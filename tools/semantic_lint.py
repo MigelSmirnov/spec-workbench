@@ -56,6 +56,7 @@ PY_KNOWN = {
     "None", "True", "False", "Optional", "Union", "Literal", "Annotated",
     "Protocol", "Callable", "Iterable", "Iterator", "Mapping", "Sequence",
     "Decimal", "Enum", "BaseModel", "Path",
+    "BaseException", "Exception",
 }
 
 MUTATION_VERBS = ("create", "commit", "save", "delete", "update", "apply",
