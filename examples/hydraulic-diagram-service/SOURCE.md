@@ -45,13 +45,25 @@ The service must not be designed as a persistence wrapper for React Flow JSON. R
 
 ## Platform context
 
-A separate Object Card Service is intended to be the source of truth for object and customer data. All platform microservices will use a common external `object_id`.
+The platform's common entry point is the **Registry** (project hub and
+published artifact catalog, deployed as `code_factory/projects/registry_sandbox`).
+All microservices address it. It plays the role previously described as
+"Object Card Service":
 
-The exact Object Card Service contract is temporarily unavailable. This is an explicit integration placeholder confined to a gateway boundary. It must not spread generic `object_data: dict` structures into the domain model.
+- a platform object is a Registry **project**: `id: UUID`, `name`, `address`,
+  `status: active | archived`, `customer_ref`, plus project rooms;
+- the common external `object_id` used by all services **is the Registry
+  project UUID**;
+- services publish per-project artifacts to the Registry
+  (`artifact_type`, `owner_service`, `version`, `schema_version`, `uri`).
+
+The contract is known (HTTP, `ProjectRecord` DTO), but object data must still
+not spread into this service's domain model: Hydraulic Diagram Service
+consumes only project existence and status through its gateway boundary and
+never becomes a second source of truth for object or customer data.
 
 The Estimator Service already has or is planned to have capabilities for:
 
-- creating an object card independently during the transition period;
 - agent-driven estimate composition through MCP;
 - matching live Brico Depot products and prices;
 - saving materials;
@@ -108,15 +120,73 @@ Decisions already accepted:
 
 The following remain intentionally unresolved and must be localized rather than hidden behind broad placeholders:
 
-- exact Object Card Service DTO and transport;
 - authentication, authorization, tenancy, and service identity model;
-- approval policy for agent-created catalog definitions;
 - exact property set required by Estimator Service;
 - supported hydraulic system taxonomy;
-- whether route geometry is authoritative enough to calculate pipe length;
 - concrete database technology;
 - event bus or synchronous integration strategy;
 - retention policy for diagram revisions.
+
+## Resolved product decisions (2026-07-15)
+
+The following former unknowns were decided in a product session and are owned
+by the design states noted in parentheses:
+
+- **Estimation handoff contract (PresuPro).** The estimator pulls
+  `EstimationDataPackage` from this service (HTTP service-to-service, MCP for
+  its agent); nothing is pushed. Matching convention: `EstimationRef`
+  (`namespace`, `code`, `role`) uses the single v1 namespace `vbc`, and
+  PresuPro resolves codes to its `Material` records through the existing
+  `Material.aliases` mechanism — an unmatched code goes to PresuPro's agent
+  matching flow, never to silent fabrication. Conversion of a package into an
+  `EstimateZone` with items, prices, waste, margin, and IVA is PresuPro's
+  domain; this service guarantees each item carries quantity, `unit_code`,
+  display `name`, estimation refs, estimator-relevant properties, and source
+  provenance. PresuPro-side tasks recorded separately: package-import use
+  case + MCP tool, and alias data entered when catalogs are seeded. (State 0
+  external systems, State 1 estimation items, State 2 collector rules.)
+- **Discovery goes through the Registry; data stays with the services.** The
+  estimator starts at the Registry (project list and header data, then
+  `list_artifacts(project_id)` to learn which services participate) and
+  fetches actual data from the owning services. Therefore this service has a
+  v1 duty: maintain one `hydraulic_diagram` index artifact per project
+  (payload lists diagrams and their current revisions), updated after each
+  revision commit — post-transaction, non-blocking, discovery-only, never a
+  second source of truth. Registry-side prerequisite: add `hydraulic_diagram`
+  to its artifact types and `hydraulic` to its owner services (separate task
+  in the Registry project). (State 0 outcomes and workflows, State 2 commit
+  policy, State 4 post-commit flow.)
+- **The object entry point is the Registry.** `object_id` is the Registry
+  project UUID; the gateway DTO is known (`ProjectRecord`: name, address,
+  status, customer_ref). In v1 this service consumes only project existence
+  and status (verification before diagram creation); no other object field
+  participates in domain behavior. (State 0 external systems, State 1
+  `ObjectRef`, State 2 identity invariants.)
+- **Pipe length is permanently out of scope for this service.** Diagram layout
+  is presentation-only forever; deriving physical pipe lengths and spatial
+  pipe routing belongs to a future plumbing service built on the platform's
+  room-geometry foundation. Lengths inside a thermal unit enter only as
+  explicit validated properties (`explicit_property`). (State 0 non-goals,
+  State 2 layout authority policy.)
+- **The service stores definition SVG assets.** An agent-created device must
+  appear in the palette of every client, so its visual asset (SVG markup,
+  default size, port anchors) is stored with the definition version as
+  presentation data the estimation path ignores. (State 1
+  `ElementVisualDefinition`, State 2 visual asset policy.)
+- **Draft approval policy.** A diagram-scoped draft created mid-authoring is
+  immediately usable in its owning diagram without human approval; global
+  catalog activation requires human or catalog-admin approval. (State 2
+  agent-created definition policy.)
+- **A diagram declares a non-empty set of system kinds.** Real thermal-unit
+  sheets combine subsystems (DHW with recirculation fed by a solar collector;
+  boiler piping plus heating), so `system_kinds` is a set over the controlled
+  enum `heating | cold_water | hot_water | solar_thermal`; the
+  `mixed_hydraulic` pseudo-kind is removed. (State 1 `Diagram`, State 2
+  taxonomy.)
+- **The base catalog is seeded as data, not code.** Initial palette content
+  is imported through the same validated definition mechanism, never baked
+  into generated code, so adding a device never triggers factory
+  regeneration. (State 0 outcomes, State 4 catalog bootstrap flow.)
 
 ## Scope rule
 

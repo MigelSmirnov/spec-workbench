@@ -81,7 +81,7 @@ Candidate columns:
 id UUID or string primary key
 object_id indexed string
 name string
-system_kind string enum value
+system_kinds JSONB array of enum values (non-empty)
 status string enum value
 current_revision integer
 created_at timestamptz

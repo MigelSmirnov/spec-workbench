@@ -86,7 +86,7 @@ global
 heating
 cold_water
 hot_water
-mixed_hydraulic
+solar_thermal
 ```
 
 ## `MediumKind`
@@ -324,6 +324,16 @@ Cross-field validator:
 object_id: str = Field(min_length=1, max_length=200)
 ```
 
+## `ObjectSnapshot` — frozen
+
+```text
+object_id: str = Field(min_length=1, max_length=200)
+status: Literal["active", "archived"]
+```
+
+Projection of the Registry `ProjectRecord`; deliberately excludes name,
+address, customer and room data (resolved 2026-07-15).
+
 ---
 
 # 4. Typed property values
@@ -486,9 +496,17 @@ direction: VisualDirection
 
 ```text
 icon_key: str = Field(min_length=1, max_length=200)
+svg_markup: str = Field(min_length=1)
 default_width: Decimal = Field(gt=0)
 default_height: Decimal = Field(gt=0)
 ```
+
+Validators:
+
+- `svg_markup` length bounded by `config.catalog.max_svg_markup_bytes`;
+- markup must be self-contained and inert: no scripts, event handlers,
+  external references, or `foreignObject` (sanitization per State 2 visual
+  asset policy).
 
 ## `ConnectionVisualDefinition` — frozen
 
@@ -620,7 +638,7 @@ model_diagram
 id: str = Field(min_length=1, max_length=200)
 object_id: str = Field(min_length=1, max_length=200)
 name: str = Field(min_length=1, max_length=300)
-system_kind: DiagramSystemKind
+system_kinds: set[DiagramSystemKind] = Field(min_length=1)
 status: DiagramStatus
 current_revision: int = Field(ge=0)
 created_at: datetime
@@ -728,7 +746,7 @@ Model validator:
 diagram_id: str
 object_id: str
 name: str
-system_kind: DiagramSystemKind
+system_kinds: set[DiagramSystemKind]
 status: DiagramStatus
 current_revision: int = Field(ge=0)
 updated_at: datetime
@@ -912,8 +930,10 @@ All models are frozen.
 
 ```text
 definition: DefinitionRef
+name: str = Field(min_length=1, max_length=300)
 estimation_refs: list[EstimationRef] = Field(default_factory=list)
 quantity: Decimal = Field(gt=0)
+unit_code: str = Field(min_length=1, max_length=40)
 properties: list[PropertyValue] = Field(default_factory=list)
 source_element_ids: list[str]
 ```
@@ -924,10 +944,14 @@ Validators:
 - duplicate property codes rejected;
 - duplicate estimation refs rejected.
 
+`name` and `unit_code` serve the PresuPro handoff: `name` is projected from
+the pinned definition version; `unit_code` defaults to the count unit `ud`.
+
 ## `ConnectionEstimationItem`
 
 ```text
 connection_type: DefinitionRef
+name: str = Field(min_length=1, max_length=300)
 estimation_refs: list[EstimationRef] = Field(default_factory=list)
 quantity: Decimal = Field(gt=0)
 unit_code: str = Field(min_length=1, max_length=40)

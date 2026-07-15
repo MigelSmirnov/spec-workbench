@@ -27,7 +27,7 @@ Purpose: compact discovery record for list operations.
 diagram_id: str
 object_id: str
 name: str
-system_kind: DiagramSystemKind
+system_kinds: set[DiagramSystemKind]
 status: DiagramStatus
 current_revision: int
 updated_at: datetime
@@ -242,7 +242,11 @@ Applies scope and status visibility rules.
 
 ### Input
 
-Concrete `CreateElementDefinitionDraft` DTO containing definition fields, scope, and actor.
+Concrete `CreateElementDefinitionDraft` DTO with two explicit parts: the
+engineering part (definition fields, ports with medium and flow semantics,
+properties, estimation refs, scope, actor) and the presentation part
+(`svg_markup`, default size, port visual anchors), per the resolved visual
+asset policy.
 
 ### Output
 
@@ -289,7 +293,7 @@ The module does not expose separate public functions to add ports, properties, o
 ```text
 object_id
 name
-system_kind
+system_kinds (non-empty set)
 actor
 ```
 
@@ -673,13 +677,18 @@ No generic `Repository[T]` is introduced.
 
 # 11. External ports
 
-## `ObjectGateway`
+## `ObjectGateway` (Registry)
 
 ```text
 get_object_snapshot(object_id) -> ObjectSnapshot
+publish_diagram_index(object_id, index) -> None
 ```
 
-`ObjectSnapshot` remains undefined until real integration evidence is available.
+`ObjectSnapshot` is defined from Registry evidence (resolved 2026-07-15):
+`object_id` plus `status: active | archived`. `publish_diagram_index`
+maintains the per-project `hydraulic_diagram` index artifact; it is called
+by the application after a successful commit, outside the transaction, and
+its failure never fails the commit.
 
 For v1, application policy may allow object verification to be disabled through config while still requiring `object_id`.
 

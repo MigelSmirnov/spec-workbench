@@ -438,18 +438,19 @@ Moderately deep lifecycle module.
 
 ---
 
-## `object_gateway`
+## `object_gateway` (Registry gateway)
 
 ### Owns
 
-- future integration with Object Card Service;
-- translation of external object DTO into an internal integration DTO;
-- object existence checks when available;
+- the platform Registry integration (project hub, resolved 2026-07-15);
+- translation of the Registry `ProjectRecord` into the internal `ObjectSnapshot` (existence + status only);
+- project verification checks when `object_verification_enabled` is true;
+- outbound publication of the per-project `hydraulic_diagram` index artifact after revision commits (post-transaction, non-blocking);
 - integration timeout and failure mapping.
 
 ### Knows
 
-- external endpoint and DTO only when the real service is available.
+- the Registry endpoint and its known `ProjectRecord` / artifact publication DTOs.
 
 ### Hides
 
@@ -884,8 +885,7 @@ Each of these hides unresolved ownership.
 - whether `change_requests` is included in the first release;
 - exact authorization port and identity model;
 - exact repository interfaces;
-- whether catalog and diagram commands use one generic command envelope or typed commands;
-- exact Object Card adapter DTO.
+- whether catalog and diagram commands use one generic command envelope or typed commands.
 
 These questions belong to flow and public-API design, not to generic catch-all modules.
 
@@ -899,7 +899,7 @@ State 3 is sufficiently stable to begin key flow design because:
 - domain modules are separated from transports and persistence;
 - estimator data has one clear owner;
 - HTTP and MCP are thin adapters to shared application use cases;
-- the Object Card placeholder is contained in one adapter boundary;
+- the Registry integration is contained in one adapter boundary;
 - no generic utility, manager, validator, or service module is required;
 - dependency direction is explicit;
 - deep and intentionally thin modules are distinguished.

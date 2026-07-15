@@ -248,6 +248,13 @@ classification
 - `namespace + code + role` is meaningful to an external estimator contract.
 - No price, retailer product ID, or Holded document data is stored here.
 
+### Resolution convention (resolved 2026-07-15)
+
+v1 uses the single namespace `vbc`. The consumer side is concrete: PresuPro
+resolves `code` to its `Material` records through `Material.aliases`; an
+unmatched code is handled by PresuPro's agent matching flow. This keeps the
+coupling loose — this service never stores PresuPro material IDs.
+
 ---
 
 # 2. Diagram aggregate models
@@ -280,13 +287,19 @@ Editor, diagram agent, Estimator Service, estimator agent, revision service.
 id: str
 object_id: str
 name: str
-system_kind: DiagramSystemKind
+system_kinds: set[DiagramSystemKind]
 status: DiagramStatus
 current_revision: int
 created_at: datetime
 updated_at: datetime
 created_by: ActorRef
 ```
+
+`system_kinds` is a non-empty author-declared set: one thermal-unit sheet
+routinely combines subsystems (DHW with recirculation fed by a solar
+collector; boiler piping plus heating). It serves discovery and labeling
+only — engineering compatibility is owned by connection-level media and flow
+rules.
 
 Candidate `DiagramStatus` values:
 
@@ -296,7 +309,7 @@ active
 archived
 ```
 
-`DiagramSystemKind` remains an intentionally open design decision for State 2. It must become a controlled catalog or enum before final specification assembly.
+`DiagramSystemKind` is a controlled enum owned by State 2 (initial values: `heating`, `cold_water`, `hot_water`, `solar_thermal`).
 
 ### Lifecycle
 
@@ -685,17 +698,26 @@ Value object inside `ElementDefinition`.
 
 ```text
 icon_key: str
+svg_markup: str
 default_width: Decimal
 default_height: Decimal
 ```
 
-### Deferred decisions
+### Storage decision (resolved 2026-07-15)
 
-Whether raw SVG assets are stored by this service, referenced by key, or managed in a frontend asset registry is unresolved. The initial model uses `icon_key` as a stable reference.
+The service stores the SVG asset itself. An agent-created device must appear
+in the palette of every client (editor sessions, other agents), so the visual
+cannot live only in one frontend build. `svg_markup` is stored with the
+definition version and is immutable together with it; `icon_key` remains the
+stable cross-client cache/reference key.
+
+The asset is presentation data: the estimation path ignores it, and it can
+never define ports, properties, or engineering semantics. Sanitization and
+size limits are policy owned by State 2 (visual asset policy).
 
 ### Placeholder resistance
 
-Do not use `visual: dict`; only known cross-client rendering metadata belongs here.
+Do not use `visual: dict`; only known cross-client rendering metadata belongs here. `svg_markup` is a sanitized presentation asset, never a carrier of engineering data.
 
 ---
 
@@ -953,18 +975,26 @@ Groups estimate-relevant element instances that are equivalent under collector r
 
 ```text
 definition: DefinitionRef
+name: str
 estimation_refs: list[EstimationRef]
 quantity: Decimal
+unit_code: str
 properties: list[PropertyValue]
 source_element_ids: list[str]
 ```
+
+`name` and `unit_code` were added 2026-07-15 for the PresuPro handoff: every
+estimate position needs a display name and an explicit unit, and leaving the
+element unit implicit ("obviously pieces") is a placeholder. `name` is
+projected from the pinned definition at collection time; `unit_code` defaults
+to the count unit `ud` unless the definition declares another quantity unit.
 
 ### Invariants
 
 - `quantity` equals the deterministic aggregation of source instances and instance quantities.
 - Source IDs are unique.
 - Grouped instances share the same estimator-relevant property values.
-- Definition version is pinned.
+- Definition version is pinned; `name` matches that pinned definition version.
 
 ---
 
@@ -978,6 +1008,7 @@ Groups estimate-relevant connection instances.
 
 ```text
 connection_type: DefinitionRef
+name: str
 estimation_refs: list[EstimationRef]
 quantity: Decimal
 unit_code: str
@@ -985,11 +1016,15 @@ properties: list[PropertyValue]
 source_connection_ids: list[str]
 ```
 
+`name` (added 2026-07-15) is projected from the pinned connection type
+definition at collection time, so a package is readable without extra
+catalog lookups.
+
 ### Invariants
 
 - Quantity and unit are derived through explicit collector rules.
 - No length is fabricated when authoritative geometry is unavailable.
-- Definition version is pinned.
+- Definition version is pinned; `name` matches that pinned definition version.
 
 ---
 
@@ -1161,27 +1196,61 @@ This model is included to preserve the read/write capability boundary, not to de
 
 ### Purpose
 
-Represents the only currently stable dependency on Object Card Service.
+Represents the only stable dependency on the platform Registry (project hub).
+
+### Fields
+
+```text
+object_id: str  # Registry project UUID in canonical string form
+```
+
+### Integration evidence (resolved 2026-07-15)
+
+The Registry contract is known: `ProjectRecord` carries `id`, `name`,
+`address`, `status: active | archived`, `customer_ref`. The gateway snapshot
+model therefore projects only what this service consumes:
+
+```text
+ObjectSnapshot
+  object_id: str
+  status: Literal["active", "archived"]
+```
+
+Name, address, customer and room data are deliberately excluded: no domain
+behavior depends on them, and clients that need them query the Registry
+directly.
+
+### Gateway boundary
+
+```text
+ObjectGateway.get_object_snapshot(object_id) -> ObjectSnapshot
+ObjectGateway.publish_diagram_index(object_id, index) -> None
+```
+
+---
+
+## `DiagramIndexArtifact`
+
+### Purpose
+
+Payload of the per-project `hydraulic_diagram` Registry artifact: the
+project's diagrams with their current committed revisions, so other services
+discover hydraulic participation without polling this service.
+
+### Kind
+
+Outbound integration DTO (discovery-only, never a source of truth).
 
 ### Fields
 
 ```text
 object_id: str
+diagrams: list[DiagramSummary]
+generated_at: datetime
 ```
 
-### Constraint
-
-No `ObjectSnapshot` is included yet because its real fields and entry point are unavailable.
-
-Future object data must arrive through a gateway DTO designed from actual integration evidence.
-
-### Placeholder boundary
-
-Acceptable unresolved interface:
-
-```text
-ObjectGateway.get_object_snapshot(object_id)
-```
+Reuses the `DiagramSummary` discovery DTO; introduces no new engineering
+fields.
 
 Unacceptable domain leakage:
 
@@ -1237,10 +1306,8 @@ ActorRef and DefinitionRef
 
 - exact `DiagramSystemKind` values;
 - exact `PortKind`, `MediumKind`, units, and categories;
-- definition activation and approval policy;
 - tenant model;
 - revision persistence strategy;
-- whether route geometry is authoritative for length;
 - estimator-required properties;
 - whether `quantity != 1` is allowed for diagram elements;
 - whether estimation packages are stored;

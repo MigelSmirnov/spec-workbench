@@ -37,6 +37,9 @@ DiagramLayout.validate_unique_references: [FORBIDDEN_ACTION] MUST NOT verify eng
 
 ```text
 ConnectionVisualDefinition.validate_color: [VALIDATION_ERROR] MUST accept only the supported hexadecimal color representation for v1.
+ElementVisualDefinition.validate_svg_markup: [VALIDATION_ERROR] MUST reject markup containing scripts, event handlers, external references, or foreignObject.
+ElementVisualDefinition.validate_svg_markup: [CONFIG_REFERENCE] MUST enforce the size limit from = config.catalog.max_svg_markup_bytes.
+ElementVisualDefinition.validate_svg_markup: [FORBIDDEN_ACTION] MUST NOT derive ports, properties, or any engineering semantics from the markup.
 PropertyDefinition.validate_value_constraints: [SCHEMA_CONSTRAINT] MUST require default_value and every allowed value to match value_type.
 PropertyDefinition.validate_value_constraints: [VALIDATION_ERROR] MUST reject minimum or maximum for non-numeric value types.
 PropertyDefinition.validate_value_constraints: [VALIDATION_ERROR] MUST reject minimum greater than maximum.
@@ -158,6 +161,7 @@ _validate_layout_references: [VALIDATION_ERROR] MUST emit blocking issues for la
 
 ```text
 create_diagram: [FIELD_ASSIGNMENT] MUST set status to draft, current_revision to 0, and created_at/updated_at to the supplied created_at.
+create_diagram: [VALIDATION_ERROR] MUST reject an empty system_kinds set and values outside DiagramSystemKind.
 create_diagram: [PROVENANCE] MUST assign created_by from the supplied ActorRef.
 create_diagram: [FORBIDDEN_ACTION] MUST NOT copy customer or object-card fields beyond object_id.
 change_diagram_status: [RULE_REFERENCE] MUST enforce = rules.diagram_status_transitions.
@@ -211,11 +215,13 @@ _advance_diagram_revision: [FIELD_ASSIGNMENT] MUST set current_revision to the c
 ```text
 collect_element_items: [BEHAVIOR] MUST group only elements with equal definition id/version and equal estimator-relevant property values.
 collect_element_items: [FIELD_ASSIGNMENT] MUST sum DiagramElement.quantity and preserve unique source_element_ids.
+collect_element_items: [FIELD_PROJECTION] MUST project name from the pinned definition version and assign unit_code, defaulting to the count unit defined by = rules.estimation_collection_policy.
 collect_element_items: [DETERMINISM_OR_ORDERING] MUST return stable group-key order.
 build_element_group_key: [DETERMINISM_OR_ORDERING] MUST use canonical typed-value serialization and exclude provenance-only fields.
 _select_estimator_properties: [MODEL_REFERENCE] MUST select only properties whose definitions have required_for_estimation or another explicit estimation relevance rule in = models.PropertyDefinition.
 _merge_element_group: [FIELD_ASSIGNMENT] MUST return a new item with summed quantity and sorted unique source IDs.
 collect_connection_items: [BEHAVIOR] MUST group only connections with equal definition id/version, quantity unit, and estimator-relevant property values.
+collect_connection_items: [FIELD_PROJECTION] MUST project name from the pinned connection type definition version.
 collect_connection_items: [FORBIDDEN_ACTION] MUST NOT derive length from DiagramLayout in v1.
 collect_connection_items: [DETERMINISM_OR_ORDERING] MUST return stable group-key order.
 build_connection_group_key: [DETERMINISM_OR_ORDERING] MUST include definition id, version, quantity unit, and canonical estimator-property identity.
@@ -311,6 +317,8 @@ apply_diagram_command_use_case: [VALIDATION_ERROR] MUST reject a base_revision t
 apply_diagram_commands_use_case: [DETERMINISM_OR_ORDERING] MUST preserve supplied command order.
 commit_diagram_revision_use_case: [SECURITY_BOUNDARY] MUST require diagram.author.
 commit_diagram_revision_use_case: [ORCHESTRATION] MUST resolve exact catalog definitions and run commit-stage validation before calling commit_revision.
+commit_diagram_revision_use_case: [ORCHESTRATION] MUST call ObjectGateway.publish_diagram_index after the commit transaction succeeds.
+commit_diagram_revision_use_case: [FALLBACK] MUST log a failed index publication and return the successful commit result unchanged.
 list_available_definitions_use_case: [SECURITY_BOUNDARY] MUST require catalog.read.
 create_element_definition_draft_use_case: [SECURITY_BOUNDARY] MUST require catalog.draft.create.
 create_connection_definition_draft_use_case: [SECURITY_BOUNDARY] MUST require catalog.draft.create.
