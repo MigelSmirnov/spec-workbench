@@ -37,9 +37,6 @@ DiagramLayout.validate_unique_references: [FORBIDDEN_ACTION] MUST NOT verify eng
 
 ```text
 ConnectionVisualDefinition.validate_color: [VALIDATION_ERROR] MUST accept only the supported hexadecimal color representation for v1.
-ElementVisualDefinition.validate_svg_markup: [VALIDATION_ERROR] MUST reject markup containing scripts, event handlers, external references, or foreignObject.
-ElementVisualDefinition.validate_svg_markup: [CONFIG_REFERENCE] MUST enforce the size limit from = config.catalog.max_svg_markup_bytes.
-ElementVisualDefinition.validate_svg_markup: [FORBIDDEN_ACTION] MUST NOT derive ports, properties, or any engineering semantics from the markup.
 PropertyDefinition.validate_value_constraints: [SCHEMA_CONSTRAINT] MUST require default_value and every allowed value to match value_type.
 PropertyDefinition.validate_value_constraints: [VALIDATION_ERROR] MUST reject minimum or maximum for non-numeric value types.
 PropertyDefinition.validate_value_constraints: [VALIDATION_ERROR] MUST reject minimum greater than maximum.
@@ -95,7 +92,12 @@ _is_definition_visible: [BEHAVIOR] MUST allow global definitions and context-mat
 _is_definition_visible: [FORBIDDEN_ACTION] MUST NOT infer tenant visibility before tenant semantics are defined.
 create_element_definition_draft: [FIELD_ASSIGNMENT] MUST set status to draft, preserve the requested scope, assign actor provenance, created_at, definition_id, and version.
 create_element_definition_draft: [VALIDATION_ERROR] MUST reject invalid scope_ref combinations and duplicate port/property codes.
+create_element_definition_draft: [ORCHESTRATION] MUST validate draft.visual.svg_markup through _validate_element_visual_asset before constructing ElementDefinition.
 create_element_definition_draft: [FORBIDDEN_ACTION] MUST NOT activate the definition or overwrite an existing active version.
+_validate_element_visual_asset: [BEHAVIOR] MUST return the original SVG markup unchanged only after the complete visual-asset policy passes.
+_validate_element_visual_asset: [VALIDATION_ERROR] MUST reject markup containing scripts, event handlers, external references, or foreignObject.
+_validate_element_visual_asset: [CONFIG_REFERENCE] MUST enforce the size limit from = config.catalog.max_svg_markup_bytes.
+_validate_element_visual_asset: [FORBIDDEN_ACTION] MUST NOT derive ports, properties, or any engineering semantics from the markup.
 create_connection_definition_draft: [FIELD_ASSIGNMENT] MUST set status to draft and assign all provenance and version fields.
 create_connection_definition_draft: [VALIDATION_ERROR] MUST reject invalid scope_ref combinations and duplicate property codes.
 _validate_draft_scope: [RULE_REFERENCE] MUST enforce = rules.definition_scope_policy.

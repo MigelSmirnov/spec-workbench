@@ -1,4 +1,4 @@
-"""Unit tests for semantic_lint.py (S1–S8, global notes, internal imports).
+"""Unit tests for semantic_lint.py (S1–S9, global notes, internal imports).
 
 Run:  python3 -m pytest test_semantic_lint.py -q
 """
@@ -194,6 +194,22 @@ def test_s8_resolve_needs_precedence_or_failure():
                   notes=["resolve_thing: [BEHAVIOR] MUST combine catalog and "
                          "overrides into one snapshot"]))
     assert msgs(r, "S8")
+
+
+# ---------------------------------------------------------------- S9
+
+def test_s9_flags_non_profile_models_path():
+    s = spec(models={"Item": {"fields": {"code": "str"}}})
+    s["module_functions"] = {"models": ["Item"]}
+    s["module_paths"] = {"models": "domain/models/__init__"}
+    assert msgs(lint(s), "S9")
+
+
+def test_s9_accepts_current_factory_models_path():
+    s = spec(models={"Item": {"fields": {"code": "str"}}})
+    s["module_functions"] = {"models": ["Item"]}
+    s["module_paths"] = {"models": "core/models"}
+    assert not msgs(lint(s), "S9")
 
 
 # ---------------------------------------------------------------- imports

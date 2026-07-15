@@ -254,7 +254,9 @@ asset policy.
 
 ### Guarantee
 
-Validates structure, uniqueness, scope, and provenance.
+Validates structure, uniqueness, scope, provenance, and the presentation SVG's
+inertness and configured byte limit before constructing the definition. The
+SVG check is an internal catalog operation, not a Pydantic model method.
 
 ## `create_connection_definition_draft`
 

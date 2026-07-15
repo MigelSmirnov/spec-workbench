@@ -78,6 +78,10 @@ These exceptions must preserve stable machine-readable codes.
 
 Pydantic model classes are declared in `models`, not as function contracts. Validators that require explicit generated methods use these signatures.
 
+All `model_*` headings in this section are authoring subdivisions assembled by
+the Factory into the single deterministic runtime unit `core/models.py`; they
+are not independent runtime import paths.
+
 ## `model_values`
 
 ```python
@@ -242,6 +246,10 @@ create_connection_definition_draft(
 Private helpers:
 
 ```python
+_validate_element_visual_asset(
+    svg_markup: str,
+) -> str
+
 _validate_draft_scope(
     scope: DefinitionScope,
     scope_ref: str | None,
@@ -255,6 +263,12 @@ _validate_connection_draft_uniqueness(
     draft: CreateConnectionDefinitionDraft,
 ) -> None
 ```
+
+`_validate_element_visual_asset` returns the unchanged markup only after
+enforcing the catalog SVG policy and `config.catalog.max_svg_markup_bytes`.
+It is shared by agent-created drafts and the seed-import path through
+`create_element_definition_draft`; it is not a Pydantic validator or a public
+package-facade export.
 
 ## `catalog_lifecycle`
 

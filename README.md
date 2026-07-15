@@ -28,6 +28,7 @@ Create specifications that:
 7. Contracts
 8. Notes
 9. Assembly
+10. Factory compatibility probe (assembler and linker, no deploy)
 
 Each layer is stabilized before moving to the next.
 
@@ -42,6 +43,9 @@ examples/
 
 skills/spec-authoring/SPEC_STANDARD.md
     Definition of the global_spec.json format.
+
+skills/spec-authoring/FACTORY_COMPATIBILITY.md
+    Current target-compiler profile and mandatory no-deploy compile probe.
 ```
 
 ## Current status

@@ -308,26 +308,18 @@ Do not add ORM fields, session objects, SQL identifiers, or database-specific me
 
 ---
 
-# Pydantic model modules
+# Pydantic model authoring sections and Factory unit
 
-Because the model set is large, `domain_models` should not become one giant generation file.
-
-Recommended package structure:
+The model set is divided into the conceptual sections below so each family can
+be reviewed independently. The current Factory deterministic-model convention,
+however, assembles the complete runtime model surface into one generation unit:
 
 ```text
-src/hydraulic_diagram/domain/models/
-    __init__.py
-    enums.py
-    common.py
-    values.py
-    diagram.py
-    catalog.py
-    layout.py
-    estimation.py
-    commands.py
-    change_requests.py
-    application.py
+models → core/models.py
 ```
+
+The `model_*` names below are authoring subdivisions, not separately generated
+runtime modules.
 
 Possible responsibilities:
 
@@ -342,7 +334,7 @@ Possible responsibilities:
 - `change_requests.py`: change-request models and variants;
 - `application.py`: workspace, summaries, reports, commit results.
 
-`__init__.py` exposes the stable model API while internal files remain separate generation units.
+`core.models` is the stable runtime model API used by every generated consumer.
 
 ---
 
@@ -355,10 +347,11 @@ The future `global_spec.json` should:
 3. include Pydantic validators as explicit contracts when the factory generates validator functions or methods;
 4. include `[SCHEMA_CONSTRAINT]` notes for `extra="forbid"`, frozen behavior, discriminators, and required cross-field invariants;
 5. keep domain-policy functions outside Pydantic model validators;
-6. split model generation into several modules through `module_functions` and `module_paths`;
-7. expose model classes through one stable package boundary where possible.
+6. keep the conceptual model families explicit in design-state documents;
+7. assemble and expose all runtime model classes through `core.models`, the
+   Factory-supported deterministic model boundary.
 
-Candidate generation module names:
+Authoring subsection names:
 
 ```text
 model_enums
@@ -374,7 +367,7 @@ model_application
 models
 ```
 
-The final facade module `models` re-exports public model types.
+The single generated `models` unit owns and exports the public model types.
 
 ---
 

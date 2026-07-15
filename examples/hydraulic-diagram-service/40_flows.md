@@ -316,6 +316,7 @@ MCP or authorized HTTP
 → application.create_element_definition_draft
 → catalog.validate draft structure
 → catalog.validate requested scope
+→ catalog validate visual asset inertness and configured byte limit
 → catalog.create draft version
 → CatalogRepository.save
 → return ElementDefinition(status=draft)
@@ -338,6 +339,7 @@ The base global catalog enters through the same mechanism, not through code:
 ```text
 catalog-admin import (HTTP or operational tool)
 → application.create definition draft (per definition, full validation)
+→ catalog visual-asset validation (same helper as agent draft creation)
 → application.transition_definition_status (global activation,
   catalog-admin authority)
 → CatalogRepository.save

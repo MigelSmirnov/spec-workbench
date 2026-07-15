@@ -453,6 +453,13 @@ client, offline, and in image export.
   validation error, but the asset never defines ports, properties, or any
   engineering semantics, and estimation ignores it.
 
+The `catalog` definition-creation boundary owns enforcement. Both agent draft
+creation and catalog seed import pass `svg_markup` through the same catalog
+visual-asset validator before an `ElementDefinition` is constructed or
+persisted. Pydantic owns only local field shape (non-empty string and positive
+dimensions); it does not parse or sanitize SVG and does not read runtime
+catalog config.
+
 ## Promotion
 
 Promotion does not mutate scope in place.

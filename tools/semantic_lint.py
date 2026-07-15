@@ -21,6 +21,8 @@ Checks:
   S8  trivial-implementation     — normalize_*/validate_*/build_*/resolve_* notes
       resistance                   must name concrete evidence that forbids an
                                    identity / empty implementation
+  S9  Factory model path profile — generated models map to core/models for the
+                                   current target Factory (advisory)
 
 Global notes ("[CLASS] body" without a target) are parsed and checked by
 S2/S3/S4; they do not participate in S5/S7/S8.
@@ -288,6 +290,17 @@ def lint(spec: dict) -> dict:
         for pattern, message in rules:
             if not re.search(pattern, combined):
                 warnings.append(f"S8 {fname}: {message}")
+
+    # ---- S9: current Factory deterministic model-path profile ----
+    module_functions = spec.get("module_functions", {}) or {}
+    if models or "models" in module_functions:
+        model_path = (spec.get("module_paths", {}) or {}).get("models")
+        if model_path != "core/models":
+            actual = repr(model_path) if model_path is not None else "missing"
+            warnings.append(
+                "S9 models generation unit path is "
+                f"{actual}; current Factory profile requires 'core/models' "
+                "for deterministic generation and runtime imports")
 
     return {
         "errors": errors,

@@ -35,11 +35,10 @@ frozen=True
 
 # 1. Enums
 
-Generation unit:
+Authoring subsection (assembled into `core/models.py`):
 
 ```text
 model_enums
-→ hydraulic_diagram/domain/models/enums.py
 ```
 
 All enums inherit from `str, Enum`.
@@ -243,11 +242,10 @@ applied
 
 # 2. Shared model base classes
 
-Generation unit:
+Authoring subsection (assembled into `core/models.py`):
 
 ```text
 model_common
-→ hydraulic_diagram/domain/models/common.py
 ```
 
 ## `ClosedModel`
@@ -274,7 +272,7 @@ These base classes are implementation conveniences. They do not appear as busine
 
 # 3. Shared value models
 
-Generation unit:
+Authoring subsection (assembled into `core/models.py`):
 
 ```text
 model_common
@@ -342,7 +340,6 @@ Generation unit:
 
 ```text
 model_values
-→ hydraulic_diagram/domain/models/values.py
 ```
 
 All value variants are frozen.
@@ -410,11 +407,10 @@ Model validator:
 
 # 5. Layout models
 
-Generation unit:
+Authoring subsection (assembled into `core/models.py`):
 
 ```text
 model_layout
-→ hydraulic_diagram/domain/models/layout.py
 ```
 
 All committed layout models are frozen.
@@ -476,11 +472,10 @@ Model validator:
 
 # 6. Catalog models
 
-Generation unit:
+Authoring subsection (assembled into `core/models.py`):
 
 ```text
 model_catalog
-→ hydraulic_diagram/domain/models/catalog.py
 ```
 
 ## `PortVisualAnchor` — frozen
@@ -501,12 +496,12 @@ default_width: Decimal = Field(gt=0)
 default_height: Decimal = Field(gt=0)
 ```
 
-Validators:
-
-- `svg_markup` length bounded by `config.catalog.max_svg_markup_bytes`;
-- markup must be self-contained and inert: no scripts, event handlers,
-  external references, or `foreignObject` (sanitization per State 2 visual
-  asset policy).
+Local model validation requires non-empty `svg_markup` and positive dimensions.
+The model does not read runtime catalog config or parse SVG. Before model
+construction, the catalog definition-creation boundary enforces
+`config.catalog.max_svg_markup_bytes` and rejects scripts, event handlers,
+external references, and `foreignObject` according to the State 2 visual asset
+policy.
 
 ## `ConnectionVisualDefinition` — frozen
 
@@ -625,11 +620,10 @@ Model validator:
 
 # 7. Diagram models
 
-Generation unit:
+Authoring subsection (assembled into `core/models.py`):
 
 ```text
 model_diagram
-→ hydraulic_diagram/domain/models/diagram.py
 ```
 
 ## `Diagram` — frozen
@@ -711,11 +705,10 @@ Model validator:
 
 # 8. Validation and application DTOs
 
-Generation unit:
+Authoring subsection (assembled into `core/models.py`):
 
 ```text
 model_application
-→ hydraulic_diagram/domain/models/application.py
 ```
 
 ## `ValidationIssue` — frozen
@@ -814,11 +807,10 @@ Whether the factory supports Pydantic generics directly must be checked before f
 
 # 9. Authoring commands
 
-Generation unit:
+Authoring subsection (assembled into `core/models.py`):
 
 ```text
 model_commands
-→ hydraulic_diagram/domain/models/commands.py
 ```
 
 All commands are frozen input models.
@@ -917,11 +909,10 @@ Annotated[
 
 # 10. Estimation-data models
 
-Generation unit:
+Authoring subsection (assembled into `core/models.py`):
 
 ```text
 model_estimation
-→ hydraulic_diagram/domain/models/estimation.py
 ```
 
 All models are frozen.
@@ -1027,11 +1018,10 @@ Model validators:
 
 # 11. Change-request models
 
-Generation unit:
+Authoring subsection (deferred from the current v1 assembly):
 
 ```text
 model_change_requests
-→ hydraulic_diagram/domain/models/change_requests.py
 ```
 
 The broad optional-field model is replaced with discriminated variants.
@@ -1115,18 +1105,19 @@ Generation unit:
 
 ```text
 models
-→ hydraulic_diagram/domain/models/__init__.py
+→ core/models.py
 ```
 
-The facade re-exports public model types from all model generation units.
+The deterministic Factory unit defines and exports the complete public model
+surface assembled from the authoring subsections above.
 
 Other packages should import from:
 
 ```python
-from hydraulic_diagram.domain.models import Diagram, DiagramRevision, AuthoringCommand
+from core.models import Diagram, DiagramRevision, AuthoringCommand
 ```
 
-Internal generation files may import concrete siblings directly when needed, but public consumers should use the facade.
+All generated consumers use this canonical import path.
 
 ---
 

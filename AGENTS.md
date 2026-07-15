@@ -14,6 +14,8 @@ structurally valid but leave important engineering decisions unresolved.
 - `AGENTS.md` tells agents how to work in the repository.
 - `SPEC_STANDARD.md` defines the existing factory specification format.
 - `SKILL.md` defines the specification-authoring methodology.
+- `FACTORY_COMPATIBILITY.md` records target-specific compiler conventions and
+  the pre-handoff compile probe; it is not part of the specification language.
 - `BEHAVIORAL_NOTES.md` explains how to design effective notes without
   changing the factory specification language.
 
@@ -23,7 +25,8 @@ Before changing the methodology, read:
 
 1. `skills/spec-authoring/SKILL.md`
 2. `skills/spec-authoring/SPEC_STANDARD.md`
-3. `skills/spec-authoring/BEHAVIORAL_NOTES.md`
+3. `skills/spec-authoring/FACTORY_COMPATIBILITY.md`
+4. `skills/spec-authoring/BEHAVIORAL_NOTES.md`
 
 When working on a case study, read its design-state documents in numerical
 order before modifying its assembled `global_spec.json`.
@@ -89,11 +92,35 @@ Public callers must not depend on internal generation-unit paths.
 Pydantic constraints
 Domain and boundary models use Pydantic.
 Schemas use extra="forbid" unless explicitly justified.
-Prefer discriminated unions over generic operation/payload models.
+Prefer discriminated unions over generic operation/payload models at the
+domain-design level, but encode them only through a representation supported by
+the target `SPEC_STANDARD` and Factory profile. Never invent a new model
+`kind`, metadata key, or alias encoding because its Python meaning seems
+obvious.
 Committed snapshots and value objects are immutable where appropriate.
 Pydantic validators own local model consistency.
 Domain modules own graph-wide and repository-dependent policy.
 Pydantic domain models remain independent from SQLAlchemy ORM models.
+Treat a model validator as local only when it is pure, deterministic, and can
+decide from the model's own fields and closed value-object rules. It must not
+depend on runtime config, repositories, cross-record lookup, filesystem or
+network I/O, or sanitization/parsing policy for rich external formats such as
+SVG, PDF, HTML, or XML. Put those checks in the domain module that owns the
+asset or integration boundary.
+
+Factory compatibility constraints
+Before final handoff, select and apply the current target profile from
+`skills/spec-authoring/FACTORY_COMPATIBILITY.md`.
+Do not assume that a conceptually valid package layout, type alias, union, or
+model method is materializable by the current Factory toolchain.
+Treat name-only model-surface coverage as insufficient: a generated empty class
+does not prove the fields, variants, discriminator, or alias semantics.
+Run the documented compile probe, including the deterministic model unit, a
+representative consumer, assembler, and linker. A compile probe is not deploy.
+Classify failures before editing the specification: repair semantic ownership
+at its earliest design state, repair unsupported representation at the model or
+module-path state, and report contradictory Factory components as toolchain
+defects instead of distorting product semantics.
 Notes constraints
 Behavioral authoring guidance may improve how existing notes are written, but it must not change the factory language.
 The final specification continues to use only existing classified-note markers supported by SPEC_STANDARD.
@@ -136,5 +163,8 @@ every public operation has one owner;
 every contract belongs to one generation unit;
 public package exports remain narrow;
 models, rules, contracts, notes, imports, and module order are consistent;
+the selected Factory compatibility profile is satisfied;
+the compile probe reaches assembler and linker without deploy, or an unresolved
+toolchain contradiction is explicitly recorded as a blocker;
 placeholder implementations violate explicit notes;
 valid local implementation freedom remains;

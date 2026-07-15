@@ -22,6 +22,11 @@ idea and discussion
 
 The governing format is [SPEC_STANDARD.md](SPEC_STANDARD.md). Treat it as normative.
 
+The format alone does not guarantee that a particular Factory revision can
+materialize every valid design. Before handoff, apply the target-specific
+[FACTORY_COMPATIBILITY.md](FACTORY_COMPATIBILITY.md) profile. The profile is an
+operational constraint, not an extension of `global_spec.json`.
+
 ## Core problem
 
 An LLM can produce a specification that is structurally valid but semantically hollow.
@@ -128,6 +133,22 @@ For each model determine:
 - the source of every required field;
 - whether partial construction is valid;
 - which invariants apply.
+
+Keep model-level validation local. A Pydantic validator is appropriate only
+when it is pure and deterministic and needs no information beyond the model's
+own fields and closed value-object rules. Runtime configuration, repository or
+cross-record lookup, I/O, and sanitization or parsing policy for rich external
+formats belong to an owning domain or boundary module. A field may still carry
+SVG, PDF, HTML, XML, or another external representation without making the
+Pydantic model the owner of that representation's security policy.
+
+Separate the correct domain concept from its Factory encoding. Before using a
+model `kind`, metadata key, named union, alias, generic, root model, or custom
+method form, verify that the normative specification standard defines it and
+that the selected Factory profile materializes it. Do not invent JSON such as
+`kind: discriminated_union` merely because the intended Python type is clear.
+If the target supports only ordinary field models and enums, use a supported
+inline type expression or stop with an explicit compatibility decision.
 
 Reject model placeholders such as:
 
@@ -236,6 +257,12 @@ Expected specification output at this stage:
 - draft `imports.internal` as public ownership, not final dependency wiring;
 - draft `module_order` and `module_paths`;
 - responsibility notes outside the final JSON if still under discussion.
+
+Before accepting `module_paths`, distinguish semantic modules from generation
+units and check the selected Factory compatibility profile. A conceptual
+package decomposition is not evidence that the target compiler can generate or
+import it. In particular, authoring subdivisions of the model catalog may need
+to assemble into one deterministic runtime model unit.
 
 ### State 4 — Key system flows
 
@@ -414,6 +441,42 @@ If assembly exposes missing models, unclear ownership, generic contracts, or vag
 
 After assembly, use the existing factory validators and inspectors. Do not duplicate them inside this skill.
 
+### State 9 — Factory compatibility probe
+
+Prove that the assembled specification is materializable by the selected
+Factory revision before declaring it handoff-ready. Follow
+`FACTORY_COMPATIBILITY.md` and use the Factory's existing commands rather than
+reimplementing their checks in the Workbench.
+
+The minimum probe must exercise:
+
+- canonical validation and inspection;
+- the deterministic runtime model generation unit;
+- at least one representative consumer of generated model types;
+- discriminated unions, aliases, protocols, or other non-field model forms
+  when the specification uses them;
+- semantic inspection of generated type shapes, not only expected-name or
+  model-count coverage;
+- assembler and linker;
+- no deploy.
+
+Classify a failure before changing anything:
+
+- **semantic ownership failure** — return to the earliest product, model, rule,
+  or module-responsibility state;
+- **unsupported target representation** — return to models, contracts, imports,
+  or `module_paths` and choose a supported representation without changing
+  product semantics;
+- **Factory contradiction** — one Factory component demonstrably materializes
+  the required semantics while another rejects that same supported runtime
+  representation; mere name emission or permissive validation is not proof of
+  materialization. Record the evidence as a toolchain blocker and do not
+  contort the specification to imitate the defect.
+
+Generation success alone is insufficient. The assembler and linker are part of
+the probe because they expose import-surface and cross-module contradictions
+that isolated drafts do not.
+
 ## Placeholder taxonomy
 
 Use this taxonomy during every state.
@@ -572,6 +635,10 @@ A specification is ready for the existing factory when:
 - notes prevent trivial placeholder implementations;
 - `config`, `models`, and `rules` are cleanly separated;
 - assembly introduces no new product or architecture decisions;
-- the complete file conforms to `SPEC_STANDARD.md`.
+- the complete file conforms to `SPEC_STANDARD.md`;
+- the selected Factory compatibility profile is satisfied;
+- the no-deploy compatibility probe has exercised models, a representative
+  consumer, assembler, and linker, with any Factory contradiction recorded
+  explicitly rather than hidden by a semantic spec change.
 
 The objective is not maximal detail. The objective is enough precision that the code-generation factory does not need to invent missing architecture or product semantics.
