@@ -369,6 +369,18 @@ silent use of latest catalog definition
 
 The notes intentionally define observable assignments, validation outcomes, provenance, ordering, forbidden behavior, and side effects so that an implementation cannot satisfy the specification with a skeleton.
 
+# 14. Positive coverage for the factory underspec gate (2026-07-15)
+
+The factory's generation-stage `spec_underspec_gate` requires every owned
+function contract to carry at least one direct positive `[BEHAVIOR]` or
+`[FIELD_PROJECTION]` note; validation, ordering, and forbidden-action notes
+alone do not satisfy it. The assembled specification therefore includes a
+positive note per owned function stating what a correct result contains —
+projections name their sources, orchestrators name the operation whose
+result they return, serializers pin round-trip equality. These notes add no
+new product behavior; they restate already-decided semantics in the marker
+form the generation gate consumes.
+
 ## State 7 readiness assessment
 
 The specification is ready for assembly when:
