@@ -229,7 +229,9 @@ def main() -> int:
         raise SystemExit(f"factory did not create the canonical spec: {paths['canonical']}")
     source_sha = sha256_file(source)
     canonical_sha = sha256_file(paths["canonical"])
-    if source_sha != canonical_sha:
+    # The factory bootstrap may reformat the JSON; identity is judged by the
+    # canonical spec hash, not file bytes.
+    if canonical_spec_sha(load_json(source)) != canonical_spec_sha(load_json(paths["canonical"])):
         raise SystemExit("canonical Factory specification differs from the validated source")
 
     validation_path = paths["working"] / "spec_workbench_validation.json"
