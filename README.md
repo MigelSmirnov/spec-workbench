@@ -49,3 +49,28 @@ skills/spec-authoring/SPEC_STANDARD.md
 The project is under active development.
 
 The current focus is building a repeatable methodology for producing high-quality specifications that can later be compiled into code by AI Code Factory.
+
+## Factory handoff
+
+Keep this repository next to the Code Factory checkout:
+
+```text
+workspace/
+├── code_factory/
+└── spec-workbench/
+```
+
+Export an accepted case into a new Factory project with:
+
+```bash
+python tools/export_to_factory.py \
+  --case hydraulic-diagram-service \
+  --project hydraulic_diagram_service
+```
+
+Use `--update-existing` only when intentionally replacing an existing canonical
+specification. The export is blocked when the two repositories have different
+`SPEC_STANDARD.md` content, the Workbench checkout is dirty, or the Factory's
+canonical validator reports errors. Provenance and validation evidence are
+written to `projects/<project>/specs/working/`; `global_spec.json` remains in
+the factory-defined format.

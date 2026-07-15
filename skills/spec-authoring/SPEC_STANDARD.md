@@ -228,6 +228,8 @@
 ```json
 {
   "config": {
+    "role": "data",
+    "schema_version": 1,
     "public_calc": {
       "rate_limit": {
         "max_requests": 20,
@@ -239,6 +241,8 @@
 ```
 
 **Правила:**
+- `role` имеет служебное значение `"data"`; `schema_version` на верхнем уровне — целое число версии секции.
+- Имена `role` и `schema_version` зарезервированы и не используются внутри вложенных namespace.
 - В `config` идут небольшие runtime/product knobs, которые могут меняться независимо от моделей предметной области.
 - Notes ссылаются на config адресно: `"calc_generate_endpoint: [CONFIG_REFERENCE] MUST enforce rate limit using = config.public_calc.rate_limit"`.
 - Не клади в `config` большие структурные доменные таблицы, enum definitions или Pydantic schema semantics.
@@ -506,6 +510,8 @@
   ],
   "adapters": {},
   "config": {
+    "role": "data",
+    "schema_version": 1,
     "fetch": {
       "timeout_seconds": 30
     },
