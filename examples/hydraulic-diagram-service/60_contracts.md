@@ -280,11 +280,11 @@ hydraulic_diagram/domain/catalog/lifecycle.py
 
 ```python
 transition_definition_status(
-    definition: ElementDefinition | ConnectionTypeDefinition,
+    definition: CatalogDefinition,
     target_status: DefinitionStatus,
     actor: ActorRef,
     allow_global_activation: bool,
-) -> ElementDefinition | ConnectionTypeDefinition
+) -> CatalogDefinition
 ```
 
 Private helpers:
@@ -296,7 +296,7 @@ _validate_definition_transition(
 ) -> None
 
 _validate_activation_authority(
-    definition: ElementDefinition | ConnectionTypeDefinition,
+    definition: CatalogDefinition,
     actor: ActorRef,
     allow_global_activation: bool,
 ) -> None
@@ -390,7 +390,7 @@ _validate_port_multiplicity(
 
 ```python
 validate_definition_use(
-    definition: ElementDefinition | ConnectionTypeDefinition,
+    definition: CatalogDefinition,
     object_id: str,
     diagram_id: str,
     stage: ValidationStage,
@@ -1103,7 +1103,7 @@ transition_definition_status_use_case(
     allow_global_activation: bool,
     catalog_repository: CatalogRepository,
     authorizer: CapabilityAuthorizer,
-) -> ElementDefinition | ConnectionTypeDefinition
+) -> CatalogDefinition
 ```
 
 ## `application_estimation`
@@ -1131,7 +1131,7 @@ inspect_estimation_source(
     revision_repository: RevisionRepository,
     catalog_repository: CatalogRepository,
     authorizer: CapabilityAuthorizer,
-) -> DiagramElement | DiagramConnection | ElementDefinition | ConnectionTypeDefinition
+) -> EstimationSourceEntity
 ```
 
 ## `application_change_requests`

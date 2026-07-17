@@ -6,7 +6,7 @@
     "create_element_definition_draft": "(draft: CreateElementDefinitionDraft, actor: ActorRef, created_at: datetime, definition_id: str, version: int = 1) -> ElementDefinition",
     "_validate_element_visual_asset": "(svg_markup: str) -> str",
     "create_connection_definition_draft": "(draft: CreateConnectionDefinitionDraft, actor: ActorRef, created_at: datetime, definition_id: str, version: int = 1) -> ConnectionTypeDefinition",
-    "transition_definition_status": "(definition: ElementDefinition | ConnectionTypeDefinition, target_status: DefinitionStatus, actor: ActorRef, allow_global_activation: bool) -> ElementDefinition | ConnectionTypeDefinition",
+    "transition_definition_status": "(definition: CatalogDefinition, target_status: DefinitionStatus, actor: ActorRef, allow_global_activation: bool) -> CatalogDefinition",
     "validate_working_diagram": "(elements: list[DiagramElement], connections: list[DiagramConnection], catalog: CatalogSnapshot, stage: ValidationStage) -> ValidationReport",
     "validate_layout": "(layout: DiagramLayout, element_ids: set[str], connection_ids: set[str], max_route_points_per_connection: int) -> ValidationReport",
     "normalize_layout": "(layout: DiagramLayout) -> DiagramLayout",
@@ -27,9 +27,9 @@
     "list_available_definitions_use_case": "(object_id: str, diagram_id: str, include_drafts: bool, actor: ActorRef, catalog_repository: CatalogRepository, authorizer: CapabilityAuthorizer) -> CatalogSnapshot",
     "create_element_definition_draft_use_case": "(draft: CreateElementDefinitionDraft, actor: ActorRef, definition_id: str, now: datetime, catalog_repository: CatalogRepository, authorizer: CapabilityAuthorizer) -> ElementDefinition",
     "create_connection_definition_draft_use_case": "(draft: CreateConnectionDefinitionDraft, actor: ActorRef, definition_id: str, now: datetime, catalog_repository: CatalogRepository, authorizer: CapabilityAuthorizer) -> ConnectionTypeDefinition",
-    "transition_definition_status_use_case": "(definition_ref: DefinitionRef, definition_kind: Literal['element', 'connection'], target_status: DefinitionStatus, actor: ActorRef, allow_global_activation: bool, catalog_repository: CatalogRepository, authorizer: CapabilityAuthorizer) -> ElementDefinition | ConnectionTypeDefinition",
+    "transition_definition_status_use_case": "(definition_ref: DefinitionRef, definition_kind: Literal['element', 'connection'], target_status: DefinitionStatus, actor: ActorRef, allow_global_activation: bool, catalog_repository: CatalogRepository, authorizer: CapabilityAuthorizer) -> CatalogDefinition",
     "build_diagram_estimation_data": "(diagram_id: str, revision: int | None, actor: ActorRef, collector_rule_version: str, package_id: str, now: datetime, diagram_repository: DiagramRepository, revision_repository: RevisionRepository, catalog_repository: CatalogRepository, authorizer: CapabilityAuthorizer) -> EstimationDataPackage",
-    "inspect_estimation_source": "(diagram_id: str, revision: int, entity_type: SourceEntityType, entity_id: str, actor: ActorRef, revision_repository: RevisionRepository, catalog_repository: CatalogRepository, authorizer: CapabilityAuthorizer) -> DiagramElement | DiagramConnection | ElementDefinition | ConnectionTypeDefinition",
+    "inspect_estimation_source": "(diagram_id: str, revision: int, entity_type: SourceEntityType, entity_id: str, actor: ActorRef, revision_repository: RevisionRepository, catalog_repository: CatalogRepository, authorizer: CapabilityAuthorizer) -> EstimationSourceEntity",
     "create_engine_from_settings": "(settings: DatabaseSettings) -> Engine",
     "create_session_factory": "(engine: Engine) -> sessionmaker[Session]",
     "serialize_diagram_revision": "(revision: DiagramRevision) -> dict[str, object]",
@@ -40,6 +40,23 @@
     "deserialize_connection_definition": "(payload: dict[str, object]) -> ConnectionTypeDefinition",
     "ObjectGateway.get_object_snapshot": "(self, object_id: str) -> ObjectSnapshot",
     "ObjectGateway.publish_diagram_index": "(self, object_id: str, index: DiagramIndexArtifact) -> None",
+    "DiagramRepository.get": "(self, diagram_id: str) -> Diagram | None",
+    "DiagramRepository.save": "(self, diagram: Diagram) -> None",
+    "DiagramRepository.list_by_object_id": "(self, object_id: str, cursor: str | None, page_size: int) -> DiagramSummaryPage",
+    "RevisionRepository.get": "(self, diagram_id: str, revision: int) -> DiagramRevision | None",
+    "RevisionRepository.get_current": "(self, diagram_id: str) -> DiagramRevision | None",
+    "RevisionRepository.list": "(self, diagram_id: str, cursor: str | None, page_size: int) -> DiagramRevisionSummaryPage",
+    "RevisionRepository.append": "(self, revision: DiagramRevision) -> None",
+    "CatalogRepository.get_element_definition": "(self, ref: DefinitionRef) -> ElementDefinition | None",
+    "CatalogRepository.get_connection_definition": "(self, ref: DefinitionRef) -> ConnectionTypeDefinition | None",
+    "CatalogRepository.list_visible_definitions": "(self, object_id: str, diagram_id: str, include_drafts: bool) -> CatalogSnapshot",
+    "CatalogRepository.save_element_definition": "(self, definition: ElementDefinition) -> None",
+    "CatalogRepository.save_connection_definition": "(self, definition: ConnectionTypeDefinition) -> None",
+    "UnitOfWork.__enter__": "(self) -> UnitOfWork",
+    "UnitOfWork.__exit__": "(self, exc_type: object, exc: BaseException | None, tb: object) -> bool | None",
+    "UnitOfWork.commit": "(self) -> None",
+    "UnitOfWork.rollback": "(self) -> None",
+    "CapabilityAuthorizer.require_capability": "(self, actor: ActorRef, capability: str, resource_id: str | None) -> None",
     "SqlAlchemyDiagramRepository.__init__": "(self, session: Session) -> None",
     "SqlAlchemyRevisionRepository.__init__": "(self, session: Session) -> None",
     "SqlAlchemyCatalogRepository.__init__": "(self, session: Session) -> None",
@@ -192,141 +209,1173 @@
     }
   },
   "models": {
-    "ActorType": {"kind": "enum", "base": "str", "values": ["user", "agent", "service", "import", "system"]},
-    "DiagramSystemKind": {"kind": "enum", "base": "str", "values": ["heating", "cold_water", "hot_water", "solar_thermal"]},
-    "DiagramStatus": {"kind": "enum", "base": "str", "values": ["draft", "active", "archived"]},
-    "DefinitionStatus": {"kind": "enum", "base": "str", "values": ["draft", "active", "deprecated", "rejected"]},
-    "DefinitionScope": {"kind": "enum", "base": "str", "values": ["diagram", "object", "tenant", "global"]},
-    "PortKind": {"kind": "enum", "base": "str", "values": ["hydraulic", "control", "sensor", "drain", "fill", "unspecified"]},
-    "MediumKind": {"kind": "enum", "base": "str", "values": ["water", "hot_water", "cold_water", "heating_water", "antifreeze_mix", "unspecified"]},
-    "FlowSemantics": {"kind": "enum", "base": "str", "values": ["bidirectional", "inlet", "outlet", "supply", "return", "unspecified"]},
-    "ValidationStage": {"kind": "enum", "base": "str", "values": ["draft", "commit", "activation", "estimation"]},
-    "ValidationSeverity": {"kind": "enum", "base": "str", "values": ["warning", "blocking"]},
-    "SourceEntityType": {"kind": "enum", "base": "str", "values": ["diagram", "element", "connection", "element_definition", "connection_definition", "property", "layout"]},
-    "ChangeSource": {"kind": "enum", "base": "str", "values": ["editor", "agent", "service", "import", "migration"]},
-    "EstimationPackageStatus": {"kind": "enum", "base": "str", "values": ["complete", "incomplete", "invalid"]},
-    "ValueSource": {"kind": "enum", "base": "str", "values": ["user", "agent", "catalog_default", "import", "calculated", "object_card"]},
-    "EstimationRole": {"kind": "enum", "base": "str", "values": ["material", "work", "equipment", "accessory", "measurement", "classification"]},
-    "MeasurementMethod": {"kind": "enum", "base": "str", "values": ["count", "property_sum", "explicit_property", "layout_route_length"]},
-    "VisualSide": {"kind": "enum", "base": "str", "values": ["top", "right", "bottom", "left", "center"]},
-    "VisualDirection": {"kind": "enum", "base": "str", "values": ["up", "right", "down", "left", "none"]},
-    "ConnectionVisualStyle": {"kind": "enum", "base": "str", "values": ["solid", "dashed", "dotted"]},
-    "ActorRef": {"fields": {"actor_type": "ActorType", "actor_id": "str", "label": "str | None = None"}},
-    "DefinitionRef": {"fields": {"definition_id": "str", "version": "int"}},
-    "PortRef": {"fields": {"element_id": "str", "port_code": "str"}},
-    "StringValue": {"fields": {"value_type": "Literal['string'] = 'string'", "value": "str"}},
-    "IntegerValue": {"fields": {"value_type": "Literal['integer'] = 'integer'", "value": "int"}},
-    "DecimalValue": {"fields": {"value_type": "Literal['decimal'] = 'decimal'", "value": "Decimal"}},
-    "BooleanValue": {"fields": {"value_type": "Literal['boolean'] = 'boolean'", "value": "bool"}},
-    "TypedValue": {"kind": "discriminated_union", "discriminator": "value_type", "variants": ["StringValue", "IntegerValue", "DecimalValue", "BooleanValue"], "fields": {}},
-    "PropertyValue": {"fields": {"property_code": "str", "value": "TypedValue", "source": "ValueSource", "source_ref": "str | None = None"}},
-    "EstimationRef": {"fields": {"namespace": "str", "code": "str", "role": "EstimationRole"}},
-    "Point": {"fields": {"x": "Decimal", "y": "Decimal"}},
-    "Viewport": {"fields": {"x": "Decimal", "y": "Decimal", "zoom": "Decimal"}},
-    "PortVisualAnchor": {"fields": {"x": "Decimal", "y": "Decimal", "side": "VisualSide", "direction": "VisualDirection"}},
-    "ElementVisualDefinition": {"fields": {"icon_key": "str", "svg_markup": "str", "default_width": "Decimal", "default_height": "Decimal"}},
-    "ConnectionVisualDefinition": {"fields": {"visual_style": "ConnectionVisualStyle", "color": "str", "stroke_width": "Decimal"}},
-    "PropertyDefinition": {"fields": {"code": "str", "label": "str", "value_type": "Literal['string','integer','decimal','boolean']", "unit_code": "str | None = None", "required_for_authoring": "bool = False", "required_for_estimation": "bool = False", "default_value": "TypedValue | None = None", "allowed_values": "list[TypedValue] = []", "minimum": "Decimal | None = None", "maximum": "Decimal | None = None"}},
-    "PortDefinition": {"fields": {"code": "str", "label": "str", "kind": "PortKind", "medium": "MediumKind", "flow_semantics": "FlowSemantics", "allowed_connection_type_codes": "list[str] = []", "visual_anchor": "PortVisualAnchor"}},
-    "ElementDefinition": {"fields": {"id": "str", "version": "int", "code": "str", "name": "str", "category_code": "str", "status": "DefinitionStatus", "scope": "DefinitionScope", "scope_ref": "str | None = None", "ports": "list[PortDefinition]", "properties": "list[PropertyDefinition] = []", "estimation_refs": "list[EstimationRef] = []", "visual": "ElementVisualDefinition", "created_at": "datetime", "created_by": "ActorRef"}},
-    "ConnectionTypeDefinition": {"fields": {"id": "str", "version": "int", "code": "str", "name": "str", "category_code": "str", "medium": "MediumKind", "status": "DefinitionStatus", "scope": "DefinitionScope", "scope_ref": "str | None = None", "properties": "list[PropertyDefinition] = []", "estimation_refs": "list[EstimationRef] = []", "visual": "ConnectionVisualDefinition", "created_at": "datetime", "created_by": "ActorRef"}},
-    "CatalogSnapshot": {"fields": {"element_definitions": "list[ElementDefinition] = []", "connection_definitions": "list[ConnectionTypeDefinition] = []"}},
-    "CreateElementDefinitionDraft": {"fields": {"code": "str", "name": "str", "category_code": "str", "scope": "DefinitionScope", "scope_ref": "str | None = None", "ports": "list[PortDefinition]", "properties": "list[PropertyDefinition] = []", "estimation_refs": "list[EstimationRef] = []", "visual": "ElementVisualDefinition"}},
-    "CreateConnectionDefinitionDraft": {"fields": {"code": "str", "name": "str", "category_code": "str", "medium": "MediumKind", "scope": "DefinitionScope", "scope_ref": "str | None = None", "properties": "list[PropertyDefinition] = []", "estimation_refs": "list[EstimationRef] = []", "visual": "ConnectionVisualDefinition"}},
-    "Diagram": {"fields": {"id": "str", "object_id": "str", "name": "str", "system_kinds": "set[DiagramSystemKind]", "status": "DiagramStatus", "current_revision": "int", "created_at": "datetime", "updated_at": "datetime", "created_by": "ActorRef"}},
-    "DiagramElement": {"fields": {"id": "str", "definition": "DefinitionRef", "label": "str | None = None", "quantity": "Decimal", "properties": "list[PropertyValue] = []"}},
-    "DiagramConnection": {"fields": {"id": "str", "source": "PortRef", "target": "PortRef", "connection_type": "DefinitionRef", "properties": "list[PropertyValue] = []"}},
-    "ElementLayout": {"fields": {"element_id": "str", "x": "Decimal", "y": "Decimal", "rotation_degrees": "int", "width": "Decimal | None = None", "height": "Decimal | None = None"}},
-    "ConnectionLayout": {"fields": {"connection_id": "str", "route_points": "list[Point] = []"}},
-    "DiagramLayout": {"fields": {"elements": "list[ElementLayout] = []", "connections": "list[ConnectionLayout] = []", "viewport": "Viewport"}},
-    "DiagramRevision": {"fields": {"diagram_id": "str", "revision": "int", "schema_version": "int", "elements": "list[DiagramElement] = []", "connections": "list[DiagramConnection] = []", "layout": "DiagramLayout", "created_at": "datetime", "created_by": "ActorRef", "change_source": "ChangeSource", "change_summary": "str | None = None"}},
-    "ValidationIssue": {"fields": {"code": "str", "severity": "ValidationSeverity", "message": "str", "entity_type": "SourceEntityType | None = None", "entity_id": "str | None = None", "property_code": "str | None = None"}},
-    "ValidationReport": {"fields": {"issues": "list[ValidationIssue] = []", "is_valid": "bool"}},
-    "WorkingDiagramResult": {"fields": {"revision_base": "int", "working_elements": "list[DiagramElement] = []", "working_connections": "list[DiagramConnection] = []", "working_layout": "DiagramLayout", "validation": "ValidationReport"}},
-    "CommitRevisionResult": {"fields": {"diagram": "Diagram", "revision": "DiagramRevision"}},
-    "AddElementCommand": {"fields": {"command_type": "Literal['add_element'] = 'add_element'", "element_id": "str", "definition": "DefinitionRef", "label": "str | None = None", "quantity": "Decimal", "properties": "list[PropertyValue] = []", "layout": "ElementLayout | None = None"}},
-    "SetElementPropertiesCommand": {"fields": {"command_type": "Literal['set_element_properties'] = 'set_element_properties'", "element_id": "str", "properties": "list[PropertyValue]"}},
-    "RemoveElementCommand": {"fields": {"command_type": "Literal['remove_element'] = 'remove_element'", "element_id": "str"}},
-    "AddConnectionCommand": {"fields": {"command_type": "Literal['add_connection'] = 'add_connection'", "connection_id": "str", "source": "PortRef", "target": "PortRef", "connection_type": "DefinitionRef", "properties": "list[PropertyValue] = []", "layout": "ConnectionLayout | None = None"}},
-    "SetConnectionPropertiesCommand": {"fields": {"command_type": "Literal['set_connection_properties'] = 'set_connection_properties'", "connection_id": "str", "properties": "list[PropertyValue]"}},
-    "RemoveConnectionCommand": {"fields": {"command_type": "Literal['remove_connection'] = 'remove_connection'", "connection_id": "str"}},
-    "UpdateLayoutCommand": {"fields": {"command_type": "Literal['update_layout'] = 'update_layout'", "layout": "DiagramLayout"}},
-    "AuthoringCommand": {"kind": "discriminated_union", "discriminator": "command_type", "variants": ["AddElementCommand", "SetElementPropertiesCommand", "RemoveElementCommand", "AddConnectionCommand", "SetConnectionPropertiesCommand", "RemoveConnectionCommand", "UpdateLayoutCommand"], "fields": {}},
-    "ElementEstimationItem": {"fields": {"definition": "DefinitionRef", "name": "str", "estimation_refs": "list[EstimationRef] = []", "quantity": "Decimal", "unit_code": "str", "properties": "list[PropertyValue] = []", "source_element_ids": "list[str]"}},
-    "ConnectionEstimationItem": {"fields": {"connection_type": "DefinitionRef", "name": "str", "estimation_refs": "list[EstimationRef] = []", "quantity": "Decimal", "unit_code": "str", "properties": "list[PropertyValue] = []", "source_connection_ids": "list[str]"}},
-    "MissingEstimationRequirement": {"fields": {"code": "str", "entity_type": "SourceEntityType", "entity_id": "str | None = None", "property_code": "str | None = None", "reason": "str", "required_by": "str", "can_agent_resolve": "bool"}},
-    "EstimationWarning": {"fields": {"code": "str", "message": "str", "entity_type": "SourceEntityType | None = None", "entity_id": "str | None = None"}},
-    "RequirementAnalysis": {"fields": {"missing_requirements": "list[MissingEstimationRequirement] = []", "warnings": "list[EstimationWarning] = []"}},
-    "EstimationDataPackage": {"fields": {"package_id": "str", "object_id": "str", "diagram_id": "str", "diagram_revision": "int", "schema_version": "int", "collector_rule_version": "str", "status": "EstimationPackageStatus", "element_items": "list[ElementEstimationItem] = []", "connection_items": "list[ConnectionEstimationItem] = []", "missing_requirements": "list[MissingEstimationRequirement] = []", "warnings": "list[EstimationWarning] = []", "generated_at": "datetime"}},
-    "DiagramWorkspace": {"fields": {"diagram": "Diagram", "current_revision": "DiagramRevision | None", "catalog": "CatalogSnapshot"}},
-    "DiagramSummary": {"fields": {"diagram_id": "str", "object_id": "str", "name": "str", "system_kinds": "set[DiagramSystemKind]", "status": "DiagramStatus", "current_revision": "int", "updated_at": "datetime"}},
-    "DiagramSummaryPage": {"fields": {"items": "list[DiagramSummary] = []", "next_cursor": "str | None = None"}},
-    "DiagramRevisionSummary": {"fields": {"diagram_id": "str", "revision": "int", "created_at": "datetime", "created_by": "ActorRef", "change_source": "ChangeSource", "change_summary": "str | None = None"}},
-    "DiagramRevisionSummaryPage": {"fields": {"items": "list[DiagramRevisionSummary] = []", "next_cursor": "str | None = None"}},
-    "ObjectSnapshot": {"fields": {"object_id": "str", "status": "Literal['active', 'archived']"}},
-    "DiagramIndexArtifact": {"fields": {"object_id": "str", "diagrams": "list[DiagramSummary] = []", "generated_at": "datetime"}},
-    "DatabaseSettings": {"fields": {"url": "str", "pool_size": "int", "max_overflow": "int", "pool_timeout_seconds": "int", "statement_timeout_seconds": "int", "connect_timeout_seconds": "int"}}
+    "ActorType": {
+      "kind": "enum",
+      "base": "str",
+      "values": [
+        "user",
+        "agent",
+        "service",
+        "import",
+        "system"
+      ]
+    },
+    "DiagramSystemKind": {
+      "kind": "enum",
+      "base": "str",
+      "values": [
+        "heating",
+        "cold_water",
+        "hot_water",
+        "solar_thermal"
+      ]
+    },
+    "DiagramStatus": {
+      "kind": "enum",
+      "base": "str",
+      "values": [
+        "draft",
+        "active",
+        "archived"
+      ]
+    },
+    "DefinitionStatus": {
+      "kind": "enum",
+      "base": "str",
+      "values": [
+        "draft",
+        "active",
+        "deprecated",
+        "rejected"
+      ]
+    },
+    "DefinitionScope": {
+      "kind": "enum",
+      "base": "str",
+      "values": [
+        "diagram",
+        "object",
+        "tenant",
+        "global"
+      ]
+    },
+    "PortKind": {
+      "kind": "enum",
+      "base": "str",
+      "values": [
+        "hydraulic",
+        "control",
+        "sensor",
+        "drain",
+        "fill",
+        "unspecified"
+      ]
+    },
+    "MediumKind": {
+      "kind": "enum",
+      "base": "str",
+      "values": [
+        "water",
+        "hot_water",
+        "cold_water",
+        "heating_water",
+        "antifreeze_mix",
+        "unspecified"
+      ]
+    },
+    "FlowSemantics": {
+      "kind": "enum",
+      "base": "str",
+      "values": [
+        "bidirectional",
+        "inlet",
+        "outlet",
+        "supply",
+        "return",
+        "unspecified"
+      ]
+    },
+    "ValidationStage": {
+      "kind": "enum",
+      "base": "str",
+      "values": [
+        "draft",
+        "commit",
+        "activation",
+        "estimation"
+      ]
+    },
+    "ValidationSeverity": {
+      "kind": "enum",
+      "base": "str",
+      "values": [
+        "warning",
+        "blocking"
+      ]
+    },
+    "SourceEntityType": {
+      "kind": "enum",
+      "base": "str",
+      "values": [
+        "diagram",
+        "element",
+        "connection",
+        "element_definition",
+        "connection_definition",
+        "property",
+        "layout"
+      ]
+    },
+    "ChangeSource": {
+      "kind": "enum",
+      "base": "str",
+      "values": [
+        "editor",
+        "agent",
+        "service",
+        "import",
+        "migration"
+      ]
+    },
+    "EstimationPackageStatus": {
+      "kind": "enum",
+      "base": "str",
+      "values": [
+        "complete",
+        "incomplete",
+        "invalid"
+      ]
+    },
+    "ValueSource": {
+      "kind": "enum",
+      "base": "str",
+      "values": [
+        "user",
+        "agent",
+        "catalog_default",
+        "import",
+        "calculated",
+        "object_card"
+      ]
+    },
+    "EstimationRole": {
+      "kind": "enum",
+      "base": "str",
+      "values": [
+        "material",
+        "work",
+        "equipment",
+        "accessory",
+        "measurement",
+        "classification"
+      ]
+    },
+    "MeasurementMethod": {
+      "kind": "enum",
+      "base": "str",
+      "values": [
+        "count",
+        "property_sum",
+        "explicit_property",
+        "layout_route_length"
+      ]
+    },
+    "VisualSide": {
+      "kind": "enum",
+      "base": "str",
+      "values": [
+        "top",
+        "right",
+        "bottom",
+        "left",
+        "center"
+      ]
+    },
+    "VisualDirection": {
+      "kind": "enum",
+      "base": "str",
+      "values": [
+        "up",
+        "right",
+        "down",
+        "left",
+        "none"
+      ]
+    },
+    "ConnectionVisualStyle": {
+      "kind": "enum",
+      "base": "str",
+      "values": [
+        "solid",
+        "dashed",
+        "dotted"
+      ]
+    },
+    "ActorRef": {
+      "fields": {
+        "actor_type": "ActorType",
+        "actor_id": "str",
+        "label": "str | None = None"
+      }
+    },
+    "DefinitionRef": {
+      "fields": {
+        "definition_id": "str",
+        "version": "int"
+      }
+    },
+    "PortRef": {
+      "fields": {
+        "element_id": "str",
+        "port_code": "str"
+      }
+    },
+    "StringValue": {
+      "fields": {
+        "value_type": "Literal['string'] = 'string'",
+        "value": "str"
+      }
+    },
+    "IntegerValue": {
+      "fields": {
+        "value_type": "Literal['integer'] = 'integer'",
+        "value": "int"
+      }
+    },
+    "DecimalValue": {
+      "fields": {
+        "value_type": "Literal['decimal'] = 'decimal'",
+        "value": "Decimal"
+      }
+    },
+    "BooleanValue": {
+      "fields": {
+        "value_type": "Literal['boolean'] = 'boolean'",
+        "value": "bool"
+      }
+    },
+    "TypedValue": {
+      "kind": "discriminated_union",
+      "discriminator": "value_type",
+      "variants": [
+        "StringValue",
+        "IntegerValue",
+        "DecimalValue",
+        "BooleanValue"
+      ],
+      "fields": {}
+    },
+    "PropertyValue": {
+      "fields": {
+        "property_code": "str",
+        "value": "TypedValue",
+        "source": "ValueSource",
+        "source_ref": "str | None = None"
+      }
+    },
+    "EstimationRef": {
+      "fields": {
+        "namespace": "str",
+        "code": "str",
+        "role": "EstimationRole"
+      }
+    },
+    "Point": {
+      "fields": {
+        "x": "Decimal",
+        "y": "Decimal"
+      }
+    },
+    "Viewport": {
+      "fields": {
+        "x": "Decimal",
+        "y": "Decimal",
+        "zoom": "Decimal"
+      }
+    },
+    "PortVisualAnchor": {
+      "fields": {
+        "x": "Decimal",
+        "y": "Decimal",
+        "side": "VisualSide",
+        "direction": "VisualDirection"
+      }
+    },
+    "ElementVisualDefinition": {
+      "fields": {
+        "icon_key": "str",
+        "svg_markup": "str",
+        "default_width": "Decimal",
+        "default_height": "Decimal"
+      }
+    },
+    "ConnectionVisualDefinition": {
+      "fields": {
+        "visual_style": "ConnectionVisualStyle",
+        "color": "str",
+        "stroke_width": "Decimal"
+      }
+    },
+    "PropertyDefinition": {
+      "fields": {
+        "code": "str",
+        "label": "str",
+        "value_type": "Literal['string','integer','decimal','boolean']",
+        "unit_code": "str | None = None",
+        "required_for_authoring": "bool = False",
+        "required_for_estimation": "bool = False",
+        "default_value": "TypedValue | None = None",
+        "allowed_values": "list[TypedValue] = []",
+        "minimum": "Decimal | None = None",
+        "maximum": "Decimal | None = None"
+      }
+    },
+    "PortDefinition": {
+      "fields": {
+        "code": "str",
+        "label": "str",
+        "kind": "PortKind",
+        "medium": "MediumKind",
+        "flow_semantics": "FlowSemantics",
+        "allowed_connection_type_codes": "list[str] = []",
+        "visual_anchor": "PortVisualAnchor"
+      }
+    },
+    "ElementDefinition": {
+      "fields": {
+        "entity_kind": "Literal['element_definition'] = 'element_definition'",
+        "id": "str",
+        "version": "int",
+        "code": "str",
+        "name": "str",
+        "category_code": "str",
+        "status": "DefinitionStatus",
+        "scope": "DefinitionScope",
+        "scope_ref": "str | None = None",
+        "ports": "list[PortDefinition]",
+        "properties": "list[PropertyDefinition] = []",
+        "estimation_refs": "list[EstimationRef] = []",
+        "visual": "ElementVisualDefinition",
+        "created_at": "datetime",
+        "created_by": "ActorRef"
+      }
+    },
+    "ConnectionTypeDefinition": {
+      "fields": {
+        "entity_kind": "Literal['connection_definition'] = 'connection_definition'",
+        "id": "str",
+        "version": "int",
+        "code": "str",
+        "name": "str",
+        "category_code": "str",
+        "medium": "MediumKind",
+        "status": "DefinitionStatus",
+        "scope": "DefinitionScope",
+        "scope_ref": "str | None = None",
+        "properties": "list[PropertyDefinition] = []",
+        "estimation_refs": "list[EstimationRef] = []",
+        "visual": "ConnectionVisualDefinition",
+        "created_at": "datetime",
+        "created_by": "ActorRef"
+      }
+    },
+    "CatalogDefinition": {
+      "kind": "discriminated_union",
+      "discriminator": "entity_kind",
+      "variants": [
+        "ElementDefinition",
+        "ConnectionTypeDefinition"
+      ]
+    },
+    "EstimationSourceEntity": {
+      "kind": "discriminated_union",
+      "discriminator": "entity_kind",
+      "variants": [
+        "DiagramElement",
+        "DiagramConnection",
+        "ElementDefinition",
+        "ConnectionTypeDefinition"
+      ]
+    },
+    "CatalogSnapshot": {
+      "fields": {
+        "element_definitions": "list[ElementDefinition] = []",
+        "connection_definitions": "list[ConnectionTypeDefinition] = []"
+      }
+    },
+    "CreateElementDefinitionDraft": {
+      "fields": {
+        "code": "str",
+        "name": "str",
+        "category_code": "str",
+        "scope": "DefinitionScope",
+        "scope_ref": "str | None = None",
+        "ports": "list[PortDefinition]",
+        "properties": "list[PropertyDefinition] = []",
+        "estimation_refs": "list[EstimationRef] = []",
+        "visual": "ElementVisualDefinition"
+      }
+    },
+    "CreateConnectionDefinitionDraft": {
+      "fields": {
+        "code": "str",
+        "name": "str",
+        "category_code": "str",
+        "medium": "MediumKind",
+        "scope": "DefinitionScope",
+        "scope_ref": "str | None = None",
+        "properties": "list[PropertyDefinition] = []",
+        "estimation_refs": "list[EstimationRef] = []",
+        "visual": "ConnectionVisualDefinition"
+      }
+    },
+    "Diagram": {
+      "fields": {
+        "id": "str",
+        "object_id": "str",
+        "name": "str",
+        "system_kinds": "set[DiagramSystemKind]",
+        "status": "DiagramStatus",
+        "current_revision": "int",
+        "created_at": "datetime",
+        "updated_at": "datetime",
+        "created_by": "ActorRef"
+      }
+    },
+    "DiagramElement": {
+      "fields": {
+        "entity_kind": "Literal['element'] = 'element'",
+        "id": "str",
+        "definition": "DefinitionRef",
+        "label": "str | None = None",
+        "quantity": "Decimal",
+        "properties": "list[PropertyValue] = []"
+      }
+    },
+    "DiagramConnection": {
+      "fields": {
+        "entity_kind": "Literal['connection'] = 'connection'",
+        "id": "str",
+        "source": "PortRef",
+        "target": "PortRef",
+        "connection_type": "DefinitionRef",
+        "properties": "list[PropertyValue] = []"
+      }
+    },
+    "ElementLayout": {
+      "fields": {
+        "element_id": "str",
+        "x": "Decimal",
+        "y": "Decimal",
+        "rotation_degrees": "int",
+        "width": "Decimal | None = None",
+        "height": "Decimal | None = None"
+      }
+    },
+    "ConnectionLayout": {
+      "fields": {
+        "connection_id": "str",
+        "route_points": "list[Point] = []"
+      }
+    },
+    "DiagramLayout": {
+      "fields": {
+        "elements": "list[ElementLayout] = []",
+        "connections": "list[ConnectionLayout] = []",
+        "viewport": "Viewport"
+      }
+    },
+    "DiagramRevision": {
+      "fields": {
+        "diagram_id": "str",
+        "revision": "int",
+        "schema_version": "int",
+        "elements": "list[DiagramElement] = []",
+        "connections": "list[DiagramConnection] = []",
+        "layout": "DiagramLayout",
+        "created_at": "datetime",
+        "created_by": "ActorRef",
+        "change_source": "ChangeSource",
+        "change_summary": "str | None = None"
+      }
+    },
+    "ValidationIssue": {
+      "fields": {
+        "code": "str",
+        "severity": "ValidationSeverity",
+        "message": "str",
+        "entity_type": "SourceEntityType | None = None",
+        "entity_id": "str | None = None",
+        "property_code": "str | None = None"
+      }
+    },
+    "ValidationReport": {
+      "fields": {
+        "issues": "list[ValidationIssue] = []",
+        "is_valid": "bool"
+      }
+    },
+    "WorkingDiagramResult": {
+      "fields": {
+        "revision_base": "int",
+        "working_elements": "list[DiagramElement] = []",
+        "working_connections": "list[DiagramConnection] = []",
+        "working_layout": "DiagramLayout",
+        "validation": "ValidationReport"
+      }
+    },
+    "CommitRevisionResult": {
+      "fields": {
+        "diagram": "Diagram",
+        "revision": "DiagramRevision"
+      }
+    },
+    "AddElementCommand": {
+      "fields": {
+        "command_type": "Literal['add_element'] = 'add_element'",
+        "element_id": "str",
+        "definition": "DefinitionRef",
+        "label": "str | None = None",
+        "quantity": "Decimal",
+        "properties": "list[PropertyValue] = []",
+        "layout": "ElementLayout | None = None"
+      }
+    },
+    "SetElementPropertiesCommand": {
+      "fields": {
+        "command_type": "Literal['set_element_properties'] = 'set_element_properties'",
+        "element_id": "str",
+        "properties": "list[PropertyValue]"
+      }
+    },
+    "RemoveElementCommand": {
+      "fields": {
+        "command_type": "Literal['remove_element'] = 'remove_element'",
+        "element_id": "str"
+      }
+    },
+    "AddConnectionCommand": {
+      "fields": {
+        "command_type": "Literal['add_connection'] = 'add_connection'",
+        "connection_id": "str",
+        "source": "PortRef",
+        "target": "PortRef",
+        "connection_type": "DefinitionRef",
+        "properties": "list[PropertyValue] = []",
+        "layout": "ConnectionLayout | None = None"
+      }
+    },
+    "SetConnectionPropertiesCommand": {
+      "fields": {
+        "command_type": "Literal['set_connection_properties'] = 'set_connection_properties'",
+        "connection_id": "str",
+        "properties": "list[PropertyValue]"
+      }
+    },
+    "RemoveConnectionCommand": {
+      "fields": {
+        "command_type": "Literal['remove_connection'] = 'remove_connection'",
+        "connection_id": "str"
+      }
+    },
+    "UpdateLayoutCommand": {
+      "fields": {
+        "command_type": "Literal['update_layout'] = 'update_layout'",
+        "layout": "DiagramLayout"
+      }
+    },
+    "AuthoringCommand": {
+      "kind": "discriminated_union",
+      "discriminator": "command_type",
+      "variants": [
+        "AddElementCommand",
+        "SetElementPropertiesCommand",
+        "RemoveElementCommand",
+        "AddConnectionCommand",
+        "SetConnectionPropertiesCommand",
+        "RemoveConnectionCommand",
+        "UpdateLayoutCommand"
+      ],
+      "fields": {}
+    },
+    "ElementEstimationItem": {
+      "fields": {
+        "definition": "DefinitionRef",
+        "name": "str",
+        "estimation_refs": "list[EstimationRef] = []",
+        "quantity": "Decimal",
+        "unit_code": "str",
+        "properties": "list[PropertyValue] = []",
+        "source_element_ids": "list[str]"
+      }
+    },
+    "ConnectionEstimationItem": {
+      "fields": {
+        "connection_type": "DefinitionRef",
+        "name": "str",
+        "estimation_refs": "list[EstimationRef] = []",
+        "quantity": "Decimal",
+        "unit_code": "str",
+        "properties": "list[PropertyValue] = []",
+        "source_connection_ids": "list[str]"
+      }
+    },
+    "MissingEstimationRequirement": {
+      "fields": {
+        "code": "str",
+        "entity_type": "SourceEntityType",
+        "entity_id": "str | None = None",
+        "property_code": "str | None = None",
+        "reason": "str",
+        "required_by": "str",
+        "can_agent_resolve": "bool"
+      }
+    },
+    "EstimationWarning": {
+      "fields": {
+        "code": "str",
+        "message": "str",
+        "entity_type": "SourceEntityType | None = None",
+        "entity_id": "str | None = None"
+      }
+    },
+    "RequirementAnalysis": {
+      "fields": {
+        "missing_requirements": "list[MissingEstimationRequirement] = []",
+        "warnings": "list[EstimationWarning] = []"
+      }
+    },
+    "EstimationDataPackage": {
+      "fields": {
+        "package_id": "str",
+        "object_id": "str",
+        "diagram_id": "str",
+        "diagram_revision": "int",
+        "schema_version": "int",
+        "collector_rule_version": "str",
+        "status": "EstimationPackageStatus",
+        "element_items": "list[ElementEstimationItem] = []",
+        "connection_items": "list[ConnectionEstimationItem] = []",
+        "missing_requirements": "list[MissingEstimationRequirement] = []",
+        "warnings": "list[EstimationWarning] = []",
+        "generated_at": "datetime"
+      }
+    },
+    "DiagramWorkspace": {
+      "fields": {
+        "diagram": "Diagram",
+        "current_revision": "DiagramRevision | None",
+        "catalog": "CatalogSnapshot"
+      }
+    },
+    "DiagramSummary": {
+      "fields": {
+        "diagram_id": "str",
+        "object_id": "str",
+        "name": "str",
+        "system_kinds": "set[DiagramSystemKind]",
+        "status": "DiagramStatus",
+        "current_revision": "int",
+        "updated_at": "datetime"
+      }
+    },
+    "DiagramSummaryPage": {
+      "fields": {
+        "items": "list[DiagramSummary] = []",
+        "next_cursor": "str | None = None"
+      }
+    },
+    "DiagramRevisionSummary": {
+      "fields": {
+        "diagram_id": "str",
+        "revision": "int",
+        "created_at": "datetime",
+        "created_by": "ActorRef",
+        "change_source": "ChangeSource",
+        "change_summary": "str | None = None"
+      }
+    },
+    "DiagramRevisionSummaryPage": {
+      "fields": {
+        "items": "list[DiagramRevisionSummary] = []",
+        "next_cursor": "str | None = None"
+      }
+    },
+    "ObjectSnapshot": {
+      "fields": {
+        "object_id": "str",
+        "status": "Literal['active', 'archived']"
+      }
+    },
+    "DiagramIndexArtifact": {
+      "fields": {
+        "object_id": "str",
+        "diagrams": "list[DiagramSummary] = []",
+        "generated_at": "datetime"
+      }
+    },
+    "DatabaseSettings": {
+      "fields": {
+        "url": "str",
+        "pool_size": "int",
+        "max_overflow": "int",
+        "pool_timeout_seconds": "int",
+        "statement_timeout_seconds": "int",
+        "connect_timeout_seconds": "int"
+      }
+    }
   },
   "rules": {
-    "diagram_status_transitions": {"draft": ["active", "archived"], "active": ["archived"], "archived": []},
-    "definition_status_transitions": {"draft": ["active", "rejected"], "active": ["deprecated"], "deprecated": [], "rejected": []},
-    "definition_scope_policy": {"diagram": {"scope_ref_required": true}, "object": {"scope_ref_required": true}, "tenant": {"scope_ref_required": true, "enabled": false}, "global": {"scope_ref_required": false}},
-    "port_multiplicity": {"default_max_connections": 1},
-    "layout_authority_policy": {"presentation_only": true, "route_length_enabled": false},
-    "estimation_collection_policy": {"enabled_measurement_methods": ["count", "property_sum", "explicit_property"], "disabled_measurement_methods": ["layout_route_length"], "count_unit": "ud", "missing_values_must_not_be_guessed": true}
+    "diagram_status_transitions": {
+      "draft": [
+        "active",
+        "archived"
+      ],
+      "active": [
+        "archived"
+      ],
+      "archived": []
+    },
+    "definition_status_transitions": {
+      "draft": [
+        "active",
+        "rejected"
+      ],
+      "active": [
+        "deprecated"
+      ],
+      "deprecated": [],
+      "rejected": []
+    },
+    "definition_scope_policy": {
+      "diagram": {
+        "scope_ref_required": true
+      },
+      "object": {
+        "scope_ref_required": true
+      },
+      "tenant": {
+        "scope_ref_required": true,
+        "enabled": false
+      },
+      "global": {
+        "scope_ref_required": false
+      }
+    },
+    "port_multiplicity": {
+      "default_max_connections": 1
+    },
+    "layout_authority_policy": {
+      "presentation_only": true,
+      "route_length_enabled": false
+    },
+    "estimation_collection_policy": {
+      "enabled_measurement_methods": [
+        "count",
+        "property_sum",
+        "explicit_property"
+      ],
+      "disabled_measurement_methods": [
+        "layout_route_length"
+      ],
+      "count_unit": "ud",
+      "missing_values_must_not_be_guessed": true
+    }
   },
   "imports": {
-    "stdlib": ["from __future__ import annotations", "from datetime import datetime", "from decimal import Decimal", "from enum import Enum", "from typing import Annotated, Literal, Protocol"],
-    "third_party": ["from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator", "from sqlalchemy import Engine", "from sqlalchemy.orm import Session, sessionmaker"],
+    "stdlib": [
+      "from __future__ import annotations",
+      "from datetime import datetime",
+      "from decimal import Decimal",
+      "from enum import Enum",
+      "from typing import Annotated, Literal, Protocol"
+    ],
+    "third_party": [
+      "from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator",
+      "from sqlalchemy import Engine",
+      "from sqlalchemy.orm import Session, sessionmaker"
+    ],
     "internal": {
-      "errors": ["DomainError", "IntegrityError", "ConflictError", "NotFoundError", "PersistenceError"],
-      "models": ["Diagram", "DiagramRevision", "DiagramElement", "DiagramConnection", "ElementDefinition", "ConnectionTypeDefinition", "CatalogSnapshot", "AuthoringCommand", "WorkingDiagramResult", "ValidationReport", "EstimationDataPackage", "DiagramSystemKind", "DiagramStatus", "DefinitionStatus", "ValidationStage", "ChangeSource", "EstimationPackageStatus", "SourceEntityType", "ActorRef", "DefinitionRef", "CreateElementDefinitionDraft", "CreateConnectionDefinitionDraft", "DiagramSummary", "DiagramSummaryPage", "DiagramRevisionSummaryPage", "ObjectSnapshot", "DiagramIndexArtifact", "DatabaseSettings"],
-      "application_ports": ["DiagramRepository", "RevisionRepository", "CatalogRepository", "UnitOfWork", "CapabilityAuthorizer", "ObjectGateway"],
-      "catalog": ["resolve_catalog_snapshot", "list_available_definitions", "create_element_definition_draft", "create_connection_definition_draft", "transition_definition_status"],
-      "diagram_policy": ["validate_working_diagram"],
-      "diagram": ["create_diagram", "apply_authoring_command", "apply_authoring_commands", "change_diagram_status"],
-      "revision": ["commit_revision"],
-      "estimation_data": ["build_estimation_data"]
+      "errors": [
+        "DomainError",
+        "IntegrityError",
+        "ConflictError",
+        "NotFoundError",
+        "PersistenceError"
+      ],
+      "models": [
+        "Diagram",
+        "DiagramRevision",
+        "DiagramElement",
+        "DiagramConnection",
+        "ElementDefinition",
+        "ConnectionTypeDefinition",
+        "CatalogSnapshot",
+        "AuthoringCommand",
+        "WorkingDiagramResult",
+        "ValidationReport",
+        "EstimationDataPackage",
+        "DiagramSystemKind",
+        "DiagramStatus",
+        "DefinitionStatus",
+        "ValidationStage",
+        "ChangeSource",
+        "EstimationPackageStatus",
+        "SourceEntityType",
+        "ActorRef",
+        "DefinitionRef",
+        "CreateElementDefinitionDraft",
+        "CreateConnectionDefinitionDraft",
+        "DiagramSummary",
+        "DiagramSummaryPage",
+        "DiagramRevisionSummaryPage",
+        "ObjectSnapshot",
+        "DiagramIndexArtifact",
+        "DatabaseSettings",
+        "CatalogDefinition",
+        "EstimationSourceEntity"
+      ],
+      "application_ports": [
+        "DiagramRepository",
+        "RevisionRepository",
+        "CatalogRepository",
+        "UnitOfWork",
+        "CapabilityAuthorizer",
+        "ObjectGateway"
+      ],
+      "catalog": [
+        "resolve_catalog_snapshot",
+        "list_available_definitions",
+        "create_element_definition_draft",
+        "create_connection_definition_draft",
+        "transition_definition_status"
+      ],
+      "diagram_policy": [
+        "validate_working_diagram"
+      ],
+      "diagram": [
+        "create_diagram",
+        "apply_authoring_command",
+        "apply_authoring_commands",
+        "change_diagram_status"
+      ],
+      "revision": [
+        "commit_revision"
+      ],
+      "estimation_data": [
+        "build_estimation_data"
+      ]
     }
   },
   "module_functions": {
-    "errors": ["DomainError", "IntegrityError", "ConflictError", "NotFoundError", "PersistenceError"],
-    "models": ["ActorType", "DiagramSystemKind", "DiagramStatus", "DefinitionStatus", "DefinitionScope", "PortKind", "MediumKind", "FlowSemantics", "ValidationStage", "ValidationSeverity", "SourceEntityType", "ChangeSource", "EstimationPackageStatus", "ValueSource", "EstimationRole", "MeasurementMethod", "VisualSide", "VisualDirection", "ConnectionVisualStyle", "ActorRef", "DefinitionRef", "PortRef", "TypedValue", "StringValue", "IntegerValue", "DecimalValue", "BooleanValue", "PropertyValue", "EstimationRef", "Point", "Viewport", "PortVisualAnchor", "ElementVisualDefinition", "ConnectionVisualDefinition", "PropertyDefinition", "PortDefinition", "ElementDefinition", "ConnectionTypeDefinition", "CatalogSnapshot", "CreateElementDefinitionDraft", "CreateConnectionDefinitionDraft", "Diagram", "DiagramElement", "DiagramConnection", "ElementLayout", "ConnectionLayout", "DiagramLayout", "DiagramRevision", "ValidationIssue", "ValidationReport", "WorkingDiagramResult", "CommitRevisionResult", "AddElementCommand", "SetElementPropertiesCommand", "RemoveElementCommand", "AddConnectionCommand", "SetConnectionPropertiesCommand", "RemoveConnectionCommand", "UpdateLayoutCommand", "AuthoringCommand", "ElementEstimationItem", "ConnectionEstimationItem", "MissingEstimationRequirement", "EstimationWarning", "RequirementAnalysis", "EstimationDataPackage", "DiagramWorkspace", "DiagramSummary", "DiagramSummaryPage", "DiagramRevisionSummary", "DiagramRevisionSummaryPage", "ObjectSnapshot", "DiagramIndexArtifact", "DatabaseSettings"],
-    "application_ports": ["DiagramRepository", "RevisionRepository", "CatalogRepository", "UnitOfWork", "CapabilityAuthorizer", "ObjectGateway"],
-    "catalog": ["resolve_catalog_snapshot", "list_available_definitions", "create_element_definition_draft", "_validate_element_visual_asset", "create_connection_definition_draft", "transition_definition_status"],
-    "diagram_policy": ["validate_working_diagram"],
-    "layout": ["validate_layout", "normalize_layout"],
-    "diagram": ["create_diagram", "change_diagram_status", "apply_authoring_command", "apply_authoring_commands"],
-    "revision": ["commit_revision"],
-    "estimation_element_items": ["collect_element_items"],
-    "estimation_connection_items": ["collect_connection_items"],
-    "estimation_requirements": ["analyze_estimation_requirements"],
-    "estimation_assembly": ["assemble_estimation_package"],
-    "estimation_data": ["build_estimation_data"],
-    "application_diagrams": ["create_diagram_use_case", "get_diagram_workspace"],
-    "application_authoring": ["apply_diagram_commands_use_case", "commit_diagram_revision_use_case"],
-    "application_catalog": ["list_available_definitions_use_case", "create_element_definition_draft_use_case", "create_connection_definition_draft_use_case", "transition_definition_status_use_case"],
-    "application_estimation": ["build_diagram_estimation_data", "inspect_estimation_source"],
-    "database": ["create_engine_from_settings", "create_session_factory"],
-    "persistence_serializers": ["serialize_diagram_revision", "deserialize_diagram_revision", "serialize_element_definition", "deserialize_element_definition", "serialize_connection_definition", "deserialize_connection_definition"],
-    "persistence_repositories": ["SqlAlchemyDiagramRepository", "SqlAlchemyRevisionRepository", "SqlAlchemyCatalogRepository", "SqlAlchemyUnitOfWork"]
+    "errors": [
+      "DomainError",
+      "IntegrityError",
+      "ConflictError",
+      "NotFoundError",
+      "PersistenceError"
+    ],
+    "models": [
+      "ActorType",
+      "DiagramSystemKind",
+      "DiagramStatus",
+      "DefinitionStatus",
+      "DefinitionScope",
+      "PortKind",
+      "MediumKind",
+      "FlowSemantics",
+      "ValidationStage",
+      "ValidationSeverity",
+      "SourceEntityType",
+      "ChangeSource",
+      "EstimationPackageStatus",
+      "ValueSource",
+      "EstimationRole",
+      "MeasurementMethod",
+      "VisualSide",
+      "VisualDirection",
+      "ConnectionVisualStyle",
+      "ActorRef",
+      "DefinitionRef",
+      "PortRef",
+      "TypedValue",
+      "StringValue",
+      "IntegerValue",
+      "DecimalValue",
+      "BooleanValue",
+      "PropertyValue",
+      "EstimationRef",
+      "Point",
+      "Viewport",
+      "PortVisualAnchor",
+      "ElementVisualDefinition",
+      "ConnectionVisualDefinition",
+      "PropertyDefinition",
+      "PortDefinition",
+      "ElementDefinition",
+      "ConnectionTypeDefinition",
+      "CatalogSnapshot",
+      "CreateElementDefinitionDraft",
+      "CreateConnectionDefinitionDraft",
+      "Diagram",
+      "DiagramElement",
+      "DiagramConnection",
+      "ElementLayout",
+      "ConnectionLayout",
+      "DiagramLayout",
+      "DiagramRevision",
+      "ValidationIssue",
+      "ValidationReport",
+      "WorkingDiagramResult",
+      "CommitRevisionResult",
+      "AddElementCommand",
+      "SetElementPropertiesCommand",
+      "RemoveElementCommand",
+      "AddConnectionCommand",
+      "SetConnectionPropertiesCommand",
+      "RemoveConnectionCommand",
+      "UpdateLayoutCommand",
+      "AuthoringCommand",
+      "ElementEstimationItem",
+      "ConnectionEstimationItem",
+      "MissingEstimationRequirement",
+      "EstimationWarning",
+      "RequirementAnalysis",
+      "EstimationDataPackage",
+      "DiagramWorkspace",
+      "DiagramSummary",
+      "DiagramSummaryPage",
+      "DiagramRevisionSummary",
+      "DiagramRevisionSummaryPage",
+      "ObjectSnapshot",
+      "DiagramIndexArtifact",
+      "DatabaseSettings",
+      "CatalogDefinition",
+      "EstimationSourceEntity"
+    ],
+    "application_ports": [
+      "DiagramRepository",
+      "RevisionRepository",
+      "CatalogRepository",
+      "UnitOfWork",
+      "CapabilityAuthorizer",
+      "ObjectGateway"
+    ],
+    "catalog": [
+      "resolve_catalog_snapshot",
+      "list_available_definitions",
+      "create_element_definition_draft",
+      "_validate_element_visual_asset",
+      "create_connection_definition_draft",
+      "transition_definition_status"
+    ],
+    "diagram_policy": [
+      "validate_working_diagram"
+    ],
+    "layout": [
+      "validate_layout",
+      "normalize_layout"
+    ],
+    "diagram": [
+      "create_diagram",
+      "change_diagram_status",
+      "apply_authoring_command",
+      "apply_authoring_commands"
+    ],
+    "revision": [
+      "commit_revision"
+    ],
+    "estimation_element_items": [
+      "collect_element_items"
+    ],
+    "estimation_connection_items": [
+      "collect_connection_items"
+    ],
+    "estimation_requirements": [
+      "analyze_estimation_requirements"
+    ],
+    "estimation_assembly": [
+      "assemble_estimation_package"
+    ],
+    "estimation_data": [
+      "build_estimation_data"
+    ],
+    "application_diagrams": [
+      "create_diagram_use_case",
+      "get_diagram_workspace"
+    ],
+    "application_authoring": [
+      "apply_diagram_commands_use_case",
+      "commit_diagram_revision_use_case"
+    ],
+    "application_catalog": [
+      "list_available_definitions_use_case",
+      "create_element_definition_draft_use_case",
+      "create_connection_definition_draft_use_case",
+      "transition_definition_status_use_case"
+    ],
+    "application_estimation": [
+      "build_diagram_estimation_data",
+      "inspect_estimation_source"
+    ],
+    "database": [
+      "create_engine_from_settings",
+      "create_session_factory"
+    ],
+    "persistence_serializers": [
+      "serialize_diagram_revision",
+      "deserialize_diagram_revision",
+      "serialize_element_definition",
+      "deserialize_element_definition",
+      "serialize_connection_definition",
+      "deserialize_connection_definition"
+    ],
+    "persistence_repositories": [
+      "SqlAlchemyDiagramRepository",
+      "SqlAlchemyRevisionRepository",
+      "SqlAlchemyCatalogRepository",
+      "SqlAlchemyUnitOfWork"
+    ]
   },
-  "module_order": ["models", "errors", "application_ports", "catalog", "diagram_policy", "layout", "diagram", "revision", "estimation_element_items", "estimation_connection_items", "estimation_requirements", "estimation_assembly", "estimation_data", "application_diagrams", "application_authoring", "application_catalog", "application_estimation", "database", "persistence_serializers", "persistence_repositories"],
-  "function_order": ["resolve_catalog_snapshot", "list_available_definitions", "create_element_definition_draft", "_validate_element_visual_asset", "create_connection_definition_draft", "transition_definition_status", "validate_working_diagram", "validate_layout", "normalize_layout", "create_diagram", "change_diagram_status", "apply_authoring_command", "apply_authoring_commands", "commit_revision", "collect_element_items", "collect_connection_items", "analyze_estimation_requirements", "assemble_estimation_package", "build_estimation_data", "create_diagram_use_case", "get_diagram_workspace", "apply_diagram_commands_use_case", "commit_diagram_revision_use_case", "list_available_definitions_use_case", "create_element_definition_draft_use_case", "create_connection_definition_draft_use_case", "transition_definition_status_use_case", "build_diagram_estimation_data", "inspect_estimation_source", "create_engine_from_settings", "create_session_factory", "serialize_diagram_revision", "deserialize_diagram_revision", "serialize_element_definition", "deserialize_element_definition", "serialize_connection_definition", "deserialize_connection_definition"],
+  "module_order": [
+    "models",
+    "errors",
+    "application_ports",
+    "catalog",
+    "diagram_policy",
+    "layout",
+    "diagram",
+    "revision",
+    "estimation_element_items",
+    "estimation_connection_items",
+    "estimation_requirements",
+    "estimation_assembly",
+    "estimation_data",
+    "application_diagrams",
+    "application_authoring",
+    "application_catalog",
+    "application_estimation",
+    "database",
+    "persistence_serializers",
+    "persistence_repositories"
+  ],
+  "function_order": [
+    "resolve_catalog_snapshot",
+    "list_available_definitions",
+    "create_element_definition_draft",
+    "_validate_element_visual_asset",
+    "create_connection_definition_draft",
+    "transition_definition_status",
+    "validate_working_diagram",
+    "validate_layout",
+    "normalize_layout",
+    "create_diagram",
+    "change_diagram_status",
+    "apply_authoring_command",
+    "apply_authoring_commands",
+    "commit_revision",
+    "collect_element_items",
+    "collect_connection_items",
+    "analyze_estimation_requirements",
+    "assemble_estimation_package",
+    "build_estimation_data",
+    "create_diagram_use_case",
+    "get_diagram_workspace",
+    "apply_diagram_commands_use_case",
+    "commit_diagram_revision_use_case",
+    "list_available_definitions_use_case",
+    "create_element_definition_draft_use_case",
+    "create_connection_definition_draft_use_case",
+    "transition_definition_status_use_case",
+    "build_diagram_estimation_data",
+    "inspect_estimation_source",
+    "create_engine_from_settings",
+    "create_session_factory",
+    "serialize_diagram_revision",
+    "deserialize_diagram_revision",
+    "serialize_element_definition",
+    "deserialize_element_definition",
+    "serialize_connection_definition",
+    "deserialize_connection_definition"
+  ],
   "module_hints": {
-    "errors": ["DomainError", "code", "message", "entity_id"],
-    "models": ["Pydantic", "BaseModel", "ConfigDict", "Field", "Enum"],
-    "application_ports": ["Protocol", "repository", "gateway", "authorizer"],
-    "catalog": ["definition", "scope", "status", "version", "draft", "SVG", "visual asset"],
-    "diagram_policy": ["validation", "port", "property", "compatibility"],
-    "layout": ["viewport", "rotation", "route_points"],
-    "diagram": ["authoring", "command", "element", "connection"],
-    "revision": ["expected_current_revision", "immutable", "UnitOfWork"],
-    "estimation_data": ["grouping", "missing requirements", "provenance"],
-    "application_catalog": ["capability", "draft", "activation"],
-    "database": ["PostgreSQL", "SQLAlchemy", "engine", "sessionmaker"],
-    "persistence_serializers": ["JSONB", "model_validate", "model_dump"],
-    "persistence_repositories": ["Session", "SqlAlchemy", "repository", "rollback"]
+    "errors": [
+      "DomainError",
+      "code",
+      "message",
+      "entity_id"
+    ],
+    "models": [
+      "Pydantic",
+      "BaseModel",
+      "ConfigDict",
+      "Field",
+      "Enum"
+    ],
+    "application_ports": [
+      "Protocol",
+      "repository",
+      "gateway",
+      "authorizer"
+    ],
+    "catalog": [
+      "definition",
+      "scope",
+      "status",
+      "version",
+      "draft",
+      "SVG",
+      "visual asset"
+    ],
+    "diagram_policy": [
+      "validation",
+      "port",
+      "property",
+      "compatibility"
+    ],
+    "layout": [
+      "viewport",
+      "rotation",
+      "route_points"
+    ],
+    "diagram": [
+      "authoring",
+      "command",
+      "element",
+      "connection"
+    ],
+    "revision": [
+      "expected_current_revision",
+      "immutable",
+      "UnitOfWork"
+    ],
+    "estimation_data": [
+      "grouping",
+      "missing requirements",
+      "provenance"
+    ],
+    "application_catalog": [
+      "capability",
+      "draft",
+      "activation"
+    ],
+    "database": [
+      "PostgreSQL",
+      "SQLAlchemy",
+      "engine",
+      "sessionmaker"
+    ],
+    "persistence_serializers": [
+      "JSONB",
+      "model_validate",
+      "model_dump"
+    ],
+    "persistence_repositories": [
+      "Session",
+      "SqlAlchemy",
+      "repository",
+      "rollback"
+    ]
   },
   "module_paths": {
     "errors": "hydraulic_diagram/domain/errors",

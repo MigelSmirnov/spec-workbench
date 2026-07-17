@@ -163,6 +163,52 @@ The discriminated union is important for both API validation and MCP tool genera
 
 ---
 
+# Catalog and estimation-source unions (added 2026-07-17)
+
+The specification standard normatively forbids untagged unions in type
+positions. Three contracts used `ElementDefinition | ConnectionTypeDefinition`
+(and a four-way variant in estimation-source inspection). They are replaced by
+declared discriminated unions over a single shared tag field.
+
+Tag field on the participating models, vocabulary aligned with the existing
+`SourceEntityType` enum:
+
+```text
+DiagramElement.entity_kind           = Literal['element'] = 'element'
+DiagramConnection.entity_kind        = Literal['connection'] = 'connection'
+ElementDefinition.entity_kind        = Literal['element_definition'] = 'element_definition'
+ConnectionTypeDefinition.entity_kind = Literal['connection_definition'] = 'connection_definition'
+```
+
+The field is additive with a constant default: previously persisted revision
+payloads and definition rows without it remain valid, and serialized output
+gains an explicit kind marker.
+
+Declared unions:
+
+```python
+CatalogDefinition = Annotated[
+    ElementDefinition | ConnectionTypeDefinition,
+    Field(discriminator="entity_kind"),
+]
+
+EstimationSourceEntity = Annotated[
+    DiagramElement
+    | DiagramConnection
+    | ElementDefinition
+    | ConnectionTypeDefinition,
+    Field(discriminator="entity_kind"),
+]
+```
+
+Contract impact (state 60): `transition_definition_status` takes and returns
+`CatalogDefinition`; `transition_definition_status_use_case` returns
+`CatalogDefinition` (its `definition_kind: Literal["element", "connection"]`
+lookup parameter is unchanged — it selects the repository getter);
+`inspect_estimation_source` returns `EstimationSourceEntity`.
+
+---
+
 # Requested diagram changes
 
 `RequestedDiagramChange` should use the same principle.
