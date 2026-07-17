@@ -147,8 +147,13 @@ model `kind`, metadata key, named union, alias, generic, root model, or custom
 method form, verify that the normative specification standard defines it and
 that the selected Factory profile materializes it. Do not invent JSON such as
 `kind: discriminated_union` merely because the intended Python type is clear.
-If the target supports only ordinary field models and enums, use a supported
-inline type expression or stop with an explicit compatibility decision.
+If a deployed target still supports only ordinary field models and enums, use
+a supported representation only when it is semantically equivalent. Do not
+replace a closed union with a many-optional-fields envelope, or replace typed
+ports with concrete persistence/session functions, solely to satisfy a legacy
+compiler. Preserve the design decision and stop with an explicit capability
+blocker while the standard, validator, generator, surface gates, and tests are
+being upgraded.
 
 Reject model placeholders such as:
 
@@ -439,7 +444,11 @@ Assembly should mostly serialize decisions already made. It must not become anot
 
 If assembly exposes missing models, unclear ownership, generic contracts, or vague behavior, return to the appropriate earlier state.
 
-After assembly, use the existing factory validators and inspectors. Do not duplicate them inside this skill.
+After assembly, use the existing factory validators and inspectors. Do not
+duplicate them inside this skill. Canonical Factory validation must exit with
+code 0, report `PASS`, and contain zero errors and zero warnings. Treat
+`WARNINGS_ONLY` as a failed assembly checkpoint and return each finding to its
+earliest owning design state before handoff.
 
 ### State 9 — Factory compatibility probe
 
@@ -447,6 +456,13 @@ Prove that the assembled specification is materializable by the selected
 Factory revision before declaring it handoff-ready. Follow
 `FACTORY_COMPATIBILITY.md` and use the Factory's existing commands rather than
 reimplementing their checks in the Workbench.
+
+Use reference applications as scoped evidence. Panelforge is the positive
+baseline for the established deterministic-model and deep-module pipeline; it
+is not proof that named unions or Protocol ports work. The hydraulic-diagram
+case is the migration probe for those new capabilities. A reference proves
+only the exact surfaces exercised by its accepted assembler, linker, and
+runtime evidence.
 
 The minimum probe must exercise:
 
@@ -465,8 +481,9 @@ Classify a failure before changing anything:
 - **semantic ownership failure** — return to the earliest product, model, rule,
   or module-responsibility state;
 - **unsupported target representation** — return to models, contracts, imports,
-  or `module_paths` and choose a supported representation without changing
-  product semantics;
+  or `module_paths` only when the encoding is invalid and a semantically
+  equivalent supported encoding exists; otherwise preserve the architecture
+  and record a Factory capability blocker;
 - **Factory contradiction** — one Factory component demonstrably materializes
   the required semantics while another rejects that same supported runtime
   representation; mere name emission or permissive validation is not proof of
@@ -476,6 +493,10 @@ Classify a failure before changing anything:
 Generation success alone is insufficient. The assembler and linker are part of
 the probe because they expose import-surface and cross-module contradictions
 that isolated drafts do not.
+
+Do not start the generation portion of the probe while canonical validation is
+warning-only. A warning is unresolved specification evidence even when later
+Factory nodes are technically able to continue.
 
 ## Placeholder taxonomy
 
@@ -636,6 +657,8 @@ A specification is ready for the existing factory when:
 - `config`, `models`, and `rules` are cleanly separated;
 - assembly introduces no new product or architecture decisions;
 - the complete file conforms to `SPEC_STANDARD.md`;
+- canonical Factory validation exits 0 with status `PASS`, zero errors, and
+  zero warnings;
 - the selected Factory compatibility profile is satisfied;
 - the no-deploy compatibility probe has exercised models, a representative
   consumer, assembler, and linker, with any Factory contradiction recorded

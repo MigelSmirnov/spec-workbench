@@ -93,10 +93,13 @@ Pydantic constraints
 Domain and boundary models use Pydantic.
 Schemas use extra="forbid" unless explicitly justified.
 Prefer discriminated unions over generic operation/payload models at the
-domain-design level, but encode them only through a representation supported by
-the target `SPEC_STANDARD` and Factory profile. Never invent a new model
-`kind`, metadata key, or alias encoding because its Python meaning seems
-obvious.
+domain-design level. Encode them through the normative representation once the
+target `SPEC_STANDARD` and Factory capability profile define it. Never invent a
+new model `kind`, metadata key, or alias encoding because its Python meaning
+seems obvious, but also never flatten a precise union into a broad optional
+field envelope merely to imitate a legacy compiler limitation. While a Factory
+capability is being added, preserve the semantic design and record handoff as
+blocked until the standard, generator, gates, and regression evidence agree.
 Committed snapshots and value objects are immutable where appropriate.
 Pydantic validators own local model consistency.
 Domain modules own graph-wide and repository-dependent policy.
@@ -111,6 +114,11 @@ asset or integration boundary.
 Factory compatibility constraints
 Before final handoff, select and apply the current target profile from
 `skills/spec-authoring/FACTORY_COMPATIBILITY.md`.
+Profiles are capability snapshots, not permanent architecture rules. Use
+Panelforge as the positive baseline for capabilities it actually proves, and
+use the hydraulic-diagram case as the migration probe for named discriminated
+unions and Protocol-based application ports. Do not infer unsupported-feature
+evidence from Panelforge or force new designs into its incidental shapes.
 Do not assume that a conceptually valid package layout, type alias, union, or
 model method is materializable by the current Factory toolchain.
 Treat name-only model-surface coverage as insufficient: a generated empty class
@@ -118,9 +126,10 @@ does not prove the fields, variants, discriminator, or alias semantics.
 Run the documented compile probe, including the deterministic model unit, a
 representative consumer, assembler, and linker. A compile probe is not deploy.
 Classify failures before editing the specification: repair semantic ownership
-at its earliest design state, repair unsupported representation at the model or
-module-path state, and report contradictory Factory components as toolchain
-defects instead of distorting product semantics.
+at its earliest design state, repair an invalid encoding at the model or
+module-path state, and report missing or contradictory Factory capabilities as
+toolchain defects instead of replacing ports, transactions, authorization, or
+domain types with a different architecture.
 Notes constraints
 Behavioral authoring guidance may improve how existing notes are written, but it must not change the factory language.
 The final specification continues to use only existing classified-note markers supported by SPEC_STANDARD.
@@ -144,6 +153,11 @@ Propagate the decision through later states.
 Update contracts and notes.
 Update global_spec.json last.
 Run available validators.
+Treat the Factory canonical validator as a zero-warning gate. The specification
+is not handoff-ready unless validation exits with code 0, reports `PASS`, and
+contains zero errors and zero warnings. `WARNINGS_ONLY` is a blocker, not an
+accepted handoff state; return to the earliest design state that owns each
+finding and repair the specification there.
 Report unresolved decisions explicitly.
 Basic checks
 Validate JSON syntax:
@@ -163,6 +177,8 @@ every public operation has one owner;
 every contract belongs to one generation unit;
 public package exports remain narrow;
 models, rules, contracts, notes, imports, and module order are consistent;
+the Factory canonical validator exits 0 with status `PASS`, zero errors, and
+zero warnings;
 the selected Factory compatibility profile is satisfied;
 the compile probe reaches assembler and linker without deploy, or an unresolved
 toolchain contradiction is explicitly recorded as a blocker;

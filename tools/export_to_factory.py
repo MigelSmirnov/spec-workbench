@@ -136,9 +136,16 @@ def run_factory_validator(validator: Path, source: Path) -> dict[str, Any]:
         if result.stderr:
             print(result.stderr, end="", file=sys.stderr)
         report = load_json(report_path)
-    if result.returncode not in (0, 2):
-        errors = report.get("summary", {}).get("error", "unknown")
-        raise SystemExit(f"factory validator rejected the source specification ({errors} errors)")
+    summary = report.get("summary", {})
+    status = report.get("status")
+    errors = summary.get("error", "unknown")
+    warnings = summary.get("warning", "unknown")
+    if result.returncode != 0 or status != "PASS" or errors != 0 or warnings != 0:
+        raise SystemExit(
+            "factory validator rejected the source specification "
+            f"(status={status!r}, exit_code={result.returncode}, "
+            f"errors={errors}, warnings={warnings}); handoff requires PASS with zero warnings"
+        )
     return report
 
 
