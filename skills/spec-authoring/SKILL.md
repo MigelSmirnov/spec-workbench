@@ -27,6 +27,13 @@ materialize every valid design. Before handoff, apply the target-specific
 [FACTORY_COMPATIBILITY.md](FACTORY_COMPATIBILITY.md) profile. The profile is an
 operational constraint, not an extension of `global_spec.json`.
 
+Platform references are conditional. When the product stores a Registry
+`project_id`, reads current project context, or creates data linked to a
+renovation project, read
+[references/platform_registry_contract.md](references/platform_registry_contract.md)
+before State 0 and apply its authoring checklist through State 9. Do not load
+that reference for unrelated specifications.
+
 ## Core problem
 
 An LLM can produce a specification that is structurally valid but semantically hollow.
