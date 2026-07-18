@@ -1,20 +1,26 @@
-# State 7 — Notes
-
-## Purpose
-
-Specify observable behavior that remains after contracts, ownership, and
-invariant owners are stable.
+# Client Portal Cross-Cutting Requirements Notes
 
 ## Status
 
-**Not started**
+**Requirements baseline; not classified implementation notes**
 
-## Expected outputs
-
-- Classified behavioral notes using the closed note-class registry.
-- Validation, projection, provenance, ordering, security, and failure details.
-- Forbidden shortcuts and external-boundary behavior.
-- Primary invariant landings in rules, notes, or properties.
-- Placeholder-resistance review for every function.
-
-No notes, properties, or determinism decisions are proposed in this bootstrap.
+- All financial and progress calculations must be deterministic for the same
+  accepted source records.
+- Financial values use decimal money semantics with explicit currency and
+  domain-defined rounding; binary floating-point behavior is not a business
+  contract.
+- Client Portal never guesses a missing amount, allocation, percentage,
+  currency, or source value.
+- Missing or unavailable data is shown explicitly and is not replaced by zero
+  unless zero is a confirmed business value.
+- Client-facing language does not expose internal microservice, adapter,
+  storage, OCR, or provider implementation names.
+- Holded document format is not a Client Portal contract.
+- OCR confidence and internal OCR working fields are not required by the
+  client view and are not accepted as financial truth without confirmation.
+- Documents and photographs are referenced from their business records; their
+  binary content remains outside the main record.
+- Sensitive credentials, tokens, provider secrets, and environment values
+  never enter Client Portal business data or these requirements.
+- Dashboard totals are derived from owning records and remain traceable to
+  their budget, expense, allocation, progress, and payment sources.

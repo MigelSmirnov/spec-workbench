@@ -1,68 +1,50 @@
-# Client Portal Workbench Case
+# Client Portal Requirements Baseline
 
 ## Purpose
 
-This directory is the design-state workspace for Client Portal, a
-client-facing view of an existing renovation project. It preserves agreed
-product boundaries and verified external-system facts before domain modeling
-or implementation design begins.
+Client Portal is a separate client-facing application for one renovation
+project. A portal session always operates in the context of one Registry
+`project_id` and presents the client with budget, expense, payment, work
+progress, and photo information for that project.
 
-## Current maturity
+The documents in this directory form one technical assignment split by topic.
+They are requirements input for a future specification-authoring pass; they
+are not an assembled specification and do not define implementation.
 
-**Status:** Bootstrap complete; iterative design has not started beyond the
-agreed product boundary.
+## Current baseline
 
-Completed inputs:
+- Registry already provides a reliable boundary for project identity,
+  validation, and current project context.
+- PresuPro currently provides an editable estimate and calculated totals, but
+  not a published immutable budget suitable for Client Portal.
+- A manually entered portal budget is temporarily allowed for the MVP.
+- An approved PresuPro snapshot is a future source and is explicitly marked
+  unavailable wherever it is referenced.
+- An approved presupuesto is not a factura. Their detailed lifecycle
+  relationship remains unresolved.
 
-- State 0 product boundary;
-- external boundary audit for Registry and PresuPro;
-- Registry integration baseline suitable for local implementation work.
+## Maturity
 
-Not started:
+The product requirements and external facts are recorded. Formal domain
+design, invariant landing, module design, exact contracts, behavioral notes,
+Factory assembly, and compatibility verification are separate future work.
+No `global_spec.json` belongs in this requirements baseline.
 
-- State 1 domain models;
-- State 2 rules and invariants;
-- State 3 module responsibilities;
-- State 4 system flows;
-- State 5 public module APIs;
-- State 6 contracts and internal functions;
-- State 7 behavioral notes and property candidates;
-- State 8 assembly;
-- State 9 Factory compatibility probe.
+## Navigation
 
-The numbered files after `02_external_boundaries.md` are design-state
-placeholders. They record expected outputs only and contain no proposed
-architecture.
+- [Product boundary](01_product_boundary.md)
+- [External boundaries](02_external_boundaries.md)
+- [Business entities](03_domain_models.md)
+- [Business rules and invariants](04_rules_and_invariants.md)
+- [Product responsibility areas](05_module_responsibilities.md)
+- [User and integration flows](06_system_flows.md)
+- [Required external capabilities](07_public_apis.md)
+- [Business contracts](08_contracts.md)
+- [Cross-cutting requirements notes](09_notes.md)
+- [Open questions](open_questions.md)
 
-## Design-state files
+## Future specification work
 
-- [State 0 — Product Boundary](01_product_boundary.md)
-- [External Boundaries](02_external_boundaries.md)
-- [State 1 — Domain Models](03_domain_models.md)
-- [State 2 — Rules and Invariants](04_rules_and_invariants.md)
-- [State 3 — Module Responsibilities](05_module_responsibilities.md)
-- [State 4 — System Flows](06_system_flows.md)
-- [State 5 — Public Module APIs](07_public_apis.md)
-- [State 6 — Contracts](08_contracts.md)
-- [State 7 — Notes](09_notes.md)
-- [Open Questions](open_questions.md)
-
-## External relationships
-
-Registry is the owner of project identity and current project context. Client
-Portal may use Registry's typed read boundary and must not create or rewrite a
-Registry `project_id`.
-
-PresuPro owns editable presupuesto data and its calculations. It does not yet
-provide an immutable, versioned, approved estimate snapshot suitable for
-portal publication. Until that contract exists, the case records a temporary
-manual-budget mode without treating current mutable PresuPro data or a Holded
-factura payload as canonical portal input.
-
-## Why this case stops before `global_spec.json`
-
-The external boundaries are known, but the domain models, lifecycle rules,
-module ownership, flows, APIs, contracts, and notes have not been designed in
-methodology order. Generating `global_spec.json` now would require placeholder
-models and invented behavior. Assembly remains intentionally blocked until the
-preceding design states are complete and coherent.
+Another authoring pass must use these documents in methodology order, resolve
+the recorded open questions with the product owner, and only then design the
+formal models, APIs, contracts, notes, and `global_spec.json`.

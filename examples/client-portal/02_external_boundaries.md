@@ -1,216 +1,199 @@
-# External Boundaries
+# Client Portal External Boundaries
 
-## Status
+## Status and classification
 
-**Audited baseline, reconciled with the current sandbox boundaries**
+**Audited requirements baseline**
 
-The original evidence report is
-`../code_factory/client_portal_external_contract_audit.md` in the sibling AI
-Code Factory repository. Registry and PresuPro received additive integration
-work after that audit; the current typed boundaries below supersede the older
-"missing dedicated validation" and "client-supplied Registry snapshot"
-findings. The approved-estimate findings remain unresolved.
+This document separates implemented external facts from Client Portal
+requirements and future contracts:
+
+- **CONFIRMED** means available in the inspected sandbox code.
+- **REQUIRED** means behavior Client Portal must enforce at its boundary.
+- **NOT AVAILABLE** means the needed external contract does not exist yet.
 
 ## Registry
 
-### Current available contracts
+### Confirmed active-project list
 
-Registry exposes these typed HTTP reads:
-
-```text
-GET /projects/active
-  -> list[ProjectReference]
-
-GET /projects/{project_id}/validate
-  -> ProjectValidationResult
-
-GET /projects/{project_id}/context
-  -> ProjectContext
-```
-
-The corresponding service operations are `list_active_projects`,
-`validate_project_reference`, and `get_project_context`. Cross-application
-consumers use the HTTP boundary, not Registry's database or repository methods.
-
-### Current `ProjectContext`
+**CONFIRMED:** Registry provides an active-project list containing:
 
 ```text
-ProjectReference
-  project_id: UUID
-  display_name: str
-  status: str
-
-ProjectContext
-  project: ProjectReference
-  address: str
-  customer_ref: str | None
-  created_at: datetime
-  registry_updated_at: datetime
-
-ProjectValidationResult
-  project_id: UUID
-  exists: bool
-  status: str | None
-  is_active: bool
-  failure: str | None
+project_id: UUID
+display_name
+status
 ```
 
-### Confirmed invariants
+The current Registry status set is `active` and `archived`; the active list
+contains only active references.
 
-- Registry creates the UUID `project_id`; create and update requests cannot
-  supply or replace it.
-- Renaming or updating project context does not change `project_id` through the
-  public boundary.
-- The current closed project status set is `active` and `archived`.
-- `/projects/active` returns only active project references.
-- Validation distinguishes active, archived, and missing references without
-  requiring direct database access.
-- A missing context read returns 404; a missing validation read returns a typed
-  negative result.
-- Archived projects are excluded from the active list and cannot receive new
-  Registry rooms or published Registry artifacts.
-- Registry owns current project context. Downstream copies are snapshots, not
-  independently editable current project records.
+### Confirmed project context
 
-Current evidence:
+**CONFIRMED:** Registry provides current project context containing:
 
+```text
+project_id
+display_name
+status
+address
+customer_ref
+created_at
+registry_updated_at
+```
+
+`customer_ref` is optional and is not a complete client or accounting record.
+Registry remains the source of truth for these current project values.
+
+### Confirmed project-reference validation
+
+**CONFIRMED:** Registry provides reference validation containing:
+
+```text
+project_id
+exists
+status
+is_active
+failure
+```
+
+Validation distinguishes an active project, an archived project, and an
+unknown project. A missing context read and a negative validation result have
+different external semantics.
+
+### Additional confirmed Registry data
+
+Registry also exposes project rooms and published artifact references. These
+capabilities are not required for the first Client Portal MVP. A Registry
+artifact reference is not the approved estimate snapshot itself, and Registry
+artifact version must not be treated as PresuPro estimate version.
+
+### Client Portal requirements for Registry
+
+- **REQUIRED:** Registry is the sole source of project identity.
+- **REQUIRED:** Client Portal never creates `project_id`.
+- **REQUIRED:** Every incoming project reference is checked against Registry;
+  client-supplied project names or addresses are not authoritative.
+- **REQUIRED:** An unknown project is rejected.
+- **REQUIRED:** Registry status controls permission to change portal data.
+- **REQUIRED:** An archived project and its history remain readable.
+- **REQUIRED:** An archived project accepts no new portal mutations.
+
+### Current Registry limitations
+
+- No production authentication or service-authorization contract is
+  confirmed.
+- No pagination or stable external ordering contract is confirmed for the
+  active-project list.
+- Registry has no paused or completed project status.
+- Registry context has no project currency, planned dates, human-readable
+  project code, or revision.
+
+Evidence baseline:
+
+- `projects/registry_sandbox/api/runtime.py`;
 - `projects/registry_sandbox/core/models.py`;
 - `projects/registry_sandbox/services/registry/project_service.py`;
-- `projects/registry_sandbox/api/runtime.py`;
 - `projects/registry_sandbox/tests/test_project_identity_boundaries.py`.
-
-### Current limitations
-
-- No authentication or service-authorization contract is implemented by the
-  sandbox HTTP boundary.
-- Active-project reads have no pagination contract.
-- No stable external sorting guarantee is declared for the active list.
-- Registry has no paused or completed project status.
-- Registry project context has no project currency, planned start/end dates,
-  human-readable project code, or revision/version.
-- Successful context retrieval does not itself grant permission for a consumer
-  to create new linked data.
-- Registry's estimate artifact record stores a reference, not the immutable
-  presupuesto snapshot itself; its artifact version must not be treated as a
-  PresuPro estimate version.
 
 ## PresuPro
 
-### Current mutable estimate capabilities
+### Confirmed mutable estimate data
 
-PresuPro currently owns an editable `Estimate` identified by a string ID. It
-contains ordered `EstimateZone` values, each containing `EstimateItem` values.
-New estimates begin with status `draft`; updates replace the current stored
-record for the same estimate ID. There is no retained estimate revision
-history.
+**CONFIRMED:** The current PresuPro estimate exposes:
 
-PresuPro supports two project-link modes:
+- `estimate.id`;
+- client name and optional fiscal client data;
+- `project_type`;
+- mutable status;
+- creation and update timestamps;
+- ordered zones;
+- positions inside each zone;
+- mutable position type, including the current `labor` total classification;
+- material reference and item name;
+- quantity and unit;
+- unit price;
+- waste percentage;
+- margin percentage;
+- IVA percentage;
+- discount percentage;
+- an optional Registry project snapshot.
 
-- standalone estimates omit `project_id` and keep their own client data without
-  calling Registry;
-- Registry-linked estimates accept `project_id`, validate and fetch context
-  server-side, and store a `RegistryProjectSnapshot` while retaining independent
-  PresuPro client data.
+The Registry snapshot is resolved server-side for linked estimates, while a
+standalone estimate can retain PresuPro client data without Registry. This
+does not make the estimate a published Client Portal budget.
 
-Client-supplied `registry_project` snapshots are rejected. A linked request
-maps Registry not-found, inactive, and dependency failures to distinct HTTP
-outcomes.
+### Confirmed current totals
 
-### Current available totals
-
-`EstimateTotals` currently exposes:
+**CONFIRMED:** PresuPro calculates whole-estimate totals containing:
 
 ```text
-materials_subtotal: float
-labor_subtotal: float
-margin_total: float
-taxable_subtotal: float
-iva_total: float
-grand_total: float
-currency: str = "EUR"
-discount_total: float
-iva_breakdown: dict[str, float]
+materials_subtotal
+labor_subtotal
+margin_total
+discount_total
+taxable_subtotal
+iva_total
+iva_breakdown
+grand_total
+currency
 ```
 
-The calculation distinguishes labor only when `EstimateItem.type == "labor"`;
-other item types contribute to materials. It applies waste, discount, margin,
-and IVA using float arithmetic and rounded amounts. These are whole-estimate
-totals. Authoritative material/work totals per zone are not currently exposed.
+The current implementation returns currency `EUR`, uses mutable estimate data,
+and does not expose authoritative planned material/work totals per
+client-facing section.
 
-Current read capabilities include the mutable estimate, its current totals,
-and filtered estimate lists. They do not provide an immutable approved version
-for a project.
+### PresuPro limitation
 
-Current evidence:
+**REQUIRED:** Client Portal treats the current estimate as internal mutable
+PresuPro state. It is not a published portal budget and must not silently
+replace a manual or previously imported portal budget.
+
+The following are **NOT AVAILABLE**:
+
+- `approved` as a closed client-publication status;
+- estimate version identity;
+- an immutable approved snapshot;
+- approval timestamp;
+- approval actor or source;
+- stable section codes;
+- ready-made planned materials and planned works by portal section;
+- safe lookup of a published estimate by `project_id`;
+- idempotent publication of one approved version;
+- a Client Portal authorization contract.
+
+Evidence baseline:
 
 - `projects/PresuPro_sandbox/core/models.py`;
-- `projects/PresuPro_sandbox/backend/services/estimates.py`;
 - `projects/PresuPro_sandbox/backend/api/routes.py`;
+- `projects/PresuPro_sandbox/backend/services/estimates.py`;
 - `projects/PresuPro_sandbox/backend/adapters/registry.py`;
 - `projects/PresuPro_sandbox/tests/test_registry_project_integration.py`.
 
-### Current limitations
+### Temporary manual-budget mode
 
-- Estimate status remains an unrestricted runtime string; there is no enforced
-  approval lifecycle or transition graph.
-- Status `accepted` is required for Holded conversion, but does not create an
-  immutable approved portal snapshot.
-- There is no estimate version/revision or retained history for overwritten
-  estimates.
-- There is no `approved_at` or approval provenance.
-- Zones have a name and list position, but no stable section ID/code or explicit
-  sort-order field.
-- Per-zone material and work planned amounts are not exposed as authoritative
-  values.
-- Currency is hard-coded in calculated totals rather than carried by a
-  versioned approved snapshot.
-- IVA values exist, but an explicit tax-inclusion mode does not.
-- Physical deletion and current-record replacement are incompatible with an
-  immutable publication history.
-- There is no Client Portal publication operation or stored publication
-  snapshot.
+**REQUIRED FOR MVP:** A manually supplied portal budget is allowed until the
+published PresuPro boundary exists. Manual entry is a real temporary source,
+not evidence that PresuPro approved the budget.
 
-### Missing published estimate contract
+### Future approved-estimate boundary
 
-PresuPro does not currently expose an immutable, versioned, approved estimate
-snapshot. Therefore Client Portal must not use any of these as its canonical
-published budget:
+**NOT AVAILABLE:** PresuPro must eventually provide the business capability to
+retrieve an approved immutable estimate snapshot by `project_id` and, when
+needed, by a specific version. The later contract must preserve exact source
+and approval provenance and must not return the latest mutable row merely
+because it exists.
 
-- the current mutable `Estimate` record;
-- `status == "accepted"` by itself;
-- an invoicing preview;
-- a Holded document payload;
-- a Registry estimate-artifact reference without a PresuPro snapshot.
+No transport shape, program signature, or lifecycle detail is decided here.
 
-### Current temporary manual-budget mode
-
-For the pilot, budget information is supplied manually within the Client Portal
-product boundary. This is a temporary source, not a PresuPro-approved snapshot
-and not evidence of approval. Its data model and migration behavior remain for
-later design states.
-
-### Future required `get_approved_estimate()` contract
-
-PresuPro will need a public read operation named conceptually
-`get_approved_estimate()`. It must provide a retained immutable approved version
-suitable for Client Portal rather than the latest mutable row or a provider
-payload.
-
-The operation's arguments, output model, version-selection semantics, approval
-provenance, section identity, tax semantics, error behavior, and publication
-policy are intentionally not defined here. They depend on unresolved PresuPro
-business decisions and later Client Portal design states.
-
-### Deferred presupuesto/factura decision
+### Deferred presupuesto/factura relationship
 
 ```text
-approved estimate
+approved presupuesto
 
-!=
+is not
 
-factura
+created factura
 ```
 
-The current baseline must not equate approval or portal publication with Holded
-invoice creation. The exact lifecycle relationship between an approved
-presupuesto and a factura is intentionally postponed.
+An approved presupuesto must eventually be able to appear in Client Portal
+before a factura exists. The detailed approval, publication, replacement, and
+factura lifecycle will be designed separately.

@@ -1,62 +1,83 @@
-# State 0 — Product Boundary
+# Client Portal Product Boundary
 
 ## Status
 
-**Agreed baseline**
+**Requirements baseline**
 
-## Product purpose
+## Purpose
 
-Client Portal is the client-facing view of an existing renovation project. Its
-current purpose is to present the project's current identity/context and the
-budget information that is explicitly available for portal use.
+Client Portal gives the client a transparent view of one renovation project:
 
-## Responsibilities
+- planned budget;
+- actual expenses and their documents;
+- allocation of expenses to budget sections;
+- progress of the work;
+- value of completed work;
+- received work payments;
+- photographs of work progress.
 
-- Present the selected renovation project to the client.
-- Use Registry-owned project identity and current project context.
-- Present budget information from an approved external source when such a
-  source exists.
-- Support temporary manual-budget data for the pilot while PresuPro lacks a
-  publishable immutable approved snapshot.
-- Keep unknown approval, publication, versioning, and invoicing decisions
-  visible rather than replacing them with assumed behavior.
+The portal is a client view and record of portal-owned facts. It does not
+replace the operational systems that create projects, calculate estimates,
+perform OCR, receive Telegram submissions, or create invoices.
 
-## Explicit non-goals
+## Portal ownership
 
-- Creating, renaming, archiving, or otherwise managing Registry projects.
-- Creating or editing PresuPro estimates.
-- Calculating PresuPro totals independently.
-- Approving estimates or defining an approval workflow.
-- Creating facturas or operating the Holded invoicing flow.
-- Treating a Holded payload as the canonical portal presupuesto.
-- Defining functionality beyond the current project-context and budget pilot.
+Client Portal owns:
 
-## Ownership boundaries
+- the local client-facing representation of the project budget;
+- confirmed expenses received from an authorized intake process;
+- manual allocation of expenses to budget sections or `Other expenses`;
+- work payments recorded for the project;
+- manually entered work progress;
+- progress-photo references, captions, section association, and visibility;
+- client-facing aggregates derived from the above records.
 
-- Registry owns `project_id` and the current project name, address, status, and
-  project customer reference.
-- PresuPro owns editable estimate data, estimate calculations, and any future
-  approved estimate snapshot contract.
-- Client Portal owns its client-facing presentation and the temporary manual
-  budget information used by the pilot.
-- PresuPro's fiscal client data remains PresuPro-owned and is not replaced by
-  Registry project context.
+## Boundaries outside Portal ownership
+
+Client Portal does not own:
+
+- project identity or creation of `project_id`;
+- current Registry project name, address, status, or customer reference;
+- PresuPro estimate calculations or mutable estimate lifecycle;
+- OCR extraction and confidence assessment;
+- Telegram intake and operator confirmation performed there;
+- accounting records or a full bookkeeping ledger;
+- Holded integration;
+- factura creation or factura lifecycle;
+- operation or administration of internal project microservices.
 
 ## Read and write responsibilities
 
-- Client Portal reads project identity and current context from Registry.
-- Client Portal does not write project identity or project context to Registry.
-- Client Portal does not use a current mutable PresuPro estimate as if it were
-  an approved publication snapshot.
-- The pilot may receive and maintain manual budget information within the
-  portal boundary.
-- The current MVP does not write estimate or invoice state to PresuPro.
+- The portal reads and validates project identity and current project context
+  through Registry.
+- The portal never creates or rewrites Registry `project_id`.
+- The portal accepts prepared, confirmed expense and photo facts from external
+  intake; it does not perform OCR or Telegram intake itself.
+- The portal records only portal-owned budget, expense, allocation, progress,
+  payment, photo, and presentation facts.
+- The portal does not write estimate or factura state to PresuPro in the MVP.
 
-## Current MVP scope
+## MVP scope
 
-- Work with an existing active Registry project.
-- Validate the selected project reference and display its current Registry
-  context.
-- Present manually supplied pilot budget information.
-- Preserve a migration boundary for a future approved estimate snapshot
-  without defining that snapshot prematurely.
+- Load and display current Registry project context.
+- Allow a temporary manual budget organized into client-facing sections.
+- Accept confirmed expenses and their document references.
+- Allocate an expense to one section, split it manually across sections, or
+  assign it to `Other expenses`.
+- Show actual expenses and derived remaining budget values.
+- Record manual work progress and derive completed work value.
+- Record received work payments and show the work balance.
+- Accept progress photos and show a chronological client gallery.
+- Present the client dashboard for the selected project.
+- Keep an archived project readable while blocking new portal changes.
+
+## Non-goals
+
+- Full accounting or bookkeeping.
+- Automatic factura reconciliation.
+- Bank integration.
+- Full document workflow or document approval management.
+- Automatic progress estimation from photographs.
+- Management of internal microservices from the portal.
+- Automatic import of a mutable PresuPro estimate.
+- Designing the future approved-presupuesto or factura lifecycle.
