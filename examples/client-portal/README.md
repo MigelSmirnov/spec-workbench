@@ -51,3 +51,9 @@ No `global_spec.json` belongs in this requirements baseline.
 Another authoring pass must use these documents in methodology order, resolve
 the recorded open questions with the product owner, and only then design the
 formal models, APIs, contracts, notes, and `global_spec.json`.
+
+That authoring pass lives in [spec/](spec/). Its State 0
+([spec/00_product.md](spec/00_product.md), decisions of 2026-07-18) closes the
+open questions of this baseline; later design states and the assembled
+specification are added there as the pass progresses. The documents 01–09 in
+this directory remain the frozen requirements input.
