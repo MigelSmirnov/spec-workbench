@@ -16,8 +16,19 @@
 - Client-facing language does not expose internal microservice, adapter,
   storage, OCR, or provider implementation names.
 - Holded document format is not a Client Portal contract.
-- OCR confidence and internal OCR working fields are not required by the
-  client view and are not accepted as financial truth without confirmation.
+- OCR Service is an external microservice; Telegram bot is only an intake
+  interface and does not own recognition logic.
+- Client Portal depends only on the versioned normalized OCR-service contract,
+  not on a provider, model, or provider-specific response.
+- OCR confidence, source-page handling, page order, provider-specific fields,
+  and raw model responses remain OCR-service concerns and do not become Portal
+  Expense fields.
+- Client Portal accepts only confirmed recognition results and requires a
+  stable recognized-document reference for idempotent Expense creation.
+- Project selection, Expense confirmation, and Budget Section allocation are
+  not inferred from OCR.
+- Accounting, Holded, and reuse by other applications are outside the current
+  OCR integration.
 - Documents and photographs are referenced from their business records; their
   binary content remains outside the main record.
 - Sensitive credentials, tokens, provider secrets, and environment values

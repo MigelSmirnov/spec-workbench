@@ -20,22 +20,52 @@
 - **Provenance:** Registry identity and freshness timestamp remain attached to
   the local representation.
 
-## Telegram Intake → Client Portal: Confirmed Expense
+## OCR Service → Client Portal OCR Adapter: Confirmed Recognized Document
 
-- **Producer:** external Telegram/OCR intake after operator confirmation.
-- **Consumer:** Client Portal Expenses and Documents area.
-- **Required data:** project identity, stable intake identity, supplier,
-  document date, total amount, confirmation fact, inclusion choice, one
-  document reference, allocations, and confirmation provenance.
-- **Business guarantees:** one confirmed intake result creates one Expense and
-  one Document reference; allocation sum equals Expense total.
-- **Invalid states:** unconfirmed OCR output, unknown or archived project,
-  missing total or document reference, automatic allocation guess, or
+- **Producer:** external OCR Service, after business confirmation supplied by
+  an operator or intake process outside OCR ownership.
+- **Consumer:** Client Portal OCR adapter, which prepares the internal Expense
+  intake representation for the Expenses and Documents area.
+- **Required data:** `recognized_document_id`, document reference, document
+  type, supplier, document date, currency, total amount, normalized items,
+  confirmed recognition status, confirmation time, contract version, and a
+  portable provenance reference.
+- **Business guarantees:** the result is normalized, confirmed, provider/model
+  independent, traceable to the source document, and suitable for mapping into
+  Expense intake data.
+- **Context outside OCR:** `project_id`, Expense confirmation authority,
+  inclusion choice, and Budget Section allocations are selected by an operator
+  or Telegram intake interaction and are not OCR results.
+- **Adapter guarantees:** validate recognized-document identity and supported
+  contract version; reject incomplete or unsupported results; preserve source
+  provenance and document reference; map only business-relevant normalized
+  fields; create at most one Expense per `recognized_document_id`.
+- **Invalid states:** unconfirmed recognition, missing stable identity or
+  document reference, unsupported contract version, incomplete normalized
+  result, unknown or archived selected project, automatic allocation guess, or
   allocation mismatch.
-- **Idempotency expectation:** replay of the same stable intake identity does
+- **Idempotency expectation:** replay of the same `recognized_document_id` does
   not duplicate the Expense or Document.
-- **Provenance:** intake identity, confirmation time, and confirming operator
-  reference remain traceable; OCR internals are not client data.
+- **Excluded data:** confidence, provider-specific fields, raw model responses,
+  OCR credentials, accounting fields, and Holded data do not enter the portal
+  contract.
+- **Provenance:** recognized-document identity, source document reference,
+  portable OCR provenance, confirmation time, and confirming operator/intake
+  reference remain distinguishable.
+
+The contract flow is:
+
+```text
+OCR Service
+→ confirmed recognized document
+→ operator selects project and allocation
+→ Client Portal OCR adapter
+→ internal Expense intake representation
+→ Expense
+```
+
+Future reuse of the normalized recognized document by other applications is a
+separate contract and not part of this MVP.
 
 ## Telegram Intake → Client Portal: Progress Photo
 

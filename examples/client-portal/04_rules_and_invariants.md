@@ -29,8 +29,19 @@
 
 ## Expense rules
 
-- One confirmed OCR result creates one Expense; replay of the same confirmed
-  result must not create another Expense.
+- An Expense created from OCR requires a stable `recognized_document_id`, a
+  supported contract version, a source document reference, and a confirmed,
+  complete normalized result.
+- One `recognized_document_id` creates at most one Expense; replay of the same
+  confirmed result must not create another Expense.
+- OCR-service duplicate detection and Client Portal Expense idempotency are
+  separate responsibilities.
+- The OCR service does not choose `project_id`, confirm the business Expense,
+  or allocate it to Budget Sections; those decisions come from the authorized
+  operator or intake process.
+- Client Portal preserves portable OCR provenance and the source document
+  reference, but does not import confidence, provider-specific fields, or raw
+  model responses into its Expense data.
 - OCR does not change planned budget values.
 - Financial actuals are calculated from Expense records, not manually
   overwritten totals.

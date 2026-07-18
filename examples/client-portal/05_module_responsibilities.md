@@ -50,10 +50,23 @@
 
 ## Integration Intake
 
-- Telegram reception, OCR, OCR confidence, and operator confirmation occur
-  outside Client Portal.
-- Client Portal accepts only prepared, confirmed data from that boundary.
+- OCR Service owns recognition, source-document page context, page order,
+  recognition provenance, confidence, and duplicate detection.
+- Telegram bot owns intake interaction only and contains no OCR logic.
+- Operator or intake interaction owns project selection, Expense confirmation,
+  and manual allocation; OCR Service owns none of those decisions.
+- Client Portal OCR adapter accepts a confirmed normalized OCR-service result,
+  validates recognized-document identity and contract version, and transforms
+  the external fields into the portal's Expense intake representation.
+- The adapter preserves portable provenance and the source document reference,
+  enforces idempotent Expense creation, and rejects incomplete or unsupported
+  results.
+- The adapter does not carry confidence, provider-specific fields, raw model
+  responses, or OCR credentials into the portal when they have no business
+  meaning.
 - Intake failure must not create partial portal financial or media records.
+- Reuse of normalized documents by other applications is a future integration,
+  not a Client Portal MVP responsibility.
 
 No internal packages, files, dependency graph, framework, or persistence
 layout is defined by these responsibility areas.

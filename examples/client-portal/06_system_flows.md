@@ -21,17 +21,21 @@ project opens in read-only mode.
 ## Add confirmed expense
 
 ```text
-Telegram intake receives a document
-→ OCR is performed locally outside Client Portal
-→ operator confirms the extracted expense data
-→ project and manual allocation are selected
-→ confirmed Expense and one Document reference are sent to Client Portal
-→ Client Portal validates the active project and the allocation total
+Telegram bot receives a document as an intake interface
+→ document is submitted to the external OCR Service
+→ OCR Service produces a normalized recognized document
+→ operator confirms the Expense and selects project and manual allocation
+→ confirmed normalized result and operator context reach Client Portal OCR adapter
+→ adapter validates recognized_document_id, contract version, and completeness
+→ adapter preserves provenance and document reference and prepares Expense intake
+→ Client Portal validates the active project and allocation total
+→ one idempotent Expense is created
 → derived financial totals are recalculated
 ```
 
 Unconfirmed OCR output is never a portal Expense. Repeated delivery of the same
-confirmed result does not create a duplicate Expense or Document.
+`recognized_document_id` does not create a duplicate Expense or Document. OCR
+provider/model details, confidence, and raw responses do not enter the portal.
 
 ## Miscellaneous expense
 

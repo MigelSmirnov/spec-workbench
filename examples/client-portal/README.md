@@ -15,6 +15,9 @@ are not an assembled specification and do not define implementation.
 
 - Registry already provides a reliable boundary for project identity,
   validation, and current project context.
+- OCR is a separate external microservice. Telegram bot is an intake interface,
+  while Client Portal accepts only a confirmed normalized recognition result
+  through its OCR boundary.
 - PresuPro currently provides an editable estimate and calculated totals, but
   not a published immutable budget suitable for Client Portal.
 - A manually entered portal budget is temporarily allowed for the MVP.

@@ -94,6 +94,58 @@ Evidence baseline:
 - `projects/registry_sandbox/services/registry/project_service.py`;
 - `projects/registry_sandbox/tests/test_project_identity_boundaries.py`.
 
+## OCR Service and Telegram Intake
+
+### Agreed ownership boundary
+
+- **REQUIRED:** OCR is a separate external microservice.
+- **REQUIRED:** Telegram bot is an intake interface and owns no OCR logic.
+- **REQUIRED:** The OCR service owns source pages, their order, OCR provenance,
+  confidence, and duplicate detection within the recognition domain.
+- **REQUIRED:** Client Portal neither performs OCR nor depends on a particular
+  OCR provider or model.
+- **REQUIRED:** Project selection, business confirmation of the Expense, and
+  allocation to Budget Sections or `Other expenses` remain outside OCR-service
+  responsibility.
+
+### Stable normalized recognition boundary
+
+Client Portal accepts only a confirmed normalized recognition result with the
+business meaning of:
+
+```text
+recognized_document_id
+document_reference
+document_type
+supplier
+document_date
+currency
+total_amount
+normalized_items
+recognition_status
+confirmed_at
+contract_version
+```
+
+The boundary may carry a portable provenance reference, but it does not expose
+provider-specific responses, raw provider payloads, confidence details, or OCR
+credentials to Client Portal.
+
+The Client Portal OCR adapter is required to:
+
+- validate `recognized_document_id`, confirmation state, completeness, and the
+  supported contract version;
+- transform normalized external values into the portal's internal Expense
+  intake representation;
+- preserve recognition provenance and the original document reference;
+- prevent one recognized document from creating more than one Expense;
+- reject an unsupported contract version or incomplete result;
+- discard confidence, provider-specific fields, and raw model responses when
+  they have no Client Portal business meaning.
+
+Accounting, Holded, and future reuse of normalized documents by other
+applications are outside the current OCR-to-Client-Portal integration and MVP.
+
 ## PresuPro
 
 ### Confirmed mutable estimate data
