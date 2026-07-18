@@ -1,4 +1,4 @@
-"""Unit tests for semantic_lint.py (S1–S9, global notes, internal imports).
+"""Unit tests for semantic_lint.py (S1–S10, global notes, internal imports).
 
 Run:  python3 -m pytest test_semantic_lint.py -q
 """
@@ -210,6 +210,88 @@ def test_s9_accepts_current_factory_models_path():
     s["module_functions"] = {"models": ["Item"]}
     s["module_paths"] = {"models": "core/models"}
     assert not msgs(lint(s), "S9")
+
+
+# ---------------------------------------------------------------- S10
+
+def _ledger(*invariants):
+    return {"schema_version": 1, "invariants": list(invariants)}
+
+
+def test_s10_flags_invariant_without_landing():
+    s = spec(contracts={"validate_input": "(x: int) -> list[str]"})
+    ledger = _ledger({
+        "id": "INV-001",
+        "statement": "invalid input produces at least one issue",
+        "owner_function": "validate_input",
+    })
+    r = lint(s, ledger)
+    assert any("no landing" in m for m in msgs(r, "S10"))
+    assert r["invariant_coverage"]["INV-001"]["status"] == "uncovered"
+
+
+def test_s10_rejects_unknown_ledger_schema_version():
+    r = lint(spec(), {"schema_version": 2, "invariants": []})
+    assert any("schema_version" in m for m in msgs(r, "S10"))
+
+
+def test_s10_accepts_rules_landing():
+    s = spec(
+        contracts={"transition": "(state: str) -> str"},
+        rules={"state_transitions": {"draft": ["active"]}},
+    )
+    ledger = _ledger({
+        "id": "INV-001",
+        "statement": "only declared state transitions are valid",
+        "owner_function": "transition",
+        "landing": {"kind": "rules", "path": "state_transitions"},
+    })
+    assert not msgs(lint(s, ledger), "S10")
+
+
+def test_s10_accepts_exact_note_landing():
+    note = "validate_input: [VALIDATION_ERROR] MUST report every negative value"
+    s = spec(
+        contracts={"validate_input": "(x: int) -> list[str]"},
+        notes=[note],
+    )
+    ledger = _ledger({
+        "id": "INV-001",
+        "statement": "negative values are invalid",
+        "owner_function": "validate_input",
+        "landing": {"kind": "note", "text": note},
+    })
+    assert not msgs(lint(s, ledger), "S10")
+
+
+def test_s10_accepts_exact_property_landing():
+    expression = "x < 0 implies len(result) >= 1"
+    s = spec(
+        contracts={"validate_input": "(x: int) -> list[str]"},
+        properties={"validate_input": [expression]},
+    )
+    ledger = _ledger({
+        "id": "INV-001",
+        "statement": "negative values produce at least one issue",
+        "owner_function": "validate_input",
+        "landing": {"kind": "property", "expression": expression},
+    })
+    assert not msgs(lint(s, ledger), "S10")
+
+
+def test_s10_flags_property_on_the_wrong_owner():
+    expression = "result >= x"
+    s = spec(
+        contracts={"normalize": "(x: int) -> int", "other": "(x: int) -> int"},
+        properties={"other": [expression]},
+    )
+    ledger = _ledger({
+        "id": "INV-001",
+        "statement": "normalization never decreases the value",
+        "owner_function": "normalize",
+        "landing": {"kind": "property", "expression": expression},
+    })
+    assert msgs(lint(s, ledger), "S10")
 
 
 # ---------------------------------------------------------------- imports

@@ -32,6 +32,15 @@ Create specifications that:
 
 Each layer is stabilized before moving to the next.
 
+State 2 invariants are tracked in a Workbench-side `invariant_ledger.json`.
+Before handoff, each entry must resolve to one function owner and one primary
+landing in `rules`, a classified note, or `properties.<function>`:
+
+```bash
+python3 tools/semantic_lint.py examples/<case>/global_spec.json \
+  --invariants examples/<case>/invariant_ledger.json --strict
+```
+
 ## Repository structure
 
 ```text

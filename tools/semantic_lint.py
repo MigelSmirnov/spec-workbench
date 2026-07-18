@@ -23,12 +23,15 @@ Checks:
                                    identity / empty implementation
   S9  Factory model path profile — generated models map to core/models for the
                                    current target Factory (advisory)
+  S10 invariant landing coverage — State 2 ledger entries resolve to one
+                                   function-owned rules/note/property landing
 
 Global notes ("[CLASS] body" without a target) are parsed and checked by
 S2/S3/S4; they do not participate in S5/S7/S8.
 
 Usage:
-    python3 semantic_lint.py global_spec.json [--matrix] [--strict] [--format json]
+    python3 semantic_lint.py global_spec.json [--invariants invariant_ledger.json]
+                             [--matrix] [--strict] [--format json]
 
 Exit codes:
     default (advisory): 1 if errors, else 0 (warnings do not fail)
@@ -163,7 +166,7 @@ def tokens(name: str) -> set[str]:
 
 # ---------------------------------------------------------------- core
 
-def lint(spec: dict) -> dict:
+def lint(spec: dict, invariant_ledger: dict | None = None) -> dict:
     errors: list[str] = []
     warnings: list[str] = []
 
@@ -302,10 +305,98 @@ def lint(spec: dict) -> dict:
                 f"{actual}; current Factory profile requires 'core/models' "
                 "for deterministic generation and runtime imports")
 
+    # ---- S10: State 2 invariant landing coverage ----
+    invariant_coverage: dict[str, dict[str, str | None]] = {}
+    if invariant_ledger is not None:
+        entries = invariant_ledger.get("invariants") if isinstance(invariant_ledger, dict) else None
+        schema_version = invariant_ledger.get("schema_version") if isinstance(invariant_ledger, dict) else None
+        if schema_version != 1:
+            warnings.append(
+                f"S10 invariant ledger schema_version must be 1, got {schema_version!r}")
+        if not isinstance(entries, list):
+            warnings.append(
+                "S10 invariant ledger must be an object with an 'invariants' list")
+            entries = []
+
+        seen_ids: set[str] = set()
+        properties = spec.get("properties", {}) or {}
+        for index, entry in enumerate(entries):
+            if not isinstance(entry, dict):
+                warnings.append(f"S10 invariant #{index}: entry must be an object")
+                continue
+
+            invariant_id = entry.get("id")
+            display_id = invariant_id if isinstance(invariant_id, str) and invariant_id else f"#{index}"
+            owner = entry.get("owner_function")
+            landing = entry.get("landing")
+            kind = landing.get("kind") if isinstance(landing, dict) else None
+            status = "covered"
+
+            if not isinstance(invariant_id, str) or not invariant_id.strip():
+                warnings.append(f"S10 invariant #{index}: missing stable id")
+                status = "invalid"
+            elif invariant_id in seen_ids:
+                warnings.append(f"S10 invariant {invariant_id}: duplicate id")
+                status = "invalid"
+            else:
+                seen_ids.add(invariant_id)
+
+            statement = entry.get("statement")
+            if not isinstance(statement, str) or not statement.strip():
+                warnings.append(f"S10 invariant {display_id}: missing statement")
+                status = "invalid"
+
+            if not isinstance(owner, str) or owner not in contracts:
+                warnings.append(
+                    f"S10 invariant {display_id}: owner_function {owner!r} "
+                    "does not resolve to a contract")
+                status = "uncovered"
+
+            if not isinstance(landing, dict):
+                warnings.append(
+                    f"S10 invariant {display_id}: no landing; choose rules, note, or property")
+                status = "uncovered"
+            elif kind == "rules":
+                path = landing.get("path")
+                if not isinstance(path, str) or not resolve_ref(spec.get("rules", {}) or {}, path):
+                    warnings.append(
+                        f"S10 invariant {display_id}: rules landing {path!r} does not resolve")
+                    status = "uncovered"
+            elif kind == "note":
+                text = landing.get("text")
+                owner_prefix = f"{owner}:" if isinstance(owner, str) else None
+                if not isinstance(text, str) or text not in notes:
+                    warnings.append(
+                        f"S10 invariant {display_id}: note landing is absent from notes")
+                    status = "uncovered"
+                elif owner_prefix and not text.startswith(owner_prefix):
+                    warnings.append(
+                        f"S10 invariant {display_id}: note landing is not owned by {owner!r}")
+                    status = "uncovered"
+            elif kind == "property":
+                expression = landing.get("expression")
+                owner_properties = properties.get(owner, []) if isinstance(properties, dict) else []
+                if not isinstance(expression, str) or expression not in owner_properties:
+                    warnings.append(
+                        f"S10 invariant {display_id}: property landing is absent from "
+                        f"properties.{owner}")
+                    status = "uncovered"
+            else:
+                warnings.append(
+                    f"S10 invariant {display_id}: landing kind must be rules, note, or property")
+                status = "uncovered"
+
+            invariant_coverage[str(display_id)] = {
+                "owner_function": owner if isinstance(owner, str) else None,
+                "landing_kind": kind if isinstance(kind, str) else None,
+                "status": status,
+            }
+
     return {
         "errors": errors,
         "warnings": warnings,
         "coverage": {f: sorted(c) for f, c in coverage.items()},
+        "invariant_coverage": invariant_coverage,
     }
 
 
@@ -315,6 +406,9 @@ def main() -> int:
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("spec", type=Path)
+    ap.add_argument(
+        "--invariants", type=Path,
+        help="State 2 invariant_ledger.json used for S10 landing coverage")
     ap.add_argument("--matrix", action="store_true",
                     help="print per-function semantic coverage matrix")
     ap.add_argument("--strict", action="store_true",
@@ -328,7 +422,15 @@ def main() -> int:
         print(f"ERROR   cannot load spec: {exc}", file=sys.stderr)
         return 1
 
-    result = lint(spec)
+    invariant_ledger = None
+    if args.invariants is not None:
+        try:
+            invariant_ledger = json.loads(args.invariants.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            print(f"ERROR   cannot load invariant ledger: {exc}", file=sys.stderr)
+            return 1
+
+    result = lint(spec, invariant_ledger)
 
     if args.format == "json":
         print(json.dumps(result, ensure_ascii=False, indent=1))
@@ -343,6 +445,12 @@ def main() -> int:
             width = max((len(f) for f in cov), default=0)
             for fname, classes in cov.items():
                 print(f"{fname:<{width}}  {', '.join(classes) or '—'}")
+            if result["invariant_coverage"]:
+                print("\n--- State 2 invariant landing coverage ---")
+                for invariant_id, item in result["invariant_coverage"].items():
+                    print(
+                        f"{invariant_id}  {item['status']}  "
+                        f"{item['owner_function'] or '—'}  {item['landing_kind'] or '—'}")
         print(f"\n{len(result['errors'])} error(s), "
               f"{len(result['warnings'])} warning(s)")
 

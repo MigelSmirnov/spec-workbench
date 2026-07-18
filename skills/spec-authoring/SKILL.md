@@ -200,6 +200,29 @@ Capture:
 - limits, paths, timeouts, and feature switches;
 - stable domain catalogs and enum-like values.
 
+Record every invariant in a Workbench-side `invariant_ledger.json`. This is an
+authoring traceability artifact, not a section of `global_spec.json`:
+
+```json
+{
+  "schema_version": 1,
+  "invariants": [
+    {
+      "id": "INV-001",
+      "statement": "a completed job has a result id",
+      "owner_function": null,
+      "landing": null
+    }
+  ]
+}
+```
+
+Assign a stable `id` and concrete `statement` in State 2. `owner_function` may
+remain `null` until public APIs and contracts stabilize, but the invariant must
+already name its owning responsibility in the State 2 working document. Do not
+use the ledger as a second rules store: policy tables and transition data still
+belong in `rules`.
+
 Classify deliberately:
 
 - `config` — runtime or product knobs that may change independently;
@@ -213,6 +236,7 @@ Readiness questions:
 - Are state transitions explicit where lifecycle matters?
 - Are tables and allow-lists stored outside notes?
 - Can a value’s section be justified by why and how it changes?
+- Does every invariant have a stable ledger id and one owning responsibility?
 
 ### State 3 — Module responsibilities
 
@@ -396,6 +420,29 @@ For each function consider:
 - orchestration boundaries;
 - evidence expectations where relevant.
 
+Before writing or accepting notes, revisit every State 2 invariant whose
+`owner_function` is this function. It must land in exactly one primary form:
+
+- `rules` when the invariant is declarative policy data or a transition table;
+- a classified `note` when it constrains effects, failures, boundaries, or
+  behavior that cannot be evaluated as a pure result predicate;
+- `properties.<function>` when it is a total, side-effect-free predicate over
+  `result`, the function arguments, and `self` for methods.
+
+Update the ledger with the exact landing. Examples:
+
+```json
+{"kind": "rules", "path": "job_status_transitions"}
+{"kind": "note", "text": "complete_job: [VALIDATION_ERROR] MUST reject a missing result_id"}
+{"kind": "property", "expression": "result.status != 'completed' or result.result_id is not None"}
+```
+
+For a property candidate ask: can the expression be evaluated for generated
+contract inputs without I/O, hidden state, clocks, randomness, or an undeclared
+helper? Does a counterexample directly prove the invariant false? If either
+answer is no, it is not a property; use rules or a note. Mark repeatable pure
+functions in `determinism` independently of the invariant's primary landing.
+
 Avoid:
 
 - restating the function name;
@@ -410,6 +457,14 @@ For every function perform the placeholder resistance test:
 > Could this contract be implemented with `return None`, `return []`, `return {}`, an empty model, a constant success value, or a simple forwarding call without contradicting the notes?
 
 If yes, the function is under-specified or prematurely designed. Strengthen the relevant earlier layer or remove the unnecessary function.
+
+Then ask the inverse question:
+
+> Is the condition that makes the placeholder impossible actually a property
+> over `result` and the contract arguments?
+
+If yes, encode it in `properties.<function>` instead of leaving it only as
+review prose.
 
 Readiness questions:
 
@@ -432,6 +487,7 @@ Populate all sections required by `SPEC_STANDARD.md`:
 - `config`;
 - `models`;
 - `rules`;
+- `properties` and `determinism` where declared;
 - `imports`;
 - `module_functions`;
 - `module_order`;
@@ -449,6 +505,16 @@ duplicate them inside this skill. Canonical Factory validation must exit with
 code 0, report `PASS`, and contain zero errors and zero warnings. Treat
 `WARNINGS_ONLY` as a failed assembly checkpoint and return each finding to its
 earliest owning design state before handoff.
+
+Run the Workbench coverage check with the State 2 ledger before export:
+
+```bash
+python3 tools/semantic_lint.py path/to/global_spec.json \
+  --invariants path/to/invariant_ledger.json --strict
+```
+
+An S10 finding means an invariant has no verifiable owner/landing bridge and
+must be repaired in the earliest owning state.
 
 ### State 9 — Factory compatibility probe
 
@@ -649,6 +715,7 @@ A specification is ready for the existing factory when:
 - product outcomes are concrete;
 - required models and fields have known producers;
 - invariants and policies have owners;
+- every State 2 invariant has a verified rules, note, or property landing;
 - modules have precise, deep responsibilities;
 - major flows terminate in observable results or explicit failures;
 - public APIs reflect real cross-module needs;

@@ -24,6 +24,8 @@
   "config": { ... },
   "models": { ... },
   "rules": { ... },
+  "properties": { ... },
+  "determinism": { ... },
   "imports": { ... },
   "module_functions": { ... },
   "module_order": [ ... ],
@@ -390,6 +392,11 @@ authorizer, gateway). Интерфейс не вводит нового синт
       "exporter": ["export_excel", "export_pdf"],
       "db": ["Database"],
       "parser": ["parse_response"]
+    },
+    "module_internal": {
+      "upload_handler": {
+        "models": ["RecognitionResult"]
+      }
     }
   }
 }
@@ -402,6 +409,10 @@ authorizer, gateway). Интерфейс не вводит нового синт
   обязан быть связан полной строкой
 - `third_party` — полные строки импорта как в коде
 - `internal` — модуль → список экспортируемых символов (функции, классы, константы)
+- `module_internal` — явный граф зависимостей: consumer → provider → список
+  импортируемых символов. Имена consumer/provider — логические ключи из
+  `module_functions`; каждый символ обязан принадлежать provider. Эта запись
+  имеет приоритет над эвристическим выводом зависимости из сигнатур и notes
 - Полные import-строки — авторская форма записи. Нормализация разбирает их
   один раз в структурную форму (module, symbol, alias); все последующие
   инструменты (resolver, validator, inspector, slicing, generator) работают
@@ -590,6 +601,81 @@ authorizer, gateway). Интерфейс не вводит нового синт
 
 ---
 
+## 14. properties
+
+**Что это:** исполняемые инварианты функции. Ключ — точное имя из
+`contracts`, значение — непустой список строковых булевых выражений.
+
+```json
+{
+  "properties": {
+    "normalize_loads": [
+      "all(0 <= load.uncertainty <= 1 for load in result)",
+      "len(project.loads) > 0 implies len(result) > 0"
+    ],
+    "BoardDesignResult.to_summary": [
+      "result.design_id == self.design_id"
+    ]
+  }
+}
+```
+
+Нормативное подмножество выражений замкнуто:
+
+- корневые имена: `result`, аргументы контракта и `self` для метода;
+- литералы `str`, `int`, `float`, `bool`, `None`, коллекционные литералы;
+- чтение атрибутов и элементов, сравнения, `in` / `not in`, булевы и
+  арифметические операции;
+- comprehensions/generator expressions с локально связанными именами;
+- чистые builtins `abs`, `sum`, `len`, `all`, `any`, `range`, `min`, `max`,
+  `str`; чистые строковые проверки `startswith`, `endswith`, `lower`, `upper`;
+- одна верхнеуровневая форма `A implies B`, эквивалентная `not A or B`.
+
+Выражение обязано возвращать `bool` и не должно выполнять import, assignment,
+I/O, mutation, вызов проектной функции, доступ к clock/random/global state или
+вычисление через undeclared helper. `properties` описывает наблюдаемое
+отношение входов и результата, а не алгоритм реализации.
+
+**Правила:**
+
+- функция обязана существовать в `contracts`;
+- пустой список запрещён: удали ключ, если properties нет;
+- имена аргументов должны точно совпадать с контрактом;
+- property должно быть истинно для всех допустимых входов; предусловие пиши
+  через `implies`, а не скрывай внутри тестовой fixture;
+- правило, требующее побочного эффекта, exception/transaction observation,
+  внешнего состояния или интеграции, остаётся classified note;
+- таблицы переходов, allow-lists и policy values остаются в `rules`.
+
+---
+
+## 15. determinism
+
+**Что это:** явное требование повторяемости функции при одинаковых аргументах
+и одинаковом допустимом состоянии `self`.
+
+```json
+{
+  "determinism": {
+    "normalize_loads": true,
+    "BoardDesignResult.to_summary": true
+  }
+}
+```
+
+Ключ обязан существовать в `contracts`, значение обязано быть JSON boolean.
+`true` запрещает зависимость результата от clock, random, uuid, secrets,
+порядка hash-контейнеров и иного скрытого недетерминированного состояния.
+Если порядок результата значим, закрепи его отдельной property или note класса
+`[DETERMINISM_OR_ORDERING]`.
+
+`false` означает, что недетерминизм является осознанной частью контракта, а не
+«не проверено». Не добавляй записи для функций, по которым решение ещё не
+принято. `determinism` не заменяет properties: повторяемый `return []` остаётся
+детерминированной заглушкой.
+
+---
+
 ## Чек-лист перед запуском сборки
 
 0. **Запусти валидатор:** `python validate_spec.py global_spec.json` — он проверит всё из этого списка автоматически.
@@ -619,6 +705,10 @@ authorizer, gateway). Интерфейс не вводит нового синт
 12. **Типы замкнуты?** Каждое имя в type position — builtin, объявленная модель или символ, связанный полной import-строкой; коллизий происхождения нет (раздел 13).
 
 13. **Порты полны?** Каждый экспортируемый `kind: interface` имеет полные method contracts; у каждого `discriminated_union` — discriminator, закрытые variants и `Literal`-теги.
+
+14. **Инварианты приземлены?** Каждый State 2 invariant имеет одного
+владельца и первичное представление в `rules`, classified note или
+`properties.<function>`; подходящие чистые функции отмечены в `determinism`.
 
 ---
 
@@ -664,6 +754,14 @@ authorizer, gateway). Интерфейс не вводит нового синт
     }
   },
   "rules": {},
+  "properties": {
+    "transform": [
+      "all(item.status == 'active' for item in result)"
+    ]
+  },
+  "determinism": {
+    "transform": true
+  },
   "imports": {
     "stdlib": ["json"],
     "third_party": ["import requests"],

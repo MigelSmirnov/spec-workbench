@@ -167,3 +167,19 @@ Reject a note when it:
 A note set is done when a motivated but lazy implementation — empty results,
 identity transforms, blind forwarding, hand-rolled duplicates of domain logic
 in transport handlers — necessarily contradicts at least one note.
+
+## When the requirement belongs in `properties`
+
+Do not keep a requirement only as prose when it is a total, side-effect-free
+predicate over the function's `result`, arguments, and `self` for methods.
+That form belongs in `properties.<function>` and can be checked with generated
+inputs. Examples include non-empty validator findings under a precise invalid
+condition, preservation of identity fields, bounds on normalized values, and
+projection of required fields.
+
+Keep the requirement as a note when checking it needs I/O, repository state,
+authorization context, exception observation, transaction boundaries, clocks,
+randomness, or orchestration evidence. Keep transition tables and policy data
+in `rules`. State 7 records one of these as the invariant's primary landing in
+`invariant_ledger.json`; supportive notes may still explain a property, but do
+not count as a second primary landing.
