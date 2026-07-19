@@ -85,6 +85,22 @@ The visual editor can restore both engineering structure and its associated layo
 
 When an existing element type is insufficient, an authorized agent can create a controlled draft definition with explicit ports, properties, estimation references, scope, and provenance.
 
+### Catalog bootstrap
+
+The base global catalog (the current frontend palette) is imported into the
+service as validated definition data with system provenance. Definitions are
+runtime data behind the catalog boundary: adding a device — by seed import or
+by an agent — never requires regenerating or redeploying the service.
+
+### Participation publishing
+
+After a revision commit, the service maintains one `hydraulic_diagram` index
+artifact per Registry project (diagram list with current revisions), so the
+estimator and other services discover hydraulic participation from the
+Registry instead of blind-polling every vertical service. Publication is
+post-transaction and non-blocking: Registry unavailability never fails a
+commit, and the index is discovery data, never a source of truth.
+
 ### Estimation-data delivery
 
 Estimator Service or its agent can request a deterministic `EstimationDataPackage` for a fixed diagram revision and fixed catalog definition versions.
@@ -113,18 +129,26 @@ The physical storage model remains undecided at this state.
 
 ## External systems
 
-### Object Card Service
+### Registry (platform project hub)
 
-Future source of truth for object and customer data.
+Deployed source of truth for platform projects and the published artifact
+catalog. All microservices address it as the common entry point.
 
-Current stable boundary:
+Stable boundary:
 
-- Hydraulic Diagram Service stores the external `object_id`;
-- detailed object data is retrieved through a gateway when needed;
-- the future DTO remains unresolved;
+- the external `object_id` stored by this service is the Registry project UUID;
+- the gateway DTO is known: `ProjectRecord` (name, address, status,
+  customer_ref) plus project rooms and published artifacts;
+- in v1 this service consumes only project existence and status, to verify
+  the target project before diagram creation when verification is enabled;
+- in the outbound direction the service publishes one `hydraulic_diagram`
+  index artifact per project after revision commits (see Participation
+  publishing);
+- name, address, customer and room data never participate in this service's
+  domain behavior; clients that need them query the Registry directly;
 - the service must not become a second source of truth for customer or object data.
 
-### Estimator Service
+### Estimator Service (PresuPro)
 
 Owns:
 
@@ -137,6 +161,16 @@ Owns:
 - Holded integration.
 
 Hydraulic Diagram Service supplies structured diagram-derived inputs only.
+
+Handoff contract (resolved 2026-07-15):
+
+- PresuPro pulls `EstimationDataPackage`; nothing is pushed;
+- `EstimationRef` codes (v1 namespace `vbc`) are resolved to PresuPro
+  materials through its `Material.aliases` mechanism; unmatched codes go to
+  PresuPro's agent matching flow, never to silent fabrication;
+- converting a package into estimate zones and priced items is PresuPro's
+  domain; this service guarantees quantity, unit, display name, refs,
+  estimator-relevant properties, and provenance on every package item.
 
 ### Agent runtime / MCP host
 
@@ -154,6 +188,9 @@ Hydraulic Diagram Service does not:
 - render the frontend canvas;
 - persist transient UI state such as selection, hover, or open panels;
 - allow clients to store arbitrary unvalidated diagram JSON;
+- derive physical pipe lengths or any physical measurement from diagram
+  layout; spatial pipe routing over building geometry belongs to a future
+  plumbing service built on the platform's room-geometry foundation;
 - perform hydraulic engineering calculations unless introduced as a separately specified capability;
 - let the estimator agent silently mutate a diagram through read-oriented estimation tools.
 
@@ -163,9 +200,13 @@ Hydraulic Diagram Service does not:
 
 ```text
 Estimator Service
-→ request EstimationDataPackage for diagram revision
+→ Registry: pick project, read header data
+→ Registry: list_artifacts(project_id) — discover hydraulic participation
+  and the diagram index
+→ request EstimationDataPackage for diagram revision from this service
 → receive complete package or structured missing requirements
 → build estimate outside Hydraulic Diagram Service
+→ publish "estimate" artifact to the Registry (estimator's own duty)
 ```
 
 ### Agent-assisted estimator workflow
@@ -208,32 +249,27 @@ These are product-level invariants; detailed ownership is deferred to later stat
 11. Estimator-facing read tools do not silently modify the diagram.
 12. Hydraulic Diagram Service is not a source of truth for customer, price, budget, or retail-product data.
 
-## Explicit integration placeholder
+## Contained integration boundary
 
-The Object Card Service integration is intentionally incomplete until its real entry point and DTO are available.
-
-Allowed placeholder boundary:
+The Registry integration is confined to one gateway boundary even though its
+contract is now known:
 
 ```text
 ObjectGateway
-→ get object data by object_id
+→ get project snapshot (existence, status) by object_id
 ```
 
-Forbidden spread of that placeholder:
+Forbidden spread beyond that boundary:
 
 - `object_data: dict` inside diagram models;
-- duplicated customer records owned by this service;
-- business rules that depend on unknown object fields without declaring them as unresolved requirements.
+- duplicated customer or project records owned by this service;
+- business rules that depend on Registry fields other than existence and status.
 
 ## Unresolved decisions for later states
 
-- Supported diagram system kinds and whether a diagram may contain several systems.
 - Diagram statuses and publication lifecycle.
 - Exact identity model for users, agents, and services.
-- Draft-definition approval and visibility rules.
-- Whether agent-created definitions may be scoped to diagram, object, tenant, or global catalog.
 - Exact property types and units needed by the estimator.
-- Whether layout routes are authoritative measurements or presentation only.
 - How optimistic concurrency is represented when committing revisions.
 - Whether estimation packages are persisted or built on demand.
 - Whether diagram revisions store full snapshots, commands, or both.

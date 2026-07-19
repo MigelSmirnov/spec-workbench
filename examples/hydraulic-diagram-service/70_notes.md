@@ -92,7 +92,12 @@ _is_definition_visible: [BEHAVIOR] MUST allow global definitions and context-mat
 _is_definition_visible: [FORBIDDEN_ACTION] MUST NOT infer tenant visibility before tenant semantics are defined.
 create_element_definition_draft: [FIELD_ASSIGNMENT] MUST set status to draft, preserve the requested scope, assign actor provenance, created_at, definition_id, and version.
 create_element_definition_draft: [VALIDATION_ERROR] MUST reject invalid scope_ref combinations and duplicate port/property codes.
+create_element_definition_draft: [ORCHESTRATION] MUST validate draft.visual.svg_markup through _validate_element_visual_asset before constructing ElementDefinition.
 create_element_definition_draft: [FORBIDDEN_ACTION] MUST NOT activate the definition or overwrite an existing active version.
+_validate_element_visual_asset: [BEHAVIOR] MUST return the original SVG markup unchanged only after the complete visual-asset policy passes.
+_validate_element_visual_asset: [VALIDATION_ERROR] MUST reject markup containing scripts, event handlers, external references, or foreignObject.
+_validate_element_visual_asset: [CONFIG_REFERENCE] MUST enforce the size limit from = config.catalog.max_svg_markup_bytes.
+_validate_element_visual_asset: [FORBIDDEN_ACTION] MUST NOT derive ports, properties, or any engineering semantics from the markup.
 create_connection_definition_draft: [FIELD_ASSIGNMENT] MUST set status to draft and assign all provenance and version fields.
 create_connection_definition_draft: [VALIDATION_ERROR] MUST reject invalid scope_ref combinations and duplicate property codes.
 _validate_draft_scope: [RULE_REFERENCE] MUST enforce = rules.definition_scope_policy.
@@ -158,6 +163,7 @@ _validate_layout_references: [VALIDATION_ERROR] MUST emit blocking issues for la
 
 ```text
 create_diagram: [FIELD_ASSIGNMENT] MUST set status to draft, current_revision to 0, and created_at/updated_at to the supplied created_at.
+create_diagram: [VALIDATION_ERROR] MUST reject an empty system_kinds set and values outside DiagramSystemKind.
 create_diagram: [PROVENANCE] MUST assign created_by from the supplied ActorRef.
 create_diagram: [FORBIDDEN_ACTION] MUST NOT copy customer or object-card fields beyond object_id.
 change_diagram_status: [RULE_REFERENCE] MUST enforce = rules.diagram_status_transitions.
@@ -211,11 +217,13 @@ _advance_diagram_revision: [FIELD_ASSIGNMENT] MUST set current_revision to the c
 ```text
 collect_element_items: [BEHAVIOR] MUST group only elements with equal definition id/version and equal estimator-relevant property values.
 collect_element_items: [FIELD_ASSIGNMENT] MUST sum DiagramElement.quantity and preserve unique source_element_ids.
+collect_element_items: [FIELD_PROJECTION] MUST project name from the pinned definition version and assign unit_code, defaulting to the count unit defined by = rules.estimation_collection_policy.
 collect_element_items: [DETERMINISM_OR_ORDERING] MUST return stable group-key order.
 build_element_group_key: [DETERMINISM_OR_ORDERING] MUST use canonical typed-value serialization and exclude provenance-only fields.
 _select_estimator_properties: [MODEL_REFERENCE] MUST select only properties whose definitions have required_for_estimation or another explicit estimation relevance rule in = models.PropertyDefinition.
 _merge_element_group: [FIELD_ASSIGNMENT] MUST return a new item with summed quantity and sorted unique source IDs.
 collect_connection_items: [BEHAVIOR] MUST group only connections with equal definition id/version, quantity unit, and estimator-relevant property values.
+collect_connection_items: [FIELD_PROJECTION] MUST project name from the pinned connection type definition version.
 collect_connection_items: [FORBIDDEN_ACTION] MUST NOT derive length from DiagramLayout in v1.
 collect_connection_items: [DETERMINISM_OR_ORDERING] MUST return stable group-key order.
 build_connection_group_key: [DETERMINISM_OR_ORDERING] MUST include definition id, version, quantity unit, and canonical estimator-property identity.
@@ -311,6 +319,8 @@ apply_diagram_command_use_case: [VALIDATION_ERROR] MUST reject a base_revision t
 apply_diagram_commands_use_case: [DETERMINISM_OR_ORDERING] MUST preserve supplied command order.
 commit_diagram_revision_use_case: [SECURITY_BOUNDARY] MUST require diagram.author.
 commit_diagram_revision_use_case: [ORCHESTRATION] MUST resolve exact catalog definitions and run commit-stage validation before calling commit_revision.
+commit_diagram_revision_use_case: [ORCHESTRATION] MUST call ObjectGateway.publish_diagram_index after the commit transaction succeeds.
+commit_diagram_revision_use_case: [FALLBACK] MUST log a failed index publication and return the successful commit result unchanged.
 list_available_definitions_use_case: [SECURITY_BOUNDARY] MUST require catalog.read.
 create_element_definition_draft_use_case: [SECURITY_BOUNDARY] MUST require catalog.draft.create.
 create_connection_definition_draft_use_case: [SECURITY_BOUNDARY] MUST require catalog.draft.create.
@@ -360,6 +370,18 @@ silent use of latest catalog definition
 ```
 
 The notes intentionally define observable assignments, validation outcomes, provenance, ordering, forbidden behavior, and side effects so that an implementation cannot satisfy the specification with a skeleton.
+
+# 14. Positive coverage for the factory underspec gate (2026-07-15)
+
+The factory's generation-stage `spec_underspec_gate` requires every owned
+function contract to carry at least one direct positive `[BEHAVIOR]` or
+`[FIELD_PROJECTION]` note; validation, ordering, and forbidden-action notes
+alone do not satisfy it. The assembled specification therefore includes a
+positive note per owned function stating what a correct result contains —
+projections name their sources, orchestrators name the operation whose
+result they return, serializers pin round-trip equality. These notes add no
+new product behavior; they restate already-decided semantics in the marker
+form the generation gate consumes.
 
 ## State 7 readiness assessment
 

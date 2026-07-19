@@ -56,6 +56,7 @@ This is a stable foundational module, not a business service. Its depth comes fr
 - activation, rejection, deprecation, and version replacement;
 - catalog lookup constrained by diagram/object/global scope;
 - catalog validation.
+- visual-asset hygiene for every element-definition creation path.
 
 ### Knows
 
@@ -65,6 +66,7 @@ This is a stable foundational module, not a business service. Its depth comes fr
 - version immutability;
 - agent-created definition policy;
 - estimation references attached to definitions.
+- the inert, self-contained SVG policy and configured asset-size limit.
 
 ### Hides
 
@@ -73,6 +75,7 @@ This is a stable foundational module, not a business service. Its depth comes fr
 - how activation approval is represented;
 - how duplicate definition codes are detected;
 - internal validation sequencing.
+- how SVG markup is parsed and rejected before definition construction.
 
 ### Must not own
 
@@ -101,6 +104,10 @@ deprecate_definition
 ### Public API pressure
 
 The final public API should avoid exposing separate low-level methods for ports, properties, and estimation refs. Those are internal parts of definition operations.
+
+Visual-asset validation is likewise an internal catalog helper, not a public
+model method or cross-module capability. Draft creation and seed import share
+that helper through the same definition-creation path.
 
 ### Depth assessment
 
@@ -438,18 +445,19 @@ Moderately deep lifecycle module.
 
 ---
 
-## `object_gateway`
+## `object_gateway` (Registry gateway)
 
 ### Owns
 
-- future integration with Object Card Service;
-- translation of external object DTO into an internal integration DTO;
-- object existence checks when available;
+- the platform Registry integration (project hub, resolved 2026-07-15);
+- translation of the Registry `ProjectRecord` into the internal `ObjectSnapshot` (existence + status only);
+- project verification checks when `object_verification_enabled` is true;
+- outbound publication of the per-project `hydraulic_diagram` index artifact after revision commits (post-transaction, non-blocking);
 - integration timeout and failure mapping.
 
 ### Knows
 
-- external endpoint and DTO only when the real service is available.
+- the Registry endpoint and its known `ProjectRecord` / artifact publication DTOs.
 
 ### Hides
 
@@ -778,7 +786,7 @@ The next state must test whether callers can remain ignorant of internal sequenc
 # 5. Candidate module paths
 
 ```text
-src/hydraulic_diagram/domain/models.py
+core/models.py
 src/hydraulic_diagram/domain/catalog.py
 src/hydraulic_diagram/domain/diagram.py
 src/hydraulic_diagram/domain/diagram_policy.py
@@ -884,8 +892,7 @@ Each of these hides unresolved ownership.
 - whether `change_requests` is included in the first release;
 - exact authorization port and identity model;
 - exact repository interfaces;
-- whether catalog and diagram commands use one generic command envelope or typed commands;
-- exact Object Card adapter DTO.
+- whether catalog and diagram commands use one generic command envelope or typed commands.
 
 These questions belong to flow and public-API design, not to generic catch-all modules.
 
@@ -899,7 +906,7 @@ State 3 is sufficiently stable to begin key flow design because:
 - domain modules are separated from transports and persistence;
 - estimator data has one clear owner;
 - HTTP and MCP are thin adapters to shared application use cases;
-- the Object Card placeholder is contained in one adapter boundary;
+- the Registry integration is contained in one adapter boundary;
 - no generic utility, manager, validator, or service module is required;
 - dependency direction is explicit;
 - deep and intentionally thin modules are distinguished.

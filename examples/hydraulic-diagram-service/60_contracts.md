@@ -78,6 +78,10 @@ These exceptions must preserve stable machine-readable codes.
 
 Pydantic model classes are declared in `models`, not as function contracts. Validators that require explicit generated methods use these signatures.
 
+All `model_*` headings in this section are authoring subdivisions assembled by
+the Factory into the single deterministic runtime unit `core/models.py`; they
+are not independent runtime import paths.
+
 ## `model_values`
 
 ```python
@@ -242,6 +246,10 @@ create_connection_definition_draft(
 Private helpers:
 
 ```python
+_validate_element_visual_asset(
+    svg_markup: str,
+) -> str
+
 _validate_draft_scope(
     scope: DefinitionScope,
     scope_ref: str | None,
@@ -256,6 +264,12 @@ _validate_connection_draft_uniqueness(
 ) -> None
 ```
 
+`_validate_element_visual_asset` returns the unchanged markup only after
+enforcing the catalog SVG policy and `config.catalog.max_svg_markup_bytes`.
+It is shared by agent-created drafts and the seed-import path through
+`create_element_definition_draft`; it is not a Pydantic validator or a public
+package-facade export.
+
 ## `catalog_lifecycle`
 
 Path:
@@ -266,11 +280,11 @@ hydraulic_diagram/domain/catalog/lifecycle.py
 
 ```python
 transition_definition_status(
-    definition: ElementDefinition | ConnectionTypeDefinition,
+    definition: CatalogDefinition,
     target_status: DefinitionStatus,
     actor: ActorRef,
     allow_global_activation: bool,
-) -> ElementDefinition | ConnectionTypeDefinition
+) -> CatalogDefinition
 ```
 
 Private helpers:
@@ -282,7 +296,7 @@ _validate_definition_transition(
 ) -> None
 
 _validate_activation_authority(
-    definition: ElementDefinition | ConnectionTypeDefinition,
+    definition: CatalogDefinition,
     actor: ActorRef,
     allow_global_activation: bool,
 ) -> None
@@ -376,7 +390,7 @@ _validate_port_multiplicity(
 
 ```python
 validate_definition_use(
-    definition: ElementDefinition | ConnectionTypeDefinition,
+    definition: CatalogDefinition,
     object_id: str,
     diagram_id: str,
     stage: ValidationStage,
@@ -471,7 +485,7 @@ create_diagram(
     diagram_id: str,
     object_id: str,
     name: str,
-    system_kind: DiagramSystemKind,
+    system_kinds: set[DiagramSystemKind],
     actor: ActorRef,
     created_at: datetime,
 ) -> Diagram
@@ -934,6 +948,11 @@ external_ports
 ```python
 class ObjectGateway(Protocol):
     def get_object_snapshot(self, object_id: str) -> ObjectSnapshot: ...
+    def publish_diagram_index(
+        self,
+        object_id: str,
+        index: DiagramIndexArtifact,
+    ) -> None: ...
 
 class CapabilityAuthorizer(Protocol):
     def require_capability(
@@ -944,14 +963,14 @@ class CapabilityAuthorizer(Protocol):
     ) -> None: ...
 ```
 
-`ObjectSnapshot` remains an explicit unresolved model. Until the real contract is available, the production gateway cannot be generated. A disabled verification adapter may expose:
+`ObjectSnapshot` is defined from Registry evidence (resolved 2026-07-15):
+`object_id` plus `status: Literal["active", "archived"]`.
+`DiagramIndexArtifact` is the payload of the per-project `hydraulic_diagram`
+Registry artifact: the project's diagrams with their current committed
+revisions. `publish_diagram_index` is invoked post-commit, outside the
+transaction, and its failure is logged, never raised into the commit result.
 
-```python
-class DisabledObjectGateway:
-    def verify_object_exists(self, object_id: str) -> None: ...
-```
-
-Do not invent object or customer fields.
+Do not invent object or customer fields beyond this projection.
 
 ---
 
@@ -965,7 +984,7 @@ Generation units should be split by responsibility rather than one `use_cases.py
 create_diagram_use_case(
     object_id: str,
     name: str,
-    system_kind: DiagramSystemKind,
+    system_kinds: set[DiagramSystemKind],
     actor: ActorRef,
     diagram_id: str,
     now: datetime,
@@ -1039,8 +1058,12 @@ commit_diagram_revision_use_case(
     catalog_repository: CatalogRepository,
     authorizer: CapabilityAuthorizer,
     unit_of_work: UnitOfWork,
+    object_gateway: ObjectGateway,
 ) -> CommitRevisionResult
 ```
+
+`object_gateway` serves only the post-commit Registry index publication; it
+is never called while the unit of work is open.
 
 ## `application_catalog`
 
@@ -1080,7 +1103,7 @@ transition_definition_status_use_case(
     allow_global_activation: bool,
     catalog_repository: CatalogRepository,
     authorizer: CapabilityAuthorizer,
-) -> ElementDefinition | ConnectionTypeDefinition
+) -> CatalogDefinition
 ```
 
 ## `application_estimation`
@@ -1108,7 +1131,7 @@ inspect_estimation_source(
     revision_repository: RevisionRepository,
     catalog_repository: CatalogRepository,
     authorizer: CapabilityAuthorizer,
-) -> DiagramElement | DiagramConnection | ElementDefinition | ConnectionTypeDefinition
+) -> EstimationSourceEntity
 ```
 
 ## `application_change_requests`
@@ -1478,7 +1501,6 @@ validate(value: object) -> bool
 
 Accepted explicit uncertainty:
 
-- `ObjectSnapshot` is not yet defined;
 - change requests may be deferred from v1;
 - default layout may be deferred;
 - exact HTTP/MCP contracts follow after application contracts;

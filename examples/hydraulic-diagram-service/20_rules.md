@@ -17,11 +17,12 @@ No HTTP routes, database tables, or function contracts are defined here.
 
 ## Diagram identity and ownership
 
-1. Every `Diagram` belongs to exactly one external `object_id`.
+1. Every `Diagram` belongs to exactly one external `object_id` — the Registry project UUID.
 2. One `object_id` may own multiple diagrams.
 3. Hydraulic Diagram Service does not own customer or object master data.
 4. A diagram ID is stable for the lifetime of the diagram.
 5. An archived diagram remains readable unless retention policy removes it.
+6. When object verification is enabled (`config.database.object_verification_enabled`), a diagram may be created only for an existing, non-archived Registry project; when disabled, `object_id` is stored as an unverified reference.
 
 ## Revision invariants
 
@@ -77,27 +78,34 @@ These values are domain catalogs or controlled enums and therefore belong in `mo
 
 ## `DiagramSystemKind`
 
-Initial supported values:
+Initial supported values (resolved 2026-07-15):
 
 ```text
 heating
 cold_water
 hot_water
-mixed_hydraulic
+solar_thermal
 ```
 
 Deferred values:
 
 ```text
 drainage
-solar_thermal
 water_treatment
 ```
 
 Policy:
 
-- One diagram has one primary `system_kind`.
-- Mixed systems use `mixed_hydraulic` until subsystem modeling is introduced.
+- A diagram declares a non-empty author-declared set `system_kinds`. Real
+  thermal-unit diagrams routinely combine subsystems on one sheet — DHW with
+  recirculation fed by a solar collector today, boiler piping plus heating
+  tomorrow — so mixing is represented by the set itself.
+- The former `mixed_hydraulic` pseudo-kind is removed: it was a placeholder
+  for exactly this decision and would have become the majority value,
+  carrying no information.
+- `system_kinds` serves discovery, listing, and labeling. Engineering
+  compatibility is never derived from it; media and flow compatibility is
+  owned by connection-level rules.
 - New kinds require explicit catalog expansion rather than arbitrary strings.
 
 ## `MediumKind`
@@ -362,6 +370,25 @@ Implementation freedom:
 
 The storage choice must not alter domain behavior.
 
+## Registry index publication (resolved 2026-07-15)
+
+Platform discovery pattern: participation is learned from the Registry, data
+is fetched from the owning service. Therefore:
+
+- the service maintains exactly one `hydraulic_diagram` index artifact per
+  Registry project; its payload lists the project's diagrams with their
+  current committed revisions;
+- the index is refreshed after a successful revision commit, strictly outside
+  the commit transaction;
+- publication is non-blocking and best-effort: Registry unavailability never
+  fails or delays a commit; a stale index is corrected by the next successful
+  publication;
+- the index is discovery data only — consumers must fetch actual diagram and
+  estimation data from this service; the index is never a second source of
+  truth;
+- prerequisite recorded for the Registry project: artifact type
+  `hydraulic_diagram`, owner service `hydraulic`.
+
 ---
 
 # 6. Agent-created definition policy
@@ -383,6 +410,55 @@ Initial activation policy:
 - diagram-scoped and object-scoped drafts may be activated by an authorized diagram owner or trusted service.
 - global activation requires explicit human or catalog-admin approval.
 - tenant activation remains disabled.
+
+## Draft usability (resolved 2026-07-15)
+
+The authoring workflow is synchronous: an agent creates a missing device
+while a diagram is being drawn. Therefore:
+
+- a diagram-scoped draft is immediately visible and usable in its owning
+  diagram without human approval;
+- a diagram containing draft-backed elements may be committed as a revision;
+- the estimation collector accepts draft-backed items but marks each of them
+  with an explicit warning naming the draft definition, so the estimator sees
+  that a non-approved definition contributed to the package;
+- outside its owning scope a draft remains invisible until activation.
+
+## Catalog bootstrap (resolved 2026-07-15)
+
+The base global catalog is seeded as data through the same definition
+mechanism: the import runs under catalog-admin authority, passes full
+structural validation, and produces `active` global definitions with system
+provenance. No definition — seeded or agent-created — is represented in
+generated code; adding a device never requires factory regeneration.
+
+## Visual assets (resolved 2026-07-15)
+
+Applies to every definition creation path (agent draft, seed import). The
+purpose is asset hygiene, not threat defense: the SVG author is a
+nondeterministic agent, and the stored asset must render identically in every
+client, offline, and in image export.
+
+- a definition version carries its immutable visual asset: `svg_markup`,
+  default size, and port anchors;
+- the SVG must be self-contained and inert: no scripts, no event handlers,
+  no external references, no `foreignObject` — otherwise the same catalog
+  entry renders differently across clients and breaks export;
+- asset size is limited by one generous config value (candidate:
+  `config.catalog.max_svg_markup_bytes`), because the catalog ships inside
+  every `CatalogSnapshot` and a single oversized agent drawing would bloat
+  every workspace load; the limit exists to keep the constraint concrete
+  rather than "reasonable";
+- the visual asset is presentation-only: rejection of a bad asset is a
+  validation error, but the asset never defines ports, properties, or any
+  engineering semantics, and estimation ignores it.
+
+The `catalog` definition-creation boundary owns enforcement. Both agent draft
+creation and catalog seed import pass `svg_markup` through the same catalog
+visual-asset validator before an `ElementDefinition` is constructed or
+persisted. Pydantic owns only local field shape (non-empty string and positive
+dimensions); it does not parse or sanitize SVG and does not read runtime
+catalog config.
 
 ## Promotion
 
@@ -409,26 +485,31 @@ An agent must not:
 
 # 7. Layout authority policy
 
-## Current decision
+## Decision (permanent, resolved 2026-07-15)
 
-Layout is presentation data, not authoritative engineering measurement.
+Layout is presentation data, not authoritative engineering measurement — and
+this is a permanent boundary of this service, not a temporary limitation.
 
 Therefore:
 
 - route points may be saved and restored;
 - route points may support rendering;
-- route points must not currently determine pipe length for estimation;
+- route points never determine pipe length for estimation;
 - element positions and symbol dimensions are not physical building coordinates.
+
+## Platform ownership of physical length
+
+A thermal-unit schematic is topological. Physical pipe lengths derive from
+building geometry, which on the platform is owned by the room-geometry
+foundation service; spatial pipe routing and length derivation belong to a
+future plumbing service built on that foundation. This service will never
+grow a floor-plan model.
 
 ## Consequence for estimation
 
-Connection length is complete only when provided through an explicit validated property or future authoritative measurement model.
+Connection length is complete only when provided through an explicit validated property (`explicit_property`).
 
 The collector must emit a missing requirement when length is required but unavailable.
-
-## Future extension
-
-A later version may introduce calibrated floor-plan coordinates and authoritative route geometry. That requires a new model and rules, not reinterpretation of current layout fields.
 
 ---
 
@@ -494,6 +575,19 @@ Disabled method:
 ```text
 layout_route_length
 ```
+
+## Item units and names (resolved 2026-07-15)
+
+Every package item is self-describing for the estimator:
+
+- element items carry an explicit `unit_code`: the count unit `ud` unless the
+  pinned definition declares another quantity unit; the unit is never left
+  implicit;
+- connection items carry the unit declared by their measurement method;
+- every item's `name` is projected from its pinned definition version at
+  collection time, so PresuPro renders positions without catalog lookups;
+- grouping keys include `unit_code`: items with different units are never
+  merged.
 
 until authoritative geometry is introduced.
 

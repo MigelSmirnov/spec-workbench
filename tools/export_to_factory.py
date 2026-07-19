@@ -136,9 +136,16 @@ def run_factory_validator(validator: Path, source: Path) -> dict[str, Any]:
         if result.stderr:
             print(result.stderr, end="", file=sys.stderr)
         report = load_json(report_path)
-    if result.returncode not in (0, 2):
-        errors = report.get("summary", {}).get("error", "unknown")
-        raise SystemExit(f"factory validator rejected the source specification ({errors} errors)")
+    summary = report.get("summary", {})
+    status = report.get("status")
+    errors = summary.get("error", "unknown")
+    warnings = summary.get("warning", "unknown")
+    if result.returncode != 0 or status != "PASS" or errors != 0 or warnings != 0:
+        raise SystemExit(
+            "factory validator rejected the source specification "
+            f"(status={status!r}, exit_code={result.returncode}, "
+            f"errors={errors}, warnings={warnings}); handoff requires PASS with zero warnings"
+        )
     return report
 
 
@@ -229,7 +236,9 @@ def main() -> int:
         raise SystemExit(f"factory did not create the canonical spec: {paths['canonical']}")
     source_sha = sha256_file(source)
     canonical_sha = sha256_file(paths["canonical"])
-    if source_sha != canonical_sha:
+    # The factory bootstrap may reformat the JSON; identity is judged by the
+    # canonical spec hash, not file bytes.
+    if canonical_spec_sha(load_json(source)) != canonical_spec_sha(load_json(paths["canonical"])):
         raise SystemExit("canonical Factory specification differs from the validated source")
 
     validation_path = paths["working"] / "spec_workbench_validation.json"

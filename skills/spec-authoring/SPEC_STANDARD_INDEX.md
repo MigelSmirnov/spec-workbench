@@ -27,6 +27,15 @@
 | [`module_hints`](SPEC_STANDARD.md#10-module_hints) | Подсказки для привязки неоднозначных notes. | Module-level note попадает не в тот модуль. |
 | [`module_paths`](SPEC_STANDARD.md#11-module_paths) | Пути генерируемых Python-модулей. | Меняется файловая или package-структура. |
 | [`default_module`](SPEC_STANDARD.md#12-default_module) | Получатель непривязанных функций и notes. | Меняется fallback-модуль или появляются непривязанные символы. |
+| [Система типов](SPEC_STANDARD.md#13-система-типов-и-происхождение-имён) | Замыкание имён, происхождение типов, нормативный NOT-list. | Появляется новый тип, import типа или ошибка «unknown/ambiguous name». |
+| [`properties`](SPEC_STANDARD.md#14-properties) | Исполняемые инварианты над аргументами и `result`. | Требование можно доказать для сгенерированных входов чистым булевым выражением. |
+| [`determinism`](SPEC_STANDARD.md#15-determinism) | Повторяемость результата при одинаковых входах. | Функция должна быть независима от clock/random/uuid и скрытого состояния. |
+
+## Детали `models`
+
+- [kind моделей — закрытый реестр](SPEC_STANDARD.md#kind-моделей)
+- [kind: discriminated_union](SPEC_STANDARD.md#kind-discriminated_union)
+- [kind: interface](SPEC_STANDARD.md#kind-interface)
 
 ## Детали `notes`
 
@@ -44,7 +53,10 @@
 
 ```text
 новая сущность или поле       → models → contracts → notes
-новый инвариант или policy    → rules → владеющий модуль → notes
+тип «ровно одно из»           → models (kind: discriminated_union) → variants
+новый порт (repo/UoW/gateway) → models (kind: interface) → contracts (Имя.метод)
+новый stdlib/third-party тип  → imports (полная строка) → раздел 13
+новый инвариант или policy    → invariant ledger → rules | note | property
 новая runtime-настройка       → config → notes
 изменение публичной границы   → imports.internal → contracts → module_functions
 перемещение реализации        → module_functions → module_order → module_paths

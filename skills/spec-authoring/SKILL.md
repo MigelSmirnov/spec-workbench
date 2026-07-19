@@ -22,6 +22,18 @@ idea and discussion
 
 The governing format is [SPEC_STANDARD.md](SPEC_STANDARD.md). Treat it as normative.
 
+The format alone does not guarantee that a particular Factory revision can
+materialize every valid design. Before handoff, apply the target-specific
+[FACTORY_COMPATIBILITY.md](FACTORY_COMPATIBILITY.md) profile. The profile is an
+operational constraint, not an extension of `global_spec.json`.
+
+Platform references are conditional. When the product stores a Registry
+`project_id`, reads current project context, or creates data linked to a
+renovation project, read
+[references/platform_registry_contract.md](references/platform_registry_contract.md)
+before State 0 and apply its authoring checklist through State 9. Do not load
+that reference for unrelated specifications.
+
 ## Core problem
 
 An LLM can produce a specification that is structurally valid but semantically hollow.
@@ -129,6 +141,27 @@ For each model determine:
 - whether partial construction is valid;
 - which invariants apply.
 
+Keep model-level validation local. A Pydantic validator is appropriate only
+when it is pure and deterministic and needs no information beyond the model's
+own fields and closed value-object rules. Runtime configuration, repository or
+cross-record lookup, I/O, and sanitization or parsing policy for rich external
+formats belong to an owning domain or boundary module. A field may still carry
+SVG, PDF, HTML, XML, or another external representation without making the
+Pydantic model the owner of that representation's security policy.
+
+Separate the correct domain concept from its Factory encoding. Before using a
+model `kind`, metadata key, named union, alias, generic, root model, or custom
+method form, verify that the normative specification standard defines it and
+that the selected Factory profile materializes it. Do not invent JSON such as
+`kind: discriminated_union` merely because the intended Python type is clear.
+If a deployed target still supports only ordinary field models and enums, use
+a supported representation only when it is semantically equivalent. Do not
+replace a closed union with a many-optional-fields envelope, or replace typed
+ports with concrete persistence/session functions, solely to satisfy a legacy
+compiler. Preserve the design decision and stop with an explicit capability
+blocker while the standard, validator, generator, surface gates, and tests are
+being upgraded.
+
 Reject model placeholders such as:
 
 ```text
@@ -174,6 +207,29 @@ Capture:
 - limits, paths, timeouts, and feature switches;
 - stable domain catalogs and enum-like values.
 
+Record every invariant in a Workbench-side `invariant_ledger.json`. This is an
+authoring traceability artifact, not a section of `global_spec.json`:
+
+```json
+{
+  "schema_version": 1,
+  "invariants": [
+    {
+      "id": "INV-001",
+      "statement": "a completed job has a result id",
+      "owner_function": null,
+      "landing": null
+    }
+  ]
+}
+```
+
+Assign a stable `id` and concrete `statement` in State 2. `owner_function` may
+remain `null` until public APIs and contracts stabilize, but the invariant must
+already name its owning responsibility in the State 2 working document. Do not
+use the ledger as a second rules store: policy tables and transition data still
+belong in `rules`.
+
 Classify deliberately:
 
 - `config` — runtime or product knobs that may change independently;
@@ -187,6 +243,7 @@ Readiness questions:
 - Are state transitions explicit where lifecycle matters?
 - Are tables and allow-lists stored outside notes?
 - Can a value’s section be justified by why and how it changes?
+- Does every invariant have a stable ledger id and one owning responsibility?
 
 ### State 3 — Module responsibilities
 
@@ -236,6 +293,12 @@ Expected specification output at this stage:
 - draft `imports.internal` as public ownership, not final dependency wiring;
 - draft `module_order` and `module_paths`;
 - responsibility notes outside the final JSON if still under discussion.
+
+Before accepting `module_paths`, distinguish semantic modules from generation
+units and check the selected Factory compatibility profile. A conceptual
+package decomposition is not evidence that the target compiler can generate or
+import it. In particular, authoring subdivisions of the model catalog may need
+to assemble into one deterministic runtime model unit.
 
 ### State 4 — Key system flows
 
@@ -364,6 +427,29 @@ For each function consider:
 - orchestration boundaries;
 - evidence expectations where relevant.
 
+Before writing or accepting notes, revisit every State 2 invariant whose
+`owner_function` is this function. It must land in exactly one primary form:
+
+- `rules` when the invariant is declarative policy data or a transition table;
+- a classified `note` when it constrains effects, failures, boundaries, or
+  behavior that cannot be evaluated as a pure result predicate;
+- `properties.<function>` when it is a total, side-effect-free predicate over
+  `result`, the function arguments, and `self` for methods.
+
+Update the ledger with the exact landing. Examples:
+
+```json
+{"kind": "rules", "path": "job_status_transitions"}
+{"kind": "note", "text": "complete_job: [VALIDATION_ERROR] MUST reject a missing result_id"}
+{"kind": "property", "expression": "result.status != 'completed' or result.result_id is not None"}
+```
+
+For a property candidate ask: can the expression be evaluated for generated
+contract inputs without I/O, hidden state, clocks, randomness, or an undeclared
+helper? Does a counterexample directly prove the invariant false? If either
+answer is no, it is not a property; use rules or a note. Mark repeatable pure
+functions in `determinism` independently of the invariant's primary landing.
+
 Avoid:
 
 - restating the function name;
@@ -378,6 +464,14 @@ For every function perform the placeholder resistance test:
 > Could this contract be implemented with `return None`, `return []`, `return {}`, an empty model, a constant success value, or a simple forwarding call without contradicting the notes?
 
 If yes, the function is under-specified or prematurely designed. Strengthen the relevant earlier layer or remove the unnecessary function.
+
+Then ask the inverse question:
+
+> Is the condition that makes the placeholder impossible actually a property
+> over `result` and the contract arguments?
+
+If yes, encode it in `properties.<function>` instead of leaving it only as
+review prose.
 
 Readiness questions:
 
@@ -400,6 +494,7 @@ Populate all sections required by `SPEC_STANDARD.md`:
 - `config`;
 - `models`;
 - `rules`;
+- `properties` and `determinism` where declared;
 - `imports`;
 - `module_functions`;
 - `module_order`;
@@ -412,7 +507,69 @@ Assembly should mostly serialize decisions already made. It must not become anot
 
 If assembly exposes missing models, unclear ownership, generic contracts, or vague behavior, return to the appropriate earlier state.
 
-After assembly, use the existing factory validators and inspectors. Do not duplicate them inside this skill.
+After assembly, use the existing factory validators and inspectors. Do not
+duplicate them inside this skill. Canonical Factory validation must exit with
+code 0, report `PASS`, and contain zero errors and zero warnings. Treat
+`WARNINGS_ONLY` as a failed assembly checkpoint and return each finding to its
+earliest owning design state before handoff.
+
+Run the Workbench coverage check with the State 2 ledger before export:
+
+```bash
+python3 tools/semantic_lint.py path/to/global_spec.json \
+  --invariants path/to/invariant_ledger.json --strict
+```
+
+An S10 finding means an invariant has no verifiable owner/landing bridge and
+must be repaired in the earliest owning state.
+
+### State 9 — Factory compatibility probe
+
+Prove that the assembled specification is materializable by the selected
+Factory revision before declaring it handoff-ready. Follow
+`FACTORY_COMPATIBILITY.md` and use the Factory's existing commands rather than
+reimplementing their checks in the Workbench.
+
+Use reference applications as scoped evidence. Panelforge is the positive
+baseline for the established deterministic-model and deep-module pipeline; it
+is not proof that named unions or Protocol ports work. The hydraulic-diagram
+case is the migration probe for those new capabilities. A reference proves
+only the exact surfaces exercised by its accepted assembler, linker, and
+runtime evidence.
+
+The minimum probe must exercise:
+
+- canonical validation and inspection;
+- the deterministic runtime model generation unit;
+- at least one representative consumer of generated model types;
+- discriminated unions, aliases, protocols, or other non-field model forms
+  when the specification uses them;
+- semantic inspection of generated type shapes, not only expected-name or
+  model-count coverage;
+- assembler and linker;
+- no deploy.
+
+Classify a failure before changing anything:
+
+- **semantic ownership failure** — return to the earliest product, model, rule,
+  or module-responsibility state;
+- **unsupported target representation** — return to models, contracts, imports,
+  or `module_paths` only when the encoding is invalid and a semantically
+  equivalent supported encoding exists; otherwise preserve the architecture
+  and record a Factory capability blocker;
+- **Factory contradiction** — one Factory component demonstrably materializes
+  the required semantics while another rejects that same supported runtime
+  representation; mere name emission or permissive validation is not proof of
+  materialization. Record the evidence as a toolchain blocker and do not
+  contort the specification to imitate the defect.
+
+Generation success alone is insufficient. The assembler and linker are part of
+the probe because they expose import-surface and cross-module contradictions
+that isolated drafts do not.
+
+Do not start the generation portion of the probe while canonical validation is
+warning-only. A warning is unresolved specification evidence even when later
+Factory nodes are technically able to continue.
 
 ## Placeholder taxonomy
 
@@ -565,6 +722,7 @@ A specification is ready for the existing factory when:
 - product outcomes are concrete;
 - required models and fields have known producers;
 - invariants and policies have owners;
+- every State 2 invariant has a verified rules, note, or property landing;
 - modules have precise, deep responsibilities;
 - major flows terminate in observable results or explicit failures;
 - public APIs reflect real cross-module needs;
@@ -572,6 +730,12 @@ A specification is ready for the existing factory when:
 - notes prevent trivial placeholder implementations;
 - `config`, `models`, and `rules` are cleanly separated;
 - assembly introduces no new product or architecture decisions;
-- the complete file conforms to `SPEC_STANDARD.md`.
+- the complete file conforms to `SPEC_STANDARD.md`;
+- canonical Factory validation exits 0 with status `PASS`, zero errors, and
+  zero warnings;
+- the selected Factory compatibility profile is satisfied;
+- the no-deploy compatibility probe has exercised models, a representative
+  consumer, assembler, and linker, with any Factory contradiction recorded
+  explicitly rather than hidden by a semantic spec change.
 
 The objective is not maximal detail. The objective is enough precision that the code-generation factory does not need to invent missing architecture or product semantics.

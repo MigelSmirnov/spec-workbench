@@ -18,7 +18,12 @@ def _write_json(path: Path, data: object) -> None:
     _write(path, json.dumps(data, ensure_ascii=False, indent=2) + "\n")
 
 
-def _fake_factory(tmp_path: Path, standard: str) -> Path:
+def _fake_factory(
+    tmp_path: Path,
+    standard: str,
+    *,
+    validator_status: str = "PASS",
+) -> Path:
     factory = tmp_path / "code_factory"
     _write(factory / "SPEC_STANDARD.md", standard)
     _write_json(
@@ -37,9 +42,11 @@ def _fake_factory(tmp_path: Path, standard: str) -> Path:
             "files": {"global_spec": "specs/base/global_spec.json"},
         },
     )
+    validator_exit_code = 0 if validator_status == "PASS" else 2
+    validator_warning_count = 0 if validator_status == "PASS" else 1
     _write(
         factory / "tools/validate_spec.py",
-        """import argparse, hashlib, json
+        f"""import argparse, hashlib, json, sys
 p = argparse.ArgumentParser()
 p.add_argument('spec')
 p.add_argument('--out', required=True)
@@ -47,8 +54,9 @@ p.add_argument('--quiet', action='store_true')
 a = p.parse_args()
 s = json.load(open(a.spec, encoding='utf-8'))
 payload = json.dumps(s, sort_keys=True, ensure_ascii=False).encode()
-r = {'status': 'PASS', 'summary': {'error': 0}, 'spec_sha': 'sha256:' + hashlib.sha256(payload).hexdigest()}
+r = {{'status': {validator_status!r}, 'summary': {{'error': 0, 'warning': {validator_warning_count}}}, 'spec_sha': 'sha256:' + hashlib.sha256(payload).hexdigest()}}
 open(a.out, 'w', encoding='utf-8').write(json.dumps(r))
+sys.exit({validator_exit_code})
 """,
     )
     _write(
@@ -84,7 +92,9 @@ def test_export_creates_canonical_spec_and_bound_handoff(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     real_workbench_root = Path(export_to_factory.__file__).resolve().parents[1]
-    standard = (real_workbench_root / "skills/spec-authoring/SPEC_STANDARD.md").read_text(encoding="utf-8")
+    standard = (
+        real_workbench_root / "skills/spec-authoring/SPEC_STANDARD.md"
+    ).read_text(encoding="utf-8")
     workbench_root = tmp_path / "spec-workbench"
     _write(workbench_root / "skills/spec-authoring/SPEC_STANDARD.md", standard)
     factory = _fake_factory(tmp_path, standard)
@@ -96,7 +106,11 @@ def test_export_creates_canonical_spec_and_bound_handoff(
         "module_order": ["app"],
     }
     _write_json(source, spec)
-    monkeypatch.setattr(export_to_factory, "__file__", str(workbench_root / "tools/export_to_factory.py"))
+    monkeypatch.setattr(
+        export_to_factory,
+        "__file__",
+        str(workbench_root / "tools/export_to_factory.py"),
+    )
     monkeypatch.setattr(export_to_factory, "git_metadata", _clean_git_metadata)
     monkeypatch.setattr(
         sys,
@@ -149,5 +163,36 @@ def test_export_blocks_standard_drift_before_project_creation(
     )
 
     with pytest.raises(SystemExit, match="SPEC_STANDARD mismatch"):
+        export_to_factory.main()
+    assert not (factory / "projects/demo").exists()
+
+
+def test_export_blocks_warning_only_validation_before_project_creation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    real_workbench_root = Path(export_to_factory.__file__).resolve().parents[1]
+    standard = (real_workbench_root / "skills/spec-authoring/SPEC_STANDARD.md").read_text(encoding="utf-8")
+    workbench_root = tmp_path / "spec-workbench"
+    _write(workbench_root / "skills/spec-authoring/SPEC_STANDARD.md", standard)
+    factory = _fake_factory(tmp_path, standard, validator_status="WARNINGS_ONLY")
+    source = workbench_root / "examples/demo/global_spec.json"
+    _write_json(source, {})
+    monkeypatch.setattr(export_to_factory, "__file__", str(workbench_root / "tools/export_to_factory.py"))
+    monkeypatch.setattr(export_to_factory, "git_metadata", _clean_git_metadata)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "export_to_factory.py",
+            "--spec",
+            str(source),
+            "--project",
+            "demo",
+            "--factory-root",
+            str(factory),
+        ],
+    )
+
+    with pytest.raises(SystemExit, match="handoff requires PASS with zero warnings"):
         export_to_factory.main()
     assert not (factory / "projects/demo").exists()

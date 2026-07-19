@@ -28,8 +28,18 @@ Create specifications that:
 7. Contracts
 8. Notes
 9. Assembly
+10. Factory compatibility probe (assembler and linker, no deploy)
 
 Each layer is stabilized before moving to the next.
+
+State 2 invariants are tracked in a Workbench-side `invariant_ledger.json`.
+Before handoff, each entry must resolve to one function owner and one primary
+landing in `rules`, a classified note, or `properties.<function>`:
+
+```bash
+python3 tools/semantic_lint.py examples/<case>/global_spec.json \
+  --invariants examples/<case>/invariant_ledger.json --strict
+```
 
 ## Repository structure
 
@@ -42,6 +52,9 @@ examples/
 
 skills/spec-authoring/SPEC_STANDARD.md
     Definition of the global_spec.json format.
+
+skills/spec-authoring/FACTORY_COMPATIBILITY.md
+    Current target-compiler profile and mandatory no-deploy compile probe.
 ```
 
 ## Current status
@@ -49,6 +62,20 @@ skills/spec-authoring/SPEC_STANDARD.md
 The project is under active development.
 
 The current focus is building a repeatable methodology for producing high-quality specifications that can later be compiled into code by AI Code Factory.
+
+## Reference cases
+
+- **Panelforge** in the sibling Factory checkout is the positive end-to-end
+  baseline for capabilities it has actually exercised: deep generation units,
+  a deterministic `core/models` surface, strict/frozen Pydantic DTOs, thin API
+  orchestration, assembler completion, linker completion, and deploy evidence.
+- **Hydraulic Diagram Service** is the capability-migration case for named
+  discriminated unions and Protocol-based repository, UnitOfWork,
+  authorization, and gateway ports.
+
+Reference cases are evidence, not templates to copy mechanically. Panelforge
+does not prove named-union or Protocol materialization, and its incidental
+shapes must not be used to downgrade a more precise architecture.
 
 ## Factory handoff
 
@@ -71,6 +98,7 @@ python tools/export_to_factory.py \
 Use `--update-existing` only when intentionally replacing an existing canonical
 specification. The export is blocked when the two repositories have different
 `SPEC_STANDARD.md` content, the Workbench checkout is dirty, or the Factory's
-canonical validator reports errors. Provenance and validation evidence are
-written to `projects/<project>/specs/working/`; `global_spec.json` remains in
-the factory-defined format.
+canonical validator reports any error or warning. Only exit code 0 with status
+`PASS` is handoff-ready; `WARNINGS_ONLY` is rejected. Provenance and validation
+evidence are written to `projects/<project>/specs/working/`;
+`global_spec.json` remains in the factory-defined format.

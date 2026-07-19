@@ -28,7 +28,7 @@ A visual editor, diagram-authoring agent, or trusted platform service creates a 
 ```text
 object_id
 name
-system_kind
+system_kinds (non-empty set)
 actor
 ```
 
@@ -48,7 +48,7 @@ HTTP or MCP
 
 - `http_api` / `mcp_api`: parse and serialize only.
 - `application`: orchestrates the use case.
-- `object_gateway`: optionally confirms the object exists when the real integration is available.
+- `object_gateway`: confirms the Registry project exists and is not archived when `object_verification_enabled` is true.
 - `diagram`: creates the domain aggregate with `current_revision = 0`.
 - `repositories`: persists the new diagram.
 
@@ -58,7 +58,7 @@ A stable diagram ID linked to the external object.
 
 ## Failures
 
-- invalid `system_kind` → domain validation error;
+- empty or invalid `system_kinds` → domain validation error;
 - object not found → integration/application error when object verification is enabled;
 - duplicate client idempotency key → return existing result or conflict according to later API policy;
 - persistence failure → no partial diagram record.
@@ -232,7 +232,23 @@ HTTP or MCP
     → update Diagram.current_revision
     → commit transaction
 → return DiagramRevision
+→ after transaction: refresh Registry index (non-blocking)
 ```
+
+## Post-commit Registry publication
+
+```text
+commit transaction succeeded
+→ registry gateway: publish/update hydraulic_diagram index artifact
+  (payload: project's diagrams with current committed revisions)
+→ on Registry failure: log and continue — the commit result is unaffected,
+  the index catches up on the next successful publication
+```
+
+The publication runs strictly outside the UnitOfWork (the commit-stage
+forbidden-action note already prohibits external calls inside the
+transaction) and is discovery-only: consumers fetch actual data from this
+service.
 
 ## Ownership
 
@@ -240,7 +256,9 @@ HTTP or MCP
 - `layout`: layout integrity.
 - `revision`: concurrency, numbering, immutability, atomic commit.
 - `repositories` / `UnitOfWork`: physical transaction.
-- `application`: orchestration only.
+- `application`: orchestration only, including post-commit index refresh.
+- `registry gateway`: outbound artifact publication (same contained boundary
+  as project verification).
 
 ## Failures
 
@@ -268,18 +286,28 @@ A diagram-authoring agent cannot find an appropriate existing element definition
 
 ## Input
 
+Two explicit parts of one definition record:
+
 ```text
-name
-code
-category
-scope
-scope_ref
-ports
-property definitions
-estimation refs
-visual reference
-actor
+engineering part (validated, drives connection and estimation semantics):
+  name
+  code
+  category
+  scope
+  scope_ref
+  ports (code, label, kind, medium, flow semantics, allowed connection types)
+  property definitions (including required_for_estimation)
+  estimation refs
+  actor
+
+presentation part (stored, sanitized, never interpreted):
+  svg_markup
+  default size
+  port visual anchors
 ```
+
+The drawing agent's SVG skill produces the presentation part; the engineering
+part cannot be inferred from the drawing and must be supplied explicitly.
 
 ## Flow
 
@@ -288,6 +316,7 @@ MCP or authorized HTTP
 → application.create_element_definition_draft
 → catalog.validate draft structure
 → catalog.validate requested scope
+→ catalog validate visual asset inertness and configured byte limit
 → catalog.create draft version
 → CatalogRepository.save
 → return ElementDefinition(status=draft)
@@ -302,6 +331,23 @@ user or trusted service approval
 → catalog.activate definition
 → CatalogRepository.save
 ```
+
+## Catalog bootstrap (seed) flow
+
+The base global catalog enters through the same mechanism, not through code:
+
+```text
+catalog-admin import (HTTP or operational tool)
+→ application.create definition draft (per definition, full validation)
+→ catalog visual-asset validation (same helper as agent draft creation)
+→ application.transition_definition_status (global activation,
+  catalog-admin authority)
+→ CatalogRepository.save
+→ observable result: active global definitions with system provenance
+```
+
+No separate unvalidated bulk-load path exists; a seed definition that fails
+validation is rejected exactly like an agent draft.
 
 ## Ownership
 
@@ -324,7 +370,7 @@ A versioned scoped draft, not an arbitrary blob.
 
 ## Placeholder resistance
 
-The agent must not submit executable code, raw arbitrary metadata, or a free-form SVG as the only definition.
+The agent must not submit executable code, raw arbitrary metadata, or a free-form SVG as the only definition. A submission with a presentation part but an empty engineering part (no ports, no properties, no estimation refs) is rejected, not silently accepted as a picture.
 
 ---
 
@@ -513,7 +559,7 @@ HTTP or MCP
 diagram_id
 object_id
 name
-system_kind
+system_kinds
 status
 current_revision
 updated_at
