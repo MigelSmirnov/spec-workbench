@@ -30,7 +30,7 @@ product is Registry-linked).
   module-owned exception classes, concrete PortalStore/PortalTransaction,
   typed dependency edges, module ownership, and function ordering recorded.
 - **State 7** — `70_notes_properties.md`. Assembly-ready classified notes
-  cover all 319 exact contracts; pure properties and determinism decisions are
+  cover all 318 exact contracts; pure properties and determinism decisions are
   recorded; every invariant has one exact owner and primary landing in
   `invariant_ledger.json`.
 - **State 8** — `../global_spec.json` + `80_assembly.md`. Assembly is complete;
@@ -105,7 +105,7 @@ product is Registry-linked).
     transaction as the business mutation.
 17. **State 6 security correction:** persisted entities containing password/
     token/secret hashes or `file_ref` are never HTTP responses. Dedicated safe
-    administration/mutation DTOs and exact PortalApi method contracts own the
+    administration/mutation DTOs and exact top-level endpoint contracts own the
     allow-list projection.
 18. **State 6 guard design:** actor-specific public guards delegate to one
     `_authorize_project_operation(ProjectAuthorizationRequest)` using the
@@ -117,9 +117,11 @@ product is Registry-linked).
     referential commit invariants use `PortalTransaction.commit` as their one
     technical owner; semantic modules still own the commands and required
     audit effects.
-21. **State 7 projection decision:** every PortalApi method has an exact thin
+21. **State 7 projection decision:** every top-level endpoint function has an exact thin
     orchestration note, and safe projection helpers have allow-list notes plus
     pure equality properties. Hashes and `file_ref` cannot reach JSON DTOs.
+
+22. **API boundary correction:** State 3 now maps `api` to `api/router`; State 5 owns an exact unversioned REST catalog; State 6/7 use top-level `*_endpoint` contracts/notes. The accidental `PortalApi` class and `api/runtime` path were removed without changing domain use cases.
 
 ## Product-owner confirmation received
 

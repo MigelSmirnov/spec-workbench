@@ -10,8 +10,8 @@ behavior.
 
 ```text
 models:       104 (26 closed enums + 78 concrete Pydantic shapes)
-contracts:    319
-notes:        338 classified strings
+contracts:    318
+notes:        337 classified strings
 properties:   21 functions / 29 expressions
 determinism:  47 explicit decisions
 modules:      20
@@ -34,6 +34,9 @@ required environment-variable names rather than fabricated values.
 3. Factory-safe config/rules keys avoid secret-like words while preserving the
    accepted policies (`credential_*`, `project_guard_sequence`, and
    `verification_envelope_policy`).
+4. The HTTP boundary now materializes as `api/router.py`: top-level endpoint
+   functions and an exact unversioned route catalog replace the accidental
+   `PortalApi` class and `api/runtime` path without changing domain behavior.
 
 ## Validation evidence
 

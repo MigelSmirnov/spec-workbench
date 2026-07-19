@@ -492,8 +492,8 @@ translation of declared domain/boundary failures to HTTP responses.
 
 **Hides:** framework-specific request/response and streaming mechanics.
 
-**Candidate public capability:** `create_app` plus route handlers that remain
-transport entry points, not cross-domain APIs.
+**Candidate public capability:** `create_app`; top-level `*_endpoint`
+functions remain transport entry points in `api/router`, not cross-domain APIs.
 
 **Must not own:** role/capability decisions, Registry validation policy,
 transactions, formulas, file-reference safety, ORM queries, or duplicated
@@ -625,7 +625,7 @@ module_paths:
   project_tracking       → domain/project_tracking
   photo_management       → domain/photo_management
   derived_views          → application/derived_views
-  api                    → api/runtime
+  api                    → api/router
 ```
 
 Package facades, if generation units are later split, are generated after

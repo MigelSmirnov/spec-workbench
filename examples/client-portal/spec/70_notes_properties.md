@@ -33,6 +33,9 @@ R14 -> rules.binary_delivery_policy
 R15 -> rules.project_list_ordering
 R16 -> rules.staff_identity_input_policy
 R17 -> rules.verification_envelope_policy
+R18 -> rules.http_route_catalog
+R18 -> rules.http_route_catalog
+R18 -> rules.http_route_catalog
 ```
 
 ## Assembly-ready classified notes
@@ -366,66 +369,65 @@ PortalTransaction._assert_open: [VALIDATION_ERROR] MUST raise PersistenceError a
 ### `api`
 
 ```text
-api: [DEPENDENCY_BOUNDARY] HTTP methods MUST remain thin typed orchestration, never import PortalTransaction, implement policy, read Registry/storage directly, or construct trusted actor/project contexts from request claims.
+api: [DEPENDENCY_BOUNDARY] Endpoint functions MUST remain thin typed orchestration, read PortalStore only from request.app.state.portal_store, never import PortalTransaction, implement policy, read Registry/storage directly, or construct trusted actor/project contexts from request claims.
 api: [SECURITY_BOUNDARY] Persisted IAM records containing password_hash, token_hash, or secret_hash and records containing file_ref MUST NOT be returned; only declared safe DTO projections or BinaryPayload may cross HTTP.
-create_app: [ORCHESTRATION] MUST construct FastAPI, instantiate PortalApi with store, register the exact declared routes once, and return that app without opening a transaction.
-PortalApi.__init__: [FIELD_ASSIGNMENT] MUST retain exactly store as the application dependency and MUST NOT begin a transaction or copy credentials.
-PortalApi.register_routes: [ORCHESTRATION] MUST bind every declared PortalApi public method to exactly one authenticated JSON or binary route and MUST NOT add endpoint-local business operations.
-PortalApi.staff_login: [ORCHESTRATION] MUST delegate only to authenticate_staff and return its StaffSessionGrant; AuthenticationRejected maps to the uniform authentication response.
-PortalApi.staff_logout: [ORCHESTRATION] MUST resolve session_token, delegate to sign_out_staff, and return no persisted StaffSession body.
-PortalApi.confirm_staff_email: [ORCHESTRATION] MUST delegate token consumption to confirm_email_verification and return only _staff_account_view.
-PortalApi.request_password_reset: [SECURITY_BOUNDARY] MUST delegate to request_password_reset and return the same no-content response for known and unknown email.
-PortalApi.complete_password_reset: [ORCHESTRATION] MUST delegate to complete_password_reset and return only _staff_account_view.
-PortalApi.request_email_change: [ORCHESTRATION] MUST resolve the staff session, delegate to request_email_change, and return its hash-free ChallengeIssueView.
-PortalApi.issue_staff_email_verification: [ORCHESTRATION] MUST resolve/authorize the administrator, delegate issuance, and return its hash-free ChallengeIssueView.
-PortalApi.confirm_email_change: [ORCHESTRATION] MUST delegate token consumption to confirm_email_change and return only _staff_account_view.
-PortalApi.create_staff: [ORCHESTRATION] MUST resolve/authorize administrator, delegate creation, and return only _staff_account_view.
-PortalApi.change_staff_status: [ORCHESTRATION] MUST resolve/authorize administrator, delegate the status transition, and return only _staff_account_view.
-PortalApi.assign_staff_project: [ORCHESTRATION] MUST resolve/authorize administrator and delegate the complete Registry-linked assignment use case without accepting project context fields.
-PortalApi.revoke_staff_assignment: [ORCHESTRATION] MUST resolve/authorize administrator and delegate revocation without probing assignment existence in the router.
-PortalApi.revoke_staff_sessions: [ORCHESTRATION] MUST resolve/authorize administrator, delegate revocation, and return only _session_revocation_result.
-PortalApi.create_viewer: [ORCHESTRATION] MUST resolve/authorize administrator, delegate creation, and return only _viewer_view.
-PortalApi.revoke_viewer: [ORCHESTRATION] MUST resolve/authorize administrator, delegate revocation, and return only _viewer_view.
-PortalApi.issue_viewer_credential: [SECURITY_BOUNDARY] MUST resolve/authorize administrator, delegate issuance, and return _viewer_credential_response with plaintext once and no secret_hash.
-PortalApi.revoke_viewer_credential: [ORCHESTRATION] MUST resolve/authorize administrator, delegate revocation, and return no ViewerAccessCredential body.
-PortalApi.grant_viewer_project: [ORCHESTRATION] MUST resolve/authorize administrator and delegate server-side Registry validation plus grant creation without client context.
-PortalApi.revoke_viewer_project: [ORCHESTRATION] MUST resolve/authorize administrator and delegate revocation without probing grant existence in the router.
-PortalApi.viewer_enter: [SECURITY_BOUNDARY] MUST delegate capability_secret authentication and return the issued session plaintext once without logging it.
-PortalApi.list_viewer_projects: [ORCHESTRATION] MUST resolve viewer_session_token and delegate list_viewer_projects; it MUST NOT accept viewer_id, grant, sort, or Registry facts from the request.
-PortalApi.viewer_project_overview: [ORCHESTRATION] MUST resolve the viewer session, authorize viewer project read, and delegate build_project_overview without weakening archived-read or visibility policy.
-PortalApi.create_service_principal: [ORCHESTRATION] MUST resolve/authorize administrator, delegate creation, and return only _service_principal_view.
-PortalApi.change_service_principal_status: [ORCHESTRATION] MUST resolve/authorize administrator, delegate transition, and return only _service_principal_view.
-PortalApi.issue_service_credential: [SECURITY_BOUNDARY] MUST resolve/authorize administrator, delegate issuance, and return _service_credential_response with plaintext once and no secret_hash.
-PortalApi.revoke_service_credential: [ORCHESTRATION] MUST resolve/authorize administrator, delegate revocation, and return no ServiceCredential body.
-PortalApi.grant_producer_project: [ORCHESTRATION] MUST resolve/authorize administrator and delegate server-side Registry validation plus grant creation without client context.
-PortalApi.revoke_producer_project: [ORCHESTRATION] MUST resolve/authorize administrator and delegate revocation without probing grant existence in the router.
-PortalApi.publish_snapshot: [ORCHESTRATION] MUST authenticate service_secret, authorize producer scope before content validation, and delegate import_snapshot without opening or controlling its transaction.
-PortalApi.get_snapshot_import: [ORCHESTRATION] MUST authenticate service_secret and delegate scoped immutable result lookup without accepting principal_id from the request.
-PortalApi.ensure_manual_budget: [ORCHESTRATION] MUST resolve staff, authorize budget mutation for project_id, and delegate ensure_manual_budget without constructing context from claims.
-PortalApi.upsert_manual_section_plan: [ORCHESTRATION] MUST resolve staff, authorize budget mutation, and delegate exact plan inputs; it MUST NOT compute totals or link sections by display name.
-PortalApi.activate_budget_version: [ORCHESTRATION] MUST resolve staff, authorize budget activation, and delegate activation; no service credential contour reaches this method.
-PortalApi.staff_project_overview: [ORCHESTRATION] MUST resolve staff, authorize project read, and delegate build_project_overview without computing component values.
-PortalApi.create_expense_from_recognition: [ORCHESTRATION] MUST resolve staff, authorize expense mutation, delegate the typed publication/allocations, and return only _expense_mutation_result.
-PortalApi.correct_expense: [ORCHESTRATION] MUST resolve staff, authorize expense mutation, delegate all correction fields atomically, and return only _expense_mutation_result.
-PortalApi.set_expense_inclusion: [ORCHESTRATION] MUST resolve staff, authorize expense mutation, delegate inclusion, and return only _expense_mutation_result.
-PortalApi.replace_expense_allocations: [ORCHESTRATION] MUST resolve staff, authorize expense mutation, delegate explicit allocations, and return only _expense_mutation_result.
-PortalApi.update_expense_document: [ORCHESTRATION] MUST resolve staff, authorize document mutation, delegate metadata fields, and return only _document_mutation_result without file_ref.
-PortalApi.staff_read_expense_document: [SECURITY_BOUNDARY] MUST resolve/authorize the staff contour then delegate read_expense_document and stream only BinaryPayload metadata/bytes.
-PortalApi.viewer_read_expense_document: [SECURITY_BOUNDARY] MUST resolve/authorize the viewer contour then delegate read_expense_document, preserving client_visible enforcement and exposing no file_ref.
-PortalApi.set_section_progress: [ORCHESTRATION] MUST resolve staff, authorize tracking mutation, and delegate the manual completion value without deriving it from photos.
-PortalApi.register_work_payment: [ORCHESTRATION] MUST resolve staff, authorize tracking mutation, and delegate the idempotent payment without treating it as an invoice.
-PortalApi.publish_progress_photo: [ORCHESTRATION] MUST resolve staff, authorize photo mutation, and delegate publication without reading file_ref or changing progress.
-PortalApi.update_progress_photo: [ORCHESTRATION] MUST resolve staff, authorize photo mutation, and delegate only mutable photo metadata.
-PortalApi.staff_read_progress_photo: [SECURITY_BOUNDARY] MUST resolve/authorize the staff contour then delegate read_progress_photo and stream only BinaryPayload metadata/bytes.
-PortalApi.viewer_read_progress_photo: [SECURITY_BOUNDARY] MUST resolve/authorize the viewer contour then delegate read_progress_photo, preserving client_visible enforcement and exposing no file_ref.
-PortalApi._staff_account_view: [FIELD_PROJECTION] MUST allow-list staff_id, email, email_verified, role, status, created_at, and updated_at exactly and MUST omit password_hash.
-PortalApi._viewer_view: [FIELD_PROJECTION] MUST allow-list viewer_id, display_name, status, created_at, and revoked_at exactly and MUST omit credentials, grants, sessions, and hashes.
-PortalApi._service_principal_view: [FIELD_PROJECTION] MUST allow-list service_principal_id, name, source_type, status, scope_mode, created_at, and disabled_at exactly and MUST omit credentials and hashes.
-PortalApi._viewer_credential_response: [FIELD_PROJECTION] MUST copy credential_id, viewer_id, created_at and one-time issue.secret and MUST omit secret_hash, revoked_at, and internal record fields.
-PortalApi._service_credential_response: [FIELD_PROJECTION] MUST copy credential_id, service_principal_id, key_version, created_at, expires_at and one-time issue.secret and MUST omit secret_hash and revoked_at.
-PortalApi._expense_mutation_result: [FIELD_PROJECTION] MUST copy expense_id and document_id from aggregate and set replayed from the aggregate outcome without supplier, allocations, or file_ref.
-PortalApi._document_mutation_result: [FIELD_PROJECTION] MUST copy document_id, client_visible, and updated_at and MUST omit expense_id and file_ref.
-PortalApi._session_revocation_result: [FIELD_PROJECTION] MUST set staff_id, revoked_session_count to len(sessions), and revoked_at to the common revocation timestamp; an empty list MUST use the operation timestamp rather than fabricate session data.
+create_app: [ORCHESTRATION] MUST construct FastAPI, store the supplied PortalStore only as app.state.portal_store, bind every handler exactly once according to = rules.http_route_catalog, and return the app without opening a transaction.
+staff_login_endpoint: [ORCHESTRATION] MUST delegate only to authenticate_staff and return its StaffSessionGrant; AuthenticationRejected maps to the uniform authentication response.
+staff_logout_endpoint: [ORCHESTRATION] MUST extract the staff bearer with _bearer_token(request), resolve it, delegate to sign_out_staff, and return no persisted StaffSession body.
+confirm_staff_email_endpoint: [ORCHESTRATION] MUST delegate token consumption to confirm_email_verification and return only _staff_account_view.
+request_password_reset_endpoint: [SECURITY_BOUNDARY] MUST delegate to request_password_reset and return the same no-content response for known and unknown email.
+complete_password_reset_endpoint: [ORCHESTRATION] MUST delegate to complete_password_reset and return only _staff_account_view.
+request_email_change_endpoint: [ORCHESTRATION] MUST resolve the staff session, delegate to request_email_change, and return its hash-free ChallengeIssueView.
+issue_staff_email_verification_endpoint: [ORCHESTRATION] MUST resolve/authorize the administrator, delegate issuance, and return its hash-free ChallengeIssueView.
+confirm_email_change_endpoint: [ORCHESTRATION] MUST delegate token consumption to confirm_email_change and return only _staff_account_view.
+create_staff_endpoint: [ORCHESTRATION] MUST resolve/authorize administrator, delegate creation, and return only _staff_account_view.
+change_staff_status_endpoint: [ORCHESTRATION] MUST resolve/authorize administrator, delegate the status transition, and return only _staff_account_view.
+assign_staff_project_endpoint: [ORCHESTRATION] MUST resolve/authorize administrator and delegate the complete Registry-linked assignment use case without accepting project context fields.
+revoke_staff_assignment_endpoint: [ORCHESTRATION] MUST resolve/authorize administrator and delegate revocation without probing assignment existence in the router.
+revoke_staff_sessions_endpoint: [ORCHESTRATION] MUST resolve/authorize administrator, delegate revocation, and return only _session_revocation_result.
+create_viewer_endpoint: [ORCHESTRATION] MUST resolve/authorize administrator, delegate creation, and return only _viewer_view.
+revoke_viewer_endpoint: [ORCHESTRATION] MUST resolve/authorize administrator, delegate revocation, and return only _viewer_view.
+issue_viewer_credential_endpoint: [SECURITY_BOUNDARY] MUST resolve/authorize administrator, delegate issuance, and return _viewer_credential_response with plaintext once and no secret_hash.
+revoke_viewer_credential_endpoint: [ORCHESTRATION] MUST resolve/authorize administrator, delegate revocation, and return no ViewerAccessCredential body.
+grant_viewer_project_endpoint: [ORCHESTRATION] MUST resolve/authorize administrator and delegate server-side Registry validation plus grant creation without client context.
+revoke_viewer_project_endpoint: [ORCHESTRATION] MUST resolve/authorize administrator and delegate revocation without probing grant existence in the router.
+viewer_enter_endpoint: [SECURITY_BOUNDARY] MUST delegate capability_secret authentication and return the issued session plaintext once without logging it.
+list_viewer_projects_endpoint: [ORCHESTRATION] MUST extract the viewer bearer with _bearer_token(request), resolve it and delegate list_viewer_projects; it MUST NOT accept viewer_id, grant, sort, or Registry facts from the request.
+viewer_project_overview_endpoint: [ORCHESTRATION] MUST resolve the viewer session, authorize viewer project read, and delegate build_project_overview without weakening archived-read or visibility policy.
+create_service_principal_endpoint: [ORCHESTRATION] MUST resolve/authorize administrator, delegate creation, and return only _service_principal_view.
+change_service_principal_status_endpoint: [ORCHESTRATION] MUST resolve/authorize administrator, delegate transition, and return only _service_principal_view.
+issue_service_credential_endpoint: [SECURITY_BOUNDARY] MUST resolve/authorize administrator, delegate issuance, and return _service_credential_response with plaintext once and no secret_hash.
+revoke_service_credential_endpoint: [ORCHESTRATION] MUST resolve/authorize administrator, delegate revocation, and return no ServiceCredential body.
+grant_producer_project_endpoint: [ORCHESTRATION] MUST resolve/authorize administrator and delegate server-side Registry validation plus grant creation without client context.
+revoke_producer_project_endpoint: [ORCHESTRATION] MUST resolve/authorize administrator and delegate revocation without probing grant existence in the router.
+publish_snapshot_endpoint: [ORCHESTRATION] MUST extract and authenticate the service bearer with _bearer_token(request), authorize producer scope before content validation, and delegate import_snapshot without opening or controlling its transaction.
+get_snapshot_import_endpoint: [ORCHESTRATION] MUST extract and authenticate the service bearer with _bearer_token(request) and delegate scoped immutable result lookup without accepting principal_id from the request.
+ensure_manual_budget_endpoint: [ORCHESTRATION] MUST resolve staff, authorize budget mutation for project_id, and delegate ensure_manual_budget without constructing context from claims.
+upsert_manual_section_plan_endpoint: [ORCHESTRATION] MUST resolve staff, authorize budget mutation, and delegate exact plan inputs; it MUST NOT compute totals or link sections by display name.
+activate_budget_version_endpoint: [ORCHESTRATION] MUST resolve staff, authorize budget activation, and delegate activation; no service credential contour reaches this method.
+staff_project_overview_endpoint: [ORCHESTRATION] MUST resolve staff, authorize project read, and delegate build_project_overview without computing component values.
+create_expense_from_recognition_endpoint: [ORCHESTRATION] MUST resolve staff, authorize expense mutation, delegate the typed publication/allocations, and return only _expense_mutation_result.
+correct_expense_endpoint: [ORCHESTRATION] MUST resolve staff, authorize expense mutation, delegate all correction fields atomically, and return only _expense_mutation_result.
+set_expense_inclusion_endpoint: [ORCHESTRATION] MUST resolve staff, authorize expense mutation, delegate inclusion, and return only _expense_mutation_result.
+replace_expense_allocations_endpoint: [ORCHESTRATION] MUST resolve staff, authorize expense mutation, delegate explicit allocations, and return only _expense_mutation_result.
+update_expense_document_endpoint: [ORCHESTRATION] MUST resolve staff, authorize document mutation, delegate metadata fields, and return only _document_mutation_result without file_ref.
+staff_read_expense_document_endpoint: [SECURITY_BOUNDARY] MUST resolve/authorize the staff contour then delegate read_expense_document and stream only BinaryPayload metadata/bytes.
+viewer_read_expense_document_endpoint: [SECURITY_BOUNDARY] MUST resolve/authorize the viewer contour then delegate read_expense_document, preserving client_visible enforcement and exposing no file_ref.
+set_section_progress_endpoint: [ORCHESTRATION] MUST resolve staff, authorize tracking mutation, and delegate the manual completion value without deriving it from photos.
+register_work_payment_endpoint: [ORCHESTRATION] MUST resolve staff, authorize tracking mutation, and delegate the idempotent payment without treating it as an invoice.
+publish_progress_photo_endpoint: [ORCHESTRATION] MUST resolve staff, authorize photo mutation, and delegate publication without reading file_ref or changing progress.
+update_progress_photo_endpoint: [ORCHESTRATION] MUST resolve staff, authorize photo mutation, and delegate only mutable photo metadata.
+staff_read_progress_photo_endpoint: [SECURITY_BOUNDARY] MUST resolve/authorize the staff contour then delegate read_progress_photo and stream only BinaryPayload metadata/bytes.
+viewer_read_progress_photo_endpoint: [SECURITY_BOUNDARY] MUST resolve/authorize the viewer contour then delegate read_progress_photo, preserving client_visible enforcement and exposing no file_ref.
+_staff_account_view: [FIELD_PROJECTION] MUST allow-list staff_id, email, email_verified, role, status, created_at, and updated_at exactly and MUST omit password_hash.
+_viewer_view: [FIELD_PROJECTION] MUST allow-list viewer_id, display_name, status, created_at, and revoked_at exactly and MUST omit credentials, grants, sessions, and hashes.
+_service_principal_view: [FIELD_PROJECTION] MUST allow-list service_principal_id, name, source_type, status, scope_mode, created_at, and disabled_at exactly and MUST omit credentials and hashes.
+_viewer_credential_response: [FIELD_PROJECTION] MUST copy credential_id, viewer_id, created_at and one-time issue.secret and MUST omit secret_hash, revoked_at, and internal record fields.
+_service_credential_response: [FIELD_PROJECTION] MUST copy credential_id, service_principal_id, key_version, created_at, expires_at and one-time issue.secret and MUST omit secret_hash and revoked_at.
+_expense_mutation_result: [FIELD_PROJECTION] MUST copy expense_id and document_id from aggregate and set replayed from the aggregate outcome without supplier, allocations, or file_ref.
+_document_mutation_result: [FIELD_PROJECTION] MUST copy document_id, client_visible, and updated_at and MUST omit expense_id and file_ref.
+_session_revocation_result: [FIELD_PROJECTION] MUST set staff_id, revoked_session_count to len(sessions), and revoked_at to the common revocation timestamp; an empty list MUST use the operation timestamp rather than fabricate session data.
+_bearer_token: [SECURITY_BOUNDARY] MUST read exactly one Authorization header, require the Bearer scheme with a non-empty credential, return only the credential value, and raise AuthenticationRejected for missing, repeated, malformed, or non-Bearer input without logging it.
 ```
 
 ## Properties draft
@@ -482,28 +484,28 @@ does not depend on a backend-specific UUID ordering implementation.
   "read_binary": [
     "result.content_length == len(result.content)"
   ],
-  "PortalApi._staff_account_view": [
+  "_staff_account_view": [
     "result.staff_id == account.staff_id and result.email == account.email and result.email_verified == account.email_verified and result.role == account.role and result.status == account.status and result.created_at == account.created_at and result.updated_at == account.updated_at"
   ],
-  "PortalApi._viewer_view": [
+  "_viewer_view": [
     "result.viewer_id == viewer.viewer_id and result.display_name == viewer.display_name and result.status == viewer.status and result.created_at == viewer.created_at and result.revoked_at == viewer.revoked_at"
   ],
-  "PortalApi._service_principal_view": [
+  "_service_principal_view": [
     "result.service_principal_id == principal.service_principal_id and result.name == principal.name and result.source_type == principal.source_type and result.status == principal.status and result.scope_mode == principal.scope_mode and result.created_at == principal.created_at and result.disabled_at == principal.disabled_at"
   ],
-  "PortalApi._viewer_credential_response": [
+  "_viewer_credential_response": [
     "result.credential_id == issue.credential.credential_id and result.viewer_id == issue.credential.viewer_id and result.secret == issue.secret and result.created_at == issue.credential.created_at"
   ],
-  "PortalApi._service_credential_response": [
+  "_service_credential_response": [
     "result.credential_id == issue.credential.credential_id and result.service_principal_id == issue.credential.service_principal_id and result.key_version == issue.credential.key_version and result.secret == issue.secret and result.created_at == issue.credential.created_at and result.expires_at == issue.credential.expires_at"
   ],
-  "PortalApi._expense_mutation_result": [
+  "_expense_mutation_result": [
     "result.expense_id == aggregate.expense.expense_id and result.document_id == aggregate.document.document_id and result.replayed == aggregate.replayed"
   ],
-  "PortalApi._document_mutation_result": [
+  "_document_mutation_result": [
     "result.document_id == document.document_id and result.client_visible == document.client_visible and result.updated_at == document.updated_at"
   ],
-  "PortalApi._session_revocation_result": [
+  "_session_revocation_result": [
     "result.staff_id == staff_id and result.revoked_session_count == len(sessions)",
     "len(sessions) > 0 implies all(session.revoked_at == result.revoked_at for session in sessions)"
   ]
@@ -558,14 +560,14 @@ precondition is needed.
   "_project_photos": true,
   "_ordered_project_items": true,
   "_validate_audit_intent": true,
-  "PortalApi._staff_account_view": true,
-  "PortalApi._viewer_view": true,
-  "PortalApi._service_principal_view": true,
-  "PortalApi._viewer_credential_response": true,
-  "PortalApi._service_credential_response": true,
-  "PortalApi._expense_mutation_result": true,
-  "PortalApi._document_mutation_result": true,
-  "PortalApi._session_revocation_result": true
+  "_staff_account_view": true,
+  "_viewer_view": true,
+  "_service_principal_view": true,
+  "_viewer_credential_response": true,
+  "_service_credential_response": true,
+  "_expense_mutation_result": true,
+  "_document_mutation_result": true,
+  "_session_revocation_result": true
 }
 ```
 
@@ -636,7 +638,7 @@ create a second landing.
 
 ## Placeholder-resistance review
 
-- Exact contract prefixes in this document match all 319 signatures in
+- Exact contract prefixes in this document match all 318 signatures in
   `60_contracts.md`; module notes add constraints but are not used as a
   substitute for operation notes.
 - Every reader states its source, scope, missing behavior, and ordering where

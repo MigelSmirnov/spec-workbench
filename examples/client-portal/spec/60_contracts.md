@@ -18,7 +18,7 @@ stdlib imports:
   from uuid import UUID
 
 third-party imports:
-  from fastapi import FastAPI
+  from fastapi import FastAPI, Request, Request
 
 internal class types:
   portal_store.PortalStore
@@ -520,77 +520,77 @@ PortalTransaction._assert_open(self) -> None
 
 ```python
 create_app(store: PortalStore) -> FastAPI
-PortalApi.__init__(self, store: PortalStore) -> None
-PortalApi.register_routes(self, app: FastAPI) -> None
 
-PortalApi.staff_login(self, email: str, password: str) -> StaffSessionGrant
-PortalApi.staff_logout(self, session_token: str) -> None
-PortalApi.confirm_staff_email(self, token: str) -> StaffAccountView
-PortalApi.request_password_reset(self, email: str) -> None
-PortalApi.complete_password_reset(self, token: str, new_password: str) -> StaffAccountView
-PortalApi.request_email_change(self, session_token: str, new_email: str) -> ChallengeIssueView
-PortalApi.issue_staff_email_verification(self, administrator_token: str, staff_id: UUID) -> ChallengeIssueView
-PortalApi.confirm_email_change(self, token: str) -> StaffAccountView
+staff_login_endpoint(request: Request, email: str, password: str) -> StaffSessionGrant
+staff_logout_endpoint(request: Request) -> None
+confirm_staff_email_endpoint(request: Request, token: str) -> StaffAccountView
+request_password_reset_endpoint(request: Request, email: str) -> None
+complete_password_reset_endpoint(request: Request, token: str, new_password: str) -> StaffAccountView
+request_email_change_endpoint(request: Request, new_email: str) -> ChallengeIssueView
+issue_staff_email_verification_endpoint(request: Request, staff_id: UUID) -> ChallengeIssueView
+confirm_email_change_endpoint(request: Request, token: str) -> StaffAccountView
 
-PortalApi.create_staff(self, administrator_token: str, email: str, initial_password: str, role: StaffRole) -> StaffAccountView
-PortalApi.change_staff_status(self, administrator_token: str, staff_id: UUID, new_status: StaffStatus) -> StaffAccountView
-PortalApi.assign_staff_project(self, administrator_token: str, operator_id: UUID, project_id: UUID) -> StaffProjectAssignment
-PortalApi.revoke_staff_assignment(self, administrator_token: str, assignment_id: UUID) -> StaffProjectAssignment
-PortalApi.revoke_staff_sessions(self, administrator_token: str, staff_id: UUID) -> SessionRevocationResult
+create_staff_endpoint(request: Request, email: str, initial_password: str, role: StaffRole) -> StaffAccountView
+change_staff_status_endpoint(request: Request, staff_id: UUID, new_status: StaffStatus) -> StaffAccountView
+assign_staff_project_endpoint(request: Request, operator_id: UUID, project_id: UUID) -> StaffProjectAssignment
+revoke_staff_assignment_endpoint(request: Request, assignment_id: UUID) -> StaffProjectAssignment
+revoke_staff_sessions_endpoint(request: Request, staff_id: UUID) -> SessionRevocationResult
 
-PortalApi.create_viewer(self, administrator_token: str, display_name: str) -> ClientViewerView
-PortalApi.revoke_viewer(self, administrator_token: str, viewer_id: UUID) -> ClientViewerView
-PortalApi.issue_viewer_credential(self, administrator_token: str, viewer_id: UUID) -> ViewerCredentialIssueResponse
-PortalApi.revoke_viewer_credential(self, administrator_token: str, credential_id: UUID) -> None
-PortalApi.grant_viewer_project(self, administrator_token: str, viewer_id: UUID, project_id: UUID) -> ProjectViewerGrant
-PortalApi.revoke_viewer_project(self, administrator_token: str, grant_id: UUID) -> ProjectViewerGrant
-PortalApi.viewer_enter(self, capability_secret: str) -> ViewerSessionGrant
-PortalApi.list_viewer_projects(self, viewer_session_token: str) -> list[ProjectListItem]
-PortalApi.viewer_project_overview(self, viewer_session_token: str, project_id: UUID) -> ProjectOverview
+create_viewer_endpoint(request: Request, display_name: str) -> ClientViewerView
+revoke_viewer_endpoint(request: Request, viewer_id: UUID) -> ClientViewerView
+issue_viewer_credential_endpoint(request: Request, viewer_id: UUID) -> ViewerCredentialIssueResponse
+revoke_viewer_credential_endpoint(request: Request, credential_id: UUID) -> None
+grant_viewer_project_endpoint(request: Request, viewer_id: UUID, project_id: UUID) -> ProjectViewerGrant
+revoke_viewer_project_endpoint(request: Request, grant_id: UUID) -> ProjectViewerGrant
+viewer_enter_endpoint(request: Request, capability_secret: str) -> ViewerSessionGrant
+list_viewer_projects_endpoint(request: Request) -> list[ProjectListItem]
+viewer_project_overview_endpoint(request: Request, project_id: UUID) -> ProjectOverview
 
-PortalApi.create_service_principal(self, administrator_token: str, name: str, source_type: ProducerSourceType, scope_mode: ProducerScopeMode) -> ServicePrincipalView
-PortalApi.change_service_principal_status(self, administrator_token: str, principal_id: UUID, new_status: PrincipalStatus) -> ServicePrincipalView
-PortalApi.issue_service_credential(self, administrator_token: str, principal_id: UUID, expires_at: datetime | None = None) -> ServiceCredentialIssueResponse
-PortalApi.revoke_service_credential(self, administrator_token: str, credential_id: UUID) -> None
-PortalApi.grant_producer_project(self, administrator_token: str, principal_id: UUID, project_id: UUID) -> ProducerProjectGrant
-PortalApi.revoke_producer_project(self, administrator_token: str, grant_id: UUID) -> ProducerProjectGrant
-PortalApi.publish_snapshot(self, service_secret: str, publication: SnapshotPublication) -> SnapshotImportRecord
-PortalApi.get_snapshot_import(self, service_secret: str, import_id: UUID) -> SnapshotImportRecord
+create_service_principal_endpoint(request: Request, name: str, source_type: ProducerSourceType, scope_mode: ProducerScopeMode) -> ServicePrincipalView
+change_service_principal_status_endpoint(request: Request, principal_id: UUID, new_status: PrincipalStatus) -> ServicePrincipalView
+issue_service_credential_endpoint(request: Request, principal_id: UUID, expires_at: datetime | None = None) -> ServiceCredentialIssueResponse
+revoke_service_credential_endpoint(request: Request, credential_id: UUID) -> None
+grant_producer_project_endpoint(request: Request, principal_id: UUID, project_id: UUID) -> ProducerProjectGrant
+revoke_producer_project_endpoint(request: Request, grant_id: UUID) -> ProducerProjectGrant
+publish_snapshot_endpoint(request: Request, publication: SnapshotPublication) -> SnapshotImportRecord
+get_snapshot_import_endpoint(request: Request, import_id: UUID) -> SnapshotImportRecord
 
-PortalApi.ensure_manual_budget(self, staff_session_token: str, project_id: UUID) -> BudgetVersionDetail
-PortalApi.upsert_manual_section_plan(self, staff_session_token: str, project_id: UUID, section_id: UUID | None, display_name: str, sort_order: int, material_planned: Decimal, work_planned: Decimal) -> BudgetVersionDetail
-PortalApi.activate_budget_version(self, staff_session_token: str, project_id: UUID, version_id: UUID) -> BudgetActivationResult
-PortalApi.staff_project_overview(self, staff_session_token: str, project_id: UUID) -> ProjectOverview
+ensure_manual_budget_endpoint(request: Request, project_id: UUID) -> BudgetVersionDetail
+upsert_manual_section_plan_endpoint(request: Request, project_id: UUID, section_id: UUID | None, display_name: str, sort_order: int, material_planned: Decimal, work_planned: Decimal) -> BudgetVersionDetail
+activate_budget_version_endpoint(request: Request, project_id: UUID, version_id: UUID) -> BudgetActivationResult
+staff_project_overview_endpoint(request: Request, project_id: UUID) -> ProjectOverview
 
-PortalApi.create_expense_from_recognition(self, staff_session_token: str, project_id: UUID, publication: ConfirmedRecognitionPublication, allocations: list[AllocationInstruction]) -> ExpenseMutationResult
-PortalApi.correct_expense(self, staff_session_token: str, project_id: UUID, expense_id: UUID, supplier: str, document_date: date, total_amount: Decimal, included: bool, allocations: list[AllocationInstruction]) -> ExpenseMutationResult
-PortalApi.set_expense_inclusion(self, staff_session_token: str, project_id: UUID, expense_id: UUID, included: bool) -> ExpenseMutationResult
-PortalApi.replace_expense_allocations(self, staff_session_token: str, project_id: UUID, expense_id: UUID, allocations: list[AllocationInstruction]) -> ExpenseMutationResult
-PortalApi.update_expense_document(self, staff_session_token: str, project_id: UUID, document_id: UUID, description: str | None, client_visible: bool) -> DocumentMutationResult
-PortalApi.staff_read_expense_document(self, staff_session_token: str, project_id: UUID, document_id: UUID) -> BinaryPayload
-PortalApi.viewer_read_expense_document(self, viewer_session_token: str, project_id: UUID, document_id: UUID) -> BinaryPayload
+create_expense_from_recognition_endpoint(request: Request, project_id: UUID, publication: ConfirmedRecognitionPublication, allocations: list[AllocationInstruction]) -> ExpenseMutationResult
+correct_expense_endpoint(request: Request, project_id: UUID, expense_id: UUID, supplier: str, document_date: date, total_amount: Decimal, included: bool, allocations: list[AllocationInstruction]) -> ExpenseMutationResult
+set_expense_inclusion_endpoint(request: Request, project_id: UUID, expense_id: UUID, included: bool) -> ExpenseMutationResult
+replace_expense_allocations_endpoint(request: Request, project_id: UUID, expense_id: UUID, allocations: list[AllocationInstruction]) -> ExpenseMutationResult
+update_expense_document_endpoint(request: Request, project_id: UUID, document_id: UUID, description: str | None, client_visible: bool) -> DocumentMutationResult
+staff_read_expense_document_endpoint(request: Request, project_id: UUID, document_id: UUID) -> BinaryPayload
+viewer_read_expense_document_endpoint(request: Request, project_id: UUID, document_id: UUID) -> BinaryPayload
 
-PortalApi.set_section_progress(self, staff_session_token: str, project_id: UUID, section_id: UUID, completion_percent: int) -> SectionProgress
-PortalApi.register_work_payment(self, staff_session_token: str, project_id: UUID, payment_id: UUID, amount: Decimal, payment_date: date, description: str) -> WorkPayment
-PortalApi.publish_progress_photo(self, staff_session_token: str, project_id: UUID, publication: PhotoPublication) -> PhotoMutationResult
-PortalApi.update_progress_photo(self, staff_session_token: str, project_id: UUID, photo_id: UUID, caption: str | None, section_id: UUID | None, client_visible: bool) -> PhotoMutationResult
-PortalApi.staff_read_progress_photo(self, staff_session_token: str, project_id: UUID, photo_id: UUID) -> BinaryPayload
-PortalApi.viewer_read_progress_photo(self, viewer_session_token: str, project_id: UUID, photo_id: UUID) -> BinaryPayload
+set_section_progress_endpoint(request: Request, project_id: UUID, section_id: UUID, completion_percent: int) -> SectionProgress
+register_work_payment_endpoint(request: Request, project_id: UUID, payment_id: UUID, amount: Decimal, payment_date: date, description: str) -> WorkPayment
+publish_progress_photo_endpoint(request: Request, project_id: UUID, publication: PhotoPublication) -> PhotoMutationResult
+update_progress_photo_endpoint(request: Request, project_id: UUID, photo_id: UUID, caption: str | None, section_id: UUID | None, client_visible: bool) -> PhotoMutationResult
+staff_read_progress_photo_endpoint(request: Request, project_id: UUID, photo_id: UUID) -> BinaryPayload
+viewer_read_progress_photo_endpoint(request: Request, project_id: UUID, photo_id: UUID) -> BinaryPayload
 
-PortalApi._staff_account_view(self, account: StaffAccount) -> StaffAccountView
-PortalApi._viewer_view(self, viewer: ClientViewer) -> ClientViewerView
-PortalApi._service_principal_view(self, principal: ServicePrincipal) -> ServicePrincipalView
-PortalApi._viewer_credential_response(self, issue: ViewerCredentialIssue) -> ViewerCredentialIssueResponse
-PortalApi._service_credential_response(self, issue: ServiceCredentialIssue) -> ServiceCredentialIssueResponse
-PortalApi._expense_mutation_result(self, aggregate: ExpenseAggregate) -> ExpenseMutationResult
-PortalApi._document_mutation_result(self, document: ExpenseDocument) -> DocumentMutationResult
-PortalApi._session_revocation_result(self, staff_id: UUID, sessions: list[StaffSession]) -> SessionRevocationResult
+_bearer_token(request: Request) -> str
+
+_staff_account_view(account: StaffAccount) -> StaffAccountView
+_viewer_view(viewer: ClientViewer) -> ClientViewerView
+_service_principal_view(principal: ServicePrincipal) -> ServicePrincipalView
+_viewer_credential_response(issue: ViewerCredentialIssue) -> ViewerCredentialIssueResponse
+_service_credential_response(issue: ServiceCredentialIssue) -> ServiceCredentialIssueResponse
+_expense_mutation_result(aggregate: ExpenseAggregate) -> ExpenseMutationResult
+_document_mutation_result(document: ExpenseDocument) -> DocumentMutationResult
+_session_revocation_result(staff_id: UUID, sessions: list[StaffSession]) -> SessionRevocationResult
 ```
 
-Separate staff/viewer binary methods prevent a request boolean from selecting
-an authentication contour. Both return BinaryPayload only after their typed
-session resolver and guard succeed. `register_routes` binds these exact
-methods; no additional endpoint function may own behavior.
+Separate staff/viewer binary endpoint functions prevent a request boolean from selecting
+an authentication contour. Every endpoint receives FastAPI Request, obtains PortalStore
+from request.app.state.portal_store, and obtains non-public credentials only through
+_bearer_token from the Authorization header fixed by the State 5 route catalog.
 
 ## `module_functions` draft
 
@@ -617,8 +617,8 @@ financial_policy → FinancialValidationError
 `models` contains all models/enums from State 1. No model symbol is duplicated
 in a semantic module.
 
-`api` contains `PortalApi`, all listed methods, and `create_app`; it exports
-only `create_app` through `imports.internal`.
+`api` contains `create_app`, the listed top-level `*_endpoint` functions, and private
+projection helpers; it exports only `create_app` through `imports.internal`.
 
 ## Exact `imports.module_internal` edges
 
@@ -671,8 +671,9 @@ owned exceptions/classes
 → record builders/projections
 → private I/O translators
 → public read operations
-→ public mutation/orchestration operations
-→ create_app last
+→ public mutation/orchestration endpoint functions
+→ private safe projections
+→ create_app
 ```
 
 For `portal_store`: `PortalStore` then `PortalTransaction`; getters/list

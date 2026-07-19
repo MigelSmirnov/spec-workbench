@@ -16,8 +16,8 @@ a delivery-only adapter.
 ## API selection rules
 
 - `imports.internal` exports only symbols required by another module.
-- Framework route handlers are not internal APIs. `api` exports only
-  `create_app`.
+- Framework route handlers are top-level `*_endpoint` functions in
+  `api/router`; they are not internal APIs. `api` exports only `create_app`.
 - Public operations receive trusted actor/access contexts produced by identity
   and guard modules; they never accept role, capability, actor ID, Registry
   context, or `file_ref` as caller authority.
@@ -257,7 +257,7 @@ any method not required by an accepted operation above remains private.
 
 ### `api`
 
-`create_app` is the sole internal export. Route handlers:
+`create_app` is the sole internal export. Top-level `*_endpoint` route handlers:
 
 - decode HTTP inputs into declared models/primitives;
 - resolve credentials through the appropriate identity module;
@@ -268,6 +268,64 @@ any method not required by an accepted operation above remains private.
 
 They do not appear in `imports.internal` and own no policy, transaction,
 formula, storage read, Registry interpretation, or audit call.
+
+## Exact HTTP route catalog
+
+The API is deliberately unversioned for this deployment, matching the sibling Registry boundary. Every non-public route reads its credential only from `Authorization: Bearer`; path IDs come only from the declared path, and remaining command fields come from the JSON body. Binary routes return the exact `BinaryPayload` bytes/metadata rather than JSON.
+
+| Handler | Method and path | Auth | Success | Mode |
+| --- | --- | --- | ---: | --- |
+| `staff_login_endpoint` | `POST /auth/staff/login` | `public` | 200 | `json` |
+| `staff_logout_endpoint` | `POST /auth/staff/logout` | `staff_bearer` | 204 | `none` |
+| `confirm_staff_email_endpoint` | `POST /auth/staff/email/confirm` | `public` | 200 | `json` |
+| `request_password_reset_endpoint` | `POST /auth/staff/password-reset` | `public` | 202 | `none` |
+| `complete_password_reset_endpoint` | `POST /auth/staff/password-reset/complete` | `public` | 200 | `json` |
+| `request_email_change_endpoint` | `POST /auth/staff/email-change` | `staff_bearer` | 202 | `json` |
+| `issue_staff_email_verification_endpoint` | `POST /admin/staff/{staff_id}/email-verification` | `administrator_bearer` | 202 | `json` |
+| `confirm_email_change_endpoint` | `POST /auth/staff/email-change/confirm` | `public` | 200 | `json` |
+| `create_staff_endpoint` | `POST /admin/staff` | `administrator_bearer` | 201 | `json` |
+| `change_staff_status_endpoint` | `PATCH /admin/staff/{staff_id}/status` | `administrator_bearer` | 200 | `json` |
+| `assign_staff_project_endpoint` | `POST /admin/staff/{operator_id}/projects/{project_id}` | `administrator_bearer` | 201 | `json` |
+| `revoke_staff_assignment_endpoint` | `POST /admin/staff-assignments/{assignment_id}/revoke` | `administrator_bearer` | 200 | `json` |
+| `revoke_staff_sessions_endpoint` | `POST /admin/staff/{staff_id}/sessions/revoke` | `administrator_bearer` | 200 | `json` |
+| `create_viewer_endpoint` | `POST /admin/viewers` | `administrator_bearer` | 201 | `json` |
+| `revoke_viewer_endpoint` | `POST /admin/viewers/{viewer_id}/revoke` | `administrator_bearer` | 200 | `json` |
+| `issue_viewer_credential_endpoint` | `POST /admin/viewers/{viewer_id}/credentials` | `administrator_bearer` | 201 | `json` |
+| `revoke_viewer_credential_endpoint` | `POST /admin/viewer-credentials/{credential_id}/revoke` | `administrator_bearer` | 204 | `none` |
+| `grant_viewer_project_endpoint` | `POST /admin/viewers/{viewer_id}/projects/{project_id}` | `administrator_bearer` | 201 | `json` |
+| `revoke_viewer_project_endpoint` | `POST /admin/viewer-grants/{grant_id}/revoke` | `administrator_bearer` | 200 | `json` |
+| `viewer_enter_endpoint` | `POST /auth/viewer/enter` | `public` | 200 | `json` |
+| `list_viewer_projects_endpoint` | `GET /viewer/projects` | `viewer_bearer` | 200 | `json` |
+| `viewer_project_overview_endpoint` | `GET /viewer/projects/{project_id}` | `viewer_bearer` | 200 | `json` |
+| `create_service_principal_endpoint` | `POST /admin/service-principals` | `administrator_bearer` | 201 | `json` |
+| `change_service_principal_status_endpoint` | `PATCH /admin/service-principals/{principal_id}/status` | `administrator_bearer` | 200 | `json` |
+| `issue_service_credential_endpoint` | `POST /admin/service-principals/{principal_id}/credentials` | `administrator_bearer` | 201 | `json` |
+| `revoke_service_credential_endpoint` | `POST /admin/service-credentials/{credential_id}/revoke` | `administrator_bearer` | 204 | `none` |
+| `grant_producer_project_endpoint` | `POST /admin/service-principals/{principal_id}/projects/{project_id}` | `administrator_bearer` | 201 | `json` |
+| `revoke_producer_project_endpoint` | `POST /admin/producer-grants/{grant_id}/revoke` | `administrator_bearer` | 200 | `json` |
+| `publish_snapshot_endpoint` | `POST /integrations/estimate-snapshots` | `service_bearer` | 200 | `json` |
+| `get_snapshot_import_endpoint` | `GET /integrations/snapshot-imports/{import_id}` | `service_bearer` | 200 | `json` |
+| `ensure_manual_budget_endpoint` | `POST /staff/projects/{project_id}/budgets/manual` | `staff_bearer` | 200 | `json` |
+| `upsert_manual_section_plan_endpoint` | `PUT /staff/projects/{project_id}/budgets/manual/sections` | `staff_bearer` | 200 | `json` |
+| `activate_budget_version_endpoint` | `POST /staff/projects/{project_id}/budget-versions/{version_id}/activate` | `staff_bearer` | 200 | `json` |
+| `staff_project_overview_endpoint` | `GET /staff/projects/{project_id}/overview` | `staff_bearer` | 200 | `json` |
+| `create_expense_from_recognition_endpoint` | `POST /staff/projects/{project_id}/expenses/from-recognition` | `staff_bearer` | 201 | `json` |
+| `correct_expense_endpoint` | `PUT /staff/projects/{project_id}/expenses/{expense_id}` | `staff_bearer` | 200 | `json` |
+| `set_expense_inclusion_endpoint` | `PATCH /staff/projects/{project_id}/expenses/{expense_id}/inclusion` | `staff_bearer` | 200 | `json` |
+| `replace_expense_allocations_endpoint` | `PUT /staff/projects/{project_id}/expenses/{expense_id}/allocations` | `staff_bearer` | 200 | `json` |
+| `update_expense_document_endpoint` | `PATCH /staff/projects/{project_id}/expense-documents/{document_id}` | `staff_bearer` | 200 | `json` |
+| `staff_read_expense_document_endpoint` | `GET /staff/projects/{project_id}/expense-documents/{document_id}/content` | `staff_bearer` | 200 | `binary` |
+| `viewer_read_expense_document_endpoint` | `GET /viewer/projects/{project_id}/expense-documents/{document_id}/content` | `viewer_bearer` | 200 | `binary` |
+| `set_section_progress_endpoint` | `PUT /staff/projects/{project_id}/sections/{section_id}/progress` | `staff_bearer` | 200 | `json` |
+| `register_work_payment_endpoint` | `POST /staff/projects/{project_id}/payments` | `staff_bearer` | 201 | `json` |
+| `publish_progress_photo_endpoint` | `POST /staff/projects/{project_id}/photos` | `staff_bearer` | 201 | `json` |
+| `update_progress_photo_endpoint` | `PATCH /staff/projects/{project_id}/photos/{photo_id}` | `staff_bearer` | 200 | `json` |
+| `staff_read_progress_photo_endpoint` | `GET /staff/projects/{project_id}/photos/{photo_id}/content` | `staff_bearer` | 200 | `binary` |
+| `viewer_read_progress_photo_endpoint` | `GET /viewer/projects/{project_id}/photos/{photo_id}/content` | `viewer_bearer` | 200 | `binary` |
+
+This table is serialized as `rules.http_route_catalog`; `create_app` binds it
+exactly once. Handlers are transport entry points, not `imports.internal`
+exports.
 
 ## Stable `imports.internal` draft
 
