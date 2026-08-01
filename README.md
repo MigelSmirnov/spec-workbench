@@ -44,11 +44,17 @@ Each design state is stabilized before moving to the next.
 skills/
     Specification authoring methodology.
 
+skills/spec-authoring/DESIGN_WORKSPACE.md
+    Layer 0 methodology and gate rules.
+
+skills/spec-authoring/DESIGN_WORKSPACE_FORMAT.md
+    File layout and record format for project workspaces.
+
+templates/design-workspace/
+    Minimal dashboard, decision registry, and question queue to copy into a project.
+
 examples/
     Real specification design case studies.
-
-skills/spec-authoring/DESIGN_WORKSPACE.md
-    Layer 0 workspace for sources, decisions, blockers, and readiness.
 
 skills/spec-authoring/SPEC_STANDARD.md
     Definition of the global_spec.json format.
