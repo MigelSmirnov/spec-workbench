@@ -17,8 +17,11 @@ Create specifications that:
 
 - **SPEC_STANDARD** defines the specification language.
 - **spec-authoring** defines the authoring methodology.
+- **Design Workspace (Layer 0)** keeps source material, decisions, open questions,
+  security strategies, and next-state readiness outside human and agent memory.
 - Specification design progresses through explicit design states:
 
+0. Design workspace
 1. Product boundary
 2. Domain models
 3. Rules & Invariants
@@ -29,7 +32,11 @@ Create specifications that:
 8. Notes
 9. Assembly
 
-Each layer is stabilized before moving to the next.
+The Design Workspace begins before Product Boundary and remains active around
+all later states. It supplies verified design input; it is not a section of
+`global_spec.json`.
+
+Each design state is stabilized before moving to the next.
 
 ## Repository structure
 
@@ -39,6 +46,9 @@ skills/
 
 examples/
     Real specification design case studies.
+
+skills/spec-authoring/DESIGN_WORKSPACE.md
+    Layer 0 workspace for sources, decisions, blockers, and readiness.
 
 skills/spec-authoring/SPEC_STANDARD.md
     Definition of the global_spec.json format.
