@@ -7,505 +7,326 @@
 
 ## Purpose
 
-The design-state ladder structures knowledge into product boundaries, domain
-models, rules, modules, flows, APIs, contracts, notes, and an assembled
-specification. It assumes that the material being structured is real, available,
-and understood.
+The design-state ladder structures knowledge into Product Boundary, Domain Models,
+Rules, Responsibilities, Flows, APIs, Contracts, Notes, and Assembly. It assumes
+that the material being structured is real, deliberate, and sufficiently complete.
 
-In practice, a project begins as a mixture of:
+The Design Workspace manages how that material is obtained and governed.
 
-- conversation;
-- existing systems and their actual data;
-- documents and screenshots;
-- incomplete external contracts;
-- security and infrastructure choices;
-- product ideas;
-- open questions;
-- assumptions that have not yet been recognized as assumptions.
+It is simultaneously:
 
-The Design Workspace keeps that material outside human and agent memory. It is
-simultaneously:
+- a sandbox for raw project material;
+- a registry of facts, choices, designs, assumptions, and open questions;
+- a planner for acquiring missing knowledge;
+- a dashboard showing current direction, blockers, and next actions;
+- persistent external memory for both the human and the agent.
 
-- a sandbox for gathering and interpreting evidence;
-- a decision register for deliberate choices;
-- a planner for unresolved work;
-- a dashboard showing where the design is going and what blocks it;
-- an external memory that survives context loss.
+The workspace is not one ever-growing Markdown document. This file defines the
+methodology. [DESIGN_WORKSPACE_FORMAT.md](DESIGN_WORKSPACE_FORMAT.md) defines the
+project file layout. Each project owns a separate workspace instance containing
+its actual records and evidence.
 
-The workspace answers a different question from the design states:
+## Core invariant
 
-```text
-Design Workspace: what do we know, why do we believe it, and what is still open?
-Design states:     how is that knowledge represented in the specification?
-```
+> No design state may silently resolve missing knowledge.
 
-## Governing principle
+Every uncertainty that can change product behavior, models, rules, security,
+contracts, architecture, or generated code must be either:
 
-> The specification must never silently resolve an unfilled decision.
+- bound to a source and closed; or
+- registered explicitly as `OPEN` or `ASSUMED`.
 
-Every uncertainty that can change product behavior, security, compatibility,
-persistent data, public contracts, or generated architecture must be either:
+When required material is missing, the correct action is to stop and acquire it,
+not to replace it with a plausible default.
 
-- bound to a real source and closed;
-- recorded as an explicit deliberate choice;
-- deliberately designed because the domain is owned by this project; or
-- visibly marked as open or assumed.
+## Responsibility boundary
 
-An absent registry entry is not evidence that no decision exists. Any hidden
-assumption that can change the generated result is itself a decision and must be
-registered when discovered.
+The Design Workspace answers:
 
-## Relationship to the design-state ladder
+- What do we know?
+- Where did it come from?
+- What have we deliberately chosen?
+- What belongs to us to design?
+- What are we only assuming?
+- What is still unanswered?
+- What blocks the next design state?
+- What action should happen next, and who owns it?
 
-The workspace is not merely a one-time State 0 document. It wraps the entire
-process:
+The later design states answer:
 
-```text
-Design Workspace
-  ├── sources and evidence
-  ├── decisions and assumptions
-  ├── open questions and blockers
-  ├── security and operational choices
-  ├── progress and next-state readiness
-  └── change and invalidation history
+- How should this verified material be represented in the specification?
 
-        ↓ verified design input
+`SPEC_STANDARD.md` answers:
 
-Product Boundary
-→ Domain Models
-→ Rules and Invariants
-→ Module Responsibilities
-→ System Flows
-→ Public APIs
-→ Contracts
-→ Notes
-→ Assembly
-```
+- How is the completed specification serialized as `global_spec.json`?
 
-The initial workspace must be coherent enough to begin Product Boundary.
-However, later states will discover new decisions. Those decisions return to the
-workspace, are sourced and closed there, and then propagate back into the owning
-design state.
+The workspace must not duplicate final models, rules, contracts, or notes. It keeps
+source material, decisions, provenance, readiness, and links to the downstream
+artifacts that consume them.
 
-A design state may be explored while some non-entry questions remain open. It
-must not be declared stable or used as accepted input for the next state while
-its blocking workspace items remain `OPEN` or `ASSUMED`.
+## What must be registered
 
-## What belongs in the workspace
+Register an item when a different reasonable answer could change at least one of:
 
-Register an item when it affects at least one of the following:
+- product semantics or observable behavior;
+- actors, permissions, ownership, or access boundaries;
+- external compatibility or an imported contract;
+- persisted data, lifecycle, or state transitions;
+- security, privacy, identity, secrets, or trust boundaries;
+- module ownership or a major architectural boundary;
+- limits, quotas, timeouts, retention, or failure policy;
+- public APIs or generated implementation behavior.
 
-- product scope or observable behavior;
-- external-system compatibility;
-- authentication, authorization, tenancy, secrets, or trust boundaries;
-- persistent data shape or ownership;
-- public API or integration contract;
-- state transitions or failure behavior;
-- storage, delivery, deployment, or operational strategy;
-- limits, quotas, timeouts, retention, or cost;
-- deterministic generation or materialization by the Factory;
-- a choice the generator would otherwise make by default.
+Do not register ordinary implementation details that do not affect the
+specification, such as local variable names or private refactorings.
 
-The workspace may also contain non-binding research and discarded alternatives,
-but they must be distinguishable from accepted inputs.
+Absence from the registry does not prove that something is not a decision. When a
+hidden assumption is discovered, register it immediately.
 
 ## Source types
 
-Every behavior-affecting decision has one legitimate source type.
+Every closable item has one primary source type.
 
-| Type | Truth comes from | Typical use | Closure evidence |
-| --- | --- | --- | --- |
-| **Snapshot** | An external system or contract that already exists | Roles, grants, session claims, API responses, database values, external enums, provider behavior | Actual evidence captured from the source and stored or referenced beside the case |
-| **Choice** | A deliberate selection among valid alternatives | Authentication mechanism, password storage, token strategy, database, timeouts, quotas, retry policy | Selected option, concrete parameters, owner, and rationale |
-| **Design** | A domain owned by this project and not borrowed from elsewhere | Project-owned entities, state machines, layouts, internal workflows | Deliberately described form, owner, and reason |
+### Snapshot
 
-The source type is about ownership of truth, not the shape of the final
-specification.
+Truth belongs to an external system or contract that already exists.
 
-A role catalog may later become `models`; a transition table may later become
-`rules`; a timeout may later become `config`; an enforcement obligation may
-later become a note or property. The workspace records where the knowledge came
-from before those states structure it.
+Use for:
 
-### Source-type legitimacy test
+- external roles and grants;
+- third-party request and response shapes;
+- existing session or token claims;
+- enum values owned elsewhere;
+- database or message formats that must be preserved;
+- imported security and compliance requirements.
 
-Before closing an item, ask:
+A Snapshot closes only when representative, sanitized evidence is stored and its
+relevant meaning, scope, environment, and limitations are understood. Inventing a
+sample does not count.
 
-1. Does an existing external system already own this truth?
-2. Is this an implementation or policy option that someone must select?
-3. Is this genuinely our domain to invent?
+### Choice
 
-A missing or inconvenient external source does not turn a Snapshot into a
-Design. A plausible agent proposal does not turn a Choice into a chosen policy.
+Truth comes from a deliberate selection among valid options.
 
-## Status model
+Use for:
 
-Each registered item has one status:
+- authentication and authorization mechanisms;
+- password or secret storage;
+- token format, lifetime, refresh, and revocation strategy;
+- session model;
+- storage backend;
+- retry, timeout, quota, retention, and failure policies;
+- other implementation policies that a generator might otherwise default.
 
-- `OPEN` — the question is known but no acceptable source is bound;
-- `ASSUMED` — a temporary hypothesis is being used for exploration; it is not
-  accepted truth;
-- `confirmed` — Snapshot evidence is captured and sufficient for its declared
-  scope;
-- `chosen` — a Choice is selected with concrete parameters and ownership;
-- `designed` — a project-owned Design is deliberate and reasoned;
-- `superseded` — replaced by a newer accepted item;
-- `invalidated` — its source or assumptions no longer support downstream use.
+A Choice closes only when the selected option and its material parameters are
+recorded. A default that nobody selected does not count.
 
-`OPEN` and `ASSUMED` are blocking when the item is required for entry to or
-stabilization of the current design state.
+### Design
 
-## Workspace views
+Truth is owned by the project and exists nowhere else yet.
 
-One registry may power several human-readable views.
+Use for:
 
-### 1. Direction
+- project-owned entities;
+- state machines;
+- product workflows;
+- layouts and interactions;
+- domain concepts invented for this product.
 
-A compact statement of:
+A Design closes only when the intended form or states and the reason for them are
+recorded deliberately.
 
-- what product or capability is being designed;
-- the current design state;
-- the next intended state;
-- the accepted scope;
-- explicit non-goals;
-- the most important current risks.
+A missing Snapshot may not be reclassified as Design merely because the external
+source is inconvenient to obtain.
 
-This prevents deep work on one entity from erasing the original destination.
+## Statuses
 
-### 2. Evidence inventory
+Active statuses:
 
-A list of real source material:
+- `OPEN` — the question is known but has no sufficient source-backed answer;
+- `ASSUMED` — a temporary hypothesis is being used for exploration but is not
+  accepted as truth.
 
-- sanitized API samples;
-- schemas and contracts;
-- production or sandbox observations;
-- existing code paths and tests;
-- policy documents;
-- screenshots or exported records;
-- interviews or owner statements.
+Closed statuses:
 
-Each evidence item records origin, environment, version or revision when known,
-capture date, authority, sanitization, and known limitations.
+- `confirmed` — Snapshot evidence has been acquired and interpreted;
+- `chosen` — a Choice and its parameters have been deliberately selected;
+- `designed` — a project-owned Design and its rationale have been accepted;
+- `not_applicable` — the item was reviewed and shown not to apply, with a reason.
 
-### 3. Decision board
+Lifecycle statuses:
 
-The complete list of behavior-affecting decisions with source type, status,
-owner, dependencies, and target design states.
+- `superseded` — replaced by a newer item;
+- `invalidated` — its source or reasoning is no longer reliable;
+- `needs_reconfirmation` — downstream use must pause until the item is checked;
+- `reopened` — a previously closed item is active again.
 
-### 4. Open questions and blockers
+`OPEN` and `ASSUMED` are never equivalent to closed knowledge.
 
-A focused view of `OPEN`, `ASSUMED`, invalidated, or conflicting items, ordered
-by what they block next.
+## Decision authority
 
-### 5. Readiness dashboard
+An agent may discover questions, collect evidence, propose choices, and draft
+project-owned designs. It may mark an item closed only when the declared owner has
+provided, selected, approved, or explicitly delegated the answer.
 
-A state-oriented view such as:
+Each material item should identify:
 
-```text
-Current target: Product Boundary
+- an owner;
+- the scope in which the answer is valid;
+- the evidence or rationale;
+- the design state it blocks or supports.
 
-READY
-  project goal
-  primary actors
-  existing Registry project contract
-  initial storage ownership
+Security-sensitive choices should identify the approving security or architecture
+owner rather than being accepted merely because they are common defaults.
 
-BLOCKED
-  production authentication strategy
-  session lifecycle
+## Evidence rules
 
-DEFERRED, NOT ENTRY-BLOCKING
-  long-term audit retention
-```
+Snapshot evidence must record enough context to prevent an observed accident from
+becoming a false contract:
 
-The dashboard is derived from the registry. It is not a second place to store
-truth.
-
-## Decision records
-
-A decision should be atomic enough to change, source, or invalidate
-independently. Do not close a broad heading such as `authentication` when token
-format, key ownership, lifetime, refresh, revocation, and browser storage remain
-independent unknowns.
-
-Recommended fields:
-
-```yaml
-- id: SRC-AUTH-001
-  topic: security.access_token
-  question: What access-token strategy does the product use?
-  source_type: choice
-  status: chosen
-
-  owner: product-security
-  scope:
-    environment: production
-    design_states:
-      - product_boundary
-      - rules
-      - system_flows
-
-  choice: signed_jwt
-  parameters:
-    algorithm: ES256
-    lifetime_seconds: 900
-    issuer: platform_identity
-
-  reason: >
-    Services need offline verification while key ownership remains centralized.
-
-  alternatives_considered:
-    - opaque_bearer_token
-
-  depends_on:
-    - SRC-IDENTITY-001
-    - SRC-CLIENTS-001
-
-  consumed_by:
-    - product_boundary.security
-    - rules.access_token_policy
-    - flows.authenticate_request
-
-  blocking:
-    state: product_boundary
-    mode: closure
-```
-
-The exact storage syntax may be Markdown, YAML, or JSON. Stable IDs and semantics
-matter more than the serialization format.
-
-## Snapshot requirements
-
-A Snapshot is not closed merely because one real payload was saved.
-
-Record:
-
-- the external owner and system;
+- source system or authority;
 - capture date;
-- environment;
-- version, revision, or endpoint when known;
-- authority: canonical, observed, or advisory;
-- the stored or referenced evidence path;
+- environment and version when relevant;
+- whether it is canonical, observed, or advisory;
+- known limitations and unknowns;
 - sanitization performed;
-- relevant interpretation;
-- known unknowns and non-guarantees.
+- relevant positive and negative examples when practical.
 
-A Snapshot closes only when its relevant semantics are understood well enough
-for the next design state. Capturing `{"status": 3}` is insufficient when the
-meaning and stability of `3` are unknown.
+Capturing bytes is not sufficient. The semantics needed by downstream design must
+be understood.
 
-One observation must not be promoted into a stronger contract than it supports.
-Record distinctions such as:
+Real samples must not expose secrets or personal data. Sanitization must preserve
+meaningful structure, types, cardinality, and formats, and must document material
+substitutions.
 
-```yaml
-known:
-  - role is present in every inspected response
-unknown:
-  - whether new role codes can appear without notice
-not_guaranteed:
-  - ordering of grants
-```
+## Security strategies
 
-When possible, collect representative positive, empty, boundary, and failure
-samples rather than only the happy path.
+Security is first-class workspace material, not a gap to be filled during code
+generation.
 
-## Choice requirements
+The workspace must expose unresolved decisions involving:
 
-A Choice is closed only when it includes:
+- identity and credential ownership;
+- authentication flows;
+- authorization and grant sources;
+- password and secret storage parameters;
+- token format, signing, lifetime, refresh, rotation, and revocation;
+- session persistence and expiry;
+- browser storage and CSRF boundaries;
+- encryption, key ownership, audit, retention, and privacy constraints;
+- abuse limits, lockout, recovery, and failure behavior.
 
-- the selected option;
-- all behavior-affecting parameters;
-- the decision owner or delegated authority;
-- a concise reason;
-- important rejected alternatives when they clarify the boundary.
+Each such item is classified as Snapshot, Choice, or Design and remains blocking
+until its required parameters are explicit.
 
-An agent may propose a choice. It may not mark the choice `chosen` unless the
-declared owner selected it or explicitly delegated the decision.
+## Atomicity and dependencies
 
-Silent library, framework, or generator defaults do not count as choices.
-Security-sensitive defaults are especially forbidden as closure evidence.
+A registry item should be atomic enough to be independently sourced, changed, or
+invalidated. Broad labels such as `authentication strategy` should be split when
+identity provider, flow, token format, lifetime, refresh, revocation, and session
+storage can vary independently.
 
-## Design requirements
+Items may declare dependencies. A closed item must not rely on an `OPEN` or
+`ASSUMED` dependency without being marked provisional.
 
-A Design is closed only when:
+## Dashboard and planner
 
-- the project genuinely owns the domain;
-- its form or states are explicit enough for the target design state;
-- the owner is known;
-- the reason for the shape is recorded;
-- it does not overwrite a real external contract that should have been a
-  Snapshot.
+The dashboard is a compact current view, not the source of truth. It should show:
 
-Designing from the head is legitimate only here, because the project is the
-source.
+- current design target;
+- accepted direction and recent decisions;
+- active blockers;
+- next acquisition or decision actions;
+- owners;
+- readiness of the next design state;
+- recently invalidated downstream work.
 
-## Security strategies are first-class workspace material
+The registry is the source of truth. Evidence and detailed decision records live in
+separate files referenced by registry entries.
 
-Security must not be postponed as an implementation detail. The workspace
-should expose at least the applicable decisions for:
-
-- identity source and actor types;
-- authentication mechanism;
-- credential and secret storage;
-- password hashing parameters when passwords are owned locally;
-- token format, issuer, audience, signature or lookup strategy, and lifetime;
-- refresh, revocation, logout, and session lifecycle;
-- authorization model, roles, grants, scopes, and resource ownership;
-- service-to-service identity;
-- tenant isolation;
-- browser/mobile storage and CSRF boundary;
-- key rotation and secret ownership;
-- audit requirements;
-- production versus trusted-local deployment assumptions.
-
-Existing identity roles, grants, claims, and session payloads are usually
-Snapshots. Mechanisms and parameters are usually Choices. Project-owned access
-state machines may be Designs. Do not collapse them into one generic
-`security strategy` item.
+The dashboard should normally remain short because closed history is summarized or
+filtered out of the active view.
 
 ## Gate semantics
 
-Every item declares what it blocks.
+Two blocking modes are available:
 
-- `entry` — the target state must not begin without it;
-- `closure` — exploration may continue, but the state cannot be accepted or
-  used as stable input for the next state;
-- `non_blocking` — explicitly deferred, with a reason and a state before which
-  it must be revisited.
+- `entry` — the design state cannot responsibly begin;
+- `closure` — exploration may continue, but the state cannot be stabilized,
+  accepted, or used as input to the next state.
 
-The workspace is ready to begin Product Boundary when:
+A design state must stop when its required entry material is `OPEN`, `ASSUMED`,
+invalidated, or awaiting reconfirmation.
 
-- the direction and initial scope are visible;
-- known external systems have source owners;
-- foundational identity, security, data-source, and integration questions are
-  registered;
-- no entry-blocking item is `OPEN` or `ASSUMED`;
-- the remaining uncertainty is visible rather than silently filled.
+A design state must not close while any closure-blocking item remains unresolved.
 
-A later design state is ready to close when every workspace item blocking that
-state is closed and consumed by the appropriate design artifact.
+The required response is operational:
 
-## Discovery loop
+1. state what material is missing;
+2. explain why continuing would require invention or a silent default;
+3. identify the source type;
+4. create or update the registry item;
+5. record the owner and next acquisition or decision action;
+6. resume only after the gate is satisfied.
 
-New questions will appear during modeling, rule design, flows, contracts, and
-notes. This is expected.
+## Continuous discovery
 
-When a new behavior-affecting uncertainty appears:
+Layer 0 is not a one-time intake form. It remains active around every later state.
 
-1. stop treating it as local prose;
-2. create or reopen a workspace item;
-3. classify its legitimate source type;
-4. mark the affected state as not stable;
-5. acquire evidence, choose, or design;
-6. propagate the result into the earliest owning design state;
-7. update downstream artifacts that depended on the old assumption.
+When a later state discovers a new unresolved fact or choice:
 
-Do not solve a newly discovered product or security decision inside a contract
-or note merely because that is where it became visible.
+1. register it in the workspace;
+2. classify its source type;
+3. mark affected work provisional or blocked;
+4. acquire or decide the missing content;
+5. update downstream artifacts and readiness;
+6. return to the design state.
+
+Returning to the workspace is normal process control, not failure.
 
 ## Change and invalidation
 
-Sources and decisions change. When a bound item changes:
+When a bound source or accepted decision changes, identify every downstream design
+artifact that consumed it. Those artifacts must be revalidated before they remain
+accepted.
 
-- create a replacement or reopen the item;
-- preserve the previous decision as superseded evidence;
-- identify every `consumed_by` design artifact;
-- mark affected states for revalidation;
-- do not leave downstream artifacts silently bound to stale knowledge.
+A closed registry item should therefore link to its consumers or use stable IDs
+that downstream working artifacts can reference.
 
-No downstream statement may be stronger than its source. Observed behavior
-remains observed behavior; a deliberate choice remains an explicit choice; an
-invented domain remains owned design.
+No downstream statement may be stronger than its source:
 
-## Sensitive data and sanitization
+- an observed sample remains an observation unless authority makes it contractual;
+- a deliberate choice remains an explicit policy;
+- a project-owned design remains owned design;
+- unknown behavior remains unknown rather than becoming an invented guarantee.
 
-Real evidence must be structurally and semantically faithful, not
-secret-bearing.
+## Readiness for Product Boundary
 
-Before storing evidence beside a case:
+Product Boundary may begin only when its entry material is sufficient to state the
+product without inventing central facts. At minimum, review:
 
-- remove credentials, tokens, cookies, private keys, and secrets;
-- anonymize personal data and internal identifiers when they are not semantically
-  required;
-- preserve types, cardinality, field presence, relevant formats, and edge cases;
-- document substitutions and redactions;
-- never commit production secrets to make a Snapshot appear more real.
+- goal and observable outcomes;
+- actors and ownership boundaries;
+- external systems and imported contracts;
+- major inputs, outputs, and persisted material;
+- material security and privacy constraints;
+- known product limits and failure obligations;
+- all current entry-blocking questions.
 
-A sanitized sample remains valid evidence only when sanitization does not erase
-the property being studied.
+Not every future design decision must be closed before Product Boundary. Decisions
+discovered later return to the workspace and block the state that needs them.
 
-## Suggested case layout
+## Interaction protocol
 
-```text
-examples/<case>/
-├── workspace/
-│   ├── README.md                 # direction and dashboard
-│   ├── decisions.yaml            # source-bound decision registry
-│   ├── open_questions.md         # optional rendered blocker view
-│   └── sources/
-│       ├── registry/
-│       ├── identity/
-│       └── provider-x/
-├── 01_product_boundary.md
-├── 02_domain_models.md
-└── ...
-```
+When working with a human:
 
-The repository may begin with a simpler `sources.md`. Split it only when the
-workspace becomes hard to review. Do not create a document hierarchy before
-there is material to organize.
+1. show the current target and compact dashboard;
+2. distinguish facts, choices, designs, assumptions, and unknowns;
+3. do not hide missing information in polished prose;
+4. ask for or acquire a small coherent group of blocking items at a time;
+5. propose concrete next actions and owners;
+6. preserve accepted answers outside conversational memory;
+7. resume the ladder only when the relevant gate is closed.
 
-## Minimal working artifact
-
-For a small case, one Markdown table is sufficient:
-
-| ID | Question | Type | Status | Owner | Evidence or decision | Blocks |
-| --- | --- | --- | --- | --- | --- | --- |
-| `SRC-IAM-001` | What roles does the existing IAM return? | Snapshot | `confirmed` | integration | `workspace/sources/iam/roles.sanitized.json` | Product Boundary entry |
-| `SRC-AUTH-002` | How are access tokens verified? | Choice | `chosen` | security | JWT ES256, 15 min, platform issuer | Product Boundary closure |
-| `SRC-DOC-003` | What is the document lifecycle? | Design | `designed` | product | draft → submitted → approved/rejected | Domain Models closure |
-| `SRC-SESSION-004` | What revokes a session? | Choice | `OPEN` | security | — | Product Boundary closure |
-
-This minimal artifact already provides the essential external memory:
-
-- where the project is going;
-- what has been agreed;
-- what evidence exists;
-- what remains open;
-- what the next design state is allowed to do.
-
-## Anti-patterns
-
-Reject these uses of the workspace:
-
-- treating conversation as confirmation without evidence or ownership;
-- storing a real sample but inventing the semantics of its fields;
-- marking an agent recommendation as a chosen security policy;
-- classifying an unavailable external contract as project-owned Design;
-- using one broad decision to hide independently open parameters;
-- creating a dashboard whose status is maintained separately from the registry;
-- moving unresolved choices directly into `rules`, `config`, models, contracts,
-  or notes;
-- collecting evidence indefinitely without converting it into design input;
-- storing secrets or personal data merely to preserve realism.
-
-## Completion test
-
-The Design Workspace is healthy when a new human or agent can answer, without
-reconstructing the entire conversation:
-
-1. What are we building and what is outside scope?
-2. What state of the design ladder are we in?
-3. What real source material has been collected?
-4. Which facts came from external systems?
-5. Which implementation and security strategies were deliberately selected?
-6. Which domains were intentionally designed by us?
-7. What is still `OPEN` or merely `ASSUMED`?
-8. What blocks the next state?
-9. Where has each closed decision been consumed?
-10. What became stale when a source or decision changed?
-
-The objective is not maximal documentation. The objective is a visible,
-source-bound path from scattered project knowledge to a specification that does
-not require the author, agent, or code generator to fill important voids from
-memory or defaults.
+Use [DESIGN_WORKSPACE_FORMAT.md](DESIGN_WORKSPACE_FORMAT.md) to create and maintain
+a concrete project workspace.
