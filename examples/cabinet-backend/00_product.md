@@ -7,129 +7,98 @@ observed `registry_sandbox` contracts.
 
 ## Product statement
 
-Cabinet Backend is the durable operational core of Cabinet. An authorized user
-or agent submits prepared working information; Cabinet validates and stores
-structured Cards, relationships, sources, supplier purchases represented by
-Invoice Cards, material lists, and their history in PostgreSQL.
+Cabinet Backend is the durable operational core of Cabinet. It validates and
+stores structured Cards, relationships, sources, supplier purchases represented
+by Invoice Cards, material lists, and their history in PostgreSQL.
 
-Registry creates the platform project. Cabinet represents that project through
-one autonomous Work Object containing Cabinet-owned working knowledge and a
-durable copy of the last successfully observed Registry project context. This
-replica allows the Cabinet Web UI and conversational agents to continue working
-when Registry or the wider platform is temporarily unavailable.
+Registry creates and identifies the platform project. Cabinet opens the same
+project through a Work Object whose identity is the Registry `project_id`.
+Cabinet obtains current project context through Registry in the same way as
+other platform applications and stores the last successful context as a durable
+read-only snapshot so the Web UI and conversational agents can continue working
+when Registry is temporarily unavailable.
 
-The primary purchase workflow is simple: the user buys materials in a shop or
-online, normally pays at the time of purchase, and saves the resulting invoice
-or receipt as a Cabinet Invoice Card. One purchase may use more than one payment
-method, for example cash and card. A purchase may be linked to one Work Object
-or remain explicitly unassigned.
-
-The agent performs extraction, normalization, matching suggestions, and other
-heuristic work. Cabinet Backend remains the authority that decides whether
-submitted Cabinet data is valid, current, non-duplicated, and safe to persist.
-
-## Product position
-
-Cabinet Backend replaces the current repository-backed Card storage mechanism;
-it does not replace the accepted Cabinet Card concept, Registry project
-identity, or the implemented Invoice Card V1 fact model.
-
-It is not:
-
-- a generic document database;
-- a second Registry;
-- a second PresuPro;
-- an accounting ledger;
-- an accounts-payable system;
-- an inventory or procurement workflow;
-- a Client Portal database;
-- a passive proxy that accepts arbitrary agent JSON.
+The normal purchase workflow is simple: the user buys materials in a shop or
+online, normally pays at the time of purchase, and saves the invoice or receipt
+as an Invoice Card. A purchase may use several payment transactions, such as
+cash plus card. It may be assigned to one Work Object or remain without an
+object.
 
 ## Sources of truth
 
 | Concern | Authoritative owner | Cabinet treatment |
 | --- | --- | --- |
-| Registry project UUID and current platform project context | Registry | Validate the project and persist a durable read-only snapshot for autonomous Cabinet operation. |
-| Cabinet Work Object identity, alias, sync evidence, and operational relationships | Cabinet | Own and persist independently of Registry availability. |
-| Cabinet Card identity, content, lifecycle, sources, and relationships | Cabinet | Validate and persist in PostgreSQL. |
-| Supplier purchase and Invoice Card facts | Cabinet | Preserve structured facts, source provenance, revisions, confirmation, primary object assignment, and payment evidence. |
-| Mutable presupuesto and estimate composition | PresuPro | Consume as plan input; never edit or silently call it approved. |
-| Holded accounting document and accounting state | Holded | Access only through Holded Gateway and retain typed external links or receipts. |
-| Client-visible budget, expenses, allocations, progress, and customer payments | Client Portal | Send only through an agreed intake boundary. |
+| Platform project identity and current project context | Registry | Use `project_id` as Work Object identity and store a read-only durable snapshot. |
+| Cabinet relationships, notes, purchases, material lists, documents, and history for that project | Cabinet | Own and persist independently of Registry availability. |
+| Invoice Card identity, facts, lifecycle, sources, and payment evidence | Cabinet | Validate and persist in PostgreSQL. |
+| Mutable estimate composition | PresuPro | Consume as plan input; never edit or silently call it approved. |
+| Accounting document and accounting state | Holded | Access only through Holded Gateway. |
+| Client-visible records | Client Portal | Send only through an agreed intake boundary. |
 
 ## Work Object boundary
 
-A Work Object is Cabinet's autonomous working representation of one Registry
-project. It is created lazily after Cabinet receives a Registry `project_id`,
-validates it, and obtains the first Registry project context.
+A Work Object is Cabinet's local working interface for one Registry project.
+It is not a separate project and has no additional Cabinet object identity:
 
-The relationship is one Registry project to zero or one Cabinet Work Object.
-The Work Object has its own stable Cabinet identity and stores
-`registry_project_id` as a required unique external identity.
+```text
+WorkObject.id = Registry ProjectRecord.id
+```
 
-Cabinet copies the Registry project context into a durable snapshot containing
-the values required by the Web UI and conversational agents, including project
-name, address, Registry lifecycle status, customer reference, Registry creation
-time, Registry update time, and Cabinet capture time.
+The relationship is one Registry project to zero or one locally persisted Work
+Object representation. Cabinet creates that representation lazily after it
+receives `project_id` and successfully obtains the first Registry project
+context. Repeated opening of the same `project_id` resolves to the same Work
+Object.
 
-Registry remains the source of truth for those copied fields. Ordinary Cabinet
-operations and agents cannot silently edit them. Cabinet may separately own an
-optional working alias and all Cabinet relationships, notes, invoices, material
-lists, documents, providers, contacts, revisions, and history.
+Cabinet stores a durable snapshot of the returned Registry context, including:
 
-When Registry is unavailable, an existing Work Object remains usable. Cabinet
-may display and search the object, capture and review purchases, assign
-purchases to the already known Work Object, and maintain Cabinet-owned
-knowledge. It must expose that the Registry snapshot may be stale and must not
-claim that the external project remains current.
+- project ID;
+- display name;
+- address;
+- Registry lifecycle status;
+- customer reference;
+- Registry creation time;
+- Registry update time;
+- Cabinet capture time.
 
-A new Work Object cannot be created from an unknown or unvalidated Registry
-UUID. Invoice Cards may exist without a Work Object and must not cause creation
-of a synthetic object.
+Registry remains authoritative for these copied values. Ordinary Cabinet edits
+and agents cannot rewrite them. Cabinet owns all project-scoped purchases,
+material lists, documents, providers, contacts, notes, decisions, revisions,
+and history.
 
-## Registry synchronization
+When Registry is unavailable, an existing Work Object remains usable from its
+last snapshot. Cabinet may display and search it, capture and review purchases,
+assign purchases to it, and maintain Cabinet-owned knowledge. Cabinet must
+show that the external context is stale or unavailable and must not claim that
+the Registry project is currently active.
 
-Cabinet records the last successful Registry snapshot and synchronization
-evidence. The first product distinguishes:
+Cabinet cannot create a new Work Object from an unknown project ID without a
+successful first Registry context read.
 
-- `current` — the latest Registry read succeeded;
-- `stale` — a snapshot exists but freshness is no longer confirmed;
-- `unavailable` — the last Registry refresh failed because the service could
-  not be reached;
-- `not_found` — Registry explicitly reported that the project does not exist.
+## Purchase without an object
 
-Registry project status `active` or `archived` remains separate inside the
-snapshot.
+Invoice Card identity is independent from Work Object identity. An Invoice Card
+may be created before any project assignment exists.
 
-Temporary unavailability does not erase the last successful snapshot or
-Cabinet-owned data. Archived Registry projects and their Work Objects remain
-readable, but new operational assignment is rejected by default.
+The first product distinguishes:
 
-## Purchase and assignment boundary
+- `unreviewed` — no assignment decision has been made;
+- `assigned` — linked to one Work Object by Registry `project_id`;
+- `intentionally_unassigned` — reviewed and deliberately left without an
+  object;
+- `label_only` — free-form source or user wording is preserved as a matching
+  hint, but no Work Object is assigned.
 
-One Invoice Card represents one supplier purchase or invoice. It preserves
-supplier and buyer facts, document numbers and dates, normalized lines, source
-wording, totals, payable amount, source evidence, payment evidence, and
-`draft`, `confirmed`, or `archived` Cabinet lifecycle state.
-
-One Invoice Card has at most one current primary object assignment in the first
-complete product. Assignment is distinguishable as:
-
-- not yet reviewed;
-- assigned to one Work Object;
-- intentionally unassigned;
-- represented only by a free-form label until a Work Object is identified.
-
-Multi-object and line-level allocations are deferred and do not belong to
-Invoice Card V1 facts.
+A missing assignment never creates a synthetic Work Object. An Invoice Card may
+be assigned later. One Invoice Card has at most one current primary assignment.
+Multi-object and line-level allocation are deferred.
 
 ## Payment boundary
 
-The normal user workflow assumes immediate full payment, including split
-cash/card settlement represented by several payment transactions.
+The normal workflow assumes immediate full payment. Split settlement is
+represented by several transactions rather than a `mixed` method.
 
-The backend preserves the complete implemented payment-status vocabulary for
-source fidelity:
+The complete implemented payment-status vocabulary is preserved:
 
 - `unknown`;
 - `unpaid`;
@@ -137,77 +106,58 @@ source fidelity:
 - `paid`;
 - `refunded`.
 
-The first product does not introduce a payment shared by several Invoice Cards,
-bank reconciliation, accounts-payable scheduling, debt collection, or a
-separate cross-invoice payment aggregate.
+The first product does not introduce cross-invoice payments, bank
+reconciliation, debt collection, or accounts-payable scheduling.
 
-## Offline operation
+## Registry synchronization
 
-While Registry is unavailable, Cabinet may use an existing Work Object snapshot
-to:
+Cabinet records the last successful snapshot and refresh evidence. The first
+product distinguishes:
 
-- display and search project context;
-- capture, review, and search invoices;
-- assign invoices to the already known Work Object;
-- maintain material lists, documents, providers, contacts, and notes;
-- support agents with explicit stale-context evidence.
+- `current` — the latest Registry read succeeded;
+- `stale` — a snapshot exists but freshness is no longer confirmed;
+- `unavailable` — the last refresh failed because Registry could not be
+  reached;
+- `not_found` — Registry explicitly reported that the project does not exist.
 
-Cabinet may not:
+Registry status `active` or `archived` remains a separate value inside the
+snapshot. Archived projects and their Cabinet data remain readable, but new
+project-scoped assignment is rejected by default.
 
-- create a new platform project;
-- create a new Work Object for an unvalidated project ID;
-- edit Registry-owned snapshot fields;
-- claim that stale Registry context is current;
-- reactivate an archived Registry project.
+## Current Registry integration
 
-## Current Registry limitation
+Cabinet follows the existing platform pattern:
 
-The observed Registry sandbox implements project identity, lifecycle,
-validation, launch context, and project-context reads. It does not yet
-implement:
+1. Registry launches Cabinet with `project_id`.
+2. Cabinet requests `GET /projects/{project_id}/context`.
+3. Cabinet creates or refreshes the local Work Object representation.
+4. If Registry is unavailable later, Cabinet uses the stored snapshot.
 
-- registered application identity;
-- project-to-application membership;
-- Cabinet participation checks;
-- attach/detach operations;
-- service authentication;
-- Registry events, subscriptions, or webhooks.
-
-These are future platform contracts. Cabinet must not pretend that application
-registration or participation is already enforced.
+The current sandbox does not yet enforce application registration, project
+membership, service identity, or push notifications. These are future platform
+contracts and are not required for the first Cabinet integration.
 
 ## Accepted product decisions
 
-1. Cabinet Backend owns Cabinet operational Cards and cross-Card
-   relationships.
-2. PostgreSQL is the selected durable Cabinet database.
-3. A Work Object is Cabinet's autonomous representation of exactly one Registry
-   project.
-4. A Work Object has its own stable Cabinet identity and one required unique
-   `registry_project_id`.
-5. Work Object creation requires a successful initial Registry validation and
-   project-context read.
-6. Registry project context is copied into a durable read-only snapshot for
-   offline Cabinet UI and agent operation.
-7. Registry remains authoritative for copied project identity fields.
-8. Registry unavailability does not delete or invalidate an existing Work
+1. PostgreSQL is the selected durable Cabinet database.
+2. Work Object identity is the Registry project UUID; no second Cabinet Work
+   Object ID is introduced.
+3. Work Object creation requires a successful first Registry context read.
+4. Registry context is copied into a durable read-only snapshot for autonomous
+   Cabinet UI and agent operation.
+5. Registry remains authoritative for copied project fields.
+6. Registry unavailability does not delete or invalidate an existing Work
    Object.
-9. Invoice Cards may exist without a Work Object.
-10. One Invoice Card has one primary object assignment in the first product.
-11. A purchase may be explicitly unassigned and later assigned.
-12. Multi-object and line-level allocation are deferred.
-13. The normal purchase flow is immediate full payment.
-14. The complete payment vocabulary `unknown`, `unpaid`, `partially_paid`,
-    `paid`, and `refunded` is preserved.
-15. Several payment transactions may represent split settlement such as cash
-    plus card.
-16. Draft, confirmed, and archived are Invoice Card lifecycle states, not
+7. Invoice Cards have their own identity and may exist without a Work Object.
+8. An Invoice Card may later be assigned to one Work Object by `project_id`.
+9. One Invoice Card has at most one current primary assignment.
+10. Multi-object and line-level allocation are deferred.
+11. The complete payment vocabulary is preserved.
+12. Several payment transactions may represent split settlement.
+13. `draft`, `confirmed`, and `archived` are Invoice Card lifecycle states, not
     procurement or delivery states.
-17. Registry application registration, participation, service identity, and
-    notifications are future platform contracts.
-18. Holded integration remains a dedicated Gateway.
-19. Client Portal publication remains explicit, versioned, and idempotent once
-    the required external contracts exist.
+14. Cabinet uses the same Registry context-read pattern as other platform
+    applications.
 
 ## State 0 readiness assessment
 
