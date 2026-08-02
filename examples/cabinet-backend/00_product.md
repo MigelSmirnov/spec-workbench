@@ -24,6 +24,12 @@ as an Invoice Card. A purchase may use several payment transactions, such as
 cash plus card. It may be assigned to one Work Object or remain without an
 object.
 
+For a Registry-backed Work Object, Cabinet may also load the current detailed
+PresuPro estimate into the working context. PresuPro remains the source of the
+plan; Cabinet uses the estimate together with Invoice Cards so an agent can
+compare expected and actual purchases, explain price and quantity differences,
+and calculate plan-versus-actual views on demand.
+
 ## Sources of truth
 
 | Concern | Authoritative owner | Cabinet treatment |
@@ -31,8 +37,9 @@ object.
 | Platform project identity and current project context | Registry | Use `project_id` as Work Object identity and store a read-only durable snapshot. |
 | Cabinet relationships, notes, purchases, material lists, documents, and history for that project | Cabinet | Own and persist independently of Registry availability. |
 | Invoice Card identity, facts, lifecycle, sources, and payment evidence | Cabinet | Validate and persist in PostgreSQL. |
-| Mutable estimate composition | PresuPro | Consume as plan input; never edit or silently call it approved. |
-| Accounting document and accounting state | Holded | Access only through Holded Gateway. |
+| Mutable estimate composition, planned quantities, planned prices, zones, and estimate calculations | PresuPro | Load through an explicit contract as plan input; never edit or silently call mutable data approved. |
+| Agent-proposed and user-confirmed invoice-line-to-estimate matches | Cabinet | Preserve accepted working decisions and provenance; do not treat heuristic suggestions as facts. |
+| Accounting document and accounting state | Holded | Publish one eligible confirmed Invoice Card through Holded Gateway. |
 | Client-visible records | Client Portal | Send only through an agreed intake boundary. |
 
 ## Work Object boundary
@@ -91,7 +98,68 @@ The first product distinguishes:
 
 A missing assignment never creates a synthetic Work Object. An Invoice Card may
 be assigned later. One Invoice Card has at most one current primary assignment.
-Multi-object and line-level allocation are deferred.
+Multi-object allocation is deferred.
+
+## PresuPro contract and plan-versus-actual
+
+The PresuPro contract is a first-class Cabinet dependency for project analytics.
+For the selected `project_id`, Cabinet must be able to obtain the detailed
+current estimate required by agents, including its source identity or freshness,
+zones, positions, item kind, name, material reference when present, quantity,
+unit, unit price, waste, margin, discount, IVA, and calculated totals.
+
+Cabinet Invoice Line fields are intentionally aligned with the comparable
+PresuPro item fields so that the agent can reason across plan and fact without
+rewriting either source model. Product names may differ between retailers, for
+example a Brico Depot estimate line and an OBRAMAT invoice line. Semantic
+equivalence is therefore heuristic and belongs to the agent.
+
+The first-product interaction is:
+
+```text
+PresuPro estimate item
++ Cabinet invoice line
+→ agent proposes whether they represent the same material or work
+→ user confirms, rejects, or corrects the proposal when needed
+→ Cabinet may retain the accepted match
+→ agent calculates plan-versus-actual analysis on demand
+```
+
+Cabinet does not require a deterministic product-name matcher. It validates the
+references and preserves accepted match provenance. Suggested matches never
+affect calculations until accepted.
+
+For the simple baseline, one Invoice Line is confirmed against at most one
+estimate item, while several Invoice Lines from several invoices may match the
+same estimate item. Partial distribution of one line across several estimate
+items is deferred.
+
+Plan-versus-actual results are derived views rather than durable invoice facts.
+On demand, the agent may calculate and explain:
+
+- planned versus actual unit price;
+- actual quantity purchased and quantity remaining;
+- planned versus actual amount;
+- average actual unit price across several purchases;
+- expected final cost using an explicitly stated forecast basis;
+- unmatched estimate items and unmatched invoice lines;
+- price, quantity, and total variance by item, zone, or Work Object.
+
+A saved match does not modify the Invoice Card or PresuPro estimate.
+
+## Holded publication
+
+A confirmed eligible Invoice Card may be published as one accounting document
+through Holded Gateway. Cabinet decides business eligibility and fixes the exact
+Invoice Card revision. Holded Gateway owns credentials, provider transport,
+technical retries, reconciliation, and technical receipts.
+
+Holded publication is independent from PresuPro matching:
+
+- an invoice may be published before it is matched to the estimate;
+- plan-versus-actual analysis does not require Holded;
+- a Holded failure does not invalidate Cabinet facts or agent analytics;
+- changing a match does not rewrite an accounting document.
 
 ## Payment boundary
 
@@ -131,7 +199,9 @@ Cabinet follows the existing platform pattern:
 1. Registry launches Cabinet with `project_id`.
 2. Cabinet requests `GET /projects/{project_id}/context`.
 3. Cabinet creates or refreshes the local Work Object representation.
-4. If Registry is unavailable later, Cabinet uses the stored snapshot.
+4. Cabinet may then obtain the PresuPro estimate for the same project through
+   the explicit PresuPro boundary.
+5. If Registry is unavailable later, Cabinet uses the stored Registry snapshot.
 
 The current sandbox does not yet enforce application registration, project
 membership, service identity, or push notifications. These are future platform
@@ -151,12 +221,25 @@ contracts and are not required for the first Cabinet integration.
 7. Invoice Cards have their own identity and may exist without a Work Object.
 8. An Invoice Card may later be assigned to one Work Object by `project_id`.
 9. One Invoice Card has at most one current primary assignment.
-10. Multi-object and line-level allocation are deferred.
-11. The complete payment vocabulary is preserved.
-12. Several payment transactions may represent split settlement.
-13. `draft`, `confirmed`, and `archived` are Invoice Card lifecycle states, not
+10. Multi-object allocation is deferred.
+11. PresuPro is the authoritative source of detailed plan data used by Cabinet
+    agents.
+12. Cabinet may load the current detailed PresuPro estimate into the Work Object
+    working context.
+13. Product-name and semantic matching between estimate items and invoice lines
+    is heuristic work owned by the agent.
+14. Suggested matches do not affect calculations until accepted.
+15. In the baseline, one Invoice Line matches at most one estimate item, while
+    many Invoice Lines may match one estimate item.
+16. Plan-versus-actual results are calculated on demand from PresuPro data,
+    Cabinet Invoice Cards, and accepted matches.
+17. A confirmed eligible Invoice Card may be published independently to Holded
+    through Holded Gateway.
+18. The complete payment vocabulary is preserved.
+19. Several payment transactions may represent split settlement.
+20. `draft`, `confirmed`, and `archived` are Invoice Card lifecycle states, not
     procurement or delivery states.
-14. Cabinet uses the same Registry context-read pattern as other platform
+21. Cabinet uses the same Registry context-read pattern as other platform
     applications.
 
 ## State 0 readiness assessment
