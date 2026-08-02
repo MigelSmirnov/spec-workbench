@@ -2,33 +2,40 @@
 
 ## Status
 
-Draft for product review after the Cabinet product-boundary correction.
+Draft corrected against the implemented Cabinet Invoice Card V1 and the
+accepted purchase workflow.
 
 ## Product statement
 
 Cabinet Backend is the durable operational core of Cabinet. An authorized user
-or agent sends prepared working information; Cabinet validates and stores
-structured Cards, relationships, sources, ready Invoice Cards, material lists,
-agent-prepared allocations, invoice payment facts, and their history in
-PostgreSQL. Cabinet links this operational knowledge to Registry projects,
-consumes PresuPro plan data, publishes eligible accounting operations through
-Holded Gateway, and prepares traceable downstream data for Client Portal.
+or agent submits prepared working information; Cabinet validates and stores
+structured Cards, relationships, sources, supplier purchases represented by
+Invoice Cards, material lists, and their history in PostgreSQL.
 
-The agent performs organisational and heuristic work. Cabinet Backend remains
-the authority that decides whether submitted Cabinet data is valid, current,
-non-duplicated, and safe to persist.
+The primary purchase workflow is simple: the user buys materials in a shop or
+online, pays at the time of purchase, and saves the resulting invoice or
+receipt as a Cabinet Invoice Card. One purchase may use more than one payment
+method, for example cash and card. A purchase may be linked to one Cabinet Work
+Object or remain explicitly unassigned.
+
+The agent performs extraction, normalization, matching suggestions, and other
+heuristic work. Cabinet Backend remains the authority that decides whether
+submitted Cabinet data is valid, current, non-duplicated, and safe to persist.
 
 ## Product position
 
-Cabinet Backend replaces the current repository-backed storage mechanism; it
-does not replace the accepted Cabinet Card concept.
+Cabinet Backend replaces the current repository-backed Card storage mechanism;
+it does not replace the accepted Cabinet Card concept or the implemented
+Invoice Card V1 fact model.
 
 It is not:
 
 - a generic document database;
 - a second Registry;
 - a second PresuPro;
-- an accounting system;
+- an accounting ledger;
+- an accounts-payable system;
+- an inventory or procurement workflow;
 - a Client Portal database;
 - a passive proxy that accepts arbitrary agent JSON.
 
@@ -39,11 +46,12 @@ It is not:
 Uses Cabinet through conversational or visual interfaces to:
 
 - save and find working contacts, providers, documents, and lists;
-- review agent-prepared information;
-- confirm or correct relationships;
-- inspect work by project;
-- confirm invoices and their prepared project/material relationships;
-- request accounting or client-facing publication.
+- capture a material purchase from a receipt, invoice, PDF, photo, or message;
+- review and correct extracted purchase facts;
+- assign a purchase to one Work Object or leave it without an object;
+- record the payment methods and amounts shown by the source;
+- inspect purchases and material facts by Work Object;
+- request later accounting or client-facing publication when eligible.
 
 ### Cabinet agent
 
@@ -53,14 +61,14 @@ Uses controlled Cabinet capabilities to:
 - search existing Cards before proposing creation;
 - prepare new or updated Cards;
 - propose but not silently confirm uncertain identity matches;
-- propose project, provider, material, and purchasing relationships;
-- prepare complete Invoice Cards, allocations, material-list matches, and
-  derived purchased/remaining quantities;
+- prepare Invoice Card drafts from source evidence;
+- propose a primary Work Object assignment;
+- preserve an explicit unassigned state when no object is known;
+- prepare payment transactions, including split cash/card settlement;
 - request deterministic Cabinet validation and persistence;
-- inspect accepted records, validation failures, conflicts, and publication
-  results.
+- inspect accepted records, warnings, conflicts, and publication results.
 
-Agent computations are proposals or prepared inputs until Cabinet Backend
+Agent computations remain proposals or prepared inputs until Cabinet Backend
 accepts them.
 
 ### Cabinet Web UI
@@ -72,22 +80,21 @@ business rules.
 ### Platform services
 
 Registry, PresuPro, Holded Gateway, and Client Portal interact through explicit
-boundaries described below. None receives direct access to Cabinet tables.
+boundaries. None receives direct access to Cabinet tables.
 
 ## Sources of truth
 
 | Concern | Authoritative owner | Cabinet treatment |
 | --- | --- | --- |
-| Registry project UUID and current project context | Registry | Validate and retain a linked reference plus read-only current projection. |
-| Cabinet Work Object operational relationships | Cabinet | Own Cabinet-specific links to Cards, invoices, material lists, and accepted allocations. |
-| Mutable presupuesto and estimate composition | PresuPro | Consume as plan input; never edit or silently call it approved. |
 | Cabinet Card identity, content, lifecycle, sources, and relationships | Cabinet | Validate and persist in PostgreSQL. |
-| Supplier invoice facts and Cabinet invoice lifecycle | Cabinet | Preserve structured facts, source provenance, revisions, and confirmation. |
-| Supplier, carrier, subcontractor, and working-contact knowledge | Cabinet | Maintain Cards that may be incomplete and enriched over time. |
-| Material-list state and accepted purchase matches | Cabinet | Preserve agent-prepared facts and relationships without inventing a procurement workflow. |
-| Holded accounting document and accounting payment state | Holded | Access only through Holded Gateway and retain typed external links/receipts. |
-| Technical Holded delivery operation | Holded Gateway | Retain durable publication state and consume typed receipts. |
-| Client-visible budget, expenses, allocations, progress, and customer payments | Client Portal | Send only through an agreed intake boundary; never edit Portal storage directly. |
+| Cabinet Work Object identity and Cabinet-owned working context | Cabinet | May exist standalone and may later link to Registry. |
+| Registry project UUID and current project context | Registry | Validate and retain an optional external link plus read-only projection. |
+| Mutable presupuesto and estimate composition | PresuPro | Consume as plan input; never edit or silently call it approved. |
+| Supplier purchase and Invoice Card facts | Cabinet | Preserve structured facts, source provenance, revisions, confirmation, primary object assignment, and payment evidence. |
+| Material-list state and accepted purchase matches | Cabinet | Preserve accepted facts and relationships without inventing procurement states. |
+| Holded accounting document and accounting state | Holded | Access only through Holded Gateway and retain typed external links or receipts. |
+| Technical Holded delivery operation | Holded Gateway | Retain durable publication state and typed receipts. |
+| Client-visible budget, expenses, allocations, progress, and customer payments | Client Portal | Send only through an agreed intake boundary. |
 
 ## Primary outcomes
 
@@ -101,96 +108,124 @@ returns either:
   errors.
 
 Cabinet does not invent missing values, accept an untyped data envelope, or
-claim persistence when the write failed.
+claim persistence when a write failed.
 
-### Maintain Work Object Cards linked to Registry
+### Maintain standalone and Registry-linked Work Objects
 
-An authorized actor can create or refresh a Cabinet Work Object only from an
-existing active Registry project. Cabinet stores the Registry UUID as
-canonical external identity and adds Cabinet-owned operational relationships.
+A Work Object is a Cabinet Card representing a working object or job context.
+It may be created without Registry and remain fully identifiable inside
+Cabinet.
 
-Changing Registry name, address, or status does not replace the Cabinet Card
-identity or erase its operational history. Cabinet does not create a competing
-Registry project UUID or a standalone Work Object. An invoice or note may
-remain unassigned without creating a Work Object.
+A Work Object may later link to an existing Registry project. Registry owns the
+external project UUID and current Registry context. Cabinet retains its own
+Card identity, history, notes, contacts, purchases, and operational
+relationships.
 
-Cabinet Contact data, including fiscal and communication details, remains
-Cabinet-owned and is never overwritten from Registry `customer_ref`.
+Linking to Registry must not replace the Cabinet Card identity or erase its
+history. Registry data must not silently overwrite Cabinet-owned contact,
+fiscal, or working information.
 
-### Maintain providers and project participants
+### Capture a purchase as one Invoice Card
 
-Cabinet can preserve and enrich working knowledge about:
+One Invoice Card represents one supplier purchase or supplier invoice. It
+preserves:
 
-- material suppliers;
-- shops;
-- carriers and delivery providers;
-- subcontractors and adjacent trades;
-- customers and other work contacts.
+- supplier and buyer facts when available;
+- invoice or receipt number and dates;
+- normalized purchase lines and source wording;
+- totals and payable amount;
+- source and provenance;
+- one primary object assignment;
+- payment facts supported by evidence;
+- draft, confirmed, or archived lifecycle state.
 
-One Card may participate in several work relationships without its phone
-number, title, or role becoming its identity. Uncertain duplicate candidates
-are presented rather than silently merged.
+The user-facing term may be “purchase” or “material purchase” even though the
+existing domain entity remains Invoice Card.
+
+### Allow purchases without an object
+
+The Invoice Card `object` block is required structurally, but both `card_id` and
+`label` may be null. This represents an explicit purchase “without object”.
+
+An unassigned purchase is valid and remains searchable, reviewable, and
+assignable later. The absence of an object must not create a synthetic Work
+Object.
+
+The product distinguishes:
+
+- not yet reviewed for object assignment;
+- intentionally left without an object;
+- assigned by free-form label;
+- assigned to a Cabinet Work Object.
+
+The exact representation of reviewed versus not-yet-reviewed belongs to later
+domain-model work.
+
+### Use one primary object per purchase in the first product
+
+The first complete product stores one primary object assignment for each
+Invoice Card. A purchase is either:
+
+- linked to one Cabinet Work Object;
+- described by one free-form object label; or
+- explicitly unassigned.
+
+Line-level distribution and one purchase across several Work Objects are not
+part of the first complete product. They may be introduced later as separate,
+mutable allocation records without changing the preserved source invoice
+facts.
+
+### Preserve immediate and split payment evidence
+
+The normal product workflow assumes the purchase is paid at the time it is
+made, whether in a physical shop or online.
+
+One purchase may contain several payment transactions when the total was split
+between methods, for example:
+
+- cash;
+- card;
+- cash plus card.
+
+The sum applied to a paid purchase must equal the payable amount. Cash evidence
+may separately preserve the amount tendered and change returned.
+
+Cabinet Invoice Card V1 already supports broader source-faithful statuses such
+as `unknown`, `unpaid`, `partially_paid`, `paid`, and `refunded`. State 1 must
+decide whether the backend preserves this complete accepted vocabulary while
+the main product flow presents immediate full payment as the default.
+
+The first complete product does not introduce:
+
+- a payment shared by several Invoice Cards;
+- bank reconciliation;
+- accounts-payable scheduling;
+- debt collection;
+- a separate cross-invoice payment aggregate.
 
 ### Maintain living material lists and accepted purchase matches
 
 The agent or user can create and update structured material requirements.
 Accepted data remains linked to its Work Object, source, actor, and history.
 
-Agent matching may propose which invoice lines satisfy which requirements.
-The agent also calculates purchased and remaining quantities. Cabinet persists
-the accepted relationships and prepared quantities, checks referenced
-identities, revisions, arithmetic consistency, and conflicts, but does not
-perform semantic matching or introduce an ordered/delivered/consumed workflow.
-
-### Preserve invoices without forcing a project
-
-A valid Cabinet Invoice Card may remain:
-
-- not yet reviewed for project association; or
-- reviewed and intentionally left unassigned.
-
-This is a normal state. A future purchase such as a reusable tool may be linked
-to a Work Object later.
-
-The Cabinet `object` field is a matching hint only. The agent may use it to
-propose Registry-linked Work Objects, but confirmation requires an authorized
-Cabinet action.
+Agent matching may propose which purchase lines satisfy which requirements.
+Cabinet may preserve accepted matches and prepared purchased/remaining
+quantities while checking referenced identities, revisions, and arithmetic.
+It does not introduce ordered, delivered, stocked, or consumed states without
+a concrete later workflow.
 
 ### Distinguish suggestions from confirmed relationships
 
-The agent may return zero, one, or several supported project or material
+The agent may return zero, one, or several supported Work Object or material
 candidates. Cabinet keeps suggestion, confirmation, rejection, and explicit
 unassignment distinguishable.
 
-There is no unattended auto-confirmation in the accepted baseline. A human or
-an authorized agent acting for the user confirms the relationship.
-
-### Store one invoice across several Work Objects
-
-One original Invoice Card may contain material or service purchases for several
-Registry-linked Work Objects.
-
-The agent prepares the distribution at invoice-line, quantity, or amount level.
-Cabinet stores the accepted distribution, verifies that it refers to the exact
-invoice revision and existing Work Objects, rejects over-allocation, and
-preserves reassignment history. Cabinet does not calculate the semantic
-distribution itself.
-
-### Store invoice payment facts without a separate payment system
-
-Cabinet preserves payment status, transactions, and evidence already present
-in the ready Invoice Card. These facts remain traceable to the invoice source
-and revision.
-
-The first complete scope does not introduce a separate cross-invoice payment
-aggregate, bank reconciliation, accounts-payable workflow, or a rule that one
-payment may close several invoices. Cabinet is not a general ledger and does
-not create accounting entries by writing directly to Holded.
+There is no unattended auto-confirmation in the accepted baseline.
 
 ### Publish eligible operations through Holded Gateway
 
-An authorized actor may request accounting publication for a Cabinet operation
-that has reached an eligible Cabinet state.
+An authorized actor may request accounting publication for an eligible Cabinet
+operation.
 
 Cabinet:
 
@@ -206,37 +241,31 @@ Holded request using a production token.
 
 ### Compare plan and operational reality
 
-Cabinet can provide accepted invoice allocations and material-list facts
-alongside PresuPro plan data for the same Registry project.
+Cabinet can provide accepted purchase lines and material-list facts alongside
+PresuPro plan data for the same working context.
 
-The agent calculates purchased/remaining quantities, material matching, and
-higher-level explanations. Cabinet preserves accepted inputs and results,
-exact source references, and freshness required to expose stale or incomplete
-comparisons. Mutable PresuPro data is not presented as an approved Client
-Portal budget.
+The agent or an application may calculate purchased/remaining quantities,
+material matching, and explanations. Mutable PresuPro data is not presented as
+an approved Client Portal budget.
 
 ### Prepare Client Portal delivery
 
 Cabinet can prepare traceable operational facts for Client Portal once a typed
-intake contract exists. Client Portal remains the owner of its Budget,
-Expenses, allocations, progress, payments, and visibility rules.
+intake contract exists. Client Portal remains the owner of its Budget, Expense,
+allocation, progress, payment, and visibility records.
 
-The current boundary is capability-blocked for automatic publication because:
-
-- PresuPro does not yet expose the required approved immutable presupuesto
-  publication contract;
-- Client Portal does not yet expose the final Cabinet intake contract.
-
-Cabinet may expose an internal preview but must not claim a successful Portal
-publication while these contracts are absent.
+The current boundary is capability-blocked for automatic publication because
+the required PresuPro approval contract and final Client Portal intake contract
+are not yet available.
 
 ## Inputs entering Cabinet
 
 - prepared user or agent commands with actor and source provenance;
-- original-source references and structured extracted facts;
-- active project references, validation results, and current context from
-  Registry;
-- mutable or later approved PresuPro plan data with source freshness;
+- photos, PDFs, scans, messages, and references to original sources;
+- structured purchase and payment facts extracted from those sources;
+- optional Cabinet Work Object references or free-form object labels;
+- optional Registry project references and current Registry context;
+- PresuPro plan data with source freshness;
 - typed Holded Gateway receipts and reconciliation results;
 - typed Client Portal acceptance or rejection when its contract exists.
 
@@ -246,11 +275,10 @@ publication while these contracts are absent.
 - search results and explicit duplicate candidates;
 - validation, stale-revision, authorization, relationship, or dependency
   failures;
-- Work Object views containing Cabinet-owned operational relationships;
-- unreviewed, intentionally unassigned, suggested, confirmed, and superseded
-  relationship outcomes;
-- accepted invoice allocations, material-list matches, and invoice payment
-  facts with provenance;
+- standalone or Registry-linked Work Object views;
+- purchases assigned to one object or explicitly shown as without object;
+- purchase lines, totals, payment methods, and payment evidence with provenance;
+- suggested, confirmed, rejected, and superseded relationships;
 - Holded publication status and external references;
 - plan-versus-operational views with source freshness;
 - Client Portal projection previews and later publication receipts.
@@ -261,12 +289,12 @@ Cabinet persists in PostgreSQL:
 
 - Cards and type-specific Cabinet content;
 - Card relationships and their history;
-- Work Object operational state linked to Registry UUID;
+- standalone Work Objects and optional Registry links;
 - source references and provenance;
-- invoice facts, lifecycle, revisions, and evidence;
-- material requirements and accepted agent-prepared purchase matches;
-- invoice-to-Work-Object allocations and their history;
-- payment facts contained in ready Invoice Cards;
+- Invoice Card facts, lifecycle, revisions, and evidence;
+- one primary object assignment per Invoice Card;
+- payment facts and transactions contained in Invoice Cards;
+- material requirements and accepted purchase matches;
 - agent/user decisions and revision conflicts;
 - external entity links;
 - publication intent, idempotency, status, and receipts.
@@ -278,23 +306,23 @@ storage are later-state decisions.
 
 ### Registry
 
-Registry is the sole creator and current owner of project UUID and current
-project context. New Cabinet links require server-side validation of the exact
-UUID. Archived projects remain readable; new operational mutations under an
-archived project are rejected.
+Registry is the sole creator and owner of Registry project UUIDs and current
+Registry project context. Cabinet may link a standalone Work Object to a
+Registry project after validating the exact UUID.
+
+Registry linkage is optional for Cabinet Work Object existence. Archived or
+missing Registry projects must not invalidate the historical Cabinet Card, but
+may restrict new Registry-dependent actions.
 
 ### PresuPro
 
 PresuPro owns estimate composition and approval. Cabinet consumes plan data
-without directly reading PresuPro storage. Missing, standalone, mutable, stale,
-or unavailable plan data remains explicit.
+without directly reading or editing PresuPro storage.
 
 ### Holded Gateway
 
-Holded Gateway is a separate platform integration boundary. It owns Holded
-credentials and technical delivery behavior but no Cabinet business decision.
-Cabinet and PresuPro are independent consumers and do not proxy Holded
-operations through each other.
+Holded Gateway owns Holded credentials and technical delivery behavior but no
+Cabinet business decision. Cabinet and PresuPro are independent consumers.
 
 ### Client Portal
 
@@ -306,33 +334,38 @@ publishes through an explicit contract and never accesses Portal storage.
 - submitted agent data is incomplete, unsupported, stale, or inconsistent with
   its cited source;
 - a possible Card identity or duplicate remains ambiguous;
-- Registry project is missing, archived for mutation, mismatched, or
-  unavailable;
-- an invoice or relationship changed since the reviewed revision;
+- a referenced Work Object is missing or changed;
+- a Registry link is missing, archived for a Registry-dependent mutation,
+  mismatched, or unavailable;
+- an Invoice Card changed since the reviewed revision;
+- payment transaction amounts do not reconcile with the payable amount;
+- cash tendered, applied, and change amounts are inconsistent;
 - a requested relationship conflicts with a newer confirmed decision;
-- an allocation or material-list match references a missing entity, stale
-  invoice revision, or an amount/quantity outside its source line;
-- PresuPro data is unavailable, mutable, stale, or not linked to the project;
-- Holded Gateway rejects the operation, times out, returns an identity
-  mismatch, or reports an ambiguous result requiring reconciliation;
+- a material-list match references a missing entity, stale invoice revision,
+  or quantity outside its source line;
+- PresuPro data is unavailable, mutable, stale, or not linked;
+- Holded Gateway rejects, times out, or reports an ambiguous result;
 - Client Portal rejects a version, duplicate, authorization, or payload;
 - a required downstream contract is not available.
 
-No failure may become fabricated data, a silent merge, an invented project
+No failure may become fabricated data, a silent merge, an invented Registry
 UUID, an unconditional retry, or a false publication success.
 
 ## Explicit non-goals
 
 Cabinet Backend does not:
 
+- require Registry before a Cabinet Work Object can exist;
 - create or independently edit Registry projects;
 - edit or approve PresuPro estimates;
 - act as a general ledger, banking integration, payroll system, or tax engine;
+- manage cross-invoice payments or bank reconciliation;
+- distribute one purchase across several Work Objects in the first product;
 - own Holded credentials or raw transport behavior;
 - let the agent call Holded directly with a production token;
 - own Client Portal allocations, progress, customer payments, or visibility;
-- implement procurement, inventory, delivery, consumption, bank
-  reconciliation, or cross-invoice payment workflows in the first scope;
+- implement procurement, inventory, delivery, or consumption workflows in the
+  first scope;
 - make raw OCR/provider responses its durable domain model;
 - trust arbitrary untyped agent payloads;
 - define shared MCP infrastructure in this case study;
@@ -342,44 +375,46 @@ Cabinet Backend does not:
 
 ## Accepted product decisions
 
-1. Cabinet Backend, not a separate cost-integration application, owns Cabinet
-   operational Cards and cross-Card relationships.
+1. Cabinet Backend owns Cabinet operational Cards and cross-Card
+   relationships.
 2. PostgreSQL is the selected durable Cabinet database.
-3. Registry UUID is the only canonical platform-project identity.
-4. Cabinet Work Objects add operational knowledge without duplicating Registry
-   truth and exist only for validated Registry projects.
-5. Agent/UI may perform heuristic computation, but Cabinet Backend owns
+3. A Cabinet Work Object may exist without Registry.
+4. Registry UUID is canonical only for an optional Registry project link; it is
+   not the identity of every Cabinet Work Object.
+5. Linking a Work Object to Registry preserves Cabinet identity and history.
+6. Agent/UI may perform heuristic computation, but Cabinet Backend owns
    deterministic validation and persistence.
-6. A valid invoice may remain unassigned; unreviewed and intentionally
-   unassigned are distinct.
-7. Suggestions are distinct from confirmed links; there is no unattended
-   auto-confirmation.
-8. Draft invoices may participate in a clearly preliminary review, but only
-   confirmed eligible facts contribute to accepted operational totals or
-   external publication.
-9. Reassociation preserves history and cannot silently rewrite already
-   published downstream facts.
-10. One Invoice Card may be distributed across several Work Objects; the agent
-    prepares the distribution and Cabinet validates and stores it.
-11. Purchased/remaining calculations and semantic material matching belong to
-    the agent; Cabinet stores accepted prepared results and validates their
-    identities, revisions, and arithmetic consistency.
-12. Cabinet stores payment facts contained in Invoice Card and does not
-    introduce a separate cross-invoice payment model in the first scope.
-13. No ordered/delivered/consumed procurement lifecycle is introduced without
+7. One Invoice Card represents one supplier purchase or invoice.
+8. One Invoice Card has one primary object assignment in the first complete
+   product.
+9. A purchase may be explicitly unassigned and later assigned.
+10. Free-form object labels are valid when a Work Object is not yet identified.
+11. Multi-object and line-level allocation are deferred and do not belong to
+    Invoice Card V1 facts.
+12. The normal purchase flow is immediate full payment.
+13. Multiple payment transactions may represent split settlement such as cash
+    plus card.
+14. No separate cross-invoice payment model is introduced in the first scope.
+15. Draft, confirmed, and archived are the Invoice Card lifecycle states; they
+    are not procurement or delivery states.
+16. Suggestions are distinct from confirmed links; there is no unattended
+    auto-confirmation.
+17. No ordered/delivered/consumed procurement lifecycle is introduced without
     a later concrete workflow.
-14. Holded integration is a dedicated Gateway; Cabinet and PresuPro never
-    serve as temporary Holded proxies for each other.
-15. The agent initiates domain actions and never owns the production Holded
+18. Holded integration is a dedicated Gateway.
+19. The agent initiates domain actions and never owns the production Holded
     token or raw provider transport.
-16. Client Portal publication is explicit, versioned, and idempotent once the
+20. Client Portal publication is explicit, versioned, and idempotent once the
     required external contracts exist.
-17. Cabinet-owned contact and fiscal data remains independent from Registry
-    `customer_ref`.
+21. Cabinet-owned contact and fiscal data remains independent from Registry
+    projections.
 
 ## State 0 readiness assessment
 
-The corrected ownership boundary satisfies the State 0 exit gate and is stable
-enough to begin State 1. Remaining questions in `open_questions.md` are
-localized external-contract or infrastructure decisions and do not need to
-block Cabinet's core domain-model work.
+The core product boundary is stable enough to begin State 1 after the remaining
+questions in `open_questions.md` are classified as either domain-blocking or
+later external-contract decisions.
+
+State 1 must preserve the implemented Invoice Card V1 facts while correcting
+the previous assumptions that every Work Object requires Registry and that one
+purchase is distributed across several Work Objects in the first product.
