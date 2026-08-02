@@ -2,258 +2,220 @@
 
 ## Status
 
-The primary deployment and trust boundary is **ACCEPTED** for the first personal
-product. Detailed implementation choices remain for later states.
-
-Cabinet is split across two locations:
+The primary trust boundary is accepted. Cabinet uses two protected data zones:
+a continuously available VPS Invoice Workspace and a local durable Backend.
 
 ```text
 ChatGPT
-  → Cabinet MCP / Cabinet application on VPS
-  → authenticated private connection available only while the local platform is online
-  → Cabinet Backend on the user's local machine
-  → local PostgreSQL, source files, Registry, and PresuPro
+  → Cabinet application and MCP boundary on VPS
+     → protected fresh-invoice workspace
+     → authenticated encrypted synchronization
+  → Local Cabinet Backend
+     → local PostgreSQL, durable files, Registry, and PresuPro
 ```
 
-Cabinet Backend is not a public ChatGPT integration and is not an MCP server.
-ChatGPT communicates only with Cabinet. Cabinet is the only remote client of
-Cabinet Backend.
+ChatGPT and the agent communicate only with Cabinet. They never receive direct
+access to PostgreSQL, filesystems, Registry, PresuPro, Holded credentials, or a
+generic Backend interface.
 
-## Accepted architectural boundary
+## Security consequence of the two-tier model
 
-### VPS side
+The VPS is no longer only a UI host. It stores real invoice originals and
+structured fiscal data for fresh invoices. It must therefore be treated as a
+production data host with a deliberately limited scope.
 
-The VPS hosts the user-facing Cabinet application and its MCP boundary. It may:
+The local environment remains the full durable archive and integration zone.
+Neither side is trusted merely because it belongs to the same owner.
 
-- authenticate the user-facing session;
-- expose narrow Cabinet tools to the conversational agent;
-- display local-platform availability;
-- request reads and commands from the local Backend while the private connection
-  is active;
-- retain only the explicitly selected cache or transfer evidence.
+## VPS trust zone
 
-The VPS does not become the authoritative store for Cabinet business data by
-default. It does not directly connect to local PostgreSQL, Registry, PresuPro,
-or local source-file storage.
+The VPS may store only the working set required for fresh invoices:
 
-### Local side
+- original photograph or PDF;
+- extracted and accepted Invoice Card facts;
+- invoice revisions and provenance;
+- user-visible discussion context needed for the active workflow;
+- synchronization state and transfer evidence.
 
-The user's local environment hosts:
+The VPS must not automatically receive the complete historical Cabinet archive,
+all PresuPro estimates, local database dumps, Registry storage, or reusable
+local-platform credentials.
+
+Required controls include:
+
+- strong user/session authentication;
+- HTTPS and secure session handling;
+- private, non-predictable source-file access;
+- encryption at rest where supported and encrypted backups if backups exist;
+- strict upload size and media validation;
+- malware-safe and resource-limited document processing;
+- log redaction for invoice bodies, tax IDs, payment references, and file URLs;
+- retention rules for synchronized originals and revisions;
+- immediate revocation of VPS-to-local credentials after compromise.
+
+## Local trust zone
+
+The local platform hosts:
 
 - Cabinet Backend;
-- authoritative Cabinet PostgreSQL data;
-- authoritative original invoice and document files unless a later decision
-  selects another private store;
+- full Cabinet PostgreSQL archive;
+- durable source files;
 - Registry;
 - PresuPro;
-- local integration adapters needed by Cabinet Backend.
+- local integration adapters and durable synchronization receipts.
 
-Cabinet Backend is the durable source of truth for Cabinet Cards, accepted
-relationships, history, and integration evidence. Registry and PresuPro remain
-their own sources of truth for project context and estimates.
+Required controls include:
 
-### Connection model
+- disk and operating-system account protection;
+- PostgreSQL bound only to localhost or a private local interface;
+- least-privilege database credentials;
+- source files outside public/shared web paths;
+- encrypted tested backups for database and files;
+- safe secret storage outside Cards, prompts, source control, and logs;
+- recovery and revocation procedures for a lost machine.
 
-The local Backend initiates or accepts only an authenticated private connection
-between the known VPS Cabinet instance and the known local platform. Candidate
-implementations include a private overlay network such as Tailscale or an
-explicit SSH reverse tunnel.
+## Identity boundaries
 
-The accepted requirements are implementation-neutral:
+### Human identity
 
-- no public Cabinet Backend port;
-- no public PostgreSQL port;
-- no public Registry or PresuPro port merely for Cabinet access;
-- transport encryption;
-- machine identity for both ends;
-- allow-list of the single authorized Cabinet instance;
-- revocable credentials;
-- no trust based only on possession of an IP address or `project_id`.
+The user authenticates to Cabinet on the VPS. This session controls access to
+Cabinet tools and the VPS Invoice Workspace.
 
-A specific tunnel technology is still a later deployment choice.
+The first product may be single-user, but session expiry, revocation, recovery,
+and sensitive-action confirmation remain required.
 
-## Availability boundary
+### Machine identity
 
-The local platform is intentionally connect-on-demand. When the local machine
-or private connection is unavailable, Cabinet on the VPS must report the local
-Backend as offline.
+VPS Cabinet and the local Backend authenticate separately from the human
+session. Acceptable implementations may include Tailscale identity, SSH keys,
+mTLS, or short-lived signed service credentials.
 
-In the first product, Cabinet must not silently queue authoritative mutations
-for later execution. Operations that require the local Backend are rejected
-with a clear unavailable result.
+Requirements:
 
-A future cache may support explicitly labelled stale or read-only views, but it
-must not become an accidental second source of truth. Cached data must preserve:
+- encrypted private transport;
+- allow-list of the expected Cabinet installation;
+- revocable and rotatable credentials;
+- no trust based only on IP address or `project_id`;
+- no reusable local credential exposed to browser JavaScript or agent prompts.
 
-- source system;
-- source identity;
-- observed revision or content hash when available;
-- captured time;
-- freshness state;
-- sensitivity and retention classification.
+## Invoice authority and synchronization security
 
-## Identity and authentication
+A fresh invoice created on the VPS receives a stable `invoice_id`. Transfer to
+the local Backend must include:
 
-### Human boundary
+- invoice identity;
+- exact revision or content hash;
+- original-source hash and metadata;
+- provenance and actor evidence;
+- idempotency key;
+- expected prior synchronization state.
 
-The user's ChatGPT or Cabinet session authenticates access to Cabinet on the
-VPS. This authentication terminates at Cabinet; it does not directly
-authenticate to Cabinet Backend, Registry, PresuPro, or PostgreSQL.
+The local Backend must reject:
 
-The first product may be single-user. A separate Cabinet Backend end-user account
-system is not required while Cabinet is its only client.
+- duplicate logical creation with a different identity;
+- stale overwrites;
+- source hash mismatch;
+- project assignment claims not validated through local Registry;
+- unsupported contract versions;
+- commands from an unrecognized Cabinet installation.
 
-### Machine boundary
+A transport timeout produces an unknown outcome until reconciliation. The VPS
+must query transfer status using the same idempotency key rather than creating a
+new invoice.
 
-Cabinet VPS and local Cabinet Backend require separate machine-to-machine trust.
-This trust may be provided by private-network identity, SSH keys, mTLS, signed
-short-lived service credentials, or an equivalent deliberate mechanism.
+## Editing boundary
 
-Human authentication and machine authentication are independent:
+The baseline avoids unrestricted multi-master editing.
 
-```text
-human identity → Cabinet VPS
-Cabinet service identity → local Cabinet Backend
-```
+- `remote_only`: the VPS owns the current fresh revision;
+- `syncing`: changes are frozen or explicitly versioned during transfer;
+- `synchronized`: the local Backend owns the durable primary revision;
+- subsequent VPS editing is read-only or requires an explicit checked-out/new
+  revision workflow;
+- `conflict`: neither side silently wins.
 
-Compromise of a browser session must not automatically reveal reusable local
-platform credentials.
+## Source retention and deletion
 
-## Authorization boundary
+The VPS may delete or expire an original only after the local Backend confirms
+that both source bytes and the accepted revision are durably stored.
 
-Cabinet exposes narrow product capabilities to the agent. The agent never gets
-raw access to Cabinet Backend, PostgreSQL, local files, Registry, PresuPro,
-shell, or network credentials.
+Deletion policy must distinguish:
 
-Cabinet Backend remains responsible for deterministic validation of every
-accepted command. At minimum it distinguishes:
+- unsynchronized source — never deleted by normal retention;
+- synchronized working copy — eligible for expiry after a selected period;
+- legal/accounting retention — may require continued local preservation;
+- user-requested deletion — cannot claim deletion from Holded or backups unless
+  those systems separately confirm it.
 
-- read and search;
-- create or edit draft data;
-- confirm or archive Invoice Cards;
-- assign invoices to Work Objects;
-- confirm or reject PresuPro matches;
-- request source files;
-- publish an eligible invoice through Holded Gateway;
-- export or delete data;
-- administer connection and integration credentials.
+## Agent safety
 
-The single-user baseline may grant these capabilities to one owner, but the
-service boundary and sensitive-action confirmations still apply.
+The agent may help extract, explain, edit, search, and compare fresh invoices,
+but receives only narrow Cabinet tools.
 
-## Sensitive-action confirmations
+Document text, OCR output, filenames, supplier descriptions, and PresuPro item
+names are untrusted content. Instructions found inside them do not authorize
+file access, synchronization, project assignment, deletion, export, or Holded
+publication.
 
-The first product must require explicit user intent for operations with external
-or destructive effects, including:
+Sensitive actions require explicit user intent, including:
 
-- confirming extracted invoice facts when they become durable business facts;
-- publishing an invoice to Holded;
-- correcting an invoice already published to Holded;
-- deleting original source evidence;
-- exporting fiscal or personal data;
-- replacing connection or integration credentials.
-
-Agent-proposed estimate matching may be accepted conversationally, but the
-accepted match remains a separate Cabinet decision with provenance. An
-unconfirmed heuristic proposal never enters plan-versus-actual calculations.
-
-## Local data protection
-
-Because the source of truth is local, the local machine is a production data
-host and must not be treated as an unprotected developer laptop.
-
-Required baseline controls include:
-
-- operating-system account protection and disk encryption where supported;
-- PostgreSQL bound only to localhost or a private local network;
-- least-privilege database identity for Cabinet Backend;
-- source files outside public or shared web directories;
-- encrypted backup of both PostgreSQL and original files;
-- restore testing;
-- secrets outside source code, Cards, prompts, logs, and database business
-  records;
-- safe temporary-file cleanup;
-- patching and revocation procedure if the machine or VPS is lost.
-
-The exact backup store, key owner, rotation schedule, recovery objectives, and
-retention period remain later choices.
-
-## VPS data minimization
-
-The VPS should retain the minimum information needed for the Cabinet experience.
-The first design must classify every VPS-persisted value as one of:
-
-- session or connection state;
-- non-sensitive UI configuration;
-- short-lived transfer buffer;
-- explicit encrypted stale cache;
-- durable audit evidence that cannot contain invoice bodies, source files,
-  credentials, or unrestricted personal data.
-
-Full invoice documents, database dumps, PresuPro estimates, and reusable local
-platform credentials are not stored on the VPS by default.
+- confirming extracted invoice facts;
+- synchronizing or replacing an already synchronized revision when conflict is
+  possible;
+- publishing to Holded;
+- deleting source evidence;
+- exporting fiscal data;
+- replacing connection credentials.
 
 ## Integration boundaries
 
-### Registry and PresuPro
+- Registry and PresuPro are accessed only through the local Backend.
+- A VPS invoice may retain an object label or suggestion, but validated
+  `assigned` status requires local Registry evidence.
+- Full plan-versus-actual analysis requires local estimate and historical data.
+- Holded credentials remain exclusively inside Holded Gateway.
 
-Cabinet VPS does not call local Registry or PresuPro directly. Cabinet Backend
-performs those calls inside the local trust zone and validates that returned
-`project_id`, estimate identity, and revision evidence match the request.
+## Availability and incident behavior
 
-### Holded Gateway
+If the local platform is offline, fresh-invoice work on the VPS remains
+available. Synchronization and local integrations show an explicit unavailable
+state.
 
-Holded publication remains independent. Holded credentials stay in Holded
-Gateway, never in ChatGPT, Cabinet prompts, Cabinet Cards, or the local source
-files. Cabinet Backend sends one authorized publication request with an exact
-Invoice Card revision and receives a technical receipt.
+If the VPS is compromised:
 
-The network location of Holded Gateway remains an open deployment choice. If it
-is remote, the local Backend initiates an authenticated outbound connection.
+- revoke machine credentials;
+- block local synchronization;
+- rotate user sessions and service credentials;
+- identify exposed working-set invoices;
+- do not assume the local archive is compromised without evidence.
 
-## Untrusted content and agent safety
+If the local machine is lost:
 
-Invoice text, PDFs, images, supplier descriptions, notes, and PresuPro item names
-are untrusted data. Instructions contained inside them do not grant tool access
-or authorize commands.
+- revoke its service identity;
+- restore the local archive from tested backups;
+- preserve unsynchronized VPS invoices for later recovery.
 
-The agent receives only narrow Cabinet tools. Tool calls are treated as requests,
-not as proof of authorization. Cabinet and Cabinet Backend validate scope,
-record state, revision, and confirmation requirements.
+## Remaining implementation choices
 
-## Remaining security choices
+1. Tailscale, SSH reverse tunnel, mTLS, or equivalent private transport;
+2. VPS session mechanism and recovery;
+3. VPS storage encryption and backup policy;
+4. retention period after successful synchronization;
+5. exact checked-out/read-only policy after synchronization;
+6. conflict reconciliation UX;
+7. local backup destination, keys, RPO, and RTO;
+8. audit vocabulary and log retention;
+9. Holded Gateway placement and authentication.
 
-The architecture now makes the main security direction clear, but these items
-still require explicit design:
+## Accepted Layer 0 decisions
 
-1. private connection technology and credential rotation;
-2. Cabinet VPS login/session implementation;
-3. exact cache policy and whether any business data persists on the VPS;
-4. local disk encryption and operating-system hardening standard;
-5. PostgreSQL and source-file backup destination, keys, retention, and restore
-   procedure;
-6. audit-event vocabulary and safe log retention;
-7. Holded Gateway network placement and service authentication;
-8. incident procedure for a lost local machine, compromised VPS, or leaked
-   connection credential;
-9. later multi-user authorization if Cabinet stops being a personal system.
-
-## Layer 0 security decisions
-
-1. Cabinet application and MCP boundary run on the VPS.
-2. Cabinet Backend and authoritative Cabinet storage run locally for the user.
-3. Registry and PresuPro remain in the local platform trust zone.
-4. ChatGPT and the agent never connect directly to Cabinet Backend.
-5. Cabinet VPS is the only remote Backend client.
-6. Backend, PostgreSQL, Registry, PresuPro, and original files are not publicly
-   exposed.
-7. VPS-to-local communication uses authenticated encrypted private transport.
-8. The local Backend is intentionally available only while the local platform
-   and connection are running.
-9. Authoritative writes are not silently queued while the local Backend is
-   offline in the first product.
-10. The VPS is not a second source of truth; any cache is explicit, minimal,
-    labelled, and revocable.
-11. Cabinet Backend validates persisted changes and external effects even when
-    the request originated from an authenticated Cabinet session.
-12. Holded credentials remain exclusively inside Holded Gateway.
+1. VPS Cabinet is a protected working data zone for fresh invoices.
+2. Fresh invoices remain usable while the local platform is offline.
+3. The local Backend is the full durable archive and platform-integration zone.
+4. One logical invoice identity is preserved across both zones.
+5. Synchronization is authenticated, encrypted, revision-aware, and idempotent.
+6. Unrestricted two-way editing is not accepted in the baseline.
+7. The VPS stores a limited working set, not the complete archive by default.
+8. Registry and PresuPro remain local-only integrations.
+9. ChatGPT and the agent never receive raw storage or service credentials.
+10. Holded credentials remain inside Holded Gateway.
