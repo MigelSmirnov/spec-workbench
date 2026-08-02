@@ -2,69 +2,35 @@
 
 ## Status
 
-Structured State 1 domain-model baseline. It records the complete model
-skeleton required before rules, module responsibilities, flows, APIs,
-contracts, persistence, and implementation are designed.
+Structured domain-model baseline for the accepted two-tier Cabinet architecture.
+It defines concepts and ownership, not APIs, tables, transports, or algorithms.
 
 ## State 1 boundary
 
-This document defines:
+State 1 defines:
 
-- which domain concepts exist;
-- which concepts are entities, value objects, external projections, decisions,
-  and calculated views;
+- entities, value objects, external projections, decision records, and calculated
+  views;
 - stable identity and lifecycle vocabulary;
-- authoritative ownership;
-- candidate fields;
-- cardinality and relationship intent;
-- which information is persisted and which is calculated on demand;
-- unresolved questions that must remain visible before State 1 closes.
+- VPS versus local ownership;
+- synchronization and conflict concepts;
+- persisted versus calculated information;
+- unresolved model questions.
 
-This document does not define:
-
-- PostgreSQL tables, columns, indexes, or migrations;
-- ORM mappings;
-- HTTP, MCP, CLI, or event endpoints;
-- exact function signatures;
-- module and package ownership;
-- orchestration sequences;
-- formulas, transition rules, validation algorithms, or retry policies;
-- concrete Holded, PresuPro, Registry, or Client Portal transport shapes.
-
-## Model categories
-
-The State 1 model uses the following categories:
-
-- **Entity** — has stable identity and history independent from its current
-  field values;
-- **Value object** — identified by its complete value and normally embedded in
-  another model;
-- **External projection** — typed data owned by another system and consumed by
-  Cabinet without becoming Cabinet-owned truth;
-- **Decision record** — Cabinet-owned accepted or rejected interpretation;
-- **Calculated view** — derived on demand and not an independent source of
-  truth.
+State 1 does not define endpoints, ORM mappings, SQL schemas, exact sync
+protocols, retry algorithms, formulas, or deployment product choices.
 
 ---
 
-# A. Shared Cabinet models
+# A. Shared models
 
 ## Card
 
-### Kind
+Entity abstraction for searchable and revisable Cabinet knowledge.
 
-Entity abstraction for user-facing Cabinet records.
+Candidate fields:
 
-### Meaning
-
-A `Card` is an independently searchable, openable, revisable, and archivable
-piece of Cabinet knowledge. Provider, Contact, Material List, Document, and
-Invoice are Card types. Work Object participates in the same user-facing card
-experience but uses Registry project identity directly.
-
-### Candidate fields
-
-- `id` — stable Card identity;
+- `id`;
 - `card_type`;
 - `title` or typed display context;
 - `status`;
@@ -72,242 +38,163 @@ experience but uses Registry project identity directly.
 - `updated_at`;
 - `revision`;
 - `created_by`;
-- `sources`;
-- optional tags and notes where supported by the specialized type.
+- `sources`.
 
-### Ownership
-
-Cabinet owns Card identity, lifecycle, relationships, revisions, and history.
-External source systems may own values copied into specialized Card fields.
-
-### Baseline lifecycle vocabulary
-
-Generic Cards use:
-
-- `active`;
-- `archived`.
-
-Specialized Cards may define a richer lifecycle, such as Invoice Card
-`draft`, `confirmed`, and `archived`.
-
-### Invariants deferred to State 2
-
-- identity stability;
-- archive behavior;
-- revision monotonicity;
-- whether a specialized lifecycle replaces or extends the generic lifecycle.
+Generic lifecycle: `active`, `archived`. Specialized Cards may define richer
+lifecycles.
 
 ## ActorReference
 
-### Kind
+Value object identifying `user`, `agent`, `service`, `import`, or `system`.
+It is provenance, not an authentication session.
 
-Value object.
+Candidate fields:
 
-### Meaning
-
-Identifies the actor responsible for a Cabinet observation, decision, or
-mutation without embedding authentication credentials.
-
-### Candidate fields
-
-- `actor_type` — `user`, `agent`, `service`, `import`, or `system`;
+- `actor_type`;
 - `actor_id`;
+- `delegated_by` optional;
+- `interaction_id` optional;
 - `display_label` optional.
-
-### Boundaries
-
-`ActorReference` is provenance, not an authorization decision and not an
-identity-provider session.
 
 ## SourceReference
 
-### Kind
+Entity or value object referencing original evidence.
 
-Entity or value object depending on final source-storage design.
-
-### Meaning
-
-References original evidence from which Cabinet facts were extracted or
-confirmed.
-
-### Candidate fields
+Candidate fields:
 
 - `source_id`;
-- `kind` — photograph, PDF, scan, message, imported file, or other controlled
-  source kind;
-- `file_ref` optional;
+- `kind`;
+- `storage_zone` — `vps_working` or `local_durable`;
+- `file_ref`;
 - `file_status`;
-- `content_hash` optional;
-- `media_type` optional;
-- `captured_at` optional;
+- `content_hash`;
+- `media_type`;
 - `received_at`;
-- `note` optional.
-
-### Ownership
-
-Cabinet owns source metadata and provenance. The binary-storage owner remains
-an open infrastructure decision.
+- `captured_at` optional;
+- `size_bytes` optional.
 
 ## RevisionReference
 
-### Kind
-
-Value object.
-
-### Meaning
-
-Pins a downstream decision or integration action to one exact revision of a
-Cabinet entity.
-
-### Candidate fields
+Value object pinning one exact entity revision.
 
 - `entity_id`;
 - `revision` or `content_hash`;
 - `observed_at` optional.
 
-### Consumers
-
-- estimate matching;
-- Holded publication;
-- conflict detection;
-- audit and correction workflows.
-
 ---
 
-# B. Work Object and Registry models
+# B. Two-tier Cabinet access and synchronization
 
-## WorkObject
+## CabinetInstallationIdentity
 
-### Kind
+Security/integration identity for one Cabinet deployment, not a business Card.
 
-Entity and project-scoped Cabinet aggregate root.
+Candidate fields:
 
-### Meaning
+- `installation_id`;
+- `installation_kind` — `vps_cabinet` or `local_backend`;
+- `status` — `active`, `revoked`;
+- `created_at`;
+- `revoked_at` optional.
 
-`WorkObject` is Cabinet's local working interface for one Registry project. It
-organises Cabinet-owned purchases, material lists, documents, contacts,
-providers, notes, accepted estimate matches, and integration history for that
-project.
+## LocalBackendConnectionState
 
-It is not a second project entity. Its identity is the platform project
-identity:
+VPS-side value object describing current local-platform reachability.
 
-```text
-WorkObject.id = Registry ProjectRecord.id
-```
+Status vocabulary:
 
-### Creation
+- `online`;
+- `offline`;
+- `unauthorized`;
+- `incompatible`;
+- `unknown`.
 
-Cabinet creates the persisted Work Object representation lazily after receiving
-a Registry `project_id` and successfully obtaining the first project context.
-Repeated opening of the same `project_id` resolves to the same Work Object.
-
-### Candidate fields
-
-- `id` — Registry project UUID;
-- `registry_snapshot` — current durable `RegistryProjectSnapshot`;
-- `registry_sync` — current `RegistrySyncState`;
-- `created_at` — time Cabinet first persisted the representation;
-- `updated_at` — time Cabinet-owned state or external evidence last changed;
-- `revision`.
-
-A separate Cabinet alias is not required in the baseline. It may be added later
-only for a concrete user need.
-
-### Relationships
-
-A Work Object may relate to:
-
-- zero or more Invoice Cards through current primary assignment;
-- zero or more Material List Cards;
-- zero or more Document Cards;
-- zero or more Contact Cards;
-- zero or more Provider Cards;
-- zero or more Project Notes;
-- zero or more confirmed Invoice Line to Estimate Item matches;
-- zero or more Holded publication records for its invoices.
-
-### Ownership
-
-Registry owns project identity and current project context. Cabinet owns the
-local representation, stored external evidence, Cabinet relationships,
-decisions, and history.
-
-### Baseline invariants
-
-- Work Object ID is a valid Registry project UUID;
-- one Registry project resolves to at most one persisted Work Object;
-- initial creation requires a successful Registry context read;
-- Registry field changes do not change Work Object identity;
-- Registry unavailability does not invalidate or delete an existing Work
-  Object;
-- ordinary Cabinet edits cannot alter Registry-owned snapshot values;
-- archived Registry projects remain readable and reject new project-scoped
-  operational assignment by default.
-
-## RegistryProjectSnapshot
-
-### Kind
-
-Persisted external projection and historical evidence value object.
-
-### Meaning
-
-Cabinet's durable copy of the last successfully observed Registry project
-context. It enables Cabinet UI and agents to continue basic project-scoped work
-when Registry is temporarily unavailable.
-
-### Candidate fields
-
-- `project_id`;
-- `display_name`;
-- `address`;
-- `project_status` — currently `active` or `archived`;
-- `customer_ref` optional;
-- `project_created_at`;
-- `registry_updated_at`;
-- `captured_at`.
-
-### Ownership
-
-Registry owns all values except `captured_at`, which records Cabinet observation
-time.
-
-### Baseline invariants
-
-- `project_id` equals the parent Work Object ID;
-- all fields come from one successful Registry response;
-- snapshot replacement is atomic;
-- fields are not edited individually by Cabinet users or agents;
-- stale snapshots remain valid historical evidence but are not presented as
-  current Registry truth.
-
-## RegistrySyncState
-
-### Kind
-
-Persisted value object.
-
-### Meaning
-
-Records Cabinet's knowledge about refreshing Registry context.
-
-### Status vocabulary
-
-- `current`;
-- `stale`;
-- `unavailable`;
-- `not_found`.
-
-Registry project lifecycle remains separate inside the snapshot.
-
-### Candidate fields
+Candidate fields:
 
 - `status`;
+- `backend_instance_id` optional;
+- `contract_version` optional;
 - `last_attempt_at`;
-- `last_success_at`;
+- `last_success_at` optional;
+- `last_error_code` optional.
+
+## InvoiceSyncState
+
+Mutable state associated with one logical Invoice Card.
+
+Status vocabulary:
+
+- `remote_only` — current revision exists only in VPS working storage;
+- `syncing` — one exact revision is being transferred;
+- `synchronized` — local Backend durably accepted the source and revision;
+- `local_only` — historical invoice exists only in the local archive;
+- `conflict` — both sides contain incompatible later revisions;
+- `failed` — synchronization failed with a known retryable or terminal result;
+- `unknown_outcome` — transport ended without knowing whether local acceptance
+  occurred.
+
+Candidate fields:
+
+- `invoice_id`;
+- `status`;
+- `vps_revision` optional;
+- `local_revision` optional;
+- `last_attempt_at` optional;
+- `last_success_at` optional;
+- `idempotency_key` optional;
 - `last_error_code` optional;
-- `last_error_message` optional safe diagnostic.
+- `conflict_ref` optional.
+
+## InvoiceTransferCommand
+
+Integration command value object for one revision transfer.
+
+Candidate fields:
+
+- `command_id`;
+- `idempotency_key`;
+- `invoice_id`;
+- `invoice_revision`;
+- `expected_local_revision` optional;
+- `source_manifest`;
+- `actor_reference`;
+- `sent_at`.
+
+## InvoiceTransferReceipt
+
+Durable evidence returned by the local Backend.
+
+Candidate fields:
+
+- `command_id`;
+- `invoice_id`;
+- `accepted_revision`;
+- `source_hash`;
+- `backend_instance_id`;
+- `accepted_at`;
+- `result` — `accepted`, `already_accepted`, `rejected`, `conflict`;
+- `safe_error_code` optional.
+
+## InvoiceSyncConflict
+
+Decision-support entity when neither side may silently overwrite the other.
+
+Candidate fields:
+
+- `conflict_id`;
+- `invoice_id`;
+- `vps_revision`;
+- `local_revision`;
+- `detected_at`;
+- `reason`;
+- `status` — `open`, `resolved`;
+- `resolution` optional;
+- `resolved_by` optional;
+- `resolved_at` optional.
+
+Baseline direction: unrestricted multi-master editing is not supported. After
+successful synchronization, the VPS record is read-only unless an explicit
+checked-out/new-revision workflow is introduced.
 
 ---
 
@@ -315,82 +202,42 @@ Registry project lifecycle remains separate inside the snapshot.
 
 ## InvoiceCard
 
-### Kind
+Entity and aggregate root representing one supplier invoice, receipt, or
+purchase.
 
-Entity and aggregate root.
+Candidate fields:
 
-### Meaning
-
-Represents one supplier invoice, receipt, or material purchase and preserves the
-source-faithful facts required for validation, search, Holded publication, and
-plan-versus-actual analysis.
-
-### Candidate fields
-
-- `id`;
-- `status`;
+- `id` — stable across VPS and local storage;
+- `status` — `draft`, `confirmed`, `archived`;
 - `invoice_number` optional;
-- `issue_date` optional;
-- `service_date` optional;
-- `due_date` optional;
-- `currency`;
-- `supplier`;
-- `buyer`;
+- dates and currency;
+- `supplier` and `buyer`;
 - `object_assignment`;
 - `lines`;
 - `totals`;
 - `payment`;
-- `source`;
+- `sources`;
 - `provenance`;
-- `revision` or canonical content hash.
+- `revision` or canonical hash;
+- `sync_state`.
 
-### Lifecycle vocabulary
+Authority rules:
 
-- `draft`;
-- `confirmed`;
-- `archived`.
-
-### Ownership
-
-Cabinet owns Invoice Card identity, accepted structured facts, lifecycle,
-source provenance, and revisions. PresuPro matches and Holded publication state
-are separate mutable records and do not become invoice facts.
+- a `remote_only` invoice is authoritative on the VPS;
+- a synchronized invoice is durably owned by the local Backend;
+- stable identity and accepted revision history survive transfer;
+- estimate matches and Holded publication remain separate records.
 
 ## InvoiceParty
 
-### Kind
-
-Value object.
-
-### Meaning
-
-Preserves supplier or buyer facts exactly as known from the invoice source or
-later accepted correction.
-
-### Candidate fields
-
-- `name` optional;
-- `tax_id` optional;
-- `address` optional.
-
-### Boundary
-
-A party may later be linked to a Provider or Contact Card, but the source
-invoice values remain independently preserved.
+Source-faithful supplier or buyer value object with optional `name`, `tax_id`,
+and `address`.
 
 ## InvoiceLine
 
-### Kind
+Entity inside Invoice Card.
 
-Entity inside Invoice Card, identified by `line_id` within the invoice.
-
-### Meaning
-
-Represents one factual invoice line. Its normalized structure is intentionally
-comparable with a PresuPro estimate item while preserving original supplier
-wording and monetary evidence.
-
-### Candidate fields
+Candidate fields:
 
 - `line_id`;
 - `kind`;
@@ -401,58 +248,18 @@ wording and monetary evidence.
 - `quantity`;
 - `unit`;
 - `unit_price_net`;
-- `discount_percent`;
-- `discount_amount`;
-- `net_amount`;
-- `tax_rate`;
-- `tax_amount`;
-- `gross_amount`.
+- discount, tax, net, and gross fields.
 
-### PresuPro alignment
-
-Comparable meanings are intentionally aligned:
-
-| PresuPro plan meaning | Invoice actual meaning |
-| --- | --- |
-| item type | `kind` |
-| item name | `description_normalized` plus preserved original wording |
-| material reference | optional `matched_material_id` |
-| planned quantity | actual `quantity` |
-| unit | `unit` |
-| planned unit price | actual `unit_price_net` |
-| planned discount | actual discount fields |
-| planned IVA | actual tax fields |
-
-This alignment does not make source names identical and does not let Cabinet
-copy PresuPro planning values into Invoice Card facts.
+Invoice Line meanings are intentionally comparable with PresuPro Estimate Item
+meanings without copying plan data into invoice facts.
 
 ## InvoiceTotals
 
-### Kind
+Value object: `net`, `discount`, `tax`, `gross`, `withholding`, `payable`.
 
-Value object.
+## Payment and PaymentTransaction
 
-### Candidate fields
-
-- `net`;
-- `discount`;
-- `tax`;
-- `gross`;
-- `withholding`;
-- `payable`.
-
-## Payment
-
-### Kind
-
-Value object inside Invoice Card.
-
-### Candidate fields
-
-- `status`;
-- `transactions`.
-
-### Status vocabulary
+Payment status vocabulary:
 
 - `unknown`;
 - `unpaid`;
@@ -460,456 +267,146 @@ Value object inside Invoice Card.
 - `paid`;
 - `refunded`.
 
-Absence of evidence means `unknown`, not `unpaid`.
-
-## PaymentTransaction
-
-### Kind
-
-Entity inside Payment, identified by `payment_id` within the invoice.
-
-### Candidate fields
-
-- `payment_id`;
-- `method`;
-- `paid_at` optional;
-- `currency`;
-- `tendered_amount` optional;
-- `applied_amount`;
-- `change_amount` optional;
-- `reference` optional;
-- `evidence`.
-
-Several transactions may represent split settlement such as cash plus card.
-There is no separate `mixed` payment method.
-
-## PaymentEvidence
-
-### Kind
-
-Value object.
-
-### Candidate fields
-
-- `basis` — invoice source, user statement, or external record;
-- `source_ref` optional.
+Several transactions may represent split cash/card settlement. Absence of
+evidence means `unknown`.
 
 ## InvoiceObjectAssignment
 
-### Kind
-
-Cabinet-owned mutable decision associated with one Invoice Card.
-
-### Meaning
-
-Records the first-product primary Work Object assignment. Invoice Card identity
-is independent from Work Object identity, so an invoice may exist without any
-project assignment.
-
-### State vocabulary
+Mutable decision with states:
 
 - `unreviewed`;
 - `assigned`;
 - `intentionally_unassigned`;
 - `label_only`.
 
-### Candidate fields
-
-- `status`;
-- `work_object_id` optional Registry project UUID;
-- `label` optional;
-- `decided_at` optional;
-- `decided_by` optional;
-- `invoice_revision`;
-- `revision`.
-
-### Baseline invariants
-
-- `assigned` requires exactly one existing Work Object;
-- `work_object_id` equals the Registry project UUID;
-- non-assigned states have no confirmed Work Object ID;
-- label-only evidence never creates a Work Object;
-- one Invoice Card has at most one current primary Work Object assignment;
-- reassignment preserves history;
-- multi-object Invoice allocation is outside the baseline.
+A VPS-only invoice may hold `unreviewed`, `intentionally_unassigned`, or
+`label_only`. Validated `assigned` requires an existing local Work Object backed
+by Registry evidence.
 
 ---
 
-# D. PresuPro estimate projection
+# D. Work Object and Registry
 
-## EstimateReference
+## WorkObject
 
-### Kind
+Project-scoped entity whose identity is Registry project identity:
 
-External-reference value object.
+```text
+WorkObject.id = Registry ProjectRecord.id
+```
 
-### Meaning
+Created locally after a successful first Registry context read.
 
-Identifies the PresuPro estimate whose plan is used for one analysis or accepted
-match.
-
-### Candidate fields
-
-- `estimate_id`;
-- `project_id`;
-- `estimate_updated_at`;
-- `estimate_content_hash` or later stable version identity;
-- optional `status`.
-
-### Boundary
-
-PresuPro owns estimate identity, mutable composition, and current values.
-Cabinet must not call a mutable estimate approved merely because it exists.
-
-## EstimateContext
-
-### Kind
-
-Typed external projection used for agent context and calculated analysis.
-
-### Meaning
-
-The detailed PresuPro plan loaded for the selected Registry project.
-
-### Candidate fields
-
-- `reference`;
-- `currency`;
-- `status`;
-- `zones`;
-- `totals`;
-- `captured_at`.
-
-### Persistence direction
-
-The baseline does not require Cabinet to persist a complete permanent estimate
-snapshot. Cabinet may load current plan data for analysis while pinning accepted
-matches to an observed content hash or version. Offline plan-versus-actual
-analysis may therefore be unavailable even while invoices and Work Object data
-remain available.
-
-## EstimateZoneReference
-
-### Kind
-
-External-reference value object.
-
-### Candidate fields
-
-- `zone_id` when PresuPro provides one;
-- `zone_index` optional temporary locator;
-- `zone_name`;
-- `zone_fingerprint` optional.
-
-Names and array indexes are not treated as stable identity unless PresuPro makes
-that guarantee.
-
-## EstimateItemReference
-
-### Kind
-
-External-reference value object.
-
-### Candidate fields
-
-- `estimate_id`;
-- `estimate_content_hash` or version;
-- `zone_reference`;
-- `item_id` when available;
-- `item_index` optional temporary locator;
-- `item_fingerprint`;
-- `display_name`.
-
-`display_name` supports human and agent understanding but is not sufficient
-identity.
-
-## EstimateComparableItem
-
-### Kind
-
-Read-only external projection.
-
-### Meaning
-
-Contains the PresuPro fields useful for agent-assisted comparison with an
-Invoice Line.
-
-### Candidate fields
-
-- `type`;
-- `name`;
-- `material_id` optional;
-- `quantity`;
-- `unit`;
-- `unit_price`;
-- `discount_percent`;
-- `iva_percent`;
-- `waste_percent`;
-- `margin_percent`.
-
-The projection may include additional source references and zone context, but
-must not become an independently editable Cabinet plan.
-
-## EstimateTotalsProjection
-
-### Kind
-
-Read-only external projection.
-
-### Candidate fields
-
-- materials subtotal;
-- labor subtotal;
-- margin total;
-- discount total;
-- taxable subtotal;
-- IVA total and breakdown;
-- grand total;
-- currency.
-
-Exact field vocabulary follows the confirmed PresuPro contract and may not be
-invented in Cabinet.
-
----
-
-# E. Agent-assisted plan-versus-actual matching
-
-## EstimateMatchSuggestion
-
-### Kind
-
-Ephemeral or optionally persisted agent proposal.
-
-### Meaning
-
-Represents the agent's heuristic interpretation that one Invoice Line probably
-corresponds to one PresuPro Estimate Item despite differences in shop,
-manufacturer, SKU, language, or wording.
-
-### Candidate fields
-
-- `invoice_id`;
-- `invoice_line_id`;
-- `invoice_revision`;
-- `estimate_item_reference`;
-- `confidence` optional;
-- `explanation` optional;
-- `alternative_candidates` optional;
-- `proposed_at`;
-- `proposed_by`.
-
-### Boundary
-
-A suggestion is not accepted truth and does not participate in deterministic
-plan-versus-actual calculations until confirmed.
-
-## InvoiceLineEstimateMatch
-
-### Kind
-
-Cabinet-owned decision entity.
-
-### Meaning
-
-Persists an accepted, rejected, or invalidated relationship between one Invoice
-Line and one PresuPro Estimate Item.
-
-### Candidate fields
+Candidate fields:
 
 - `id`;
-- `project_id`;
-- `invoice_id`;
-- `invoice_revision`;
-- `invoice_line_id`;
-- `estimate_reference`;
-- `estimate_item_reference`;
-- `status`;
-- `proposal_confidence` optional;
-- `proposal_explanation` optional;
-- `proposed_by` optional;
-- `confirmed_by` optional;
-- `confirmed_at` optional;
-- `invalidated_at` optional;
-- `invalidation_reason` optional;
+- `registry_snapshot`;
+- `registry_sync`;
 - `created_at`;
 - `updated_at`;
 - `revision`.
 
-### Status vocabulary
+## RegistryProjectSnapshot
+
+Persisted external projection containing project ID, display name, address,
+status, customer reference, Registry timestamps, and Cabinet capture time.
+
+## RegistrySyncState
+
+Statuses: `current`, `stale`, `unavailable`, `not_found`.
+
+Registry unavailability is distinct from Local Backend unavailability.
+
+---
+
+# E. PresuPro estimate projection
+
+## EstimateReference
+
+Value object containing:
+
+- `estimate_id`;
+- `project_id`;
+- `estimate_updated_at`;
+- `estimate_content_hash` or stable version;
+- optional status.
+
+## EstimateSnapshot
+
+Local persisted external projection used for repeatable analysis and accepted
+matches.
+
+Candidate fields:
+
+- `reference`;
+- `currency`;
+- `zones`;
+- `totals`;
+- `captured_at`;
+- `source_contract_version`.
+
+PresuPro remains authoritative. Snapshot persistence does not make Cabinet the
+plan owner.
+
+## EstimateZoneReference and EstimateItemReference
+
+References include stable IDs when provided, otherwise version-pinned
+fingerprints and temporary locators.
+
+## EstimateComparableItem
+
+Read-only projection including type, name, material reference, quantity, unit,
+unit price, discounts, IVA, waste, and margin.
+
+---
+
+# F. Agent-assisted matching and analytics
+
+## EstimateMatchSuggestion
+
+Ephemeral agent proposal with invoice line, estimate item, confidence,
+explanation, alternatives, actor, and timestamp. It is not analytical truth.
+
+## InvoiceLineEstimateMatch
+
+Cabinet-owned decision entity.
+
+Statuses:
 
 - `confirmed`;
 - `rejected`;
 - `invalidated`.
 
-The active calculation uses only `confirmed` matches.
+Baseline cardinality:
 
-### Baseline cardinality
+- one Invoice Line has at most one active confirmed match;
+- one Estimate Item may have many Invoice Lines;
+- one-line-to-many-item distribution is deferred.
 
-For the first complete product:
-
-- one Invoice Line has at most one active confirmed Estimate Item match;
-- one Estimate Item may have many matched Invoice Lines from many invoices;
-- partial distribution of one Invoice Line across several Estimate Items is
-  deferred;
-- multi-object allocation remains a separate deferred concern.
-
-### Ownership
-
-The agent proposes semantic equivalence. Cabinet owns acceptance, history,
-referential consistency, and deterministic use of confirmed matches.
-
-## MatchInvalidationReason
-
-### Kind
-
-Controlled vocabulary, to be finalized in State 2.
-
-### Candidate values
-
-- `invoice_changed`;
-- `estimate_changed`;
-- `estimate_item_missing`;
-- `unit_changed`;
-- `manual_rejection`;
-- `project_mismatch`.
-
-## UnitConversion
-
-### Kind
-
-Deferred value object.
-
-### Baseline decision
-
-The first complete product compares quantities only when units match. When
-units differ, Cabinet may still compare monetary amounts but must report that
-quantity analysis is unavailable. Explicit confirmed conversions may be added
-later.
-
----
-
-# F. Calculated plan-versus-actual views
+Only confirmed matches participate in plan-versus-actual analysis.
 
 ## PlanActualAnalysis
 
-### Kind
+Calculated view assembled from an Estimate Snapshot, synchronized confirmed
+Invoice Cards, and confirmed matches.
 
-Calculated view, not an independently persisted source of truth.
+May contain item-level and project-level planned amount, actual amount, average
+price, remaining quantity, variance, unmatched coverage, warnings, and explicit
+forecast assumptions.
 
-### Meaning
-
-Assembles current or pinned PresuPro plan data, confirmed Invoice Cards, and
-confirmed matches into an on-demand analytical response for the user or agent.
-
-### Candidate fields
-
-- `project_id`;
-- `estimate_reference`;
-- `generated_at`;
-- `coverage`;
-- `items`;
-- `totals`;
-- `warnings`;
-- `assumptions`.
-
-## PlanActualItemView
-
-### Kind
-
-Calculated view.
-
-### Candidate fields
-
-- `estimate_item_reference`;
-- `planned_quantity`;
-- `planned_unit_price`;
-- `planned_amount`;
-- `actual_quantity` optional;
-- `actual_average_unit_price` optional;
-- `actual_amount`;
-- `remaining_quantity` optional;
-- `unit_price_variance` optional;
-- `amount_variance`;
-- `matched_invoice_lines`;
-- `quantity_analysis_available`;
-- `warnings`.
-
-## PlanActualTotalsView
-
-### Kind
-
-Calculated view.
-
-### Candidate fields
-
-- `planned_amount`;
-- `actual_amount`;
-- `remaining_planned_amount` optional;
-- `variance`;
-- `matched_actual_amount`;
-- `unmatched_invoice_amount`;
-- `coverage_percent` optional.
-
-## ForecastAssumption
-
-### Kind
-
-Calculated-view value object.
-
-### Meaning
-
-Makes a forward-looking projection explicit instead of presenting it as fact.
-
-### Candidate fields
-
-- `basis`;
-- `description`;
-- `price_basis`;
-- `generated_at`.
-
-### Candidate basis vocabulary
-
-- `planned_price`;
-- `latest_actual_price`;
-- `average_actual_price`;
-- `user_supplied_price`.
-
-### Persistence boundary
-
-Plan-versus-actual results and forecasts are normally recalculated on demand.
-Cabinet persists source facts and accepted matches, not every analytical answer.
+Fresh VPS-only invoices may be analyzed locally within their own facts, but they
+are excluded from complete project plan-versus-actual until synchronized and
+matched against local project data.
 
 ---
 
-# G. Holded publication models
+# G. Holded publication
 
 ## HoldedPublication
 
-### Kind
+Integration entity for one exact confirmed Invoice Card revision.
 
-Cabinet-owned integration-operation entity.
-
-### Meaning
-
-Records the attempt to publish one exact confirmed Invoice Card revision to
-Holded through Holded Gateway.
-
-### Candidate fields
-
-- `id`;
-- `invoice_id`;
-- `invoice_revision`;
-- `status`;
-- `idempotency_key`;
-- `requested_at`;
-- `completed_at` optional;
-- `holded_document_id` optional;
-- `gateway_receipt` optional;
-- `last_error_code` optional;
-- `last_error_message` optional safe diagnostic;
-- `revision`.
-
-### Status vocabulary
+Statuses:
 
 - `pending`;
 - `succeeded`;
@@ -917,356 +414,134 @@ Holded through Holded Gateway.
 - `ambiguous`;
 - `cancelled`.
 
-Absence of a publication record means publication was not requested; a
-`not_requested` record is not required.
+Candidate fields include publication ID, invoice ID and revision, idempotency
+key, timestamps, external document ID, gateway receipt, and safe errors.
 
-### Boundary
-
-- one publication concerns one Invoice Card revision;
-- publication does not alter source invoice facts;
-- plan-versus-actual matching is independent from Holded publication;
-- agent and Cabinet do not hold Holded credentials;
-- Holded Gateway owns provider transport behavior, credentials, retries,
-  reconciliation, and technical response decoding.
-
-## HoldedPublicationReceipt
-
-### Kind
-
-Value object or referenced integration evidence.
-
-### Candidate fields
-
-- `gateway_operation_id`;
-- `external_document_id` optional;
-- `provider_status`;
-- `received_at`;
-- `safe_response_reference` optional.
-
-Raw credentials, secrets, and unrestricted provider payloads are excluded.
+Holded publication is independent from PresuPro matching. Holded credentials
+remain inside Holded Gateway.
 
 ---
 
 # H. Remaining Cabinet Cards
 
-## ProviderCard
+State 1 retains these entities:
 
-### Kind
+- `ProviderCard`;
+- `ContactCard`;
+- `MaterialListCard` and `MaterialListItem`;
+- `DocumentCard`;
+- embedded baseline `ProjectNote`.
 
-Entity and Card type.
-
-### Meaning
-
-Represents a supplier, shop, driver, delivery service, contractor, or other
-working resource that may provide goods or services.
-
-### Candidate fields
-
-- `id`;
-- `title`;
-- `names`;
-- `services`;
-- `service_areas`;
-- `contact_methods`;
-- `communication_languages`;
-- `notes`;
-- `sources`;
-- `status`;
-- `created_at`;
-- `updated_at`;
-- `revision`.
-
-Provider identity is not defined by a display name alone.
-
-## ContactCard
-
-### Kind
-
-Entity and Card type.
-
-### Meaning
-
-Represents a customer, contractor, employee, professional, or other person or
-organisation the user needs to contact.
-
-### Candidate fields
-
-- `id`;
-- `display_name`;
-- `kind`;
-- `phones`;
-- `emails`;
-- `messaging_contacts`;
-- `addresses`;
-- `notes`;
-- `sources`;
-- `status`;
-- `created_at`;
-- `updated_at`;
-- `revision`.
-
-A later relationship may connect an InvoiceParty to a Contact or Provider Card
-without replacing source invoice values.
-
-## MaterialListCard
-
-### Kind
-
-Entity and Card type.
-
-### Meaning
-
-Represents a living shopping or material-requirement list maintained through
-conversation and UI.
-
-### Candidate fields
-
-- `id`;
-- `title`;
-- `work_object_id` optional;
-- `items`;
-- `status`;
-- `created_at`;
-- `updated_at`;
-- `revision`.
-
-## MaterialListItem
-
-### Kind
-
-Entity inside Material List Card.
-
-### Candidate fields
-
-- `item_id`;
-- `description`;
-- `quantity` optional;
-- `unit` optional;
-- `status`;
-- `notes` optional;
-- `source` optional.
-
-Exact item lifecycle belongs to State 2.
-
-## DocumentCard
-
-### Kind
-
-Entity and Card type.
-
-### Meaning
-
-Represents a user-meaningful document that is not necessarily an Invoice Card.
-
-### Candidate fields
-
-- `id`;
-- `document_kind`;
-- `title`;
-- `work_object_id` optional;
-- `source`;
-- `extracted_text` optional;
-- `related_card_ids`;
-- `status`;
-- `created_at`;
-- `updated_at`;
-- `revision`.
-
-Invoice Card remains a separate specialized Card rather than merely a generic
-Document Card. Both may refer to original source evidence.
-
-## ProjectNote
-
-### Kind
-
-Embedded Work Object entity in the baseline.
-
-### Candidate fields
-
-- `note_id`;
-- `project_id`;
-- `content`;
-- `created_by`;
-- `created_at`;
-- `updated_at`.
-
-A future product need may promote notes to standalone Cards, but that is not
-required for the baseline.
+They remain local durable archive models unless a later product decision grants
+a specific VPS working lifecycle.
 
 ---
 
 # I. Relationship map
 
 ```text
-Registry Project 1 <-> 0..1 persisted Cabinet Work Object
+VPS Cabinet Installation 1 -> 0..* remote_only fresh Invoice Cards
+Local Cabinet Backend 1 -> 0..* synchronized and historical Cabinet Cards
 
-Work Object 1 <-> 0..* Invoice Cards through current primary assignment
-Work Object 1 <-> 0..* Material List Cards
-Work Object 1 <-> 0..* Document Cards
-Work Object 1 <-> 0..* Contact and Provider relationships
-Work Object 1 <-> 0..* Project Notes
+Logical Invoice Card 1 -> 1 current InvoiceSyncState
+Invoice Card 1 -> 1..* revisions
+Invoice Card 1 -> 1..* source references
+Invoice Card 1 -> 1..* invoice lines
+Invoice Card 1 -> 0..* transfer commands and receipts
+Invoice Card 1 -> 0..* synchronization conflicts
 
-Invoice Card 1 -> 1..* Invoice Lines
-Invoice Card 1 -> 1 Invoice Object Assignment decision
-Invoice Card 1 -> 1 Payment
-Payment 1 -> 0..* Payment Transactions
-
-Registry Project 1 -> 0..* PresuPro estimates externally
-PresuPro Estimate 1 -> 0..* Estimate Zones
-Estimate Zone 1 -> 0..* Estimate Items
-
-Invoice Line 1 -> 0..1 active confirmed Estimate Match in the baseline
-Estimate Item 1 -> 0..* confirmed matched Invoice Lines
-
+Registry Project 1 <-> 0..1 Work Object
+Work Object 1 <-> 0..* synchronized Invoice Cards
+PresuPro Estimate 1 -> 0..* Estimate Items
+Invoice Line 1 -> 0..1 active confirmed Estimate Match
+Estimate Item 1 -> 0..* matched Invoice Lines
 Invoice Card 1 -> 0..* Holded Publication attempts
-Invoice revision 1 -> 0..1 successful Holded publication unless correction
-policy later allows another accounting action
 ```
 
-The final Holded correction cardinality remains an open question.
+---
+
+# J. Persisted versus calculated
+
+Persisted on VPS for the fresh working set:
+
+- unsynchronized Invoice Cards and revisions;
+- their protected originals;
+- provenance;
+- synchronization state and receipts;
+- minimal user/session and connection state.
+
+Persisted locally:
+
+- complete Cabinet archive;
+- synchronized originals and revisions;
+- Work Objects and Registry snapshots;
+- Estimate Snapshots;
+- accepted matches;
+- Holded publication evidence;
+- other Cabinet Cards and history.
+
+Calculated on demand:
+
+- totals across invoices;
+- average actual prices;
+- remaining planned quantities;
+- plan-versus-actual variance;
+- coverage and forecasts.
 
 ---
 
-# J. Lifecycle vocabulary summary
+# K. Degraded-operation matrix
 
-## Generic Card
+## Local Backend offline
 
-- `active`;
-- `archived`.
+Available:
 
-## Invoice Card
+- fresh invoice capture, extraction, editing, confirmation, search, and
+  discussion inside the VPS working set.
 
-- `draft`;
-- `confirmed`;
-- `archived`.
+Unavailable or limited:
 
-## Invoice object assignment
+- validated Registry assignment;
+- current PresuPro retrieval;
+- complete historical search;
+- durable matching and full project analytics;
+- local integration actions.
 
-- `unreviewed`;
-- `assigned`;
-- `intentionally_unassigned`;
-- `label_only`.
+## Local Backend online, Registry unavailable
 
-## Estimate match
+Existing local Cabinet data and Work Objects remain available from snapshots;
+new unknown Work Objects cannot be validated.
 
-- `confirmed`;
-- `rejected`;
-- `invalidated`.
+## PresuPro unavailable
 
-## Holded publication
+Invoices and accepted matches remain readable; fresh current-plan analysis may
+be unavailable unless a suitable local Estimate Snapshot exists.
 
-- `pending`;
-- `succeeded`;
-- `failed`;
-- `ambiguous`;
-- `cancelled`.
+## Holded unavailable
 
-## Registry synchronization
-
-- `current`;
-- `stale`;
-- `unavailable`;
-- `not_found`.
-
-Transitions and terminal-state rules belong to State 2.
+Invoice capture, synchronization, matching, and analytics remain available;
+publication records failure or ambiguity.
 
 ---
 
-# K. Persisted versus calculated information
+# L. State 1 closure questions
 
-## Persisted Cabinet-owned or Cabinet-retained information
+1. After synchronization, is the VPS invoice strictly read-only or may Cabinet
+   explicitly check out a new revision?
+2. What exact VPS working-set retention applies after local acceptance?
+3. Are confirmed invoices allowed to synchronize before source OCR/extraction is
+   complete?
+4. Which source files and revision history must be transferred atomically?
+5. How is `unknown_outcome` reconciled?
+6. What conflicts can exist if baseline editing is single-owner after sync?
+7. How does Cabinet select the relevant PresuPro estimate for a project?
+8. Which stable IDs exist for estimate zones and items?
+9. Who may confirm estimate matches?
+10. Which changes invalidate confirmed matches?
+11. How are corrected invoices handled after successful Holded publication?
+12. Which remaining Card types need a VPS working lifecycle?
+13. What is the precise partial-refund meaning of `refunded`?
+14. What source retention, backup, and deletion guarantees apply in each zone?
 
-- Card identities, content, lifecycle, and revisions;
-- Work Object relationships and history;
-- Registry project snapshot and sync evidence;
-- Invoice facts, payment evidence, source provenance, and assignment decisions;
-- confirmed, rejected, and invalidated estimate-match decisions;
-- exact references to the invoice and estimate revisions used by those
-  decisions;
-- Holded publication requests, statuses, and receipts;
-- Provider, Contact, Material List, Document, and Project Note records.
-
-## External current truth
-
-- Registry current project context;
-- PresuPro estimate composition, quantities, prices, margin, waste, IVA, and
-  totals;
-- Holded accounting document and accounting state.
-
-## Calculated on demand
-
-- total spending across invoices;
-- actual quantity and actual amount for one estimate item;
-- average actual unit price;
-- remaining planned quantity;
-- plan-versus-actual amount and price variance;
-- matched and unmatched purchase coverage;
-- project-level plan-versus-actual totals;
-- forecast final cost under an explicit price assumption.
-
-Calculated results do not become primary facts merely because an agent presents
-them in conversation.
-
----
-
-# L. Offline and degraded-operation model implications
-
-When Registry is unavailable, Cabinet may use an existing Work Object and
-Registry snapshot to continue basic Cabinet work.
-
-When PresuPro is unavailable:
-
-- stored Invoice Cards and accepted matches remain readable;
-- Cabinet may report previously accepted match references;
-- fresh plan-versus-actual analysis requiring current estimate data may be
-  unavailable;
-- Cabinet must not fabricate plan values from invoice data.
-
-When Holded or Holded Gateway is unavailable:
-
-- Invoice Card capture, confirmation, matching, and analysis remain usable;
-- publication state records the failure or ambiguity;
-- source Invoice Cards remain unchanged.
-
----
-
-# M. State 1 closure questions
-
-State 1 remains open until the following questions are answered or explicitly
-accepted as deferred:
-
-1. How does Cabinet obtain the relevant PresuPro estimate for a Registry
-   `project_id`: direct PresuPro lookup, Registry artifact discovery, or another
-   agreed boundary?
-2. Does PresuPro already provide a reliable way to select one current estimate
-   for a project, and what happens when several estimates exist?
-3. Does Cabinet persist a full observed estimate snapshot, a compact projection,
-   or only an `EstimateReference` with content hash/version?
-4. Which stable identifiers currently exist for PresuPro zones and estimate
-   items? If they do not exist, what fingerprint and invalidation evidence is
-   sufficient for the baseline?
-5. Is one Invoice Line to at most one Estimate Item the accepted first-product
-   limit?
-6. Is a rejected match a durable decision record, or may rejection live only in
-   general decision history?
-7. Who may confirm an estimate match: user only, user plus trusted agent, or
-   another authorized actor?
-8. Which invoice or estimate changes automatically invalidate a confirmed
-   match?
-9. How is a corrected Invoice Card handled after a successful Holded
-   publication: correction document, replacement, cancellation and republish,
-   or a separate workflow owned by Holded policy?
-10. Which Provider, Contact, Material List, Document, and Project Note fields
-    are mandatory for the first PostgreSQL-backed Cabinet release?
-11. What freshness policy changes Registry sync from `current` to `stale`?
-12. Does Cabinet retain historical Registry snapshots or only the current
-    snapshot plus audit evidence?
-13. Which historical Cabinet corrections remain allowed after Registry project
-    archival?
-14. Which source binaries are stored by Cabinet, and which storage service owns
-    them?
-15. What is the precise meaning of partial refund under the current
-    `refunded` payment vocabulary?
-
-Once the model questions are resolved, State 2 will define invariants,
-transitions, calculation semantics, invalidation rules, and policy tables.
+State 2 will define invariants, transitions, conflict rules, synchronization
+policy, calculation semantics, and validation tables.
