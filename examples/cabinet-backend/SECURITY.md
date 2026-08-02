@@ -1,396 +1,259 @@
-# Cabinet Backend — Layer 0 security workspace
+# Cabinet Backend — Layer 0 security boundary
 
 ## Status
 
-Security architecture is **OPEN**. This document records the decisions that
-must be made before public API, deployment, production integration, or secret
-handling can be considered stable.
+The primary deployment and trust boundary is **ACCEPTED** for the first personal
+product. Detailed implementation choices remain for later states.
 
-Known deployment direction is incomplete:
+Cabinet is split across two locations:
 
-- the Cabinet user-facing application is expected to run on a VPS;
-- the deployment location and exposure model of Cabinet Backend are not yet
-  selected;
-- Registry, PresuPro, Holded Gateway, agents, PostgreSQL, and binary source
-  storage may run in different trust zones;
-- current sandbox behavior does not establish a production authentication or
-  authorization contract.
+```text
+ChatGPT
+  → Cabinet MCP / Cabinet application on VPS
+  → authenticated private connection available only while the local platform is online
+  → Cabinet Backend on the user's local machine
+  → local PostgreSQL, source files, Registry, and PresuPro
+```
 
-No common default is accepted merely because it is convenient. Until the items
-below are chosen, later design states may discuss domain behavior but must not
-claim production security readiness.
+Cabinet Backend is not a public ChatGPT integration and is not an MCP server.
+ChatGPT communicates only with Cabinet. Cabinet is the only remote client of
+Cabinet Backend.
 
-## Protected assets
+## Accepted architectural boundary
 
-Cabinet handles information that requires explicit protection:
+### VPS side
 
-- invoice and receipt images and PDFs;
-- supplier and customer names, addresses, telephone numbers, emails, tax IDs,
-  and other contact or fiscal data;
-- project addresses and Registry customer references;
-- purchase lines, prices, payment evidence, plan-versus-actual analysis, and
-  estimate data from PresuPro;
-- Holded accounting document identifiers and publication receipts;
-- Cabinet decisions, notes, agent suggestions, provenance, and history;
-- database credentials, service credentials, API tokens, signing keys, and
-  encryption keys;
-- logs, backups, exports, and temporary processing files containing any of the
-  above.
+The VPS hosts the user-facing Cabinet application and its MCP boundary. It may:
 
-## Actors and trust boundaries
+- authenticate the user-facing session;
+- expose narrow Cabinet tools to the conversational agent;
+- display local-platform availability;
+- request reads and commands from the local Backend while the private connection
+  is active;
+- retain only the explicitly selected cache or transfer evidence.
 
-The security model must distinguish at least:
+The VPS does not become the authoritative store for Cabinet business data by
+default. It does not directly connect to local PostgreSQL, Registry, PresuPro,
+or local source-file storage.
 
-- human Cabinet user;
-- browser or future client;
-- Cabinet Web UI;
-- conversational agent runtime;
+### Local side
+
+The user's local environment hosts:
+
 - Cabinet Backend;
-- PostgreSQL;
-- binary source storage;
+- authoritative Cabinet PostgreSQL data;
+- authoritative original invoice and document files unless a later decision
+  selects another private store;
 - Registry;
 - PresuPro;
-- Holded Gateway;
-- Client Portal or future downstream consumers;
-- VPS operator and infrastructure automation.
+- local integration adapters needed by Cabinet Backend.
 
-An agent is not automatically trusted as the user. A service being inside the
-same VPS is not automatically authorized to read every Cabinet record or use
-every external credential.
+Cabinet Backend is the durable source of truth for Cabinet Cards, accepted
+relationships, history, and integration evidence. Registry and PresuPro remain
+their own sources of truth for project context and estimates.
 
-## Deployment choices to close
+### Connection model
 
-### SEC-DEPLOY-001 — Cabinet Backend placement
+The local Backend initiates or accepts only an authenticated private connection
+between the known VPS Cabinet instance and the known local platform. Candidate
+implementations include a private overlay network such as Tailscale or an
+explicit SSH reverse tunnel.
 
-**Type:** Choice  
-**Status:** OPEN
+The accepted requirements are implementation-neutral:
 
-Select whether Cabinet Backend runs:
+- no public Cabinet Backend port;
+- no public PostgreSQL port;
+- no public Registry or PresuPro port merely for Cabinet access;
+- transport encryption;
+- machine identity for both ends;
+- allow-list of the single authorized Cabinet instance;
+- revocable credentials;
+- no trust based only on possession of an IP address or `project_id`.
 
-- on the same VPS as the Cabinet Web UI;
-- on a separate VPS or private service host;
-- inside a private platform network;
-- locally for the user while only the UI is hosted;
-- in another explicitly described topology.
+A specific tunnel technology is still a later deployment choice.
 
-The decision must state which components are internet-facing and which are
-private-only.
+## Availability boundary
 
-### SEC-DEPLOY-002 — Database placement and reachability
+The local platform is intentionally connect-on-demand. When the local machine
+or private connection is unavailable, Cabinet on the VPS must report the local
+Backend as offline.
 
-**Type:** Choice  
-**Status:** OPEN
+In the first product, Cabinet must not silently queue authoritative mutations
+for later execution. Operations that require the local Backend are rejected
+with a clear unavailable result.
 
-Select where PostgreSQL runs and which identities may connect. Direct public
-internet access to PostgreSQL must not be assumed. The decision must cover
-network restrictions, TLS, database users, backup access, and administrative
-access.
+A future cache may support explicitly labelled stale or read-only views, but it
+must not become an accidental second source of truth. Cached data must preserve:
 
-### SEC-DEPLOY-003 — Binary source storage
+- source system;
+- source identity;
+- observed revision or content hash when available;
+- captured time;
+- freshness state;
+- sensitivity and retention classification.
 
-**Type:** Choice  
-**Status:** OPEN
+## Identity and authentication
 
-Select where invoice images, PDFs, scans, and other originals are stored. The
-decision must cover access control, encryption, signed or authenticated reads,
-retention, deletion, backup, and prevention of public predictable URLs.
+### Human boundary
 
-## Identity and authentication choices
+The user's ChatGPT or Cabinet session authenticates access to Cabinet on the
+VPS. This authentication terminates at Cabinet; it does not directly
+authenticate to Cabinet Backend, Registry, PresuPro, or PostgreSQL.
 
-### SEC-AUTHN-001 — Human identity provider
+The first product may be single-user. A separate Cabinet Backend end-user account
+system is not required while Cabinet is its only client.
 
-**Type:** Choice or Snapshot  
-**Status:** OPEN
+### Machine boundary
 
-Determine how a user proves identity to Cabinet. Candidates may include an
-existing platform identity, an external identity provider, or a Cabinet-owned
-account model. No password, magic-link, OAuth, passkey, or session mechanism is
-selected yet.
+Cabinet VPS and local Cabinet Backend require separate machine-to-machine trust.
+This trust may be provided by private-network identity, SSH keys, mTLS, signed
+short-lived service credentials, or an equivalent deliberate mechanism.
 
-Required closure parameters include:
+Human authentication and machine authentication are independent:
 
-- identity authority;
-- login and recovery flow;
-- multi-factor policy if applicable;
-- account disable/revoke behavior;
-- session creation and expiry;
-- trusted-device behavior if any.
+```text
+human identity → Cabinet VPS
+Cabinet service identity → local Cabinet Backend
+```
 
-### SEC-AUTHN-002 — Service identity
+Compromise of a browser session must not automatically reveal reusable local
+platform credentials.
 
-**Type:** Choice  
-**Status:** OPEN
+## Authorization boundary
 
-Determine how Cabinet Backend authenticates Registry, PresuPro, Holded Gateway,
-and other services, and how those services authenticate Cabinet Backend.
-Shared static secrets, mTLS, signed service tokens, workload identity, or
-another mechanism must be deliberately selected rather than inferred from
-sandbox access.
+Cabinet exposes narrow product capabilities to the agent. The agent never gets
+raw access to Cabinet Backend, PostgreSQL, local files, Registry, PresuPro,
+shell, or network credentials.
 
-### SEC-AUTHN-003 — Agent identity and delegation
+Cabinet Backend remains responsible for deterministic validation of every
+accepted command. At minimum it distinguishes:
 
-**Type:** Design  
-**Status:** OPEN
-
-Determine how an agent proves:
-
-- which user or service invoked it;
-- which Cabinet capabilities were delegated;
-- which project scope applies;
-- how long delegation remains valid;
-- whether a human confirmation is required for sensitive actions.
-
-An agent must not receive a reusable Holded token or unrestricted database
-credential.
-
-## Authorization choices
-
-### SEC-AUTHZ-001 — Capability model
-
-**Type:** Design  
-**Status:** OPEN
-
-Define authorization for at least:
-
-- read Cabinet Cards;
-- create and edit drafts;
+- read and search;
+- create or edit draft data;
 - confirm or archive Invoice Cards;
 - assign invoices to Work Objects;
 - confirm or reject PresuPro matches;
-- read source binaries;
-- request Holded publication;
-- view fiscal or payment data;
-- administer integrations and credentials;
-- export or delete data.
+- request source files;
+- publish an eligible invoice through Holded Gateway;
+- export or delete data;
+- administer connection and integration credentials.
 
-The first product may be single-user, but single-user does not remove the need
-to distinguish browser, agent, backend, database, and integration privileges.
+The single-user baseline may grant these capabilities to one owner, but the
+service boundary and sensitive-action confirmations still apply.
 
-### SEC-AUTHZ-002 — Project and record scope
+## Sensitive-action confirmations
 
-**Type:** Design  
-**Status:** OPEN
+The first product must require explicit user intent for operations with external
+or destructive effects, including:
 
-Decide whether authorization is global to one Cabinet account, scoped by
-Registry `project_id`, scoped by Card, or a combination. Every cross-system
-request must preserve the selected scope; possession of a project UUID alone
-must not grant access.
-
-### SEC-AUTHZ-003 — Sensitive action confirmation
-
-**Type:** Design  
-**Status:** OPEN
-
-Determine which operations require explicit human confirmation. Candidates
-include:
-
-- confirming extracted invoice facts;
+- confirming extracted invoice facts when they become durable business facts;
 - publishing an invoice to Holded;
-- correcting a previously published invoice;
+- correcting an invoice already published to Holded;
 - deleting original source evidence;
-- accepting low-confidence estimate matching;
 - exporting fiscal or personal data;
-- rotating or replacing integration credentials.
+- replacing connection or integration credentials.
 
-## Browser and API security choices
+Agent-proposed estimate matching may be accepted conversationally, but the
+accepted match remains a separate Cabinet decision with provenance. An
+unconfirmed heuristic proposal never enters plan-versus-actual calculations.
 
-### SEC-WEB-001 — Session and browser boundary
+## Local data protection
 
-**Type:** Choice  
-**Status:** OPEN
+Because the source of truth is local, the local machine is a production data
+host and must not be treated as an unprotected developer laptop.
 
-Select session storage and transport. The decision must cover secure cookies or
-other token storage, CSRF protection, XSS exposure, session fixation, logout,
-idle expiry, absolute expiry, and revocation.
+Required baseline controls include:
 
-Long-lived bearer credentials in browser-accessible storage are not accepted by
-default.
+- operating-system account protection and disk encryption where supported;
+- PostgreSQL bound only to localhost or a private local network;
+- least-privilege database identity for Cabinet Backend;
+- source files outside public or shared web directories;
+- encrypted backup of both PostgreSQL and original files;
+- restore testing;
+- secrets outside source code, Cards, prompts, logs, and database business
+  records;
+- safe temporary-file cleanup;
+- patching and revocation procedure if the machine or VPS is lost.
 
-### SEC-WEB-002 — Public exposure
+The exact backup store, key owner, rotation schedule, recovery objectives, and
+retention period remain later choices.
 
-**Type:** Choice  
-**Status:** OPEN
+## VPS data minimization
 
-Determine whether Cabinet Backend is directly internet-facing or reachable only
-through the Cabinet Web UI/reverse proxy/private network. Define TLS termination,
-trusted proxy handling, allowed origins, host validation, request size limits,
-and upload limits.
+The VPS should retain the minimum information needed for the Cabinet experience.
+The first design must classify every VPS-persisted value as one of:
 
-### SEC-WEB-003 — Abuse and rate limits
+- session or connection state;
+- non-sensitive UI configuration;
+- short-lived transfer buffer;
+- explicit encrypted stale cache;
+- durable audit evidence that cannot contain invoice bodies, source files,
+  credentials, or unrestricted personal data.
 
-**Type:** Choice  
-**Status:** OPEN
+Full invoice documents, database dumps, PresuPro estimates, and reusable local
+platform credentials are not stored on the VPS by default.
 
-Define limits for login, document upload, OCR or agent processing, searches,
-export, Holded publication, and expensive plan-versus-actual requests. Failure
-behavior and observability must be specified.
+## Integration boundaries
 
-## Data protection choices
+### Registry and PresuPro
 
-### SEC-DATA-001 — Encryption and key ownership
+Cabinet VPS does not call local Registry or PresuPro directly. Cabinet Backend
+performs those calls inside the local trust zone and validates that returned
+`project_id`, estimate identity, and revision evidence match the request.
 
-**Type:** Choice  
-**Status:** OPEN
+### Holded Gateway
 
-Determine encryption requirements for:
+Holded publication remains independent. Holded credentials stay in Holded
+Gateway, never in ChatGPT, Cabinet prompts, Cabinet Cards, or the local source
+files. Cabinet Backend sends one authorized publication request with an exact
+Invoice Card revision and receives a technical receipt.
 
-- network traffic;
-- PostgreSQL storage and backups;
-- binary source storage and backups;
-- integration credentials;
-- local temporary files and processing artifacts.
+The network location of Holded Gateway remains an open deployment choice. If it
+is remote, the local Backend initiates an authenticated outbound connection.
 
-The decision must identify who owns keys, where keys live, how they rotate, and
-how recovery works.
+## Untrusted content and agent safety
 
-### SEC-DATA-002 — Secrets management
+Invoice text, PDFs, images, supplier descriptions, notes, and PresuPro item names
+are untrusted data. Instructions contained inside them do not grant tool access
+or authorize commands.
 
-**Type:** Choice  
-**Status:** OPEN
+The agent receives only narrow Cabinet tools. Tool calls are treated as requests,
+not as proof of authorization. Cabinet and Cabinet Backend validate scope,
+record state, revision, and confirmation requirements.
 
-Select how database passwords, service credentials, Holded credentials, signing
-keys, and storage credentials are provided to processes. Secrets must not be
-stored in Cabinet Cards, committed configuration, logs, agent prompts, or
-Gateway receipts.
+## Remaining security choices
 
-### SEC-DATA-003 — Retention, deletion, and backup
+The architecture now makes the main security direction clear, but these items
+still require explicit design:
 
-**Type:** Design and Choice  
-**Status:** OPEN
+1. private connection technology and credential rotation;
+2. Cabinet VPS login/session implementation;
+3. exact cache policy and whether any business data persists on the VPS;
+4. local disk encryption and operating-system hardening standard;
+5. PostgreSQL and source-file backup destination, keys, retention, and restore
+   procedure;
+6. audit-event vocabulary and safe log retention;
+7. Holded Gateway network placement and service authentication;
+8. incident procedure for a lost local machine, compromised VPS, or leaked
+   connection credential;
+9. later multi-user authorization if Cabinet stops being a personal system.
 
-Define retention and deletion for Cards, originals, logs, idempotency records,
-publication receipts, audit evidence, backups, and exports. Deleting a current
-record must not falsely claim that immutable backups or external Holded records
-were also deleted.
+## Layer 0 security decisions
 
-### SEC-DATA-004 — Logging and redaction
-
-**Type:** Design  
-**Status:** OPEN
-
-Define what may enter logs. Tax IDs, document images, full invoice payloads,
-payment references, credentials, cookies, and raw provider responses must not be
-logged by default. Correlation identifiers and safe error codes should permit
-operations without exposing business data.
-
-## Integration security choices
-
-### SEC-INT-001 — Registry and PresuPro access
-
-**Type:** Choice  
-**Status:** OPEN
-
-Define authentication, authorization, timeout, retry, and response-validation
-policy for Registry and PresuPro. Cabinet must reject identity mismatch and must
-not accept client-supplied Registry or PresuPro snapshots as authoritative.
-
-### SEC-INT-002 — Holded Gateway boundary
-
-**Type:** Design  
-**Status:** OPEN
-
-Holded credentials belong to Holded Gateway, not Cabinet UI, Cabinet agents, or
-Invoice Cards. Define how Cabinet authorizes one publication request, how the
-Gateway authenticates Cabinet, what idempotency and receipt data crosses the
-boundary, and how ambiguous outcomes are reconciled without exposing provider
-secrets.
-
-### SEC-INT-003 — Webhooks and callbacks
-
-**Type:** Choice  
-**Status:** OPEN
-
-If future integrations call Cabinet, define signature verification, replay
-protection, timestamp tolerance, endpoint exposure, idempotency, and secret
-rotation. No unsigned webhook is assumed safe.
-
-## Agent and AI safety boundaries
-
-### SEC-AGENT-001 — Tool allow-list
-
-**Type:** Design  
-**Status:** OPEN
-
-Agents receive narrow tools rather than database, shell, filesystem, or raw
-external-service credentials. Tool authorization must be checked by Cabinet
-Backend for each operation; prompt text alone is not authorization.
-
-### SEC-AGENT-002 — Untrusted document content
-
-**Type:** Design  
-**Status:** OPEN
-
-Invoice text, PDF text, images, notes, supplier descriptions, and imported
-PresuPro names are untrusted data. They may contain prompt-injection-like text
-or malicious file content. Extraction and matching must not convert document
-instructions into tool authority.
-
-### SEC-AGENT-003 — Confirmation and provenance
-
-**Type:** Design  
-**Status:** OPEN
-
-Agent suggestions must preserve provenance and remain distinguishable from
-human-confirmed facts. Sensitive actions and low-confidence semantic matches may
-require human confirmation according to the selected authorization policy.
-
-## Operational security choices
-
-### SEC-OPS-001 — VPS hardening and administration
-
-**Type:** Choice  
-**Status:** OPEN
-
-Define administrator access, SSH policy, patching, firewalling, process
-isolation, least-privilege operating-system users, container policy if used,
-monitoring, and incident access. The VPS must not be treated as one undivided
-trusted process space.
-
-### SEC-OPS-002 — Backups and restoration
-
-**Type:** Choice  
-**Status:** OPEN
-
-Define encrypted backups, access, retention, restore testing, recovery point,
-recovery time, and restoration of consistency between PostgreSQL records and
-binary sources.
-
-### SEC-OPS-003 — Security events and audit
-
-**Type:** Design  
-**Status:** OPEN
-
-Determine which events require durable audit evidence, including login,
-failed authorization, invoice confirmation, match confirmation, source access,
-Holded publication, credential changes, export, deletion, and administrative
-operations.
-
-## Minimum gate before later states close
-
-State 1 domain exploration may continue while these choices remain open, but
-security-sensitive API, module, contract, and deployment design must not close
-until at least these are selected:
-
-1. Cabinet Backend placement and internet exposure;
-2. human authentication and browser session strategy;
-3. service identity and agent delegation;
-4. capability and project-scope authorization;
-5. PostgreSQL and binary-storage placement;
-6. secrets management and Holded Gateway credential ownership;
-7. encryption, backup, retention, logging, and audit policy;
-8. explicit confirmation policy for sensitive actions;
-9. production operational owner and incident/recovery process.
-
-## Accepted provisional direction
-
-Only the following security direction is currently accepted:
-
-- security is a Layer 0 blocker and will not be silently defaulted later;
-- Cabinet Backend, not the agent, enforces authorization for persisted changes;
-- Holded credentials remain inside Holded Gateway;
-- Registry and PresuPro remain external sources of truth accessed through typed
-  boundaries;
-- secrets, cookies, tokens, raw credentials, and private keys never become
-  Cabinet business data;
-- production exposure, identity, authorization, storage, and deployment choices
-  remain OPEN.
+1. Cabinet application and MCP boundary run on the VPS.
+2. Cabinet Backend and authoritative Cabinet storage run locally for the user.
+3. Registry and PresuPro remain in the local platform trust zone.
+4. ChatGPT and the agent never connect directly to Cabinet Backend.
+5. Cabinet VPS is the only remote Backend client.
+6. Backend, PostgreSQL, Registry, PresuPro, and original files are not publicly
+   exposed.
+7. VPS-to-local communication uses authenticated encrypted private transport.
+8. The local Backend is intentionally available only while the local platform
+   and connection are running.
+9. Authoritative writes are not silently queued while the local Backend is
+   offline in the first product.
+10. The VPS is not a second source of truth; any cache is explicit, minimal,
+    labelled, and revocable.
+11. Cabinet Backend validates persisted changes and external effects even when
+    the request originated from an authenticated Cabinet session.
+12. Holded credentials remain exclusively inside Holded Gateway.
