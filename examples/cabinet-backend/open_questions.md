@@ -6,6 +6,33 @@ Open decisions discovered while filling State 1. They remain explicit inputs to
 State 1 closure and later State 2 rules. No endpoint, table, transport, module,
 or implementation is implied.
 
+Security decisions are tracked in `SECURITY.md`. They are Layer 0 blockers for
+production-facing API, deployment, secrets, authorization, and integration
+contracts.
+
+## Layer 0 security blockers
+
+1. Where does Cabinet Backend run relative to the VPS-hosted Cabinet Web UI?
+2. Is Cabinet Backend directly internet-facing, reverse-proxied, or private-only?
+3. How does the human user authenticate, recover access, and maintain a session?
+4. How do Registry, PresuPro, Holded Gateway, agents, and Cabinet Backend
+   authenticate each other?
+5. How is agent authority delegated and limited by user, capability, project,
+   action, and expiry?
+6. What authorization model protects Cards, source binaries, fiscal data,
+   matching decisions, exports, and Holded publication?
+7. Where do PostgreSQL and original source binaries run, and who may reach them?
+8. How are credentials, signing keys, encryption keys, and Holded secrets stored
+   and rotated?
+9. What encryption, backup, retention, deletion, redaction, logging, and audit
+   policies apply?
+10. Which actions require explicit human confirmation?
+11. Who owns VPS hardening, patching, monitoring, incident response, and tested
+    restoration?
+
+These questions must not be silently answered by framework defaults. See
+`SECURITY.md` for the complete decision workspace and closure gate.
+
 ## State 1 model questions
 
 1. How does Cabinet obtain the relevant PresuPro estimate for a Registry
@@ -130,3 +157,7 @@ or implementation is implied.
   Gateway independently from PresuPro matching and analysis.
 - Registry application registration and project membership are future platform
   concerns, not blockers for the current context-read integration.
+- Security is a Layer 0 blocker and must not be silently defaulted during API,
+  contract, or deployment design.
+- Holded credentials remain inside Holded Gateway and never become Cabinet Card
+  or agent data.
