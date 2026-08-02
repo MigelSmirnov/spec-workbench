@@ -2,79 +2,95 @@
 
 ## Status
 
-Working domain-model baseline for the accepted two-tier Cabinet architecture.
+Working domain-model baseline for the accepted Cabinet operating cycle.
 
 This state defines concepts, identities, ownership, lifecycle vocabulary, and
-relationships. It deliberately does not define APIs, SQL tables, ORM mappings,
-transport payloads, retry algorithms, or deployment products.
+relationships. It does not define APIs, SQL tables, ORM mappings, transport
+payloads, retry algorithms, or deployment products.
 
 ## Modelling priorities
 
-State 1 is assembled in this order:
+State 1 is assembled around the real product workflow:
 
-1. resolve contradictions in identity, authority, revision, and synchronization;
-2. define the Invoice aggregate and its source-faithful facts;
-3. define local project and estimate projections;
-4. define Cabinet-owned decisions, publications, and calculated views;
-5. leave policy and transition details for State 2.
+1. preserve the received invoice image or PDF as immutable source evidence;
+2. separate machine extraction from confirmed human-understood facts;
+3. make Registry objects available on the VPS through a versioned cached
+   catalogue;
+4. permit real offline object assignment with explicit snapshot provenance;
+5. transfer daytime work into the durable local archive idempotently;
+6. keep PresuPro matching, analytics, and Holded publication as separate Cabinet
+   decisions and integrations.
 
 ---
 
 # A. Resolved modelling contradictions
 
-## A.1 Logical Invoice versus deployment copy
+## A.1 Source document versus Cabinet interpretation
 
-`InvoiceCard` is one logical business entity. Synchronization status is not a
-field of that business entity because VPS and local storage can observe different
-copies and revisions at the same time.
+The paper invoice, photograph, or PDF is not an editable Cabinet record. It is
+primary evidence.
+
+The model separates:
+
+- `InvoiceDocument` — one real-world invoice or receipt known to Cabinet;
+- `SourceArtifact` — one immutable received image, PDF, or other source file;
+- `InvoiceExtraction` — one machine interpretation of source evidence;
+- `InvoiceFactsVersion` — one structured Cabinet interpretation after edits or
+  corrections;
+- `InvoiceConfirmation` — acceptance of one exact facts version;
+- Cabinet decisions such as object assignment, estimate matching, and Holded
+  publication.
+
+A correction changes Cabinet's interpretation. It never rewrites the source.
+
+## A.2 Invoice identity versus storage copy
+
+One logical invoice has one stable `invoice_id`. The VPS and local Backend may
+hold different physical copies at different moments.
 
 The model therefore separates:
 
-- `InvoiceCard` — stable logical identity;
-- `InvoiceRevision` — immutable source-faithful state at one revision number;
-- `InvoiceReplica` — the presence and role of that invoice at one Cabinet node;
-- `InvoiceSynchronization` — transfer and acceptance state between replicas.
+- logical invoice identity;
+- source and facts replicas at each Cabinet node;
+- transfer and durable acceptance state.
 
-This avoids one shared `sync_state` field having incompatible values on two
-nodes.
+Synchronization status is not a property of the real-world invoice itself.
 
-## A.2 Revision number versus content identity
+## A.3 Work Object identity
 
-A revision number orders revisions within one `invoice_id`. A content hash
-identifies exact canonical content. They are not alternatives.
+Registry owns work-object identity and current context.
 
-Every accepted revision has both:
+```text
+WorkObject.id = Registry ProjectRecord.id
+```
 
-- `revision_number` — monotonic within the Invoice Card;
-- `content_hash` — deterministic hash of canonical revision content.
+Cabinet does not create a competing standalone Work Object in this baseline. It
+stores Registry snapshots and Cabinet-owned relationships linked to the same
+`project_id`.
 
-## A.3 Business confirmation versus synchronization
+## A.4 Offline assignment validity
 
-Confirmation means that a user or authorized actor accepts the extracted invoice
-facts represented by one exact revision. It does not mean that synchronization,
-project assignment, estimate matching, or Holded publication has completed.
+A VPS invoice may be assigned to an object from the cached Registry catalogue
+while the local platform is offline.
 
-Synchronization may transfer draft or confirmed revisions, subject to State 2
-policy. A `confirmed` marker always pins an exact revision and never floats to a
-later correction automatically.
+This assignment is a real Cabinet decision, not merely a text suggestion. Its
+provenance records the exact Registry snapshot or catalogue version used.
 
-## A.4 Source identity versus storage location
+Current Registry validation occurs after reconnection. A validation warning does
+not silently erase the user's original assignment.
 
-A received original is one logical `SourceArtifact`. VPS and local files are
-storage replicas of that artifact, not separate sources merely because they live
-in different zones.
+## A.5 Confirmation versus later decisions
 
-## A.5 Publication record versus transport attempts
+Confirmation means that an actor accepts what Cabinet currently believes the
+source document says. It does not imply:
 
-A Holded publication is the business intent and outcome for one exact confirmed
-invoice revision. Retries are separate attempt records. A retry must not create a
-second business publication.
+- current Registry validation;
+- PresuPro matching;
+- complete analytics;
+- Holded publication;
+- successful local synchronization.
 
-## A.6 Current estimate versus repeatable analysis
-
-PresuPro owns the mutable current estimate. Cabinet analysis and accepted matches
-pin a captured `EstimateSnapshot`; they do not silently follow later PresuPro
-changes.
+Each later decision references the exact confirmed facts version it used.
 
 ---
 
@@ -82,7 +98,7 @@ changes.
 
 ## ActorReference
 
-Value object identifying the actor responsible for a domain action.
+Value object identifying the actor responsible for an action.
 
 Candidate fields:
 
@@ -92,7 +108,7 @@ Candidate fields:
 - `interaction_id` optional;
 - `display_label` optional.
 
-It records provenance, not authentication or authorization state.
+It records provenance, not authentication state.
 
 ## CabinetNodeIdentity
 
@@ -107,42 +123,59 @@ Candidate fields:
 - `created_at`;
 - `revoked_at` optional.
 
-## EntityRevisionReference
+## Money
 
-Value object pinning exact entity content.
+Value object containing decimal `amount` and ISO `currency`.
+
+Currency conversion is never implicit.
+
+## Quantity
+
+Value object containing decimal `value`, normalized `unit`, and optional original
+unit text.
+
+## ExactVersionReference
+
+Value object pinning exact accepted content.
 
 Candidate fields:
 
 - `entity_type`;
 - `entity_id`;
-- `revision_number`;
+- `version_number`;
 - `content_hash`.
-
-## Money
-
-Value object containing decimal `amount` and ISO `currency`.
-
-Currency conversion is never implicit. Values in different currencies cannot be
-summed without an explicit conversion record and rate source.
-
-## Quantity
-
-Value object containing decimal `value` and normalized `unit`, while retaining
-the original unit text when normalization is uncertain.
 
 ---
 
-# C. Source evidence
+# C. Invoice source evidence
+
+## InvoiceDocument
+
+Aggregate root representing one real-world supplier invoice, receipt, or purchase
+document known to Cabinet.
+
+Candidate fields:
+
+- `invoice_id` — created at first VPS capture and preserved locally;
+- `created_at`;
+- `created_by`;
+- `lifecycle_status` — `active` or `archived`;
+- `current_facts_version` optional;
+- `current_confirmation_id` optional.
+
+`InvoiceDocument` is the stable Cabinet identity around the source evidence and
+its interpretation history.
 
 ## SourceArtifact
 
-Logical source entity representing an original received invoice photograph, PDF,
-or other evidence.
+Immutable source entity representing one received photograph, PDF, or other
+piece of evidence.
 
 Candidate fields:
 
 - `source_id`;
-- `kind`;
+- `invoice_id`;
+- `kind` — `photo`, `pdf`, `scan`, or `other`;
 - `content_hash`;
 - `media_type`;
 - `size_bytes`;
@@ -150,10 +183,11 @@ Candidate fields:
 - `captured_at` optional;
 - `original_filename` optional;
 - `created_by`;
+- `source_role` — `primary`, `additional_view`, or `supporting`;
 - `status` — `available`, `quarantined`, `corrupt`, or `deleted`.
 
-The source identity is stable across transfer. A source is not considered
-locally durable merely because metadata was synchronized.
+The byte content is immutable. A better photograph creates another
+`SourceArtifact`; it does not replace the earlier one.
 
 ## SourceReplica
 
@@ -166,57 +200,60 @@ Candidate fields:
 - `storage_zone` — `vps_working` or `local_durable`;
 - `storage_ref`;
 - `stored_hash`;
-- `verification_status` — `pending`, `verified`, `failed`;
+- `verification_status` — `pending`, `verified`, or `failed`;
 - `stored_at`;
-- `deleted_at` optional;
-- `retention_until` optional.
+- `retention_until` optional;
+- `deleted_at` optional.
 
-Durable local acceptance requires all mandatory source replicas to be stored and
-hash-verified according to State 2 policy.
+A source is durably accepted locally only after required bytes are stored and
+hash-verified.
 
-## SourceUse
+## SourceRegionReference
 
-Relationship pinning a source or a region of a source to extracted facts.
+Value object linking extracted data to evidence.
 
 Candidate fields:
 
 - `source_id`;
-- page, region, or fragment locator optional;
-- extraction method;
-- confidence optional;
-- observed_at.
+- page optional;
+- region or fragment locator optional;
+- observed_text optional.
 
 ---
 
-# D. Invoice aggregate
+# D. Extraction and confirmed invoice facts
 
-## InvoiceCard
+## InvoiceExtraction
 
-Aggregate root representing one supplier invoice, receipt, or purchase.
+Immutable record of one machine extraction attempt.
 
 Candidate fields:
 
-- `invoice_id` — created at first VPS capture and never replaced during sync;
+- `extraction_id`;
+- `invoice_id`;
+- source artifact references;
+- extraction engine and version;
+- raw extracted text optional;
+- structured candidate facts;
+- field-level confidence and source regions;
 - `created_at`;
 - `created_by`;
-- `current_revision_number`;
-- `lifecycle_status` — `active` or `archived`.
+- `status` — `completed`, `partial`, or `failed`.
 
-`InvoiceCard` contains identity and revision lineage. Mutable invoice facts live
-inside immutable `InvoiceRevision` records.
+An extraction is evidence of what the machine proposed. It is never silently
+rewritten after a human correction.
 
-## InvoiceRevision
+## InvoiceFactsVersion
 
-Immutable entity containing the complete source-faithful invoice state at one
-point in its history.
+Immutable structured Cabinet interpretation of what the invoice says.
 
 Candidate fields:
 
 - `invoice_id`;
-- `revision_number`;
-- `parent_revision_number` optional;
+- `version_number`;
+- `parent_version_number` optional;
 - `content_hash`;
-- `document_status` — `draft` or `confirmed`;
+- `based_on_extraction_ids`;
 - `invoice_number` optional;
 - `issue_date` optional;
 - `supply_date` optional;
@@ -227,30 +264,30 @@ Candidate fields:
 - `lines`;
 - `totals`;
 - `payment_summary`;
-- `source_uses`;
+- field-level source references;
 - `created_at`;
 - `created_by`;
-- `confirmation` optional;
-- `correction_reason` optional.
+- `change_reason` optional.
 
-A later correction creates a new revision. Existing confirmations, matches,
-synchronization receipts, analyses, and publications continue to reference the
-older exact revision unless explicitly superseded.
+A correction creates a new facts version. Earlier versions remain available for
+history and provenance.
 
 ## InvoiceConfirmation
 
-Decision record confirming one exact invoice revision.
+Decision record accepting one exact `InvoiceFactsVersion`.
 
 Candidate fields:
 
-- `invoice_revision`;
+- `confirmation_id`;
+- exact facts-version reference;
 - `confirmed_at`;
 - `confirmed_by`;
-- `confirmation_scope` — baseline value `source_facts`;
-- `notes` optional.
+- `scope` — baseline value `source_facts`;
+- `notes` optional;
+- `status` — `active` or `superseded`.
 
-Only one active confirmation may exist for an exact revision. A new revision
-requires a new confirmation before actions that require confirmed facts.
+A new facts version requires a new confirmation before actions that require
+confirmed facts.
 
 ## InvoiceParty
 
@@ -265,19 +302,18 @@ Candidate fields:
 - `phone` optional;
 - original unparsed text optional.
 
-A Cabinet provider match may reference this party but must not overwrite the
+A Provider Card match may link to this party but must not overwrite the
 source-faithful values.
 
 ## InvoiceLine
 
-Entity inside an `InvoiceRevision`.
+Entity inside an `InvoiceFactsVersion`.
 
 Candidate fields:
 
-- `line_id` — stable across revisions when the same logical line is edited;
+- `line_id`;
 - `kind` — `item`, `service`, `shipping`, `discount`, `fee`, `tax`, or `other`;
 - `description_original`;
-- `description_normalized` optional;
 - `supplier_sku` optional;
 - `quantity` optional;
 - `unit_price_net` optional;
@@ -286,10 +322,9 @@ Candidate fields:
 - `net_amount` optional;
 - `tax_amount` optional;
 - `gross_amount` optional;
-- `source_uses`.
+- source region references.
 
-`matched_material_id` is intentionally excluded. Material normalization and
-estimate matching are Cabinet decisions outside source-faithful invoice facts.
+Material normalization and estimate matching are separate Cabinet decisions.
 
 ## InvoiceTotals
 
@@ -302,12 +337,14 @@ Value object containing optional monetary values:
 - `withholding`;
 - `payable`.
 
-The model preserves printed totals even when calculated line sums differ. The
-difference becomes a validation finding rather than an automatic rewrite.
+Printed totals are preserved even when calculated line sums differ. The
+difference becomes a validation finding.
 
 ## PaymentSummary
 
-Invoice-level source statement with status:
+Source-faithful payment statement.
+
+Status vocabulary:
 
 - `unknown`;
 - `unpaid`;
@@ -317,134 +354,65 @@ Invoice-level source statement with status:
 - `refunded`.
 
 Candidate fields may include paid amount, refunded amount, stated method, and
-source evidence. Actual accounting transactions belong to separate imported or
-integration records and are not invented from absence of evidence.
+source evidence. Cabinet does not invent payment facts from absence of evidence.
 
 ---
 
-# E. Replica ownership and synchronization
+# E. Registry object catalogue and offline assignment
 
-## InvoiceReplica
+## RegistryProjectSnapshot
 
-Entity describing the presence and authority role of one logical invoice at one
-Cabinet node.
+Immutable local projection of one Registry object.
 
 Candidate fields:
 
-- `invoice_id`;
+- `snapshot_id`;
+- `project_id`;
+- display name;
+- address or short context;
+- Registry status;
+- customer reference optional;
+- Registry version or content hash;
+- Registry timestamps;
+- `captured_at`;
+- `source_contract_version`.
+
+Registry remains authoritative for identity and current context.
+
+## RegistryCatalogueSnapshot
+
+Immutable snapshot of the compact object catalogue published to the VPS.
+
+Candidate fields:
+
+- `catalogue_id`;
+- `generated_at`;
+- `generated_by_node_id`;
+- Registry observation time;
+- Registry contract version;
+- catalogue content hash;
+- included project snapshot references;
+- project count;
+- optional completeness or filter description.
+
+The catalogue is not claimed to be current after its capture time. Its age must
+be available to the user and agent.
+
+## RegistryCatalogueReplica
+
+Record that a specific catalogue snapshot is available on a Cabinet node.
+
+Candidate fields:
+
+- `catalogue_id`;
 - `node_id`;
-- `highest_present_revision`;
-- `highest_verified_revision`;
-- `authority_role` — `authoritative_workspace`, `durable_primary`, or
-  `read_only_replica`;
-- `write_status` — `editable`, `read_only`, or `checked_out`;
-- `created_at`;
-- `updated_at`.
-
-Baseline authority:
-
-- before first durable local acceptance, the VPS replica is
-  `authoritative_workspace`;
-- after durable local acceptance, the local replica is `durable_primary`;
-- the synchronized VPS replica becomes `read_only_replica` in the baseline.
-
-## InvoiceSynchronization
-
-Process entity for synchronizing one logical invoice from the VPS to the local
-Backend.
-
-Candidate fields:
-
-- `synchronization_id`;
-- `invoice_id`;
-- `source_node_id`;
-- `target_node_id`;
-- `requested_revision`;
-- `status` — `pending`, `transferring`, `unknown_outcome`, `accepted`,
-  `rejected`, `conflict`, or `failed`;
-- `idempotency_key`;
-- `expected_target_revision` optional;
-- `started_at`;
-- `finished_at` optional;
-- `last_error_code` optional.
-
-`local_only` and `remote_only` are not synchronization statuses. They are derived
-from which `InvoiceReplica` records exist and which revisions each contains.
-
-## InvoiceTransferManifest
-
-Immutable value object describing the exact transfer set.
-
-Candidate fields:
-
-- `invoice_revision`;
-- required revision chain references;
-- required source artifact references and hashes;
-- canonical format version;
-- generated_at.
-
-## InvoiceTransferReceipt
-
-Durable local evidence for one idempotent synchronization request.
-
-Candidate fields:
-
-- `synchronization_id`;
-- `idempotency_key`;
-- `invoice_id`;
-- `accepted_revision` optional;
-- accepted source hashes;
-- `target_node_id`;
-- `result` — `accepted`, `already_accepted`, `rejected`, or `conflict`;
-- `accepted_at` optional;
-- `safe_error_code` optional.
-
-An `accepted` receipt is valid only when the local Backend has durably stored and
-verified the revision and all mandatory source artifacts.
-
-## InvoiceSyncConflict
-
-Entity created when expected revision checks show that neither side may overwrite
-the other.
-
-Candidate fields:
-
-- `conflict_id`;
-- `invoice_id`;
-- `vps_revision`;
-- `local_revision`;
-- `common_ancestor_revision` optional;
-- `reason`;
-- `detected_at`;
-- `status` — `open` or `resolved`;
-- `resolution` optional;
-- `resolved_by` optional;
-- `resolved_at` optional.
-
-Conflicts remain modelled even with single-owner baseline editing because they
-can result from stale clients, interrupted authority transfer, operator repair,
-software defects, or a future checked-out revision workflow.
-
-## LocalBackendConnectionObservation
-
-VPS-side operational observation, not durable business truth.
-
-Candidate fields:
-
-- `status` — `online`, `offline`, `unauthorized`, `incompatible`, or `unknown`;
-- `backend_node_id` optional;
-- `contract_version` optional;
-- `observed_at`;
-- `last_success_at` optional;
-- `safe_error_code` optional.
-
----
-
-# F. Work Object and Registry projection
+- `stored_at`;
+- `verification_status`;
+- `expires_at` optional.
 
 ## WorkObject
 
-Local project-scoped entity whose identity equals Registry project identity:
+Cabinet working projection for one Registry project.
 
 ```text
 WorkObject.id = Registry ProjectRecord.id
@@ -453,73 +421,171 @@ WorkObject.id = Registry ProjectRecord.id
 Candidate fields:
 
 - `project_id`;
-- `created_at`;
-- `created_by`;
 - `current_registry_snapshot_id`;
-- `lifecycle_status` — `active` or `archived`.
+- `first_seen_at`;
+- `last_seen_at`;
+- `cabinet_status` — `active`, `historical`, or `needs_attention`.
 
-A Work Object may be created only after a successful Registry read confirms the
-project identity. One Registry project has at most one persisted Work Object.
-
-## RegistryProjectSnapshot
-
-Immutable persisted external projection.
-
-Candidate fields:
-
-- `snapshot_id`;
-- `project_id`;
-- display name;
-- address;
-- status;
-- customer reference;
-- Registry timestamps;
-- Registry version or content hash;
-- `captured_at`;
-- `source_contract_version`.
-
-Registry remains authoritative. Cabinet may operate from an older snapshot while
-explicitly reporting its age and freshness.
-
-## RegistryObservationState
-
-Operational state for a project read:
-
-- `current`;
-- `stale`;
-- `unavailable`;
-- `not_found`.
-
-`not_found` is an observed Registry result and does not silently delete an
-existing Work Object.
+The Work Object does not own Registry name, address, or lifecycle. Cabinet owns
+relationships and history linked to the `project_id`.
 
 ## InvoiceObjectAssignment
 
-Cabinet-owned decision record, separate from invoice source facts.
+Cabinet-owned decision assigning an invoice to one Registry work object or
+intentionally leaving it unassigned.
 
-States:
+State vocabulary:
 
 - `unreviewed`;
-- `label_only`;
 - `assigned`;
 - `intentionally_unassigned`;
-- `invalidated`.
+- `invalidated`;
+- `needs_attention`.
 
 Candidate fields:
 
 - `assignment_id`;
-- `invoice_revision`;
+- `invoice_id`;
+- exact facts-version reference optional;
 - `state`;
 - `project_id` optional;
-- `label` optional;
+- `catalogue_id` optional;
 - `registry_snapshot_id` optional;
+- `decision_context` — `online_current`, `offline_cached`, or `manual_unassigned`;
 - `decided_at`;
 - `decided_by`;
-- `reason` optional.
+- `reason` optional;
+- `supersedes_assignment_id` optional.
 
-A validated `assigned` decision requires a local Work Object and pins the
-Registry snapshot used for validation. VPS-only work may preserve a label or an
-assignment suggestion but cannot create a validated `assigned` decision.
+An `offline_cached` assignment is valid Cabinet work. It records the catalogue
+and project snapshot used for selection.
+
+## AssignmentValidation
+
+Post-reconnection validation of one assignment against current Registry data.
+
+Candidate fields:
+
+- `validation_id`;
+- `assignment_id`;
+- current Registry snapshot reference optional;
+- `result` — `valid`, `project_missing`, `project_closed`, `materially_changed`,
+  `registry_unavailable`, or `inconclusive`;
+- `validated_at`;
+- `validated_by`;
+- warnings;
+- safe details optional.
+
+A non-valid result does not overwrite the assignment. It changes its attention
+state or leads to an explicit replacement decision.
+
+---
+
+# F. Replica ownership and synchronization
+
+## InvoiceWorkingReplica
+
+Record describing invoice work available at one Cabinet node.
+
+Candidate fields:
+
+- `invoice_id`;
+- `node_id`;
+- highest facts version present;
+- active confirmation present optional;
+- source artifact manifest hash;
+- `role` — `vps_working`, `local_durable`, or `read_only_cache`;
+- `updated_at`.
+
+The VPS is the working owner before durable local acceptance. The local Backend
+becomes the complete durable archive after acceptance.
+
+## InvoiceSynchronization
+
+Process entity for transferring one invoice work package from VPS to local.
+
+Candidate fields:
+
+- `synchronization_id`;
+- `invoice_id`;
+- `source_node_id`;
+- `target_node_id`;
+- exact transfer-manifest hash;
+- `status` — `pending`, `transferring`, `unknown_outcome`, `accepted`,
+  `rejected`, `conflict`, or `failed`;
+- `idempotency_key`;
+- `started_at`;
+- `finished_at` optional;
+- `last_error_code` optional.
+
+## InvoiceTransferManifest
+
+Immutable value object describing the exact transfer set.
+
+Candidate fields:
+
+- invoice identity;
+- included source artifact IDs and hashes;
+- included extraction IDs;
+- included facts-version references;
+- included confirmation references;
+- included assignment and assignment-validation references;
+- other included Cabinet decision references;
+- canonical format version;
+- generated time and manifest hash.
+
+## InvoiceTransferReceipt
+
+Durable local evidence for one idempotent transfer.
+
+Candidate fields:
+
+- `synchronization_id`;
+- `idempotency_key`;
+- `invoice_id`;
+- accepted manifest hash;
+- accepted source hashes;
+- `target_node_id`;
+- `result` — `accepted`, `already_accepted`, `rejected`, or `conflict`;
+- `accepted_at` optional;
+- `safe_error_code` optional.
+
+Acceptance requires durable storage and verification of all mandatory source
+artifacts and structured records in the manifest.
+
+## SynchronizationConflict
+
+Exceptional entity created when the same logical record has incompatible later
+changes on both nodes or when expected-version checks fail.
+
+Candidate fields:
+
+- `conflict_id`;
+- `invoice_id`;
+- affected record type and identity;
+- VPS version reference;
+- local version reference;
+- common ancestor optional;
+- reason;
+- `detected_at`;
+- `status` — `open` or `resolved`;
+- explicit resolution evidence optional.
+
+Conflicts concern Cabinet interpretations or decisions, never mutation of source
+bytes.
+
+## LocalBackendConnectionObservation
+
+VPS-side operational observation.
+
+Candidate fields:
+
+- `status` — `online`, `offline`, `unauthorized`, `incompatible`, or `unknown`;
+- backend node ID optional;
+- contract version optional;
+- `observed_at`;
+- `last_success_at` optional;
+- safe error code optional.
 
 ---
 
@@ -543,44 +609,19 @@ Candidate fields:
 - `snapshot_id`;
 - `reference`;
 - `currency`;
-- `zones`;
-- `items`;
-- `totals`;
+- zones;
+- items;
+- totals;
 - `captured_at`;
 - `source_contract_version`.
 
-## EstimateZoneSnapshot
-
-Candidate fields:
-
-- stable zone ID when provided;
-- version-pinned fingerprint otherwise;
-- name;
-- position;
-- parent zone reference optional.
-
 ## EstimateItemSnapshot
 
-Read-only comparable projection.
+Read-only comparable projection including stable item identity when available,
+zone, type, description, material reference, quantity, unit, unit price, waste,
+margin, discount, IVA, and totals.
 
-Candidate fields:
-
-- stable item ID when provided;
-- version-pinned fingerprint otherwise;
-- zone reference;
-- item type;
-- name and description;
-- material reference optional;
-- quantity and unit;
-- unit price;
-- waste;
-- margin;
-- discount;
-- IVA;
-- totals.
-
-PresuPro remains authoritative for mutable plan composition. Cabinet snapshots
-are evidence of what was observed, not an editable copy of the plan.
+PresuPro remains authoritative for mutable plan composition.
 
 ---
 
@@ -588,19 +629,18 @@ are evidence of what was observed, not an editable copy of the plan.
 
 ## MaterialIdentificationSuggestion
 
-Ephemeral agent proposal connecting one Invoice Line to a known material or
+Ephemeral agent proposal connecting one invoice line to a known material or
 normalized product concept.
 
 It may include confidence, explanation, alternatives, actor, and timestamp. It
-never modifies the source-faithful Invoice Line.
+never modifies source-faithful invoice facts.
 
 ## EstimateMatchSuggestion
 
-Ephemeral agent proposal connecting one exact invoice line revision to one exact
-Estimate Item Snapshot.
+Ephemeral agent proposal connecting one exact invoice line facts version to one
+exact Estimate Item Snapshot.
 
-Candidate fields include confidence, explanation, alternatives, actor, and
-timestamp. It is not analytical truth.
+It is not analytical truth.
 
 ## InvoiceLineEstimateMatch
 
@@ -609,57 +649,39 @@ Cabinet-owned decision entity.
 Candidate fields:
 
 - `match_id`;
-- exact invoice revision and line ID;
+- exact confirmed invoice facts version and line ID;
 - exact estimate snapshot and item reference;
 - `status` — `confirmed`, `rejected`, or `invalidated`;
 - `decided_at`;
 - `decided_by`;
-- suggestion provenance optional;
+- explanation optional;
 - invalidation reason optional.
 
 Baseline cardinality:
 
-- one invoice line in one exact revision has at most one active confirmed match;
+- one invoice line has at most one active confirmed match;
 - one estimate item may have many matched invoice lines;
-- distribution of one invoice line across multiple estimate items is deferred.
-
-A later invoice revision or incompatible estimate snapshot does not silently
-retarget the match. State 2 defines invalidation rules.
+- splitting one invoice line across several estimate items is deferred.
 
 ---
 
-# I. Plan-versus-actual analysis
-
-## PlanActualAnalysisRequest
-
-Value object pinning all analysis inputs:
-
-- `project_id`;
-- `estimate_snapshot_id`;
-- included confirmed invoice revisions;
-- included confirmed match IDs;
-- requested_at;
-- requested_by;
-- forecast assumptions optional.
+# I. Analytics
 
 ## PlanActualAnalysis
 
-Calculated view, not a source-of-truth entity.
+Calculated view assembled from:
 
-May contain:
+- one exact Estimate Snapshot;
+- synchronized confirmed invoice facts;
+- valid object assignments;
+- confirmed estimate matches;
+- explicit forecast assumptions.
 
-- planned and actual quantity and amount;
-- average actual price;
-- remaining quantity and budget;
-- variance;
-- matched and unmatched coverage;
-- stale-input warnings;
-- explicit forecast assumptions;
-- input references and calculation version.
+It may contain planned amount, actual amount, average price, remaining quantity,
+variance, unmatched coverage, warnings, and forecasts.
 
-Complete project analysis uses locally available synchronized invoices and local
-project data. VPS-only invoices may be discussed from their own facts but are not
-presented as complete project actuals.
+Fresh VPS-only invoices may be discussed using their own facts, but complete
+project analysis requires the local archive and PresuPro snapshot.
 
 ---
 
@@ -667,117 +689,101 @@ presented as complete project actuals.
 
 ## HoldedPublication
 
-Business entity representing publication of one exact confirmed Invoice
-Revision.
+Business record for publishing one exact confirmed invoice facts version.
+
+Status vocabulary:
+
+- `pending`;
+- `succeeded`;
+- `failed`;
+- `ambiguous`;
+- `cancelled`.
 
 Candidate fields:
 
 - `publication_id`;
-- `invoice_revision`;
-- `idempotency_key`;
-- `status` — `pending`, `succeeded`, `failed`, `ambiguous`, `cancelled`, or
-  `superseded`;
-- `external_document_id` optional;
-- `created_at`;
-- `created_by`;
-- `completed_at` optional;
-- correction or supersession reference optional.
-
-Publication eligibility is independent from PresuPro matching.
+- exact confirmation reference;
+- idempotency key;
+- external document ID optional;
+- current status;
+- created and completed timestamps;
+- safe outcome details.
 
 ## HoldedPublicationAttempt
 
-Technical attempt record owned through the Holded integration boundary.
+Technical attempt record belonging to one `HoldedPublication`.
 
-Candidate fields:
+Retries create new attempts, not new business publications.
 
-- `attempt_id`;
-- `publication_id`;
-- `attempt_number`;
-- `started_at`;
-- `finished_at` optional;
-- result;
-- gateway receipt optional;
-- safe error optional.
-
-Credentials, transport retries, and reconciliation stay inside Holded Gateway.
+Holded publication is independent from PresuPro matching.
 
 ---
 
 # K. Remaining Cabinet Cards
 
-The local durable domain retains:
+State 1 retains the broader Cabinet product direction:
 
 - `ProviderCard`;
 - `ContactCard`;
 - `MaterialListCard` and `MaterialListItem`;
 - `DocumentCard`;
-- embedded baseline `ProjectNote`.
+- project-linked notes and relationships.
 
-These models require further assembly. They remain local-only unless a later
-product decision grants a specific VPS lifecycle.
-
-A generic `Card` superclass is not yet accepted. Shared search, provenance, and
-revision capabilities may be implemented through common interfaces or metadata
-without forcing unrelated aggregates into one lifecycle.
+Their exact fields belong to later focused modelling. They remain part of the
+same personal working-memory product rather than separate systems.
 
 ---
 
 # L. Relationship map
 
 ```text
-InvoiceCard 1 -> 1..* InvoiceRevision
-InvoiceRevision 1 -> 0..1 InvoiceConfirmation
-InvoiceRevision 1 -> 1..* SourceUse
-SourceArtifact 1 -> 1..* SourceReplica
+Registry Project 1 -> 0..* RegistryProjectSnapshots
+RegistryCatalogueSnapshot 1 -> 0..* RegistryProjectSnapshots
+VPS Cabinet 1 -> 0..* cached RegistryCatalogueSnapshots
 
-InvoiceCard 1 -> 1..* InvoiceReplica
-InvoiceCard 1 -> 0..* InvoiceSynchronization
-InvoiceSynchronization 1 -> 0..1 InvoiceTransferReceipt
-InvoiceCard 1 -> 0..* InvoiceSyncConflict
+InvoiceDocument 1 -> 1..* SourceArtifacts
+SourceArtifact 1 -> 1..* SourceReplicas
+InvoiceDocument 1 -> 0..* InvoiceExtractions
+InvoiceDocument 1 -> 1..* InvoiceFactsVersions
+InvoiceFactsVersion 1 -> 0..1 active InvoiceConfirmation
+InvoiceDocument 1 -> 0..* InvoiceObjectAssignments
+InvoiceObjectAssignment 1 -> 0..* AssignmentValidations
 
-Registry Project 1 <-> 0..1 WorkObject
-WorkObject 1 -> 1..* RegistryProjectSnapshot
-InvoiceRevision 1 -> 0..* InvoiceObjectAssignment
-WorkObject 1 <- 0..* validated InvoiceObjectAssignment
-
-PresuPro Estimate 1 -> 1..* EstimateSnapshot
-EstimateSnapshot 1 -> 0..* EstimateItemSnapshot
-Invoice Line Revision 1 -> 0..1 active confirmed InvoiceLineEstimateMatch
-Estimate Item Snapshot 1 -> 0..* InvoiceLineEstimateMatch
-
-Confirmed InvoiceRevision 1 -> 0..* HoldedPublication
-HoldedPublication 1 -> 0..* HoldedPublicationAttempt
+InvoiceDocument 1 -> 0..* synchronization transfers and receipts
+Invoice Line 1 -> 0..1 active confirmed Estimate Match
+Estimate Item 1 -> 0..* matched Invoice Lines
+InvoiceDocument 1 -> 0..* Holded Publications
 ```
 
 ---
 
 # M. Persisted versus calculated
 
-Persisted on VPS for the fresh working set:
+Persisted on VPS for the working set:
 
-- logical Invoice Cards and revisions created there;
-- protected source artifacts and VPS source replicas;
-- confirmations and provenance;
-- VPS Invoice Replica records;
-- synchronization processes, manifests, and received receipts;
-- connection observations needed for operation.
+- immutable received source artifacts;
+- extraction attempts;
+- invoice facts versions and confirmations;
+- cached Registry catalogue snapshots;
+- offline object assignments and provenance;
+- synchronization state and receipts;
+- minimal connection and session state.
 
 Persisted locally:
 
-- complete Invoice Card revision history accepted by the local Backend;
-- durable source replicas and verification evidence;
-- local Invoice Replica and synchronization receipts;
-- Work Objects and Registry snapshots;
+- complete Cabinet archive;
+- durable source replicas;
+- all extraction and correction history;
+- Registry project and catalogue snapshots;
+- assignments and validation history;
 - Estimate Snapshots;
-- assignment and match decisions;
+- accepted matches;
 - Holded publication evidence;
-- other Cabinet Cards and history.
+- other Cabinet Cards and relationships.
 
 Calculated on demand:
 
-- replica-derived labels such as `remote_only`, `local_only`, and
-  `synchronized`;
+- invoice validation findings;
 - totals across invoices;
 - average actual prices;
 - remaining planned quantities;
@@ -786,72 +792,67 @@ Calculated on demand:
 
 ---
 
-# N. Degraded-operation behaviour
+# N. Degraded-operation matrix
 
-## Local Backend offline
+## Local platform offline
 
-Available on VPS:
+Available:
 
-- fresh invoice capture and source preservation;
-- extraction, revision editing, confirmation, search, and discussion inside the
-  VPS working set;
-- creation of labels and assignment suggestions;
-- queued idempotent synchronization intent.
+- invoice capture and immutable source preservation;
+- extraction, correction, and confirmation;
+- search and discussion inside the VPS working set;
+- browsing the cached Registry object catalogue;
+- assigning invoices to cached objects;
+- preserving all work for later transfer.
 
 Unavailable or limited:
 
-- validated Registry assignment;
+- current Registry refresh;
 - current PresuPro retrieval;
 - complete historical search;
-- durable estimate matching and complete project analytics;
+- durable estimate matching and full analytics;
 - local integration actions.
 
 ## Local Backend online, Registry unavailable
 
-Existing local Work Objects and Registry snapshots remain usable with explicit
-freshness warnings. New unknown Work Objects cannot be validated.
+Existing snapshots and cached assignments remain readable. New validation is
+recorded as `registry_unavailable`; prior user decisions are not erased.
 
 ## PresuPro unavailable
 
-Invoices and prior decisions remain readable. Repeatable analysis may use an
-explicitly selected existing Estimate Snapshot; it must not claim to represent
-the current plan unless freshness is known.
+Invoices and accepted matches remain readable. Fresh current-plan analysis may be
+unavailable unless a suitable local Estimate Snapshot exists.
 
 ## Holded unavailable
 
-Invoice capture, synchronization, assignment, matching, and analytics remain
-available. Publication records a failed or ambiguous attempt without duplicating
-the business publication.
+Capture, synchronization, assignment, matching, and analytics remain available.
+Publication records failure or ambiguity.
 
 ---
 
 # O. State 1 closure questions
 
-Questions are ordered by risk to model consistency.
+Priority questions for State 2:
 
-1. Is the baseline after-sync VPS policy strictly read-only, or is an explicit
-   checked-out revision required in the first product?
-2. Which revision chain and source artifacts form the minimum atomic durable
-   acceptance set?
-3. May draft revisions synchronize, or only confirmed revisions?
-4. Can a newer draft exist after an older confirmed revision, and which revision
-   is shown as the current working revision?
-5. What exact VPS retention and deletion guarantees apply after local durable
-   acceptance?
-6. How is `unknown_outcome` reconciled and when may a transfer be retried?
-7. Which authority-transfer failures create a conflict rather than a retryable
-   synchronization failure?
-8. How does Cabinet select the relevant PresuPro estimate for a project?
-9. Which stable IDs exist for PresuPro zones and items?
-10. Who may validate project assignments and confirm estimate matches?
-11. Which invoice, assignment, Registry, and estimate changes invalidate a
-    confirmed match?
-12. How are corrected invoices represented after successful Holded publication?
-13. Which remaining Card types need revision history, and which need a VPS
-    working lifecycle?
-14. What backup, quarantine, retention, and deletion guarantees apply to each
-    source storage zone?
+1. What exact fields belong in the compact VPS Registry catalogue?
+2. Is the catalogue complete for all active objects or filtered by user or
+   business status?
+3. How old may a cached catalogue be before Cabinet warns or blocks assignment?
+4. Which Registry changes make an offline assignment `needs_attention` rather
+   than still valid?
+5. May a source document contain several photos and one PDF, and how are they
+   grouped as one real-world invoice?
+6. Which extracted fields require explicit human confirmation?
+7. Can confirmation be partial when one field remains unreadable?
+8. Which facts corrections invalidate object assignment, estimate matching, or
+   Holded eligibility?
+9. Which source artifacts and structured records must transfer atomically?
+10. How is `unknown_outcome` reconciled after a timeout?
+11. What exact VPS retention and backup policy protects unsynchronized work?
+12. How does Cabinet select the relevant PresuPro estimate for a project?
+13. Which PresuPro changes invalidate accepted matches?
+14. How are corrected facts handled after successful Holded publication?
+15. Which additional Cabinet Card types require their own VPS working lifecycle?
 
-State 2 will define invariants, state transitions, authority transfer,
-synchronization policy, validation matrices, invalidation rules, and calculation
-semantics.
+State 2 will define invariants, transitions, validation rules, synchronization
+policy, conflict handling, and calculation semantics.
