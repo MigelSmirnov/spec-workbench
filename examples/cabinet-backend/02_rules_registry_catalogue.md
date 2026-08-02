@@ -126,6 +126,20 @@ catalogue.
 Older catalogues may remain retained for assignment provenance and audit, but
 normal object browsing uses the current pointer.
 
+## Rule B6 — Refresh triggers
+
+Catalogue refresh uses a combination of triggers:
+
+1. immediately after a local Backend connection becomes successfully available;
+2. manually on explicit user or operator request;
+3. once every 24 hours while the local platform remains continuously online.
+
+Repeated connection events within 15 minutes MUST be coalesced into one refresh
+attempt unless a manual refresh is requested.
+
+A failed refresh records its own outcome and does not deactivate the last
+verified catalogue.
+
 ---
 
 # C. Freshness and degraded use
@@ -137,17 +151,39 @@ user and agent whenever offline project data is presented or selected.
 
 Cabinet MUST NOT describe a cached catalogue as current Registry data.
 
-## Rule C2 — Baseline stale behaviour
+## Rule C2 — Freshness classes
 
-Catalogue age does not invalidate project identity by itself.
+Catalogue age is classified from its Registry observation time:
 
-In the baseline, an old but verified catalogue remains usable for offline
-assignment with a freshness warning. The system MUST NOT block the user solely
-because the local platform has been unavailable longer than expected.
+- `fresh`: less than 48 hours old;
+- `stale`: at least 48 hours but less than 7 days old;
+- `very_stale`: at least 7 days but less than 30 days old;
+- `expired_for_assignment`: 30 days old or older.
 
-Exact warning thresholds are runtime configuration and remain to be selected.
+These thresholds are accepted baseline policy, not unresolved placeholders.
+A later product change may revise them explicitly, but implementations MUST NOT
+silently choose different values.
 
-## Rule C3 — No catalogue available
+## Rule C3 — Behaviour by freshness class
+
+A verified catalogue behaves as follows:
+
+- `fresh`: normal offline selection without freshness warning;
+- `stale`: selection remains allowed with a visible warning showing catalogue
+  age;
+- `very_stale`: selection remains allowed only after explicit acknowledgement
+  that current Registry state cannot be confirmed;
+- `expired_for_assignment`: browsing and historical explanation remain allowed,
+  but a new Registry `project_id` assignment is blocked.
+
+When assignment is blocked by age, invoice capture remains available and the
+user may leave the Card unassigned or use a free-form label allowed by Invoice
+Card V1.
+
+Age alone never invalidates an assignment already recorded in an accepted Card
+revision.
+
+## Rule C4 — No catalogue available
 
 When no verified catalogue exists on the VPS:
 
@@ -156,7 +192,7 @@ When no verified catalogue exists on the VPS:
   by Invoice Card V1;
 - Cabinet MUST NOT invent or claim a validated Registry `project_id`.
 
-## Rule C4 — Registry outage during refresh
+## Rule C5 — Registry outage during refresh
 
 A failed Registry refresh does not delete or invalidate the last verified VPS
 catalogue.
@@ -170,7 +206,7 @@ The failure is recorded separately from catalogue content.
 ## Rule D1 — Selection is real Cabinet work
 
 Selecting a `project_id` from a verified cached catalogue is a valid offline
-Cabinet action.
+Cabinet action when the catalogue is not `expired_for_assignment`.
 
 It is not merely an AI suggestion and does not require Registry to be reachable
 at the moment of selection.
@@ -182,6 +218,8 @@ An offline selection MUST retain:
 - selected `project_id`;
 - catalogue ID and catalogue hash;
 - the exact project entry or project snapshot used;
+- catalogue freshness class at selection time;
+- any required stale-catalogue acknowledgement;
 - decision time and actor;
 - Card revision in which the object context was stored.
 
@@ -206,9 +244,9 @@ A later Card revision may deliberately update the object context.
 
 ## Rule E1 — Validate after local acceptance
 
-After reconnection, an assigned Card revision SHOULD be checked against current
+After reconnection, an assigned Card revision MUST be checked against current
 Registry data before the assignment is relied upon for new PresuPro matching or
-project analytics.
+new project analytics.
 
 The Card itself may still be durably archived when Registry is unavailable.
 
@@ -234,17 +272,29 @@ An archived project:
 - remains a valid historical identity;
 - remains readable through stored snapshots and Registry lookup by ID;
 - does not invalidate previously captured invoices;
-- requires attention before being used for new matching or new current-project
-  work.
+- blocks automatic creation of new PresuPro matches and new current-project
+  analytics;
+- may be used for historical matching only after an explicit user decision that
+  records acknowledgement of the archived status.
+
+The acknowledgement applies to the exact Card revision and Registry validation
+result. It is not a permanent reactivation of the Registry project.
 
 ## Rule E4 — Not-found behaviour
 
 A current `not_found` result MUST NOT erase the Card assignment or delete linked
 history.
 
-It creates an attention condition requiring explicit review.
+It creates an attention condition requiring explicit review and blocks new
+matching or current-project analytics for that assignment.
 
-## Rule E5 — Registry name or address changes
+## Rule E5 — Registry unavailable or inconclusive
+
+`registry_unavailable` and `inconclusive` do not invalidate the stored Card.
+They postpone new matching and current-project analytics until a current safe
+validation or an explicit historical-use decision exists.
+
+## Rule E6 — Registry name or address changes
 
 A change to display name, address, customer reference, or `registry_updated_at`
 does not change `project_id` identity.
@@ -252,7 +302,7 @@ does not change `project_id` identity.
 The latest Registry snapshot is used for current presentation. The snapshot used
 at capture remains retained for provenance.
 
-## Rule E6 — Explicit correction only
+## Rule E7 — Explicit correction only
 
 Changing the assigned `project_id` requires an explicit Cabinet Card revision.
 Validation records cannot silently replace one project with another.
@@ -270,18 +320,39 @@ catalogue.
 This may be satisfied by retaining the full catalogue or the exact referenced
 project entry plus catalogue identity and policy evidence.
 
-## Rule F2 — VPS cleanup safety
+## Rule F2 — VPS catalogue retention
 
-Deleting an old catalogue from VPS working storage MUST NOT remove the only copy
-of assignment provenance that has not yet been durably accepted locally.
+The VPS retains:
 
-## Rule F3 — Local durable history
+- the current verified catalogue;
+- the six immediately preceding verified catalogues, for seven full catalogues
+  total;
+- every additional catalogue or project entry still required by unsynchronized
+  assignment provenance.
 
-The local Backend retains catalogue publication evidence and the project
-snapshots required to explain historical offline selections.
+A full catalogue MUST NOT be deleted before it is 30 days old. After durable
+local acceptance of all references to an older catalogue, the VPS may compact it
+to the exact referenced project entries plus catalogue identity and policy
+evidence.
 
-It does not need to preserve every unreferenced catalogue forever; exact
-retention duration is policy/configuration for a later decision.
+Compaction MUST preserve the ability to explain what the user saw and selected.
+
+## Rule F3 — VPS cleanup safety
+
+Deleting or compacting an old catalogue from VPS working storage MUST NOT remove
+the only copy of assignment provenance that has not yet been durably accepted
+locally.
+
+## Rule F4 — Local durable history
+
+The local Backend retains all accepted catalogue snapshots, publication
+receipts, referenced project entries, and assignment provenance indefinitely in
+the baseline.
+
+The expected data volume is small, and deleting unreferenced catalogue history
+would add policy and recovery complexity without meaningful product benefit.
+A future retention change requires an explicit migration and audit-preservation
+plan.
 
 ---
 
@@ -296,23 +367,36 @@ retention duration is policy/configuration for a later decision.
 7. Registry validation never silently edits an accepted Invoice Card revision.
 8. Archived and not-found outcomes never erase historical Cabinet relationships.
 9. New normal project selection uses active projects only.
-10. Registry URL and freshness thresholds are configuration, not domain model
-    fields or hard-coded port assumptions.
+10. A catalogue 30 days old or older cannot provide a new Registry ID assignment.
+11. New PresuPro matching requires current safe Registry validation or an explicit
+    archived historical-use acknowledgement.
+12. The VPS retains seven full verified catalogues and never removes unresolved
+    assignment provenance.
+13. The local Backend retains accepted catalogue history indefinitely in the
+    baseline.
+14. Registry URL is configuration and MUST NOT be inferred from a hard-coded
+    platform port.
 
 ---
 
-# H. State 2 decisions still open
+# H. Closed baseline values
 
-The following values remain explicit later policy/config decisions:
+The following values are accepted for the baseline:
 
-1. warning threshold for a stale catalogue;
-2. stronger warning threshold for a very old catalogue;
-3. whether any maximum age eventually blocks new assignment;
-4. exact retained catalogue count or duration on VPS;
-5. exact local retention for unreferenced catalogues;
-6. user-facing handling of `valid_archived` before PresuPro matching;
-7. whether catalogue refresh is manual, connection-triggered, scheduled, or a
-   combination.
+| Concern | Accepted value |
+| --- | --- |
+| Fresh catalogue | `< 48 hours` |
+| Stale warning | `48 hours to < 7 days` |
+| Strong warning and acknowledgement | `7 days to < 30 days` |
+| Block new Registry ID assignment | `>= 30 days` |
+| Full catalogues retained on VPS | `7` |
+| Minimum full-catalogue age before deletion | `30 days` |
+| Local accepted catalogue retention | indefinite |
+| Automatic refresh after connection | yes |
+| Continuous-online refresh | every 24 hours |
+| Connection refresh coalescing window | 15 minutes |
+| Manual refresh | always available |
+| Archived project for new matching | blocked by default; explicit historical acknowledgement required |
 
-These unknowns do not require new domain models and do not block the accepted
-baseline rules above.
+These are product rules. They MUST NOT be replaced by implementation defaults or
+left as unspecified configuration during later design states.
