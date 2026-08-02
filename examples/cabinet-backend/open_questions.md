@@ -2,162 +2,105 @@
 
 ## Status
 
-Open decisions discovered while filling State 1. They remain explicit inputs to
-State 1 closure and later State 2 rules. No endpoint, table, transport, module,
-or implementation is implied.
+Open decisions after accepting the two-tier Cabinet architecture. State 0 now
+accepts that fresh invoices remain fully workable on the VPS while the local
+Backend owns the complete durable archive and local platform integrations.
 
-Security decisions are tracked in `SECURITY.md`. They are Layer 0 blockers for
-production-facing API, deployment, secrets, authorization, and integration
-contracts.
+## Synchronization and authority questions
 
-## Layer 0 security blockers
+1. After first successful synchronization, is the VPS Invoice Card strictly
+   read-only, or may Cabinet explicitly check out a new revision?
+2. How long does the VPS retain synchronized originals and structured invoice
+   revisions?
+3. Which source files, metadata, provenance, and revision history must be
+   transferred atomically?
+4. May a draft synchronize before confirmation, or does synchronization always
+   transfer the current state regardless of lifecycle?
+5. How is `unknown_outcome` reconciled after a timeout?
+6. Which conflict types remain possible under the baseline single-owner-after-sync
+   rule?
+7. Can the local Backend reject an already confirmed VPS invoice for domain
+   validation reasons, and what user state follows?
+8. How are local-only historical invoices surfaced to the VPS without copying
+   the complete archive?
+9. Which Card types besides Invoice require a future VPS working lifecycle?
 
-1. Where does Cabinet Backend run relative to the VPS-hosted Cabinet Web UI?
-2. Is Cabinet Backend directly internet-facing, reverse-proxied, or private-only?
-3. How does the human user authenticate, recover access, and maintain a session?
-4. How do Registry, PresuPro, Holded Gateway, agents, and Cabinet Backend
-   authenticate each other?
-5. How is agent authority delegated and limited by user, capability, project,
-   action, and expiry?
-6. What authorization model protects Cards, source binaries, fiscal data,
-   matching decisions, exports, and Holded publication?
-7. Where do PostgreSQL and original source binaries run, and who may reach them?
-8. How are credentials, signing keys, encryption keys, and Holded secrets stored
-   and rotated?
-9. What encryption, backup, retention, deletion, redaction, logging, and audit
-   policies apply?
-10. Which actions require explicit human confirmation?
-11. Who owns VPS hardening, patching, monitoring, incident response, and tested
-    restoration?
+## VPS working-set questions
 
-These questions must not be silently answered by framework defaults. See
-`SECURITY.md` for the complete decision workspace and closure gate.
+1. What exact invoice count, age, or storage quota defines the fresh working set?
+2. Are synchronized invoice bodies searchable on the VPS until retention expiry?
+3. Does the VPS retain extracted text after deleting the synchronized original?
+4. What encrypted backup, if any, protects unsynchronized VPS invoices?
+5. What recovery path applies if the VPS fails before synchronization?
+6. Which user-visible freshness and authority labels are required?
 
-## State 1 model questions
+## State 1 domain questions
 
 1. How does Cabinet obtain the relevant PresuPro estimate for a Registry
-   `project_id`: direct PresuPro lookup, Registry artifact discovery, or another
-   agreed boundary?
-2. Does PresuPro already provide a reliable way to select one current estimate
-   for a project, and what happens when several estimates exist?
-3. Does Cabinet persist a full observed estimate snapshot, a compact projection,
-   or only an `EstimateReference` with content hash/version?
-4. Which stable identifiers currently exist for PresuPro zones and estimate
-   items? If they do not exist, what fingerprint and invalidation evidence is
-   sufficient for the baseline?
-5. Is one Invoice Line to at most one Estimate Item the accepted first-product
-   limit?
-6. Is a rejected estimate match a durable decision record, or may rejection live
-   only in general decision history?
-7. Who may confirm an estimate match: user only, user plus trusted agent, or
-   another authorized actor?
-8. Which invoice or estimate changes automatically invalidate a confirmed
-   match?
-9. How is a corrected Invoice Card handled after a successful Holded
-   publication: correction document, replacement, cancellation and republish,
-   or a separate workflow owned by Holded policy?
-10. Which Provider, Contact, Material List, Document, and Project Note fields
-    are mandatory for the first PostgreSQL-backed Cabinet release?
-11. Is `ProjectNote` an embedded Work Object entity in the baseline, or should
-    notes be independent Cards from the first release?
-12. Is `SourceReference` a shared independently identified entity or a value
-    object embedded separately in each Card?
+   `project_id`?
+2. What happens when several estimates exist for one project?
+3. Which stable identifiers exist for PresuPro zones and estimate items?
+4. Is a persisted local `EstimateSnapshot` required for every accepted match?
+5. Who may confirm an estimate match?
+6. Which invoice or estimate changes invalidate a confirmed match?
+7. Is a rejected match a durable decision record?
+8. How is a corrected Invoice Card handled after successful Holded publication?
+9. Which Provider, Contact, Material List, Document, and Project Note fields are
+   mandatory for the first local PostgreSQL release?
+10. Is `SourceReference` shared across revisions or embedded per Card revision?
 
 ## State 2 policy questions
 
-1. What freshness policy changes Registry synchronization state from `current`
-   to `stale`?
-2. Does Cabinet retain historical Registry snapshots or only the current
-   snapshot plus audit evidence?
-3. Which historical Cabinet corrections remain allowed after Registry project
-   archival?
-4. How are assignment suggestions, rejected candidates, confirmation, and
-   reassignment history represented without overloading the current assignment?
-5. What exact invoice or estimate revision changes invalidate a confirmed
-   `InvoiceLineEstimateMatch`?
-6. Which plan-versus-actual values are calculated when units differ and no
-   explicit conversion exists?
-7. Which forecast price basis is the default, if any, and must the agent always
-   ask before projecting a final cost?
-8. What is the precise first-product meaning of `refunded` when only part of a
-   purchase is returned?
-9. Can an archived Invoice Card remain in historical plan-versus-actual totals,
-   and how are excluded or corrected invoices represented?
-10. What rule ensures that one invoice revision has at most one successful
-    Holded accounting publication unless a correction workflow explicitly
-    authorizes another action?
+1. Exact transitions for `remote_only`, `syncing`, `synchronized`, `conflict`,
+   `failed`, and `unknown_outcome`.
+2. Revision-freeze behavior during transfer.
+3. Idempotency and reconciliation rules.
+4. Conflict-resolution choices and audit evidence.
+5. Registry snapshot freshness and history policy.
+6. Estimate-match invalidation rules.
+7. Quantity analysis when units differ.
+8. Forecast default and required assumptions.
+9. Partial refund semantics.
+10. Archived invoice inclusion in plan-versus-actual totals.
+11. Holded correction and repeat-publication rules.
 
-## Source and infrastructure questions
+## Security and operations questions
 
-1. Which original source binaries are stored by Cabinet?
-2. Which binary storage service owns them?
-3. What retention, integrity, and deletion policy applies to source binaries?
-4. Does Holded Gateway require a separate deployable and database from its
-   first release, or may it be an independently owned platform module deployed
-   beside other services without direct table access?
-5. What production authentication and service-authorization model applies to
-   users, agents, Cabinet, Registry, PresuPro, Holded Gateway, and Client
-   Portal?
+1. Select Tailscale, SSH reverse tunnel, mTLS, or equivalent transport.
+2. Define VPS session, recovery, expiry, and revocation.
+3. Define VPS encryption, backup, and unsynchronized-invoice recovery.
+4. Define local backup destination, keys, RPO, RTO, and restore tests.
+5. Define synchronization credential rotation and incident response.
+6. Define safe audit and log retention in both zones.
+7. Define source retention and deletion guarantees after synchronization.
+8. Define Holded Gateway placement and authentication.
 
 ## External-contract questions
 
-1. What exact PresuPro read contract returns estimate identity, project link,
-   zones, items, quantities, units, prices, waste, margin, discounts, IVA, and
-   totals for agent-assisted analysis?
-2. What contract or evidence identifies the estimate revision or content hash
-   used by an accepted match?
-3. What PresuPro event produces an approved immutable presupuesto for future
-   downstream publication?
-4. How are PresuPro zones and items mapped to later Client Portal Budget
-   Sections?
-5. What exact Cabinet facts and corrections does Client Portal accept?
-6. Is Client Portal delivery push, pull, or artifact-based?
-7. What Holded Gateway command and receipt semantics support idempotent purchase
-   invoice publication, ambiguous outcomes, reconciliation, and corrections?
+1. PresuPro read contract for estimate identity, project link, zones, items,
+   quantities, units, prices, waste, margin, discounts, IVA, and totals.
+2. Evidence that identifies the estimate version used by a match.
+3. Registry contract for validating project assignment during synchronization.
+4. Holded Gateway command and receipt semantics for idempotency, ambiguity,
+   reconciliation, and corrections.
+5. Future Client Portal intake boundary.
 
-## Resolved product questions
+## Resolved decisions
 
-- Cabinet uses the same Registry project-context access pattern as other current
-  platform applications.
-- Work Object is the Cabinet working interface for one Registry project.
-- `WorkObject.id` equals Registry `project_id`; no second Cabinet Work Object
-  identity is introduced.
-- One Registry project has at most one persisted Cabinet Work Object
-  representation.
-- Work Object creation requires a successful first Registry context read.
-- Registry context is copied into a durable read-only snapshot for offline Web
-  UI and conversational-agent work.
-- Registry remains authoritative for copied project fields.
-- Existing Work Objects remain usable during temporary Registry unavailability.
-- Invoice Cards have their own identity and may exist without a Work Object.
-- The primary assignment may be `unreviewed`, `assigned`,
-  `intentionally_unassigned`, or `label_only`.
-- Label-only evidence does not create a Work Object.
-- One Invoice Card has at most one current primary Work Object assignment.
-- Multi-object Invoice allocation is deferred.
-- Invoice Line fields are intentionally comparable with PresuPro Estimate Item
-  fields without copying planning values into invoice facts.
-- PresuPro owns the plan; Cabinet owns accepted invoice facts and match
-  decisions.
-- The agent owns heuristic semantic matching between differently named products
-  from different shops.
-- A suggestion does not participate in plan-versus-actual calculations until it
-  is confirmed.
-- Several Invoice Lines from several invoices may match one Estimate Item.
-- Partial distribution of one Invoice Line across several Estimate Items is
-  deferred from the baseline.
-- Plan-versus-actual totals, variances, remaining quantities, average prices,
-  and forecasts are calculated on demand rather than stored as primary facts.
-- Multiple payment transactions may describe one purchase, including split
-  cash/card settlement.
-- The complete payment status vocabulary is preserved: `unknown`, `unpaid`,
-  `partially_paid`, `paid`, and `refunded`.
-- There is no cross-invoice payment aggregate in the first product.
-- One confirmed Invoice Card revision may be published to Holded through Holded
-  Gateway independently from PresuPro matching and analysis.
-- Registry application registration and project membership are future platform
-  concerns, not blockers for the current context-read integration.
-- Security is a Layer 0 blocker and must not be silently defaulted during API,
-  contract, or deployment design.
-- Holded credentials remain inside Holded Gateway and never become Cabinet Card
-  or agent data.
+- Cabinet VPS and local Backend are separate trust and data zones.
+- Fresh invoices remain fully workable on the VPS while the local platform is
+  offline.
+- A stable `invoice_id` is created at first VPS capture and preserved locally.
+- The VPS is authoritative for an unsynchronized fresh invoice revision.
+- The local Backend is the complete durable archive after synchronization.
+- Synchronization is authenticated, encrypted, revision-aware, and idempotent.
+- Unrestricted multi-master editing is not part of the baseline.
+- The VPS stores a limited fresh working set, not the complete archive by
+  default.
+- Registry and PresuPro are reached only through the local Backend.
+- Validated Work Object assignment requires local Registry evidence.
+- Invoice Line fields remain comparable with PresuPro Estimate Item fields.
+- The agent proposes semantic matches; only accepted matches affect analytics.
+- Plan-versus-actual results are calculated on demand.
+- Holded publication is independent from matching and uses Holded Gateway.
+- Holded credentials never become Cabinet or agent data.
