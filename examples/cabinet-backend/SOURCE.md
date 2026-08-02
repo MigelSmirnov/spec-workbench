@@ -3,33 +3,66 @@
 ## Purpose of this case study
 
 This case study designs the transition of Cabinet from repository-backed Cards
-to a continuously running backend with PostgreSQL while preserving Cabinet's
-original product idea:
+to a continuously available assistant backed by VPS working storage and a local
+PostgreSQL archive.
+
+Cabinet preserves its original product idea:
 
 > The user communicates naturally; the agent organises incoming working
 > information; Cabinet stores the resulting structured, searchable knowledge.
 
-The target is not a separate Project Cost Integration product and not an
-extension of Registry. Cabinet Backend becomes the durable operational core
-for Cabinet Cards, relationships, purchases represented by Invoice Cards,
-material lists, sources, and history.
+Cabinet is a personal operational memory for everyday work. Invoice capture is
+one important workflow inside that larger product, not a separate accounting or
+payables application.
 
 ## Original Cabinet intent
 
 The inspected `MigelSmirnov/cabinet` repository establishes:
 
-- Cabinet is a personal workspace for everyday work;
 - conversation is the primary write interface;
-- AI extracts, searches, creates, and enriches Cards;
-- Provider, Contact, Material List, Document, Invoice, and Work Object Cards
+- AI extracts, searches, creates, links, and enriches Cards;
+- Provider, Contact, Material List, Document, Invoice, and Work Object views
   belong to the product direction;
 - original documents and source context are preserved;
 - AI, Web UI, API, and future clients use the same structured information;
-- repository storage is a Version 1 decision that may move to a server without
-  changing accepted domain facts.
+- repository storage is a Version 1 implementation choice, not a permanent
+  domain boundary.
 
-The current Provider implementation is narrower than the full product boundary
-and does not redefine that boundary.
+## Product interpretation of an invoice
+
+In the normal Cabinet workflow, an invoice is usually evidence of a material or
+service purchase made in a shop, online, or from a tradesperson.
+
+The user may photograph a Spanish invoice or receipt while away from the local
+platform, or upload an existing image or PDF. The paper document, received image,
+or PDF is the primary source. Cabinet does not edit that source.
+
+Cabinet may improve its understanding of the source by:
+
+- adding another photograph of the same paper document;
+- running OCR or another extraction method;
+- correcting an extraction error;
+- confirming the extracted facts;
+- assigning the purchase to a known work object;
+- linking lines to PresuPro estimate items;
+- publishing an eligible confirmed purchase to Holded.
+
+These are interpretations and Cabinet decisions around the source. They are not
+changes to the original invoice.
+
+The normal field workflow is:
+
+```text
+purchase materials or receive a tradesperson invoice
+→ photograph or upload the source on the VPS
+→ extract and review invoice facts
+→ select a work object from the cached Registry object list, or leave unassigned
+→ keep working while the local platform is offline
+→ later connect the local platform
+→ transfer sources, extracted facts, confirmation, and Cabinet decisions
+→ validate the selected object against current Registry data
+→ continue with PresuPro analysis and other local integrations
+```
 
 ## Implemented Cabinet Invoice Card V1
 
@@ -38,159 +71,135 @@ Inspected merged work: Cabinet pull request `#3`, originally developed on
 
 Confirmed implementation facts:
 
-- one Invoice Card represents one supplier invoice or purchase;
+- one Invoice Card represents one supplier invoice, receipt, or purchase;
 - lifecycle states are `draft`, `confirmed`, and `archived`;
-- the `object` block is structurally required;
-- `object.card_id` is an optional Cabinet Object Card identifier;
-- `object.label` is an optional free-form working label;
-- both object values may be null, producing an unassigned warning rather than
-  making the card invalid;
-- Invoice Card V1 stores one primary object assignment only;
-- line-level allocation and distribution across several objects are explicitly
-  outside immutable Invoice Card facts;
+- one primary object assignment is supported;
+- a purchase may remain unassigned;
+- line-level distribution across several objects is outside the baseline;
 - payment is represented by a status and an array of transactions;
-- multiple transactions may use different methods and therefore already
-  support split settlement such as cash plus card;
-- the validator checks paid amount against invoice payable amount;
-- cash transactions distinguish tendered, applied, and returned change;
-- accepted payment statuses are `unknown`, `unpaid`, `partially_paid`, `paid`,
-  and `refunded`;
+- split settlement such as cash plus card is supported;
 - missing payment evidence is `unknown`, not inferred as `unpaid`;
-- Object Card implementation itself remains deferred.
+- original source evidence must remain traceable.
 
-## Product interpretation of “invoice”
+## Work Object and Registry correction
 
-For this Cabinet use case, the user is primarily recording a material purchase
-made in a physical shop or online. In user-facing language the concept may be
-called “purchase” or “material purchase”.
+Registry contains the authoritative object cards used by the working platform.
+Cabinet does not create an independent competing object identity in the baseline.
 
-The existing Cabinet entity remains Invoice Card because it preserves the
-source receipt or invoice facts. The backend design must not reinterpret it as
-a payable workflow merely because the entity is named Invoice.
+The accepted product direction is:
 
-The normal product flow is:
+- Registry owns each work-object `project_id` and current object context;
+- the local Cabinet Backend reads Registry objects and stores versioned snapshots;
+- the VPS receives a compact cached object catalogue from the local Backend;
+- the cached catalogue is intentionally available while the local platform is
+  offline, which is the normal daytime condition;
+- a user may assign a fresh VPS invoice to an object from that cached catalogue;
+- the assignment records which Registry snapshot was used and how old it was;
+- after local reconnection, Cabinet validates the selected `project_id` against
+  current Registry data;
+- a missing, closed, or materially changed Registry object does not erase the
+  user's earlier choice; it creates a validation warning requiring attention;
+- an unassigned purchase does not require a synthetic Work Object.
+
+In this case study:
 
 ```text
-purchase materials
-→ pay immediately
-→ capture receipt/invoice
-→ validate extracted facts
-→ optionally assign one Work Object
-→ store confirmed Cabinet record
+WorkObject.id = Registry ProjectRecord.id
 ```
 
-A purchase may remain “without object”. A purchase may also record several
-payment transactions when settlement was split between payment methods.
+Cabinet owns relationships, invoice history, notes, matching decisions, and
+operational context linked to that Registry identity. Registry remains the owner
+of the object card itself.
 
-## Work Object correction
+## Two operating periods
 
-The original Cabinet domain document identifies Work Object as a Card but does
-not yet define its specialized fields. There is no accepted implementation
-fact requiring every Work Object to originate in Registry.
+### Local platform connected
 
-The product decision for this case study is therefore:
+The local Backend can:
 
-- a Cabinet Work Object may exist standalone;
-- it has its own Cabinet Card identity;
-- it may later link to a Registry project;
-- Registry owns the external project UUID and current Registry context;
-- Registry linkage does not replace Cabinet identity or erase Cabinet history;
-- an unassigned purchase does not require creation of a synthetic Work Object.
+- refresh Registry object snapshots;
+- publish the compact object catalogue to the VPS;
+- receive fresh invoice sources and structured records from the VPS;
+- validate cached object assignments;
+- access PresuPro estimates;
+- calculate complete historical analysis;
+- perform controlled Holded integration.
 
-State 1 must define the exact Work Object fields and the optional Registry link
-without inventing implementation details in State 0.
+### Local platform unavailable
+
+The VPS remains useful and can:
+
+- receive invoice photographs and PDFs;
+- preserve immutable source files;
+- extract, correct, and confirm invoice facts;
+- search and discuss its retained working set;
+- show the cached Registry object catalogue with freshness information;
+- assign an invoice to a cached object;
+- preserve all work for later local transfer.
+
+It cannot claim current Registry freshness, retrieve current PresuPro data, or
+perform complete historical analysis while disconnected.
 
 ## Platform systems
 
 ### Registry
 
-Factory project: `registry_sandbox`.
-
-Registry creates and owns stable Registry project UUIDs and current project
-context. Cabinet may retain an optional validated Registry link for a Work
-Object. Registry-owned name, address, and status may be consumed as a read-only
-projection.
-
-Cabinet-owned Card identity, notes, relationships, purchase history, contact
-facts, and fiscal information remain Cabinet-owned and must not be silently
-overwritten from Registry.
+Registry owns stable project UUIDs and current object context. Cabinet consumes
+versioned read-only snapshots and a compact cached catalogue for offline use.
 
 ### PresuPro
 
-Factory project: `PresuPro_sandbox`.
-
-PresuPro owns mutable presupuesto composition, zones, line items, totals, and
-its approval/publication lifecycle. Cabinet consumes plan data for operational
-comparison and purchasing work but does not edit the estimate or silently
-present the latest mutable estimate as an approved budget.
+PresuPro owns mutable estimate composition, zones, line items, totals, and its
+approval or publication lifecycle. Cabinet consumes versioned plan snapshots for
+comparison and accepted matching decisions.
 
 ### Client Portal
 
-Workbench case: `examples/client-portal`.
-
-Client Portal owns client-visible Budget, Expense, allocation, progress,
-payment, and visibility records. Cabinet prepares traceable operational facts
-for an agreed Client Portal intake boundary. Cabinet does not write directly to
-Client Portal storage.
+Client Portal owns client-visible Budget, Expense, allocation, progress, payment,
+and visibility records. Cabinet prepares traceable operational facts for an
+agreed intake boundary and does not write directly to Client Portal storage.
 
 ### Holded and Holded Gateway
 
-Holded is the external online accounting system.
-
-The selected platform direction is a dedicated Holded Gateway used by both
-Cabinet and PresuPro:
-
-- Cabinet decides whether a confirmed supplier purchase is eligible for
-  accounting publication;
-- PresuPro decides whether an approved estimate produces a sales-side
-  accounting document;
-- Holded Gateway owns credentials, Holded HTTP behavior, retries,
-  reconciliation, provider request/response decoding, and technical receipts;
-- the agent does not call Holded directly and does not own the Holded token;
-- Holded Gateway does not decide Cabinet or PresuPro business policy.
+Cabinet decides whether a confirmed supplier purchase is eligible for accounting
+publication. Holded Gateway owns credentials, transport, retries,
+reconciliation, and technical receipts.
 
 ## Selected persistence direction
 
-PostgreSQL is the selected durable database for Cabinet Backend.
+PostgreSQL is the selected durable database for the local Cabinet Backend.
+Original binary documents remain required evidence. PostgreSQL may retain hashes,
+metadata, provenance, and storage references without necessarily storing large
+binaries in rows.
 
-This State 0 decision establishes the need for transactional, relational,
-concurrent backend storage. It does not yet define tables, ORM mappings,
-indexes, or migration files.
-
-Original binary documents remain required source evidence. Their eventual
-binary storage technology is unresolved; PostgreSQL may retain references,
-hashes, media metadata, and provenance without necessarily storing large
-binaries in database rows.
+The VPS stores a protected working set needed for continuous assistance while the
+local platform is unavailable. The local Backend stores the complete durable
+archive.
 
 ## Governing interpretation
 
-Cabinet Backend is deliberately low-level but not responsibility-free.
-
-The agent and UI may perform heuristic and computational work such as OCR,
-classification, candidate matching, material-name matching, preparation of a
-primary object suggestion, and plan-versus-actual calculations. Cabinet Backend
-owns deterministic acceptance:
+The agent and UI may perform heuristic work such as OCR, classification, object
+suggestion, material-name matching, and match proposals. Cabinet Backend owns
+deterministic acceptance:
 
 - typed Cabinet records and relationships;
 - stable identity;
+- source immutability and provenance;
+- extraction correction history;
 - validation and lifecycle;
-- source and actor provenance;
 - concurrency and idempotency;
 - referential and transactional integrity;
 - durable history;
 - external publication state.
 
-No generic prepared payload becomes trusted merely because an agent produced
-it.
+No prepared payload becomes trusted merely because an agent produced it.
 
 ## Current delivery constraints
 
-- No temporary reuse of PresuPro as a Cabinet-to-Holded proxy.
 - No direct agent-to-Holded production integration.
-- No cross-invoice payment system in the first complete product.
-- No multi-object Invoice Card allocation in the first complete product.
-- Shared MCP design remains a separate cross-card task.
-- VPS and whole-platform production operations remain outside the current
-  design state.
-- Exact endpoints, contracts, tables, and module paths belong to later design
-  states.
+- No temporary reuse of PresuPro as a Cabinet-to-Holded proxy.
+- No cross-invoice payment system in the baseline.
+- No multi-object Invoice Card allocation in the baseline.
+- No Cabinet-created standalone Work Object in this case study.
+- Exact endpoints, contracts, tables, module paths, and transports belong to
+  later design states.
