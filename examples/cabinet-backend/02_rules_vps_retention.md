@@ -36,6 +36,21 @@ The system must show what will be affected and whether all required originals ar
 4. A manual release may proceed after durable local verification.
 5. Repeating the same release request does not recreate or duplicate deletion records.
 
-## Open Registry check
+## Open question — Registry completion signal
 
-The Registry repository or specification was not available through the connected GitHub installation during this decision. The presence and semantics of a Registry project-completion function therefore remain unverified and must be checked before designing automatic integration.
+This is an explicit unresolved product-integration question, not a placeholder implementation requirement.
+
+The current system is complete without automatic Registry integration because manual VPS release is the accepted behavior.
+
+Before any automatic signal is designed, the Registry source or its application-research document must be reviewed to determine:
+
+- whether Registry has a project completion, closure, or archive action;
+- whether that state is reversible;
+- whether it describes business completion or only Registry record visibility;
+- whether Cabinet should treat it as information, a user prompt, or an allowed automation trigger.
+
+Until that evidence is available:
+
+- Cabinet does not derive project completion from Registry;
+- Registry changes do not delete or archive VPS evidence;
+- manual release remains the only accepted path.
