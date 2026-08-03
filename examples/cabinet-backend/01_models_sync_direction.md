@@ -6,7 +6,8 @@ Accepted clarification of the State 1 system boundary.
 
 This document does not add State 2 business rules. It resolves ambiguities in
 `01_models.md` about which node initiates communication between Cabinet and the
-local Cabinet Backend, and about where Registry-derived project projections live.
+local Cabinet Backend, and about how Registry-derived project data reaches the
+Cabinet `WorkObject` card.
 
 ## System roles
 
@@ -47,45 +48,50 @@ applications directly. Those integrations belong to Cabinet Backend.
 
 ## WorkObject and Registry ownership clarification
 
-`WorkObject` is a **Cabinet Backend-owned local projection** keyed by the Registry
-`project_id`. It is not created by Cabinet through a direct Registry request.
+`WorkObject` is a **Cabinet Card owned by the Cabinet web application**. It is not
+a Cabinet Backend-owned domain entity.
 
-Registry remains authoritative for project identity, name, address, customer
-context, and lifecycle. Cabinet Backend reads Registry and maintains:
+Registry remains authoritative for project identity and current project master
+data. Cabinet Backend is the integration intermediary that:
 
-- `RegistryProjectSnapshot` records;
-- the local `WorkObject` projection;
-- `RegistryCatalogueSnapshot` publications prepared for Cabinet.
+- reads Registry;
+- captures immutable `RegistryProjectSnapshot` records locally;
+- prepares a compact, versioned `RegistryCatalogueSnapshot`;
+- publishes that catalogue to Cabinet on the VPS.
 
-Cabinet receives only a published, compact, versioned Registry catalogue from
-Cabinet Backend. Cabinet uses that catalogue to let the user select an object while
-the local computer is unavailable. The selected project identifier and catalogue
-provenance return later inside the completed Invoice Card work package.
+Cabinet consumes the published catalogue and creates or updates its own
+`WorkObject` Cards from that published data. Cabinet does not obtain Registry data
+through a direct Registry request.
 
-Therefore the data flow is:
+The identity relationship remains:
+
+```text
+WorkObject.id = Registry ProjectRecord.id
+```
+
+This equality preserves the shared project identity but does not transfer
+ownership of Registry master data to Cabinet. The `WorkObject` may own
+Cabinet-specific relationships, invoices, notes, matches, working history, and
+user context, while Registry continues to own the current project name, address,
+customer context, and lifecycle facts.
+
+The data flow is therefore:
 
 ```text
 Registry
    ↓ read by Cabinet Backend
-RegistryProjectSnapshot / WorkObject
+RegistryProjectSnapshot
    ↓ compact catalogue published by Cabinet Backend
-Cabinet offline catalogue
-   ↓ user selects project; confirmed Card later pulled
-Cabinet Backend validates selection against current Registry data
+Cabinet Registry catalogue replica
+   ↓ Cabinet creates or updates WorkObject Cards
+User works with WorkObject in Cabinet
+   ↓ confirmed Card later pulled by Cabinet Backend
+Cabinet Backend validates the referenced project against current Registry data
 ```
 
-The sentence in `01_models.md` stating that “Cabinet owns relationships, invoices,
-notes, matches, and history” uses **Cabinet as the wider product/domain**, not the
-VPS web application as an integration owner. For node-level responsibility it
-must be read as follows:
-
-- Cabinet Backend durably owns the relationships, invoices, matches, and history;
-- Cabinet may hold working copies and user decisions while offline;
-- Registry owns the current project master data;
-- Cabinet never becomes authoritative for Registry fields.
-
-This interpretation removes any implication that the VPS application calls
-Registry or independently maintains authoritative `WorkObject` records.
+Cabinet Backend may store references to `project_id`, catalogue provenance, and
+Registry snapshots needed for validation and durable history. It must not model
+itself as the owner of the Cabinet `WorkObject` Card.
 
 ## Correction to LocalBackendConnectionObservation
 
@@ -117,19 +123,15 @@ normative direction defined here applies immediately.
 ## Boundary diagram
 
 ```text
-User -> Cabinet (VPS)
-          |
-          | prepares confirmed immutable work packages
-          v
-      VPS outbound working area
-          ^
-          | Cabinet Backend initiates pull when local computer is online
-          |
-Cabinet Backend (local)
-          |
-          | owns platform integrations
-          v
-Registry / PresuPro / Holded / Client Portal
+Registry
+   ↓
+Cabinet Backend (local integration centre)
+   ↓ publishes compact catalogue
+Cabinet (VPS web application)
+   ↓ owns WorkObject Cards and prepares confirmed work packages
+VPS outbound working area
+   ↑ Cabinet Backend initiates pull when the local computer is online
+Cabinet Backend durable archive
 ```
 
 ## What remains for State 2
@@ -144,5 +146,5 @@ State 2 may define deterministic behavior inside this accepted boundary, includi
 - authentication and authorization policy;
 - unknown outcomes.
 
-State 2 must not reopen whether Cabinet pushes to the local Backend, directly
-calls platform applications, or independently owns Registry project master data.
+State 2 must not reopen whether Cabinet pushes to the local Backend or directly
+calls platform applications.
