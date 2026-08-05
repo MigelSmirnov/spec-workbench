@@ -44,6 +44,7 @@ Normative text is defined in the referenced specifications.
 | A30 | Project completion remains manual | 01_models.md |
 | A31 | Unknown project does not reject an invoice | 02_rules.md |
 | A32 | Closed project is not an error | 02_rules.md |
+| A33 | Project status does not reject an invoice | 02_rules.md |
 
 ### PresuPro (A40–A49)
 

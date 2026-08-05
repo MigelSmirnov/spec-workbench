@@ -13,37 +13,41 @@ normative while these questions are open.
 
 ---
 
-## OQ-001 — Registry project completion semantics
+## OQ-001 — Registry status mapping
 
 ### Question
 
-Does Registry already define an accepted project completion, closure, or archive
-operation, and what are its exact semantics?
+Which concrete Registry status values map to Cabinet Backend's accepted semantic
+categories `active`, `completed`, and `unavailable`?
 
 ### Why it remains open
 
-The Registry reconnaissance document or repository evidence was not available in
-the current branch when the decision was discussed.
+The exact Registry lifecycle vocabulary and status field contract have not yet
+been verified against authoritative Registry evidence.
 
 ### Current Cabinet Backend baseline
 
-- VPS working copies are retained after successful synchronization.
-- Releasing or removing VPS copies is a manual Cabinet action.
-- Registry status changes do not automatically delete VPS evidence.
-- A closed Registry project may still receive late invoices.
+- Registry is authoritative for project status.
+- `active` projects produce normal project costs.
+- `completed` projects may receive `late_project_cost` invoices without being
+  reopened automatically.
+- `unavailable` or unknown projects require assignment review.
+- Project status alone never rejects or deletes a valid confirmed Invoice Card.
 
 ### Required verification
 
-- available Registry project lifecycle states;
-- whether closure and archival are separate actions;
-- whether a closed project can be reopened;
-- whether Registry emits a stable lifecycle version or timestamp;
-- whether Cabinet should merely display Registry completion or use it as a
-  precondition for a manual release action.
+- canonical Registry status field and complete value vocabulary;
+- exact mapping of each Registry value to `active`, `completed`, or
+  `unavailable`;
+- whether completion, closure, archival, blocking, and deletion are distinct
+  Registry states;
+- how missing or deleted project records are represented;
+- status version or observation evidence required to preserve the mapping result.
 
 ### Explicit non-decision
 
-No Registry state is currently treated as an automatic deletion command.
+Cabinet Backend does not guess a mapping for an unverified Registry value. An
+unmapped value is treated as unavailable and requires manual review.
 
 ---
 
