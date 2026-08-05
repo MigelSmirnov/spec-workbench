@@ -13,41 +13,36 @@ normative while these questions are open.
 
 ---
 
-## OQ-001 — Registry status mapping
+## OQ-001 — Registry completion semantics
 
 ### Question
 
-Which concrete Registry status values map to Cabinet Backend's accepted semantic
-categories `active`, `completed`, and `unavailable`?
+Should Registry expose a separate authoritative project-completion fact, distinct
+from `active` and `archived`?
 
 ### Why it remains open
 
-The exact Registry lifecycle vocabulary and status field contract have not yet
-been verified against authoritative Registry evidence.
+Registry discovery confirmed only `active` and `archived`. It does not reveal
+whether an archived project was completed, cancelled, hidden administratively, or
+archived for another reason.
 
 ### Current Cabinet Backend baseline
 
-- Registry is authoritative for project status.
-- `active` projects produce normal project costs.
-- `completed` projects may receive `late_project_cost` invoices without being
-  reopened automatically.
-- `unavailable` or unknown projects require assignment review.
-- Project status alone never rejects or deletes a valid confirmed Invoice Card.
+- `active` maps to normal project availability.
+- `archived` maps to unavailable and requires review.
+- a missing project maps to unavailable and requires review.
+- `archived` is never interpreted as `completed`.
+- no current Registry value produces `late_project_cost`.
 
-### Required verification
+### Required decision
 
-- canonical Registry status field and complete value vocabulary;
-- exact mapping of each Registry value to `active`, `completed`, or
-  `unavailable`;
-- whether completion, closure, archival, blocking, and deletion are distinct
-  Registry states;
-- how missing or deleted project records are represented;
-- status version or observation evidence required to preserve the mapping result.
+- add a distinct Registry completion field or status and define its lifecycle; or
+- keep completion outside Registry and identify its authoritative owner.
 
 ### Explicit non-decision
 
-Cabinet Backend does not guess a mapping for an unverified Registry value. An
-unmapped value is treated as unavailable and requires manual review.
+Cabinet Backend does not infer completion from `archived`, invoice timing,
+project inactivity, or any other heuristic.
 
 ---
 
@@ -90,40 +85,11 @@ Cabinet Backend must not infer lineage only from similar content or project ID.
 
 ## OQ-003 — Registry catalogue exact field contract
 
-### Question
+**Status:** Resolved by accepted decision A34 in `02_rules.md`.
 
-What is the final minimal Registry catalogue payload published by Cabinet Backend
-to Cabinet?
-
-### Current accepted minimum
-
-The working minimum is:
-
-- `project_id`;
-- display name;
-- address or short context;
-- Registry project status;
-- Registry observation time;
-- catalogue version or content hash.
-
-### Why it remains open
-
-The exact Registry field names, nullable behavior, lifecycle vocabulary, and
-version evidence have not yet been checked against the Registry contract.
-
-### Required verification
-
-- canonical field names and identifiers;
-- whether address is a single field or structured data;
-- project status vocabulary;
-- Registry record version, ETag, content hash, or update timestamp;
-- whether catalogue completeness or filtering must be declared;
-- whether customer display context is required to disambiguate projects.
-
-### Explicit constraint
-
-The catalogue must remain compact. Cabinet does not receive the complete Registry
-project record merely because more fields are available.
+The compact catalogue contains `project_id`, `display_name`, `address`,
+`status`, and `registry_updated_at`, projected from the full Registry project
+list. See `registry_discovery.md` for the factual source contract and limitations.
 
 ---
 
@@ -141,11 +107,12 @@ business rule.
 
 ### Current Cabinet Backend responsibility
 
-- read Registry through the platform integration;
-- preserve immutable Registry project snapshots;
-- publish a compact versioned catalogue to Cabinet;
-- retain catalogue provenance returned with completed Invoice Cards;
-- validate returned `project_id` values against current Registry information.
+- poll the full Registry project list including archived records;
+- publish the five-field A34 catalogue projection to Cabinet;
+- preserve each entry's `registry_updated_at` and the refresh observation;
+- make no claim of a Registry catalogue revision, incremental cursor, or
+  deletion tombstone;
+- validate selected `project_id` values against current Registry information.
 
 ### Required Cabinet verification
 
@@ -153,8 +120,8 @@ business rule.
 - which fields are refreshed from a new catalogue;
 - how local Cabinet notes and relationships survive display-field changes;
 - how removed or closed projects remain visible for historical work;
-- whether Cabinet records the exact catalogue version used to create or update the
-  Card.
+- whether Cabinet records the exact catalogue observation used to create or
+  update the Card.
 
 ### Explicit constraint
 
