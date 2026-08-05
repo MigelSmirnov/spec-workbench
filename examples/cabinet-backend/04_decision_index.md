@@ -28,6 +28,7 @@ Normative text is defined in the referenced specifications.
 | A10 | Local source attachment through Backend | 02_rules.md |
 | A11 | VPS retains working copies until manual release | 01_models.md / 02_rules.md |
 | A12 | One Invoice Card owns one Source Package | 02_rules.md |
+| A13 | Partial Source Package acceptance | 02_rules.md |
 
 ### Synchronization (A20–A29)
 
