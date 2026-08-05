@@ -50,6 +50,7 @@ Normative text is defined in the referenced specifications.
 |----|----------|------------------|
 | A40 | Estimate snapshots are immutable | 02_rules.md |
 | A41 | Unmatched purchases are a valid analytical state | 02_rules.md |
+| A42 | PresuPro semantic analysis belongs to Cabinet | 02_rules.md |
 
 ### Holded (A50–A59)
 

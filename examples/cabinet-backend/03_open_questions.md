@@ -8,8 +8,8 @@ An entry here is not a placeholder and not an implementation TODO. It marks a
 real dependency on another application's accepted contract, repository evidence,
 or a later product decision.
 
-Accepted behavior already defined in `01_models*.md`, `02_rules.md`, and
-`02_rules_accepted_followup.md` remains normative while these questions are open.
+Accepted behavior already defined in `01_models*.md` and `02_rules.md` remains
+normative while these questions are open.
 
 ---
 
