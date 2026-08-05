@@ -95,38 +95,12 @@ list. See `registry_discovery.md` for the factual source contract and limitation
 
 ## OQ-004 — Cabinet WorkObject catalogue application behavior
 
-### Question
+**Status:** Resolved by accepted decision A35 in `02_rules.md`.
 
-How exactly does the Cabinet web application create and update its `WorkObject`
-Card from a newly published Registry catalogue?
-
-### Ownership
-
-This is primarily a Cabinet web-application question, not a Cabinet Backend
-business rule.
-
-### Current Cabinet Backend responsibility
-
-- poll the full Registry project list including archived records;
-- publish the five-field A34 catalogue projection to Cabinet;
-- preserve each entry's `registry_updated_at` and the refresh observation;
-- make no claim of a Registry catalogue revision, incremental cursor, or
-  deletion tombstone;
-- validate selected `project_id` values against current Registry information.
-
-### Required Cabinet verification
-
-- whether `WorkObject` is created automatically or only after user selection;
-- which fields are refreshed from a new catalogue;
-- how local Cabinet notes and relationships survive display-field changes;
-- how removed or closed projects remain visible for historical work;
-- whether Cabinet records the exact catalogue observation used to create or
-  update the Card.
-
-### Explicit constraint
-
-Cabinet Backend does not edit `WorkObject` directly and Cabinet does not call
-Registry directly.
+Cabinet maintains at most one `WorkObject` for each observed Registry
+`project_id`. Catalogue refreshes update only Registry-derived fields; Cabinet
+fields, archived objects, and objects absent from a later catalogue remain
+preserved. The projection is one-way and never writes to Registry.
 
 ---
 

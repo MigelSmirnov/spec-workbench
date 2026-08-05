@@ -46,6 +46,7 @@ Normative text is defined in the referenced specifications.
 | A32 | Closed project is not an error | 02_rules.md |
 | A33 | Project status does not reject an invoice | 02_rules.md |
 | A34 | Minimal Registry catalogue | 02_rules.md |
+| A35 | One-way WorkObject projection | 02_rules.md |
 
 ### PresuPro (A40–A49)
 
