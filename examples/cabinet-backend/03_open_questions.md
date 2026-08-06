@@ -85,7 +85,8 @@ preserved. The projection is one-way and never writes to Registry.
 ### Question
 
 Which Holded operations and status semantics can Cabinet Backend safely use after
-the verified first purchase publication defined by accepted decision A51?
+the verified first purchase publication and create recovery defined by accepted
+decisions A51 and A52?
 
 ### Current accepted constraints
 
@@ -94,7 +95,10 @@ the verified first purchase publication defined by accepted decision A51?
 - Cabinet Backend never edits an accepted Card revision;
 - a later correction is a new confirmed Card revision;
 - first publication uses exactly one POST followed by GET verification;
-- an ambiguous create outcome is never retried automatically;
+- every publication attempt has one stable marker and at most one automatic POST;
+- ambiguous create recovery uses bounded list polling, exact marker matching, and
+  GET verification without mutation;
+- zero marker matches never authorize automatic retry;
 - Holded-specific intermediate rounding does not rewrite Invoice Card totals.
 
 ### Remaining verification
@@ -105,8 +109,7 @@ Only the following Holded areas remain open in this question:
 2. PUT behavior and accounting consequences for an existing purchase;
 3. purchase refund or rectification behavior and linkage to the source purchase;
 4. attachment upload, listing, retrieval, and persistence behavior;
-5. create idempotency or another safe duplicate-prevention mechanism;
-6. reconciliation of a later confirmed Invoice Card revision with an already
+5. reconciliation of a later confirmed Invoice Card revision with an already
    published purchase.
 
 ### Explicit non-decisions

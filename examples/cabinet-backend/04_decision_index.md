@@ -64,6 +64,7 @@ Normative text is defined in the referenced specifications.
 |----|----------|------------------|
 | A50 | Missing originals allowed for Client Portal but not Holded | 02_rules.md |
 | A51 | Create one Holded purchase and verify it by GET | 02_rules.md |
+| A52 | Marker-based Holded purchase create recovery | 02_rules.md |
 
 ### Platform boundary and security (A60–A69)
 
