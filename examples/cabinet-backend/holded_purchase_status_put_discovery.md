@@ -2,11 +2,13 @@
 
 ## Status
 
-Factual runtime discovery through H3.
+Complete factual runtime discovery for H1 through H3.
 
 The read-only H1 observation and same-document UI correlation are reproducible.
 The metadata-only H2 PUT and restoring H3 PUT were each executed exactly once and
 verified by GET. The final API response is byte-identical to the original H1 GET.
+Final same-document UI inspection confirmed the original approval and payment
+state, and Holded `Historial` showed no event from either PUT.
 
 No POST, DELETE, attachment, payment, approval, or `purchaserefund` request was
 executed. Exactly two PUT requests changed only `desc`, first forward and then
@@ -249,10 +251,17 @@ payment state: pending
 pending amount: 11.75 EUR
 ```
 
-The user explicitly authorized H3 as safe after H2. The current runtime still
-cannot independently inspect the UI. A final UI check may confirm that the
-description is again `CABINET API TEST`, approval remains unapproved, payment
-remains pending at `11.75 EUR`, and no new accounting or audit event appeared.
+After H3, user inspection of the same document confirmed:
+
+```text
+description: CABINET API TEST
+approval state: not approved / unapproved
+payment state: pending
+pending amount: 11.75 EUR
+Historial events created by H2 or H3: none
+```
+
+The API and UI therefore returned to the original observed business state.
 
 ## Accounting consequences
 
@@ -260,9 +269,9 @@ The API-visible document status, payment fields, lines, taxes, subtotal, and tot
 did not change after H2 or H3. The API exposed no new accounting or timestamp
 field.
 
-The current runtime cannot inspect Holded accounting UI or audit events.
-Therefore absence of an invisible accounting or audit consequence is not proven
-by API read-back alone.
+Final user inspection confirmed that approval remained unapproved, payment
+remained pending at `11.75 EUR`, and Holded `Historial` contained no event caused
+by either metadata PUT. No visible accounting consequence was observed.
 
 ## Experiment record
 
@@ -298,7 +307,7 @@ numeric document status after: 0
 totals before: subtotal 9.72, tax 2.03, total 11.75 EUR
 totals after: subtotal 9.72, tax 2.03, total 11.75 EUR
 UI state before: not approved / unapproved; payment pending 11.75 EUR
-UI state after: not independently recorded; H3 subsequently authorized by user
+UI state after: final post-H3 inspection showed the original unapproved and pending state
 ```
 
 ```text
@@ -319,13 +328,13 @@ description before: CABINET API TEST PUT METADATA
 description after: CABINET API TEST
 final raw response matches original H1 response: yes
 UI state before: H3 explicitly authorized by user
-UI state after: pending optional final verification
+UI state after: not approved / unapproved; payment pending 11.75 EUR
+Historial after H2 and H3: no new events
 ```
 
 ## Limitations
 
 - Only `status = 0` has a same-document UI correlation.
-- Final UI and accounting-event verification is not available to this runtime.
 - Reversible partial-update behavior is verified only for `desc` on one
   unapproved purchase.
 - Behavior for approved or paid documents remains unknown.
@@ -334,11 +343,9 @@ UI state after: pending optional final verification
 
 ## Remaining questions
 
-1. Does the final UI preserve the unapproved and pending states after H2 and H3?
-2. Did H2 or H3 create any accounting or audit event visible in Holded?
-3. Does partial-update behavior remain safe for approved or paid documents?
-4. Which other numeric status values map to which visible UI states?
-5. Which financial changes are accepted, and what accounting consequences do
+1. Does partial-update behavior remain safe for approved or paid documents?
+2. Which other numeric status values map to which visible UI states?
+3. Which financial changes are accepted, and what accounting consequences do
    they have?
 
 ## Current answers
@@ -347,8 +354,8 @@ UI state after: pending optional final verification
 2. A `desc`-only PUT succeeds on this unapproved purchase.
 3. Identifier, number, complete ordered products, taxes, totals, document status,
    and payment fields were preserved in API read-back.
-4. No API-visible accounting state changed; UI accounting consequences remain to
-   be checked independently.
+4. No API-visible accounting state changed. Final UI inspection showed the same
+   unapproved and pending state, and `Historial` showed no event from either PUT.
 5. PUT behaves as a reversible partial update for the observed `desc`-only
    requests. H3 restored a raw response byte-identical to H1.
 6. Metadata PUT is safe at the verified API-data level for changing `desc` on
@@ -357,6 +364,7 @@ UI state after: pending optional final verification
 7. No financial mutation should be attempted before a separate plan covers
    approved-state behavior, line/tax/total read-back, accounting entries,
    concurrency, and correction strategy.
-8. Evidence is sufficient for a narrowly scoped factual statement about
-   unapproved `desc` updates, but remains insufficient for a normative Invoice
-   Card reconciliation rule.
+8. Evidence is sufficient to propose a narrowly scoped normative rule for
+   `desc`-only updates of an unapproved purchase with pre-PUT and post-PUT GET
+   verification. It remains insufficient for general Invoice Card
+   reconciliation, approved-document updates, or financial-field changes.
