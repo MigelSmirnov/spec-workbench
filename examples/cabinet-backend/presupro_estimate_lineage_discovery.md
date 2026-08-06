@@ -50,9 +50,9 @@ copy and independent estimate are indistinguishable.
 
 Therefore the existing PresuPro contract cannot provide explicit family,
 predecessor, replacement, or supersession semantics. If Cabinet Backend requires
-those semantics, PresuPro needs an accepted contract extension. `OQ-002` must not
-be closed by inferring lineage from shared project identity, similar content, or
-timestamps.
+those semantics, PresuPro needs an accepted contract extension. `OQ-002` can be
+resolved for the current contract only by explicitly accepting that Cabinet does
+not infer lineage from shared project identity, similar content, or timestamps.
 
 ### Evidence baseline
 
@@ -519,9 +519,9 @@ unless a user or future PresuPro contract explicitly supplies lineage.
 
 ---
 
-## Minimum safe Cabinet Backend rule before discovery closes
+## Safe Cabinet Backend baseline derived from discovery
 
-Until authoritative PresuPro lineage is verified:
+Under the verified current PresuPro contract:
 
 1. Every imported estimate content becomes an immutable snapshot.
 2. PresuPro estimate identity is preserved exactly as received.
@@ -534,7 +534,7 @@ Until authoritative PresuPro lineage is verified:
 
 ---
 
-## Questions to close OQ-002
+## Questions answered by discovery
 
 1. What is the canonical stable PresuPro estimate identifier?
 2. Does editing preserve or replace that identifier?
@@ -553,5 +553,7 @@ Until authoritative PresuPro lineage is verified:
 
 Cabinet Backend can safely preserve immutable estimate evidence today.
 
-Version-family semantics must remain open until PresuPro provides explicit,
-verified lineage or the product accepts a contract extension.
+Accepted decision A43 in `02_rules.md` resolves OQ-002 for the current contract
+by defining Cabinet-owned immutable snapshots and prohibiting inferred lineage.
+Version-family semantics are not part of the current PresuPro contract; adding
+them later requires an explicit, verified contract extension.

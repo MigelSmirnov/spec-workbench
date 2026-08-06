@@ -48,38 +48,14 @@ project inactivity, or any other heuristic.
 
 ## OQ-002 — PresuPro estimate family and version lineage
 
-### Question
+**Status:** Resolved by accepted decision A43 in `02_rules.md`.
 
-How does PresuPro represent a new version of an existing estimate?
-
-### Why it remains open
-
-Cabinet Backend requires immutable `EstimateSnapshot` records, but the current
-PresuPro contract has not yet been verified for explicit version lineage.
-
-### Current Cabinet Backend baseline
-
-- every accepted estimate snapshot is immutable;
-- a changed estimate arrives as a new snapshot;
-- existing invoice-line matches remain pinned to the exact old snapshot;
-- matches are never moved automatically to a new estimate.
-
-### Required verification
-
-- stable `estimate_id` semantics;
-- whether a new version keeps or changes `estimate_id`;
-- presence of an `estimate_family_id` or equivalent;
-- presence of `previous_estimate_id`, parent, predecessor, or replacement links;
-- explicit estimate version number or content hash;
-- accepted/frozen status semantics;
-- whether multiple independent estimates for one project are distinguishable from
-  revisions of the same estimate.
-
-### Possible PresuPro enhancement
-
-If PresuPro does not expose lineage, it may need an accepted contract extension
-that provides stable family identity and predecessor/replacement references.
-Cabinet Backend must not infer lineage only from similar content or project ID.
+PresuPro exposes one stable mutable `Estimate.id` but no authoritative family,
+predecessor, replacement, or revision lineage. Cabinet therefore stores every
+observed content state as an immutable snapshot, permits several snapshots to
+share one PresuPro estimate ID, treats different estimate IDs as independent,
+and never infers lineage. See `presupro_estimate_lineage_discovery.md` for the
+verified source behavior.
 
 ---
 
