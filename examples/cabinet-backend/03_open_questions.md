@@ -104,38 +104,40 @@ preserved. The projection is one-way and never writes to Registry.
 
 ---
 
-## OQ-005 — Holded correction and reconciliation workflow
+## OQ-005 — Unverified Holded operations and revision reconciliation
 
 ### Question
 
-What is the accepted business process when a new confirmed Invoice Card revision
-appears after an older revision has already been published successfully to
-Holded?
+Which Holded operations and status semantics can Cabinet Backend safely use after
+the verified first purchase publication defined by accepted decision A51?
 
 ### Current accepted constraints
 
 - Holded publication is pinned to one exact confirmed Card revision;
 - an invoice without required original evidence is not eligible for Holded;
 - Cabinet Backend never edits an accepted Card revision;
-- a later correction is a new confirmed Card revision.
+- a later correction is a new confirmed Card revision;
+- first publication uses exactly one POST followed by GET verification;
+- an ambiguous create outcome is never retried automatically;
+- Holded-specific intermediate rounding does not rewrite Invoice Card totals.
 
-### Required decision
+### Remaining verification
 
-Choose and specify one or more accepted workflows:
+Only the following Holded areas remain open in this question:
 
-- manual reconciliation only;
-- create a corrective document in Holded;
-- cancel and recreate when legally and technically permitted;
-- record the new revision without changing Holded;
-- explicit publication prohibition until an operator resolves the discrepancy.
+1. exact meaning of returned numeric status values;
+2. PUT behavior and accounting consequences for an existing purchase;
+3. purchase refund or rectification behavior and linkage to the source purchase;
+4. attachment upload, listing, retrieval, and persistence behavior;
+5. create idempotency or another safe duplicate-prevention mechanism;
+6. reconciliation of a later confirmed Invoice Card revision with an already
+   published purchase.
 
-### Required Holded verification
+### Explicit non-decisions
 
-- supported correction and cancellation operations;
-- external document mutability;
-- idempotency support;
-- legal/accounting constraints for posted purchases;
-- representation of credit notes and replacement invoices.
+Until separately verified and accepted, Backend must not infer status semantics,
+automatically update a purchase, create a refund, upload attachments, retry an
+ambiguous POST, or reconcile a later Invoice Card revision by mutating Holded.
 
 ---
 

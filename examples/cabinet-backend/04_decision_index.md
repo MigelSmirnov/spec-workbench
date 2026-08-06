@@ -61,6 +61,7 @@ Normative text is defined in the referenced specifications.
 | ID | Decision | Primary document |
 |----|----------|------------------|
 | A50 | Missing originals allowed for Client Portal but not Holded | 02_rules.md |
+| A51 | Create one Holded purchase and verify it by GET | 02_rules.md |
 
 ### Platform boundary (A60–A69)
 
