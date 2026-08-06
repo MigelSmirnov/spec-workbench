@@ -2,7 +2,8 @@
 
 ## Status
 
-Factual reconnaissance plan for PresuPro estimate identity, versions, and lineage.
+Factual reconnaissance record for PresuPro estimate identity, versions, and
+lineage.
 
 This document does not define new Cabinet Backend behavior. Its purpose is to
 verify whether PresuPro exposes enough authoritative evidence to distinguish:
@@ -14,6 +15,206 @@ verify whether PresuPro exposes enough authoritative evidence to distinguish:
 
 Cabinet Backend must not infer lineage from similar content, project identity, or
 timestamps alone.
+
+---
+
+## Discovery result — 2026-08-06
+
+The current PresuPro contract does not expose authoritative estimate-family or
+revision lineage.
+
+The observed behavior is:
+
+1. `Estimate.id` is the stable identity of one mutable PresuPro estimate record.
+2. Editing preserves `Estimate.id` and `created_at`, changes `updated_at`, and
+   overwrites the same SQLite row.
+3. PresuPro does not retain the previous estimate content.
+4. There is no estimate revision table, history table, content hash, revision
+   number, family identifier, predecessor, replacement, supersession, or copy
+   reference.
+5. There is no duplicate or copy endpoint. A client may submit equivalent content
+   under a new ID, but the result is indistinguishable from an independent
+   estimate.
+6. Multiple independent estimates may reference the same Registry project.
+7. `accepted` and `archived` do not block editing.
+8. The Backend accepts arbitrary status strings; the five named statuses are a
+   frontend convention rather than a validated Backend lifecycle contract.
+9. Conversion creates `invoice_ref` and sets `locked = true`. The storage layer
+   then rejects content changes to that record.
+10. XLSX export preserves current estimate identity, status, and timestamps but
+    contains no lineage fields. No estimate-import path exists.
+
+This corresponds to Outcome B for ordinary edits: stable estimate identity with
+no revision history. It also corresponds to Outcome D for client-created copies:
+copy and independent estimate are indistinguishable.
+
+Therefore the existing PresuPro contract cannot provide explicit family,
+predecessor, replacement, or supersession semantics. If Cabinet Backend requires
+those semantics, PresuPro needs an accepted contract extension. `OQ-002` must not
+be closed by inferring lineage from shared project identity, similar content, or
+timestamps.
+
+### Evidence baseline
+
+```text
+PresuPro project: PresuPro_sandbox
+repository commit: ef80666906a1e1aabcfe6441b67f314b56976aeb
+accepted base spec SHA-256:
+4536ede04f8d87b6421fb3c2bcb31251479717814ce98063f41066d3ddf6872c
+terminal verification run: 20260720_225003
+terminal verdict: PASS
+observed_at: 2026-08-06
+```
+
+The scoped PresuPro project files were clean at the repository commit above. An
+untracked pre-existing research file was present but was not used as runtime
+state and was not modified.
+
+### Repository evidence
+
+| Question | Observed fact | Evidence |
+|----------|---------------|----------|
+| Canonical identity | `Estimate.id` | `core/models.py`, `Estimate` |
+| Client-supplied identity | Create request may supply `id`; duplicate existing ID returns HTTP `409` | `core/models.py`, `CreateEstimateRequest`; `backend/api/routes.py`, `create_estimate_endpoint` |
+| Edit identity | Update constructs a replacement with the existing ID and `created_at` | `backend/services/estimates.py`, `estimate_from_request` |
+| Persistence | `id` is the SQLite primary key; `ON CONFLICT(id)` updates the same row | `backend/storage/schema.py`; `backend/storage/estimates.py`, `upsert_estimate` |
+| Revision history | No revision/history table or lineage columns exist | `backend/storage/schema.py` and runtime SQLite inspection |
+| Duplicate workflow | No duplicate/copy route, service, frontend action, or MCP tool exists | `backend/api/routes.py`; `frontend/api.js`; `mcp/presupro_mcp_server.py` |
+| Status values | Backend stores an unrestricted string; frontend lists `draft`, `sent`, `accepted`, `rejected`, `archived` | `core/models.py`, `Estimate.status`; `frontend/engine.js` |
+| Lock | Conversion stores `invoice_ref` and `locked = true`; storage rejects later field changes | `backend/services/invoicing.py`; `backend/storage/estimates.py` |
+| Export | Current ID, status, `created_at`, and `updated_at` are exported; lineage is absent | `backend/services/exporter.py` |
+
+### Runtime experiment P1 — create and edit
+
+An estimate with ID `est-lineage-e1` was created in an isolated temporary SQLite
+database and then edited through the HTTP API.
+
+Observed:
+
+```text
+create HTTP = 200
+edit HTTP = 200
+id preserved = true
+created_at preserved = true
+updated_at changed = true
+content replaced = true
+rows for estimate ID = 1
+rows retaining old content = 0
+history/revision tables = none
+lineage columns = none
+```
+
+The old line content could not be reconstructed after the edit.
+
+### Runtime experiment P2 — duplicate or copy
+
+No dedicated duplicate operation exists.
+
+Observed through the create API:
+
+```text
+repeat create with same ID = HTTP 409, "Estimate already exists"
+same content with a new ID = HTTP 200
+lineage fields on new estimate = none
+```
+
+The new-ID record is structurally identical to an independent estimate. PresuPro
+does not record that it was copied.
+
+### Runtime experiment P3 — multiple estimates in one project
+
+Two estimates with different IDs were created against the same isolated Registry
+project snapshot.
+
+Observed:
+
+```text
+first create HTTP = 200
+second create HTTP = 200
+Registry project_id equal = true
+estimate IDs distinct = true
+family grouping = none
+```
+
+Registry project identity is therefore not estimate-family identity.
+
+### Runtime experiment P4 — status and edit behavior
+
+Observed:
+
+```text
+arbitrary status "frozen-by-probe" accepted = HTTP 200
+accepted status stored = HTTP 200
+edit after accepted = HTTP 200
+accepted locked = false
+archived status stored = HTTP 200
+edit after archived = HTTP 200
+archived locked = false
+```
+
+No tested status value froze the estimate by itself.
+
+### Runtime experiment P5 — post-conversion lock
+
+The existing conversion workflow was exercised with the Holded contact and
+document calls replaced by isolated test doubles. No real Holded request was
+made.
+
+Observed:
+
+```text
+conversion from accepted = HTTP 200
+invoice_ref stored = true
+locked = true
+content edit after lock = rejected
+HTTP result of locked edit = 500
+stored content changed = false
+```
+
+The storage rejection is `ValueError("Cannot modify locked estimate fields")`.
+The update route does not currently map this storage error to a client-level
+`409`, so the HTTP surface returns `500` even though persistence remains
+unchanged.
+
+### Runtime experiment P6 — export
+
+An XLSX export was generated from an isolated estimate and its Summary worksheet
+was inspected.
+
+Observed:
+
+```text
+estimate_id present = true
+status present = true
+created_at present = true
+updated_at present = true
+version/revision/family/predecessor/copy/content_hash fields = none
+estimate import endpoint or service = none
+```
+
+Export preserves only the current mutable record identity and timestamps. It does
+not make the exported estimate an authoritative immutable revision.
+
+### Test evidence
+
+The complete PresuPro test suite passed after the reconnaissance:
+
+```text
+67 passed
+46 deprecation warnings
+```
+
+The warnings concern FastAPI `on_event` deprecation and do not provide estimate
+lineage evidence.
+
+### Discovery limitations
+
+- Runtime operations used temporary SQLite databases and synthetic project data.
+- The Registry resolver was replaced with an isolated test snapshot.
+- Holded calls in the conversion experiment were replaced with test doubles.
+- No existing user estimate, PresuPro database, or Holded document was modified.
+- No product code, canonical PresuPro spec, or Cabinet Backend normative rule was
+  changed.
 
 ---
 
