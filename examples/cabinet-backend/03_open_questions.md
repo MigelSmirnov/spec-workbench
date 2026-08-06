@@ -130,28 +130,13 @@ contract.
 
 ## OQ-007 — Final authentication and authorization model
 
-### Question
+**Status:** Resolved by accepted decision A61 in `02_rules.md`.
 
-How does the local synchronization client authenticate to Cabinet, and how are
-local agent and HTML attachment operations authorized?
-
-### Current accepted constraints
-
-- Cabinet Backend initiates synchronization;
-- Cabinet never exposes or calls the local Backend;
-- the local HTML uploader is local-only;
-- agent and HTML workflows use the same Backend attachment operation;
-- every exceptional acceptance or attachment records actor provenance.
-
-### Required decision
-
-- node credential format and rotation;
-- revocation behavior;
-- whether synchronization credentials are per device or per installation;
-- local-user authentication for the HTML uploader;
-- authorization boundaries for read, attach, reconcile, release, and publish
-  operations;
-- audit requirements for agent-delegated actions.
+Synchronization uses a unique per-installation node credential with
+synchronization-only authority. Local mutations require an authenticated active
+local user and the required role; agent actions use time-bounded local-user
+delegation. Machine credentials, local identities, Holded credentials, roles,
+sessions, and append-only audit evidence remain separate concerns.
 
 ---
 

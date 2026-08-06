@@ -65,11 +65,12 @@ Normative text is defined in the referenced specifications.
 | A50 | Missing originals allowed for Client Portal but not Holded | 02_rules.md |
 | A51 | Create one Holded purchase and verify it by GET | 02_rules.md |
 
-### Platform boundary (A60–A69)
+### Platform boundary and security (A60–A69)
 
 | ID | Decision | Primary document |
 |----|----------|------------------|
 | A60 | Platform integrations belong to Cabinet Backend | 01_models.md |
+| A61 | Separate machine and local-user identities | 02_rules.md |
 
 ---
 
@@ -104,4 +105,4 @@ See:
 | A30–A39 | Registry |
 | A40–A49 | PresuPro |
 | A50–A59 | Holded |
-| A60–A69 | Platform boundary |
+| A60–A69 | Platform boundary and security |
