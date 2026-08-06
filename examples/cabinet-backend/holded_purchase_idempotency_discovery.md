@@ -2,7 +2,7 @@
 
 ## Status
 
-Factual discovery through one controlled create/recovery runtime test.
+Complete factual discovery of marker-based create recovery.
 
 The official contract and read-only list behavior were inspected. Exactly one
 isolated test purchase POST was executed with a unique attempt marker. Recovery
@@ -10,6 +10,11 @@ used list and GET only; no second POST was sent.
 
 The marker was recovered exactly once, but full verification found a financial
 payload mismatch. The deterministic outcome is `reconciliation_required`, not
+`created_and_recovered`.
+
+A second separately authorized test used corrected net unit amounts, a new
+marker, and exactly one new POST. List recovered exactly one document and GET
+passed the complete accepted verification baseline. Its deterministic outcome is
 `created_and_recovered`.
 
 No PUT, DELETE, attachment, payment, approval, or `purchaserefund` request was
@@ -42,6 +47,10 @@ pre-create list: 2026-08-06T20:26:04Z
 single POST: 2026-08-06T20:26:13Z
 first recovery list: 2026-08-06T20:26:23.199Z
 recovered document GET: 2026-08-06T20:26:40.020Z
+successful pre-create list: 2026-08-06T20:34:26.972Z
+successful single POST: 2026-08-06T20:34:34.620Z
+successful first recovery list: 2026-08-06T20:34:45.190Z
+successful recovered document GET: 2026-08-06T20:35:05.357Z
 API family: Holded invoicing v1
 credential source: HOLDED_V1_API_KEY from /home/smirnov/jestor_VBC/.env
 credential value: not recorded
@@ -158,6 +167,8 @@ No rate-limit or `Retry-After` header was exposed by the observed list responses
    approximately ten seconds after POST completion.
 9. Finding one marker is not sufficient publication success; the recovered
    document still requires complete business-field verification.
+10. With corrected net unit amounts, one marker match plus complete GET
+    verification produced `created_and_recovered`.
 
 ## Candidate recovery protocol
 
@@ -312,6 +323,86 @@ and payload mismatch
 No second POST or corrective mutation was executed. The recovered test purchase
 remains unapproved with numeric status `0` and gross total `14.23 EUR`.
 
+## Successful recovery experiment
+
+A second, separately authorized attempt used corrected net unit amounts derived
+from the previously verified Holded representation:
+
+```text
+publication_attempt_id: 530df579-60e9-4d07-86dc-f6e9901203fe
+marker: CABINET API TEST ATTEMPT 530df579-60e9-4d07-86dc-f6e9901203fe
+invoiceNum: CAB-ATT-530DF57960E9
+payload SHA-256: f4936fb479a5b43e3ade27a19a628eee93df009a99dbaa79dac06d51c2f5547a
+preexisting marker matches: 0
+expected gross total: 11.75 EUR
+```
+
+Sanitized item amounts were:
+
+```json
+[
+  {"units":1,"subtotal":2.066116,"discount":0,"tax":21},
+  {"units":2,"subtotal":1.859504,"discount":0,"tax":21},
+  {"units":1,"subtotal":3.925620,"discount":0,"tax":21}
+]
+```
+
+Their unrounded calculated gross was `11.75000024`, which is `11.75 EUR` at
+currency precision.
+
+Exactly one POST was sent:
+
+```text
+HTTP status: 200
+curl exit: 0
+returned documentId: 6a74efda0f9c6caac8027342
+returned operation status: 1
+automatic retry: no
+```
+
+The saved POST response was withheld from the recovery procedure. The first list
+request, approximately ten seconds after POST completion, returned:
+
+```text
+HTTP status: 200
+exact marker matches: 1
+recovered documentId: 6a74efda0f9c6caac8027342
+```
+
+The independently recovered ID matched the saved POST response. GET of that ID
+returned HTTP `200` and confirmed:
+
+```text
+marker: matches
+existing contact: matches
+invoiceNum: matches
+date: matches
+currency: matches
+line count: matches
+line names, descriptions, and order: match
+line quantities: match
+line tax rates: match
+net unit values: numerically equivalent
+returned subtotal: 9.72
+returned tax: 2.03
+returned gross total: 11.75
+expected gross total: 11.75
+numeric document status: 0
+paymentsPending: 11.75
+complete accepted baseline match: true
+```
+
+The recovery procedure therefore produced:
+
+```text
+one exact marker match
+and complete payload match
+-> created_and_recovered
+```
+
+No second POST, PUT, DELETE, approval, payment, attachment, or refund operation
+was executed.
+
 ## Safety constraints for the mutation phase
 
 - Exactly one new POST is allowed after explicit approval of its payload.
@@ -333,8 +424,6 @@ remains unapproved with numeric status `0` and gross total `14.23 EUR`.
 4. Is any undocumented idempotency header supported and contractually stable?
 5. How should list polling be bounded when no rate-limit headers are returned?
 6. Can approved or paid documents still be correlated by the same marker?
-7. Does the corrected fixture-to-Holded amount mapping reach
-   `created_and_recovered` in a future separately authorized test?
 
 ## Current decision boundary
 
@@ -342,10 +431,10 @@ Cabinet Backend must not automatically retry an ambiguous create request.
 
 Runtime evidence confirms that an exact unique `desc` marker can recover one
 created purchase through list and GET without repeating POST. It also confirms
-that marker recovery must be followed by complete payload verification: the
-experiment correctly rejected a financially mismatched document.
+that marker recovery must be followed by complete payload verification: one
+experiment correctly produced `reconciliation_required`, while the corrected
+experiment produced `created_and_recovered`.
 
-The evidence supports the `reconciliation_required` branch and the prohibition
-on automatic retry. A future separately authorized test with corrected amount
-mapping is still needed to exercise the successful `created_and_recovered`
-branch before accepting a complete normative recovery rule.
+The evidence is sufficient to formulate a stable marker-based recovery rule for
+the tested unapproved purchase-create flow. It does not establish native Holded
+idempotency and must never authorize a repeated POST after zero matches.
