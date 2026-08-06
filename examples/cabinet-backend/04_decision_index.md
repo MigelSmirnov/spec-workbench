@@ -20,6 +20,7 @@ Normative text is defined in the referenced specifications.
 | A3 | Explicit acceptance without source bytes | 02_rules.md |
 | A4 | Cabinet owns semantic duplicate detection | 02_rules.md |
 | A5 | Backend never edits Invoice Card | 02_rules.md |
+| A6 | Initial Cabinet Card scope is Invoice Card V1 only | 02_rules.md |
 
 ### Source Package (A10–A19)
 

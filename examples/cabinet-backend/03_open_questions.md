@@ -119,35 +119,12 @@ ambiguous POST, or reconcile a later Invoice Card revision by mutating Holded.
 
 ## OQ-006 — Additional Cabinet Card types in the local Backend
 
-### Question
+**Status:** Resolved by accepted decision A6 in `02_rules.md`.
 
-Which Cabinet Card types beyond Invoice Card must be supported offline and
-synchronized in the first Cabinet Backend implementation?
-
-### Candidate types
-
-- `ProviderCard`;
-- `ContactCard`;
-- `MaterialListCard` and items;
-- `DocumentCard`;
-- project-linked notes and relationships.
-
-### Why it remains open
-
-State 1 deliberately avoids inventing replacement schemas for Card types whose
-accepted Cabinet contracts have not been reviewed.
-
-### Required verification
-
-For each Card type:
-
-- accepted schema and validator;
-- draft/confirmed lifecycle;
-- immutable revision identity;
-- source-file semantics;
-- synchronization package eligibility;
-- local durability requirements;
-- Registry, PresuPro, Holded, and Client Portal dependencies.
+The first Cabinet Backend implementation supports only `Invoice Card V1`.
+Additional Cabinet Card types remain outside its offline, synchronization,
+durability, and local-processing scope until each receives a separately accepted
+contract.
 
 ---
 
