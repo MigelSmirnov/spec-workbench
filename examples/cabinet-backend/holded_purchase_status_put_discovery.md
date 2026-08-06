@@ -2,13 +2,14 @@
 
 ## Status
 
-Partial factual runtime discovery.
+Factual runtime discovery through H2, pending post-H2 UI verification.
 
-The read-only H1 observation is reproducible. The run stopped before H2 because
-the current runtime has no authenticated Holded UI session and therefore cannot
-correlate numeric API status with the visible state of the same document.
+The read-only H1 observation and same-document UI correlation are reproducible.
+One metadata-only H2 PUT was executed and verified by GET. The run stopped before
+H3 because the current runtime cannot inspect the Holded UI or accounting events.
 
-No POST, PUT, DELETE, attachment, or `purchaserefund` request was executed.
+No POST, DELETE, attachment, payment, approval, or `purchaserefund` request was
+executed. Exactly one PUT changed only `desc`.
 
 This document is factual evidence, not a normative Cabinet Backend rule.
 
@@ -18,6 +19,9 @@ This document is factual evidence, not a normative Cabinet Backend rule.
 
 ```text
 observed_at: 2026-08-06T19:31:05Z
+H2 pre-PUT GET: 2026-08-06T19:54:07Z
+H2 PUT: 2026-08-06T19:54:18Z
+H2 post-PUT GET: 2026-08-06T19:54:36Z
 runtime: local Cabinet/spec-workbench environment
 credential source: HOLDED_V1_API_KEY from /home/smirnov/jestor_VBC/.env
 credential value: not recorded
@@ -78,12 +82,18 @@ created_at or equivalent: absent
 updated_at or equivalent: absent
 ```
 
-The payment fields show that the full amount remained pending at observation
-time. They do not prove whether the document was visibly draft, approved,
-cancelled, or in another Holded UI state.
+The Holded UI for the same document showed `Este documento aún no ha sido
+aprobado` and the separate action `Aprobar`. It also showed total `11.75 EUR`,
+payment state `pending`, and pending amount `11.75 EUR`.
 
-No semantic label is assigned to `status = 0` because the same document could not
-be inspected in an authenticated Holded UI session from this runtime.
+Therefore, for this observed purchase:
+
+```text
+numeric status = 0 -> not approved / unapproved
+```
+
+This is a same-document correlation. It does not establish the meaning of every
+other numeric status value.
 
 ## PUT request semantics
 
@@ -101,15 +111,15 @@ The GET response and response headers exposed no ETag, content version,
 last-modified value, revision hash, or update timestamp suitable for concurrent
 update protection.
 
+For this unapproved purchase, a body containing only `desc` preserved every
+other returned top-level field. The observed runtime behavior is therefore a
+partial metadata update, despite the HTTP method being PUT. This does not prove
+the same preservation behavior for financial fields, approved documents, or
+fields not exposed by GET.
+
 ## Metadata PUT result
 
-Not executed.
-
-H2 was blocked by the explicit stop condition: the numeric status could not be
-correlated with the visible UI state before mutation. Consequently H3 was also
-not executed.
-
-The intended H2 request remains:
+Executed exactly once:
 
 ```json
 {
@@ -117,7 +127,16 @@ The intended H2 request remains:
 }
 ```
 
-This payload was not sent.
+```text
+HTTP method: PUT
+sanitized path: /api/invoicing/v1/documents/purchase/{documentId}
+HTTP status: 200
+sanitized response: {"status":1,"info":"Updated"}
+```
+
+The PUT response's `status = 1` is an operation-result field. It is not the
+purchase document status: the following GET still returned document `status =
+0`.
 
 ## Read-back verification
 
@@ -161,30 +180,53 @@ The sanitized snapshot SHA-256 is:
 3f0099c520131e14c2674a8bd4bde7827f252f4b70d460ce2239d70598847c3d
 ```
 
-## UI verification
-
-Not available in the current runtime. No authenticated Holded browser session or
-safe UI automation capability was available.
-
-Required next evidence is the visible state of document
-`6a74cd787765e9f84a0297d3` in Holded immediately before H2, selected from:
+The post-PUT GET returned HTTP `200`. Its sanitized snapshot SHA-256 is:
 
 ```text
-draft
-approved
-paid
-partially paid
-cancelled
-other
+48edfdffef51693d6748985917d0e573bc430e0b9a2a8368f10179843c02d641
 ```
+
+The only changed top-level response key was `desc`. The comparison confirmed:
+
+```text
+documentId: preserved
+docNumber: preserved
+currency: preserved
+product count and order: preserved
+complete product objects: preserved
+subtotal: preserved at 9.7200000000000006
+tax: preserved at 2.0299999999999998
+total: preserved at 11.75
+document numeric status: preserved at 0
+paymentsTotal: preserved at 0
+paymentsPending: preserved at 11.75
+paymentsRefunds: preserved at 0
+```
+
+## UI verification
+
+Before H2, user inspection of the same document confirmed:
+
+```text
+approval state: not approved / unapproved
+available action: Aprobar
+payment state: pending
+pending amount: 11.75 EUR
+```
+
+Post-H2 UI verification is pending. The required next check is that the document
+still shows the same approval and payment state, that the description is
+`CABINET API TEST PUT METADATA`, and that no new accounting record or event
+appeared.
 
 ## Accounting consequences
 
-No mutation occurred, so no accounting event or state change was produced by
-this run.
+The API-visible document status, payment fields, lines, taxes, subtotal, and total
+did not change after H2. The API exposed no new accounting or timestamp field.
 
-The current API response is insufficient to prove whether a metadata-only PUT
-would create or alter accounting entries.
+The current runtime cannot inspect Holded accounting UI or audit events.
+Therefore absence of an accounting consequence is not yet proven, and H3 remains
+blocked.
 
 ## Experiment record
 
@@ -201,41 +243,60 @@ numeric status before: 0
 numeric status after: 0 (second byte-identical GET)
 totals before: subtotal 9.72, tax 2.03, total 11.75 EUR
 totals after: unchanged across two GET observations
-UI state before: not verified
-UI state after: not applicable; no mutation
+UI state before: not approved / unapproved; payment pending 11.75 EUR
+UI state after: unchanged during H1; no mutation
+```
+
+```text
+experiment_id: H2
+observed_at: 2026-08-06T19:54:07Z through 2026-08-06T19:54:36Z
+HTTP method: GET, one PUT, GET
+sanitized path: /api/invoicing/v1/documents/purchase/{documentId}
+sanitized request: {"desc":"CABINET API TEST PUT METADATA"}
+PUT HTTP status: 200
+sanitized PUT response: {"status":1,"info":"Updated"}
+post-PUT GET HTTP status: 200
+documentId: 6a74cd787765e9f84a0297d3
+numeric document status before: 0
+numeric document status after: 0
+totals before: subtotal 9.72, tax 2.03, total 11.75 EUR
+totals after: subtotal 9.72, tax 2.03, total 11.75 EUR
+UI state before: not approved / unapproved; payment pending 11.75 EUR
+UI state after: pending user verification
 ```
 
 ## Limitations
 
-- Numeric status semantics remain unknown without same-document UI correlation.
-- Metadata PUT was not executed.
-- PUT replacement versus patch behavior remains unknown.
-- Accounting consequences remain unknown.
+- Only `status = 0` has a same-document UI correlation.
+- Post-H2 UI and accounting-event verification remain pending.
+- Partial-update behavior is verified only for `desc` on one unapproved purchase.
+- Behavior for approved or paid documents remains unknown.
 - The API exposed no usable concurrency token or update version.
 - No financial PUT behavior was tested.
 
 ## Remaining questions
 
-1. What visible Holded UI state corresponds to `status = 0` for this document?
-2. Does a `desc`-only PUT preserve identifier, number, products, taxes, totals,
-   payment fields, and UI state?
-3. Does reverting the description produce the same preservation result?
-4. Is PUT partial in practice, despite the operation being named PUT?
-5. Does metadata PUT create any accounting event or audit entry?
+1. Does the post-H2 UI preserve the unapproved and pending states?
+2. Did H2 create any accounting or audit event visible in Holded?
+3. Does reverting the description in H3 produce the same preservation result?
+4. Does partial-update behavior remain safe for approved or paid documents?
+5. Which other numeric status values map to which visible UI states?
 6. Which financial changes are accepted, and what accounting consequences do
    they have?
 
 ## Current answers
 
-1. Numeric `status = 0` was observed, but its UI meaning is not yet proven.
-2. Description-only update is documented as syntactically supported but was not
-   executed.
-3. Preservation after metadata PUT is not yet proven.
-4. Accounting state was unchanged because no PUT occurred; PUT consequences are
-   unknown.
-5. Full-replacement versus partial-update semantics remain undocumented and
-   untested.
-6. Metadata PUT cannot yet be declared safe for Cabinet Backend.
-7. UI correlation, H2/H3 read-back comparison, and accounting-event inspection
-   are required before any financial-field test plan is considered.
-8. Evidence is insufficient for a new normative rule.
+1. For this document, numeric `status = 0` means not approved / unapproved.
+2. A `desc`-only PUT succeeds on this unapproved purchase.
+3. Identifier, number, complete ordered products, taxes, totals, document status,
+   and payment fields were preserved in API read-back.
+4. No API-visible accounting state changed; UI accounting consequences remain to
+   be checked.
+5. PUT behaves as a partial update for the observed `desc`-only request.
+6. Metadata PUT is provisionally safe at the API data level for this unapproved
+   test purchase, but Cabinet Backend must not enable it until post-PUT UI and H3
+   restoration are verified.
+7. No financial mutation should be attempted before a separate plan covers
+   approved-state behavior, line/tax/total read-back, accounting entries,
+   concurrency, and correction strategy.
+8. Evidence remains insufficient for a normative reconciliation rule.
