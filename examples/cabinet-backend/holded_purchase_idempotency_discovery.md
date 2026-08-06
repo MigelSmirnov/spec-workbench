@@ -2,11 +2,18 @@
 
 ## Status
 
-Partial factual discovery and controlled runtime-test plan.
+Factual discovery through one controlled create/recovery runtime test.
 
-The official contract and read-only list behavior have been inspected. No POST,
-PUT, DELETE, attachment, payment, approval, or `purchaserefund` request was
-executed during this phase.
+The official contract and read-only list behavior were inspected. Exactly one
+isolated test purchase POST was executed with a unique attempt marker. Recovery
+used list and GET only; no second POST was sent.
+
+The marker was recovered exactly once, but full verification found a financial
+payload mismatch. The deterministic outcome is `reconciliation_required`, not
+`created_and_recovered`.
+
+No PUT, DELETE, attachment, payment, approval, or `purchaserefund` request was
+executed.
 
 This document is factual evidence and an experiment plan. It is not a normative
 Cabinet Backend rule.
@@ -31,6 +38,10 @@ duplicate candidates already exist
 
 ```text
 observed_at: 2026-08-06T20:13:14Z
+pre-create list: 2026-08-06T20:26:04Z
+single POST: 2026-08-06T20:26:13Z
+first recovery list: 2026-08-06T20:26:23.199Z
+recovered document GET: 2026-08-06T20:26:40.020Z
 API family: Holded invoicing v1
 credential source: HOLDED_V1_API_KEY from /home/smirnov/jestor_VBC/.env
 credential value: not recorded
@@ -142,8 +153,11 @@ No rate-limit or `Retry-After` header was exposed by the observed list responses
    idempotency key.
 6. Supplier, amount, date, lines, or payload similarity alone are unsafe because
    two legitimate purchases may share them.
-7. The current test document proves list visibility after successful creation,
-   but does not measure immediate visibility or eventual-consistency delay.
+7. A unique `desc` marker survived create and was returned by both list and GET.
+8. The new purchase appeared exactly once in the first recovery list request,
+   approximately ten seconds after POST completion.
+9. Finding one marker is not sufficient publication success; the recovered
+   document still requires complete business-field verification.
 
 ## Candidate recovery protocol
 
@@ -185,12 +199,12 @@ one marker match with payload mismatch -> reconciliation_required
 Zero candidates must not authorize an automatic second POST because list
 visibility delay and request-delivery ambiguity remain unproven.
 
-## Controlled mutation experiment required
+## Controlled mutation experiment
 
-One new isolated test purchase is required to verify recovery. It must be marked
-`CABINET API TEST` and use a unique attempt marker.
+One new isolated test purchase was authorized to verify recovery. It was marked
+`CABINET API TEST` and used a unique attempt marker.
 
-Proposed sequence:
+Executed sequence:
 
 1. Generate and persist one unique `publication_attempt_id` locally.
 2. Confirm by list that the marker does not already exist.
@@ -212,6 +226,92 @@ The experiment should not deliberately force a transport timeout. Saving a
 successful response for evidence while withholding it from the recovery routine
 tests the same post-condition without adding network-delivery uncertainty.
 
+## Controlled mutation result
+
+The local attempt record was persisted before POST:
+
+```text
+publication_attempt_id: c3cd678a-f545-42d4-b865-d85f56d3e1a1
+marker: CABINET API TEST ATTEMPT c3cd678a-f545-42d4-b865-d85f56d3e1a1
+invoiceNum: CAB-ATT-C3CD678AF545
+payload SHA-256: d764b3450bfef490acff4ebd59466e51e68aed31e208de07b1387e91fba3c5f7
+preexisting marker matches: 0
+```
+
+The sanitized payload used an existing Holded contact and the three lines from
+the validated Cabinet fixture:
+
+```json
+{
+  "applyContactDefaults": false,
+  "contactId": "[redacted-existing-contact-id]",
+  "desc": "CABINET API TEST ATTEMPT c3cd678a-f545-42d4-b865-d85f56d3e1a1",
+  "date": 1785535200,
+  "approveDoc": false,
+  "items": [
+    {"name":"[redacted]","units":1,"subtotal":2.50,"discount":0,"tax":21,"sku":"[redacted]"},
+    {"name":"[redacted]","units":2,"subtotal":2.25,"discount":0,"tax":21,"sku":"[redacted]"},
+    {"name":"[redacted]","units":1,"subtotal":4.75,"discount":0,"tax":21,"sku":"[redacted]"}
+  ],
+  "invoiceNum": "CAB-ATT-C3CD678AF545",
+  "currency": "eur"
+}
+```
+
+Exactly one POST was sent:
+
+```text
+HTTP status: 200
+curl exit: 0
+sanitized response keys: contactId, id, invoiceNum, status
+returned documentId: 6a74ede5958487ce530173e3
+returned operation status: 1
+automatic retry: no
+```
+
+The saved POST response was not used by the recovery procedure. The first list
+request returned:
+
+```text
+HTTP status: 200
+exact marker matches: 1
+recovered documentId: 6a74ede5958487ce530173e3
+```
+
+The independently recovered ID matched the ID in the saved POST response.
+
+GET of the recovered ID returned HTTP `200`. Verification found:
+
+```text
+marker: matches
+invoiceNum: matches
+currency: matches
+line count: matches
+line names and order: match
+line quantities: match
+line tax rates: match
+expected fixture gross total: 11.75
+returned subtotal: 11.75
+returned tax: 2.48
+returned gross total: 14.23
+returned paymentsPending: 14.23
+financial match: false
+```
+
+The request incorrectly supplied gross unit amounts in item `subtotal`. Holded
+interpreted them as net unit prices and added IVA, producing `14.23`.
+
+The recovery procedure therefore produced:
+
+```text
+one exact marker match
+and payload mismatch
+-> reconciliation_required
+```
+
+No second POST or corrective mutation was executed. The recovered test purchase
+remains unapproved with numeric status `0` and gross total `14.23 EUR`.
+
 ## Safety constraints for the mutation phase
 
 - Exactly one new POST is allowed after explicit approval of its payload.
@@ -225,19 +325,27 @@ tests the same post-condition without adding network-delivery uncertainty.
 
 ## Remaining questions
 
-1. Does a unique marker in `desc` survive create and appear immediately in list?
-2. How many list requests, if any, are needed before a new purchase is visible?
-3. Can tags or custom fields carry a cleaner stable attempt marker?
-4. Does Holded reject or allow a second purchase with the same supplier invoice
+1. Is a new purchase visible sooner than the observed approximately ten-second
+   first recovery check, and can visibility ever be delayed longer?
+2. Can tags or custom fields carry a cleaner stable attempt marker?
+3. Does Holded reject or allow a second purchase with the same supplier invoice
    number?
-5. Is any undocumented idempotency header supported and contractually stable?
-6. How should list polling be bounded when no rate-limit headers are returned?
-7. Can approved or paid documents still be correlated by the same marker?
+4. Is any undocumented idempotency header supported and contractually stable?
+5. How should list polling be bounded when no rate-limit headers are returned?
+6. Can approved or paid documents still be correlated by the same marker?
+7. Does the corrected fixture-to-Holded amount mapping reach
+   `created_and_recovered` in a future separately authorized test?
 
 ## Current decision boundary
 
 Cabinet Backend must not automatically retry an ambiguous create request.
 
-Read-only evidence supports a candidate marker-and-list recovery design, but one
-controlled create experiment is still required before that design becomes a
-normative duplicate-prevention rule.
+Runtime evidence confirms that an exact unique `desc` marker can recover one
+created purchase through list and GET without repeating POST. It also confirms
+that marker recovery must be followed by complete payload verification: the
+experiment correctly rejected a financially mismatched document.
+
+The evidence supports the `reconciliation_required` branch and the prohibition
+on automatic retry. A future separately authorized test with corrected amount
+mapping is still needed to exercise the successful `created_and_recovered`
+branch before accepting a complete normative recovery rule.
