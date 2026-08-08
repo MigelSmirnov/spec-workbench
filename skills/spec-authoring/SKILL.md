@@ -333,3 +333,320 @@ At every transition determine:
 - which module owns the next decision;
 - whether an adapter is needed;
 - which errors may occur;
+- who translates errors across boundaries;
+- which state or artifact is produced;
+- whether cleanup or rollback is required.
+
+Do not attempt to encode every possible test case. The goal is to expose missing ownership, missing data, and broken boundaries.
+
+Readiness questions:
+
+- Does every major flow end in an observable result or explicit failure?
+- Is there a module that actually produces each promised result?
+- Are error boundaries owned?
+- Are required adapters visible?
+- Does any endpoint still contain hidden business logic?
+
+### State 5 — Public module APIs
+
+Define only the operations that other modules may call.
+
+For every public operation establish:
+
+- owning module;
+- caller or callers;
+- input model or primitive values;
+- output model or primitive value;
+- observable effect;
+- policy or invariant it enforces;
+- errors or rejection forms;
+- whether it mutates state or creates artifacts.
+
+Do not expose internal algorithm steps merely because they will later become functions.
+
+Readiness questions:
+
+- Does each public operation correspond to a real cross-module need?
+- Can callers remain ignorant of internal sequencing?
+- Would removing this operation force callers to violate module ownership?
+- Are outputs concrete enough to prevent empty generic results?
+
+Expected specification output:
+
+- stable public entries in `imports.internal`;
+- stable top-level entries in `module_functions`;
+- preliminary adapter requirements.
+
+### State 6 — Contracts and internal functions
+
+Now create exact typed Python signatures.
+
+Use real project types from the stabilized model layer.
+
+For each public operation:
+
+1. create its exact contract;
+2. identify internal functions required to hide its complexity;
+3. add internal functions to `module_functions`;
+4. add exact contracts for every public and private function;
+5. establish `function_order`.
+
+Do not introduce new domain concepts silently at this stage.
+
+If a signature requires an undefined type, ambiguous result, or new state, return to an earlier state.
+
+Reject contract placeholders such as:
+
+```python
+process(data: dict) -> dict
+handle(request: Any) -> Any
+build(config: dict) -> object
+run(payload: Mapping[str, Any]) -> Result
+```
+
+unless generic openness is an explicit external contract.
+
+Readiness questions:
+
+- Does every argument have a clear source?
+- Does every return value have a clear consumer?
+- Does each function belong to exactly one module?
+- Are public and private functions distinguishable by module API ownership?
+- Are adapters defined where caller and callee shapes differ?
+
+### State 7 — Notes
+
+Write notes only after contracts and ownership are stable.
+
+Notes specify behavior not already captured by the signature.
+
+Use the closed note class registry from `SPEC_STANDARD.md`.
+
+For each function consider:
+
+- domain behavior;
+- validation and rejection;
+- exact return shape;
+- field assignment;
+- field projection;
+- rule, model, or config references;
+- provenance;
+- determinism and ordering;
+- security boundary;
+- path or artifact policy;
+- forbidden actions;
+- fallback;
+- orchestration boundaries;
+- evidence expectations where relevant.
+
+Avoid:
+
+- restating the function name;
+- repeating the signature;
+- implementation pseudocode;
+- inline policy tables;
+- vague adjectives such as “properly”, “correctly”, “appropriately”, or “as needed”;
+- requirements that cannot distinguish a real implementation from a stub.
+
+For every function perform the placeholder resistance test:
+
+> Could this contract be implemented with `return None`, `return []`, `return {}`, an empty model, a constant success value, or a simple forwarding call without contradicting the notes?
+
+If yes, the function is under-specified or prematurely designed. Strengthen the relevant earlier layer or remove the unnecessary function.
+
+Readiness questions:
+
+- Is the observable outcome explicit?
+- Are required output fields assigned or projected from known sources?
+- Are invalid inputs and external failures defined where important?
+- Are side effects explicit?
+- Are forbidden shortcuts explicit?
+- Do notes refer addressably to `config`, `models`, and `rules`?
+
+### State 8 — Assembly
+
+Assemble the final `global_spec.json` only after the preceding states are coherent.
+
+Populate all sections required by `SPEC_STANDARD.md`:
+
+- `contracts`;
+- `notes`;
+- `adapters`;
+- `config`;
+- `models`;
+- `rules`;
+- `imports`;
+- `module_functions`;
+- `module_order`;
+- `function_order`;
+- `module_hints`;
+- `module_paths`;
+- `default_module`.
+
+Assembly should mostly serialize decisions already made. It must not become another creative design pass.
+
+If assembly exposes missing models, unclear ownership, generic contracts, or vague behavior, return to the appropriate earlier state.
+
+After assembly, use the existing factory validators and inspectors. Do not duplicate them inside this skill.
+
+## Placeholder taxonomy
+
+Use this taxonomy during every state.
+
+### Product placeholder
+
+A broad promise without an observable result.
+
+Examples:
+
+- “manage documents”;
+- “support collaboration”;
+- “process requests efficiently”.
+
+Replace with concrete user actions, outputs, and failures.
+
+### Model placeholder
+
+A generic container used because domain structure has not been decided.
+
+Examples:
+
+- `data: dict`;
+- `metadata: dict`;
+- `result: Any`;
+- one universal `status: str` for unrelated lifecycles.
+
+Replace with explicit models, fields, states, and producers.
+
+### Rule placeholder
+
+A policy described as prose but not actually decided.
+
+Examples:
+
+- “choose the best strategy”;
+- “use reasonable limits”;
+- “fallback when necessary”.
+
+Replace with a declared rule, config value, ordering, or explicit unresolved question.
+
+### Module placeholder
+
+A module name that collects behavior without owning a precise responsibility.
+
+Examples:
+
+- `utils`;
+- `helpers`;
+- `manager`;
+- `processor`;
+- `common_service`.
+
+Replace with an ownership boundary or remove the module.
+
+### Contract placeholder
+
+A typed signature that preserves uncertainty instead of defining an interface.
+
+Examples:
+
+- `dict -> dict`;
+- `Any -> Any`;
+- `object -> Result`;
+- broad optional parameters added for hypothetical reuse.
+
+Replace with real project types and explicit outcomes.
+
+### Behavioral placeholder
+
+A note that sounds normative but imposes no meaningful constraint.
+
+Examples:
+
+- `MUST process correctly`;
+- `MUST handle errors`;
+- `MUST return the result`;
+- `MUST validate all fields`.
+
+Replace with specific invalid conditions, outcomes, assignments, policies, and boundaries.
+
+### Orchestration placeholder
+
+A sequence of calls exists, but no component owns creation of the promised state, artifact, or result.
+
+Replace with explicit producer ownership and end-to-end flow.
+
+### Future placeholder
+
+A speculative extension point added instead of solving the present design.
+
+Examples:
+
+- generic plugin interfaces without a current plugin;
+- optional fields “for future use”;
+- unsupported format branches with no defined behavior;
+- premature abstract base classes.
+
+Record future ideas separately. Do not encode them in the current specification unless required now.
+
+## Interaction protocol
+
+When using this skill in conversation:
+
+1. State the current design state.
+2. Summarize decisions already stable.
+3. Surface unresolved questions without hiding them.
+4. Discuss only the current state and necessary backward corrections.
+5. Show a compact draft of the current artifact.
+6. Run placeholder resistance questions.
+7. Move forward when the current layer is coherent enough.
+
+Do not overwhelm the user with a full questionnaire. Ask and resolve a small coherent group of decisions at a time.
+
+Prefer concrete proposals over abstract lectures. When several valid architectures exist, present the trade-off and recommend one based on the product constraints.
+
+Do not repeatedly ask for information already established in the conversation or project materials.
+
+## Output discipline
+
+During early states, use compact working artifacts rather than prematurely generating final JSON.
+
+Examples:
+
+```text
+Model: ProcessingJob
+Purpose: records asynchronous processing lifecycle
+Created by: processing module
+Modified by: processing module only
+Consumed by: API, status view, persistence
+States: pending → running → completed | failed
+Invariant: completed requires result_id; failed requires error_code
+```
+
+```text
+Module: artifact_policy
+Owns: artifact kind, path safety, access eligibility
+Exports: validate_artifact_request, authorize_artifact_access
+Must not own: HTTP response formatting, file reading, persistence
+Depends on: models, rules
+```
+
+Convert these decisions into `global_spec.json` only in later states.
+
+## Completion criteria
+
+A specification is ready for the existing factory when:
+
+- product outcomes are concrete;
+- required models and fields have known producers;
+- invariants and policies have owners;
+- modules have precise, deep responsibilities;
+- major flows terminate in observable results or explicit failures;
+- public APIs reflect real cross-module needs;
+- contracts use real project types;
+- notes prevent trivial placeholder implementations;
+- `config`, `models`, and `rules` are cleanly separated;
+- assembly introduces no new product or architecture decisions;
+- the complete file conforms to `SPEC_STANDARD.md`.
+
+The objective is not maximal detail. The objective is enough precision that the code-generation factory does not need to invent missing architecture or product semantics.
