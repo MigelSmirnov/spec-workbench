@@ -413,6 +413,35 @@ state machine has several records.
 
 ---
 
+### Required tests
+
+1. Replaying the same idempotency key with the same manifest returns the same
+   logical outcome and creates no duplicate records.
+2. Reusing an idempotency key with a different manifest is rejected as an
+   idempotency conflict.
+3. An incomplete manifest or a missing mandatory source is quarantined without
+   partially exposing the package as accepted archive content.
+4. A source hash mismatch is quarantined and is not repaired by changing the
+   expected hash or trusting the received bytes.
+5. An unsupported Card version is quarantined without being downgraded or parsed
+   as Invoice Card V1.
+6. Replaying an already accepted Card revision with its required source content
+   returns `already_accepted`.
+7. A safely related new content hash under an existing `invoice_id` creates a new
+   immutable Card revision; an unsafe or unproven relationship enters conflict or
+   quarantine.
+8. A verified source binary already owned by another logical invoice blocks
+   normal acceptance until an explicit duplicate decision exists.
+9. Quarantined content is excluded from normal archive queries, matching,
+   analytics, and publication.
+10. An accepted receipt is issued only after atomic durable acceptance of the
+    complete required set.
+11. An unknown transport outcome is reconciled using the same idempotency key and
+    exact manifest hash rather than a new invoice identity.
+12. VPS source bytes remain ineligible for retention release until the exact Card
+    revisions and required sources have durable accepted evidence and no blocking
+    quarantine remains.
+
 ### K. Remaining import-policy questions
 
 The following remain open for later State 2 documents:

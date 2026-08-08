@@ -1386,6 +1386,40 @@ or independently create semantic matches.
 6. Deterministic totals and reports may be calculated from confirmed decisions;
    semantic interpretation remains outside Backend.
 
+### Formal invariants
+
+Semantic authority:
+
+```text
+confirmed estimate match
+-> explicit Cabinet decision with sufficient provenance
+```
+
+Backend non-authority:
+
+```text
+similarity evidence without a confirmed Cabinet decision
+-> no confirmed estimate match
+```
+
+Analytical calculations:
+
+```text
+accepted matching calculation
+-> uses confirmed matching decisions only
+```
+
+### Required tests
+
+1. A similarity suggestion without Cabinet confirmation remains unconfirmed.
+2. Similar descriptions, prices, suppliers, or quantities do not cause Backend
+   to create a confirmed match automatically.
+3. A confirmed decision referencing an existing invoice revision, line, estimate
+   snapshot, and estimate item is stored with its provenance.
+4. A decision referencing a missing invoice revision, line, estimate snapshot,
+   or estimate item is rejected without creating a match.
+5. Deterministic totals and reports use confirmed matching decisions only.
+
 ### Consequence
 
 Cabinet answers why two commercial items should be treated as corresponding.
