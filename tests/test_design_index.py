@@ -106,6 +106,42 @@ Holded credentials are separate.
     assert items["A61"]["explicit_refs"] == []
 
 
+def test_query_helpers_keep_explicit_graph_separate_from_navigation(tmp_path: Path) -> None:
+    project = tmp_path / "demo"
+    _write(
+        project / "02_rules.md",
+        """# State 2 — Rules
+
+## Accepted decision A10 — Preserve source evidence
+
+A10 delegates retention policy to A11.
+
+### Normative rules
+
+SourcePackage remains immutable.
+
+## Accepted decision A11 — Retention
+
+Retention has one owner.
+""",
+    )
+
+    listed = design_index.list_items(project, state=2, kind="decision")
+    assert [item["key"] for item in listed] == ["A10", "A11"]
+    assert design_index.get_item(project, "a10")["title"].startswith("Accepted decision A10")
+
+    refs = design_index.get_references(project, "A11")
+    assert refs["outgoing"] == []
+    assert refs["incoming"] == ["A10"]
+
+    context = design_index.context_at(project, "02_rules.md:9", radius=1)
+    assert context.item_key == "A10"
+    assert context.heading_path[-1] == "Normative rules"
+    assert context.start_line == 8
+    assert context.end_line == 10
+    assert any("SourcePackage" in line for line in context.lines)
+
+
 def test_supporting_decision_without_id_gets_source_key(tmp_path: Path) -> None:
     project = tmp_path / "demo"
     _write(
