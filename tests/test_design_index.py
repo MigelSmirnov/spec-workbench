@@ -87,10 +87,10 @@ Copies remain until explicit release.
     index = design_index.build_index(project)
     items = index["items"]
 
-    assert len(items) == 2
-    assert all(item["state"] == 2 for item in items)
-    assert all(item["explicit_id"] is None for item in items)
-    assert all(item["key"].startswith("source:02_rules_retention.md#") for item in items)
+    assert len(items) == 1
+    assert items[0]["state"] == 2
+    assert items[0]["explicit_id"] is None
+    assert items[0]["key"] == "source:02_rules_retention.md#accepted-decision"
 
 
 def test_duplicate_explicit_ids_are_reported(tmp_path: Path) -> None:
