@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import design_index
+import pytest
 
 
 def _write(path: Path, text: str) -> None:
@@ -207,3 +208,186 @@ def test_duplicate_explicit_ids_are_reported(tmp_path: Path) -> None:
     index = design_index.build_index(project)
 
     assert index["diagnostics"]["duplicate_keys"] == ["A1"]
+
+
+def test_parses_case_insensitive_state_and_open_question_beyond_first_line(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "demo"
+    _write(
+        project / "07_questions.md",
+        """---
+title: Questions
+---
+
+# sTaTe 7 — Questions
+
+## Open question OQ-12 — Retention window
+
+How long should evidence remain available?
+""",
+    )
+
+    index = design_index.build_index(project)
+
+    assert len(index["items"]) == 1
+    assert index["items"][0]["key"] == "OQ-12"
+    assert index["items"][0]["kind"] == "open_question"
+    assert index["items"][0]["state"] == 7
+
+
+def test_reports_one_based_item_and_section_ranges(tmp_path: Path) -> None:
+    project = tmp_path / "demo"
+    _write(
+        project / "02_rules.md",
+        """# State 2
+
+## Accepted decision A1 — One
+
+Body.
+
+### First section
+First body.
+
+### Second section
+Second body.
+
+## Accepted decision A2 — Two
+""",
+    )
+
+    items = {item["key"]: item for item in design_index.build_index(project)["items"]}
+
+    assert items["A1"]["source"]["start_line"] == 3
+    assert items["A1"]["source"]["end_line"] == 12
+    assert items["A1"]["sections"] == [
+        {
+            "title": "First section",
+            "level": 3,
+            "start_line": 7,
+            "end_line": 9,
+        },
+        {
+            "title": "Second section",
+            "level": 3,
+            "start_line": 10,
+            "end_line": 12,
+        },
+    ]
+
+
+def test_heading_path_replaces_same_level_sibling(tmp_path: Path) -> None:
+    project = tmp_path / "demo"
+    _write(
+        project / "02_rules.md",
+        """# State 2
+
+## Accepted decision A1 — One
+
+### First section
+
+First body.
+
+### Second section
+
+Needle appears here.
+""",
+    )
+
+    mentions = design_index.find_mentions(project, "Needle")
+
+    assert len(mentions) == 1
+    assert mentions[0].heading_path == (
+        "State 2",
+        "Accepted decision A1 — One",
+        "Second section",
+    )
+
+
+def test_case_sensitive_mentions_preserve_columns_text_and_overlaps(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "demo"
+    _write(
+        project / "02_rules.md",
+        """# State 2
+
+## Accepted decision A1 — One
+
+  ZZZ
+""",
+    )
+
+    mentions = design_index.find_mentions(project, "Z", case_sensitive=True)
+
+    assert [mention.column for mention in mentions] == [3, 4, 5]
+    assert [mention.text for mention in mentions] == ["ZZZ", "ZZZ", "ZZZ"]
+    assert design_index.find_mentions(project, "z", case_sensitive=True) == []
+
+
+def test_list_filters_distinguish_states_and_item_kinds(tmp_path: Path) -> None:
+    project = tmp_path / "demo"
+    _write(
+        project / "02_rules.md",
+        """# State 2
+
+## Accepted decision A1 — State two decision
+
+## Open question OQ-1 — State two question
+""",
+    )
+    _write(
+        project / "03_rules.md",
+        """# State 3
+
+## Accepted decision A2 — State three decision
+""",
+    )
+
+    assert [item["key"] for item in design_index.list_items(project, state=2)] == [
+        "A1",
+        "OQ-1",
+    ]
+    assert [
+        item["key"] for item in design_index.list_items(project, kind="open_question")
+    ] == ["OQ-1"]
+
+
+def test_public_contract_rejects_empty_mentions_and_versions_index(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "demo"
+    project.mkdir()
+
+    with pytest.raises(ValueError, match="term must not be empty"):
+        design_index.find_mentions(project, "")
+
+    assert design_index.build_index(project)["schema_version"] == (
+        "spec_workbench_design_index.v1"
+    )
+
+
+def test_references_separate_resolved_and_unresolved_targets(tmp_path: Path) -> None:
+    project = tmp_path / "demo"
+    _write(
+        project / "02_rules.md",
+        """# State 2
+
+## Accepted decision A10 — Source owner
+
+A10 delegates retention to A11 and leaves OQ-404 unresolved.
+
+## Accepted decision A11 — Retention owner
+
+Retention has one owner.
+""",
+    )
+
+    references = design_index.get_references(project, "a10")
+
+    assert references is not None
+    assert references["key"] == "A10"
+    assert references["outgoing"] == ["A11", "OQ-404"]
+    assert [item["key"] for item in references["resolved_outgoing"]] == ["A11"]
+    assert references["unresolved_outgoing"] == ["OQ-404"]
+    assert design_index.get_references(project, "A999") is None
