@@ -19,7 +19,9 @@ import design_index
 
 
 SUPPORTED_STATE = 2
-SCHEMA_VERSION = "spec_workbench_design_lint.v1"
+SCHEMA_VERSION = "spec_workbench_design_lint.v2"
+FULL_ITEM_CONTEXT_MAX_LINES = 120
+LONG_ITEM_CONTEXT_RADIUS = 14
 Severity = Literal["error", "warning", "info"]
 SEVERITY_ORDER: dict[Severity, int] = {"error": 0, "warning": 1, "info": 2}
 
@@ -48,13 +50,48 @@ class DesignLintError(Exception):
 
 
 @dataclass(frozen=True)
+class SourceLocation:
+    path: str
+    line: int
+
+
+@dataclass(frozen=True)
+class LineRange:
+    start_line: int
+    end_line: int
+
+
+@dataclass(frozen=True)
+class SectionOutline:
+    title: str
+    level: int
+    start_line: int
+    end_line: int
+
+
+@dataclass(frozen=True)
 class Finding:
     severity: Severity
     code: str
-    item_key: str
-    path: str
-    line: int
     message: str
+    item_key: str
+    source: SourceLocation
+    section: str | None
+    heading_path: tuple[str, ...]
+    item_range: LineRange
+    section_outline: tuple[SectionOutline, ...]
+    context_range: LineRange
+    context_lines: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class _FindingDraft:
+    severity: Severity
+    code: str
+    message: str
+    item: dict[str, object]
+    line: int
+    section: str | None
 
 
 @dataclass(frozen=True)
@@ -84,37 +121,38 @@ def _normalized_title(title: str) -> str:
     return " ".join(title.casefold().split())
 
 
-def _finding(
+def _draft(
     severity: Severity,
     code: str,
     item: dict[str, object],
     message: str,
     *,
     line: int | None = None,
-) -> Finding:
-    return Finding(
+    section: str | None = None,
+) -> _FindingDraft:
+    return _FindingDraft(
         severity=severity,
         code=code,
-        item_key=item["key"],
-        path=item["source"]["path"],
         line=line if line is not None else item["source"]["start_line"],
         message=message,
+        item=item,
+        section=section,
     )
 
 
-def _finding_sort_key(finding: Finding) -> tuple[object, ...]:
+def _finding_sort_key(finding: _FindingDraft) -> tuple[object, ...]:
     return (
-        finding.path,
+        finding.item["source"]["path"],
         finding.line,
-        finding.item_key,
+        finding.item["key"],
         SEVERITY_ORDER[finding.severity],
         finding.code,
         finding.message,
     )
 
 
-def _duplicate_section_findings(item: dict[str, object]) -> list[Finding]:
-    findings: list[Finding] = []
+def _duplicate_section_findings(item: dict[str, object]) -> list[_FindingDraft]:
+    findings: list[_FindingDraft] = []
     by_exact: dict[str, list[dict[str, object]]] = defaultdict(list)
     by_normalized: dict[str, list[dict[str, object]]] = defaultdict(list)
     for section in item["sections"]:
@@ -127,12 +165,13 @@ def _duplicate_section_findings(item: dict[str, object]) -> list[Finding]:
             continue
         exact_ambiguous.add(_normalized_title(title))
         findings.append(
-            _finding(
+            _draft(
                 "error",
                 "ambiguous_section",
                 item,
                 f"Section title {title!r} occurs {len(sections)} times and is not uniquely addressable.",
                 line=sections[0]["start_line"],
+                section=title,
             )
         )
 
@@ -141,48 +180,69 @@ def _duplicate_section_findings(item: dict[str, object]) -> list[Finding]:
             continue
         rendered = ", ".join(repr(section["title"]) for section in sections)
         findings.append(
-            _finding(
+            _draft(
                 "warning",
                 "duplicate_section_name",
                 item,
                 f"Section titles differ only by case or whitespace: {rendered}.",
                 line=sections[0]["start_line"],
+                section=sections[0]["title"],
             )
         )
     return findings
 
 
-def _canonical_section_findings(item: dict[str, object]) -> list[Finding]:
-    findings: list[Finding] = []
+def _missing_section_anchor(
+    item: dict[str, object],
+    canonical_index: int,
+    positions: dict[str, list[int]],
+) -> int:
     sections = item["sections"]
-    positions: dict[str, list[int]] = {}
+    for candidate in CANONICAL_SECTIONS[canonical_index + 1 :]:
+        if positions.get(candidate.key):
+            return sections[positions[candidate.key][0]]["start_line"]
+    for candidate in reversed(CANONICAL_SECTIONS[:canonical_index]):
+        if positions.get(candidate.key):
+            return sections[positions[candidate.key][-1]]["end_line"]
+    return item["source"]["start_line"]
 
-    for canonical in CANONICAL_SECTIONS:
-        matches = [
+
+def _canonical_section_findings(item: dict[str, object]) -> list[_FindingDraft]:
+    findings: list[_FindingDraft] = []
+    sections = item["sections"]
+    positions = {
+        canonical.key: [
             index
             for index, section in enumerate(sections)
             if _normalized_title(section["title"]) in canonical.aliases
         ]
-        positions[canonical.key] = matches
+        for canonical in CANONICAL_SECTIONS
+    }
+
+    for canonical_index, canonical in enumerate(CANONICAL_SECTIONS):
+        matches = positions[canonical.key]
         if not matches:
             findings.append(
-                _finding(
+                _draft(
                     "warning",
                     "missing_canonical_section",
                     item,
                     f"Review decision: canonical section {canonical.label!r} is absent.",
+                    line=_missing_section_anchor(item, canonical_index, positions),
+                    section=canonical.label,
                 )
             )
         elif len(matches) > 1:
             exact_titles = [sections[index]["title"] for index in matches]
             if len(set(exact_titles)) == len(exact_titles):
                 findings.append(
-                    _finding(
+                    _draft(
                         "warning",
                         "duplicate_canonical_section",
                         item,
                         f"Canonical role {canonical.label!r} appears under multiple aliases.",
                         line=sections[matches[0]]["start_line"],
+                        section=canonical.label,
                     )
                 )
 
@@ -203,7 +263,7 @@ def _canonical_section_findings(item: dict[str, object]) -> list[Finding]:
         labels = {canonical.key: canonical.label for canonical in CANONICAL_SECTIONS}
         rendered = " -> ".join(labels[key] for key in observed)
         findings.append(
-            _finding(
+            _draft(
                 "warning",
                 "canonical_section_order",
                 item,
@@ -216,14 +276,14 @@ def _canonical_section_findings(item: dict[str, object]) -> list[Finding]:
 def _duplicate_item_findings(
     index: dict[str, object],
     selected_items: list[dict[str, object]],
-) -> list[Finding]:
+) -> list[_FindingDraft]:
     selected_keys = {item["key"] for item in selected_items}
     duplicates = [
         key
         for key in index["diagnostics"]["duplicate_keys"]
         if key in selected_keys
     ]
-    findings: list[Finding] = []
+    findings: list[_FindingDraft] = []
     for key in sorted(duplicates):
         occurrences = [item for item in index["items"] if item["key"] == key]
         selected_occurrences = [
@@ -242,7 +302,7 @@ def _duplicate_item_findings(
         )
         code = "duplicate_explicit_id" if anchor["explicit_id"] else "duplicate_item_key"
         findings.append(
-            _finding(
+            _draft(
                 "error",
                 code,
                 anchor,
@@ -252,11 +312,62 @@ def _duplicate_item_findings(
     return findings
 
 
+def _enrich_finding(project: Path, draft: _FindingDraft) -> Finding:
+    item = draft.item
+    item_start = item["source"]["start_line"]
+    item_end = item["source"]["end_line"]
+    anchor = min(max(draft.line, item_start), item_end)
+    item_line_count = item_end - item_start + 1
+    if item_line_count <= FULL_ITEM_CONTEXT_MAX_LINES:
+        context_start = item_start
+        context_end = item_end
+    else:
+        context_start = max(item_start, anchor - LONG_ITEM_CONTEXT_RADIUS)
+        context_end = min(item_end, anchor + LONG_ITEM_CONTEXT_RADIUS)
+    radius = max(anchor - context_start, context_end - anchor)
+    location = f"{item['source']['path']}:{anchor}"
+    try:
+        context = design_index.context_at(project, location, radius=radius)
+    except Exception as exc:
+        raise DesignLintError(
+            f"structural context could not be built for {item['key']} at {location}: {exc}"
+        ) from exc
+    context_lines = tuple(
+        rendered
+        for line_number, rendered in zip(
+            range(context.start_line, context.end_line + 1),
+            context.lines,
+        )
+        if context_start <= line_number <= context_end
+    )
+    return Finding(
+        severity=draft.severity,
+        code=draft.code,
+        message=draft.message,
+        item_key=item["key"],
+        source=SourceLocation(item["source"]["path"], anchor),
+        section=draft.section,
+        heading_path=context.heading_path,
+        item_range=LineRange(item_start, item_end),
+        section_outline=tuple(
+            SectionOutline(
+                section["title"],
+                section["level"],
+                section["start_line"],
+                section["end_line"],
+            )
+            for section in item["sections"]
+        ),
+        context_range=LineRange(context_start, context_end),
+        context_lines=context_lines,
+    )
+
+
 def lint_project(project: Path, *, state: int = SUPPORTED_STATE) -> LintReport:
     """Analyze one design state using only the structural design index."""
     if state != SUPPORTED_STATE:
         raise DesignLintError(
-            f"design_lint v1 supports only State {SUPPORTED_STATE}, got State {state}"
+            f"design_lint v2 supports only State {SUPPORTED_STATE}, got State {state}"
         )
     project = project.resolve()
     if not project.is_dir():
@@ -272,14 +383,14 @@ def lint_project(project: Path, *, state: int = SUPPORTED_STATE) -> LintReport:
         item for item in selected_items if item["kind"] == "open_question"
     ]
     known_keys = {item["key"] for item in index["items"]}
-    findings = _duplicate_item_findings(index, selected_items)
+    drafts = _duplicate_item_findings(index, selected_items)
 
     for item in decisions:
-        findings.extend(_duplicate_section_findings(item))
-        findings.extend(_canonical_section_findings(item))
+        drafts.extend(_duplicate_section_findings(item))
+        drafts.extend(_canonical_section_findings(item))
         if not item["sections"]:
-            findings.append(
-                _finding(
+            drafts.append(
+                _draft(
                     "warning",
                     "section_not_nested",
                     item,
@@ -287,8 +398,8 @@ def lint_project(project: Path, *, state: int = SUPPORTED_STATE) -> LintReport:
                 )
             )
         if item["explicit_id"] is None:
-            findings.append(
-                _finding(
+            drafts.append(
+                _draft(
                     "info",
                     "supporting_decision",
                     item,
@@ -302,8 +413,8 @@ def lint_project(project: Path, *, state: int = SUPPORTED_STATE) -> LintReport:
             if reference in known_keys:
                 continue
             unresolved_count += 1
-            findings.append(
-                _finding(
+            drafts.append(
+                _draft(
                     "warning",
                     "unresolved_reference",
                     item,
@@ -311,7 +422,10 @@ def lint_project(project: Path, *, state: int = SUPPORTED_STATE) -> LintReport:
                 )
             )
 
-    ordered_findings = tuple(sorted(findings, key=_finding_sort_key))
+    ordered_drafts = sorted(drafts, key=_finding_sort_key)
+    ordered_findings = tuple(
+        _enrich_finding(project, draft) for draft in ordered_drafts
+    )
     severities = Counter(finding.severity for finding in ordered_findings)
     reference_count = sum(len(item["explicit_refs"]) for item in selected_items)
     summary = LintSummary(
@@ -340,8 +454,8 @@ def render_json(report: LintReport) -> str:
     return json.dumps(asdict(report), ensure_ascii=False, indent=2, sort_keys=True) + "\n"
 
 
-def render_human(report: LintReport) -> str:
-    """Render a concise deterministic report for authoring review."""
+def render_human(report: LintReport, *, compact: bool = False) -> str:
+    """Render deterministic diagnostics, with structural context by default."""
     summary = report.summary
     lines = [
         f"Design lint: {report.project_root} (State {report.state})",
@@ -361,10 +475,37 @@ def render_human(report: LintReport) -> str:
         ),
     ]
     for finding in report.findings:
-        lines.append(
-            f"{finding.severity.upper()} {finding.code} "
-            f"{finding.item_key} {finding.path}:{finding.line} - {finding.message}"
+        lines.extend(
+            [
+                "",
+                f"{finding.severity.upper()} {finding.code} - {finding.message}",
+                f"  item: {finding.item_key}",
+                f"  source: {finding.source.path}:{finding.source.line}",
+            ]
         )
+        if finding.section is not None:
+            lines.append(f"  section: {finding.section}")
+        if compact:
+            continue
+        lines.append(
+            f"  item range: {finding.item_range.start_line}-{finding.item_range.end_line}"
+        )
+        lines.append(
+            "  heading path: " + " > ".join(finding.heading_path)
+        )
+        lines.append("  sections:")
+        if finding.section_outline:
+            for section in finding.section_outline:
+                lines.append(
+                    f"    {'#' * section.level} {section.title} "
+                    f"{section.start_line}-{section.end_line}"
+                )
+        else:
+            lines.append("    (none indexed)")
+        lines.append(
+            f"  context {finding.context_range.start_line}-{finding.context_range.end_line}:"
+        )
+        lines.extend(f"    {line}" for line in finding.context_lines)
     if not report.findings:
         lines.append("OK: no authoring findings.")
     return "\n".join(lines) + "\n"
@@ -381,9 +522,14 @@ def _parser() -> argparse.ArgumentParser:
         "--state",
         type=int,
         default=SUPPORTED_STATE,
-        help=f"Design state to lint (v1: only {SUPPORTED_STATE})",
+        help=f"Design state to lint (v2: only {SUPPORTED_STATE})",
     )
     parser.add_argument("--json", action="store_true", help="Emit stable JSON")
+    parser.add_argument(
+        "--compact",
+        action="store_true",
+        help="Hide structural outline and source context in human output",
+    )
     return parser
 
 
@@ -394,7 +540,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     except DesignLintError as exc:
         print(f"design_lint: error: {exc}", file=sys.stderr)
         return 2
-    output = render_json(report) if args.json else render_human(report)
+    output = (
+        render_json(report)
+        if args.json
+        else render_human(report, compact=args.compact)
+    )
     print(output, end="")
     return report_exit_code(report)
 

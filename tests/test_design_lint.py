@@ -309,7 +309,7 @@ def test_duplicate_explicit_ids_are_errors_with_stable_location_order(
     assert _codes(report) == ["duplicate_explicit_id"]
     finding = report.findings[0]
     assert finding.severity == "error"
-    assert finding.path == "02_a.md"
+    assert finding.source.path == "02_a.md"
     assert "02_a.md:3, 02_b.md:3" in finding.message
 
 
@@ -336,8 +336,8 @@ def test_json_and_finding_order_are_stable_across_files(tmp_path: Path) -> None:
         "state",
         "summary",
     ]
-    assert payload["schema_version"] == "spec_workbench_design_lint.v1"
-    assert [finding["path"] for finding in payload["findings"]] == (
+    assert payload["schema_version"] == "spec_workbench_design_lint.v2"
+    assert [finding["source"]["path"] for finding in payload["findings"]] == (
         ["02_a.md"] * 6 + ["02_b.md"] * 6
     )
     assert rendered.endswith("\n")
@@ -367,3 +367,195 @@ def test_missing_project_is_analysis_failure(tmp_path: Path) -> None:
 
     with pytest.raises(design_lint.DesignLintError, match="directory not found"):
         design_lint.lint_project(missing)
+
+
+def test_small_item_finding_contains_complete_structural_context(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "demo"
+    _write(
+        project / "02_rules.md",
+        "# State 2\n\n## Accepted decision A1 — Minimal\n\nDecision body.\n",
+    )
+
+    report = design_lint.lint_project(project)
+    finding = next(
+        finding
+        for finding in report.findings
+        if finding.code == "section_not_nested"
+    )
+
+    assert finding.source == design_lint.SourceLocation("02_rules.md", 3)
+    assert finding.section is None
+    assert finding.heading_path == (
+        "State 2",
+        "Accepted decision A1 — Minimal",
+    )
+    assert finding.item_range == design_lint.LineRange(3, 5)
+    assert finding.context_range == finding.item_range
+    assert finding.section_outline == ()
+    assert finding.context_lines == (
+        "3: ## Accepted decision A1 — Minimal",
+        "4: ",
+        "5: Decision body.",
+    )
+
+
+def test_long_item_finding_uses_outline_and_local_structural_window(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "demo"
+    normative_body = "\n".join(
+        f"Rule evidence line {number}." for number in range(1, 131)
+    )
+    consequence_body = "\n".join(
+        f"Consequence evidence line {number}." for number in range(1, 41)
+    )
+    _write(
+        project / "02_rules.md",
+        f"""# State 2
+
+## Accepted decision A1 — Long decision
+
+### Normative rules
+{normative_body}
+
+### Required tests
+1. Verify the rule.
+
+### Consequence
+{consequence_body}
+""",
+    )
+
+    report = design_lint.lint_project(project)
+    finding = next(
+        finding
+        for finding in report.findings
+        if finding.code == "missing_canonical_section"
+        and finding.section == "Formal invariant(s)"
+    )
+
+    assert finding.item_range.end_line - finding.item_range.start_line + 1 > 120
+    assert finding.context_range == design_lint.LineRange(
+        finding.source.line - 14,
+        finding.source.line + 14,
+    )
+    assert len(finding.context_lines) == 29
+    assert finding.context_range != finding.item_range
+    assert [section.title for section in finding.section_outline] == [
+        "Normative rules",
+        "Required tests",
+        "Consequence",
+    ]
+    assert finding.source.line == finding.section_outline[1].start_line
+    assert any("### Required tests" in line for line in finding.context_lines)
+
+
+def test_item_within_full_context_threshold_is_not_reduced_to_local_window(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "demo"
+    body = "\n".join(f"Evidence line {number}." for number in range(1, 51))
+    _write(
+        project / "02_rules.md",
+        f"# State 2\n\n## Accepted decision A1 — Medium\n\n{body}\n",
+    )
+
+    finding = design_lint.lint_project(project).findings[0]
+
+    assert finding.item_range.end_line - finding.item_range.start_line + 1 == 52
+    assert finding.context_range == finding.item_range
+    assert len(finding.context_lines) == 52
+
+
+def test_human_context_is_default_and_compact_hides_blast_radius(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "demo"
+    _write(
+        project / "02_rules.md",
+        "# State 2\n\n## Accepted decision A1 — Minimal\n\nDecision body.\n",
+    )
+    report = design_lint.lint_project(project)
+
+    contextual = design_lint.render_human(report)
+    compact = design_lint.render_human(report, compact=True)
+
+    assert "  item range: 3-5" in contextual
+    assert "  heading path: State 2 > Accepted decision A1 — Minimal" in contextual
+    assert "  sections:" in contextual
+    assert "  context 3-5:" in contextual
+    assert "3: ## Accepted decision A1 — Minimal" in contextual
+    assert "  item: A1" in compact
+    assert "  source: 02_rules.md:3" in compact
+    assert "  item range:" not in compact
+    assert "  context " not in compact
+
+
+def test_json_always_contains_structural_context(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    project = tmp_path / "demo"
+    _write(
+        project / "02_rules.md",
+        "# State 2\n\n## Accepted decision A1 — Minimal\n\nDecision body.\n",
+    )
+
+    assert design_lint.main([str(project), "--json", "--compact"]) == 0
+    payload = json.loads(capsys.readouterr().out)
+    finding = payload["findings"][0]
+
+    assert finding["source"] == {"line": 3, "path": "02_rules.md"}
+    assert finding["item_range"] == {"end_line": 5, "start_line": 3}
+    assert finding["context_range"] == {"end_line": 5, "start_line": 3}
+    assert finding["context_lines"][0].startswith("3: ## Accepted decision")
+    assert "section_outline" in finding
+    assert "heading_path" in finding
+
+
+def test_cli_compact_flag_controls_only_human_context(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    project = tmp_path / "demo"
+    _write(
+        project / "02_rules.md",
+        "# State 2\n\n## Accepted decision A1 — Minimal\n\nDecision body.\n",
+    )
+
+    assert design_lint.main([str(project)]) == 0
+    contextual = capsys.readouterr().out
+    assert "  item range: 3-5" in contextual
+    assert "  context 3-5:" in contextual
+
+    assert design_lint.main([str(project), "--compact"]) == 0
+    compact = capsys.readouterr().out
+    assert "  item: A1" in compact
+    assert "  item range:" not in compact
+    assert "  context " not in compact
+
+
+def test_lint_delegates_context_building_to_design_index(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project = tmp_path / "demo"
+    _write(
+        project / "02_rules.md",
+        "# State 2\n\n## Accepted decision A1 — Minimal\n\nDecision body.\n",
+    )
+    real_context_at = design_lint.design_index.context_at
+    calls: list[tuple[Path, str, int]] = []
+
+    def record_context(project_path: Path, location: str, *, radius: int = 3):
+        calls.append((project_path, location, radius))
+        return real_context_at(project_path, location, radius=radius)
+
+    monkeypatch.setattr(design_lint.design_index, "context_at", record_context)
+
+    report = design_lint.lint_project(project)
+
+    assert len(calls) == len(report.findings)
+    assert all(call[0] == project.resolve() for call in calls)
