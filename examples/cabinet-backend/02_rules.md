@@ -2408,7 +2408,7 @@ rotated_at
 revoked_at
 ```
 
-#### Normative rules
+#### Sync node credential rules
 
 1. A node credential belongs to exactly one Backend installation.
 2. Credentials must not be shared between installations.
@@ -2482,7 +2482,7 @@ A disabled user cannot start new authenticated operations.
 The HTML uploader is a local interface to the same Backend source-attachment
 operation used by agent workflows.
 
-#### Normative rules
+#### Local-only HTML uploader rules
 
 1. The uploader binds only to a local or explicitly trusted private interface.
 2. It must not be exposed as a public internet service.

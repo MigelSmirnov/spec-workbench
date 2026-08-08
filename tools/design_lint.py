@@ -277,6 +277,15 @@ def lint_project(project: Path, *, state: int = SUPPORTED_STATE) -> LintReport:
     for item in decisions:
         findings.extend(_duplicate_section_findings(item))
         findings.extend(_canonical_section_findings(item))
+        if not item["sections"]:
+            findings.append(
+                _finding(
+                    "warning",
+                    "section_not_nested",
+                    item,
+                    "Decision has no indexed child sections; nest owned headings deeper than the decision heading.",
+                )
+            )
         if item["explicit_id"] is None:
             findings.append(
                 _finding(

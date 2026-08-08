@@ -78,6 +78,44 @@ The tool has two deliberately separate views:
 
 A lexical occurrence is never architectural evidence by itself. Do not infer module ownership, responsibility clusters, or semantic relations from `--mentions` output alone.
 
+### Author addressable design items with canonical Markdown nesting
+
+Represent every addressable decision as one heading and place all content owned
+by that decision under strictly deeper headings:
+
+```markdown
+# State 2 — Rules
+
+## Accepted decision A10 — Preserve evidence
+
+### Normative rules
+
+### Formal invariants
+
+### Required tests
+
+### Consequence
+```
+
+Use `## Accepted decision` without an explicit ID for a legal supporting
+decision; the index assigns it a stable `source:*` key. Keep every owned section
+at `###` or deeper. A heading at the same or shallower level closes the decision
+and is not part of that item.
+
+Start every normative State 2 document with at least one accepted-decision item.
+A file with no indexed item is outside `design_lint`'s structural input and
+cannot be recovered by lint-side inference.
+
+Qualify repeated section titles so `ITEM + SECTION` remains unique. Additional
+headings such as `Payload rules`, `Retry safety`, or `Supplier behavior` are
+valid; do not flatten them or treat them as authoring errors.
+
+For State 2 decisions, include `Normative rules`, `Formal invariant` or `Formal
+invariants`, `Required tests`, and `Consequence` when the decision has evidence
+for those sections. Treat a missing canonical section as a review prompt, not a
+semantic-invalidity claim. Do not expand the parser to absorb flat legacy
+headings; normalize the document hierarchy instead.
+
 Useful commands:
 
 ```bash
@@ -86,6 +124,7 @@ python tools/design_index.py examples/<case> --get A51
 python tools/design_index.py examples/<case> --references A51
 python tools/design_index.py examples/<case> --mentions Holded
 python tools/design_index.py examples/<case> --context 02_rules.md:240 --radius 5
+python tools/design_lint.py examples/<case> --state 2
 ```
 
 Prefer these commands when they can answer the navigation question before falling back to raw `grep`. The tool is an authoring aid; source Markdown remains normative.

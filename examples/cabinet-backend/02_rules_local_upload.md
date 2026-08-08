@@ -1,10 +1,10 @@
 # State 2 decision — local invoice source upload
 
-## Status
+## Accepted decision
 
 Accepted supporting decision for `02_rules.md`.
 
-## Decision
+### Decision
 
 Local Cabinet Backend provides a minimal local HTML uploader for attaching invoice
 photographs and PDFs after the confirmed Invoice Card has already been accepted.
@@ -16,7 +16,7 @@ Codex or another authorised local agent and the HTML uploader must use the same
 Backend attachment operation. Neither may write directly to PostgreSQL or copy
 files into storage folders while bypassing Backend validation and provenance.
 
-## User workflow
+### User workflow
 
 The local page allows the user to:
 
@@ -32,7 +32,7 @@ A convenient implementation may preselect an invoice when search returns exactly
 one clear result. The final attachment still targets the stable `invoice_id`, not
 the human invoice number.
 
-## Agent workflow
+### Agent workflow
 
 A local agent may perform the same operation in bulk, for example when instructed:
 
@@ -42,7 +42,7 @@ The agent may automatically attach a file only when it resolves the target to on
 invoice with sufficiently strong evidence. Ambiguous matches require user choice
 and must not modify any invoice before that choice.
 
-## Normative rules
+### Normative rules
 
 1. The HTML uploader binds only to a local or otherwise explicitly private
    interface.
@@ -62,7 +62,7 @@ and must not modify any invoice before that choice.
 10. A successfully attached and verified file removes the corresponding visible
     missing-source warning when no other required source remains missing.
 
-## Required tests
+### Required tests
 
 1. A local user can find an invoice, select it, upload a photograph, and receive a
    success result.
@@ -77,7 +77,7 @@ and must not modify any invoice before that choice.
 7. Uploading several valid photographs attaches all of them to the selected
    invoice and reports each result separately.
 
-## Consequence
+### Consequence
 
 Invoice source recovery is usable without the VPS chat interface. The user may
 ask a local agent to process files from a folder or use a simple browser page, but

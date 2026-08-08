@@ -72,8 +72,10 @@ def test_missing_canonical_sections_are_review_warnings(tmp_path: Path) -> None:
 
     report = design_lint.lint_project(project)
 
-    assert _codes(report) == ["missing_canonical_section"] * 4
-    assert report.summary.warnings == 4
+    assert _codes(report) == ["missing_canonical_section"] * 4 + [
+        "section_not_nested"
+    ]
+    assert report.summary.warnings == 5
     assert report.summary.errors == 0
     assert design_lint.report_exit_code(report) == 0
 
@@ -202,6 +204,34 @@ def test_supporting_decision_source_key_is_info(tmp_path: Path) -> None:
     assert report.summary.supporting_decisions == 1
 
 
+def test_flat_supporting_sections_report_not_nested(tmp_path: Path) -> None:
+    project = tmp_path / "demo"
+    _write(
+        project / "02_rules.md",
+        """# State 2
+
+## Accepted decision
+
+Supporting body.
+
+## Normative rules
+
+1. This same-level section is outside the item.
+""",
+    )
+
+    report = design_lint.lint_project(project)
+
+    assert "section_not_nested" in _codes(report)
+    finding = next(
+        finding
+        for finding in report.findings
+        if finding.code == "section_not_nested"
+    )
+    assert finding.item_key == "source:02_rules.md#accepted-decision"
+    assert finding.severity == "warning"
+
+
 def test_unresolved_references_warn_and_statistics_distinguish_resolution(
     tmp_path: Path,
 ) -> None:
@@ -307,18 +337,9 @@ def test_json_and_finding_order_are_stable_across_files(tmp_path: Path) -> None:
         "summary",
     ]
     assert payload["schema_version"] == "spec_workbench_design_lint.v1"
-    assert [finding["path"] for finding in payload["findings"]] == [
-        "02_a.md",
-        "02_a.md",
-        "02_a.md",
-        "02_a.md",
-        "02_a.md",
-        "02_b.md",
-        "02_b.md",
-        "02_b.md",
-        "02_b.md",
-        "02_b.md",
-    ]
+    assert [finding["path"] for finding in payload["findings"]] == (
+        ["02_a.md"] * 6 + ["02_b.md"] * 6
+    )
     assert rendered.endswith("\n")
 
 

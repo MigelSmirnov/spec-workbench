@@ -2,6 +2,48 @@
 
 `tools/design_index.py` is a deterministic navigation aid for large design-state corpora. Source Markdown remains normative.
 
+## Authoring grammar for addressable items
+
+Use heading depth as the ownership boundary. An accepted decision owns only the
+content beneath headings deeper than its own heading:
+
+```markdown
+# State 2 — Rules
+
+## Accepted decision A10 — Preserve evidence
+
+### Normative rules
+
+### Formal invariants
+
+### Required tests
+
+### Consequence
+```
+
+Use `## Accepted decision` for a supporting decision without an explicit ID.
+Keep its sections at `###` or deeper. A heading at the decision's level or above
+closes the item; content under that heading is intentionally not absorbed by the
+index.
+
+Place at least one accepted-decision item in every normative State 2 document.
+`design_lint` consumes the index and therefore cannot diagnose a document that
+contains no indexed item at all.
+
+Keep section titles unique within an item when tools must address them as
+`ITEM + SECTION`. Qualify repeated local headings rather than teaching the
+parser to infer parent context. Additional non-canonical sections are allowed.
+
+Run the State 2 authoring check after structural edits:
+
+```bash
+python tools/design_lint.py examples/<case> --state 2
+```
+
+`section_not_nested` means the index found a decision but no owned child
+sections. Fix the Markdown hierarchy; do not broaden the parser to reinterpret a
+flat document.
+
 ## State 2 -> State 3 required loop
 
 When a candidate responsibility is derived from State 2, use the following navigation loop before assigning ownership.

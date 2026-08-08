@@ -9,7 +9,7 @@ A source may be temporarily missing and expected later, or it may be explicitly
 recorded as permanently lost. Loss of the original does not delete the accepted
 Card or erase the working decisions already made from it.
 
-## User-visible states
+### User-visible states
 
 For source completeness, an invoice is presented as one of:
 
@@ -24,7 +24,7 @@ Moving an invoice to `source_lost` is an explicit, auditable action. It records
 who confirmed the loss, when it was confirmed, the affected source references,
 and an optional explanation.
 
-## Allowed use
+### Allowed use
 
 An accepted confirmed Card in `awaiting_source` or `source_lost` remains available
 for:
@@ -37,7 +37,7 @@ for:
 - publication to `client_portal`, with a visible indication that the original is
   missing when the portal contract exposes source completeness.
 
-## Holded restriction
+### Holded restriction
 
 An Invoice Card is not eligible for Holded publication unless every original
 source required for that Card is stored in the Local Backend and verified.
@@ -54,7 +54,7 @@ Neither `awaiting_source` nor `source_lost` can be overridden for Holded
 publication. Recovering and verifying the original changes source completeness to
 `complete`; it does not require rewriting the accepted Card payload.
 
-## Client Portal rule
+### Client Portal rule
 
 Missing original source does not block publication to `client_portal`.
 
@@ -62,7 +62,7 @@ The portal publication must carry or derive the source-completeness state so tha
 `source_lost` is not presented as if documentary evidence were available. The
 exact visual presentation belongs to the Client Portal contract.
 
-## Invariants
+### Invariants
 
 For every successful Holded publication:
 
@@ -89,7 +89,7 @@ Marking a source as lost cannot remove:
 - analytics history;
 - provenance or earlier source-transfer evidence.
 
-## Required tests
+### Required tests
 
 1. A complete confirmed invoice may be published to Holded.
 2. An invoice awaiting an original cannot be published to Holded.

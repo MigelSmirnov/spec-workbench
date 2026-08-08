@@ -1,6 +1,8 @@
 # State 2 — Cabinet Backend import and durable-acceptance rules
 
-## Status
+## Accepted decision
+
+### Status
 
 Accepted baseline rules for VPS-to-local Invoice Card import.
 
@@ -8,7 +10,7 @@ This document defines invariants, state transitions, rejection and quarantine
 semantics, idempotency, and archive visibility. It does not define modules,
 public APIs, SQL tables, transport protocols, or implementation algorithms.
 
-## Scope
+### Scope
 
 These rules govern one `InvoiceTransferManifest` containing existing Cabinet
 Invoice Card V1 revisions, referenced source binaries, and capture provenance.
@@ -25,9 +27,9 @@ transport delivery
 
 ---
 
-# A. Core invariants
+### A. Core invariants
 
-## A.1 Card identity
+#### A.1 Card identity
 
 1. The Card `id` is the logical invoice identity.
 2. Import never replaces that identity with a local ID.
@@ -36,7 +38,7 @@ transport delivery
 4. Two different canonical payloads must not be stored under the same
    `content_hash`.
 
-## A.2 Immutable accepted revisions
+#### A.2 Immutable accepted revisions
 
 1. A locally stored `StoredInvoiceCardRevision` is immutable.
 2. A correction creates another Card revision through accepted Cabinet Card
@@ -46,7 +48,7 @@ transport delivery
 4. Backend-owned Registry, PresuPro, duplicate, synchronization, and publication
    records remain outside the Card payload.
 
-## A.3 Source bytes
+#### A.3 Source bytes
 
 1. Source bytes are immutable under one binary content hash.
 2. A source reference is locally durable only when the required bytes are stored
@@ -55,7 +57,7 @@ transport delivery
 4. A corrupt or mismatched binary must never be presented as the Card's verified
    original.
 
-## A.4 Transport versus acceptance
+#### A.4 Transport versus acceptance
 
 1. `InvoiceSynchronization.status = delivered` means only that the target
    received the manifest package.
@@ -66,7 +68,7 @@ transport delivery
 4. Quarantined work remains outside normal archive queries, analytics, matching,
    and Holded eligibility.
 
-## A.5 Idempotency
+#### A.5 Idempotency
 
 1. One idempotency key is bound to one exact manifest hash.
 2. Reusing the same key with the same manifest resolves to the same logical
@@ -79,9 +81,9 @@ transport delivery
 
 ---
 
-# B. Accepted Card lifecycle policy
+### B. Accepted Card lifecycle policy
 
-## B.1 Draft synchronization
+#### B.1 Draft synchronization
 
 Draft Invoice Cards may be transferred and durably archived.
 
@@ -99,7 +101,7 @@ A locally accepted draft:
 - is excluded from confirmed actual totals by default;
 - may later receive a confirmed Card revision with the same `invoice_id`.
 
-## B.2 Confirmed and archived Cards
+#### B.2 Confirmed and archived Cards
 
 1. Confirmed Cards may be accepted and become eligible inputs for later
    operations, subject to their own rules.
@@ -109,9 +111,9 @@ A locally accepted draft:
 
 ---
 
-# C. Manifest completeness and atomic acceptance
+### C. Manifest completeness and atomic acceptance
 
-## C.1 Manifest identity
+#### C.1 Manifest identity
 
 A manifest is immutable and must identify:
 
@@ -121,7 +123,7 @@ A manifest is immutable and must identify:
 - capture/catalogue provenance included in the transfer;
 - manifest format version and manifest hash.
 
-## C.2 Required source set
+#### C.2 Required source set
 
 For each Card revision, the required source set is derived from its accepted
 Invoice Card V1 source metadata and the transfer policy in force when the
@@ -133,7 +135,7 @@ The manifest must explicitly distinguish:
 - source bytes already known and verified locally;
 - source metadata whose Card state explicitly says the file is not stored.
 
-## C.3 Atomic business acceptance
+#### C.3 Atomic business acceptance
 
 Local durable acceptance is atomic at the manifest's required-set boundary:
 
@@ -149,7 +151,7 @@ Local durable acceptance is atomic at the manifest's required-set boundary:
 A partial package may be physically preserved in quarantine, but it must not be
 partially committed to the normal archive and reported as accepted.
 
-## C.4 Card `file_status = not_stored`
+#### C.4 Card `file_status = not_stored`
 
 A Card revision whose accepted source metadata explicitly states
 `file_status = not_stored` may be durably archived without source bytes only when:
@@ -164,20 +166,20 @@ Such a Card must not be presented as having a verified original.
 
 ---
 
-# D. Validation outcomes
+### D. Validation outcomes
 
-## D.1 Valid Card
+#### D.1 Valid Card
 
 A valid Card may proceed to duplicate review and source verification.
 
-## D.2 Valid with warnings
+#### D.2 Valid with warnings
 
 A Card with validator warnings may be accepted when the Card already contains the
 required acknowledgement evidence defined by Invoice Card V1.
 
 Backend must not invent acknowledgement on import.
 
-## D.3 Invalid Card
+#### D.3 Invalid Card
 
 A Card that fails the accepted validator is not accepted into the normal archive.
 
@@ -189,7 +191,7 @@ It is:
 
 Validation never repairs the payload automatically.
 
-## D.4 Unsupported Card version
+#### D.4 Unsupported Card version
 
 An unsupported `card_version` is quarantined, not silently downgraded or parsed
 as V1.
@@ -199,9 +201,9 @@ supported Card revision.
 
 ---
 
-# E. Quarantine rules
+### E. Quarantine rules
 
-## E.1 Quarantine reasons
+#### E.1 Quarantine reasons
 
 The baseline quarantine reasons are:
 
@@ -214,7 +216,7 @@ The baseline quarantine reasons are:
 - `idempotency_conflict`;
 - `operator_review`.
 
-## E.2 Quarantine behavior
+#### E.2 Quarantine behavior
 
 1. Quarantine preserves received evidence without declaring business acceptance.
 2. A quarantined import is not included in normal archive search results unless
@@ -226,7 +228,7 @@ The baseline quarantine reasons are:
 6. Resolution may produce `accepted`, `rejected`, or `discarded`; it must not
    rewrite the original receipt history.
 
-## E.3 Hash mismatch
+#### E.3 Hash mismatch
 
 A hash mismatch is never repaired by trusting the received bytes or changing the
 expected hash.
@@ -236,15 +238,15 @@ identifies which accepted source is authoritative.
 
 ---
 
-# F. Duplicate handling
+### F. Duplicate handling
 
-## F.1 Exact revision replay
+#### F.1 Exact revision replay
 
 If the local archive already contains the same `invoice_id` and `content_hash`,
 import returns `already_accepted` after confirming that required source content
 is also present or explicitly absent under the accepted Card state.
 
-## F.2 Same invoice ID, new revision
+#### F.2 Same invoice ID, new revision
 
 A new content hash under an existing `invoice_id` is treated as another Card
 revision, not a duplicate invoice, when it is connected to accepted Cabinet
@@ -254,7 +256,7 @@ in the manifest.
 If the relationship cannot be established safely, the import enters conflict or
 quarantine rather than choosing a winner.
 
-## F.3 Different invoice IDs, possible same real document
+#### F.3 Different invoice IDs, possible same real document
 
 Possible duplicate signals may include:
 
@@ -266,7 +268,7 @@ Possible duplicate signals may include:
 These signals create `DuplicateCandidateReview`; they do not automatically merge
 or delete Cards.
 
-## F.4 Blocking duplicate conditions
+#### F.4 Blocking duplicate conditions
 
 The baseline blocks normal acceptance only when a verified source binary hash is
 already owned by another logical invoice and no accepted explicit decision says
@@ -275,7 +277,7 @@ that both Cards intentionally refer to the same source.
 Other duplicate signals permit durable archival acceptance but keep an open
 review warning. This preserves work while avoiding destructive automatic merge.
 
-## F.5 Confirmed duplicate resolution
+#### F.5 Confirmed duplicate resolution
 
 Confirming two Cards as duplicates does not silently merge their histories.
 Resolution must identify:
@@ -289,9 +291,9 @@ Exact merge/archive mechanics belong to a later focused rule set.
 
 ---
 
-# G. State transitions
+### G. State transitions
 
-## G.1 Synchronization
+#### G.1 Synchronization
 
 ```text
 pending
@@ -305,7 +307,7 @@ pending
 `unknown_outcome` may later reconcile to `delivered`, `failed`, or a settled
 receipt result. It is not safe to assume failure.
 
-## G.2 Import
+#### G.2 Import
 
 ```text
 received
@@ -322,7 +324,7 @@ A quarantined import may later resolve to:
 quarantined → accepted | rejected
 ```
 
-## G.3 Quarantine
+#### G.3 Quarantine
 
 ```text
 open → resolved | discarded
@@ -330,7 +332,7 @@ open → resolved | discarded
 
 `resolved` requires linked evidence and the resulting import state.
 
-## G.4 Receipt
+#### G.4 Receipt
 
 Receipt results are immutable observations:
 
@@ -345,9 +347,9 @@ issued receipt in place.
 
 ---
 
-# H. Reconciliation and retention consequences
+### H. Reconciliation and retention consequences
 
-## H.1 Unknown transport outcome
+#### H.1 Unknown transport outcome
 
 When the VPS does not know whether delivery or import occurred, it retries using
 the same idempotency key and exact manifest hash or asks for reconciliation by
@@ -356,7 +358,7 @@ that identity.
 It must not generate a new invoice ID or new idempotency key merely because a
 response was lost.
 
-## H.2 VPS deletion eligibility
+#### H.2 VPS deletion eligibility
 
 VPS source bytes and working records are not eligible for retention expiry until
 there is durable evidence that:
@@ -372,14 +374,14 @@ defined separately.
 
 ---
 
-# I. Archive visibility and downstream eligibility
+### I. Archive visibility and downstream eligibility
 
-## I.1 Normal archive visibility
+#### I.1 Normal archive visibility
 
 Only accepted and already-accepted imports contribute records to normal local
 archive queries.
 
-## I.2 Matching and analytics
+#### I.2 Matching and analytics
 
 - Draft Cards may be archived but do not participate in confirmed actual totals
   by default.
@@ -387,7 +389,7 @@ archive queries.
   complete plan-versus-actual analysis.
 - Quarantined, rejected, and conflict-blocked content is excluded.
 
-## I.3 Holded
+#### I.3 Holded
 
 Only an exact locally accepted and confirmed Card revision may become a candidate
 for Holded publication. Import acceptance alone does not grant publication
@@ -395,7 +397,7 @@ eligibility.
 
 ---
 
-# J. Primary enforcement ownership for later State 3
+### J. Primary enforcement ownership for later State 3
 
 State 3 must assign one primary enforcement owner for each invariant group:
 
@@ -411,7 +413,7 @@ state machine has several records.
 
 ---
 
-# K. Remaining import-policy questions
+### K. Remaining import-policy questions
 
 The following remain open for later State 2 documents:
 
