@@ -24,6 +24,7 @@ STATE_RE = re.compile(r"\bState\s+(\d+)\b", re.IGNORECASE)
 DECISION_ID_RE = re.compile(r"\b(A\d+)\b")
 OPEN_QUESTION_ID_RE = re.compile(r"\b(OQ-\d+)\b", re.IGNORECASE)
 EXPLICIT_REF_RE = re.compile(r"\b(?:A\d+|OQ-\d+)\b", re.IGNORECASE)
+LOCATION_RE = re.compile(r"^(?P<path>.+):(?P<line>\d+)$")
 
 
 @dataclass(frozen=True)
@@ -63,6 +64,18 @@ class Mention:
     item_key: str | None
     item_title: str | None
     heading_path: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class Context:
+    path: str
+    line: int
+    item_key: str | None
+    item_title: str | None
+    heading_path: tuple[str, ...]
+    start_line: int
+    end_line: int
+    lines: tuple[str, ...]
 
 
 def _slug(text: str) -> str:
@@ -250,14 +263,99 @@ def build_index(project: Path) -> dict[str, object]:
     }
 
 
+def list_items(project: Path, *, state: int | None = None, kind: str | None = None) -> list[dict[str, object]]:
+    items = build_index(project)["items"]
+    result = []
+    for item in items:
+        if state is not None and item["state"] != state:
+            continue
+        if kind is not None and item["kind"] != kind:
+            continue
+        result.append(item)
+    return result
+
+
+def get_item(project: Path, key: str) -> dict[str, object] | None:
+    normalized = key.upper() if re.fullmatch(r"(?:A\d+|OQ-\d+)", key, re.IGNORECASE) else key
+    for item in build_index(project)["items"]:
+        if item["key"] == normalized:
+            return item
+    return None
+
+
+def get_references(project: Path, key: str) -> dict[str, object] | None:
+    item = get_item(project, key)
+    if item is None:
+        return None
+    all_items = {entry["key"]: entry for entry in build_index(project)["items"]}
+    outgoing = item["explicit_refs"]
+    incoming = sorted(
+        entry["key"]
+        for entry in all_items.values()
+        if item["key"] in entry["explicit_refs"]
+    )
+    return {
+        "key": item["key"],
+        "outgoing": outgoing,
+        "incoming": incoming,
+        "resolved_outgoing": [all_items[ref] for ref in outgoing if ref in all_items],
+        "unresolved_outgoing": [ref for ref in outgoing if ref not in all_items],
+    }
+
+
+def context_at(project: Path, location: str, *, radius: int = 3) -> Context:
+    match = LOCATION_RE.fullmatch(location)
+    if not match:
+        raise ValueError("location must be PATH:LINE")
+    if radius < 0:
+        raise ValueError("radius must be >= 0")
+
+    project = project.resolve()
+    rel = match.group("path")
+    line = int(match.group("line"))
+    path = (project / rel).resolve()
+    if not path.is_relative_to(project) or not path.is_file():
+        raise ValueError(f"path is not a Markdown file inside project: {rel}")
+
+    lines = path.read_text(encoding="utf-8").splitlines()
+    if line < 1 or line > len(lines):
+        raise ValueError(f"line is outside file: {line}")
+
+    headings = _headings(lines)
+    items = parse_markdown(path, project)
+    item = _item_at(items, rel, line)
+    start = max(1, line - radius)
+    end = min(len(lines), line + radius)
+    rendered = tuple(f"{number}: {lines[number - 1]}" for number in range(start, end + 1))
+    return Context(
+        path=rel,
+        line=line,
+        item_key=item.key if item else None,
+        item_title=item.title if item else None,
+        heading_path=_heading_path_at(headings, line),
+        start_line=start,
+        end_line=end,
+        lines=rendered,
+    )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("project", type=Path, help="Directory containing design-state Markdown files")
     parser.add_argument("--output", type=Path, help="Write JSON to this file instead of stdout")
-    parser.add_argument("--mentions", metavar="TERM", help="Find lexical mentions with structural context")
+    action = parser.add_mutually_exclusive_group()
+    action.add_argument("--list", action="store_true", help="List indexed design items")
+    action.add_argument("--get", metavar="KEY", help="Get one design item by stable key")
+    action.add_argument("--references", metavar="KEY", help="Show explicit incoming/outgoing references")
+    action.add_argument("--mentions", metavar="TERM", help="Find lexical mentions with structural context")
+    action.add_argument("--context", metavar="PATH:LINE", help="Show structural context around a source line")
+    parser.add_argument("--state", type=int, help="Filter --list by design state")
+    parser.add_argument("--kind", choices=("decision", "open_question"), help="Filter --list by item kind")
     parser.add_argument("--case-sensitive", action="store_true", help="Use case-sensitive mention lookup")
+    parser.add_argument("--radius", type=int, default=3, help="Context lines before/after --context (default: 3)")
     args = parser.parse_args()
 
+    exit_code = 0
     if args.mentions is not None:
         payload_data: object = [
             asdict(mention)
@@ -267,7 +365,18 @@ def main() -> int:
                 case_sensitive=args.case_sensitive,
             )
         ]
-        exit_code = 0
+    elif args.list:
+        payload_data = list_items(args.project, state=args.state, kind=args.kind)
+    elif args.get is not None:
+        payload_data = get_item(args.project, args.get)
+        if payload_data is None:
+            exit_code = 1
+    elif args.references is not None:
+        payload_data = get_references(args.project, args.references)
+        if payload_data is None:
+            exit_code = 1
+    elif args.context is not None:
+        payload_data = asdict(context_at(args.project, args.context, radius=args.radius))
     else:
         index = build_index(args.project)
         payload_data = index
