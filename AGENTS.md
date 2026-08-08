@@ -30,6 +30,27 @@ order before modifying its assembled `global_spec.json`.
 
 Later design-state documents may refine earlier conceptual decisions.
 
+## Design-state navigation tools
+
+When a case study has multiple decisions or supporting Markdown files, prefer
+`tools/design_index.py` over raw `grep` for design-state navigation.
+
+For State 2, begin with the indexed decision inventory when available:
+
+```bash
+python tools/design_index.py examples/<case> --list --state 2 --kind decision
+```
+
+Use `--get` and `--references` for explicit design structure. Use `--mentions`
+only to discover where a name appears, then use `--context` to read the source
+under its enclosing headings. Shared words do not create architectural
+relations.
+
+When moving from State 2 to State 3, agents must use the decision index as the
+evidence inventory before assigning primary enforcement owners. The tool may
+suggest where to read next; it must not invent module names or responsibility
+clusters.
+
 ## Decision hierarchy
 
 ```text
