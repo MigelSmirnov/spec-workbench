@@ -41,15 +41,26 @@ For State 2, begin with the indexed decision inventory when available:
 python tools/design_index.py examples/<case> --list --state 2 --kind decision
 ```
 
-Use `--get` and `--references` for explicit design structure. Use `--mentions`
-only to discover where a name appears, then use `--context` to read the source
-under its enclosing headings. Shared words do not create architectural
-relations.
+Use `--get` and `--references` for explicit design structure. Shared words do
+not create architectural relations.
 
-When moving from State 2 to State 3, agents must use the decision index as the
-evidence inventory before assigning primary enforcement owners. The tool may
-suggest where to read next; it must not invent module names or responsibility
-clusters.
+When moving from State 2 to State 3, use the required expand -> narrow ->
+references loop documented in `tools/DESIGN_INDEX_WORKFLOW.md` before assigning
+a primary enforcement owner:
+
+```bash
+python tools/design_index.py examples/<case> --mentions <name>
+python tools/design_index.py examples/<case> --mentions-in-items <name> --state 2 --kind decision
+python tools/design_index.py examples/<case> --references <decision-id>
+```
+
+Use `--context` selectively for broad results that may change ownership,
+dependencies, forbidden responsibilities, or external constraints. The broad
+mention pass is intentionally wider than the normative state; the focused pass
+returns to indexed State 2 evidence.
+
+The tool may suggest where to read next; it must not invent module names,
+responsibility clusters, or ownership from lexical overlap.
 
 ## Decision hierarchy
 
