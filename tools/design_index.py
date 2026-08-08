@@ -5,6 +5,10 @@ The indexer intentionally does not infer ownership, semantic similarity, or
 responsibility clusters. It records only structure that is explicit in source:
 state numbers, decision/open-question headings, child sections, source ranges,
 and explicit A*/OQ-* references.
+
+A separate lexical mention lookup provides grep-like visibility with structural
+context. A mention is navigation evidence only; it never creates a design
+relation.
 """
 from __future__ import annotations
 
@@ -49,6 +53,18 @@ class DesignItem:
     sections: list[Section] = field(default_factory=list)
 
 
+@dataclass(frozen=True)
+class Mention:
+    term: str
+    path: str
+    line: int
+    column: int
+    text: str
+    item_key: str | None
+    item_title: str | None
+    heading_path: tuple[str, ...]
+
+
 def _slug(text: str) -> str:
     value = re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")
     return value or "item"
@@ -78,14 +94,19 @@ def _state_from_lines(lines: list[str]) -> int | None:
     return None
 
 
-def parse_markdown(path: Path, root: Path) -> list[DesignItem]:
-    lines = path.read_text(encoding="utf-8").splitlines()
-    state = _state_from_lines(lines[:40])
-    headings: list[tuple[int, int, str]] = []
+def _headings(lines: list[str]) -> list[tuple[int, int, str]]:
+    result: list[tuple[int, int, str]] = []
     for index, line in enumerate(lines, start=1):
         match = HEADING_RE.match(line)
         if match:
-            headings.append((index, len(match.group(1)), match.group(2).strip()))
+            result.append((index, len(match.group(1)), match.group(2).strip()))
+    return result
+
+
+def parse_markdown(path: Path, root: Path) -> list[DesignItem]:
+    lines = path.read_text(encoding="utf-8").splitlines()
+    state = _state_from_lines(lines[:40])
+    headings = _headings(lines)
 
     rel = path.relative_to(root).as_posix()
     items: list[DesignItem] = []
@@ -141,6 +162,68 @@ def parse_markdown(path: Path, root: Path) -> list[DesignItem]:
     return items
 
 
+def _heading_path_at(headings: list[tuple[int, int, str]], line: int) -> tuple[str, ...]:
+    stack: list[tuple[int, str]] = []
+    for heading_line, level, title in headings:
+        if heading_line > line:
+            break
+        while stack and stack[-1][0] >= level:
+            stack.pop()
+        stack.append((level, title))
+    return tuple(title for _, title in stack)
+
+
+def _item_at(items: list[DesignItem], rel: str, line: int) -> DesignItem | None:
+    candidates = [
+        item
+        for item in items
+        if item.source.path == rel and item.source.start_line <= line <= item.source.end_line
+    ]
+    if not candidates:
+        return None
+    return max(candidates, key=lambda item: item.source.start_line)
+
+
+def find_mentions(project: Path, term: str, *, case_sensitive: bool = False) -> list[Mention]:
+    """Return lexical occurrences with structural context, without inferring relations."""
+    if not term:
+        raise ValueError("term must not be empty")
+
+    project = project.resolve()
+    result: list[Mention] = []
+    needle = term if case_sensitive else term.casefold()
+
+    for path in iter_markdown(project):
+        lines = path.read_text(encoding="utf-8").splitlines()
+        headings = _headings(lines)
+        items = parse_markdown(path, project)
+        rel = path.relative_to(project).as_posix()
+
+        for line_number, text in enumerate(lines, start=1):
+            haystack = text if case_sensitive else text.casefold()
+            start = 0
+            while True:
+                column = haystack.find(needle, start)
+                if column < 0:
+                    break
+                item = _item_at(items, rel, line_number)
+                result.append(
+                    Mention(
+                        term=term,
+                        path=rel,
+                        line=line_number,
+                        column=column + 1,
+                        text=text.strip(),
+                        item_key=item.key if item else None,
+                        item_title=item.title if item else None,
+                        heading_path=_heading_path_at(headings, line_number),
+                    )
+                )
+                start = column + max(1, len(needle))
+
+    return result
+
+
 def iter_markdown(project: Path) -> Iterable[Path]:
     yield from sorted(path for path in project.rglob("*.md") if path.is_file())
 
@@ -170,19 +253,32 @@ def build_index(project: Path) -> dict[str, object]:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("project", type=Path, help="Directory containing design-state Markdown files")
-    parser.add_argument("--output", type=Path, help="Write JSON index to this file instead of stdout")
+    parser.add_argument("--output", type=Path, help="Write JSON to this file instead of stdout")
+    parser.add_argument("--mentions", metavar="TERM", help="Find lexical mentions with structural context")
+    parser.add_argument("--case-sensitive", action="store_true", help="Use case-sensitive mention lookup")
     args = parser.parse_args()
 
-    index = build_index(args.project)
-    payload = json.dumps(index, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+    if args.mentions is not None:
+        payload_data: object = [
+            asdict(mention)
+            for mention in find_mentions(
+                args.project,
+                args.mentions,
+                case_sensitive=args.case_sensitive,
+            )
+        ]
+        exit_code = 0
+    else:
+        index = build_index(args.project)
+        payload_data = index
+        exit_code = 2 if index["diagnostics"]["duplicate_keys"] else 0
+
+    payload = json.dumps(payload_data, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
     if args.output:
         args.output.write_text(payload, encoding="utf-8")
     else:
         print(payload, end="")
-
-    if index["diagnostics"]["duplicate_keys"]:
-        return 2
-    return 0
+    return exit_code
 
 
 if __name__ == "__main__":
