@@ -64,7 +64,7 @@ def _item_kind(title: str) -> tuple[str, str | None] | None:
     if decision and ("decision" in lowered or "accepted" in lowered):
         return "decision", decision.group(1).upper()
 
-    if "accepted decision" in lowered or re.search(r"\bstate\s+\d+\s+decision\b", lowered):
+    if "accepted decision" in lowered:
         return "decision", None
 
     return None
