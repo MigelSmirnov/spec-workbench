@@ -106,6 +106,42 @@ Holded credentials are separate.
     assert items["A61"]["explicit_refs"] == []
 
 
+def test_broad_then_focused_mentions_preserve_expand_narrow_loop(tmp_path: Path) -> None:
+    project = tmp_path / "demo"
+    _write(
+        project / "02_rules.md",
+        """# State 2 — Rules
+
+## Accepted decision A51 — Publish
+
+Holded publication behavior.
+""",
+    )
+    _write(
+        project / "discovery.md",
+        """# Runtime discovery
+
+Holded returned an undocumented field during reconnaissance.
+""",
+    )
+
+    broad = design_index.find_mentions(project, "Holded")
+    focused = design_index.find_mentions_in_items(
+        project,
+        "Holded",
+        state=2,
+        kind="decision",
+    )
+
+    assert [(m.path, m.item_key) for m in broad] == [
+        ("02_rules.md", "A51"),
+        ("discovery.md", None),
+    ]
+    assert [(m.path, m.item_key) for m in focused] == [
+        ("02_rules.md", "A51"),
+    ]
+
+
 def test_query_helpers_keep_explicit_graph_separate_from_navigation(tmp_path: Path) -> None:
     project = tmp_path / "demo"
     _write(
