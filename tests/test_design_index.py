@@ -72,6 +72,40 @@ Holded credentials are protected.
     assert items["A61"]["explicit_refs"] == []
 
 
+def test_mentions_keep_heading_and_item_context_without_relation(tmp_path: Path) -> None:
+    project = tmp_path / "demo"
+    _write(
+        project / "02_rules.md",
+        """# State 2 — Rules
+
+## Accepted decision A51 — Publish
+
+### Retry safety
+
+Holded create is not assumed idempotent.
+
+## Accepted decision A61 — Security
+
+### Secret handling
+
+Holded credentials are separate.
+""",
+    )
+
+    mentions = design_index.find_mentions(project, "Holded")
+
+    assert [(m.item_key, m.heading_path[-1]) for m in mentions] == [
+        ("A51", "Retry safety"),
+        ("A61", "Secret handling"),
+    ]
+    assert [m.line for m in mentions] == [7, 13]
+
+    index = design_index.build_index(project)
+    items = {item["key"]: item for item in index["items"]}
+    assert items["A51"]["explicit_refs"] == []
+    assert items["A61"]["explicit_refs"] == []
+
+
 def test_supporting_decision_without_id_gets_source_key(tmp_path: Path) -> None:
     project = tmp_path / "demo"
     _write(
