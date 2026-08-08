@@ -6,9 +6,10 @@ responsibility clusters. It records only structure that is explicit in source:
 state numbers, decision/open-question headings, child sections, source ranges,
 and explicit A*/OQ-* references.
 
-A separate lexical mention lookup provides grep-like visibility with structural
-context. A mention is navigation evidence only; it never creates a design
-relation.
+Lexical navigation is deliberately two-phase:
+- broad mentions discover all textual occurrences with structural context;
+- focused mentions narrow those occurrences to indexed design items.
+Neither mode creates architectural relations.
 """
 from __future__ import annotations
 
@@ -120,7 +121,6 @@ def parse_markdown(path: Path, root: Path) -> list[DesignItem]:
     lines = path.read_text(encoding="utf-8").splitlines()
     state = _state_from_lines(lines[:40])
     headings = _headings(lines)
-
     rel = path.relative_to(root).as_posix()
     items: list[DesignItem] = []
 
@@ -129,7 +129,6 @@ def parse_markdown(path: Path, root: Path) -> list[DesignItem]:
         if parsed_kind is None:
             continue
         kind, explicit_id = parsed_kind
-
         end = len(lines)
         for next_start, next_level, _ in headings[h_index + 1 :]:
             if next_level <= level:
@@ -149,28 +148,10 @@ def parse_markdown(path: Path, root: Path) -> list[DesignItem]:
                 if next_child_level <= child_level:
                     child_end = next_child_start - 1
                     break
-            sections.append(
-                Section(
-                    title=child_title,
-                    level=child_level,
-                    start_line=child_start,
-                    end_line=child_end,
-                )
-            )
+            sections.append(Section(child_title, child_level, child_start, child_end))
 
         key = explicit_id or f"source:{rel}#{_slug(title)}"
-        items.append(
-            DesignItem(
-                key=key,
-                explicit_id=explicit_id,
-                kind=kind,
-                title=title,
-                state=state,
-                source=SourceRange(rel, start, end),
-                explicit_refs=refs,
-                sections=sections,
-            )
-        )
+        items.append(DesignItem(key, kind, title, state, SourceRange(rel, start, end), explicit_id, refs, sections))
 
     return items
 
@@ -187,21 +168,14 @@ def _heading_path_at(headings: list[tuple[int, int, str]], line: int) -> tuple[s
 
 
 def _item_at(items: list[DesignItem], rel: str, line: int) -> DesignItem | None:
-    candidates = [
-        item
-        for item in items
-        if item.source.path == rel and item.source.start_line <= line <= item.source.end_line
-    ]
-    if not candidates:
-        return None
-    return max(candidates, key=lambda item: item.source.start_line)
+    candidates = [item for item in items if item.source.path == rel and item.source.start_line <= line <= item.source.end_line]
+    return max(candidates, key=lambda item: item.source.start_line) if candidates else None
 
 
 def find_mentions(project: Path, term: str, *, case_sensitive: bool = False) -> list[Mention]:
-    """Return lexical occurrences with structural context, without inferring relations."""
+    """Return all lexical occurrences with structural context."""
     if not term:
         raise ValueError("term must not be empty")
-
     project = project.resolve()
     result: list[Mention] = []
     needle = term if case_sensitive else term.casefold()
@@ -211,7 +185,6 @@ def find_mentions(project: Path, term: str, *, case_sensitive: bool = False) -> 
         headings = _headings(lines)
         items = parse_markdown(path, project)
         rel = path.relative_to(project).as_posix()
-
         for line_number, text in enumerate(lines, start=1):
             haystack = text if case_sensitive else text.casefold()
             start = 0
@@ -220,21 +193,18 @@ def find_mentions(project: Path, term: str, *, case_sensitive: bool = False) -> 
                 if column < 0:
                     break
                 item = _item_at(items, rel, line_number)
-                result.append(
-                    Mention(
-                        term=term,
-                        path=rel,
-                        line=line_number,
-                        column=column + 1,
-                        text=text.strip(),
-                        item_key=item.key if item else None,
-                        item_title=item.title if item else None,
-                        heading_path=_heading_path_at(headings, line_number),
-                    )
-                )
+                result.append(Mention(term, rel, line_number, column + 1, text.strip(), item.key if item else None, item.title if item else None, _heading_path_at(headings, line_number)))
                 start = column + max(1, len(needle))
-
     return result
+
+
+def find_mentions_in_items(project: Path, term: str, *, state: int | None = None, kind: str | None = None, case_sensitive: bool = False) -> list[Mention]:
+    """Narrow broad mention results to occurrences enclosed by matching indexed items."""
+    allowed = {
+        item["key"]
+        for item in list_items(project, state=state, kind=kind)
+    }
+    return [mention for mention in find_mentions(project, term, case_sensitive=case_sensitive) if mention.item_key in allowed]
 
 
 def iter_markdown(project: Path) -> Iterable[Path]:
@@ -246,7 +216,6 @@ def build_index(project: Path) -> dict[str, object]:
     items: list[DesignItem] = []
     for path in iter_markdown(project):
         items.extend(parse_markdown(path, project))
-
     by_key: dict[str, DesignItem] = {}
     duplicates: list[str] = []
     for item in items:
@@ -254,19 +223,12 @@ def build_index(project: Path) -> dict[str, object]:
             duplicates.append(item.key)
         else:
             by_key[item.key] = item
-
-    return {
-        "schema_version": "spec_workbench_design_index.v1",
-        "project_root": project.name,
-        "items": [asdict(item) for item in items],
-        "diagnostics": {"duplicate_keys": sorted(set(duplicates))},
-    }
+    return {"schema_version": "spec_workbench_design_index.v1", "project_root": project.name, "items": [asdict(item) for item in items], "diagnostics": {"duplicate_keys": sorted(set(duplicates))}}
 
 
 def list_items(project: Path, *, state: int | None = None, kind: str | None = None) -> list[dict[str, object]]:
-    items = build_index(project)["items"]
     result = []
-    for item in items:
+    for item in build_index(project)["items"]:
         if state is not None and item["state"] != state:
             continue
         if kind is not None and item["kind"] != kind:
@@ -289,18 +251,8 @@ def get_references(project: Path, key: str) -> dict[str, object] | None:
         return None
     all_items = {entry["key"]: entry for entry in build_index(project)["items"]}
     outgoing = item["explicit_refs"]
-    incoming = sorted(
-        entry["key"]
-        for entry in all_items.values()
-        if item["key"] in entry["explicit_refs"]
-    )
-    return {
-        "key": item["key"],
-        "outgoing": outgoing,
-        "incoming": incoming,
-        "resolved_outgoing": [all_items[ref] for ref in outgoing if ref in all_items],
-        "unresolved_outgoing": [ref for ref in outgoing if ref not in all_items],
-    }
+    incoming = sorted(entry["key"] for entry in all_items.values() if item["key"] in entry["explicit_refs"])
+    return {"key": item["key"], "outgoing": outgoing, "incoming": incoming, "resolved_outgoing": [all_items[ref] for ref in outgoing if ref in all_items], "unresolved_outgoing": [ref for ref in outgoing if ref not in all_items]}
 
 
 def context_at(project: Path, location: str, *, radius: int = 3) -> Context:
@@ -309,34 +261,22 @@ def context_at(project: Path, location: str, *, radius: int = 3) -> Context:
         raise ValueError("location must be PATH:LINE")
     if radius < 0:
         raise ValueError("radius must be >= 0")
-
     project = project.resolve()
     rel = match.group("path")
     line = int(match.group("line"))
     path = (project / rel).resolve()
     if not path.is_relative_to(project) or not path.is_file():
         raise ValueError(f"path is not a Markdown file inside project: {rel}")
-
     lines = path.read_text(encoding="utf-8").splitlines()
     if line < 1 or line > len(lines):
         raise ValueError(f"line is outside file: {line}")
-
     headings = _headings(lines)
     items = parse_markdown(path, project)
     item = _item_at(items, rel, line)
     start = max(1, line - radius)
     end = min(len(lines), line + radius)
     rendered = tuple(f"{number}: {lines[number - 1]}" for number in range(start, end + 1))
-    return Context(
-        path=rel,
-        line=line,
-        item_key=item.key if item else None,
-        item_title=item.title if item else None,
-        heading_path=_heading_path_at(headings, line),
-        start_line=start,
-        end_line=end,
-        lines=rendered,
-    )
+    return Context(rel, line, item.key if item else None, item.title if item else None, _heading_path_at(headings, line), start, end, rendered)
 
 
 def main() -> int:
@@ -347,24 +287,20 @@ def main() -> int:
     action.add_argument("--list", action="store_true", help="List indexed design items")
     action.add_argument("--get", metavar="KEY", help="Get one design item by stable key")
     action.add_argument("--references", metavar="KEY", help="Show explicit incoming/outgoing references")
-    action.add_argument("--mentions", metavar="TERM", help="Find lexical mentions with structural context")
+    action.add_argument("--mentions", metavar="TERM", help="Broad lexical discovery across all Markdown")
+    action.add_argument("--mentions-in-items", metavar="TERM", help="Narrow lexical occurrences to indexed items")
     action.add_argument("--context", metavar="PATH:LINE", help="Show structural context around a source line")
-    parser.add_argument("--state", type=int, help="Filter --list by design state")
-    parser.add_argument("--kind", choices=("decision", "open_question"), help="Filter --list by item kind")
+    parser.add_argument("--state", type=int, help="Filter --list or --mentions-in-items by design state")
+    parser.add_argument("--kind", choices=("decision", "open_question"), help="Filter --list or --mentions-in-items by item kind")
     parser.add_argument("--case-sensitive", action="store_true", help="Use case-sensitive mention lookup")
     parser.add_argument("--radius", type=int, default=3, help="Context lines before/after --context (default: 3)")
     args = parser.parse_args()
 
     exit_code = 0
     if args.mentions is not None:
-        payload_data: object = [
-            asdict(mention)
-            for mention in find_mentions(
-                args.project,
-                args.mentions,
-                case_sensitive=args.case_sensitive,
-            )
-        ]
+        payload_data: object = [asdict(m) for m in find_mentions(args.project, args.mentions, case_sensitive=args.case_sensitive)]
+    elif args.mentions_in_items is not None:
+        payload_data = [asdict(m) for m in find_mentions_in_items(args.project, args.mentions_in_items, state=args.state, kind=args.kind, case_sensitive=args.case_sensitive)]
     elif args.list:
         payload_data = list_items(args.project, state=args.state, kind=args.kind)
     elif args.get is not None:
