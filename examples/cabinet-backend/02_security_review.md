@@ -15,8 +15,8 @@ responses across the trust boundaries recorded by A60.
    boundary.
 3. Document text, OCR content, supplier descriptions, filenames, and external
    labels cannot select a privileged Cabinet operation or enlarge its scope.
-4. Stable entity IDs select a candidate target only; A61 authorization for the
-   exact entity and operation remains independently required.
+4. Stable entity IDs select a candidate target only; A61 and A66 authorization
+   for the exact entity and operation remains independently required.
 5. Query parameter lowering that is guaranteed by the deterministic persistence
    backend remains a backend mechanism and is not duplicated as project
    metadata or a compiler instruction.
@@ -52,21 +52,41 @@ boundary implementation.
 
 **Status:** UNRESOLVED / BLOCK.
 
-A61 fixes separate node/user identities, credential rotation and revocation,
-finite-lived sessions, password hashing, roles, and failure behavior. State 0
-requires strong authentication and recovery. No product evidence defines abuse
-throttling or the authority and proof used for recovery.
+A61 and A66 now separate the authentication boundaries explicitly:
 
-Product owner must decide, separately for the public VPS and local account store:
+- the public VPS owns human login/session authentication and remote agent/service
+  authentication;
+- the single-user local interactive baseline may delegate human trust to the
+  authenticated operating-system session and therefore has no Cabinet-owned
+  local password-recovery flow;
+- local agents/services authenticate separately at the private Backend tool
+  boundary;
+- synchronization uses its own revocable `SyncNodeCredential`.
 
-1. the failed-attempt budget and rate-limit scope (account, credential, source, or a
-   defined combination) for brute-force and credential-stuffing resistance;
-2. the slowdown/lockout behavior and authorized administrative override;
-3. who may initiate recovery and what evidence proves control; and
-4. whether successful recovery revokes all active sessions and machine tokens.
+Credential separation, rotation/revocation, exact-operation authorization, and
+finite-lived human sessions are accepted. Product evidence still does not select
+the concrete abuse and recovery policy for the public human boundary or the
+abuse/replay response policy for machine/service credentials.
 
-Until these choices are accepted as enforceable State 2 policy, this category
-remains a BLOCK.
+Product owner must still decide:
+
+1. for VPS human login, the failed-attempt budget and rate-limit scope (account,
+   credential, source, or a defined combination) for brute-force and
+   credential-stuffing resistance;
+2. the VPS slowdown/temporary-lockout behavior and authorized administrative
+   override;
+3. who may initiate VPS human-account recovery and what evidence proves control;
+4. whether successful VPS recovery revokes all active human sessions and under
+   what compromise evidence related agent/service or sync credentials are also
+   revoked; and
+5. for VPS agent/service, local agent/service, and sync-node credentials, which
+   replay/request-abuse signals trigger throttling, temporary disablement, or
+   mandatory rotation/revocation.
+
+The local single-user baseline does not require a Cabinet password store or a
+Cabinet human recovery mechanism. Until the remaining VPS and machine/service
+choices are accepted as enforceable State 2 policy, this category remains a
+BLOCK.
 
 ## Open question OQ-009 — upload payload and retrieval safety policy
 
@@ -74,7 +94,7 @@ remains a BLOCK.
 
 A64 closes payload acceptance, path ownership, non-executable treatment, storage
 isolation, exact-entity authorization, and the current no-generic-retrieval
-baseline using A60, A61, A62, M05, M10, M11, and the accepted local-upload
+baseline using A60, A61, A62, A66, M05, M10, M11, and the accepted local-upload
 operation. Numeric size/resource limits remain deployment configuration rather
 than an unresolved product decision. Any future byte-retrieval API requires a
 separate accepted disclosure decision.
@@ -125,13 +145,13 @@ coverage and unresolved gaps explicit.
 
 Security review: PERFORMED
 
-- authentication_credential_abuse: UNRESOLVED; references: A61, OQ-008; affected: A60, M03, M04, VPS and local authentication boundaries
-- secrets: APPLICABLE; references: A60, A61; affected: M04, synchronization and Holded gateway boundaries
-- authorization: APPLICABLE; references: A61, source:02_rules_local_upload.md#accepted-decision; affected: M03, M06, M10, M33, exact invoice and source targets
+- authentication_credential_abuse: UNRESOLVED; references: A61, A66, OQ-008; affected: A60, M03, M04, VPS human and service authentication, local agent/service boundary, sync-node boundary
+- secrets: APPLICABLE; references: A60, A61, A66; affected: M04, synchronization, local agent/service, and Holded gateway boundaries
+- authorization: APPLICABLE; references: A61, A66, source:02_rules_local_upload.md#accepted-decision; affected: M03, M06, M10, M33, exact invoice and source targets
 - injection_interpreted_input: APPLICABLE; references: A62; affected: search, agent, OCR, filename, Registry, PresuPro, and Holded inputs
 - external_callbacks_webhooks: APPLICABLE; references: A60, A61, source:02_rules_import.md#accepted-decision; affected: M19, M20, M21, VPS synchronization boundary (no inbound webhook is accepted)
-- browser_boundary: APPLICABLE; references: A61; affected: local uploader and VPS browser sessions
-- files_artifacts: APPLICABLE; references: A60, A61, A64, source:02_rules_local_upload.md#accepted-decision; affected: M05, M10, M11, upload, storage, processing, and retrieval boundaries
+- browser_boundary: APPLICABLE; references: A61, A66; affected: local uploader, local OS-delegated interactive context, and VPS browser sessions
+- files_artifacts: APPLICABLE; references: A60, A61, A64, A66, source:02_rules_local_upload.md#accepted-decision; affected: M05, M10, M11, upload, storage, processing, and retrieval boundaries
 - concurrency: APPLICABLE; references: A65, source:02_rules_import.md#accepted-decision; affected: M10, M11, M21, source attachment, import, and missing-source transitions
 - dependencies: UNRESOLVED; references: OQ-011; affected: public VPS, document processing, local Backend, and integration clients
 
@@ -155,5 +175,6 @@ stable_entity_id_known
 ### Consequence
 
 Cabinet cannot claim State 2 security closure or proceed to State 3 while OQ-008
-and OQ-011 remain unresolved. OQ-009 and OQ-010 are closed by A64 and A65;
-their review outcomes are `APPLICABLE`, not inferred `NOT_APPLICABLE`.
+and OQ-011 remain unresolved. OQ-008 no longer assumes a Cabinet-owned local
+human account store; OQ-009 and OQ-010 are closed by A64 and A65, and their
+review outcomes are `APPLICABLE`, not inferred `NOT_APPLICABLE`.
