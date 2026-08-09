@@ -4,7 +4,8 @@
 This tool addresses module responsibilities without inferring architecture. It
 reads only explicit State 3 module headings, canonical sections, capability
 names, and references placed under ``Trace inputs``. Stable ``module:<name>``
-keys and handoff JSON are intended for later design states and future MCP use.
+and ``capability:<module>.<name>`` keys are intended for later design states and
+future MCP use.
 """
 from __future__ import annotations
 
@@ -149,6 +150,10 @@ def parse_modules(project: Path) -> list[ModuleItem]:
     return result
 
 
+def _capability_key(module: ModuleItem, capability: str) -> str:
+    return f"capability:{module.name}.{capability}"
+
+
 def manifest(project: Path) -> dict[str, object]:
     modules = parse_modules(project)
     duplicates = sorted({m.key for m in modules if sum(x.key == m.key for x in modules) > 1})
@@ -164,23 +169,39 @@ def get_module(project: Path, key: str) -> dict[str, object] | None:
     normalized = key if key.startswith("module:") else f"module:{key}"
     for module in parse_modules(project):
         if module.key == normalized:
-            return asdict(module)
+            payload = asdict(module)
+            payload["capability_refs"] = [
+                {"key": _capability_key(module, name), "name": name}
+                for name in module.capabilities
+            ]
+            return payload
     return None
 
 
 def handoff(project: Path) -> dict[str, object]:
     modules = parse_modules(project)
+    module_payloads = []
+    capability_index = []
+    for module in modules:
+        refs = [
+            {"key": _capability_key(module, name), "name": name}
+            for name in module.capabilities
+        ]
+        module_payloads.append({
+            "key": module.key,
+            "name": module.name,
+            "capabilities": list(module.capabilities),
+            "capability_refs": refs,
+            "upstream_refs": list(module.upstream_refs),
+        })
+        capability_index.extend(
+            {"key": entry["key"], "name": entry["name"], "module": module.key}
+            for entry in refs
+        )
     return {
         "schema_version": "spec_workbench_state3_handoff.v1",
-        "modules": [
-            {
-                "key": module.key,
-                "name": module.name,
-                "capabilities": list(module.capabilities),
-                "upstream_refs": list(module.upstream_refs),
-            }
-            for module in modules
-        ],
+        "modules": module_payloads,
+        "capabilities": capability_index,
     }
 
 
@@ -212,8 +233,11 @@ def lint(project: Path) -> dict[str, object]:
     modules = parse_modules(project)
     findings: list[Finding] = []
     counts: dict[str, int] = {}
+    capability_keys: dict[str, list[str]] = {}
     for module in modules:
         counts[module.key] = counts.get(module.key, 0) + 1
+        for capability in module.capabilities:
+            capability_keys.setdefault(_capability_key(module, capability), []).append(module.key)
     for module in modules:
         normalized_sections = {title.casefold() for title in module.sections}
         if counts[module.key] > 1:
@@ -237,6 +261,7 @@ def lint(project: Path) -> dict[str, object]:
         findings.append(Finding("error", "unresolved_upstream_reference", module.key, f"Trace input {entry['reference']!r} does not resolve in design_index.", module.source))
     summary = {
         "modules": len(modules),
+        "capabilities": len(capability_keys),
         "errors": sum(f.severity == "error" for f in findings),
         "warnings": sum(f.severity == "warning" for f in findings),
         "unclaimed_state2_decisions": len(traced["unclaimed_state2_decisions"]),
@@ -252,7 +277,7 @@ def _render_human(payload: dict[str, object]) -> str:
     if payload.get("schema_version") == "spec_workbench_state3_lint.v1":
         summary = payload["summary"]
         lines = [
-            f"State 3: {summary['modules']} modules; {summary['errors']} errors; {summary['warnings']} warnings; {summary['unclaimed_state2_decisions']} unclaimed State 2 decisions"
+            f"State 3: {summary['modules']} modules; {summary['capabilities']} capabilities; {summary['errors']} errors; {summary['warnings']} warnings; {summary['unclaimed_state2_decisions']} unclaimed State 2 decisions"
         ]
         for finding in payload["findings"]:
             lines.append(f"{finding['severity'].upper()} {finding['code']} {finding['module_key']} - {finding['message']}")
