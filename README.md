@@ -48,17 +48,18 @@ skills/spec-authoring/SPEC_STANDARD.md
 
 The project is under active development.
 
-The current focus is building a repeatable methodology for producing high-quality specifications that can later be compiled into code by AI Code Factory.
+The current focus is building a repeatable methodology and deterministic toolchain for producing high-quality specifications that can later be compiled into code by AI Code Factory.
 
 ## Design toolchain
 
-Large Markdown design states are handled through four narrow tools:
+Large Markdown design states are handled through narrow deterministic tools:
 
 ```text
 design_router -> chooses the deterministic workflow
-design_index  -> addresses and navigates design structure
+design_index  -> addresses and navigates State 1/2 design structure
 design_editor -> plans and atomically applies one structural splice
 design_lint   -> reports State 1 identity and State 2 authoring findings
+design_stage3 -> addresses modules, checks State 3, traces upstream decisions, emits handoff
 ```
 
 Ask the router for a plan before composing commands manually:
@@ -69,16 +70,52 @@ python tools/design_router.py examples/cabinet-backend diagnose-state2
 python tools/design_router.py examples/cabinet-backend trace-term \
   --term Holded
 
-python tools/design_router.py examples/cabinet-backend edit-fragment \
-  --operation insert-section \
-  --item A42 \
-  --after-section "Normative rules" \
-  --content-file /tmp/new-section.md
+python tools/design_router.py examples/cabinet-backend diagnose-state3
+
+python tools/design_router.py examples/cabinet-backend trace-state2-to-state3
+
+python tools/design_router.py examples/cabinet-backend verify-state3
 ```
 
-Use `--json` for agent and future MCP integration. The router is read-only: it
-returns ordered tool arguments, command previews, review checkpoints, and stop
-conditions, but never executes a command or infers design semantics.
+Use `--json` for agent and future MCP integration. The router is read-only: it returns ordered tool arguments, command previews, review checkpoints, and stop conditions, but never executes a command or infers design semantics.
+
+### State 3 stable addresses and handoff
+
+A State 3 responsibility heading such as:
+
+```markdown
+## `durable_archive`
+```
+
+has the stable machine address:
+
+```text
+module:durable_archive
+```
+
+Backward trace is explicit. Put only normative upstream design references in a dedicated section:
+
+```markdown
+### Trace inputs
+
+- M06
+- A64
+- source:02_rules_import.md#accepted-decision
+```
+
+References mentioned elsewhere in prose do not create trace edges.
+
+The State 3 tool can then be used directly:
+
+```bash
+python tools/design_stage3.py examples/cabinet-backend --list --json
+python tools/design_stage3.py examples/cabinet-backend --get module:durable_archive --json
+python tools/design_stage3.py examples/cabinet-backend --lint
+python tools/design_stage3.py examples/cabinet-backend --trace --json
+python tools/design_stage3.py examples/cabinet-backend --handoff --json
+```
+
+`--handoff` emits stable module keys, candidate public capability names, and upstream references. A later State 4 tool or MCP client should consume that output instead of reparsing State 3 Markdown or guessing module names.
 
 ## Factory handoff
 
@@ -98,9 +135,4 @@ python tools/export_to_factory.py \
   --project hydraulic_diagram_service
 ```
 
-Use `--update-existing` only when intentionally replacing an existing canonical
-specification. The export is blocked when the two repositories have different
-`SPEC_STANDARD.md` content, the Workbench checkout is dirty, or the Factory's
-canonical validator reports errors. Provenance and validation evidence are
-written to `projects/<project>/specs/working/`; `global_spec.json` remains in
-the factory-defined format.
+Use `--update-existing` only when intentionally replacing an existing canonical specification. The export is blocked when the two repositories have different `SPEC_STANDARD.md` content, the Workbench checkout is dirty, or the Factory's canonical validator reports errors. Provenance and validation evidence are written to `projects/<project>/specs/working/`; `global_spec.json` remains in the factory-defined format.
