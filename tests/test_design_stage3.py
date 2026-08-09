@@ -151,7 +151,8 @@ def test_refs_outside_trace_inputs_do_not_create_graph_edges(tmp_path: Path) -> 
     path = project / "30_modules.md"
     path.write_text(
         path.read_text(encoding="utf-8").replace(
-            "### Owns\n", "Text elsewhere mentions A99 but is not a trace edge.\n\n### Owns\n"
+            "### Owns\n\n- durable record preservation.",
+            "### Owns\n\n- durable record preservation.\n- Text elsewhere mentions A99 but is not a trace edge.",
         ),
         encoding="utf-8",
     )
