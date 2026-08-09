@@ -22,7 +22,7 @@ SUPPORTED_EDITOR_OPERATIONS = frozenset(
     {"replace-section", "append-section", "insert-section", "replace-item"}
 )
 SUPPORTED_TOOLS = frozenset(
-    {"design_index", "design_editor", "design_lint", "design_stage3", "pytest"}
+    {"design_index", "design_editor", "design_lint", "design_stage3", "design_trace", "pytest"}
 )
 StepKind = Literal["tool", "command", "checkpoint", "conditional", "foreach"]
 
@@ -59,7 +59,6 @@ class RoutePlan:
 
 
 def load_routes(path: Path = ROUTES_PATH) -> dict[str, object]:
-    """Load and validate the declarative routing authority."""
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
@@ -181,12 +180,12 @@ def _step_runtime(
     elif step_id == "state3_lint":
         arguments = {"project": project, "state": 3}
         argv = ["python", "tools/design_stage3.py", project, "--lint", "--json"]
-    elif step_id == "state3_trace":
+    elif step_id == "trace_2_3_check":
         arguments = {"project": project, "from_state": 2, "to_state": 3}
-        argv = ["python", "tools/design_stage3.py", project, "--trace", "--json"]
-    elif step_id == "state3_handoff":
-        arguments = {"project": project, "state": 3, "consumer": "next_design_state"}
-        argv = ["python", "tools/design_stage3.py", project, "--handoff", "--json"]
+        argv = ["python", "tools/design_trace.py", project, "--check", "--json"]
+    elif step_id == "trace_2_3_handoff":
+        arguments = {"project": project, "from_state": 2, "to_state": 3, "consumer": "next_design_state"}
+        argv = ["python", "tools/design_trace.py", project, "--handoff"]
     elif step_id in {"editor_dry_run", "editor_apply"}:
         if editor is None:
             raise DesignRouterError("editor route is missing editor arguments")
@@ -223,7 +222,6 @@ def route(
     state: int = 2,
     kind: str = "decision",
 ) -> RoutePlan:
-    """Return one complete advisory plan without executing any step."""
     if not project.is_dir():
         raise DesignRouterError(f"project directory not found: {project}")
     if state < 0:
