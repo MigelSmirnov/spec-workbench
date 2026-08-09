@@ -105,16 +105,36 @@ def test_module_keys_and_capabilities_are_stable_handoff(tmp_path: Path) -> None
             "key": "module:archive",
             "name": "archive",
             "capabilities": ["get_record", "store_record"],
+            "capability_refs": [
+                {"key": "capability:archive.get_record", "name": "get_record"},
+                {"key": "capability:archive.store_record", "name": "store_record"},
+            ],
             "upstream_refs": ["A10", "M01"],
         }
     ]
+    assert payload["capabilities"] == [
+        {
+            "key": "capability:archive.get_record",
+            "name": "get_record",
+            "module": "module:archive",
+        },
+        {
+            "key": "capability:archive.store_record",
+            "name": "store_record",
+            "module": "module:archive",
+        },
+    ]
 
 
-def test_get_accepts_full_or_short_module_key(tmp_path: Path) -> None:
+def test_get_accepts_full_or_short_module_key_and_returns_capability_refs(tmp_path: Path) -> None:
     project = _project(tmp_path)
 
-    assert design_stage3.get_module(project, "archive")["key"] == "module:archive"
-    assert design_stage3.get_module(project, "module:archive")["key"] == "module:archive"
+    short = design_stage3.get_module(project, "archive")
+    full = design_stage3.get_module(project, "module:archive")
+
+    assert short["key"] == "module:archive"
+    assert full["key"] == "module:archive"
+    assert short["capability_refs"][0]["key"] == "capability:archive.get_record"
 
 
 def test_trace_maps_explicit_inputs_to_module_and_reports_coverage(tmp_path: Path) -> None:
@@ -138,7 +158,7 @@ def test_refs_outside_trace_inputs_do_not_create_graph_edges(tmp_path: Path) -> 
 
     module = design_stage3.get_module(project, "archive")
 
-    assert module["upstream_refs"] == ("A10", "M01") or module["upstream_refs"] == ["A10", "M01"]
+    assert tuple(module["upstream_refs"]) == ("A10", "M01")
 
 
 def test_lint_rejects_unresolved_trace_input(tmp_path: Path) -> None:
@@ -185,7 +205,7 @@ def test_missing_trace_inputs_is_warning_not_inferred_from_prose(tmp_path: Path)
     report = design_stage3.lint(project)
 
     assert any(finding["code"] == "missing_trace_inputs_section" for finding in report["findings"])
-    assert design_stage3.get_module(project, "archive")["upstream_refs"] == () or design_stage3.get_module(project, "archive")["upstream_refs"] == []
+    assert tuple(design_stage3.get_module(project, "archive")["upstream_refs"]) == ()
 
 
 def test_generic_module_name_is_error(tmp_path: Path) -> None:
