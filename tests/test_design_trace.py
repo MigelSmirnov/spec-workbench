@@ -142,6 +142,111 @@ def test_disposition_requires_reason(tmp_path: Path) -> None:
     assert any(f["code"] == "missing_disposition_reason" for f in report["findings"])
 
 
+def test_owner_and_disposition_are_mutually_exclusive(tmp_path: Path) -> None:
+    project = _project(tmp_path)
+    path = project / "30_trace.json"
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload["decisions"]["A1"].update(
+        disposition="deployment_process", reason="Not a runtime owner."
+    )
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    report = design_trace.analyze(project)
+
+    assert any(f["code"] == "owner_disposition_exclusive" for f in report["findings"])
+
+
+def test_trace_entry_requires_owner_or_disposition(tmp_path: Path) -> None:
+    project = _project(tmp_path)
+    path = project / "30_trace.json"
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    del payload["decisions"]["A1"]["primary_owner"]
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    report = design_trace.analyze(project)
+
+    assert any(f["code"] == "owner_disposition_exclusive" for f in report["findings"])
+
+
+def test_disposition_must_be_allowed(tmp_path: Path) -> None:
+    project = _project(tmp_path)
+    path = project / "30_trace.json"
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload["decisions"]["A2"]["disposition"] = "invented"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    report = design_trace.analyze(project)
+
+    assert any(f["code"] == "invalid_disposition" for f in report["findings"])
+
+
+def test_unknown_state2_decision_is_error(tmp_path: Path) -> None:
+    project = _project(tmp_path)
+    path = project / "30_trace.json"
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload["decisions"]["A404"] = {
+        "disposition": "external_owner",
+        "reason": "Owned elsewhere.",
+        "consumers": [],
+    }
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    report = design_trace.analyze(project)
+
+    assert any(f["code"] == "unknown_state2_decision" for f in report["findings"])
+
+
+def test_consumers_must_be_module_key_list(tmp_path: Path) -> None:
+    project = _project(tmp_path)
+    path = project / "30_trace.json"
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload["decisions"]["A1"]["consumers"] = "module:archive"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    report = design_trace.analyze(project)
+
+    assert any(f["code"] == "invalid_consumers" for f in report["findings"])
+
+
+def test_unknown_consumer_is_error(tmp_path: Path) -> None:
+    project = _project(tmp_path)
+    path = project / "30_trace.json"
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload["decisions"]["A1"]["consumers"] = ["module:missing"]
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    report = design_trace.analyze(project)
+
+    assert any(f["code"] == "unknown_consumer" for f in report["findings"])
+
+
+def test_primary_owner_repeated_as_consumer_is_warning(tmp_path: Path) -> None:
+    project = _project(tmp_path)
+    path = project / "30_trace.json"
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload["decisions"]["A1"]["consumers"] = ["module:archive"]
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    report = design_trace.analyze(project)
+
+    assert any(
+        f["severity"] == "warning" and f["code"] == "owner_repeated_as_consumer"
+        for f in report["findings"]
+    )
+
+
+def test_trace_entry_must_be_object(tmp_path: Path) -> None:
+    project = _project(tmp_path)
+    path = project / "30_trace.json"
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload["decisions"]["A1"] = "module:archive"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    report = design_trace.analyze(project)
+
+    assert any(f["code"] == "invalid_trace_entry" for f in report["findings"])
+
+
 def test_handoff_carries_stable_modules_capabilities_and_backward_trace(tmp_path: Path) -> None:
     payload = design_trace.handoff(_project(tmp_path))
 
