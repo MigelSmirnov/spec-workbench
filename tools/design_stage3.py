@@ -2,9 +2,9 @@
 """Deterministic State 3 module manifest, lint, trace, and handoff.
 
 This tool addresses module responsibilities without inferring architecture. It
-reads only explicit State 3 module headings, sections, identifiers, capabilities,
-and explicit upstream references. Stable module keys are suitable for later
-design states and future MCP integration.
+reads only explicit State 3 module headings, canonical sections, capability
+names, and references placed under ``Trace inputs``. Stable ``module:<name>``
+keys and handoff JSON are intended for later design states and future MCP use.
 """
 from __future__ import annotations
 
@@ -25,6 +25,7 @@ REF_RE = re.compile(r"\b(?:A\d+|M\d+|OQ-\d+)\b|source:[a-zA-Z0-9_./-]+#[a-z0-9-]
 IDENT_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 REQUIRED_SECTIONS = ("Owns", "Knows", "Must not own", "Depth assessment")
 CAPABILITY_SECTIONS = ("Candidate public capabilities", "Public surface")
+TRACE_SECTION = "Trace inputs"
 
 
 @dataclass(frozen=True)
@@ -68,27 +69,48 @@ def _normalize_ref(ref: str) -> str:
     return ref
 
 
-def _extract_capabilities(lines: list[str], sections: list[tuple[int, int, str]], start: int, end: int) -> tuple[str, ...]:
-    result: set[str] = set()
-    wanted = {title.casefold() for title in CAPABILITY_SECTIONS}
-    for section_start, level, title in sections:
-        if not (start < section_start <= end) or title.casefold() not in wanted:
+def _section_range(
+    headings: list[tuple[int, int, str]], start: int, end: int, wanted: str
+) -> tuple[int, int] | None:
+    for index, (section_start, level, title) in enumerate(headings):
+        if not (start < section_start <= end) or title.casefold() != wanted.casefold():
             continue
         section_end = end
-        for next_start, next_level, _ in sections:
-            if next_start > section_start and next_start <= end and next_level <= level:
+        for next_start, next_level, _ in headings[index + 1:]:
+            if next_start > end:
+                break
+            if next_start > section_start and next_level <= level:
                 section_end = next_start - 1
                 break
-        in_fence = False
+        return section_start, section_end
+    return None
+
+
+def _extract_capabilities(
+    lines: list[str], headings: list[tuple[int, int, str]], start: int, end: int
+) -> tuple[str, ...]:
+    result: set[str] = set()
+    for title in CAPABILITY_SECTIONS:
+        found = _section_range(headings, start, end, title)
+        if found is None:
+            continue
+        section_start, section_end = found
         for line in lines[section_start:section_end]:
-            stripped = line.strip()
-            if stripped.startswith("```"):
-                in_fence = not in_fence
-                continue
-            candidate = stripped.strip("`*- ")
+            candidate = line.strip().strip("`*- ")
             if IDENT_RE.fullmatch(candidate):
                 result.add(candidate)
     return tuple(sorted(result))
+
+
+def _extract_trace_refs(
+    lines: list[str], headings: list[tuple[int, int, str]], start: int, end: int
+) -> tuple[str, ...]:
+    found = _section_range(headings, start, end, TRACE_SECTION)
+    if found is None:
+        return ()
+    section_start, section_end = found
+    body = "\n".join(lines[section_start:section_end])
+    return tuple(sorted({_normalize_ref(ref) for ref in REF_RE.findall(body)}))
 
 
 def parse_modules(project: Path) -> list[ModuleItem]:
@@ -115,17 +137,14 @@ def parse_modules(project: Path) -> list[ModuleItem]:
                 for child_start, child_level, child_title in headings[index + 1:]
                 if start < child_start <= end and child_level > level
             )
-            body = "\n".join(lines[start - 1:end])
-            refs = tuple(sorted({_normalize_ref(ref) for ref in REF_RE.findall(body)}))
-            capabilities = _extract_capabilities(lines, headings, start, end)
             name = match.group("name")
             result.append(ModuleItem(
                 key=f"module:{name}",
                 name=name,
                 source=SourceRange(path.relative_to(project).as_posix(), start, end),
                 sections=child_titles,
-                upstream_refs=refs,
-                capabilities=capabilities,
+                upstream_refs=_extract_trace_refs(lines, headings, start, end),
+                capabilities=_extract_capabilities(lines, headings, start, end),
             ))
     return result
 
@@ -202,18 +221,20 @@ def lint(project: Path) -> dict[str, object]:
         for required in REQUIRED_SECTIONS:
             if required.casefold() not in normalized_sections:
                 findings.append(Finding("error", "missing_module_section", module.key, f"Required State 3 section {required!r} is absent.", module.source))
-        if "Hides".casefold() not in normalized_sections and module.name != "domain_models":
+        if "hides" not in normalized_sections and module.name != "domain_models":
             findings.append(Finding("warning", "missing_hides_section", module.key, "Deep runtime module should state what complexity it hides.", module.source))
         if not module.capabilities and module.name != "domain_models":
             findings.append(Finding("warning", "missing_capabilities", module.key, "Runtime responsibility exposes no machine-readable candidate capability names.", module.source))
-        if not module.upstream_refs:
-            findings.append(Finding("warning", "missing_upstream_trace", module.key, "Module has no explicit M*/A*/OQ-*/source:* input reference for deterministic backward trace.", module.source))
+        if TRACE_SECTION.casefold() not in normalized_sections:
+            findings.append(Finding("warning", "missing_trace_inputs_section", module.key, "Module has no explicit Trace inputs section for deterministic backward trace.", module.source))
+        elif not module.upstream_refs:
+            findings.append(Finding("warning", "empty_trace_inputs", module.key, "Trace inputs exists but contains no M*/A*/OQ-*/source:* reference.", module.source))
         if module.name in {"utils", "helpers", "manager", "processor", "service", "common"}:
             findings.append(Finding("error", "generic_module_name", module.key, "Generic module name does not identify a stable responsibility.", module.source))
     traced = trace(project)
     for entry in traced["unresolved_references"]:
         module = next(m for m in modules if m.key == entry["module"])
-        findings.append(Finding("error", "unresolved_upstream_reference", module.key, f"Upstream reference {entry['reference']!r} does not resolve in design_index.", module.source))
+        findings.append(Finding("error", "unresolved_upstream_reference", module.key, f"Trace input {entry['reference']!r} does not resolve in design_index.", module.source))
     summary = {
         "modules": len(modules),
         "errors": sum(f.severity == "error" for f in findings),
