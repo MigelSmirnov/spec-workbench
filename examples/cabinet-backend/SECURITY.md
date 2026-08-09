@@ -87,11 +87,25 @@ Required controls include:
 
 ### Remote human identity
 
-The user authenticates to Cabinet on the VPS. This session controls access to
-Cabinet tools and the VPS Invoice Workspace.
+The user authenticates to Cabinet on the VPS with an account identifier and
+password. The authenticated finite-lived session controls access to Cabinet
+tools and the VPS Invoice Workspace.
 
 The first product may be single-user, but session expiry, revocation, recovery,
 and sensitive-action confirmation remain required.
+
+The accepted recovery authority is the user's recovery email address bound to
+the account before recovery begins. Recovery proves control through a
+single-use, short-lived token or link delivered to that pre-bound email channel.
+Security questions, Cabinet business data, and knowledge of entity identifiers
+are not accepted recovery proof.
+
+A successful recovery revokes all active human sessions. Ordinary
+forgotten-password recovery does not automatically revoke separate local/remote
+agent service credentials or the synchronization credential. Known or suspected
+account or device compromise expands revocation/rotation to the affected
+non-human credentials according to the incident scope. Concrete abuse limits,
+temporary blocking, and machine/service replay response are enforced by A67.
 
 ### Local interactive human context
 
@@ -250,16 +264,14 @@ If the local machine is lost or compromised:
 
 1. Tailscale, SSH reverse tunnel, mTLS, or equivalent private synchronization
    transport;
-2. VPS session mechanism and recovery;
-3. VPS and machine/service credential abuse throttling and replay response;
-4. exact local service/agent credential or OS/IPC peer-identity mechanism;
-5. VPS storage encryption and backup policy;
-6. retention period after successful synchronization;
-7. exact checked-out/read-only policy after synchronization;
-8. conflict reconciliation UX;
-9. local backup destination, keys, RPO, and RTO;
-10. audit vocabulary and log retention;
-11. Holded Gateway placement and authentication.
+2. exact local service/agent credential or OS/IPC peer-identity mechanism;
+3. VPS storage encryption and backup policy;
+4. retention period after successful synchronization;
+5. exact checked-out/read-only policy after synchronization;
+6. conflict reconciliation UX;
+7. local backup destination, keys, RPO, and RTO;
+8. audit vocabulary and log retention;
+9. Holded Gateway placement and authentication.
 
 ## Accepted decision A60 — Cabinet trust boundary inventory
 
@@ -280,7 +292,9 @@ If the local machine is lost or compromised:
 
 ### Actors and authentication boundaries
 
-- The remote human user authenticates at Cabinet VPS for the remote working set.
+- The remote human user authenticates at Cabinet VPS with account/password and
+  recovers access only through the pre-bound email recovery channel.
+- Successful VPS human recovery revokes all active human sessions.
 - The single-user local interactive baseline may rely on the authenticated OS
   session rather than a Cabinet-owned local password account.
 - Remote agent/service actions authenticate at the VPS Cabinet tool boundary.
@@ -320,6 +334,7 @@ metadata.
 VPS Cabinet is the only accepted public network surface. Local Backend,
 PostgreSQL, Registry, PresuPro, local agent/application transports, and local
 durable storage remain local or on an explicitly trusted private interface.
-Remote human session secrets, sync-node credentials, local/remote service
-credentials, and Holded credentials are distinct secrets and must not cross into
-Cards, prompts, exports, generated files, or ordinary logs.
+Remote human session secrets, recovery tokens, sync-node credentials,
+local/remote service credentials, and Holded credentials are distinct secrets
+and must not cross into Cards, prompts, exports, generated files, or ordinary
+logs.
