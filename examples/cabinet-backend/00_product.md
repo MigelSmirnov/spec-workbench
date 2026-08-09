@@ -7,7 +7,7 @@ Accepted product, deployment, trust, and availability boundary.
 ## Product statement
 
 Cabinet is an AI-assisted personal working system. The user communicates
-naturally; the agent organises incoming information; Cabinet preserves the
+naturally; agents organise incoming information; Cabinet preserves the
 sources and stores structured, searchable knowledge about purchases, documents,
 suppliers, material lists, work objects, and related decisions.
 
@@ -15,19 +15,27 @@ Cabinet is split across two cooperating runtimes because the local working
 platform is normally unavailable during the day:
 
 ```text
-ChatGPT
+Remote user / ChatGPT / remote agent
   → Cabinet application and MCP boundary on VPS
      → continuously available invoice and working-information workspace
      → cached Registry object catalogue
      → authenticated private synchronization
-  → Local Cabinet Backend
+
+Local user / local agent
+  → Local Cabinet Backend private application/tool boundary
      → complete PostgreSQL archive and durable source storage
      → Registry, PresuPro, and controlled external integrations
 ```
 
-ChatGPT and the agent communicate only with Cabinet. Neither receives direct
-access to PostgreSQL, local files, Registry, PresuPro, Holded credentials, or a
-generic backend API.
+Agents communicate only through an accepted Cabinet application/tool boundary on
+the node where they run. Neither remote nor local agents receive direct access
+to PostgreSQL, raw filesystem paths, Registry storage, PresuPro storage, Holded
+credentials, or a generic unrestricted backend interface.
+
+The VPS and local Backend may expose compatible logical Cabinet operations where
+the owning data and integrations permit them. Transport may differ by runtime;
+product rules and domain semantics remain Cabinet-owned rather than transport-
+wrapper behavior.
 
 ## Primary-source boundary
 
@@ -59,6 +67,7 @@ newly captured invoices until they are durably synchronized locally. It may:
 - preserve each received original in protected working storage;
 - create a stable `invoice_id` immediately;
 - extract, review, correct, confirm, search, and discuss fresh Invoice Cards;
+- expose narrow remote Cabinet tools to ChatGPT and remote agents;
 - show a cached catalogue of Registry work objects with freshness information;
 - assign a fresh invoice to an object from that cached catalogue;
 - retain source evidence, interpretation history, assignment decisions, and
@@ -70,12 +79,14 @@ the local platform is offline.
 
 ### Local Cabinet Backend
 
-The local Backend is the complete durable archive and platform-integration
-boundary. It owns:
+The local Backend is the complete durable archive, local agent/application
+runtime, and platform-integration boundary. It owns:
 
 - the complete Cabinet PostgreSQL archive;
 - long-term source-file storage;
 - historical Cards, relationships, and decision history;
+- a private local Cabinet application/tool boundary for the local agent and
+  explicitly enrolled local consumers;
 - versioned Registry object snapshots;
 - publication of a compact Registry object catalogue to the VPS;
 - validation of assignments made from cached Registry data;
@@ -85,6 +96,10 @@ boundary. It owns:
 
 Registry and PresuPro remain authoritative for their own object and estimate
 data.
+
+The local agent may use narrow Cabinet Backend operations that expose the full
+archive and accepted local integrations. Running locally does not grant raw
+storage access or implicit authorization.
 
 ## Registry object availability
 
@@ -145,17 +160,18 @@ change.
 local platform connects
 → refresh Registry object snapshots
 → publish compact object catalogue to VPS
+→ local user and local agent can use the complete Cabinet archive and local integrations
 
 local platform goes offline
 → user photographs invoices during the day
-→ Cabinet extracts and confirms facts
+→ Cabinet VPS extracts and confirms facts through its remote user/agent boundary
 → user selects cached Registry objects where appropriate
 
 local platform connects later
 → idempotently transfer originals, interpretations, confirmations, and decisions
 → durably accept the same invoice_id in the local archive
 → validate cached object assignments against current Registry data
-→ enable PresuPro matching, complete analytics, and local integrations
+→ enable local-agent PresuPro matching, complete analytics, and local integrations
 ```
 
 A timeout must not create a duplicate Invoice Card. VPS source deletion or expiry
@@ -171,6 +187,7 @@ Available:
 - OCR and extraction;
 - correction and confirmation of invoice facts;
 - search and discussion inside the VPS working set;
+- remote agent operations over the VPS working set;
 - browsing the cached Registry object catalogue;
 - assigning an invoice to a cached object;
 - intentionally leaving an invoice unassigned.
@@ -182,13 +199,14 @@ Unavailable or limited:
 - full historical search outside the VPS working set;
 - complete plan-versus-actual analysis;
 - durable estimate matching against local project data;
-- local integration actions such as Holded publication.
+- local integration actions such as Holded publication;
+- local-agent operations because the local platform itself is unavailable.
 
 ### Local platform connected
 
 Cabinet refreshes object data, validates cached assignments, downloads fresh
-invoice work, and makes full archive, PresuPro, analytics, and integration
-functions available.
+invoice work, and makes full archive, PresuPro, analytics, integration, and local
+agent functions available through the private Local Cabinet Backend boundary.
 
 ## Sources of truth
 
@@ -203,7 +221,9 @@ functions available.
 | Mutable estimate composition | PresuPro | Retain versioned snapshots for matching and analysis. |
 | Accepted invoice-line-to-estimate matches | Local Cabinet Backend | Preserve decisions and provenance. |
 | Accounting document and accounting state | Holded | Publish through Holded Gateway. |
-| User session and MCP interaction | Cabinet VPS | Authenticate interaction and expose narrow tools. |
+| Remote user session and remote MCP/agent interaction | Cabinet VPS | Authenticate remote interaction and expose narrow tools. |
+| Local agent/application interaction | Local Cabinet Backend | Expose private narrow tools; authorize enrolled local service/agent principals independently from synchronization identity. |
+| Local interactive human context | Protected local operating-system session | Cabinet may delegate single-user local interactive trust to the authenticated OS session; a separate Cabinet password store is not required in the baseline. |
 
 ## PresuPro and plan-versus-actual
 
@@ -238,10 +258,14 @@ Publication is independent from PresuPro matching.
 - VPS-to-local synchronization uses authenticated encrypted private transport.
 - The VPS protects invoice originals, extracted fiscal data, and the cached
   Registry object catalogue.
-- User authentication terminates at Cabinet VPS; machine identity separately
-  authenticates synchronization.
-- The agent receives narrow Cabinet tools, never raw storage or service
-  credentials.
+- Remote human authentication terminates at Cabinet VPS.
+- Single-user local interactive access may rely on the authenticated OS session
+  instead of a Cabinet-owned password store.
+- Local agents/services authenticate separately at the Local Cabinet Backend
+  private tool boundary and cannot reuse the synchronization credential.
+- Machine identity separately authenticates synchronization.
+- Remote and local agents receive narrow Cabinet tools, never raw storage or
+  service credentials.
 - Source hashes, idempotency, confirmation, assignment provenance, and
   authorization are enforced at their owning boundaries.
 
@@ -271,15 +295,26 @@ Publication is independent from PresuPro matching.
     decisions.
 16. Plan-versus-actual results are derived on demand.
 17. Holded publication remains a separate controlled integration.
+18. Cabinet supports agent/application tool boundaries on both VPS and Local
+    Backend; each node exposes only operations supported by its owned data and
+    integrations.
+19. The Local Cabinet Backend tool boundary is private and supports a local agent
+    without requiring a Cabinet-owned local human password store in the
+    single-user baseline.
+20. Local agent/service identity and synchronization identity are distinct and
+    non-interchangeable.
 
 ## State 0 readiness assessment
 
 The product boundary now reflects the real operating cycle: Registry objects are
 cached before disconnection, invoices are captured and assigned on the VPS during
 the day, and all new work is transferred and validated when the local platform
-connects later.
+connects later. It also records the local platform as an active Cabinet runtime
+with its own private agent/application boundary over the complete archive and
+local integrations.
 
 State 1 must model immutable source evidence, extraction and correction history,
 confirmed invoice facts, cached Registry catalogues, offline assignment
-provenance, post-reconnection validation, and idempotent transfer to the durable
-local archive.
+provenance, post-reconnection validation, idempotent transfer to the durable
+local archive, and provenance for human/agent/service actions without treating
+an authentication credential as a domain business entity.
