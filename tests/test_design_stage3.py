@@ -60,7 +60,10 @@ History survives.
 
 ## `archive`
 
-A10 and M01 are explicit inputs.
+### Trace inputs
+
+- A10
+- M01
 
 ### Owns
 
@@ -68,7 +71,7 @@ A10 and M01 are explicit inputs.
 
 ### Knows
 
-- A10 preservation semantics.
+- preservation semantics.
 
 ### Hides
 
@@ -94,9 +97,7 @@ Deep archive module.
 
 
 def test_module_keys_and_capabilities_are_stable_handoff(tmp_path: Path) -> None:
-    project = _project(tmp_path)
-
-    payload = design_stage3.handoff(project)
+    payload = design_stage3.handoff(_project(tmp_path))
 
     assert payload["schema_version"] == "spec_workbench_state3_handoff.v1"
     assert payload["modules"] == [
@@ -125,10 +126,28 @@ def test_trace_maps_explicit_inputs_to_module_and_reports_coverage(tmp_path: Pat
     assert trace["unclaimed_state2_decisions"] == []
 
 
-def test_lint_rejects_unresolved_upstream_reference(tmp_path: Path) -> None:
+def test_refs_outside_trace_inputs_do_not_create_graph_edges(tmp_path: Path) -> None:
     project = _project(tmp_path)
     path = project / "30_modules.md"
-    path.write_text(path.read_text(encoding="utf-8").replace("A10 and M01", "A99 and M01"), encoding="utf-8")
+    path.write_text(
+        path.read_text(encoding="utf-8").replace(
+            "### Owns\n", "Text elsewhere mentions A99 but is not a trace edge.\n\n### Owns\n"
+        ),
+        encoding="utf-8",
+    )
+
+    module = design_stage3.get_module(project, "archive")
+
+    assert module["upstream_refs"] == ("A10", "M01") or module["upstream_refs"] == ["A10", "M01"]
+
+
+def test_lint_rejects_unresolved_trace_input(tmp_path: Path) -> None:
+    project = _project(tmp_path)
+    path = project / "30_modules.md"
+    path.write_text(
+        path.read_text(encoding="utf-8").replace("- A10\n", "- A99\n"),
+        encoding="utf-8",
+    )
 
     report = design_stage3.lint(project)
     codes = {finding["code"] for finding in report["findings"]}
@@ -141,8 +160,10 @@ def test_lint_rejects_unresolved_upstream_reference(tmp_path: Path) -> None:
 def test_lint_requires_module_responsibility_sections(tmp_path: Path) -> None:
     project = _project(tmp_path)
     path = project / "30_modules.md"
-    text = path.read_text(encoding="utf-8").replace("### Must not own\n\n- transport.\n\n", "")
-    path.write_text(text, encoding="utf-8")
+    path.write_text(
+        path.read_text(encoding="utf-8").replace("### Must not own\n\n- transport.\n\n", ""),
+        encoding="utf-8",
+    )
 
     report = design_stage3.lint(project)
 
@@ -153,10 +174,27 @@ def test_lint_requires_module_responsibility_sections(tmp_path: Path) -> None:
     )
 
 
+def test_missing_trace_inputs_is_warning_not_inferred_from_prose(tmp_path: Path) -> None:
+    project = _project(tmp_path)
+    path = project / "30_modules.md"
+    text = path.read_text(encoding="utf-8")
+    start = text.index("### Trace inputs")
+    end = text.index("### Owns")
+    path.write_text(text[:start] + "A10 is mentioned in prose.\n\n" + text[end:], encoding="utf-8")
+
+    report = design_stage3.lint(project)
+
+    assert any(finding["code"] == "missing_trace_inputs_section" for finding in report["findings"])
+    assert design_stage3.get_module(project, "archive")["upstream_refs"] == () or design_stage3.get_module(project, "archive")["upstream_refs"] == []
+
+
 def test_generic_module_name_is_error(tmp_path: Path) -> None:
     project = _project(tmp_path)
     path = project / "30_modules.md"
-    path.write_text(path.read_text(encoding="utf-8").replace("`archive`", "`utils`"), encoding="utf-8")
+    path.write_text(
+        path.read_text(encoding="utf-8").replace("`archive`", "`utils`"),
+        encoding="utf-8",
+    )
 
     report = design_stage3.lint(project)
 
