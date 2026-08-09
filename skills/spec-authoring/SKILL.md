@@ -1,6 +1,6 @@
 ---
 name: spec-authoring
-description: Guide a human and an LLM through layered, semi-manual creation of global_spec.json according to SPEC_STANDARD.md, preventing placeholder architecture, premature contracts, vague notes, and top-down skeleton specifications.
+description: Guide layered creation and legacy migration of global_spec.json according to SPEC_STANDARD.md, including evidence-first recovery of hidden decisions, while preventing placeholder architecture, majority inference, premature contracts, vague notes, and top-down skeleton specifications.
 ---
 
 # Spec Authoring
@@ -66,6 +66,19 @@ Work in design layers. At each layer:
 5. proceed only when the layer is sufficiently stable.
 
 The process may revisit earlier layers. Returning backward is expected and is not a failure.
+
+## Legacy migration evidence
+
+When an existing implementation is being migrated, do not begin from notes or
+from a proposed target schema. Read and follow
+[LEGACY_MIGRATION_EVIDENCE.md](LEGACY_MIGRATION_EVIDENCE.md) before changing a
+design-state artifact or `global_spec.json`.
+
+Treat probe output as evidence only. Classify every finding as derivable,
+product/policy value, supported backend lowering, genuinely irregular
+responsibility, or unresolved. Only accepted product decisions and supported
+backend relations may become normative spec content. An unresolved finding is
+BLOCK; frequency in existing code never resolves it.
 
 ## Primary rule
 

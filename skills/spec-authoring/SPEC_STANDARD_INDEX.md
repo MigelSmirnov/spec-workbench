@@ -60,6 +60,30 @@
 5. Не передавай значения данных в контекст LLM: генератор данных владеет
    своими файлами эксклюзивно, а код получает только адрес и тип.
 
+### Рабочий цикл миграции legacy persistence
+
+До изменения старой спеки инвентаризируй не только notes, но и существующий
+код с тестами: predicates, ordering, literals, storage conversions,
+`CHECK`/`UNIQUE`/index semantics. Код является evidence, а не нормой.
+
+Различай четыре механизма:
+
+- `derivation` — результат единственно выводится из модели и версии backend;
+- `placement` — продуктовое значение получает дом по процедуре 15.2;
+- `lowering` — domain/storage-пара замыкается единственным codec backend-а;
+- `legacy recovery` — probe обнаруживает потерянное решение, которому нужен
+  владелец либо доказательство выводимости/случайности.
+
+Codec registry принадлежит deterministic backend-у. Не добавляй
+`_parse_*`, `_row_to_*` и свободные encode/decode-фрагменты в проектные
+contracts, notes или persistence-данные. Если projection, query kind,
+predicate или method shape не замкнуты, diagnostic emitter возвращает
+`DEFECT`; он не выбирает конвенцию по большинству.
+
+Не фиксируй полноценный persistence IR по одному проекту. Сначала прогони цикл
+`legacy project → probe → missing decisions → spec → emitter → DEFECT/success`
+на нескольких разных проектах и собери повторяющиеся классы незамкнутости.
+
 ## Архитектура
 
 - Предпочитай глубокие модули с ясной ответственностью.
