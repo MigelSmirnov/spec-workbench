@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Deterministic agent routing over the spec-workbench design tools.
 
-The router is advisory and read-only.  It does not parse Markdown, execute
-commands, mutate documents, or infer design semantics.  Its only responsibility
+The router is advisory and read-only. It does not parse Markdown, execute
+commands, mutate documents, or infer design semantics. Its only responsibility
 is to project one reviewed workflow from ``design_routes.json`` into concrete
 tool arguments and CLI command previews.
 """
@@ -16,14 +16,13 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Literal, Sequence
 
-
 ROUTES_PATH = Path(__file__).with_name("design_routes.json")
 PLAN_SCHEMA_VERSION = "spec_workbench_design_route_plan.v1"
 SUPPORTED_EDITOR_OPERATIONS = frozenset(
     {"replace-section", "append-section", "insert-section", "replace-item"}
 )
 SUPPORTED_TOOLS = frozenset(
-    {"design_index", "design_editor", "design_lint", "pytest"}
+    {"design_index", "design_editor", "design_lint", "design_stage3", "pytest"}
 )
 StepKind = Literal["tool", "command", "checkpoint", "conditional", "foreach"]
 
@@ -65,7 +64,6 @@ def load_routes(path: Path = ROUTES_PATH) -> dict[str, object]:
         payload = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         raise DesignRouterError(f"design route table could not be loaded: {exc}") from exc
-
     if payload.get("schema_version") != "spec_workbench_design_routes.v1":
         raise DesignRouterError("unsupported design route schema")
     intents = payload.get("intents")
@@ -77,7 +75,6 @@ def load_routes(path: Path = ROUTES_PATH) -> dict[str, object]:
         raise DesignRouterError("design route table must define editor_operations")
     if set(operations) != SUPPORTED_EDITOR_OPERATIONS:
         raise DesignRouterError("route table editor operations drifted from design_editor v1")
-
     for intent, definition in intents.items():
         if not isinstance(definition, dict) or not isinstance(definition.get("steps"), list):
             raise DesignRouterError(f"invalid route definition: {intent}")
@@ -122,20 +119,12 @@ def _editor_arguments(
         raise DesignRouterError("content_file is required")
     if not content_file.is_file():
         raise DesignRouterError(f"content file not found: {content_file}")
-
     definition = routes["editor_operations"][operation]
     section_input = definition["section_input"]
-    values = {
-        "item": item,
-        "section": section,
-        "after_section": after_section,
-    }
+    values = {"item": item, "section": section, "after_section": after_section}
     if section_input is not None:
         _require_text(values[section_input], section_input)
-    cli_arguments = [
-        token.format(**values)
-        for token in definition["cli_arguments"]
-    ]
+    cli_arguments = [token.format(**values) for token in definition["cli_arguments"]]
     return operation, item, content_file, cli_arguments
 
 
@@ -182,6 +171,22 @@ def _step_runtime(
     elif step_id == "rebuild_index":
         arguments = {"project": project}
         argv = ["python", "tools/design_index.py", project]
+    elif step_id == "state3_inventory":
+        arguments = {"project": project, "state": 3}
+        argv = ["python", "tools/design_stage3.py", project, "--list", "--json"]
+    elif step_id == "state3_get":
+        resolved_item = _require_text(item, "item")
+        arguments = {"project": project, "module": resolved_item}
+        argv = ["python", "tools/design_stage3.py", project, "--get", resolved_item, "--json"]
+    elif step_id == "state3_lint":
+        arguments = {"project": project, "state": 3}
+        argv = ["python", "tools/design_stage3.py", project, "--lint", "--json"]
+    elif step_id == "state3_trace":
+        arguments = {"project": project, "from_state": 2, "to_state": 3}
+        argv = ["python", "tools/design_stage3.py", project, "--trace", "--json"]
+    elif step_id == "state3_handoff":
+        arguments = {"project": project, "state": 3, "consumer": "next_design_state"}
+        argv = ["python", "tools/design_stage3.py", project, "--handoff", "--json"]
     elif step_id in {"editor_dry_run", "editor_apply"}:
         if editor is None:
             raise DesignRouterError("editor route is missing editor arguments")
@@ -225,7 +230,6 @@ def route(
         raise DesignRouterError("state must be non-negative")
     if kind not in {"decision", "open_question"}:
         raise DesignRouterError(f"unsupported item kind: {kind}")
-
     routes = load_routes()
     intents = routes["intents"]
     if intent not in intents:
@@ -237,7 +241,6 @@ def route(
         _require_text(item, "item")
     if "term" in definition["required_inputs"]:
         _require_text(term, "term")
-
     editor = None
     if intent == "edit-fragment":
         editor = _editor_arguments(
@@ -248,7 +251,6 @@ def route(
             after_section=after_section,
             content_file=content_file,
         )
-
     project_text = project.as_posix()
     step_ids = definition["steps"]
     result: list[RouteStep] = []
@@ -263,21 +265,18 @@ def route(
             term=term,
             editor=editor,
         )
-        result.append(
-            RouteStep(
-                id=step_id,
-                kind=source["kind"],
-                tool=source.get("tool"),
-                action=source.get("action"),
-                arguments=arguments,
-                command=command,
-                why=source["why"],
-                requires=tuple(source.get("requires", [])),
-                stop_if=tuple(source.get("stop_if", [])),
-                next_on_success=step_ids[index + 1] if index + 1 < len(step_ids) else None,
-            )
-        )
-
+        result.append(RouteStep(
+            id=step_id,
+            kind=source["kind"],
+            tool=source.get("tool"),
+            action=source.get("action"),
+            arguments=arguments,
+            command=command,
+            why=source["why"],
+            requires=tuple(source.get("requires", [])),
+            stop_if=tuple(source.get("stop_if", [])),
+            next_on_success=step_ids[index + 1] if index + 1 < len(step_ids) else None,
+        ))
     return RoutePlan(
         schema_version=PLAN_SCHEMA_VERSION,
         route_schema_version=routes["schema_version"],
@@ -296,11 +295,7 @@ def render_json(plan: RoutePlan) -> str:
 
 
 def render_human(plan: RoutePlan) -> str:
-    lines = [
-        f"Design route: {plan.intent}",
-        f"Project: {plan.project}",
-        plan.description,
-    ]
+    lines = [f"Design route: {plan.intent}", f"Project: {plan.project}", plan.description]
     for number, step in enumerate(plan.steps, start=1):
         label = f"{number}. {step.id} [{step.kind}]"
         if step.tool and step.action:
@@ -324,7 +319,7 @@ def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("project", type=Path, help="Directory containing design Markdown")
     parser.add_argument("intent", choices=intents, help="Deterministic workflow intent")
-    parser.add_argument("--item", help="Explicit item ID or supporting source key")
+    parser.add_argument("--item", help="Explicit item ID, supporting source key, or module key")
     parser.add_argument("--term", help="Lexical term for the broad-to-narrow loop")
     parser.add_argument("--operation", choices=sorted(SUPPORTED_EDITOR_OPERATIONS))
     parser.add_argument("--section", help="Target section for replace/append")
