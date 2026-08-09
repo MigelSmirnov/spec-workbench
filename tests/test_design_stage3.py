@@ -13,57 +13,10 @@ def _write(path: Path, text: str) -> None:
 def _project(tmp_path: Path) -> Path:
     project = tmp_path / "demo"
     _write(
-        project / "01_models.md",
-        """# State 1 — Models
-
-## Model M01 — Record
-
-### Meaning
-
-A record.
-
-### Identity
-
-entity
-
-### Identity evidence
-
-Stable id.
-""",
-    )
-    _write(
-        project / "02_rules.md",
-        """# State 2 — Rules
-
-## Accepted decision A10 — Preserve records
-
-### Normative rules
-
-1. Preserve them.
-
-### Formal invariants
-
-record_preserved
-
-### Required tests
-
-1. It remains.
-
-### Consequence
-
-History survives.
-""",
-    )
-    _write(
         project / "30_modules.md",
         """# State 3 — Module responsibilities
 
 ## `archive`
-
-### Trace inputs
-
-- A10
-- M01
 
 ### Owns
 
@@ -99,7 +52,7 @@ Deep archive module.
 def test_module_keys_and_capabilities_are_stable_handoff(tmp_path: Path) -> None:
     payload = design_stage3.handoff(_project(tmp_path))
 
-    assert payload["schema_version"] == "spec_workbench_state3_handoff.v1"
+    assert payload["schema_version"] == "spec_workbench_state3_handoff.v2"
     assert payload["modules"] == [
         {
             "key": "module:archive",
@@ -109,7 +62,6 @@ def test_module_keys_and_capabilities_are_stable_handoff(tmp_path: Path) -> None
                 {"key": "capability:archive.get_record", "name": "get_record"},
                 {"key": "capability:archive.store_record", "name": "store_record"},
             ],
-            "upstream_refs": ["A10", "M01"],
         }
     ]
     assert payload["capabilities"] == [
@@ -126,7 +78,7 @@ def test_module_keys_and_capabilities_are_stable_handoff(tmp_path: Path) -> None
     ]
 
 
-def test_get_accepts_full_or_short_module_key_and_returns_capability_refs(tmp_path: Path) -> None:
+def test_get_accepts_full_or_short_module_key(tmp_path: Path) -> None:
     project = _project(tmp_path)
 
     short = design_stage3.get_module(project, "archive")
@@ -135,47 +87,6 @@ def test_get_accepts_full_or_short_module_key_and_returns_capability_refs(tmp_pa
     assert short["key"] == "module:archive"
     assert full["key"] == "module:archive"
     assert short["capability_refs"][0]["key"] == "capability:archive.get_record"
-
-
-def test_trace_maps_explicit_inputs_to_module_and_reports_coverage(tmp_path: Path) -> None:
-    trace = design_stage3.trace(_project(tmp_path))
-
-    assert trace["upstream_to_modules"]["A10"] == ["module:archive"]
-    assert trace["upstream_to_modules"]["M01"] == ["module:archive"]
-    assert trace["unresolved_references"] == []
-    assert trace["unclaimed_state2_decisions"] == []
-
-
-def test_refs_outside_trace_inputs_do_not_create_graph_edges(tmp_path: Path) -> None:
-    project = _project(tmp_path)
-    path = project / "30_modules.md"
-    path.write_text(
-        path.read_text(encoding="utf-8").replace(
-            "### Owns\n\n- durable record preservation.",
-            "### Owns\n\n- durable record preservation.\n- Text elsewhere mentions A99 but is not a trace edge.",
-        ),
-        encoding="utf-8",
-    )
-
-    module = design_stage3.get_module(project, "archive")
-
-    assert tuple(module["upstream_refs"]) == ("A10", "M01")
-
-
-def test_lint_rejects_unresolved_trace_input(tmp_path: Path) -> None:
-    project = _project(tmp_path)
-    path = project / "30_modules.md"
-    path.write_text(
-        path.read_text(encoding="utf-8").replace("- A10\n", "- A99\n"),
-        encoding="utf-8",
-    )
-
-    report = design_stage3.lint(project)
-    codes = {finding["code"] for finding in report["findings"]}
-
-    assert report["summary"]["errors"] == 1
-    assert "unresolved_upstream_reference" in codes
-    assert report["summary"]["unclaimed_state2_decisions"] == 1
 
 
 def test_lint_requires_module_responsibility_sections(tmp_path: Path) -> None:
@@ -188,25 +99,12 @@ def test_lint_requires_module_responsibility_sections(tmp_path: Path) -> None:
 
     report = design_stage3.lint(project)
 
+    assert report["summary"]["errors"] == 1
     assert any(
         finding["code"] == "missing_module_section"
         and "Must not own" in finding["message"]
         for finding in report["findings"]
     )
-
-
-def test_missing_trace_inputs_is_warning_not_inferred_from_prose(tmp_path: Path) -> None:
-    project = _project(tmp_path)
-    path = project / "30_modules.md"
-    text = path.read_text(encoding="utf-8")
-    start = text.index("### Trace inputs")
-    end = text.index("### Owns")
-    path.write_text(text[:start] + "A10 is mentioned in prose.\n\n" + text[end:], encoding="utf-8")
-
-    report = design_stage3.lint(project)
-
-    assert any(finding["code"] == "missing_trace_inputs_section" for finding in report["findings"])
-    assert tuple(design_stage3.get_module(project, "archive")["upstream_refs"]) == ()
 
 
 def test_generic_module_name_is_error(tmp_path: Path) -> None:
@@ -220,3 +118,18 @@ def test_generic_module_name_is_error(tmp_path: Path) -> None:
     report = design_stage3.lint(project)
 
     assert any(finding["code"] == "generic_module_name" for finding in report["findings"])
+
+
+def test_capabilities_are_read_only_from_fenced_capability_section(tmp_path: Path) -> None:
+    project = _project(tmp_path)
+    path = project / "30_modules.md"
+    path.write_text(
+        path.read_text(encoding="utf-8").replace(
+            "### Owns\n", "### Owns\n\nincidental_identifier\n"
+        ),
+        encoding="utf-8",
+    )
+
+    module = design_stage3.get_module(project, "archive")
+
+    assert module["capabilities"] == ("get_record", "store_record")
