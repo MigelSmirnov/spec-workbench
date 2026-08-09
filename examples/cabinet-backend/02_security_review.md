@@ -50,43 +50,23 @@ boundary implementation.
 
 ## Open question OQ-008 — credential abuse and account recovery policy
 
-**Status:** UNRESOLVED / BLOCK.
+**Status:** RESOLVED by accepted decision A67.
 
-A61 and A66 now separate the authentication boundaries explicitly:
+A67 closes the remaining credential-abuse and recovery choices across the
+accepted A60/A61/A66 identity boundaries:
 
-- the public VPS owns human login/session authentication and remote agent/service
-  authentication;
-- the single-user local interactive baseline may delegate human trust to the
-  authenticated operating-system session and therefore has no Cabinet-owned
-  local password-recovery flow;
-- local agents/services authenticate separately at the private Backend tool
-  boundary;
-- synchronization uses its own revocable `SyncNodeCredential`.
-
-Credential separation, rotation/revocation, exact-operation authorization, and
-finite-lived human sessions are accepted. Product evidence still does not select
-the concrete abuse and recovery policy for the public human boundary or the
-abuse/replay response policy for machine/service credentials.
-
-Product owner must still decide:
-
-1. for VPS human login, the failed-attempt budget and rate-limit scope (account,
-   credential, source, or a defined combination) for brute-force and
-   credential-stuffing resistance;
-2. the VPS slowdown/temporary-lockout behavior and authorized administrative
-   override;
-3. who may initiate VPS human-account recovery and what evidence proves control;
-4. whether successful VPS recovery revokes all active human sessions and under
-   what compromise evidence related agent/service or sync credentials are also
-   revoked; and
-5. for VPS agent/service, local agent/service, and sync-node credentials, which
-   replay/request-abuse signals trigger throttling, temporary disablement, or
-   mandatory rotation/revocation.
-
-The local single-user baseline does not require a Cabinet password store or a
-Cabinet human recovery mechanism. Until the remaining VPS and machine/service
-choices are accepted as enforceable State 2 policy, this category remains a
-BLOCK.
+- VPS human login uses account- and source-scoped abuse controls, progressive
+  delay after 5 consecutive failures, and a 15-minute temporary block after 10;
+- recovery uses a pre-bound email channel and a single-use short-lived token;
+- successful recovery revokes every active human session;
+- ordinary forgotten-password recovery does not automatically revoke separate
+  agent/service or synchronization credentials;
+- known or suspected compromise requires revocation or rotation of affected
+  non-human credentials;
+- machine/service credentials have rejection, throttling, rotation, and
+  revocation behavior rather than a password-recovery flow;
+- the single-user local human baseline remains OS-delegated and has no
+  Cabinet-owned local password-recovery endpoint.
 
 ## Open question OQ-009 — upload payload and retrieval safety policy
 
@@ -110,29 +90,19 @@ acceptance. Neither decision assigns a State 3 module.
 
 ## Open question OQ-011 — dependency vulnerability and update policy
 
-**Status:** UNRESOLVED / BLOCK.
+**Status:** RESOLVED by accepted decision A68.
 
-Cabinet has a public VPS, document-processing paths, a local Backend, and external
-integration clients, so externally maintained runtime dependencies are
-operationally relevant. Existing product evidence contains no accepted
-vulnerability/update policy.
-
-Product owner must decide:
-
-1. who owns the deployed dependency inventory for each Cabinet surface;
-2. which advisory source and severity/exploitability threshold blocks a release;
-3. the response or remediation window for a detected vulnerability; and
-4. who may approve a time-bounded exception and what rollback or containment is
-   required.
-
-Until those choices are accepted as State 2 deployment policy, this category
-remains a BLOCK.
+A68 assigns dependency inventory to each deployed surface's engineer/deployment
+owner, requires reproducible dependency inventory, blocks introduction of known
+critical and high vulnerabilities, defines remediation windows for deployed
+critical/high/moderate findings, and permits only documented time-bounded
+exceptions of at most 30 days with containment and rollback/upgrade planning.
 
 ## Accepted decision A63 — State 0–2 security review record
 
 The total review followed `skills/spec-authoring/SECURITY_REVIEW_EVIDENCE.md`.
 Accepted decisions below remain authoritative; this record only makes their
-coverage and unresolved gaps explicit.
+coverage and previously unresolved gaps explicit.
 
 ### Normative rules
 
@@ -145,15 +115,15 @@ coverage and unresolved gaps explicit.
 
 Security review: PERFORMED
 
-- authentication_credential_abuse: UNRESOLVED; references: A61, A66, OQ-008; affected: A60, M03, M04, VPS human and service authentication, local agent/service boundary, sync-node boundary
-- secrets: APPLICABLE; references: A60, A61, A66; affected: M04, synchronization, local agent/service, and Holded gateway boundaries
+- authentication_credential_abuse: APPLICABLE; references: A61, A66, A67; affected: A60, M03, M04, VPS human and service authentication, local agent/service boundary, sync-node boundary
+- secrets: APPLICABLE; references: A60, A61, A66, A67; affected: M04, synchronization, local agent/service, recovery, and Holded gateway boundaries
 - authorization: APPLICABLE; references: A61, A66, source:02_rules_local_upload.md#accepted-decision; affected: M03, M06, M10, M33, exact invoice and source targets
 - injection_interpreted_input: APPLICABLE; references: A62; affected: search, agent, OCR, filename, Registry, PresuPro, and Holded inputs
 - external_callbacks_webhooks: APPLICABLE; references: A60, A61, source:02_rules_import.md#accepted-decision; affected: M19, M20, M21, VPS synchronization boundary (no inbound webhook is accepted)
-- browser_boundary: APPLICABLE; references: A61, A66; affected: local uploader, local OS-delegated interactive context, and VPS browser sessions
+- browser_boundary: APPLICABLE; references: A61, A66, A67; affected: local uploader, local OS-delegated interactive context, VPS browser sessions, login, and recovery
 - files_artifacts: APPLICABLE; references: A60, A61, A64, A66, source:02_rules_local_upload.md#accepted-decision; affected: M05, M10, M11, upload, storage, processing, and retrieval boundaries
 - concurrency: APPLICABLE; references: A65, source:02_rules_import.md#accepted-decision; affected: M10, M11, M21, source attachment, import, and missing-source transitions
-- dependencies: UNRESOLVED; references: OQ-011; affected: public VPS, document processing, local Backend, and integration clients
+- dependencies: APPLICABLE; references: A68; affected: public VPS, document processing, local Backend, agent/MCP runtimes, and integration/gateway runtimes
 
 ### Formal invariants
 
@@ -174,7 +144,7 @@ stable_entity_id_known
 
 ### Consequence
 
-Cabinet cannot claim State 2 security closure or proceed to State 3 while OQ-008
-and OQ-011 remain unresolved. OQ-008 no longer assumes a Cabinet-owned local
-human account store; OQ-009 and OQ-010 are closed by A64 and A65, and their
-review outcomes are `APPLICABLE`, not inferred `NOT_APPLICABLE`.
+All required State 0–2 security-review categories now have accepted enforceable
+outcomes. OQ-008, OQ-009, OQ-010, and OQ-011 are resolved by A67, A64, A65, and
+A68 respectively. Subject to structural lint and the ordinary State 2 readiness
+checks, the security review no longer blocks transition to State 3.
