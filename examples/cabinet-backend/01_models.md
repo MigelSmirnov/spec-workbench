@@ -28,7 +28,7 @@ Cabinet Backend must:
 
 # A. Accepted Invoice Card boundary
 
-## Invoice Card V1
+## Model M01 — InvoiceCardV1
 
 Invoice Card V1 is an existing Cabinet contract. Backend consumes the complete
 canonical Card JSON and validates it using the accepted Cabinet validator or a
@@ -51,7 +51,35 @@ Backend must preserve unknown or currently unused Card fields. It must not
 introduce alternative line kinds, payment meanings, arithmetic rules, object
 shape, source shape, or invoice revision numbering.
 
-## InvoiceCardRevisionReference
+### Meaning
+
+The accepted Cabinet invoice contract consumed and preserved by Backend.
+
+### Identity
+
+entity
+
+### Identity evidence
+
+Substitution: two Cards with equal visible fields are not interchangeable when their stable Card id or canonical revision differs. Continuity: one Card keeps its id while accepted content revisions and lifecycle status change.
+
+### Source of truth
+
+The accepted Cabinet Invoice Card V1 contract; Backend is a preserving consumer.
+
+### Lifecycle
+
+draft -> confirmed -> archived under the Cabinet contract; corrections create content revisions.
+
+### Persistence candidate
+
+Durable complete Card revisions on the nodes required by the operating cycle.
+
+### Open questions
+
+None for identity closure.
+
+## Model M02 — InvoiceCardRevisionReference
 
 Value object pinning one exact accepted Card payload.
 
@@ -67,9 +95,37 @@ Candidate fields:
 
 ---
 
+### Meaning
+
+A pin to one exact accepted Invoice Card payload.
+
+### Identity
+
+value
+
+### Identity evidence
+
+Substitution: equal invoice id, contract version, content hash, status, and observation values are interchangeable. Continuity: the reference does not change; a different revision produces another value.
+
+### Source of truth
+
+Derived from one accepted Invoice Card revision.
+
+### Lifecycle
+
+No independent lifecycle; created as an immutable reference.
+
+### Persistence candidate
+
+Embedded wherever an exact Card revision must be pinned.
+
+### Open questions
+
+None for identity closure.
+
 # B. Shared Backend primitives
 
-## ActorReference
+## Model M03 — ActorReference
 
 Provenance value object.
 
@@ -83,7 +139,42 @@ Candidate fields:
 
 It is not an authentication session.
 
-## CabinetNodeIdentity
+### Meaning
+
+Provenance identifying the actor context for an action.
+
+### Identity
+
+value
+
+### Identity evidence
+
+Substitution: equal actor and delegation facts carry the same provenance meaning. Continuity: authentication or actor state is not managed through this reference.
+
+### Source of truth
+
+The authenticated or delegated interaction that produced the action.
+
+### Lifecycle
+
+No independent lifecycle.
+
+### Persistence candidate
+
+Embedded in durable evidence records when provenance is required.
+
+### Open questions
+
+None for identity closure.
+
+### Security semantics
+
+`ActorReference` is embedded provenance scoped to the current Cabinet
+deployment. It may cross synchronization and audit boundaries, but it is not an
+authentication session, reusable credential, or authorization proof. Actor and
+delegation identifiers are sensitive audit data; the value contains no secret.
+
+## Model M04 — CabinetNodeIdentity
 
 Identity of one participating Cabinet node.
 
@@ -96,7 +187,43 @@ Candidate fields:
 - `created_at`;
 - `revoked_at` optional.
 
-## ContentReference
+### Meaning
+
+One participating VPS Cabinet or local Backend node.
+
+### Identity
+
+entity
+
+### Identity evidence
+
+Substitution: records for different node ids are never interchangeable. Continuity: the same node remains identifiable while status and contract version change.
+
+### Source of truth
+
+Cabinet Backend node enrollment and revocation records.
+
+### Lifecycle
+
+active -> revoked.
+
+### Persistence candidate
+
+Durable on the Cabinet systems that authenticate or exchange with the node.
+
+### Open questions
+
+None for identity closure.
+
+### Security semantics
+
+`CabinetNodeIdentity` is externally addressable at the synchronization boundary
+and scopes one installation. Its stable node identity selects the installation
+subject but authorizes nothing without the separate active credential accepted
+by A61. Credential material is not a field of this entity and must not cross in
+business payloads.
+
+## Model M05 — ContentReference
 
 Value object referencing immutable content.
 
@@ -110,9 +237,42 @@ Candidate fields:
 
 ---
 
+### Meaning
+
+A typed reference to immutable content bytes.
+
+### Identity
+
+value
+
+### Identity evidence
+
+Substitution: equal kind, id, hash, size, and media type identify the same immutable content. Continuity: content changes create another reference rather than mutating this value.
+
+### Source of truth
+
+Derived from the referenced immutable content.
+
+### Lifecycle
+
+No independent lifecycle.
+
+### Persistence candidate
+
+Embedded in manifests, records, and evidence that pin content.
+
+### Open questions
+
+None for identity closure.
+
+
+### Security semantics
+
+`ContentReference` may cross manifest and audit boundaries and pins exact immutable bytes. Its ID, hash, size, and media type identify data but are not authorization proof and grant no path or retrieval authority. It contains no secret.
+
 # C. Accepted Card archive
 
-## StoredInvoiceCard
+## Model M06 — StoredInvoiceCard
 
 Local archive identity for one logical Invoice Card.
 
@@ -127,7 +287,42 @@ Candidate fields:
 - `durable_at` optional;
 - `archive_status` — `active` or `archived`.
 
-## StoredInvoiceCardRevision
+### Meaning
+
+The local archive root for one logical Invoice Card.
+
+### Identity
+
+entity
+
+### Identity evidence
+
+Substitution: equal current fields do not make two invoice ids interchangeable. Continuity: one invoice id remains the same archive root across revisions, receipt times, durability, and archive status.
+
+### Source of truth
+
+Card id supplies identity; Cabinet Backend owns the archive record.
+
+### Lifecycle
+
+received -> durable; active -> archived, with immutable revisions retained.
+
+### Persistence candidate
+
+Durable in the local archive.
+
+### Open questions
+
+None for identity closure.
+
+### Security semantics
+
+`StoredInvoiceCard` is a sensitive fiscal entity in the current Cabinet owner
+scope. Its stable `invoice_id` is the exact object-level authorization target,
+not proof that a caller may read or mutate it. Revisions and references may cross
+the VPS/local boundary only through authenticated Cabinet operations.
+
+## Model M07 — StoredInvoiceCardRevision
 
 Immutable storage record for one exact canonical Card JSON payload.
 
@@ -145,7 +340,35 @@ Candidate fields:
 A later Cabinet correction is another Card content revision. Backend does not
 split it into a competing invoice-facts schema.
 
-## InvoiceCardValidationRecord
+### Meaning
+
+The immutable archive record for one exact canonical Card payload.
+
+### Identity
+
+entity
+
+### Identity evidence
+
+Substitution: records with different invoice id or content hash are distinct even if projected fields match. Continuity: the issued revision keeps stable identity and is linked into predecessor and supersession history without mutation.
+
+### Source of truth
+
+The accepted Card id plus canonical content revision; Backend owns archival evidence.
+
+### Lifecycle
+
+Issued immutable snapshot; may gain external predecessor/supersession links without rewriting payload facts.
+
+### Persistence candidate
+
+Durable in the Card archive.
+
+### Open questions
+
+None for identity closure.
+
+## Model M08 — InvoiceCardValidationRecord
 
 Deterministic validation evidence.
 
@@ -162,7 +385,35 @@ Candidate fields:
 
 Validation never silently rewrites the Card.
 
-## DuplicateCandidateReview
+### Meaning
+
+Deterministic evidence of validating one exact Card revision.
+
+### Identity
+
+entity
+
+### Identity evidence
+
+Substitution: validation runs with different validation ids, validator versions, or acknowledgement evidence are not interchangeable. Continuity: one validation record keeps stable identity while its issued result remains immutable.
+
+### Source of truth
+
+Cabinet Backend validation operation over the accepted Card contract.
+
+### Lifecycle
+
+Issued once with valid, valid_with_warnings, or invalid result.
+
+### Persistence candidate
+
+Durable validation history.
+
+### Open questions
+
+None for identity closure.
+
+## Model M09 — DuplicateCandidateReview
 
 Review record for possible duplicate logical invoices.
 
@@ -180,9 +431,37 @@ Duplicate candidates are not automatically merged.
 
 ---
 
+### Meaning
+
+A human-reviewable case for a possible duplicate logical invoice.
+
+### Identity
+
+entity
+
+### Identity evidence
+
+Substitution: two review ids remain distinct cases even with equal candidates. Continuity: the same review moves from open to a recorded decision or resolution.
+
+### Source of truth
+
+Cabinet Backend duplicate-review workflow.
+
+### Lifecycle
+
+open -> not_duplicate | confirmed_duplicate | resolved.
+
+### Persistence candidate
+
+Durable review and decision history.
+
+### Open questions
+
+None for identity closure.
+
 # D. Source binary archive
 
-## SourceBinary
+## Model M10 — SourceBinary
 
 Immutable binary object corresponding to source metadata in an Invoice Card.
 
@@ -201,7 +480,43 @@ Candidate fields:
 The Card remains authoritative for accepted source metadata. `SourceBinary`
 records byte handling and verification.
 
-## SourceBinaryReplica
+### Meaning
+
+The immutable source-byte object named by Invoice Card source metadata.
+
+### Identity
+
+entity
+
+### Identity evidence
+
+Substitution: source ids are not interchangeable even when bytes happen to hash equally. Continuity: one source id remains identifiable while byte availability and retention status change.
+
+### Source of truth
+
+Invoice Card owns accepted source metadata; Backend owns byte custody state.
+
+### Lifecycle
+
+available | missing | quarantined | corrupt -> deleted when policy permits.
+
+### Persistence candidate
+
+Durable wherever the operating cycle requires source-byte custody.
+
+### Open questions
+
+None for identity closure.
+
+### Security semantics
+
+`SourceBinary` contains sensitive documentary evidence in the current Cabinet
+owner scope. Its stable source identity is externally addressable only through
+authorized Cabinet file operations. Filename and media metadata never grant path
+or execution authority; verified bytes may cross the VPS/local boundary through
+the accepted transfer workflow.
+
+## Model M11 — SourceBinaryReplica
 
 Storage record for one binary on one Cabinet node.
 
@@ -222,9 +537,42 @@ That condition is explicit and is not equivalent to durable local acceptance.
 
 ---
 
+### Meaning
+
+The custody record for one source binary on one Cabinet node and storage zone.
+
+### Identity
+
+entity
+
+### Identity evidence
+
+Substitution: replicas on different nodes or zones are operationally distinct. Continuity: one replica identity persists while verification, retention, and deletion state change.
+
+### Source of truth
+
+Cabinet Backend storage custody for the source, node, and zone tuple.
+
+### Lifecycle
+
+pending -> verified | failed; retained -> deleted when policy permits.
+
+### Persistence candidate
+
+Durable replica metadata; referenced bytes live in the named storage zone.
+
+### Open questions
+
+None for identity closure.
+
+
+### Security semantics
+
+`SourceBinaryReplica` is custody metadata scoped to an exact source, Cabinet node, and storage zone. Its storage reference is Backend-internal and must not become a client path or URL. Replica identity and status do not authorize byte retrieval.
+
 # E. Registry catalogue and offline object work
 
-## RegistryProjectSnapshot
+## Model M12 — RegistryProjectSnapshot
 
 Immutable projection of one Registry project.
 
@@ -243,7 +591,35 @@ Candidate fields:
 
 Registry remains authoritative for project identity and current context.
 
-## RegistryCatalogueSnapshot
+### Meaning
+
+An immutable issued projection of one externally identified Registry project.
+
+### Identity
+
+entity
+
+### Identity evidence
+
+Substitution: equal projected fields do not make snapshots with different ids or Registry observations interchangeable. Continuity: the mirrored project keeps Registry project identity; each issued observation has snapshot semantics.
+
+### Source of truth
+
+Registry owns project identity and current facts; Backend owns the issued snapshot record.
+
+### Lifecycle
+
+Issued immutable snapshot; a later Registry observation creates another snapshot.
+
+### Persistence candidate
+
+Durable when used in catalogues, assignments, validation, or historical evidence.
+
+### Open questions
+
+None for identity closure.
+
+## Model M13 — RegistryCatalogueSnapshot
 
 Immutable compact project catalogue prepared for offline VPS use.
 
@@ -262,7 +638,35 @@ Candidate fields:
 The catalogue exposes its age. It is usable offline but never claims Registry is
 currently reachable.
 
-## RegistryCataloguePublication
+### Meaning
+
+An immutable compact Registry project catalogue issued for offline VPS use.
+
+### Identity
+
+entity
+
+### Identity evidence
+
+Substitution: catalogue ids, content hashes, and observation times distinguish releases even with overlapping projects. Continuity: one issued catalogue remains fixed; regeneration creates another catalogue entity.
+
+### Source of truth
+
+Cabinet Backend generates the catalogue from Registry observations.
+
+### Lifecycle
+
+generated -> available -> expired by later policy; never mutated in place.
+
+### Persistence candidate
+
+Durable on local archive and cached on VPS through replica records.
+
+### Open questions
+
+None for identity closure.
+
+## Model M14 — RegistryCataloguePublication
 
 Backend record of publishing one catalogue snapshot from local to VPS.
 
@@ -277,7 +681,35 @@ Candidate fields:
 - requested, completed, and acknowledged times;
 - safe error code optional.
 
-## RegistryCatalogueReplica
+### Meaning
+
+The business record of publishing one catalogue snapshot to a target node.
+
+### Identity
+
+entity
+
+### Identity evidence
+
+Substitution: publication ids and idempotency keys distinguish publication obligations. Continuity: the same publication progresses through transfer and outcome states.
+
+### Source of truth
+
+Cabinet Backend catalogue publication workflow.
+
+### Lifecycle
+
+pending -> transferring -> accepted | failed | unknown_outcome.
+
+### Persistence candidate
+
+Durable publication and reconciliation history.
+
+### Open questions
+
+None for identity closure.
+
+## Model M15 — RegistryCatalogueReplica
 
 Record that one exact catalogue snapshot is available on one Cabinet node.
 
@@ -289,7 +721,35 @@ Candidate fields:
 - verification status;
 - expiry time optional.
 
-## WorkObject
+### Meaning
+
+The availability record for one exact catalogue on one Cabinet node.
+
+### Identity
+
+entity
+
+### Identity evidence
+
+Substitution: replicas on different nodes are not interchangeable. Continuity: the same catalogue-node record persists through verification and expiry state.
+
+### Source of truth
+
+Cabinet Backend custody evidence for the catalogue and node tuple.
+
+### Lifecycle
+
+stored -> verified or failed; may expire.
+
+### Persistence candidate
+
+Durable replica metadata on the systems that track catalogue availability.
+
+### Open questions
+
+None for identity closure.
+
+## Model M16 — WorkObject
 
 Cabinet working projection for one Registry project.
 
@@ -308,7 +768,35 @@ Candidate fields:
 Cabinet owns relationships, invoices, notes, matches, and history linked to the
 Registry `project_id`; it does not own Registry name, address, or lifecycle.
 
-## CardObjectAssignmentObservation
+### Meaning
+
+Cabinet's working representative of one Registry project.
+
+### Identity
+
+entity
+
+### Identity evidence
+
+Substitution: equal projected fields do not make different Registry project ids interchangeable. Continuity: the same project id anchors Cabinet relationships while snapshots and attention status change.
+
+### Source of truth
+
+Registry owns project identity and current context; Cabinet owns linked work and attention state.
+
+### Lifecycle
+
+active | historical | needs_attention as Registry observations change.
+
+### Persistence candidate
+
+Durable Cabinet relationship root keyed by Registry project id.
+
+### Open questions
+
+None for identity closure.
+
+## Model M17 — CardObjectAssignmentObservation
 
 Backend interpretation of the primary object context already stored in the Card
 `object` block.
@@ -327,7 +815,35 @@ Candidate fields:
 This record adds provenance that Invoice Card V1 does not carry. It does not
 replace the Card `object` block.
 
-## ObjectAssignmentValidation
+### Meaning
+
+Backend provenance for the object context observed in one exact Card revision.
+
+### Identity
+
+entity
+
+### Identity evidence
+
+Substitution: observations for different Card revisions or capture contexts are not interchangeable. Continuity: one issued observation remains fixed and is the stable subject of later validations.
+
+### Source of truth
+
+The accepted Card object block plus capture-time Backend catalogue provenance.
+
+### Lifecycle
+
+Issued immutable observation; later Card revisions create new observations.
+
+### Persistence candidate
+
+Durable when assignment provenance is available.
+
+### Open questions
+
+None for identity closure.
+
+## Model M18 — ObjectAssignmentValidation
 
 Post-reconnection validation against current Registry data.
 
@@ -347,9 +863,37 @@ requires an explicit new Card revision through Cabinet.
 
 ---
 
+### Meaning
+
+A post-reconnection validation of one observed Card assignment against Registry.
+
+### Identity
+
+entity
+
+### Identity evidence
+
+Substitution: different validation ids, source observations, or Registry snapshots are distinct evidence. Continuity: one issued validation remains identifiable and immutable.
+
+### Source of truth
+
+Cabinet Backend validation against a current Registry observation.
+
+### Lifecycle
+
+Issued with valid, project_missing, project_closed, materially_changed, registry_unavailable, or inconclusive result.
+
+### Persistence candidate
+
+Durable validation history.
+
+### Open questions
+
+None for identity closure.
+
 # F. VPS-to-local transfer and import
 
-## InvoiceTransferManifest
+## Model M19 — InvoiceTransferManifest
 
 Immutable description of one exact work package sent by the VPS.
 
@@ -365,7 +909,42 @@ Candidate fields:
 - generated time;
 - manifest hash.
 
-## InvoiceSynchronization
+### Meaning
+
+The immutable issued description of one exact VPS work package.
+
+### Identity
+
+entity
+
+### Identity evidence
+
+Substitution: manifest ids and hashes distinguish packages and retry obligations. Continuity: one issued manifest remains fixed; changed contents require another manifest.
+
+### Source of truth
+
+The sending Cabinet node generates and hashes the canonical manifest.
+
+### Lifecycle
+
+Issued immutable snapshot.
+
+### Persistence candidate
+
+Durable on sender and receiver for transfer and import evidence.
+
+### Open questions
+
+None for identity closure.
+
+### Security semantics
+
+`InvoiceTransferManifest` crosses the VPS/local trust boundary and is addressed
+by its stable manifest identity and content hash. It contains sensitive entity
+and artifact references but no credential. Knowledge of a manifest id or hash
+does not authenticate its sender or authorize an import transition.
+
+## Model M20 — InvoiceSynchronization
 
 Transport process for one manifest.
 
@@ -384,7 +963,35 @@ Candidate fields:
 `delivered` means the target received the package. It does not by itself mean
 that the package was validated or committed to the durable archive.
 
-## InvoiceImport
+### Meaning
+
+The transport process for one invoice transfer manifest.
+
+### Identity
+
+entity
+
+### Identity evidence
+
+Substitution: synchronization ids remain distinct transport processes even for the same invoice. Continuity: one synchronization keeps identity through transfer, uncertainty, delivery, failure, or cancellation.
+
+### Source of truth
+
+Cabinet Backend synchronization workflow.
+
+### Lifecycle
+
+pending -> transferring -> unknown_outcome | delivered | failed | cancelled.
+
+### Persistence candidate
+
+Durable until outcome and reconciliation obligations are closed; retained as history locally.
+
+### Open questions
+
+None for identity closure.
+
+## Model M21 — InvoiceImport
 
 Local Backend process that validates and commits one delivered manifest.
 
@@ -406,7 +1013,35 @@ Candidate fields:
 This separation prevents transport success from being mistaken for durable
 business acceptance.
 
-## ImportQuarantine
+### Meaning
+
+The local durable-acceptance process for one delivered manifest.
+
+### Identity
+
+entity
+
+### Identity evidence
+
+Substitution: import ids and idempotent manifest identity distinguish logical imports. Continuity: the same import progresses from receipt through validation to one terminal business result.
+
+### Source of truth
+
+Local Cabinet Backend import workflow.
+
+### Lifecycle
+
+received -> validating -> quarantined | accepted | rejected | already_accepted.
+
+### Persistence candidate
+
+Durable local import history.
+
+### Open questions
+
+None for identity closure.
+
+## Model M22 — ImportQuarantine
 
 Record for a package that arrived but cannot yet be accepted or rejected safely.
 
@@ -425,7 +1060,35 @@ Candidate fields:
 Quarantine preserves the received package without presenting it as part of the
 normal durable archive.
 
-## InvoiceTransferReceipt
+### Meaning
+
+The preserved review case for an import that cannot yet be accepted or rejected safely.
+
+### Identity
+
+entity
+
+### Identity evidence
+
+Substitution: different quarantine ids or imports are distinct obligations. Continuity: one quarantine remains identifiable from opening through resolution or discard.
+
+### Source of truth
+
+Local Cabinet Backend import policy and operator evidence.
+
+### Lifecycle
+
+open -> resolved | discarded.
+
+### Persistence candidate
+
+Durable while open and retained with import evidence.
+
+### Open questions
+
+None for identity closure.
+
+## Model M23 — InvoiceTransferReceipt
 
 Durable target evidence returned to the VPS.
 
@@ -445,7 +1108,35 @@ Candidate fields:
 A retry with the same idempotency key and manifest must resolve to the same
 logical import and must not create a second invoice.
 
-## InvoiceWorkingReplica
+### Meaning
+
+Immutable target evidence of the outcome known for one transfer and import.
+
+### Identity
+
+value
+
+### Identity evidence
+
+Substitution: equal synchronization, import, idempotency, manifest, result, hashes, and time facts carry the same evidence. Continuity: the issued receipt does not mutate; later reconciliation issues another receipt value if the known outcome changes.
+
+### Source of truth
+
+The target Cabinet Backend issues it from durable import state.
+
+### Lifecycle
+
+Issued immutable snapshot.
+
+### Persistence candidate
+
+Durable on target and retained by sender for reconciliation.
+
+### Open questions
+
+None for identity closure.
+
+## Model M24 — InvoiceWorkingReplica
 
 Record describing which exact Card revisions and source bytes are available on
 one Cabinet node.
@@ -460,7 +1151,35 @@ Candidate fields:
 - role — `vps_working`, `local_durable`, or `read_only_cache`;
 - updated time.
 
-## SynchronizationConflict
+### Meaning
+
+The availability record for exact Card and source content on one Cabinet node.
+
+### Identity
+
+entity
+
+### Identity evidence
+
+Substitution: replicas on different invoice-node pairs are not interchangeable. Continuity: one invoice-node replica remains the same while available revisions, role, and update time change.
+
+### Source of truth
+
+Cabinet Backend custody state for the invoice and node tuple.
+
+### Lifecycle
+
+working or cached availability changes as content transfers or is retained.
+
+### Persistence candidate
+
+Durable replica metadata on participating nodes.
+
+### Open questions
+
+None for identity closure.
+
+## Model M25 — SynchronizationConflict
 
 Exceptional record for incompatible accepted Card revisions or Backend decisions
 on two nodes.
@@ -480,7 +1199,35 @@ Candidate fields:
 Source bytes are immutable. Conflicts concern Card JSON revisions or
 Backend-owned operational decisions.
 
-## LocalBackendConnectionObservation
+### Meaning
+
+An exceptional case for incompatible accepted revisions or operational decisions on nodes.
+
+### Identity
+
+entity
+
+### Identity evidence
+
+Substitution: conflict ids represent distinct resolution obligations. Continuity: one conflict remains identifiable from detection until explicit resolution.
+
+### Source of truth
+
+Cabinet Backend conflict detection and resolution evidence.
+
+### Lifecycle
+
+open -> resolved.
+
+### Persistence candidate
+
+Durable conflict and resolution history.
+
+### Open questions
+
+None for identity closure.
+
+## Model M26 — LocalBackendConnectionObservation
 
 VPS-side reachability observation.
 
@@ -495,9 +1242,37 @@ Candidate fields:
 
 ---
 
+### Meaning
+
+A VPS-side timestamped observation of local Backend reachability and compatibility.
+
+### Identity
+
+value
+
+### Identity evidence
+
+Substitution: equal status, node, contract, timestamps, and safe error facts are interchangeable. Continuity: the observation itself does not change; another probe creates another value.
+
+### Source of truth
+
+The VPS Cabinet connectivity probe.
+
+### Lifecycle
+
+Issued immutable observation.
+
+### Persistence candidate
+
+Temporary for live decisions; latest and historical observations may be persisted when operational evidence requires it.
+
+### Open questions
+
+None for identity closure.
+
 # G. PresuPro projection and matching
 
-## EstimateReference
+## Model M27 — EstimateReference
 
 Value object containing:
 
@@ -506,7 +1281,35 @@ Value object containing:
 - PresuPro version, content hash, or observed update time;
 - PresuPro status optional.
 
-## EstimateSnapshot
+### Meaning
+
+A pin to one externally owned PresuPro estimate observation.
+
+### Identity
+
+value
+
+### Identity evidence
+
+Substitution: equal estimate, project, version or hash, time, and status facts identify the same reference. Continuity: the reference does not own estimate mutation; a changed estimate produces another value.
+
+### Source of truth
+
+PresuPro owns estimate and project identity and status.
+
+### Lifecycle
+
+No independent lifecycle.
+
+### Persistence candidate
+
+Embedded in snapshots, matches, and analysis inputs.
+
+### Open questions
+
+None for identity closure.
+
+## Model M28 — EstimateSnapshot
 
 Immutable local projection used for repeatable analysis.
 
@@ -523,18 +1326,102 @@ Candidate fields:
 
 PresuPro remains authoritative for mutable estimate composition.
 
-## EstimateItemSnapshot
+### Meaning
+
+An immutable issued local projection of one PresuPro estimate for repeatable analysis.
+
+### Identity
+
+entity
+
+### Identity evidence
+
+Substitution: snapshot ids and PresuPro observations distinguish analytical evidence. Continuity: one issued snapshot remains fixed while later estimate changes create another snapshot.
+
+### Source of truth
+
+PresuPro owns estimate composition; Backend owns the issued snapshot record.
+
+### Lifecycle
+
+Issued immutable snapshot.
+
+### Persistence candidate
+
+Durable when used by accepted matches or repeatable analysis.
+
+### Open questions
+
+None for identity closure.
+
+## Model M29 — EstimateItemSnapshot
 
 Read-only comparable projection including stable item identity when available,
 zone, type, description, material reference, quantity, unit, unit price, waste,
 margin, discount, IVA, and totals.
 
-## EstimateMatchSuggestion
+### Meaning
+
+The immutable comparable projection of one estimate item inside an exact Estimate Snapshot.
+
+### Identity
+
+entity
+
+### Identity evidence
+
+Substitution: externally stable item identity and containing estimate snapshot distinguish items even when commercial fields match. Continuity: the mirrored estimate item keeps its source identity; each issued projection has snapshot semantics.
+
+### Source of truth
+
+PresuPro owns estimate-item identity and facts; Backend owns the issued projection.
+
+### Lifecycle
+
+Issued immutable snapshot within an EstimateSnapshot.
+
+### Persistence candidate
+
+Persisted as part of the containing EstimateSnapshot.
+
+### Open questions
+
+None for identity closure.
+
+## Model M30 — EstimateMatchSuggestion
 
 Ephemeral agent proposal connecting one exact Card line to one exact Estimate
 Item Snapshot. It is not analytical truth.
 
-## InvoiceLineEstimateMatch
+### Meaning
+
+An ephemeral agent proposal connecting one exact Card line to one exact estimate-item snapshot.
+
+### Identity
+
+value
+
+### Identity evidence
+
+Substitution: equal inputs and proposal facts are interchangeable because the suggestion owns no accepted decision or history. Continuity: it is not mutated into truth; acceptance creates an InvoiceLineEstimateMatch entity.
+
+### Source of truth
+
+Calculated by the matching agent from pinned Card and estimate inputs.
+
+### Lifecycle
+
+Ephemeral proposal; accepted or discarded by a separate decision.
+
+### Persistence candidate
+
+Runtime only unless included as provenance in a separate accepted decision record.
+
+### Open questions
+
+None for identity closure.
+
+## Model M31 — InvoiceLineEstimateMatch
 
 Backend-owned decision entity.
 
@@ -559,9 +1446,37 @@ confirmed PresuPro Estimate Item match.
 
 ---
 
+### Meaning
+
+The Backend-owned decision linking one confirmed Card line to one estimate item snapshot.
+
+### Identity
+
+entity
+
+### Identity evidence
+
+Substitution: match ids are distinct decisions even when endpoints match. Continuity: one match remains identifiable while status changes or it is invalidated.
+
+### Source of truth
+
+Cabinet Backend matching decision and actor evidence.
+
+### Lifecycle
+
+confirmed | rejected; confirmed -> invalidated when accepted policy requires it.
+
+### Persistence candidate
+
+Durable decision history.
+
+### Open questions
+
+None for identity closure.
+
 # H. Analytics
 
-## PlanActualAnalysis
+## Model M32 — PlanActualAnalysis
 
 Calculated view assembled from:
 
@@ -579,9 +1494,37 @@ requires the local archive and a PresuPro snapshot.
 
 ---
 
+### Meaning
+
+A calculated plan-versus-actual view for pinned estimate, Card, assignment, match, and forecast inputs.
+
+### Identity
+
+value
+
+### Identity evidence
+
+Substitution: analyses with equal pinned inputs and calculation assumptions are interchangeable. Continuity: the view has no independent mutation; changed inputs produce a recalculated value.
+
+### Source of truth
+
+Calculated by Cabinet Backend from the named immutable and accepted inputs.
+
+### Lifecycle
+
+Calculated on demand; no independent lifecycle.
+
+### Persistence candidate
+
+Not required as a mutable record; may be cached only with complete input provenance.
+
+### Open questions
+
+None for identity closure.
+
 # I. Holded publication
 
-## HoldedPublication
+## Model M33 — HoldedPublication
 
 Business record for publishing one exact confirmed Card revision.
 
@@ -595,7 +1538,43 @@ Candidate fields:
 - created and completed times;
 - safe outcome details.
 
-## HoldedPublicationAttempt
+### Meaning
+
+The business record for publishing one exact confirmed Card revision to Holded.
+
+### Identity
+
+entity
+
+### Identity evidence
+
+Substitution: publication ids and idempotency keys represent distinct external side-effect obligations. Continuity: one publication remains identifiable through pending and terminal outcomes.
+
+### Source of truth
+
+Cabinet Backend publication workflow; Holded owns the external document outcome.
+
+### Lifecycle
+
+pending -> succeeded | failed | ambiguous | cancelled.
+
+### Persistence candidate
+
+Durable publication and reconciliation history.
+
+### Open questions
+
+None for identity closure.
+
+### Security semantics
+
+`HoldedPublication` is accounting-sensitive evidence owned by Local Cabinet
+Backend and crosses the Holded integration boundary. Stable invoice, publication,
+and Holded document identities are exact authorization and reconciliation
+targets, not authority. Holded credentials remain outside this entity and inside
+the dedicated gateway.
+
+## Model M34 — HoldedPublicationAttempt
 
 Technical attempt belonging to one `HoldedPublication`. Retries create attempts,
 not new business publications.
@@ -603,6 +1582,34 @@ not new business publications.
 Holded publication is independent from PresuPro matching.
 
 ---
+
+### Meaning
+
+One technical attempt belonging to a HoldedPublication business record.
+
+### Identity
+
+entity
+
+### Identity evidence
+
+Substitution: retries are distinct attempts even when request facts match. Continuity: one attempt keeps stable identity and one issued outcome; retry creates another attempt.
+
+### Source of truth
+
+Cabinet Backend Holded integration attempt evidence.
+
+### Lifecycle
+
+started -> succeeded | failed | ambiguous as later State 2 policy names the exact states.
+
+### Persistence candidate
+
+Durable as technical evidence under its business publication.
+
+### Open questions
+
+None for identity closure.
 
 # J. Remaining Cabinet Cards
 

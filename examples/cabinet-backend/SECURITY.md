@@ -1,4 +1,4 @@
-# Cabinet Backend — Layer 0 security boundary
+# State 0 — Cabinet Backend security boundary
 
 ## Status
 
@@ -207,7 +207,7 @@ If the local machine is lost:
 8. audit vocabulary and log retention;
 9. Holded Gateway placement and authentication.
 
-## Accepted Layer 0 decisions
+## Accepted decision A60 — Cabinet trust boundary inventory
 
 1. VPS Cabinet is a protected working data zone for fresh invoices.
 2. Fresh invoices remain usable while the local platform is offline.
@@ -219,3 +219,43 @@ If the local machine is lost:
 8. Registry and PresuPro remain local-only integrations.
 9. ChatGPT and the agent never receive raw storage or service credentials.
 10. Holded credentials remain inside Holded Gateway.
+
+### Actors and authentication boundaries
+
+- The human user authenticates at Cabinet VPS for the remote working set and at
+  Local Cabinet Backend for local mutations.
+- Agent-assisted actions use narrow Cabinet tools and delegated local-user
+  authority; agent identity alone grants no mutation permission.
+- Each Backend installation has a separate revocable machine identity for
+  Backend-initiated synchronization with VPS Cabinet.
+
+### Browser and client boundary
+
+Browser, ChatGPT, agent, OCR text, filenames, and client-side state are untrusted
+inputs. They do not authorize storage access or privileged state changes. The
+public VPS client and the local-only uploader terminate at different
+authentication and network surfaces.
+
+### External and integration boundaries
+
+Registry, PresuPro, PostgreSQL, durable local files, and Holded credentials stay
+behind Local Cabinet Backend. Holded is reached through its dedicated gateway.
+The accepted product has no inbound webhook callback; synchronization is
+initiated by Local Cabinet Backend and authenticates the VPS response/package
+boundary before acceptance.
+
+### Upload and file boundary
+
+Photographs and PDFs enter through the VPS capture workflow or the local
+attachment operation. Their bytes, declared type, filename, extracted text, and
+document contents are untrusted. Accepted originals are immutable evidence and
+must not gain filesystem-path or executable authority from user-controlled
+metadata.
+
+### Secrets and network surfaces
+
+VPS Cabinet is the only accepted public network surface. Local Backend,
+PostgreSQL, Registry, PresuPro, and local durable storage remain local or on an
+explicitly trusted private interface. Human sessions, sync-node credentials,
+local-user password material, and Holded credentials are distinct secrets and
+must not cross into Cards, prompts, exports, generated files, or ordinary logs.
