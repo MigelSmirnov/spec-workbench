@@ -32,6 +32,35 @@ Later design-state documents may refine earlier conceptual decisions.
 
 ## Design-state navigation tools
 
+When working on State 1:
+
+1. read `skills/spec-authoring/MODEL_IDENTITY_EVIDENCE.md`;
+2. list models with `python tools/design_index.py examples/<case> --list --state 1 --kind model`;
+3. patch a model section through `tools/design_editor.py`;
+4. run `python tools/design_lint.py examples/<case> --state 1`;
+5. do not enter State 2 until identity closure passes.
+
+Before moving from State 2 to State 3:
+
+1. read `skills/spec-authoring/SECURITY_REVIEW_EVIDENCE.md`;
+2. perform the security review across States 0–2;
+3. use `tools/design_index.py` to navigate affected models and decisions;
+4. use `tools/design_editor.py` for structural changes;
+5. run `python tools/design_lint.py examples/<case> --state 2`;
+6. do not enter State 3 while any security category is `UNRESOLVED`.
+
+Before composing a multi-tool design workflow, ask the deterministic router for
+the applicable plan:
+
+```bash
+python tools/design_router.py examples/<case> <intent> --json
+```
+
+Supported intents are `inventory`, `inspect-item`, `trace-term`,
+`diagnose-state2`, `edit-fragment`, and `verify`. Follow the returned step order,
+review checkpoints, and stop conditions. The router is advisory and read-only;
+it does not authorize semantic content or execute its command previews.
+
 When a case study has multiple decisions or supporting Markdown files, prefer
 `tools/design_index.py` over raw `grep` for design-state navigation.
 

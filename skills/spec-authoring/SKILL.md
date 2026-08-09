@@ -1,6 +1,6 @@
 ---
 name: spec-authoring
-description: Guide a human and an LLM through layered, semi-manual creation of global_spec.json according to SPEC_STANDARD.md, preventing placeholder architecture, premature contracts, vague notes, and top-down skeleton specifications.
+description: Guide layered creation and legacy migration of global_spec.json according to SPEC_STANDARD.md, including evidence-first recovery of hidden decisions, while preventing placeholder architecture, majority inference, premature contracts, vague notes, and top-down skeleton specifications.
 ---
 
 # Spec Authoring
@@ -129,6 +129,19 @@ python tools/design_lint.py examples/<case> --state 2
 
 Prefer these commands when they can answer the navigation question before falling back to raw `grep`. The tool is an authoring aid; source Markdown remains normative.
 
+## Legacy migration evidence
+
+When an existing implementation is being migrated, do not begin from notes or
+from a proposed target schema. Read and follow
+[LEGACY_MIGRATION_EVIDENCE.md](LEGACY_MIGRATION_EVIDENCE.md) before changing a
+design-state artifact or `global_spec.json`.
+
+Treat probe output as evidence only. Classify every finding as derivable,
+product/policy value, supported backend lowering, genuinely irregular
+responsibility, or unresolved. Only accepted product decisions and supported
+backend relations may become normative spec content. An unresolved finding is
+BLOCK; frequency in existing code never resolves it.
+
 ## Primary rule
 
 > Do not design the next layer while unresolved decisions in the current layer are being hidden with generic names, generic types, or vague prose.
@@ -172,6 +185,11 @@ Readiness questions:
 - Are important invalid or failure outcomes known?
 - Are unknowns written as unknowns rather than replaced with generic abstractions?
 
+Record applicable trust boundaries at this state and follow the mandatory route
+in [SECURITY_REVIEW_EVIDENCE.md](SECURITY_REVIEW_EVIDENCE.md). Do not defer
+unknown actors, ingress surfaces, credentials, or external-system trust to
+module design.
+
 ### State 1 — Domain models
 
 Design the concepts and data shapes that the application actually needs.
@@ -204,6 +222,15 @@ extra: dict
 
 unless the external contract is genuinely open-ended and that openness is itself explicitly required.
 
+For every runtime model, close identity as `value` or `entity`. If product
+requirements do not determine the classification, mark it `BLOCK` and do not
+enter State 2. Read and follow
+[MODEL_IDENTITY_EVIDENCE.md](MODEL_IDENTITY_EVIDENCE.md) for the procedure.
+
+Also record applicable security-relevant entity semantics without redefining
+the accepted identity decision. Use the State 1 route in
+[SECURITY_REVIEW_EVIDENCE.md](SECURITY_REVIEW_EVIDENCE.md).
+
 Readiness questions:
 
 - Does every required field have a known producer or source?
@@ -235,6 +262,10 @@ Capture:
 - runtime knobs;
 - limits, paths, timeouts, and feature switches;
 - stable domain catalogs and enum-like values.
+
+Before State 3, complete the mandatory security gate in
+[SECURITY_REVIEW_EVIDENCE.md](SECURITY_REVIEW_EVIDENCE.md). Every required
+category needs an explicit outcome; any `UNRESOLVED` outcome is BLOCK.
 
 Classify deliberately:
 

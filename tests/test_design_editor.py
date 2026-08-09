@@ -58,6 +58,75 @@ def test_replace_section_changes_only_indexed_byte_range(tmp_path: Path) -> None
     assert path.read_bytes() == DOCUMENT
 
 
+def test_replace_state1_model_section_by_model_id(tmp_path: Path) -> None:
+    project = tmp_path / "demo"
+    path = project / "01_models.md"
+    path.parent.mkdir(parents=True)
+    path.write_text(
+        """# State 1 — Models
+
+## Model M12 — StoredInvoiceCard
+
+### Identity
+
+entity
+
+### Identity evidence
+
+Continuity matters.
+""",
+        encoding="utf-8",
+    )
+
+    plan = design_editor.plan_edit(
+        project,
+        "replace-section",
+        "M12",
+        b"### Identity evidence\n\nStable invoice identity survives revision changes.\n",
+        section_title="Identity evidence",
+    )
+
+    assert plan.item_key == "M12"
+    assert plan.relative_path == "01_models.md"
+    assert b"Stable invoice identity" in plan.after
+    assert path.read_bytes() == plan.before
+
+
+def test_editor_preserves_addressability_of_security_review_decision(
+    tmp_path: Path,
+) -> None:
+    project, path = _project(
+        tmp_path,
+        b"# State 2\n\n"
+        b"## Accepted decision A70 \xe2\x80\x94 Security closure\n\n"
+        b"### Security review\n\n"
+        b"Security review: PERFORMED\n\n"
+        b"- secrets: UNRESOLVED; references: OQ-7\n",
+    )
+    replacement = (
+        b"### Security review\n\n"
+        b"Security review: PERFORMED\n\n"
+        b"- secrets: APPLICABLE; references: A61\n"
+    )
+
+    plan = design_editor.plan_edit(
+        project,
+        "replace-section",
+        "A70",
+        replacement,
+        section_title="Security review",
+    )
+    design_editor.apply_plan(plan)
+
+    item = design_editor.design_index.get_item(project, "A70")
+    assert item is not None
+    assert item["source"]["path"] == "02_rules.md"
+    assert [section["title"] for section in item["sections"]] == [
+        "Security review"
+    ]
+    assert b"secrets: APPLICABLE" in path.read_bytes()
+
+
 def test_locality_assertion_rejects_prefix_and_suffix_corruption(
     tmp_path: Path,
 ) -> None:

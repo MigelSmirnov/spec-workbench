@@ -50,6 +50,36 @@ The project is under active development.
 
 The current focus is building a repeatable methodology for producing high-quality specifications that can later be compiled into code by AI Code Factory.
 
+## Design toolchain
+
+Large Markdown design states are handled through four narrow tools:
+
+```text
+design_router -> chooses the deterministic workflow
+design_index  -> addresses and navigates design structure
+design_editor -> plans and atomically applies one structural splice
+design_lint   -> reports State 1 identity and State 2 authoring findings
+```
+
+Ask the router for a plan before composing commands manually:
+
+```bash
+python tools/design_router.py examples/cabinet-backend diagnose-state2
+
+python tools/design_router.py examples/cabinet-backend trace-term \
+  --term Holded
+
+python tools/design_router.py examples/cabinet-backend edit-fragment \
+  --operation insert-section \
+  --item A42 \
+  --after-section "Normative rules" \
+  --content-file /tmp/new-section.md
+```
+
+Use `--json` for agent and future MCP integration. The router is read-only: it
+returns ordered tool arguments, command previews, review checkpoints, and stop
+conditions, but never executes a command or infers design semantics.
+
 ## Factory handoff
 
 Keep this repository next to the Code Factory checkout:

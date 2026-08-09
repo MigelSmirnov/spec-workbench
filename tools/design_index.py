@@ -23,6 +23,7 @@ from typing import Iterable
 HEADING_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*$")
 STATE_RE = re.compile(r"\bState\s+(\d+)\b", re.IGNORECASE)
 DECISION_ID_RE = re.compile(r"\b(A\d+)\b")
+MODEL_ID_RE = re.compile(r"\b(M\d+)\b")
 OPEN_QUESTION_ID_RE = re.compile(r"\b(OQ-\d+)\b", re.IGNORECASE)
 EXPLICIT_REF_RE = re.compile(r"\b(?:A\d+|OQ-\d+)\b", re.IGNORECASE)
 LOCATION_RE = re.compile(r"^(?P<path>.+):(?P<line>\d+)$")
@@ -85,6 +86,10 @@ def _slug(text: str) -> str:
 
 
 def _item_kind(title: str) -> tuple[str, str | None] | None:
+    model = MODEL_ID_RE.search(title)
+    if model and title.casefold().startswith("model "):
+        return "model", model.group(1).upper()
+
     oq = OPEN_QUESTION_ID_RE.search(title)
     if oq:
         return "open_question", oq.group(1).upper()
@@ -238,7 +243,7 @@ def list_items(project: Path, *, state: int | None = None, kind: str | None = No
 
 
 def get_item(project: Path, key: str) -> dict[str, object] | None:
-    normalized = key.upper() if re.fullmatch(r"(?:A\d+|OQ-\d+)", key, re.IGNORECASE) else key
+    normalized = key.upper() if re.fullmatch(r"(?:A\d+|M\d+|OQ-\d+)", key, re.IGNORECASE) else key
     for item in build_index(project)["items"]:
         if item["key"] == normalized:
             return item
@@ -291,7 +296,7 @@ def main() -> int:
     action.add_argument("--mentions-in-items", metavar="TERM", help="Narrow lexical occurrences to indexed items")
     action.add_argument("--context", metavar="PATH:LINE", help="Show structural context around a source line")
     parser.add_argument("--state", type=int, help="Filter --list or --mentions-in-items by design state")
-    parser.add_argument("--kind", choices=("decision", "open_question"), help="Filter --list or --mentions-in-items by item kind")
+    parser.add_argument("--kind", choices=("decision", "model", "open_question"), help="Filter --list or --mentions-in-items by item kind")
     parser.add_argument("--case-sensitive", action="store_true", help="Use case-sensitive mention lookup")
     parser.add_argument("--radius", type=int, default=3, help="Context lines before/after --context (default: 3)")
     args = parser.parse_args()

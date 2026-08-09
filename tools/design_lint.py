@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
-"""Deterministic State 2 authoring lint over ``design_index`` output.
+"""Deterministic State 1/2 authoring lint over ``design_index`` output.
 
 The linter owns methodology checks and report rendering.  It deliberately does
-not parse Markdown, infer semantics, compare design states, or assign owners.
-Warnings are review prompts rather than claims that a specification is wrong.
+not infer semantics, compare design states, or assign owners. Warnings are
+review prompts rather than claims that a specification is wrong.
 """
 from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from collections import Counter, defaultdict
 from dataclasses import asdict, dataclass
@@ -18,7 +19,8 @@ from typing import Literal, Sequence
 import design_index
 
 
-SUPPORTED_STATE = 2
+DEFAULT_STATE = 2
+SUPPORTED_STATES = (1, 2)
 SCHEMA_VERSION = "spec_workbench_design_lint.v2"
 FULL_ITEM_CONTEXT_MAX_LINES = 120
 LONG_ITEM_CONTEXT_RADIUS = 14
@@ -43,6 +45,26 @@ CANONICAL_SECTIONS = (
     CanonicalSection("required_tests", "Required tests", frozenset({"required tests"})),
     CanonicalSection("consequence", "Consequence", frozenset({"consequence"})),
 )
+
+SECURITY_REVIEW_SECTION = "Security review"
+SECURITY_REVIEW_MARKER = "Security review: PERFORMED"
+SECURITY_CATEGORIES = (
+    "authentication_credential_abuse",
+    "secrets",
+    "authorization",
+    "injection_interpreted_input",
+    "external_callbacks_webhooks",
+    "browser_boundary",
+    "files_artifacts",
+    "concurrency",
+    "dependencies",
+)
+SECURITY_OUTCOMES = frozenset({"APPLICABLE", "NOT_APPLICABLE", "UNRESOLVED"})
+SECURITY_LINE_RE = re.compile(
+    r"^\s*-\s*(?P<category>[a-z][a-z0-9_]*)\s*:\s*"
+    r"(?P<outcome>[A-Z_]+)(?P<tail>.*)$"
+)
+SECURITY_FIELDS = frozenset({"references", "rationale", "affected"})
 
 
 class DesignLintError(Exception):
@@ -97,6 +119,7 @@ class _FindingDraft:
 @dataclass(frozen=True)
 class LintSummary:
     files: int
+    models: int
     decisions: int
     open_questions: int
     supporting_decisions: int
@@ -276,6 +299,7 @@ def _canonical_section_findings(item: dict[str, object]) -> list[_FindingDraft]:
 def _duplicate_item_findings(
     index: dict[str, object],
     selected_items: list[dict[str, object]],
+    state: int,
 ) -> list[_FindingDraft]:
     selected_keys = {item["key"] for item in selected_items}
     duplicates = [
@@ -287,7 +311,7 @@ def _duplicate_item_findings(
     for key in sorted(duplicates):
         occurrences = [item for item in index["items"] if item["key"] == key]
         selected_occurrences = [
-            item for item in occurrences if item["state"] == SUPPORTED_STATE
+            item for item in occurrences if item["state"] == state
         ]
         anchor = min(
             selected_occurrences,
@@ -309,6 +333,443 @@ def _duplicate_item_findings(
                 f"Design item key {key!r} is duplicated at {locations}.",
             )
         )
+    return findings
+
+
+def _section_matches(
+    item: dict[str, object], title: str
+) -> list[dict[str, object]]:
+    normalized = _normalized_title(title)
+    return [
+        section
+        for section in item["sections"]
+        if _normalized_title(section["title"]) == normalized
+    ]
+
+
+def _section_body(
+    project: Path, item: dict[str, object], section: dict[str, object]
+) -> str:
+    path = project / item["source"]["path"]
+    lines = path.read_text(encoding="utf-8").splitlines()
+    return "\n".join(
+        lines[section["start_line"] : section["end_line"]]
+    ).strip()
+
+
+def _item_body(project: Path, item: dict[str, object]) -> str:
+    path = project / item["source"]["path"]
+    lines = path.read_text(encoding="utf-8").splitlines()
+    return "\n".join(
+        lines[item["source"]["start_line"] - 1 : item["source"]["end_line"]]
+    )
+
+
+def _state1_model_findings(
+    project: Path, item: dict[str, object]
+) -> list[_FindingDraft]:
+    findings = _duplicate_section_findings(item)
+    identity_sections = _section_matches(item, "Identity")
+    evidence_sections = _section_matches(item, "Identity evidence")
+    question_sections = _section_matches(item, "Open questions")
+
+    if not identity_sections:
+        findings.append(_draft(
+            "error",
+            "missing_identity_section",
+            item,
+            "Runtime model has no Identity section.",
+            section="Identity",
+        ))
+    if not evidence_sections:
+        findings.append(_draft(
+            "error",
+            "missing_identity_evidence",
+            item,
+            "Runtime model has no Identity evidence section.",
+            section="Identity evidence",
+        ))
+
+    identity_body = (
+        _section_body(project, item, identity_sections[0])
+        if len(identity_sections) == 1
+        else ""
+    )
+    evidence_body = (
+        _section_body(project, item, evidence_sections[0])
+        if len(evidence_sections) == 1
+        else ""
+    )
+    normalized_identity = identity_body.strip().strip("`").casefold()
+    unresolved = bool(re.search(
+        r"\bUNRESOLVED\b",
+        _item_body(project, item),
+        re.IGNORECASE,
+    ))
+
+    if identity_sections and len(identity_sections) == 1:
+        if normalized_identity not in {"value", "entity"}:
+            findings.append(_draft(
+                "error",
+                "invalid_identity",
+                item,
+                "Identity must contain exactly 'value' or 'entity'.",
+                line=identity_sections[0]["start_line"],
+                section="Identity",
+            ))
+    if evidence_sections and len(evidence_sections) == 1 and not evidence_body:
+        findings.append(_draft(
+            "error",
+            "empty_identity_evidence",
+            item,
+            "Identity evidence exists as a heading but has no content.",
+            line=evidence_sections[0]["start_line"],
+            section="Identity evidence",
+        ))
+
+    block_sections = [
+        section
+        for section in question_sections
+        if re.search(
+            r"(?mi)^\s*(?:[-*]\s*)?BLOCK\s*:",
+            _section_body(project, item, section),
+        )
+    ]
+    if unresolved and not block_sections:
+        findings.append(_draft(
+            "error",
+            "unresolved_without_block",
+            item,
+            "UNRESOLVED identity evidence requires an explicit BLOCK: question under Open questions.",
+            section="Open questions",
+        ))
+    for section in block_sections:
+        findings.append(_draft(
+            "error",
+            "blocking_open_question",
+            item,
+            "A State 1 identity question is explicitly BLOCK and prevents transition to State 2.",
+            line=section["start_line"],
+            section="Open questions",
+        ))
+    return findings
+
+
+def _security_section_lines(
+    project: Path,
+    item: dict[str, object],
+    section: dict[str, object],
+) -> list[tuple[int, str]]:
+    path = project / item["source"]["path"]
+    lines = path.read_text(encoding="utf-8").splitlines()
+    return [
+        (line_number, lines[line_number - 1])
+        for line_number in range(section["start_line"] + 1, section["end_line"] + 1)
+    ]
+
+
+def _parse_security_fields(tail: str) -> tuple[dict[str, str], str | None]:
+    if not tail.strip():
+        return {}, None
+    if not tail.lstrip().startswith(";"):
+        return {}, "fields must follow the outcome after a semicolon"
+    fields: dict[str, str] = {}
+    for fragment in tail.lstrip()[1:].split(";"):
+        fragment = fragment.strip()
+        if not fragment:
+            continue
+        if ":" not in fragment:
+            return {}, f"field {fragment!r} has no ':' separator"
+        name, value = (part.strip() for part in fragment.split(":", 1))
+        if name not in SECURITY_FIELDS:
+            return {}, f"unknown field {name!r}"
+        if name in fields:
+            return {}, f"field {name!r} is duplicated"
+        fields[name] = value
+    return fields, None
+
+
+def _normalized_reference(reference: str) -> str:
+    if re.fullmatch(r"(?:A\d+|M\d+|OQ-\d+)", reference, re.IGNORECASE):
+        return reference.upper()
+    return reference
+
+
+def _security_review_findings(
+    project: Path,
+    index: dict[str, object],
+    selected_items: list[dict[str, object]],
+    decisions: list[dict[str, object]],
+) -> list[_FindingDraft]:
+    if not selected_items:
+        return []
+
+    review_sections = [
+        (item, section)
+        for item in decisions
+        for section in item["sections"]
+        if _normalized_title(section["title"])
+        == _normalized_title(SECURITY_REVIEW_SECTION)
+    ]
+    if not review_sections:
+        anchor = decisions[0] if decisions else selected_items[0]
+        return [
+            _draft(
+                "error",
+                "missing_security_review",
+                anchor,
+                "State 2 has no indexed accepted decision with a 'Security review' section.",
+                section=SECURITY_REVIEW_SECTION,
+            )
+        ]
+    if len(review_sections) > 1:
+        item, section = review_sections[0]
+        return [
+            _draft(
+                "error",
+                "ambiguous_security_review",
+                item,
+                "State 2 contains more than one 'Security review' section.",
+                line=section["start_line"],
+                section=SECURITY_REVIEW_SECTION,
+            )
+        ]
+
+    item, section = review_sections[0]
+    lines = _security_section_lines(project, item, section)
+    findings: list[_FindingDraft] = []
+    marker_lines = [
+        line_number
+        for line_number, line in lines
+        if line.strip() == SECURITY_REVIEW_MARKER
+    ]
+    marker_candidates = [
+        (line_number, line.strip())
+        for line_number, line in lines
+        if line.strip().casefold().startswith("security review:")
+    ]
+    if len(marker_lines) != 1:
+        message = (
+            f"Security review must contain exactly one {SECURITY_REVIEW_MARKER!r} marker."
+        )
+        findings.append(
+            _draft(
+                "error",
+                "invalid_security_review_marker",
+                item,
+                message,
+                line=(marker_candidates[0][0] if marker_candidates else section["start_line"]),
+                section=SECURITY_REVIEW_SECTION,
+            )
+        )
+
+    category_lines: dict[str, list[tuple[int, re.Match[str]]]] = defaultdict(list)
+    for line_number, line in lines:
+        match = SECURITY_LINE_RE.match(line)
+        if match is None:
+            continue
+        category = match.group("category")
+        if category not in SECURITY_CATEGORIES:
+            findings.append(
+                _draft(
+                    "error",
+                    "unknown_security_category",
+                    item,
+                    f"Unknown security review category {category!r}.",
+                    line=line_number,
+                    section=SECURITY_REVIEW_SECTION,
+                )
+            )
+            continue
+        category_lines[category].append((line_number, match))
+
+    items_by_key = {entry["key"]: entry for entry in index["items"]}
+    for category in SECURITY_CATEGORIES:
+        occurrences = category_lines.get(category, [])
+        if not occurrences:
+            findings.append(
+                _draft(
+                    "error",
+                    "missing_security_category",
+                    item,
+                    f"Security category {category!r} has no explicit outcome.",
+                    line=section["start_line"],
+                    section=category,
+                )
+            )
+            continue
+        if len(occurrences) > 1:
+            findings.append(
+                _draft(
+                    "error",
+                    "duplicate_security_category",
+                    item,
+                    f"Security category {category!r} occurs more than once.",
+                    line=occurrences[0][0],
+                    section=category,
+                )
+            )
+            continue
+
+        line_number, match = occurrences[0]
+        outcome = match.group("outcome")
+        if outcome not in SECURITY_OUTCOMES:
+            findings.append(
+                _draft(
+                    "error",
+                    "invalid_security_outcome",
+                    item,
+                    f"Security category {category!r} has invalid outcome {outcome!r}.",
+                    line=line_number,
+                    section=category,
+                )
+            )
+            continue
+
+        fields, field_error = _parse_security_fields(match.group("tail"))
+        if field_error is not None:
+            findings.append(
+                _draft(
+                    "error",
+                    "invalid_security_record",
+                    item,
+                    f"Security category {category!r}: {field_error}.",
+                    line=line_number,
+                    section=category,
+                )
+            )
+            continue
+
+        references = [
+            _normalized_reference(reference.strip())
+            for reference in fields.get("references", "").split(",")
+            if reference.strip()
+        ]
+        resolved = [items_by_key[reference] for reference in references if reference in items_by_key]
+        unresolved = [reference for reference in references if reference not in items_by_key]
+        for reference in unresolved:
+            findings.append(
+                _draft(
+                    "error",
+                    "unresolved_security_reference",
+                    item,
+                    f"Security category {category!r} references unknown item {reference!r}.",
+                    line=line_number,
+                    section=category,
+                )
+            )
+
+        if outcome == "NOT_APPLICABLE":
+            if not fields.get("rationale", "").strip():
+                findings.append(
+                    _draft(
+                        "error",
+                        "missing_not_applicable_rationale",
+                        item,
+                        f"Security category {category!r} is NOT_APPLICABLE without a rationale.",
+                        line=line_number,
+                        section=category,
+                    )
+                )
+            continue
+
+        if not references:
+            findings.append(
+                _draft(
+                    "error",
+                    "missing_security_reference",
+                    item,
+                    f"Security category {category!r} with outcome {outcome} has no references.",
+                    line=line_number,
+                    section=category,
+                )
+            )
+
+        if outcome == "APPLICABLE":
+            accepted = [
+                entry
+                for entry in resolved
+                if entry["kind"] == "decision" and entry["state"] in {0, 1, 2}
+            ]
+            if references and not accepted and not unresolved:
+                findings.append(
+                    _draft(
+                        "error",
+                        "invalid_security_reference_kind",
+                        item,
+                        f"Security category {category!r} must reference an indexed accepted decision in States 0–2.",
+                        line=line_number,
+                        section=category,
+                    )
+                )
+        else:
+            open_questions = [entry for entry in resolved if entry["kind"] == "open_question"]
+            if references and not open_questions and not unresolved:
+                findings.append(
+                    _draft(
+                        "error",
+                        "missing_security_open_question",
+                        item,
+                        f"UNRESOLVED security category {category!r} must reference an indexed open question.",
+                        line=line_number,
+                        section=category,
+                    )
+                )
+            findings.append(
+                _draft(
+                    "error",
+                    "security_unresolved",
+                    item,
+                    f"Security category {category!r} is UNRESOLVED and blocks State 3.",
+                    line=line_number,
+                    section=category,
+                )
+            )
+    return findings
+
+
+def _unindexed_state1_model_findings(
+    project: Path, indexed_models: list[dict[str, object]]
+) -> list[_FindingDraft]:
+    """Catch legacy runtime headings in the canonical 01_models.md document."""
+    indexed_locations = {
+        (item["source"]["path"], item["source"]["start_line"])
+        for item in indexed_models
+    }
+    findings: list[_FindingDraft] = []
+    path = project / "01_models.md"
+    if not path.is_file():
+        return findings
+    lines = path.read_text(encoding="utf-8").splitlines()
+    for line_number, line in enumerate(lines, start=1):
+        match = design_index.HEADING_RE.match(line)
+        if not match or len(match.group(1)) != 2:
+            continue
+        title = match.group(2).strip()
+        if title == "Status" or not re.fullmatch(r"[A-Z][A-Za-z0-9]+", title):
+            continue
+        if ("01_models.md", line_number) in indexed_locations:
+            continue
+        item = {
+            "key": f"source:01_models.md#{line_number}",
+            "kind": "model",
+            "title": title,
+            "state": 1,
+            "source": {
+                "path": "01_models.md",
+                "start_line": line_number,
+                "end_line": line_number,
+            },
+            "explicit_id": None,
+            "explicit_refs": [],
+            "sections": [],
+        }
+        findings.append(_draft(
+            "error",
+            "unindexed_runtime_model",
+            item,
+            f"Runtime model heading {title!r} is not indexed; use 'Model M<n> — <Name>'.",
+        ))
     return findings
 
 
@@ -363,11 +824,11 @@ def _enrich_finding(project: Path, draft: _FindingDraft) -> Finding:
     )
 
 
-def lint_project(project: Path, *, state: int = SUPPORTED_STATE) -> LintReport:
+def lint_project(project: Path, *, state: int = DEFAULT_STATE) -> LintReport:
     """Analyze one design state using only the structural design index."""
-    if state != SUPPORTED_STATE:
+    if state not in SUPPORTED_STATES:
         raise DesignLintError(
-            f"design_lint v2 supports only State {SUPPORTED_STATE}, got State {state}"
+            f"design_lint supports States 1 and 2, got State {state}"
         )
     project = project.resolve()
     if not project.is_dir():
@@ -379,13 +840,24 @@ def lint_project(project: Path, *, state: int = SUPPORTED_STATE) -> LintReport:
 
     selected_items = [item for item in index["items"] if item["state"] == state]
     decisions = [item for item in selected_items if item["kind"] == "decision"]
+    models = [item for item in selected_items if item["kind"] == "model"]
     open_questions = [
         item for item in selected_items if item["kind"] == "open_question"
     ]
     known_keys = {item["key"] for item in index["items"]}
-    drafts = _duplicate_item_findings(index, selected_items)
+    drafts = _duplicate_item_findings(index, selected_items, state)
 
-    for item in decisions:
+    if state == 1:
+        for item in models:
+            drafts.extend(_state1_model_findings(project, item))
+        drafts.extend(_unindexed_state1_model_findings(project, models))
+
+    if state == 2:
+        drafts.extend(
+            _security_review_findings(project, index, selected_items, decisions)
+        )
+
+    for item in decisions if state == 2 else []:
         drafts.extend(_duplicate_section_findings(item))
         drafts.extend(_canonical_section_findings(item))
         if not item["sections"]:
@@ -430,6 +902,7 @@ def lint_project(project: Path, *, state: int = SUPPORTED_STATE) -> LintReport:
     reference_count = sum(len(item["explicit_refs"]) for item in selected_items)
     summary = LintSummary(
         files=len({item["source"]["path"] for item in selected_items}),
+        models=len(models),
         decisions=len(decisions),
         open_questions=len(open_questions),
         supporting_decisions=sum(item["explicit_id"] is None for item in decisions),
@@ -461,6 +934,7 @@ def render_human(report: LintReport, *, compact: bool = False) -> str:
         f"Design lint: {report.project_root} (State {report.state})",
         (
             "Summary: "
+            f"{summary.models} models, "
             f"{summary.decisions} decisions, "
             f"{summary.open_questions} open questions, "
             f"{summary.explicit_references} references "
@@ -521,8 +995,8 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--state",
         type=int,
-        default=SUPPORTED_STATE,
-        help=f"Design state to lint (v2: only {SUPPORTED_STATE})",
+        default=DEFAULT_STATE,
+        help="Design state to lint (supported: 1, 2)",
     )
     parser.add_argument("--json", action="store_true", help="Emit stable JSON")
     parser.add_argument(

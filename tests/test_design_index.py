@@ -50,6 +50,47 @@ No explicit relation back.
     assert items["A11"]["explicit_refs"] == []
 
 
+def test_indexes_state1_model_as_first_class_item_without_graph_edges(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "demo"
+    _write(
+        project / "01_models.md",
+        """# State 1 — Models
+
+## Model M12 — StoredInvoiceCard
+
+### Meaning
+
+Archive root.
+
+### Identity
+
+entity
+
+### Identity evidence
+
+Two observations can describe the same logical invoice.
+""",
+    )
+
+    item = design_index.get_item(project, "m12")
+
+    assert item is not None
+    assert item["kind"] == "model"
+    assert item["state"] == 1
+    assert item["explicit_id"] == "M12"
+    assert item["explicit_refs"] == []
+    assert [section["title"] for section in item["sections"]] == [
+        "Meaning",
+        "Identity",
+        "Identity evidence",
+    ]
+    assert [entry["key"] for entry in design_index.list_items(
+        project, state=1, kind="model"
+    )] == ["M12"]
+
+
 def test_same_keyword_does_not_create_relation(tmp_path: Path) -> None:
     project = tmp_path / "demo"
     _write(
