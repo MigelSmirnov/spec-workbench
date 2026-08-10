@@ -392,6 +392,102 @@ authorizer, gateway). Интерфейс не вводит нового синт
 - Не переносись сюда schema/model definitions.
 - Notes ссылаются на rules адресно: `"derive_policy: [RULE_REFERENCE] MUST use = rules.example_policy.threshold"`.
 
+### 6.1 `http_router_backend/v1`
+
+`rules.http_router_backend` — нормативный IR детерминированной сборки тонкого
+HTTP-router. Он описывает экспонирование handler-ов, transport wiring и
+принадлежность исключений, но не повторяет Python-контракты.
+
+Обязательный верхнеуровневый состав версии 1 показан ниже; пустые коллекции и
+`error_policy` здесь только сокращают схему и должны быть заполнены согласно
+инвариантам валидатора:
+
+```json
+{
+  "kind": "http_router_backend",
+  "schema_version": 1,
+  "backend": {"framework": "fastapi", "emitter": "fastapi_sync_v1"},
+  "wiring": {
+    "module": "api",
+    "app_factory": "create_app",
+    "request_parameter": "request",
+    "state_bindings": {
+      "store": {"factory_parameter": "store", "state_attribute": "store"}
+    },
+    "credential_extractors": {}
+  },
+  "auth_policies": {},
+  "principals": {},
+  "routes": [],
+  "projections": [],
+  "error_policy": {},
+  "irregular_ownership": {"module": "api_irregular"}
+}
+```
+
+Маршрут с `emission: "table"` содержит только transport/orchestration data:
+
+```json
+{
+  "handler": "get_invoice",
+  "method": "GET",
+  "path": "/invoices/{invoice_id}",
+  "auth": "staff_bearer",
+  "success_status": 200,
+  "response_mode": "json",
+  "emission": "table",
+  "authorize": [],
+  "delegate": {
+    "function": "load_invoice",
+    "args": [
+      {"ref": "slot", "name": "store"},
+      {"ref": "parameter", "path": ["invoice_id"]},
+      {"ref": "enum", "type": "Capability", "member": "INVOICE_READ"}
+    ]
+  },
+  "projection": null,
+  "returns": "delegate"
+}
+```
+
+Нормативные инварианты:
+
+- Единственный источник сигнатуры handler-а, app factory, resolver-а,
+  delegate-а и projection-функции — `contracts[function]`. Поле `signature` в
+  route row запрещено. Path parameters и parameter refs обязаны разрешаться
+  через этот контракт и поля `models`.
+- Аргумент вызова — объект закрытого DSL, а не Python-строка. Версия 1 знает
+  только `slot`, `credential`, `parameter`, `enum` и JSON-scalar `literal`.
+  Неизвестный `ref`, дополнительное поле или строка вроде
+  `"payload.email"`/`"Capability.X"` — дефект спеки.
+- `wiring.state_bindings` связывает параметры контракта app factory с
+  атрибутами app state; имена slots проектные. Backend не содержит
+  project-specific классов, state names, capability constants или companion
+  module names.
+- `principals`, `auth_policies`, `authorize`, `delegate` и `projection`
+  ссылаются только на объявленные функции/slots/credentials. Число аргументов
+  проверяется по canonical contract; результат authorization-step может
+  связать один `context`, delegate — `result` для projection.
+- `projections` обязаны точно покрывать поля модели возвращаемого типа из
+  контракта projection-функции. Форма модели и сигнатура в IR не дублируются.
+- Маршрут `emission: "irregular"` не содержит скрытого тела. Он объявляет
+  `irregular_reason`, а handler обязан принадлежать ровно companion-модулю из
+  `irregular_ownership.module`. Router только импортирует и регистрирует его.
+- `error_policy` задаёт единое отображение exception → HTTP status. Доступные
+  router-модулю исключения обязаны быть прямыми imports; намеренно недоступные
+  перечисляются в `unavailable_to_module` и lower-ятся backend-ом без
+  project-specific констант.
+- Пара `(method, path)` и `handler` уникальны; status/method/response/return
+  modes принадлежат закрытым реестрам версии backend. Неизвестные поля на всех
+  узлах запрещены.
+- Если `http_router_backend/v1` присутствует и владеет router-модулем,
+  генерация fail-closed: дефект IR останавливает сборку, а не переводит модуль
+  на LLM. Отсутствие IR оставляет проекту обычный недетерминированный путь.
+
+Версия backend является частью значения. Новая форма extractor-а, ref-а,
+response mode или lowering требует новой поддерживаемой версии; emitter не
+угадывает форму по существующему Python-коду.
+
 ---
 
 ## 7. imports

@@ -84,6 +84,21 @@ predicate или method shape не замкнуты, diagnostic emitter возв
 `legacy project → probe → missing decisions → spec → emitter → DEFECT/success`
 на нескольких разных проектах и собери повторяющиеся классы незамкнутости.
 
+## Если router собирается детерминированно
+
+Нормативная схема: [раздел 6.1](SPEC_STANDARD.md#61-http_router_backendv1).
+
+- `rules.http_router_backend` хранит backend declaration, route catalog,
+  error policy, wiring и irregular ownership.
+- Route row не содержит `signature`: canonical Python signature берётся только
+  из `contracts[handler]`.
+- Аргументы вызовов — только typed refs (`slot`, `credential`, `parameter`,
+  `enum`, scalar `literal`), не строки с Python-выражениями.
+- Project-specific state names, capability members и companion module
+  задаются данными IR; backend их не прошивает.
+- Присутствующий, но невалидный IR блокирует сборку. LLM fallback допустим
+  только когда IR для модуля отсутствует.
+
 ## Архитектура
 
 - Предпочитай глубокие модули с ясной ответственностью.
