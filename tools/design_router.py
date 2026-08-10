@@ -196,6 +196,12 @@ def _step_runtime(
     elif step_id == "state4_lint":
         arguments = {"project": project, "state": 4}
         argv = ["python", "tools/design_stage4.py", project, "--lint", "--json"]
+    elif step_id == "state4_coverage":
+        arguments = {"project": project, "state": 4, "plan": "40_flow_plan.json"}
+        argv = ["python", "tools/design_stage4.py", project, "--coverage", "--json"]
+    elif step_id == "state4_next":
+        arguments = {"project": project, "state": 4, "plan": "40_flow_plan.json"}
+        argv = ["python", "tools/design_stage4.py", project, "--next", "--json"]
     elif step_id == "state4_handoff":
         arguments = {"project": project, "state": 4, "consumer": "next_design_state_or_mcp"}
         argv = ["python", "tools/design_stage4.py", project, "--handoff"]
