@@ -30,10 +30,10 @@ Implication for Cabinet Backend: модели сметы и встроенная
 
 Finding: существующий Cabinet является отдельным вложенным git-репозиторием.
 Status: confirmed
-Repository: `/home/smirnov/jestor_VBC/exp_vbc/demo/code_factory/projects/cabinet` (branch `agent/invoice-presupro-alignment`)
-Path: `projects/cabinet`
+Repository: `/home/smirnov/jestor_VBC/exp_vbc/demo/code_factory/projects/Cabinet_web` (branch `agent/invoice-presupro-alignment`)
+Path: `projects/Cabinet_web`
 Symbol: repository root
-Evidence: `git -C projects/cabinet rev-parse --show-toplevel` вернул сам каталог `projects/cabinet`; в нём есть собственный `.git`.
+Evidence: `git -C projects/Cabinet_web rev-parse --show-toplevel` вернул сам каталог `projects/Cabinet_web`; в нём есть собственный `.git`.
 Implication for Cabinet Backend: существующие Cabinet-документы и инструменты принадлежат отдельному репозиторию; в этой разведке они использованы только для проверки наличия интеграционных точек.
 
 Finding: `client_portal_sandbox` содержит уже реализованные Registry gateway и приём snapshot-данных, поэтому он является релевантным примером общей локальной платформы, но не частью Cabinet и не источником PresuPro-модели.
@@ -373,7 +373,7 @@ Implication for Cabinet Backend: correction/republish нельзя считат�
 Finding: текущая ответственность PresuPro — проверить accepted estimate/client/prices, найти/создать Holded contact, создать документ, сохранить `InvoiceRef` и lock сметы. Отдельной Cabinet↔Gateway границы нет.
 Status: confirmed
 Repository: Code Factory / `PresuPro_sandbox`; Cabinet repository
-Path: `projects/PresuPro_sandbox/backend/services/invoicing.py`; `projects/cabinet` scoped search
+Path: `projects/PresuPro_sandbox/backend/services/invoicing.py`; `projects/Cabinet_web` scoped search
 Symbol: `convert_estimate_to_invoice`
 Evidence: orchestration `invoicing.py:76-123`; в Cabinet scoped search нет runtime Holded adapter/gateway.
 Implication for Cabinet Backend: фактически существующая граница заканчивается в PresuPro `/convert`; ответственность Cabinet в отношении Holded кодом не определена.
@@ -479,7 +479,7 @@ Implication for Cabinet Backend: существующий Portal snapshot contra
 Finding: в Cabinet runtime-коде нет Registry/PresuPro/Holded client, adapter или gateway; существующая точка размещения интеграционного адаптера не подтверждена кодом.
 Status: not_found
 Repository: Cabinet
-Path: `projects/cabinet/tools`; `projects/cabinet/web`; scoped repository search
+Path: `projects/Cabinet_web/tools`; `projects/Cabinet_web/web`; scoped repository search
 Symbol: Cabinet runtime integration boundary
 Evidence: scoped search нашёл PresuPro только в документации; `tools/` содержит invoice validation/storage/workflow services, но не external service client; `web/app.js` читает локальный `web/catalog.json`.
 Implication for Cabinet Backend: фактически существующей Cabinet integration point нет; указывать конкретный модуль размещения без проектного решения нельзя.
@@ -664,4 +664,4 @@ Implication for Cabinet Backend: модели нельзя смешивать и
 - Deep code inspection scoped to `registry_sandbox`, `PresuPro_sandbox`, `client_portal_sandbox`, and Cabinet runtime/docs.
 - Holded search: `backend/adapters/holded.py`, `backend/services/invoicing.py`, `backend/api/routes.py`, `core/models.py`, tests and scoped repo-wide symbol search for `holded`, `idempot*`, `retry`, `reconcil*`, `timeout`.
 - Launch/discovery search: workspace files matching `*compose*`, `*launch*`, `*supervisor*`, `*.service`, `*.sh`, plus URL/port environment references.
-- Cabinet integration search: `projects/cabinet/tools`, `web`, schemas and integration docs; no Registry/PresuPro/Holded runtime client found.
+- Cabinet integration search: `projects/Cabinet_web/tools`, `web`, schemas and integration docs; no Registry/PresuPro/Holded runtime client found.

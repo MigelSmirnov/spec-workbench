@@ -17,7 +17,7 @@ payables application.
 
 ## Original Cabinet intent
 
-The inspected `MigelSmirnov/cabinet` repository establishes:
+The inspected `MigelSmirnov/Cabinet_web` repository establishes:
 
 - conversation is the primary write interface;
 - AI extracts, searches, creates, links, and enriches Cards;

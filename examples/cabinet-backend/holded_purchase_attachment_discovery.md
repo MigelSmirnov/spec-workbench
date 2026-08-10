@@ -154,7 +154,7 @@ The document GET contained no top-level key whose name matched `attach` or
 The existing Invoice Card fixture inspected was:
 
 ```text
-/home/smirnov/jestor_VBC/exp_vbc/demo/code_factory/projects/cabinet/tests/fixtures/invoices/obramat-cash/card.json
+/home/smirnov/jestor_VBC/exp_vbc/demo/code_factory/projects/Cabinet_web/tests/fixtures/invoices/obramat-cash/card.json
 ```
 
 Its source declaration is:
