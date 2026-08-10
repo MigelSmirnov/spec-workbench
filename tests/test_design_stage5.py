@@ -50,7 +50,7 @@ Archive errors.
   "schema_version": "spec_workbench_state5_plan.v1",
   "operations": [
     {
-      "key": "api:archive.accept_transfer",
+      "key": "public_op:archive.accept_transfer",
       "capability": "capability:archive.accept_transfer",
       "flows": ["flow:accept_record"],
       "callers": ["adapter:transport"],
@@ -59,9 +59,9 @@ Archive errors.
   ]
 }
 """)
-    _write(project / "50_public_apis.md", """# State 5 — Public APIs
+    _write(project / "50_public_apis.md", """# State 5 — Public module operations
 
-## `api:archive.accept_transfer`
+## `public_op:archive.accept_transfer`
 
 ### Owner
 `module:archive`
@@ -83,11 +83,11 @@ May mutate archive state.
     return project
 
 
-def test_state5_handoff_has_stable_api_key(tmp_path: Path) -> None:
+def test_state5_handoff_has_stable_public_operation_key(tmp_path: Path) -> None:
     payload = design_stage5.handoff(_project(tmp_path))
-    assert payload["schema_version"] == "spec_workbench_state5_handoff.v1"
+    assert payload["schema_version"] == "spec_workbench_state5_handoff.v2"
     assert payload["lint_summary"]["errors"] == 0
-    assert payload["apis"][0]["key"] == "api:archive.accept_transfer"
+    assert payload["operations"][0]["key"] == "public_op:archive.accept_transfer"
 
 
 def test_coverage_requires_state4_flow_evidence(tmp_path: Path) -> None:
@@ -95,19 +95,19 @@ def test_coverage_requires_state4_flow_evidence(tmp_path: Path) -> None:
     path = project / "40_flows.md"
     path.write_text(path.read_text(encoding="utf-8").replace("capability:archive.accept_transfer", "capability:archive.missing"), encoding="utf-8")
     report = design_stage5.coverage(project)
-    assert report["apis"][0]["flow_evidence_missing"] == ["flow:accept_record"]
+    assert report["operations"][0]["flow_evidence_missing"] == ["flow:accept_record"]
 
 
-def test_lint_requires_api_sections(tmp_path: Path) -> None:
+def test_lint_requires_public_operation_sections(tmp_path: Path) -> None:
     project = _project(tmp_path)
     path = project / "50_public_apis.md"
     path.write_text(path.read_text(encoding="utf-8").replace("### Errors\nInvalid transfer.\n", ""), encoding="utf-8")
     report = design_stage5.lint(project)
-    assert any(f["code"] == "missing_api_section" and "Errors" in f["message"] for f in report["findings"])
+    assert any(f["code"] == "missing_public_op_section" and "Errors" in f["message"] for f in report["findings"])
 
 
 def test_next_reports_complete_when_plan_is_closed(tmp_path: Path) -> None:
-    payload = design_stage5.next_api(_project(tmp_path))
+    payload = design_stage5.next_operation(_project(tmp_path))
     assert payload["complete"] is True
     assert payload["next"] is None
     assert payload["summary"]["remaining"] == 0
