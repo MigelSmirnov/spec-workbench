@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Deterministic State 4 flow structure, lint, and handoff.
+"""Deterministic State 4 flow workbench, lint, coverage, and handoff.
 
-State 4 records reviewed end-to-end flows. This tool does not infer flow order,
-ownership, or contracts from prose. It exposes stable ``flow:<name>`` keys and
-validates explicit ``module:*`` / ``capability:*`` references against State 3.
+State 4 records reviewed end-to-end flows. The workbench does not invent flow
+order, ownership, contracts, modules, or capabilities from prose. Projects may
+supply an explicit ``40_flow_plan.json`` that lists operator-accepted flow needs.
+The tool then reports coverage and the next missing flow without authoring it.
 """
 from __future__ import annotations
 
@@ -13,19 +14,26 @@ import re
 import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Iterable
+from typing import Any, Iterable
 
 import design_stage3
 
-SCHEMA_VERSION = "spec_workbench_state4.v1"
-HANDOFF_SCHEMA = "spec_workbench_state4_handoff.v1"
-LINT_SCHEMA = "spec_workbench_state4_lint.v1"
+SCHEMA_VERSION = "spec_workbench_state4.v2"
+HANDOFF_SCHEMA = "spec_workbench_state4_handoff.v2"
+LINT_SCHEMA = "spec_workbench_state4_lint.v2"
+PLAN_SCHEMA = "spec_workbench_state4_plan.v1"
+COVERAGE_SCHEMA = "spec_workbench_state4_coverage.v1"
+DEFAULT_PLAN_FILE = "40_flow_plan.json"
 FLOW_RE = re.compile(r"^`flow:(?P<name>[a-z][a-z0-9_]*)`$")
 HEADING_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*$")
 STATE4_RE = re.compile(r"\bState\s+4\b", re.IGNORECASE)
 MODULE_REF_RE = re.compile(r"`(module:[a-z][a-z0-9_]*)`")
 CAPABILITY_REF_RE = re.compile(r"`(capability:[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*)`")
 REQUIRED_SECTIONS = ("Trigger", "Boundary", "Steps", "Outcomes", "Errors")
+
+
+class DesignStage4Error(Exception):
+    """State 4 project input is structurally invalid."""
 
 
 @dataclass(frozen=True)
@@ -111,6 +119,41 @@ def _payload(flow: FlowItem) -> dict[str, object]:
     return asdict(flow)
 
 
+def _load_plan(project: Path, *, required: bool = False) -> dict[str, Any] | None:
+    path = project / DEFAULT_PLAN_FILE
+    if not path.is_file():
+        if required:
+            raise DesignStage4Error(f"State 4 flow plan not found: {path}")
+        return None
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise DesignStage4Error(f"State 4 flow plan could not be read: {exc}") from exc
+    if not isinstance(payload, dict) or payload.get("schema_version") != PLAN_SCHEMA:
+        raise DesignStage4Error(f"unsupported State 4 flow plan schema; expected {PLAN_SCHEMA!r}")
+    flows = payload.get("flows")
+    if not isinstance(flows, list):
+        raise DesignStage4Error("State 4 flow plan must contain a list named 'flows'")
+    seen: set[str] = set()
+    for index, entry in enumerate(flows):
+        if not isinstance(entry, dict):
+            raise DesignStage4Error(f"flow plan entry {index} must be an object")
+        key = entry.get("key")
+        if not isinstance(key, str) or FLOW_RE.fullmatch(f"`{key}`") is None:
+            raise DesignStage4Error(f"flow plan entry {index} has invalid key {key!r}")
+        if key in seen:
+            raise DesignStage4Error(f"duplicate planned flow key: {key}")
+        seen.add(key)
+        purpose = entry.get("purpose")
+        if not isinstance(purpose, str) or not purpose.strip():
+            raise DesignStage4Error(f"planned flow {key} requires a non-empty purpose")
+        for field in ("required_modules", "candidate_capabilities"):
+            value = entry.get(field, [])
+            if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+                raise DesignStage4Error(f"planned flow {key} field {field!r} must be a string list")
+    return payload
+
+
 def manifest(project: Path) -> dict[str, object]:
     flows = parse_flows(project)
     counts: dict[str, int] = {}
@@ -130,6 +173,74 @@ def get_flow(project: Path, key: str) -> dict[str, object] | None:
         if flow.key == normalized:
             return _payload(flow)
     return None
+
+
+def coverage(project: Path) -> dict[str, object]:
+    plan = _load_plan(project, required=True)
+    actual = {flow.key: flow for flow in parse_flows(project)}
+    stage3 = design_stage3.handoff(project)
+    known_modules = {entry["key"] for entry in stage3["modules"]}
+    known_capabilities = {entry["key"] for entry in stage3["capabilities"]}
+    rows: list[dict[str, object]] = []
+    invalid_plan_refs: list[dict[str, str]] = []
+    for entry in plan["flows"]:
+        key = entry["key"]
+        required_modules = list(entry.get("required_modules", []))
+        candidate_capabilities = list(entry.get("candidate_capabilities", []))
+        for ref in required_modules:
+            if ref not in known_modules:
+                invalid_plan_refs.append({"flow": key, "ref": ref, "kind": "module"})
+        for ref in candidate_capabilities:
+            if ref not in known_capabilities:
+                invalid_plan_refs.append({"flow": key, "ref": ref, "kind": "capability"})
+        flow = actual.get(key)
+        rows.append({
+            "key": key,
+            "purpose": entry["purpose"],
+            "implemented": flow is not None,
+            "required_modules": required_modules,
+            "candidate_capabilities": candidate_capabilities,
+            "missing_required_modules": sorted(set(required_modules) - set(flow.module_refs if flow else ())),
+            "missing_candidate_capabilities": sorted(set(candidate_capabilities) - set(flow.capability_refs if flow else ())),
+        })
+    planned_keys = {entry["key"] for entry in plan["flows"]}
+    unplanned = sorted(set(actual) - planned_keys)
+    complete = sum(1 for row in rows if row["implemented"] and not row["missing_required_modules"] and not row["missing_candidate_capabilities"])
+    return {
+        "schema_version": COVERAGE_SCHEMA,
+        "project_root": project.resolve().name,
+        "summary": {
+            "planned": len(rows),
+            "implemented": sum(bool(row["implemented"]) for row in rows),
+            "complete": complete,
+            "remaining": len(rows) - complete,
+            "invalid_plan_refs": len(invalid_plan_refs),
+            "unplanned_flows": len(unplanned),
+        },
+        "flows": rows,
+        "invalid_plan_refs": invalid_plan_refs,
+        "unplanned_flows": unplanned,
+    }
+
+
+def next_flow(project: Path) -> dict[str, object]:
+    report = coverage(project)
+    for row in report["flows"]:
+        if not row["implemented"] or row["missing_required_modules"] or row["missing_candidate_capabilities"]:
+            return {
+                "schema_version": COVERAGE_SCHEMA,
+                "project_root": project.resolve().name,
+                "complete": False,
+                "next": row,
+                "summary": report["summary"],
+            }
+    return {
+        "schema_version": COVERAGE_SCHEMA,
+        "project_root": project.resolve().name,
+        "complete": True,
+        "next": None,
+        "summary": report["summary"],
+    }
 
 
 def lint(project: Path) -> dict[str, object]:
@@ -156,6 +267,16 @@ def lint(project: Path) -> dict[str, object]:
         for ref in flow.capability_refs:
             if ref not in capabilities:
                 findings.append(Finding("error", "unknown_capability_ref", flow.key, f"Unknown State 3 capability reference {ref!r}.", flow.source))
+    plan = _load_plan(project, required=False)
+    if plan is not None:
+        coverage_report = coverage(project)
+        for invalid in coverage_report["invalid_plan_refs"]:
+            source = SourceRange(DEFAULT_PLAN_FILE, 1, 1)
+            findings.append(Finding("error", "invalid_plan_ref", invalid["flow"], f"Planned {invalid['kind']} reference {invalid['ref']!r} does not exist in State 3.", source))
+        for key in coverage_report["unplanned_flows"]:
+            flow = next((item for item in flows if item.key == key), None)
+            if flow is not None:
+                findings.append(Finding("warning", "unplanned_flow", key, "Flow exists but is not declared in the explicit State 4 flow plan.", flow.source))
     return {
         "schema_version": LINT_SCHEMA,
         "summary": {
@@ -169,10 +290,12 @@ def lint(project: Path) -> dict[str, object]:
 
 def handoff(project: Path) -> dict[str, object]:
     report = lint(project)
+    plan = _load_plan(project, required=False)
     return {
         "schema_version": HANDOFF_SCHEMA,
         "project_root": project.resolve().name,
         "flows": [_payload(flow) for flow in parse_flows(project)],
+        "coverage": coverage(project) if plan is not None else None,
         "lint_summary": report["summary"],
     }
 
@@ -192,30 +315,42 @@ def main(argv: list[str] | None = None) -> int:
     action.add_argument("--list", action="store_true")
     action.add_argument("--get", metavar="FLOW_KEY")
     action.add_argument("--lint", action="store_true")
+    action.add_argument("--coverage", action="store_true")
+    action.add_argument("--next", action="store_true")
     action.add_argument("--handoff", action="store_true")
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args(argv)
     if not args.project.is_dir():
         print(f"design_stage4: error: project directory not found: {args.project}", file=sys.stderr)
         return 2
-    if args.get:
-        payload = get_flow(args.project, args.get)
-        if payload is None:
-            print(f"design_stage4: error: unknown flow: {args.get}", file=sys.stderr)
-            return 1
-    elif args.lint:
-        payload = lint(args.project)
-    elif args.handoff:
-        payload = handoff(args.project)
-    elif args.list:
-        payload = [_payload(flow) for flow in parse_flows(args.project)]
-    else:
-        payload = manifest(args.project)
+    try:
+        if args.get:
+            payload = get_flow(args.project, args.get)
+            if payload is None:
+                print(f"design_stage4: error: unknown flow: {args.get}", file=sys.stderr)
+                return 1
+        elif args.lint:
+            payload = lint(args.project)
+        elif args.coverage:
+            payload = coverage(args.project)
+        elif args.next:
+            payload = next_flow(args.project)
+        elif args.handoff:
+            payload = handoff(args.project)
+        elif args.list:
+            payload = [_payload(flow) for flow in parse_flows(args.project)]
+        else:
+            payload = manifest(args.project)
+    except DesignStage4Error as exc:
+        print(f"design_stage4: error: {exc}", file=sys.stderr)
+        return 2
     if args.lint and not args.json:
         print(_render_human(payload), end="")
     else:
         print(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
     if args.lint and payload["summary"]["errors"]:
+        return 1
+    if args.coverage and (payload["summary"]["invalid_plan_refs"] or payload["summary"]["remaining"]):
         return 1
     if args.handoff and payload["lint_summary"]["errors"]:
         return 1
