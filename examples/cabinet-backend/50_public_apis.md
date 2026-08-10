@@ -2,11 +2,11 @@
 
 ## Status
 
-State 5 is in progress. These entries define public cross-boundary operations proven by State 4. They intentionally stop before exact Python signatures, concrete DTO field lists, transport bindings, or private helper functions; those belong to State 6.
+State 5 is in progress. These entries define public cross-boundary operations proven by State 4. They intentionally stop before exact Python signatures, concrete DTO field lists, transport bindings, or private helper functions; those belong to State 6. `public_op:*` denotes an owning module's public operation and does not denote the compiler-owned HTTP `api` artifact.
 
 ---
 
-## `api:access_control.authorize_operation`
+## `public_op:access_control.authorize_operation`
 
 ### Owner
 `module:access_control`
@@ -34,7 +34,7 @@ May append security evidence; must not mutate invoice, Registry, PresuPro, Holde
 
 ---
 
-## `api:synchronization.synchronize_invoice_work`
+## `public_op:synchronization.synchronize_invoice_work`
 
 ### Owner
 `module:synchronization`
@@ -62,7 +62,7 @@ Mutates synchronization attempt/receipt state only; durable acceptance remains o
 
 ---
 
-## `api:synchronization.get_sync_status`
+## `public_op:synchronization.get_sync_status`
 
 ### Owner
 `module:synchronization`
@@ -90,7 +90,7 @@ None beyond optional observation/audit recording.
 
 ---
 
-## `api:durable_archive.accept_transfer_manifest`
+## `public_op:durable_archive.accept_transfer_manifest`
 
 ### Owner
 `module:durable_archive`
@@ -118,7 +118,7 @@ Mutates durable archive state only according to accepted acceptance/quarantine t
 
 ---
 
-## `api:durable_archive.verify_durable_acceptance`
+## `public_op:durable_archive.verify_durable_acceptance`
 
 ### Owner
 `module:durable_archive`
@@ -146,7 +146,7 @@ None beyond optional verification evidence.
 
 ---
 
-## `api:durable_archive.attach_local_source`
+## `public_op:durable_archive.attach_local_source`
 
 ### Owner
 `module:durable_archive`
@@ -174,7 +174,7 @@ Mutates source evidence only; accepted Card bytes/content hash remain immutable.
 
 ---
 
-## `api:durable_archive.get_source_status`
+## `public_op:durable_archive.get_source_status`
 
 ### Owner
 `module:durable_archive`
@@ -202,7 +202,7 @@ None.
 
 ---
 
-## `api:durable_archive.get_archived_invoice`
+## `public_op:durable_archive.get_archived_invoice`
 
 ### Owner
 `module:durable_archive`
@@ -230,7 +230,7 @@ None.
 
 ---
 
-## `api:registry_context.refresh_registry_context`
+## `public_op:registry_context.refresh_registry_context`
 
 ### Owner
 `module:registry_context`
@@ -258,7 +258,7 @@ Mutates Registry-derived local projection only; never writes Registry.
 
 ---
 
-## `api:registry_context.validate_card_assignment`
+## `public_op:registry_context.validate_card_assignment`
 
 ### Owner
 `module:registry_context`
@@ -286,7 +286,7 @@ Mutates validation/review evidence only.
 
 ---
 
-## `api:registry_context.get_assignment_validation`
+## `public_op:registry_context.get_assignment_validation`
 
 ### Owner
 `module:registry_context`
@@ -314,7 +314,7 @@ None.
 
 ---
 
-## `api:registry_context.get_work_object`
+## `public_op:registry_context.get_work_object`
 
 ### Owner
 `module:registry_context`
@@ -342,7 +342,7 @@ None.
 
 ---
 
-## `api:plan_actual.refresh_estimate_snapshot`
+## `public_op:plan_actual.refresh_estimate_snapshot`
 
 ### Owner
 `module:plan_actual`
@@ -370,7 +370,7 @@ Appends immutable estimate evidence only.
 
 ---
 
-## `api:plan_actual.calculate_plan_actual`
+## `public_op:plan_actual.calculate_plan_actual`
 
 ### Owner
 `module:plan_actual`
@@ -398,7 +398,7 @@ May persist derived analytical evidence/cache if implementation chooses; source 
 
 ---
 
-## `api:holded_publication.request_holded_publication`
+## `public_op:holded_publication.request_holded_publication`
 
 ### Owner
 `module:holded_publication`
@@ -426,7 +426,7 @@ Mutates logical publication lifecycle; never mutates Invoice Card facts.
 
 ---
 
-## `api:holded_publication.reconcile_holded_publication`
+## `public_op:holded_publication.reconcile_holded_publication`
 
 ### Owner
 `module:holded_publication`
@@ -454,7 +454,7 @@ Mutates logical publication/reconciliation state only.
 
 ---
 
-## `api:holded_gateway.create_holded_purchase`
+## `public_op:holded_gateway.create_holded_purchase`
 
 ### Owner
 `module:holded_gateway`
@@ -482,7 +482,7 @@ Persists technical attempt evidence; does not decide Cabinet publication eligibi
 
 ---
 
-## `api:holded_gateway.lookup_holded_purchase`
+## `public_op:holded_gateway.lookup_holded_purchase`
 
 ### Owner
 `module:holded_gateway`
@@ -510,7 +510,7 @@ May append technical observation evidence only.
 
 ---
 
-## `api:retention_release.evaluate_vps_release`
+## `public_op:retention_release.evaluate_vps_release`
 
 ### Owner
 `module:retention_release`
@@ -538,7 +538,7 @@ May append retention evaluation/audit state only.
 
 ---
 
-## `api:retention_release.request_manual_vps_release`
+## `public_op:retention_release.request_manual_vps_release`
 
 ### Owner
 `module:retention_release`
