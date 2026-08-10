@@ -2,11 +2,9 @@
 
 ## Status
 
-Experimental first State 3 responsibility derived from the accepted State 2 rules.
+Historical State 2 → State 3 dogfood experiment. Superseded for active State 3 design by `30_modules.md` and `30_trace.json`.
 
-This file intentionally contains only one responsibility as a dogfood pass for the
-State 2 → State 3 navigation workflow. It does not claim that the complete Cabinet
-Backend module decomposition is finished.
+This file is retained as tooling/process evidence for the first responsibility-clustering pass around A51/A52. It is not the authoritative Cabinet Backend module decomposition and must not be used as the State 3 handoff to State 4.
 
 ---
 
