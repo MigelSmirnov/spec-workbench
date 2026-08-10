@@ -6,7 +6,6 @@ from typing import Any
 
 import design_stage3
 import design_stage4
-import design_stage5
 
 from notes_workbench.markdown_sections import child_map, sections
 
@@ -67,7 +66,7 @@ def build(project: Path, module: str) -> dict[str, Any]:
     module_entry = next((item for item in stage3["modules"] if item["key"] == module_key), None)
     if module_entry is None:
         raise ValueError(f"unknown module: {module_key}")
-    capabilities = [item for item in stage3["capabilities"] if item["module_key"] == module_key]
+    capabilities = [item for item in stage3["capabilities"] if item["module"] == module_key]
     return {
         "schema_version": "spec_workbench_notes_slice.v1",
         "project_root": project.resolve().name,
