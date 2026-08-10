@@ -14,9 +14,10 @@ from pathlib import Path
 from typing import Any
 
 SCHEMA = "spec_workbench_state6_data_closure.v1"
-REPORT_SCHEMA = "spec_workbench_state6_data_lint.v1"
+REPORT_SCHEMA = "spec_workbench_state6_data_lint.v2"
 DEFAULT_FILE = "60_data_closure.json"
 ALLOWED_SECTIONS = {"config", "rules", "persistence", "properties", "determinism"}
+PERSISTENCE_CLASSES = {"master", "derived", "issued", "mirrored"}
 
 
 def load(project: Path) -> dict[str, Any]:
@@ -57,6 +58,26 @@ def lint(project: Path) -> dict[str, Any]:
         elif not isinstance(sections[key], dict):
             findings.append({"severity":"error","code":"invalid_data_section","message":f"section {key} must be an object"})
 
+    persistence = sections.get("persistence", {})
+    persistence_counts = {name: 0 for name in sorted(PERSISTENCE_CLASSES)}
+    if isinstance(persistence, dict):
+        for model_name, declaration in sorted(persistence.items()):
+            if not isinstance(model_name, str) or not model_name:
+                findings.append({"severity":"error","code":"invalid_persistence_model","message":"persistence model names must be non-empty strings"})
+                continue
+            if not isinstance(declaration, dict):
+                findings.append({"severity":"error","code":"invalid_persistence_declaration","message":f"persistence.{model_name} must be an object"})
+                continue
+            persistence_class = declaration.get("class")
+            if persistence_class not in PERSISTENCE_CLASSES:
+                findings.append({"severity":"error","code":"invalid_persistence_class","message":f"persistence.{model_name}.class must be one of {sorted(PERSISTENCE_CLASSES)}"})
+                continue
+            persistence_counts[persistence_class] += 1
+            if persistence_class == "mirrored":
+                remote = declaration.get("remote")
+                if not isinstance(remote, str) or not remote.strip():
+                    findings.append({"severity":"error","code":"missing_mirrored_remote","message":f"persistence.{model_name} class=mirrored requires non-empty remote"})
+
     placements = payload.get("placements")
     if not isinstance(placements, list):
         findings.append({"severity":"error","code":"invalid_placements","message":"placements must be a list"})
@@ -86,7 +107,6 @@ def lint(project: Path) -> dict[str, Any]:
         if not isinstance(reason, str) or not reason.strip():
             findings.append({"severity":"error","code":"missing_placement_reason","message":f"{address} requires a placement reason"})
 
-    # Fail closed on structured values that have no placement evidence.
     leaves: list[str] = []
     def walk(prefix: str, value: Any) -> None:
         if isinstance(value, dict):
@@ -110,6 +130,8 @@ def lint(project: Path) -> dict[str, Any]:
         "summary": {
             "placements": len(placements),
             "structured_values": len(leaves),
+            "persistence_models": len(persistence) if isinstance(persistence, dict) else 0,
+            "persistence_classes": persistence_counts,
             "errors": sum(f["severity"] == "error" for f in findings),
             "unresolved_topics": len(unresolved_topics),
         },
@@ -136,7 +158,7 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(report, indent=2, sort_keys=True))
     else:
         s = report["summary"]
-        print(f"State 6 data: {s['placements']} placements; {s['structured_values']} values; {s['errors']} errors; {s['unresolved_topics']} unresolved topics")
+        print(f"State 6 data: {s['placements']} placements; {s['structured_values']} values; {s['persistence_models']} persistence models; {s['errors']} errors; {s['unresolved_topics']} unresolved topics")
         for finding in report["findings"]:
             print(f"{finding['severity'].upper()} {finding['code']} - {finding['message']}")
     return 1 if report["summary"]["errors"] else 0
