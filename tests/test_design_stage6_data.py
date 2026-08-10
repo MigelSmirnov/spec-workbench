@@ -18,8 +18,8 @@ def test_cabinet_data_closure_is_structurally_valid() -> None:
     assert report["summary"]["persistence_models"] == 21
     assert report["summary"]["persistence_classes"] == {
         "derived": 0,
-        "issued": 8,
-        "master": 13,
+        "issued": 7,
+        "master": 14,
         "mirrored": 0,
     }
     assert set(report["unresolved_topics"]) == {
