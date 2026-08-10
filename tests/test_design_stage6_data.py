@@ -13,9 +13,18 @@ CABINET = ROOT / "examples" / "cabinet-backend"
 def test_cabinet_data_closure_is_structurally_valid() -> None:
     report = design_stage6_data.lint(CABINET)
     assert report["summary"]["errors"] == 0
-    assert report["summary"]["placements"] == 11
-    assert report["summary"]["structured_values"] == 11
-    assert set(report["unresolved_topics"]) == {"config", "determinism", "persistence", "properties"}
+    assert report["summary"]["placements"] == 32
+    assert report["summary"]["structured_values"] == 32
+    assert report["summary"]["persistence_models"] == 21
+    assert report["summary"]["persistence_classes"] == {
+        "derived": 0,
+        "issued": 8,
+        "master": 13,
+        "mirrored": 0,
+    }
+    assert set(report["unresolved_topics"]) == {
+        "config", "determinism", "external_mirror_schema", "properties"
+    }
 
 
 def test_untraced_structured_value_is_rejected(tmp_path: Path) -> None:
@@ -40,3 +49,19 @@ def test_placement_without_value_is_rejected(tmp_path: Path) -> None:
     (tmp_path / "60_data_closure.json").write_text(json.dumps(payload), encoding="utf-8")
     report = design_stage6_data.lint(tmp_path)
     assert any(item["code"] == "missing_placed_value" for item in report["findings"])
+
+
+def test_unknown_persistence_class_is_rejected(tmp_path: Path) -> None:
+    payload = json.loads((CABINET / "60_data_closure.json").read_text(encoding="utf-8"))
+    payload["sections"]["persistence"]["StoredInvoiceCard"]["class"] = "mutable"
+    (tmp_path / "60_data_closure.json").write_text(json.dumps(payload), encoding="utf-8")
+    report = design_stage6_data.lint(tmp_path)
+    assert any(item["code"] == "invalid_persistence_class" for item in report["findings"])
+
+
+def test_mirrored_persistence_requires_remote(tmp_path: Path) -> None:
+    payload = json.loads((CABINET / "60_data_closure.json").read_text(encoding="utf-8"))
+    payload["sections"]["persistence"]["StoredInvoiceCard"]["class"] = "mirrored"
+    (tmp_path / "60_data_closure.json").write_text(json.dumps(payload), encoding="utf-8")
+    report = design_stage6_data.lint(tmp_path)
+    assert any(item["code"] == "missing_mirrored_remote" for item in report["findings"])
