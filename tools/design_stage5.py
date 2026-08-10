@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
-"""Deterministic State 5 public API workbench, lint, coverage, and handoff.
+"""Deterministic State 5 public-module-operation workbench.
 
-State 5 freezes only cross-boundary public module operations proven by reviewed
-State 4 flows. This tool does not invent APIs from candidate capabilities. An
-explicit ``50_api_plan.json`` selects accepted public operations and links each
-one to its State 3 capability and State 4 evidence.
+State 5 freezes only cross-boundary public operations proven by reviewed State 4
+flows. ``public_op:<module>.<name>`` denotes a provider module operation; it is
+not the compiler-owned HTTP ``api`` artifact described by API_ASSEMBLY_STANDARD.
 """
 from __future__ import annotations
 
@@ -19,30 +18,26 @@ from typing import Any, Iterable
 import design_stage3
 import design_stage4
 
-SCHEMA_VERSION = "spec_workbench_state5.v1"
+SCHEMA_VERSION = "spec_workbench_state5.v2"
 PLAN_SCHEMA = "spec_workbench_state5_plan.v1"
-LINT_SCHEMA = "spec_workbench_state5_lint.v1"
-COVERAGE_SCHEMA = "spec_workbench_state5_coverage.v1"
-HANDOFF_SCHEMA = "spec_workbench_state5_handoff.v1"
+LINT_SCHEMA = "spec_workbench_state5_lint.v2"
+COVERAGE_SCHEMA = "spec_workbench_state5_coverage.v2"
+HANDOFF_SCHEMA = "spec_workbench_state5_handoff.v2"
 DEFAULT_PLAN_FILE = "50_api_plan.json"
-API_RE = re.compile(r"^`(?P<key>api:(?P<module>[a-z][a-z0-9_]*)\.(?P<name>[a-z][a-z0-9_]*))`$")
+PUBLIC_OP_RE = re.compile(
+    r"^`(?P<key>public_op:(?P<module>[a-z][a-z0-9_]*)\.(?P<name>[a-z][a-z0-9_]*))`$"
+)
 HEADING_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*$")
 STATE5_RE = re.compile(r"\bState\s+5\b", re.IGNORECASE)
 MODULE_REF_RE = re.compile(r"`(module:[a-z][a-z0-9_]*)`")
 REQUIRED_SECTIONS = (
-    "Owner",
-    "Callers",
-    "Inputs",
-    "Outputs",
-    "Observable effect",
-    "Enforces",
-    "Errors",
-    "State impact",
+    "Owner", "Callers", "Inputs", "Outputs", "Observable effect",
+    "Enforces", "Errors", "State impact",
 )
 
 
 class DesignStage5Error(Exception):
-    """State 5 project input is structurally invalid."""
+    pass
 
 
 @dataclass(frozen=True)
@@ -53,7 +48,7 @@ class SourceRange:
 
 
 @dataclass(frozen=True)
-class ApiItem:
+class PublicOpItem:
     key: str
     module: str
     name: str
@@ -66,7 +61,7 @@ class ApiItem:
 class Finding:
     severity: str
     code: str
-    api_key: str
+    operation_key: str
     message: str
     source: SourceRange
 
@@ -81,7 +76,7 @@ def _iter_state5_files(project: Path) -> Iterable[Path]:
 
 
 def _headings(lines: list[str]) -> list[tuple[int, int, str]]:
-    result: list[tuple[int, int, str]] = []
+    result = []
     for number, line in enumerate(lines, start=1):
         match = HEADING_RE.match(line)
         if match:
@@ -89,16 +84,16 @@ def _headings(lines: list[str]) -> list[tuple[int, int, str]]:
     return result
 
 
-def parse_apis(project: Path) -> list[ApiItem]:
+def parse_operations(project: Path) -> list[PublicOpItem]:
     project = project.resolve()
-    result: list[ApiItem] = []
+    result: list[PublicOpItem] = []
     for path in _iter_state5_files(project):
         lines = path.read_text(encoding="utf-8").splitlines()
         headings = _headings(lines)
         for index, (start, level, title) in enumerate(headings):
             if level != 2:
                 continue
-            match = API_RE.fullmatch(title)
+            match = PUBLIC_OP_RE.fullmatch(title)
             if match is None:
                 continue
             end = len(lines)
@@ -112,7 +107,7 @@ def parse_apis(project: Path) -> list[ApiItem]:
                 for child_start, child_level, child_title in headings[index + 1:]
                 if start < child_start <= end and child_level > level
             )
-            result.append(ApiItem(
+            result.append(PublicOpItem(
                 key=match.group("key"),
                 module=match.group("module"),
                 name=match.group("name"),
@@ -123,7 +118,12 @@ def parse_apis(project: Path) -> list[ApiItem]:
     return result
 
 
-def _payload(item: ApiItem) -> dict[str, object]:
+def parse_apis(project: Path) -> list[PublicOpItem]:
+    """Backward-compatible Python helper name; payload keys use public operations."""
+    return parse_operations(project)
+
+
+def _payload(item: PublicOpItem) -> dict[str, object]:
     return asdict(item)
 
 
@@ -131,67 +131,71 @@ def _load_plan(project: Path, *, required: bool = False) -> dict[str, Any] | Non
     path = project / DEFAULT_PLAN_FILE
     if not path.is_file():
         if required:
-            raise DesignStage5Error(f"State 5 API plan not found: {path}")
+            raise DesignStage5Error(f"State 5 public-operation plan not found: {path}")
         return None
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
-        raise DesignStage5Error(f"State 5 API plan could not be read: {exc}") from exc
+        raise DesignStage5Error(f"State 5 public-operation plan could not be read: {exc}") from exc
     if not isinstance(payload, dict) or payload.get("schema_version") != PLAN_SCHEMA:
-        raise DesignStage5Error(f"unsupported State 5 API plan schema; expected {PLAN_SCHEMA!r}")
+        raise DesignStage5Error(f"unsupported State 5 plan schema; expected {PLAN_SCHEMA!r}")
     operations = payload.get("operations")
     if not isinstance(operations, list):
-        raise DesignStage5Error("State 5 API plan must contain a list named 'operations'")
+        raise DesignStage5Error("State 5 plan must contain a list named 'operations'")
     seen: set[str] = set()
     for index, entry in enumerate(operations):
         if not isinstance(entry, dict):
-            raise DesignStage5Error(f"API plan entry {index} must be an object")
+            raise DesignStage5Error(f"plan entry {index} must be an object")
         key = entry.get("key")
         capability = entry.get("capability")
-        if not isinstance(key, str) or API_RE.fullmatch(f"`{key}`") is None:
-            raise DesignStage5Error(f"API plan entry {index} has invalid key {key!r}")
+        if not isinstance(key, str) or PUBLIC_OP_RE.fullmatch(f"`{key}`") is None:
+            raise DesignStage5Error(f"plan entry {index} has invalid public operation key {key!r}")
         if key in seen:
-            raise DesignStage5Error(f"duplicate planned API key: {key}")
+            raise DesignStage5Error(f"duplicate planned public operation key: {key}")
         seen.add(key)
-        expected_capability = "capability:" + key.removeprefix("api:")
+        expected_capability = "capability:" + key.removeprefix("public_op:")
         if capability != expected_capability:
             raise DesignStage5Error(
-                f"planned API {key} must map to matching State 3 capability {expected_capability!r}"
+                f"planned operation {key} must map to matching State 3 capability {expected_capability!r}"
             )
         for field in ("flows", "callers"):
             value = entry.get(field)
             if not isinstance(value, list) or not value or not all(isinstance(v, str) for v in value):
-                raise DesignStage5Error(f"planned API {key} field {field!r} must be a non-empty string list")
+                raise DesignStage5Error(f"planned operation {key} field {field!r} must be a non-empty string list")
         purpose = entry.get("purpose")
         if not isinstance(purpose, str) or not purpose.strip():
-            raise DesignStage5Error(f"planned API {key} requires a non-empty purpose")
+            raise DesignStage5Error(f"planned operation {key} requires a non-empty purpose")
     return payload
 
 
 def manifest(project: Path) -> dict[str, object]:
-    items = parse_apis(project)
+    items = parse_operations(project)
     counts: dict[str, int] = {}
     for item in items:
         counts[item.key] = counts.get(item.key, 0) + 1
     return {
         "schema_version": SCHEMA_VERSION,
         "project_root": project.resolve().name,
-        "apis": [_payload(item) for item in items],
-        "diagnostics": {"duplicate_api_keys": sorted(k for k, v in counts.items() if v > 1)},
+        "operations": [_payload(item) for item in items],
+        "diagnostics": {"duplicate_operation_keys": sorted(k for k, v in counts.items() if v > 1)},
     }
 
 
-def get_api(project: Path, key: str) -> dict[str, object] | None:
-    normalized = key if key.startswith("api:") else f"api:{key}"
-    for item in parse_apis(project):
+def get_operation(project: Path, key: str) -> dict[str, object] | None:
+    normalized = key if key.startswith("public_op:") else f"public_op:{key}"
+    for item in parse_operations(project):
         if item.key == normalized:
             return _payload(item)
     return None
 
 
+def get_api(project: Path, key: str) -> dict[str, object] | None:
+    return get_operation(project, key)
+
+
 def coverage(project: Path) -> dict[str, object]:
     plan = _load_plan(project, required=True)
-    actual = {item.key: item for item in parse_apis(project)}
+    actual = {item.key: item for item in parse_operations(project)}
     stage3 = design_stage3.handoff(project)
     stage4 = design_stage4.handoff(project)
     known_modules = {entry["key"] for entry in stage3["modules"]}
@@ -206,20 +210,20 @@ def coverage(project: Path) -> dict[str, object]:
         declared_flows = list(entry["flows"])
         callers = list(entry["callers"])
         if capability not in known_capabilities:
-            invalid_refs.append({"api": key, "ref": capability, "kind": "capability"})
+            invalid_refs.append({"operation": key, "ref": capability, "kind": "capability"})
         for caller in callers:
             if caller.startswith("module:") and caller not in known_modules:
-                invalid_refs.append({"api": key, "ref": caller, "kind": "caller_module"})
-        flow_evidence_missing: list[str] = []
+                invalid_refs.append({"operation": key, "ref": caller, "kind": "caller_module"})
+        missing_flow_evidence: list[str] = []
         for flow_key in declared_flows:
             flow = flows.get(flow_key)
             if flow is None:
-                invalid_refs.append({"api": key, "ref": flow_key, "kind": "flow"})
+                invalid_refs.append({"operation": key, "ref": flow_key, "kind": "flow"})
                 continue
             if capability not in set(flow["capability_refs"]):
-                flow_evidence_missing.append(flow_key)
+                missing_flow_evidence.append(flow_key)
         item = actual.get(key)
-        expected_owner = "module:" + key.removeprefix("api:").split(".", 1)[0]
+        expected_owner = "module:" + key.removeprefix("public_op:").split(".", 1)[0]
         owner_missing = bool(item is not None and expected_owner not in set(item.module_refs))
         rows.append({
             "key": key,
@@ -229,7 +233,7 @@ def coverage(project: Path) -> dict[str, object]:
             "implemented": item is not None,
             "expected_owner": expected_owner,
             "owner_missing": owner_missing,
-            "flow_evidence_missing": flow_evidence_missing,
+            "flow_evidence_missing": missing_flow_evidence,
         })
 
     planned = {entry["key"] for entry in plan["operations"]}
@@ -247,86 +251,69 @@ def coverage(project: Path) -> dict[str, object]:
             "complete": complete,
             "remaining": len(rows) - complete,
             "invalid_refs": len(invalid_refs),
-            "unplanned_apis": len(unplanned),
+            "unplanned_operations": len(unplanned),
         },
-        "apis": rows,
+        "operations": rows,
         "invalid_refs": invalid_refs,
-        "unplanned_apis": unplanned,
+        "unplanned_operations": unplanned,
     }
+
+
+def next_operation(project: Path) -> dict[str, object]:
+    report = coverage(project)
+    for row in report["operations"]:
+        if not row["implemented"] or row["owner_missing"] or row["flow_evidence_missing"]:
+            return {"schema_version": COVERAGE_SCHEMA, "project_root": project.resolve().name,
+                    "complete": False, "next": row, "summary": report["summary"]}
+    return {"schema_version": COVERAGE_SCHEMA, "project_root": project.resolve().name,
+            "complete": True, "next": None, "summary": report["summary"]}
 
 
 def next_api(project: Path) -> dict[str, object]:
-    report = coverage(project)
-    for row in report["apis"]:
-        if not row["implemented"] or row["owner_missing"] or row["flow_evidence_missing"]:
-            return {
-                "schema_version": COVERAGE_SCHEMA,
-                "project_root": project.resolve().name,
-                "complete": False,
-                "next": row,
-                "summary": report["summary"],
-            }
-    return {
-        "schema_version": COVERAGE_SCHEMA,
-        "project_root": project.resolve().name,
-        "complete": True,
-        "next": None,
-        "summary": report["summary"],
-    }
+    return next_operation(project)
 
 
 def lint(project: Path) -> dict[str, object]:
-    items = parse_apis(project)
+    items = parse_operations(project)
     findings: list[Finding] = []
     counts: dict[str, int] = {}
     for item in items:
         counts[item.key] = counts.get(item.key, 0) + 1
     for item in items:
         if counts[item.key] > 1:
-            findings.append(Finding("error", "duplicate_api_key", item.key, "API key is not unique.", item.source))
+            findings.append(Finding("error", "duplicate_public_op_key", item.key, "Public operation key is not unique.", item.source))
         sections = {section.casefold() for section in item.sections}
         for required in REQUIRED_SECTIONS:
             if required.casefold() not in sections:
-                findings.append(Finding(
-                    "error", "missing_api_section", item.key,
-                    f"Required State 5 section {required!r} is absent.", item.source,
-                ))
+                findings.append(Finding("error", "missing_public_op_section", item.key,
+                                        f"Required State 5 section {required!r} is absent.", item.source))
         expected_owner = "module:" + item.module
         if expected_owner not in set(item.module_refs):
-            findings.append(Finding(
-                "error", "missing_api_owner", item.key,
-                f"Owner section must explicitly reference {expected_owner!r}.", item.source,
-            ))
+            findings.append(Finding("error", "missing_public_op_owner", item.key,
+                                    f"Owner section must explicitly reference {expected_owner!r}.", item.source))
 
-    plan = _load_plan(project, required=False)
-    if plan is not None:
+    if _load_plan(project, required=False) is not None:
         report = coverage(project)
         for invalid in report["invalid_refs"]:
-            findings.append(Finding(
-                "error", "invalid_plan_ref", invalid["api"],
-                f"Planned {invalid['kind']} reference {invalid['ref']!r} is not valid State 3/4 evidence.",
-                SourceRange(DEFAULT_PLAN_FILE, 1, 1),
-            ))
-        for row in report["apis"]:
+            findings.append(Finding("error", "invalid_plan_ref", invalid["operation"],
+                                    f"Planned {invalid['kind']} reference {invalid['ref']!r} is not valid State 3/4 evidence.",
+                                    SourceRange(DEFAULT_PLAN_FILE, 1, 1)))
+        for row in report["operations"]:
             if row["flow_evidence_missing"]:
-                findings.append(Finding(
-                    "error", "missing_flow_evidence", row["key"],
-                    "Planned API capability is not explicitly used by every declared State 4 flow: "
-                    + ", ".join(row["flow_evidence_missing"]),
-                    SourceRange(DEFAULT_PLAN_FILE, 1, 1),
-                ))
-        for key in report["unplanned_apis"]:
+                findings.append(Finding("error", "missing_flow_evidence", row["key"],
+                                        "Planned public operation capability is not explicitly used by every declared State 4 flow: "
+                                        + ", ".join(row["flow_evidence_missing"]),
+                                        SourceRange(DEFAULT_PLAN_FILE, 1, 1)))
+        for key in report["unplanned_operations"]:
             item = next((candidate for candidate in items if candidate.key == key), None)
             if item is not None:
-                findings.append(Finding(
-                    "warning", "unplanned_api", key,
-                    "API exists but is not declared in the explicit State 5 API plan.", item.source,
-                ))
+                findings.append(Finding("warning", "unplanned_public_op", key,
+                                        "Public operation exists but is not declared in the explicit State 5 plan.", item.source))
 
     return {
         "schema_version": LINT_SCHEMA,
         "summary": {
-            "apis": len(items),
+            "operations": len(items),
             "errors": sum(f.severity == "error" for f in findings),
             "warnings": sum(f.severity == "warning" for f in findings),
         },
@@ -336,21 +323,20 @@ def lint(project: Path) -> dict[str, object]:
 
 def handoff(project: Path) -> dict[str, object]:
     report = lint(project)
-    plan = _load_plan(project, required=False)
     return {
         "schema_version": HANDOFF_SCHEMA,
         "project_root": project.resolve().name,
-        "apis": [_payload(item) for item in parse_apis(project)],
-        "coverage": coverage(project) if plan is not None else None,
+        "operations": [_payload(item) for item in parse_operations(project)],
+        "coverage": coverage(project) if _load_plan(project, required=False) is not None else None,
         "lint_summary": report["summary"],
     }
 
 
 def _render_human(report: dict[str, object]) -> str:
     summary = report["summary"]
-    lines = [f"State 5: {summary['apis']} APIs; {summary['errors']} errors; {summary['warnings']} warnings"]
+    lines = [f"State 5: {summary['operations']} public operations; {summary['errors']} errors; {summary['warnings']} warnings"]
     for finding in report["findings"]:
-        lines.append(f"{finding['severity'].upper()} {finding['code']} {finding['api_key']} - {finding['message']}")
+        lines.append(f"{finding['severity'].upper()} {finding['code']} {finding['operation_key']} - {finding['message']}")
     return "\n".join(lines) + "\n"
 
 
@@ -359,7 +345,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("project", type=Path)
     action = parser.add_mutually_exclusive_group()
     action.add_argument("--list", action="store_true")
-    action.add_argument("--get", metavar="API_KEY")
+    action.add_argument("--get", metavar="PUBLIC_OP_KEY")
     action.add_argument("--lint", action="store_true")
     action.add_argument("--coverage", action="store_true")
     action.add_argument("--next", action="store_true")
@@ -371,20 +357,20 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     try:
         if args.get:
-            payload = get_api(args.project, args.get)
+            payload = get_operation(args.project, args.get)
             if payload is None:
-                print(f"design_stage5: error: unknown API: {args.get}", file=sys.stderr)
+                print(f"design_stage5: error: unknown public operation: {args.get}", file=sys.stderr)
                 return 1
         elif args.lint:
             payload = lint(args.project)
         elif args.coverage:
             payload = coverage(args.project)
         elif args.next:
-            payload = next_api(args.project)
+            payload = next_operation(args.project)
         elif args.handoff:
             payload = handoff(args.project)
         elif args.list:
-            payload = [_payload(item) for item in parse_apis(args.project)]
+            payload = [_payload(item) for item in parse_operations(args.project)]
         else:
             payload = manifest(args.project)
     except DesignStage5Error as exc:
