@@ -22,7 +22,7 @@ SUPPORTED_EDITOR_OPERATIONS = frozenset(
     {"replace-section", "append-section", "insert-section", "replace-item"}
 )
 SUPPORTED_TOOLS = frozenset(
-    {"design_index", "design_editor", "design_lint", "design_stage3", "design_trace", "pytest"}
+    {"design_index", "design_editor", "design_lint", "design_stage3", "design_stage4", "design_trace", "pytest"}
 )
 StepKind = Literal["tool", "command", "checkpoint", "conditional", "foreach"]
 
@@ -186,6 +186,25 @@ def _step_runtime(
     elif step_id == "trace_2_3_handoff":
         arguments = {"project": project, "from_state": 2, "to_state": 3, "consumer": "next_design_state"}
         argv = ["python", "tools/design_trace.py", project, "--handoff"]
+    elif step_id == "state4_inventory":
+        arguments = {"project": project, "state": 4}
+        argv = ["python", "tools/design_stage4.py", project, "--list", "--json"]
+    elif step_id == "state4_get":
+        resolved_item = _require_text(item, "item")
+        arguments = {"project": project, "flow": resolved_item}
+        argv = ["python", "tools/design_stage4.py", project, "--get", resolved_item, "--json"]
+    elif step_id == "state4_lint":
+        arguments = {"project": project, "state": 4}
+        argv = ["python", "tools/design_stage4.py", project, "--lint", "--json"]
+    elif step_id == "state4_coverage":
+        arguments = {"project": project, "state": 4, "plan": "40_flow_plan.json"}
+        argv = ["python", "tools/design_stage4.py", project, "--coverage", "--json"]
+    elif step_id == "state4_next":
+        arguments = {"project": project, "state": 4, "plan": "40_flow_plan.json"}
+        argv = ["python", "tools/design_stage4.py", project, "--next", "--json"]
+    elif step_id == "state4_handoff":
+        arguments = {"project": project, "state": 4, "consumer": "next_design_state_or_mcp"}
+        argv = ["python", "tools/design_stage4.py", project, "--handoff"]
     elif step_id in {"editor_dry_run", "editor_apply"}:
         if editor is None:
             raise DesignRouterError("editor route is missing editor arguments")
@@ -317,7 +336,7 @@ def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("project", type=Path, help="Directory containing design Markdown")
     parser.add_argument("intent", choices=intents, help="Deterministic workflow intent")
-    parser.add_argument("--item", help="Explicit item ID, supporting source key, or module key")
+    parser.add_argument("--item", help="Explicit item ID, supporting source key, module key, or flow key")
     parser.add_argument("--term", help="Lexical term for the broad-to-narrow loop")
     parser.add_argument("--operation", choices=sorted(SUPPORTED_EDITOR_OPERATIONS))
     parser.add_argument("--section", help="Target section for replace/append")

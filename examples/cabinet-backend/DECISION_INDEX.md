@@ -2,10 +2,11 @@
 
 ## Status
 
-Navigation index for accepted architectural decisions.
+Human-facing navigation index for accepted architectural decisions.
 
-This document is not normative.
-Normative text is defined in the referenced specifications.
+This document is not normative. Normative text is defined in the referenced design-state specifications.
+
+For machine-readable State 2 → State 3 ownership coverage and handoff, `30_trace.json` is authoritative and must be validated through `tools/design_trace.py`. This index must not be interpreted as State 4 simply because it previously used a `04_` filename prefix.
 
 ---
 
