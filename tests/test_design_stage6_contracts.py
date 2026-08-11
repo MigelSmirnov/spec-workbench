@@ -112,13 +112,13 @@ def test_ready_handoff_contains_operation_and_handler_contracts() -> None:
     assert handler["router_operation"] == FIRST_EXTERNAL
 
 
-def test_authoring_gate_advances_current_cabinet_to_router() -> None:
+def test_authoring_gate_reaches_global_router_context_after_route_closure() -> None:
     report = design_authoring_next.next_step(CABINET)
-    assert report["phase"] == "deterministic_http_router_closure"
-    assert report["blocked"] is False
+    assert report["phase"] == "deterministic_http_router_context_closure"
+    assert report["blocked"] is True
     assert report["router_allowed"] is True
-    assert "design_router_closure.py" in report["next_command"]
-    assert report["summary"]["unresolved"] == 11
+    assert "design_router_context.py" in report["next_command"]
+    assert "error_taxonomy" in report["unresolved_topics"]
 
 
 def test_authoring_gate_returns_to_state6_when_contract_is_unresolved(tmp_path: Path) -> None:
