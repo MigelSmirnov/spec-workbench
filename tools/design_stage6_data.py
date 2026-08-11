@@ -1,9 +1,14 @@
 #!/usr/bin/env python3
-"""Deterministic State 6 data-closure workbench.
+"""Deterministic pre-contract structured-data closure workbench.
 
-State 6 places already accepted semantic facts into structured specification
-homes before exact contracts and notes. It does not invent values. Empty
-sections are valid when no accepted value belongs there yet.
+This compatibility tool predates the frozen authoring sequence and therefore
+retains ``state6`` in its schema names and the ``60_data_closure.json`` filename.
+It is not semantic State 6. Semantic State 6 is exact contracts and internal
+functions; see skills/spec-authoring/AUTHORING_SEQUENCE.md.
+
+The workbench places already accepted semantic facts into structured
+specification homes before exact contracts and notes. It does not invent values.
+Empty sections are valid when no accepted value belongs there yet.
 """
 from __future__ import annotations
 
@@ -13,6 +18,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+# Compatibility identifiers: do not infer semantic state numbering from them.
 SCHEMA = "spec_workbench_state6_data_closure.v1"
 REPORT_SCHEMA = "spec_workbench_state6_data_lint.v2"
 DEFAULT_FILE = "60_data_closure.json"
@@ -29,7 +35,7 @@ def load(project: Path) -> dict[str, Any]:
     except json.JSONDecodeError as exc:
         raise ValueError(f"invalid JSON in {DEFAULT_FILE}: {exc}") from exc
     if not isinstance(payload, dict) or payload.get("schema_version") != SCHEMA:
-        raise ValueError(f"unsupported State 6 schema; expected {SCHEMA!r}")
+        raise ValueError(f"unsupported compatibility data-closure schema; expected {SCHEMA!r}")
     return payload
 
 
@@ -95,7 +101,7 @@ def lint(project: Path) -> dict[str, Any]:
             continue
         root = address.split(".", 1)[0]
         if root not in ALLOWED_SECTIONS:
-            findings.append({"severity":"error","code":"invalid_address_root","message":f"{address} is outside State 6 structured sections"})
+            findings.append({"severity":"error","code":"invalid_address_root","message":f"{address} is outside pre-contract structured sections"})
         if address in seen:
             findings.append({"severity":"error","code":"duplicate_address","message":f"duplicate placement address: {address}"})
         seen.add(address)
@@ -158,7 +164,7 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(report, indent=2, sort_keys=True))
     else:
         s = report["summary"]
-        print(f"State 6 data: {s['placements']} placements; {s['structured_values']} values; {s['persistence_models']} persistence models; {s['errors']} errors; {s['unresolved_topics']} unresolved topics")
+        print(f"Pre-contract data closure: {s['placements']} placements; {s['structured_values']} values; {s['persistence_models']} persistence models; {s['errors']} errors; {s['unresolved_topics']} unresolved topics")
         for finding in report["findings"]:
             print(f"{finding['severity'].upper()} {finding['code']} - {finding['message']}")
     return 1 if report["summary"]["errors"] else 0
