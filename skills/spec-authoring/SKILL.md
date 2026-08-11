@@ -451,6 +451,11 @@ Expected specification output:
 
 Now create exact typed Python signatures.
 
+If the project uses deterministic HTTP assembly, read
+`ROUTER_IR_GUIDE.md` after stabilizing these contracts. Build
+`rules.http_router_backend` from accepted flows, ownership and contracts; never
+derive canonical signatures from route rows or legacy router text.
+
 Use real project types from the stabilized model layer.
 
 For each public operation:

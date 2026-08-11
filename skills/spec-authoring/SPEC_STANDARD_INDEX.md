@@ -87,6 +87,8 @@ predicate или method shape не замкнуты, diagnostic emitter возв
 ## Если router собирается детерминированно
 
 Нормативная схема: [раздел 6.1](SPEC_STANDARD.md#61-http_router_backendv1).
+Порядок проектирования и миграции:
+[ROUTER_IR_GUIDE.md](ROUTER_IR_GUIDE.md).
 
 - `rules.http_router_backend` хранит backend declaration, route catalog,
   error policy, wiring и irregular ownership.
