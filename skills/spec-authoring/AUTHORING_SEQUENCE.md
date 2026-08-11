@@ -65,6 +65,49 @@ reviewed State 4 flow
    authority. When a filename conflicts with this sequence, this sequence and
    `SKILL.md` win.
 
+## Deterministic authoring entrypoint
+
+Post-State-5 agents should ask the sequencer what comes next instead of choosing
+between State 6 and Router Closure from filenames:
+
+```bash
+python tools/design_authoring_next.py examples/<case> --json
+```
+
+The sequencer is the ordering gate. It routes to:
+
+- `design_stage6_data.py` when pre-contract structured data has deterministic
+  errors;
+- `design_stage6_contracts.py` until the explicit State 6 function plan is
+  closed and every planned function has an exact signature;
+- `design_router_closure.py` only after the State 6 contract handoff is ready;
+- State 7 notes after Router Closure is ready.
+
+`design_router_closure.py` and the `router_workbench` package remain useful as
+low-level DSL workbenches and unit-test surfaces. They are not the authority for
+cross-state ordering. A caller that skips `design_authoring_next.py` owns the
+responsibility for proving the same prerequisites independently.
+
+## State 6 contract workbench
+
+State 6 uses an explicit plan and catalog:
+
+- `60_contract_plan.json` inventories public and internal functions;
+- `60_contracts.json` stores canonical exact Python signatures;
+- `design_stage6_contracts.py --next` selects one unresolved function;
+- `--coverage` / `--lint` validate plan ownership and signatures;
+- `--handoff` is ready only when the function inventory is explicitly closed
+  and every planned function is resolved without deterministic errors.
+
+Public function seeds may be projected from accepted State 5 public operations
+because their operation names and owners are already explicit. Internal/private
+functions must never be invented by the tool: the author adds them explicitly
+to the State 6 plan before setting its status to `closed`.
+
+When the State 6 handoff is ready, Router Closure semantic slices may include the
+canonical contract for the owning external operation. The Router row remains a
+transport DSL and still must not duplicate the Python signature.
+
 ## Compatibility note
 
 The current Cabinet workbench introduced structured-data and Router Closure
