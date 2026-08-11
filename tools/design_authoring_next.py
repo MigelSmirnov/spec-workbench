@@ -4,7 +4,8 @@
 This is the workflow gate for the current authoring standard. Low-level
 workbenches remain independently testable, but this sequencer never routes an
 author into Router Closure before the canonical State 6 contract handoff is
-ready.
+ready and never treats Router Closure as ready unless its rows validate against
+those canonical contracts.
 """
 from __future__ import annotations
 
@@ -17,7 +18,7 @@ from typing import Any
 
 import design_stage6_contracts
 import design_stage6_data
-from router_workbench import service as router_service
+from router_workbench import authoring as router_authoring
 
 SCHEMA = "spec_workbench_authoring_next.v1"
 
@@ -54,14 +55,14 @@ def next_step(project: Path) -> dict[str, Any]:
             "router_allowed": False,
         }
 
-    router = router_service.coverage(project)
+    router = router_authoring.coverage(project)
     if not router["summary"]["handoff_ready"]:
         return {
             "schema_version": SCHEMA,
             "project_root": project.resolve().name,
             "phase": "deterministic_http_router_closure",
             "blocked": bool(router["summary"]["errors"]),
-            "reason": "Canonical contracts are ready; Router Closure may now bind transport semantics to those contracts.",
+            "reason": "Canonical contracts are ready; Router Closure may now bind transport semantics and must validate them against State 6.",
             "next_command": _command("python", "tools/design_router_closure.py", project_text, "--next", "--json"),
             "summary": router["summary"],
             "unresolved_operations": router["unresolved_operations"],
@@ -73,7 +74,7 @@ def next_step(project: Path) -> dict[str, Any]:
         "project_root": project.resolve().name,
         "phase": "state7_notes",
         "blocked": False,
-        "reason": "State 6 contracts and deterministic Router Closure are ready; continue to State 7 notes.",
+        "reason": "State 6 contracts and contract-validated deterministic Router Closure are ready; continue to State 7 notes.",
         "next_command": None,
         "summary": router["summary"],
         "router_allowed": True,
