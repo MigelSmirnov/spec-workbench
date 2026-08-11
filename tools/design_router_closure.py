@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Thin CLI facade for Router Closure design/evidence state."""
+"""Thin CLI facade for Router Closure design/evidence state.
+
+The low-level Router workbench remains independently testable, but the official
+`--next` authoring path is contract-aware and refuses pre-contract routing.
+"""
 from __future__ import annotations
 
 import argparse
@@ -9,6 +13,7 @@ from pathlib import Path
 
 from router_workbench import service
 from router_workbench.model import RouterClosureError
+from router_workbench.slice import contract_aware_operation_slice
 
 
 def _human(action: str, payload: dict[str, object]) -> str:
@@ -42,6 +47,9 @@ def main(argv: list[str] | None = None) -> int:
     selected = "coverage" if args.coverage else "next" if args.next else "lint"
     try:
         payload = getattr(service, selected if selected != "next" else "next_operation")(args.project)
+        if selected == "next" and payload["next"] is not None:
+            operation = payload["next"]["operation"]
+            payload["next"]["semantic_slice"] = contract_aware_operation_slice(args.project, operation)
     except RouterClosureError as exc:
         print(f"design_router_closure: error: {exc}", file=sys.stderr)
         return 2
