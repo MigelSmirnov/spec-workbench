@@ -5,6 +5,10 @@ State 6 owns canonical Python signatures and the explicit inventory of public
 and internal functions. The workbench never invents signatures or private
 helpers. Public functions are proven by accepted State 5 operations; internal
 functions must be added explicitly to the State 6 plan by the author.
+
+For deterministic HTTP projects, State 6 also owns the operation -> canonical
+handler mapping. Router Closure may choose transport semantics only after every
+externally exposed operation already has exactly one handler contract here.
 """
 from __future__ import annotations
 
@@ -16,6 +20,7 @@ from pathlib import Path
 from typing import Any
 
 import design_stage5
+import design_stage5_exposure
 
 PLAN_SCHEMA = "spec_workbench_state6_contract_plan.v1"
 CATALOG_SCHEMA = "spec_workbench_state6_contracts.v1"
@@ -70,8 +75,20 @@ def _validate_plan(project: Path, plan: dict[str, Any]) -> tuple[list[dict[str, 
     normalized: list[dict[str, Any]] = []
     seen_functions: set[str] = set()
     seen_public_ops: set[str] = set()
+    seen_router_ops: set[str] = set()
+
     state5 = design_stage5.coverage(project)
     accepted_ops = {row["key"]: row for row in state5["operations"] if row["implemented"]}
+    exposure = design_stage5_exposure.lint(project)
+    if exposure["summary"]["errors"]:
+        findings.append({
+            "severity": "error",
+            "code": "invalid_exposure_boundary",
+            "message": "State 5 exposure boundary must be valid before State 6 handler contracts are closed.",
+        })
+        external_ops: set[str] = set()
+    else:
+        external_ops = set(exposure["external_operations"])
 
     for index, entry in enumerate(plan["functions"]):
         location = f"functions[{index}]"
@@ -83,6 +100,7 @@ def _validate_plan(project: Path, plan: dict[str, Any]) -> tuple[list[dict[str, 
         visibility = entry.get("visibility")
         purpose = entry.get("purpose")
         public_op = entry.get("public_operation")
+        router_op = entry.get("router_operation")
         if not isinstance(function, str) or not FUNCTION_RE.fullmatch(function):
             findings.append({"severity":"error","code":"invalid_function_name","message":f"{location}.function is invalid"})
             continue
@@ -95,7 +113,10 @@ def _validate_plan(project: Path, plan: dict[str, Any]) -> tuple[list[dict[str, 
             findings.append({"severity":"error","code":"invalid_visibility","message":function})
         if not isinstance(purpose, str) or not purpose.strip():
             findings.append({"severity":"error","code":"missing_function_purpose","message":function})
+
         if visibility == "public":
+            if router_op is not None:
+                findings.append({"severity":"error","code":"public_has_router_operation","message":function})
             if not isinstance(public_op, str) or public_op not in accepted_ops:
                 findings.append({"severity":"error","code":"invalid_public_operation","message":function})
             else:
@@ -108,19 +129,32 @@ def _validate_plan(project: Path, plan: dict[str, Any]) -> tuple[list[dict[str, 
                     findings.append({"severity":"error","code":"public_owner_mismatch","message":f"{function}: expected {expected_module}"})
                 if function != expected_function:
                     findings.append({"severity":"error","code":"public_function_name_mismatch","message":f"{public_op}: expected function {expected_function}"})
-        elif public_op is not None:
-            findings.append({"severity":"error","code":"internal_has_public_operation","message":function})
+        else:
+            if public_op is not None:
+                findings.append({"severity":"error","code":"internal_has_public_operation","message":function})
+            if router_op is not None:
+                if not isinstance(router_op, str) or router_op not in external_ops:
+                    findings.append({"severity":"error","code":"invalid_router_operation","message":f"{function}: {router_op!r}"})
+                elif router_op in seen_router_ops:
+                    findings.append({"severity":"error","code":"duplicate_router_handler","message":router_op})
+                else:
+                    seen_router_ops.add(router_op)
+
         normalized.append({
             "function": function,
             "module": module,
             "visibility": visibility,
             "public_operation": public_op,
+            "router_operation": router_op,
             "purpose": purpose,
         })
 
     missing_public = sorted(set(accepted_ops) - seen_public_ops)
     for operation in missing_public:
         findings.append({"severity":"error","code":"missing_public_function","message":operation})
+    missing_handlers = sorted(external_ops - seen_router_ops)
+    for operation in missing_handlers:
+        findings.append({"severity":"error","code":"missing_router_handler_contract","message":operation})
     return findings, normalized
 
 
@@ -210,6 +244,7 @@ def handoff(project: Path) -> dict[str, Any]:
                 "module": row["module"],
                 "visibility": row["visibility"],
                 "public_operation": row["public_operation"],
+                "router_operation": row["router_operation"],
                 "signature": row["signature"],
             }
             for row in report["functions"] if row["resolved"]
