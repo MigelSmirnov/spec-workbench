@@ -33,7 +33,7 @@ def exposure_boundary(project: Path) -> ExposureBoundary:
 
 
 def semantic_operation_slice(project: Path, operation: str) -> dict[str, Any]:
-    """Return one bounded semantic slice plus ready operation/handler contracts."""
+    """Return the stable bounded semantic slice used by low-level Router tests."""
     if not operation.startswith("public_op:") or "." not in operation:
         raise RouterClosureError(f"invalid public operation key: {operation!r}")
     module = operation.removeprefix("public_op:").split(".", 1)[0]
@@ -44,7 +44,7 @@ def semantic_operation_slice(project: Path, operation: str) -> dict[str, Any]:
     )
     if public_operation is None:
         raise RouterClosureError(f"operation is absent from its semantic module slice: {operation}")
-    result = {
+    return {
         "schema_version": payload["schema_version"],
         "module": payload["module"],
         "responsibility": payload["responsibility"],
@@ -53,20 +53,26 @@ def semantic_operation_slice(project: Path, operation: str) -> dict[str, Any]:
         "public_operation": public_operation,
         "structured_refs": payload["structured_refs"],
     }
+
+
+def contract_aware_operation_slice(project: Path, operation: str) -> dict[str, Any]:
+    """Enrich the stable slice with canonical State 6 operation and handler contracts."""
+    result = semantic_operation_slice(project, operation)
     contracts = design_stage6_contracts.handoff(project)
-    if contracts["ready"]:
-        operation_contract = next(
-            (value for value in contracts["contracts"].values() if value["public_operation"] == operation),
-            None,
-        )
-        handler_contract = next(
-            (value for value in contracts["contracts"].values() if value.get("router_operation") == operation),
-            None,
-        )
-        if operation_contract is None:
-            raise RouterClosureError(f"canonical State 6 operation contract is missing: {operation}")
-        if handler_contract is None:
-            raise RouterClosureError(f"canonical State 6 handler contract is missing: {operation}")
-        result["canonical_contract"] = operation_contract
-        result["canonical_handler_contract"] = handler_contract
+    if not contracts["ready"]:
+        raise RouterClosureError("State 6 contract handoff is not ready; Router Closure is post-contract")
+    operation_contract = next(
+        (value for value in contracts["contracts"].values() if value["public_operation"] == operation),
+        None,
+    )
+    handler_contract = next(
+        (value for value in contracts["contracts"].values() if value.get("router_operation") == operation),
+        None,
+    )
+    if operation_contract is None:
+        raise RouterClosureError(f"canonical State 6 operation contract is missing: {operation}")
+    if handler_contract is None:
+        raise RouterClosureError(f"canonical State 6 handler contract is missing: {operation}")
+    result["canonical_contract"] = operation_contract
+    result["canonical_handler_contract"] = handler_contract
     return result
