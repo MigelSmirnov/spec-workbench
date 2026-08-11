@@ -63,7 +63,7 @@ def next_step(project: Path) -> dict[str, Any]:
             "phase": "deterministic_http_router_closure",
             "blocked": bool(router["summary"]["errors"]),
             "reason": "Canonical contracts are ready; Router Closure may now bind transport semantics and must validate them against State 6.",
-            "next_command": _command("python", "tools/design_router_closure.py", project_text, "--next", "--json"),
+            "next_command": _command("python", "tools/design_router_authoring.py", project_text, "--next", "--json"),
             "summary": router["summary"],
             "unresolved_operations": router["unresolved_operations"],
             "router_allowed": True,
