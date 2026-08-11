@@ -33,11 +33,17 @@ def test_intermediate_closures_do_not_consume_state_numbers() -> None:
     payload = _sequence()
     phases = {entry["id"]: entry for entry in payload["intermediate_phases"]}
     data = phases["pre_contract_structured_data_closure"]
-    router = phases["deterministic_http_router_closure"]
+    routes = phases["deterministic_http_route_closure"]
+    context = phases["deterministic_http_router_context_closure"]
+    assembly = phases["deterministic_http_router_ir_assembly"]
     assert data["after"] == "public_module_operations"
     assert data["before"] == "exact_contracts_internal_functions"
-    assert router["after"] == "exact_contracts_internal_functions"
-    assert router["before"] == "notes"
+    assert routes["after"] == "exact_contracts_internal_functions"
+    assert routes["before"] == "deterministic_http_router_context_closure"
+    assert context["after"] == "deterministic_http_route_closure"
+    assert context["before"] == "deterministic_http_router_ir_assembly"
+    assert assembly["after"] == "deterministic_http_router_context_closure"
+    assert assembly["before"] == "notes"
     assert payload["invariants"]["artifact_prefixes_define_semantic_state"] is False
 
 
@@ -45,7 +51,9 @@ def test_router_cannot_be_signature_source() -> None:
     invariants = _sequence()["invariants"]
     assert invariants["canonical_python_signatures_owner"] == "exact_contracts_internal_functions"
     assert invariants["router_requires_canonical_contracts"] is True
+    assert invariants["router_requires_canonical_handler_per_external_operation"] is True
     assert invariants["router_may_define_signatures"] is False
+    assert invariants["router_final_ir_is_deterministic_projection"] is True
     assert invariants["legacy_router_is_evidence_only"] is True
 
 
