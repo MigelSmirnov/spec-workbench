@@ -4,8 +4,8 @@
 This is the workflow gate for the current authoring standard. Low-level
 workbenches remain independently testable, but this sequencer never routes an
 author into Router Closure before the canonical State 6 contract handoff is
-ready and never treats Router Closure as ready unless its rows validate against
-those canonical contracts.
+ready and never treats the complete deterministic HTTP IR as ready until both
+per-route and global Router context closures are closed.
 """
 from __future__ import annotations
 
@@ -16,6 +16,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+import design_router_context
 import design_stage6_contracts
 import design_stage6_data
 from router_workbench import authoring as router_authoring
@@ -62,10 +63,24 @@ def next_step(project: Path) -> dict[str, Any]:
             "project_root": project.resolve().name,
             "phase": "deterministic_http_router_closure",
             "blocked": bool(router["summary"]["errors"]),
-            "reason": "Canonical contracts are ready; Router Closure may now bind transport semantics and must validate them against State 6.",
+            "reason": "Canonical contracts are ready; per-route Router Closure may now bind transport semantics and must validate them against State 6.",
             "next_command": _command("python", "tools/design_router_authoring.py", project_text, "--next", "--json"),
             "summary": router["summary"],
             "unresolved_operations": router["unresolved_operations"],
+            "router_allowed": True,
+        }
+
+    context = design_router_context.coverage(project)
+    if not context["summary"]["handoff_ready"]:
+        return {
+            "schema_version": SCHEMA,
+            "project_root": project.resolve().name,
+            "phase": "deterministic_http_router_context_closure",
+            "blocked": bool(context["summary"]["errors"]),
+            "reason": "Per-route closure is ready, but global deterministic HTTP wiring/auth/error policy is not yet closed.",
+            "next_command": _command("python", "tools/design_router_context.py", project_text, "--coverage", "--json"),
+            "summary": context["summary"],
+            "unresolved_topics": context["unresolved_topics"],
             "router_allowed": True,
         }
 
@@ -74,9 +89,9 @@ def next_step(project: Path) -> dict[str, Any]:
         "project_root": project.resolve().name,
         "phase": "state7_notes",
         "blocked": False,
-        "reason": "State 6 contracts and contract-validated deterministic Router Closure are ready; continue to State 7 notes.",
+        "reason": "State 6 contracts and complete deterministic Router IR closure are ready; continue to State 7 notes.",
         "next_command": None,
-        "summary": router["summary"],
+        "summary": context["summary"],
         "router_allowed": True,
     }
 
@@ -91,7 +106,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     try:
         payload = next_step(args.project)
-    except (ValueError, design_stage6_contracts.DesignStage6ContractsError) as exc:
+    except (ValueError, design_stage6_contracts.DesignStage6ContractsError, design_router_context.RouterContextError) as exc:
         print(f"design_authoring_next: error: {exc}", file=sys.stderr)
         return 2
     if args.json:
