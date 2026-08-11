@@ -2,8 +2,9 @@
 """Deterministic State 5 public-module-operation workbench.
 
 State 5 freezes only cross-boundary public operations proven by reviewed State 4
-flows. ``public_op:<module>.<name>`` denotes a provider module operation; it is
-not the compiler-owned HTTP ``api`` artifact described by API_ASSEMBLY_STANDARD.
+flows. ``public_op:<module>.<name>`` denotes an operation owned by a project
+module. Deterministic HTTP exposure is designed later from accepted operations
+and contracts; see ROUTER_IR_GUIDE.
 """
 from __future__ import annotations
 

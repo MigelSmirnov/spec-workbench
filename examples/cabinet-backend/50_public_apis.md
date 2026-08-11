@@ -2,7 +2,7 @@
 
 ## Status
 
-State 5 is in progress. These entries define public cross-boundary operations proven by State 4. They intentionally stop before exact Python signatures, concrete DTO field lists, transport bindings, or private helper functions; those belong to State 6. `public_op:*` denotes an owning module's public operation and does not denote the compiler-owned HTTP `api` artifact.
+State 5 is in progress. These entries define public cross-boundary operations proven by State 4. They intentionally stop before exact Python signatures, concrete DTO field lists, transport bindings, or private helper functions; those belong to State 6. `public_op:*` denotes an owning module's public operation; deterministic HTTP exposure is designed later from accepted operations and contracts.
 
 ---
 
