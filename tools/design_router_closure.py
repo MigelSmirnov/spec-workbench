@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
-"""Thin CLI facade for Router Closure design/evidence state.
+"""Official contract-aware CLI for Router Closure authoring.
 
-The low-level Router workbench remains independently testable, but the official
-`--next` authoring path is contract-aware and refuses pre-contract routing.
+Low-level Router DSL helpers remain independently testable through
+``router_workbench.service``. This CLI is the authoring boundary: State 6 must
+be ready, and resolved rows are validated against canonical operation/handler
+contracts before they can contribute to handoff readiness.
 """
 from __future__ import annotations
 
@@ -11,9 +13,8 @@ import json
 import sys
 from pathlib import Path
 
-from router_workbench import service
+from router_workbench import authoring
 from router_workbench.model import RouterClosureError
-from router_workbench.slice import contract_aware_operation_slice
 
 
 def _human(action: str, payload: dict[str, object]) -> str:
@@ -46,10 +47,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     selected = "coverage" if args.coverage else "next" if args.next else "lint"
     try:
-        payload = getattr(service, selected if selected != "next" else "next_operation")(args.project)
-        if selected == "next" and payload["next"] is not None:
-            operation = payload["next"]["operation"]
-            payload["next"]["semantic_slice"] = contract_aware_operation_slice(args.project, operation)
+        payload = getattr(authoring, selected if selected != "next" else "next_operation")(args.project)
     except RouterClosureError as exc:
         print(f"design_router_closure: error: {exc}", file=sys.stderr)
         return 2
