@@ -22,42 +22,34 @@ def _project(tmp_path: Path) -> Path:
     return project
 
 
-def _resolve_contracts(project: Path) -> None:
-    plan_path = project / PLAN
-    plan = json.loads(plan_path.read_text(encoding="utf-8"))
-    plan["status"] = "closed"
-    plan_path.write_text(json.dumps(plan), encoding="utf-8")
+def _make_unresolved(project: Path, function: str = "attach_local_source") -> None:
     catalog_path = project / CATALOG
     catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
-    catalog["contracts"] = {
-        entry["function"]: "(value: str) -> str"
-        for entry in plan["functions"]
-    }
+    catalog["contracts"][function] = "unresolved"
     catalog_path.write_text(json.dumps(catalog), encoding="utf-8")
 
 
-def test_cabinet_state6_contracts_are_open_and_fail_closed() -> None:
+def test_cabinet_state6_contracts_are_closed_and_ready() -> None:
     report = design_stage6_contracts.coverage(CABINET)
     assert report["summary"] == {
-        "planned_functions": 20,
+        "planned_functions": 36,
         "public_functions": 20,
-        "internal_functions": 0,
-        "resolved": 0,
-        "unresolved": 20,
+        "internal_functions": 16,
+        "resolved": 36,
+        "unresolved": 0,
         "errors": 0,
-        "plan_closed": False,
-        "handoff_ready": False,
+        "plan_closed": True,
+        "handoff_ready": True,
     }
-    assert len(report["unresolved_functions"]) == 20
-    assert any(item["code"] == "contract_plan_open" for item in report["findings"])
+    assert report["unresolved_functions"] == []
+    assert report["findings"] == []
 
 
-def test_next_function_is_deterministic() -> None:
+def test_next_function_is_complete_after_state6_handoff() -> None:
     report = design_stage6_contracts.next_function(CABINET)
-    assert report["complete"] is False
-    assert report["next"]["function"] == "accept_transfer_manifest"
-    assert report["next"]["module"] == "module:durable_archive"
-    assert report["next"]["public_operation"] == "public_op:durable_archive.accept_transfer_manifest"
+    assert report["complete"] is True
+    assert report["next"] is None
+    assert report["summary"]["handoff_ready"] is True
 
 
 def test_public_operation_mapping_is_complete() -> None:
@@ -68,6 +60,16 @@ def test_public_operation_mapping_is_complete() -> None:
     assert not any(item["code"] == "missing_public_function" for item in report["findings"])
 
 
+def test_every_external_operation_has_one_canonical_handler_contract() -> None:
+    report = design_stage6_contracts.coverage(CABINET)
+    handlers = [row for row in report["functions"] if row["router_operation"] is not None]
+    assert len(handlers) == 11
+    assert len({row["router_operation"] for row in handlers}) == 11
+    irregular = [row for row in handlers if row["module"] == "module:api_irregular"]
+    assert [row["function"] for row in irregular] == ["attach_local_source_handler"]
+    assert irregular[0]["router_operation"] == FIRST_EXTERNAL
+
+
 def test_internal_functions_require_explicit_plan_entries(tmp_path: Path) -> None:
     project = _project(tmp_path)
     plan_path = project / PLAN
@@ -76,49 +78,61 @@ def test_internal_functions_require_explicit_plan_entries(tmp_path: Path) -> Non
         "function": "_persist_manifest_atomically",
         "module": "module:durable_archive",
         "visibility": "internal",
-        "public_operation": None,
         "purpose": "Synthetic explicit internal-function inventory for workbench testing.",
     })
     plan_path.write_text(json.dumps(plan), encoding="utf-8")
     report = design_stage6_contracts.coverage(project)
-    assert report["summary"]["planned_functions"] == 21
-    assert report["summary"]["internal_functions"] == 1
+    assert report["summary"]["planned_functions"] == 37
+    assert report["summary"]["internal_functions"] == 17
     assert "_persist_manifest_atomically" in report["unresolved_functions"]
+    assert report["summary"]["handoff_ready"] is False
 
 
-def test_closed_resolved_contract_plan_produces_ready_handoff(tmp_path: Path) -> None:
+def test_missing_router_handler_mapping_is_fail_closed(tmp_path: Path) -> None:
     project = _project(tmp_path)
-    _resolve_contracts(project)
-    handoff = design_stage6_contracts.handoff(project)
+    plan_path = project / PLAN
+    plan = json.loads(plan_path.read_text(encoding="utf-8"))
+    handler = next(item for item in plan["functions"] if item.get("router_operation") == FIRST_EXTERNAL)
+    handler.pop("router_operation")
+    plan_path.write_text(json.dumps(plan), encoding="utf-8")
+    report = design_stage6_contracts.coverage(project)
+    assert report["summary"]["handoff_ready"] is False
+    assert any(item["code"] == "missing_router_handler_contract" for item in report["findings"])
+
+
+def test_ready_handoff_contains_operation_and_handler_contracts() -> None:
+    handoff = design_stage6_contracts.handoff(CABINET)
     assert handoff["ready"] is True
-    assert handoff["summary"]["handoff_ready"] is True
-    assert handoff["summary"]["resolved"] == 20
-    assert handoff["unresolved_functions"] == []
+    assert handoff["summary"]["resolved"] == 36
+    domain = handoff["contracts"]["attach_local_source"]
+    handler = handoff["contracts"]["attach_local_source_handler"]
+    assert domain["public_operation"] == FIRST_EXTERNAL
+    assert domain["router_operation"] is None
+    assert handler["public_operation"] is None
+    assert handler["router_operation"] == FIRST_EXTERNAL
 
 
-def test_authoring_gate_keeps_cabinet_in_state6_before_router() -> None:
+def test_authoring_gate_advances_current_cabinet_to_router() -> None:
     report = design_authoring_next.next_step(CABINET)
-    assert report["phase"] == "state6_exact_contracts"
-    assert report["blocked"] is False
-    assert report["router_allowed"] is False
-    assert "design_stage6_contracts.py" in report["next_command"]
-
-
-def test_authoring_gate_advances_to_router_only_after_contract_handoff(tmp_path: Path) -> None:
-    project = _project(tmp_path)
-    _resolve_contracts(project)
-    report = design_authoring_next.next_step(project)
     assert report["phase"] == "deterministic_http_router_closure"
+    assert report["blocked"] is False
     assert report["router_allowed"] is True
     assert "design_router_closure.py" in report["next_command"]
     assert report["summary"]["unresolved"] == 11
 
 
-def test_router_semantic_slice_is_enriched_only_after_contract_handoff(tmp_path: Path) -> None:
-    before = semantic_operation_slice(CABINET, FIRST_EXTERNAL)
-    assert "canonical_contract" not in before
+def test_authoring_gate_returns_to_state6_when_contract_is_unresolved(tmp_path: Path) -> None:
     project = _project(tmp_path)
-    _resolve_contracts(project)
-    after = semantic_operation_slice(project, FIRST_EXTERNAL)
-    assert after["canonical_contract"]["public_operation"] == FIRST_EXTERNAL
-    assert after["canonical_contract"]["signature"] == "(value: str) -> str"
+    _make_unresolved(project)
+    report = design_authoring_next.next_step(project)
+    assert report["phase"] == "state6_exact_contracts"
+    assert report["router_allowed"] is False
+    assert "attach_local_source" in report["unresolved_functions"]
+
+
+def test_router_semantic_slice_contains_both_canonical_contracts() -> None:
+    payload = semantic_operation_slice(CABINET, FIRST_EXTERNAL)
+    assert payload["canonical_contract"]["public_operation"] == FIRST_EXTERNAL
+    assert payload["canonical_contract"]["signature"].startswith("(invoice_id: str, files:")
+    assert payload["canonical_handler_contract"]["router_operation"] == FIRST_EXTERNAL
+    assert payload["canonical_handler_contract"]["signature"] == "(request: Request, invoice_id: str) -> SourceAttachmentBatchResult"
