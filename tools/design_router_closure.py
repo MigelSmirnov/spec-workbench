@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Official contract-aware CLI for Router Closure authoring.
+"""Low-level CLI facade for Router Closure DSL/evidence state.
 
-Low-level Router DSL helpers remain independently testable through
-``router_workbench.service``. This CLI is the authoring boundary: State 6 must
-be ready, and resolved rows are validated against canonical operation/handler
-contracts before they can contribute to handoff readiness.
+This compatibility entrypoint validates the closed Router Closure DSL in
+isolation. It is intentionally not the official post-State-6 authoring workflow.
+Use ``design_authoring_next.py`` and ``design_router_authoring.py`` for
+contract-aware authoring.
 """
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ import json
 import sys
 from pathlib import Path
 
-from router_workbench import authoring
+from router_workbench import service
 from router_workbench.model import RouterClosureError
 
 
@@ -47,7 +47,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     selected = "coverage" if args.coverage else "next" if args.next else "lint"
     try:
-        payload = getattr(authoring, selected if selected != "next" else "next_operation")(args.project)
+        payload = getattr(service, selected if selected != "next" else "next_operation")(args.project)
     except RouterClosureError as exc:
         print(f"design_router_closure: error: {exc}", file=sys.stderr)
         return 2
