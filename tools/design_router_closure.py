@@ -1,10 +1,5 @@
 #!/usr/bin/env python3
-"""Official Router Closure authoring entrypoint.
-
-The low-level router_workbench package can validate its closed DSL in isolation,
-but authoring through this CLI is fail-closed until State 6 exact contracts have
-a ready handoff. This preserves the normative sequence in AUTHORING_SEQUENCE.
-"""
+"""Thin CLI facade for Router Closure design/evidence state."""
 from __future__ import annotations
 
 import argparse
@@ -12,19 +7,11 @@ import json
 import sys
 from pathlib import Path
 
-import design_stage6_contracts
 from router_workbench import service
 from router_workbench.model import RouterClosureError
 
-PREREQUISITE_SCHEMA = "spec_workbench_router_closure_prerequisite.v1"
-
 
 def _human(action: str, payload: dict[str, object]) -> str:
-    if payload.get("schema_version") == PREREQUISITE_SCHEMA:
-        return (
-            "Router Closure blocked: State 6 exact contracts are not ready.\n"
-            "Run: python tools/design_stage6_contracts.py <project> --next --json\n"
-        )
     summary = payload["summary"]
     if action == "next":
         operation = payload["next"]["operation"] if payload["next"] else "complete"
@@ -38,22 +25,6 @@ def _human(action: str, payload: dict[str, object]) -> str:
         operation = f" {finding['operation']}" if finding.get("operation") else ""
         lines.append(f"{finding['severity'].upper()} {finding['code']}{operation} - {finding['message']}")
     return "\n".join(lines) + "\n"
-
-
-def _prerequisite(project: Path) -> dict[str, object] | None:
-    handoff = design_stage6_contracts.handoff(project)
-    if handoff["ready"]:
-        return None
-    return {
-        "schema_version": PREREQUISITE_SCHEMA,
-        "project_root": project.resolve().name,
-        "blocked": True,
-        "requires": "state6_exact_contracts",
-        "message": "Router Closure requires a ready State 6 exact-contract handoff.",
-        "contract_summary": handoff["summary"],
-        "unresolved_functions": handoff["unresolved_functions"],
-        "findings": handoff["findings"],
-    }
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -70,14 +41,11 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     selected = "coverage" if args.coverage else "next" if args.next else "lint"
     try:
-        blocked = _prerequisite(args.project)
-        payload = blocked or getattr(service, selected if selected != "next" else "next_operation")(args.project)
-    except (RouterClosureError, design_stage6_contracts.DesignStage6ContractsError) as exc:
+        payload = getattr(service, selected if selected != "next" else "next_operation")(args.project)
+    except RouterClosureError as exc:
         print(f"design_router_closure: error: {exc}", file=sys.stderr)
         return 2
     print(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) if args.json else _human(selected, payload))
-    if blocked is not None:
-        return 1
     if selected == "lint":
         return 1 if payload["summary"]["errors"] else 0
     if selected == "coverage":
