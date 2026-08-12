@@ -41,7 +41,6 @@ def _load_module_scopes(project: Path) -> set[str]:
     if not path.is_file():
         return set()
     result: set[str] = set()
-    # State 3 canonical module headings contain `module:<name>`.
     for match in re.finditer(r"`module:([A-Za-z_][A-Za-z0-9_]*)`", path.read_text(encoding="utf-8")):
         result.add(match.group(1))
     return result
@@ -61,11 +60,31 @@ def _load_structured_addresses(project: Path) -> set[str]:
     return result
 
 
+def _load_deterministic_callable_scopes(project: Path) -> set[str]:
+    """Return callables whose implementation is fully owned by deterministic IR.
+
+    State 7 prose is not required for a table-emitted HTTP handler: its call graph,
+    argument refs, authorization and return behavior are already closed in router
+    IR. Irregular handlers are deliberately excluded because their implementation
+    still requires generation notes.
+    """
+    path = project / "70_router_closure.json"
+    if not path.is_file():
+        return set()
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    result: set[str] = set()
+    for item in payload.get("items", []):
+        if not isinstance(item, dict) or item.get("emission") != "table":
+            continue
+        handler = item.get("handler")
+        if isinstance(handler, str) and handler:
+            result.add(handler)
+    return result
+
+
 def _address_resolves(address: str, known: set[str]) -> bool:
     if address in known:
         return True
-    # A placement may represent a structured parent used as a whole. A deeper
-    # address is valid only when the known placement itself is that parent.
     return any(address.startswith(item + ".") for item in known)
 
 
@@ -86,6 +105,7 @@ def coverage(project: Path) -> dict[str, Any]:
     module_scopes = _load_module_scopes(project)
     valid_scopes = contract_scopes | module_scopes
     known_addresses = _load_structured_addresses(project)
+    deterministic_scopes = _load_deterministic_callable_scopes(project)
 
     if not path.is_file():
         findings.append(_finding("block", "missing_notes_file", "State 7 requires 80_notes.md before handoff."))
@@ -127,6 +147,19 @@ def coverage(project: Path) -> dict[str, Any]:
     for note in notes:
         by_scope[note["scope"]].append(note)
 
+    # Every State 6 callable must be either constrained by at least one State 7
+    # note or be provably owned by deterministic assembly. This prevents a new
+    # callable from silently reaching the LLM with only a signature and therefore
+    # admitting a trivial/placeholder implementation.
+    for scope in sorted(contract_scopes - deterministic_scopes):
+        if scope not in by_scope:
+            findings.append(_finding(
+                "block",
+                "missing_callable_note",
+                f"State 6 callable {scope} has no State 7 note and is not deterministically implemented.",
+                scope=scope,
+            ))
+
     for scope, scoped_notes in sorted(by_scope.items()):
         known_classes = [note["class"] for note in scoped_notes if note["class"] in NOTE_CLASSES]
         counts = Counter(known_classes)
@@ -154,11 +187,14 @@ def coverage(project: Path) -> dict[str, Any]:
         "project_root": project.resolve().name,
         "summary": {
             "notes": len(notes),
+            "contract_callables": len(contract_scopes),
+            "deterministic_callables": len(deterministic_scopes & contract_scopes),
             "blocks": blocks,
             "reviews": reviews,
             "handoff_ready": blocks == 0 and reviews == 0,
         },
         "notes": notes,
+        "deterministic_callables": sorted(deterministic_scopes & contract_scopes),
         "findings": findings,
     }
 
