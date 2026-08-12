@@ -2,11 +2,11 @@
 
 Flow: `flow:accept_local_source_attachment`
 
-Status: **AMBIGUITY — repair required**
+Status: **semantic_closed**
 
 ## Reconstructed accepted behavior
 
-The accepted State 2/4 behavior is per-file evaluation inside one batch:
+The accepted behavior is per-file evaluation inside one batch:
 
 ```text
 authorized exact invoice target + files
@@ -22,43 +22,77 @@ recompute source status from accepted evidence
 return per-file results + source status
 ```
 
-A batch containing both valid and rejected files may therefore produce partial success. Rejected files must not replace accepted evidence, but their presence does not erase successful attachments from the same batch.
+A batch containing both valid and rejected files may produce partial success. Rejected files do not replace accepted evidence, and their presence does not erase successful attachments from the same batch.
 
-## Adversarial ambiguity
+## Original Stage 7.1 finding
 
-### Interpretation A — per-file partial success
+Before repair, the State 5/7 wording allowed two materially different implementations:
 
-Each file is evaluated independently. Valid files are attached, rejected files are represented as `SourceAttachmentItemResult.result = "rejected"`, and the returned `SourceAttachmentBatchResult` reports all outcomes.
+- per-file partial success;
+- batch-wide abort via `SourceAttachmentRejectedError` on the first rejected file.
 
-### Interpretation B — batch-wide rejection
+For a batch `[valid_photo, invalid_pdf]`, those alternatives produced different accepted archive truth.
 
-The implementation validates files in sequence and raises `SourceAttachmentRejectedError` as soon as one file is unsupported, unreadable, wrong-target, or hash-mismatched. No valid file from the same request is attached.
+## Applied repair
 
-The current State 5/7 exception wording permits Interpretation B even though State 2 and State 4 require independent per-file outcomes and explicit partial success.
+The loss was repaired at the earliest affected layer and propagated forward:
 
-## Material difference
+- `50_public_apis_flow2_semantic_repair.md` restores the State 2/4 requirement that classifiable file-local rejection is returned as a rejected `SourceAttachmentItemResult` and does not abort valid sibling files;
+- `60_exception_taxonomy.json` now reserves `SourceAttachmentRejectedError` for request/batch-level conditions that prevent trustworthy independent per-file classification;
+- `80_notes_flow2_semantic_repair.md` makes per-file evaluation, complete result reporting, status recomputation, idempotent provenance preservation, and the transport-only HTTP seam generation-obligatory.
 
-For a batch `[valid_photo, invalid_pdf]`, Interpretation A attaches the valid photo and returns one accepted plus one rejected item. Interpretation B attaches nothing and raises. This is observable business behavior, not implementation variation.
+No function signature or product behavior was added.
 
-## Finding
+## Scenario rerun
+
+### A1 — valid attachment changes source evidence only
+
+**PASS.** A valid file is attached through `durable_archive`; source status is recomputed from accepted evidence and the immutable Invoice Card is not rewritten.
+
+### A2 — unknown invoice is not converted into empty source state
+
+**PASS.** Target resolution failure remains `InvoiceNotFoundError`; neither attachment nor source-status operations may synthesize a placeholder invoice/source state.
+
+### A3 — repeated identical bytes are idempotent, not silent replacement
+
+**PASS.** Equivalent bytes do not create a duplicate binary replica. Previously accepted provenance remains preserved; a repeated attempt may add attempt evidence but cannot silently replace accepted provenance.
+
+### A4 — irregular HTTP handler owns no archive policy
+
+**PASS.** The irregular handler may perform multipart transformation and accepted authentication/authorization orchestration, but source acceptance, per-file rejection, persistence and source-status policy remain in `durable_archive`.
+
+## Adversarial ambiguity rerun
+
+Strongest alternative considered: abort the whole mixed batch when one file has a classifiable local rejection.
+
+Result: **PASS**. That implementation now violates the repaired public-operation and generation-note obligations.
+
+Remaining alternatives concern internal ordering of independent file checks, transaction mechanics compatible with preserving accepted sibling outcomes, storage layout, or adapter implementation. They do not change the accepted observable semantics.
+
+Classification: **PASS_INTERNAL_VARIATION**.
+
+## Placeholder resistance
+
+A trivial implementation cannot satisfy the complete slice:
+
+- an empty batch result omits one required result for each submitted file;
+- blind forwarding omits media/hash/target/provenance validation;
+- unconditional rejection violates accepted valid-file behavior and partial success;
+- mutating the Invoice Card violates the immutable-card boundary;
+- an HTTP-only policy implementation violates the ownership boundary.
+
+Result: **PASS**.
+
+## Final review record
 
 ```text
 flow: flow:accept_local_source_attachment
-status: AMBIGUITY
-material_alternative_found: yes
+status: semantic_closed
+material_alternative_found: no
 placeholder_implementation_found: no
-scenario_gaps:
-  - mixed valid/rejected batches are not unambiguously required to preserve valid attachments
+scenario_gaps: []
 findings:
-  - owner: structure
-    scope: State 5 attachment outcome/error semantics propagated through State 6 exception meaning and State 7 notes
-    interpretation_A: ordinary file-level rejection is returned per item while valid sibling files may attach
-    interpretation_B: any rejected file raises SourceAttachmentRejectedError and aborts the entire batch
-    required_resolution: reserve SourceAttachmentRejectedError for batch-level inability to produce trustworthy per-file results; represent ordinary source-policy rejection as per-file rejected items
+  - resolved: mixed-batch partial-success semantics restored at State 5 and propagated through State 6/7
 ```
 
-## Earliest repair owner
-
-State 2 and State 4 are already explicit. The loss occurs when the public API compresses partial-success semantics into an exception description. Repair State 5 first, then propagate to State 6 exception taxonomy and State 7 notes.
-
-`semantic_closed`: **no**, pending repair and rerun.
+`semantic_closed`: **yes**
