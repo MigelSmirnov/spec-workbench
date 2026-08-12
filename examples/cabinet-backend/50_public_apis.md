@@ -18,7 +18,7 @@ Local protected-operation adapters.
 Authenticated principal context and one exact protected Cabinet operation identifier.
 
 ### Outputs
-Authorization decision plus security/audit evidence sufficient for the caller to allow or deny that exact operation.
+Authorization decision plus security/audit evidence for an exact operation that the authenticated principal is permitted to perform.
 
 ### Observable effect
 May record authorization/security evidence; does not perform the protected business operation itself.
@@ -27,7 +27,7 @@ May record authorization/security evidence; does not perform the protected busin
 Exact-operation authorization, principal/capability separation, revocation, and local-service versus synchronization-identity boundaries.
 
 ### Errors
-Unauthenticated principal, revoked credential, insufficient capability, invalid operation vocabulary, security-policy refusal.
+`AuthenticationRequiredError` when no valid authenticated principal exists. `OperationForbiddenError` when the authenticated principal is revoked, lacks the required exact-operation capability, supplies an operation outside the accepted protected vocabulary, or is refused by the accepted access-control policy.
 
 ### State impact
 May append security evidence; must not mutate invoice, Registry, PresuPro, Holded, or retention state.
@@ -46,7 +46,7 @@ Synchronization scheduler/adapter.
 One exact synchronization work selection and synchronization-node context.
 
 ### Outputs
-Transfer/delivery/reconciliation outcome that preserves the distinction between delivered and durably accepted.
+Transfer/delivery/reconciliation outcome that preserves the distinction between delivered and durably accepted. Authentication failure, transport failure, incompatible package/contract, remote unavailability, and ambiguous delivery are explicit synchronization outcome states rather than implicit success.
 
 ### Observable effect
 May perform authenticated transfer attempts and record transport observations/receipts.
@@ -55,7 +55,7 @@ May perform authenticated transfer attempts and record transport observations/re
 Outbound synchronization identity, retry/reconciliation semantics, transfer identity, and delivery-versus-acceptance separation.
 
 ### Errors
-Authentication/transport failure, incompatible package/contract, unknown outcome requiring reconciliation, remote unavailability.
+Failure to construct or durably record a synchronization outcome at all. Transport and reconciliation conditions that can be classified are returned in `SynchronizationOutcome` and are not silently promoted to durable acceptance.
 
 ### State impact
 Mutates synchronization attempt/receipt state only; durable acceptance remains owned by `module:durable_archive`.
@@ -74,7 +74,7 @@ Mutates synchronization attempt/receipt state only; durable acceptance remains o
 Exact transfer, replica, invoice work, or working-set identity required by the release evaluation.
 
 ### Outputs
-Current synchronization/replica observation without any claim of durable archive acceptance.
+Current synchronization/replica observation without any claim of durable archive acceptance. Unknown, unavailable, stale, or insufficient observations remain explicit observation states where the synchronization status model can represent them.
 
 ### Observable effect
 Read-only with respect to business state.
@@ -83,7 +83,7 @@ Read-only with respect to business state.
 Transport facts remain transport facts.
 
 ### Errors
-Unknown target, unavailable observation, stale/insufficient synchronization evidence.
+Failure to obtain or construct a trustworthy synchronization observation at all; the caller must never receive a fabricated default synchronized state.
 
 ### State impact
 None beyond optional observation/audit recording.
@@ -102,7 +102,7 @@ None beyond optional observation/audit recording.
 One exact transfer manifest, immutable Invoice Card revision evidence, and required source evidence presented for local acceptance.
 
 ### Outputs
-Accepted, already-accepted, rejected, quarantined, or explicit incomplete/failure outcome with durable acceptance evidence when applicable.
+Accepted, already-accepted, rejected, quarantined, or explicit incomplete/failure outcome with durable acceptance evidence when applicable. Unsupported Card/version, integrity failure, conflicting evidence, duplicate-review requirements, and quarantine requirements are classified acceptance outcomes rather than alternate exception semantics.
 
 ### Observable effect
 May create durable archive records, source custody, quarantine state, and acceptance evidence atomically under the accepted rules.
@@ -111,7 +111,7 @@ May create durable archive records, source custody, quarantine state, and accept
 Card immutability, manifest idempotency, source integrity, duplicate policy, quarantine policy, and atomic visibility.
 
 ### Errors
-Unsupported Card/version, integrity/hash failure, conflicting predecessor/evidence, duplicate review, persistence failure, quarantine-required condition.
+Persistence or system failure that prevents the archive from atomically recording a trustworthy classified acceptance outcome. Validation, duplicate, integrity, and quarantine conditions that can be classified belong in the returned `InvoiceTransferReceipt`.
 
 ### State impact
 Mutates durable archive state only according to accepted acceptance/quarantine transitions.
@@ -130,7 +130,7 @@ Mutates durable archive state only according to accepted acceptance/quarantine t
 Exact archive target or working-set evidence identity.
 
 ### Outputs
-Authoritative durable-acceptance proof or explicit not-accepted/not-verifiable result.
+Authoritative durable-acceptance proof or explicit not-accepted/not-verifiable result. Unknown target, missing/unverified required replica, or inconsistent archive evidence must remain explicit verification outcomes when they can be classified from archive truth.
 
 ### Observable effect
 Read-only verification of archive truth.
@@ -139,7 +139,7 @@ Read-only verification of archive truth.
 Network delivery or external status can never substitute for local durable proof.
 
 ### Errors
-Unknown target, missing/unverified required replica, inconsistent archive evidence.
+Failure to read or evaluate authoritative archive evidence at all. Missing or inconsistent evidence that can be classified must not be converted into a fabricated positive proof.
 
 ### State impact
 None beyond optional verification evidence.
@@ -167,7 +167,7 @@ May add verified source custody/provenance and update Backend-owned source avail
 Stable mutation identity, media/hash verification, expected-source matching, provenance, idempotent repeated bytes, and no silent replacement.
 
 ### Errors
-Unknown invoice, unsupported/unreadable file, hash mismatch, wrong target, storage failure, ambiguous target before invocation.
+`InvoiceNotFoundError` when the stable accepted invoice target cannot be resolved. `SourceAttachmentRejectedError` when submitted evidence is unsupported, unreadable, wrong-target, hash-mismatched, ambiguous, or otherwise rejected by accepted archive policy. Unexpected persistence/system failure is not a normal attachment result.
 
 ### State impact
 Mutates source evidence only; accepted Card bytes/content hash remain immutable.
@@ -186,7 +186,7 @@ Local source-attachment adapters.
 Exact accepted invoice/source package identity.
 
 ### Outputs
-Current source availability, completeness, attachment outcomes, and missing/failed evidence state.
+Current source availability, completeness, attachment outcomes, and missing/failed evidence state for an existing accepted archive target.
 
 ### Observable effect
 Read-only.
@@ -195,7 +195,7 @@ Read-only.
 Truthful distinction among available, missing, and failed-verification evidence.
 
 ### Errors
-Unknown invoice/source target or unavailable archive evidence.
+`InvoiceNotFoundError` when the requested accepted invoice/source target cannot be resolved. Missing or failed source evidence for an existing invoice remains part of the returned source status rather than becoming a fabricated empty result.
 
 ### State impact
 None.
@@ -223,7 +223,7 @@ Read-only.
 Callers consume accepted immutable archive truth rather than mutable transport payloads.
 
 ### Errors
-Invoice/revision not found, not accepted, quarantined-only visibility, unavailable required evidence.
+`InvoiceNotFoundError` when the exact accepted invoice or revision cannot be resolved. Missing, unaccepted, or quarantined-only revisions are not returned as normal archive truth.
 
 ### State impact
 None.
@@ -251,7 +251,7 @@ Creates/updates Registry-derived WorkObject fields while preserving Cabinet-owne
 Registry authority, one-way projection, accepted field set, no inferred deletion/completion, and stable `project_id` identity.
 
 ### Errors
-Registry observation/translation failure, invalid project data, incomplete refresh evidence.
+`RegistryContextUnavailableError` when the supplied Registry observation is unavailable, invalid, incomplete, or cannot be translated and accepted safely. No partial unverifiable refresh is a normal result.
 
 ### State impact
 Mutates Registry-derived local projection only; never writes Registry.
@@ -270,7 +270,7 @@ Registry refresh/assignment-review adapters.
 Exact immutable Card assignment context and current Registry/WorkObject context.
 
 ### Outputs
-Valid assignment or explicit review-required validation evidence.
+Valid assignment or explicit review-required validation evidence. Archived project status, changed Registry facts, or otherwise review-worthy but observable context may produce review evidence without rewriting the immutable Card.
 
 ### Observable effect
 May create/update Backend-owned assignment-validation evidence.
@@ -279,7 +279,7 @@ May create/update Backend-owned assignment-validation evidence.
 Registry status affects classification/review but does not rewrite or reject an otherwise valid immutable Card.
 
 ### Errors
-Missing/archived/unavailable project context, inconsistent references, insufficient Registry evidence.
+`RegistryContextUnavailableError` when the current Registry observation required to perform a trustworthy validation is unavailable or cannot be accepted safely. Observable disagreement or review-worthy status is returned as validation evidence rather than guessed away.
 
 ### State impact
 Mutates validation/review evidence only.
@@ -307,7 +307,7 @@ Read-only.
 Unresolved facts remain unresolved rather than guessed.
 
 ### Errors
-Unknown assignment or unavailable validation evidence.
+`AssignmentValidationNotFoundError` when no accepted assignment-validation evidence exists for the exact requested Card revision context.
 
 ### State impact
 None.
@@ -335,7 +335,7 @@ Read-only.
 One Registry project maps to at most one current WorkObject and Registry-derived facts remain source-attributed.
 
 ### Errors
-Unknown WorkObject, unavailable project context, unresolved source presence.
+`RegistryContextUnavailableError` when the requested WorkObject or Registry context required to resolve it cannot be obtained safely. The operation must not construct a placeholder WorkObject.
 
 ### State impact
 None.
@@ -363,7 +363,7 @@ May append one immutable EstimateSnapshot when canonical content changed.
 Immutable snapshots, content-based idempotency, stable source identity, no inferred estimate lineage.
 
 ### Errors
-Invalid/missing source identity, unprocessable content, unsupported observation, persistence failure.
+`EstimateObservationRejectedError` when stable source identity is missing or the observation is unsupported, invalid, or unprocessable. Unexpected persistence/system failure is not an accepted partial snapshot.
 
 ### State impact
 Appends immutable estimate evidence only.
@@ -382,7 +382,7 @@ Plan/actual request adapters.
 Exact pinned invoice revision evidence, WorkObject/project context, immutable EstimateSnapshot, confirmed matching decisions, and accepted conversion/forecast assumptions when applicable.
 
 ### Outputs
-Reproducible plan-versus-actual result with pinned evidence identities, unmatched facts, warnings/refusals, and deterministic calculated values.
+Reproducible plan-versus-actual result with pinned evidence identities, explicit unmatched facts, warnings that do not invalidate the calculation, and deterministic calculated values.
 
 ### Observable effect
 Produces analytical artifact/result; does not rewrite source facts.
@@ -391,7 +391,7 @@ Produces analytical artifact/result; does not rewrite source facts.
 Confirmed matches only, explicit unmatched state, comparability preconditions, reproducibility, and source immutability.
 
 ### Errors
-Missing pinned evidence, unresolved project assignment where required, incomparable units/quantities, invalid match reference, unsupported calculation precondition.
+`PlanActualPreconditionError` when pinned project/invoice/estimate/match evidence is missing, incompatible, unresolved, or otherwise insufficient for a reproducible calculation, including unsupported unit-comparability preconditions.
 
 ### State impact
 May persist derived analytical evidence/cache if implementation chooses; source records remain unchanged.
@@ -466,7 +466,7 @@ Mutates logical publication/reconciliation state only.
 One exact already-authorized Holded purchase attempt payload and stable attempt marker/identity.
 
 ### Outputs
-Immutable technical attempt result including returned remote identifier/response evidence or ambiguous/failure classification.
+Immutable technical attempt result including returned remote identifier/response evidence or explicit credential, transport, remote-rejection, malformed-response, or ambiguous-outcome classification.
 
 ### Observable effect
 Performs the single permitted remote create mutation for that logical attempt.
@@ -475,7 +475,7 @@ Performs the single permitted remote create mutation for that logical attempt.
 Holded credential secrecy, exact request contract, maximum automatic POST count of one, raw response preservation, secret redaction.
 
 ### Errors
-Credential failure, transport timeout, remote rejection, malformed response, ambiguous network outcome.
+Failure to construct or durably preserve trustworthy technical attempt evidence at all. Classifiable remote and transport outcomes belong in `HoldedPublicationAttempt` and do not authorize hidden mutation retries.
 
 ### State impact
 Persists technical attempt evidence; does not decide Cabinet publication eligibility/success.
@@ -494,7 +494,7 @@ Persists technical attempt evidence; does not decide Cabinet publication eligibi
 Stable publication attempt marker and/or canonical Holded document identifier when available.
 
 ### Outputs
-Read-only remote lookup/GET evidence and technical match classification needed by publication reconciliation.
+Read-only remote lookup/GET evidence and technical match classification, including zero-match, multi-match, malformed-response, unknown-document, and transport-failure observations needed by publication reconciliation.
 
 ### Observable effect
 Remote reads only.
@@ -503,7 +503,7 @@ Remote reads only.
 Recovery uses observed Holded evidence without hidden mutation or business interpretation of unknown status values.
 
 ### Errors
-Lookup/GET transport failure, zero/multiple matches, malformed response, unknown document.
+Failure to obtain or construct trustworthy lookup evidence at all. Classifiable lookup outcomes remain evidence for `holded_publication` and are not silently converted to verified success.
 
 ### State impact
 May append technical observation evidence only.
