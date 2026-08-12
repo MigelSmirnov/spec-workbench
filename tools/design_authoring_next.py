@@ -4,8 +4,9 @@
 This is the workflow gate for the current authoring standard. Low-level
 workbenches remain independently testable, but this sequencer never routes an
 author into Router Closure before the canonical State 6 contract handoff is
-ready and never treats the complete deterministic HTTP IR as ready until both
-per-route and global Router context closures are closed.
+ready, never treats deterministic HTTP IR as ready until route/context closure
+is complete, and never hands off State 7 notes while structural, consistency,
+or semantic-stub findings remain unresolved.
 """
 from __future__ import annotations
 
@@ -19,6 +20,7 @@ from typing import Any
 import design_router_context
 import design_stage6_contracts
 import design_stage6_data
+from notes_workbench import gate as notes_gate
 from router_workbench import authoring as router_authoring
 
 SCHEMA = "spec_workbench_authoring_next.v1"
@@ -84,14 +86,29 @@ def next_step(project: Path) -> dict[str, Any]:
             "router_allowed": True,
         }
 
+    notes = notes_gate.coverage(project)
+    if not notes["summary"]["handoff_ready"]:
+        only_missing = notes["findings"] and all(item["code"] == "missing_notes_file" for item in notes["findings"])
+        return {
+            "schema_version": SCHEMA,
+            "project_root": project.resolve().name,
+            "phase": "state7_notes",
+            "blocked": False if only_missing else bool(notes["summary"]["blocks"] or notes["summary"]["reviews"]),
+            "reason": "Deterministic structures are closed; author State 7 notes and resolve all address/class/reference, cross-note consistency, and semantic-stub findings before handoff.",
+            "next_command": _command("python", "tools/design_notes.py", project_text, "--gate", "--json"),
+            "summary": notes["summary"],
+            "findings": notes["findings"],
+            "router_allowed": True,
+        }
+
     return {
         "schema_version": SCHEMA,
         "project_root": project.resolve().name,
-        "phase": "state7_notes",
+        "phase": "state8_assembly",
         "blocked": False,
-        "reason": "State 6 contracts and complete deterministic Router IR closure are ready; continue to State 7 notes.",
+        "reason": "State 6 contracts, deterministic Router closure, and State 7 notes gate are ready; continue to final specification assembly.",
         "next_command": None,
-        "summary": context["summary"],
+        "summary": notes["summary"],
         "router_allowed": True,
     }
 
@@ -106,7 +123,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     try:
         payload = next_step(args.project)
-    except (ValueError, design_stage6_contracts.DesignStage6ContractsError, design_router_context.RouterContextError) as exc:
+    except (ValueError, design_stage6_contracts.DesignStage6ContractsError, design_router_context.RouterContextError, json.JSONDecodeError) as exc:
         print(f"design_authoring_next: error: {exc}", file=sys.stderr)
         return 2
     if args.json:
