@@ -25,9 +25,21 @@ The gate checks all non-heading, non-empty lines in `80_notes.md` and blocks whe
 3. the marker is not in the closed registry from `note_gate.json`;
 4. a reference class omits its required address namespace;
 5. an address of the form `= config.*`, `= models.*`, or `= rules.*` does not resolve to closed structured data;
-6. the prose is an explicit semantic stub such as `TODO`, `TBD`, `implement ...`, `handle errors appropriately`, `validate input correctly`, or equivalent registered placeholder form.
+6. the prose is an explicit semantic stub such as `TODO`, `TBD`, `implement ...`, `handle errors appropriately`, `validate input correctly`, or equivalent registered placeholder form;
+7. a State 6 callable has neither a State 7 note nor a deterministic implementation owner.
 
 Malformed or unknown notes are never silently skipped.
+
+## Callable completeness
+
+State 6 is the canonical callable inventory. Every callable in `60_contracts.json` must be accounted for before State 7 handoff:
+
+- a callable that still requires LLM generation must have at least one exact-scope State 7 note;
+- a callable whose complete implementation is owned by deterministic assembly does not require redundant prose notes.
+
+For `http_router_backend/v1`, a handler with `emission: "table"` is a deterministic completeness exemption because its authorization, delegate, typed argument refs and return behavior are already closed in router IR. An `emission: "irregular"` handler is not exempt: deterministic routing owns only its registration, while the handler body still requires generation guidance.
+
+This rule is intentionally about implementation ownership, not about naming conventions. A future deterministic backend may add another exemption only when the Workbench can prove from structured artifacts that it owns the callable implementation completely.
 
 ## Cross-note consistency
 
