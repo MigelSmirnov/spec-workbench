@@ -39,7 +39,11 @@ def test_gate_accepts_addressed_classified_notes(tmp_path):
         "parser: [DEPENDENCY_BOUNDARY] MUST keep parsing policy outside transport code.\n",
     )
     report = gate.coverage(project)
-    assert report["summary"] == {"notes": 2, "blocks": 0, "reviews": 0, "handoff_ready": True}
+    assert report["summary"]["notes"] == 2
+    assert report["summary"]["contract_callables"] == 1
+    assert report["summary"]["blocks"] == 0
+    assert report["summary"]["reviews"] == 0
+    assert report["summary"]["handoff_ready"] is True
 
 
 def test_gate_blocks_unknown_scope_class_and_dangling_reference(tmp_path):
@@ -95,4 +99,46 @@ def test_gate_does_not_silently_ignore_malformed_note(tmp_path):
     report = gate.coverage(project)
     assert "invalid_note_shape" in _codes(report)
     assert report["summary"]["notes"] == 0
+    assert report["summary"]["handoff_ready"] is False
+
+
+def test_gate_blocks_state6_callable_without_note(tmp_path):
+    project = _project(tmp_path, "parser: [DEPENDENCY_BOUNDARY] MUST keep parsing policy local.\n")
+    report = gate.coverage(project)
+    assert "missing_callable_note" in _codes(report)
+    assert report["summary"]["handoff_ready"] is False
+
+
+def test_table_emitted_handler_is_deterministic_completeness_exemption(tmp_path):
+    project = _project(tmp_path, "parse: [BEHAVIOR] MUST return normalized content.\n")
+    contracts = json.loads((tmp_path / "60_contracts.json").read_text(encoding="utf-8"))
+    contracts["contracts"]["parse_handler"] = "(request: object, raw: str) -> str | None"
+    (tmp_path / "60_contracts.json").write_text(json.dumps(contracts), encoding="utf-8")
+    (tmp_path / "70_router_closure.json").write_text(
+        json.dumps({
+            "schema_version": "spec_workbench_router_closure.v1",
+            "items": [{"handler": "parse_handler", "emission": "table"}],
+        }),
+        encoding="utf-8",
+    )
+    report = gate.coverage(project)
+    assert "missing_callable_note" not in _codes(report)
+    assert report["deterministic_callables"] == ["parse_handler"]
+    assert report["summary"]["handoff_ready"] is True
+
+
+def test_irregular_handler_still_requires_note(tmp_path):
+    project = _project(tmp_path, "parse: [BEHAVIOR] MUST return normalized content.\n")
+    contracts = json.loads((tmp_path / "60_contracts.json").read_text(encoding="utf-8"))
+    contracts["contracts"]["parse_handler"] = "(request: object, raw: str) -> str | None"
+    (tmp_path / "60_contracts.json").write_text(json.dumps(contracts), encoding="utf-8")
+    (tmp_path / "70_router_closure.json").write_text(
+        json.dumps({
+            "schema_version": "spec_workbench_router_closure.v1",
+            "items": [{"handler": "parse_handler", "emission": "irregular"}],
+        }),
+        encoding="utf-8",
+    )
+    report = gate.coverage(project)
+    assert "missing_callable_note" in _codes(report)
     assert report["summary"]["handoff_ready"] is False
