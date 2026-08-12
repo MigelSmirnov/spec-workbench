@@ -2,9 +2,9 @@
 
 Flow: `flow:synchronize_invoice_to_local_archive`
 
-Status: **AMBIGUITY — not semantic_closed**
+Status: **semantic_closed**
 
-This review applies the protocol in `skills/spec-authoring/STAGE_7_1_SEMANTIC_HANDOFF.md` to the first Cabinet handoff flow. It records the finding before any upstream repair.
+This review applies the protocol in `skills/spec-authoring/STAGE_7_1_SEMANTIC_HANDOFF.md` to the first Cabinet handoff flow. The initial ambiguity was recorded before repair and then re-reviewed after bounded State 3, State 5, and State 7 corrections.
 
 ## Reviewed semantic slice
 
@@ -13,13 +13,16 @@ This review applies the protocol in `skills/spec-authoring/STAGE_7_1_SEMANTIC_HA
 - `01_models_contract_support.md`
 - relevant synchronization/archive State 2 rules
 - `30_modules.md`
+- `30_modules_flow1_semantic_repair.md`
 - `40_flows.md`
 - `50_public_apis.md`
+- `50_public_apis_flow1_semantic_repair.md`
 - `60_contract_plan.json`
 - `60_contracts.json`
 - `60_data_closure.json`
 - `60_exception_taxonomy.json`
 - `80_notes.md`
+- `80_notes_flow1_semantic_repair.md`
 - `71_semantic_e2e_handoff.md`
 
 ## Reconstructed accepted behavior
@@ -34,23 +37,25 @@ archive acceptance receipt
 local durable verification
 ```
 
-`module:synchronization` owns authenticated transfer, transfer identity, delivery state and reconciliation. `module:durable_archive` alone owns the acceptance decision and authoritative durable-local proof.
+`module:synchronization` owns authenticated transfer, transfer identity, delivery state, reconciliation, and the application-level sequencing that crosses the accepted archive boundary after an exact delivered package exists.
 
-The State 1 support model is capable of preserving this distinction because `SynchronizationOutcome` contains:
+`module:durable_archive` alone owns the archive acceptance classification and authoritative durable-local proof.
+
+The State 1 support model preserves the distinction through `SynchronizationOutcome`:
 
 - `synchronization: InvoiceSynchronization`;
 - `receipt: InvoiceTransferReceipt | None`;
 - `durable_acceptance: DurableAcceptanceVerification | None`.
 
-Therefore this finding is not caused by a missing result type.
+No contract or result-model change was required.
 
-## Adversarial ambiguity question
+## Initial Stage 7.1 finding
 
-> Construct the strongest materially different alternative observable semantics that still satisfies the complete specification slice.
+The original slice permitted two materially different implementations:
 
 ### Interpretation A — transport-only completion
 
-`synchronize_invoice_work` authenticates, obtains/transfers the exact work package, records a delivered `InvoiceSynchronization`, and returns:
+`synchronize_invoice_work` could record a delivered transport result and return:
 
 ```text
 SynchronizationOutcome(
@@ -60,79 +65,103 @@ SynchronizationOutcome(
 )
 ```
 
-No generated callable is required by its current State 5 operation description or State 7 notes to invoke `accept_transfer_manifest` for the delivered package or to invoke `verify_durable_acceptance` after an accepted/already-accepted receipt.
-
-The result truthfully avoids claiming durable acceptance, so the existing delivery-versus-acceptance rule is not violated.
+without ever presenting the delivered package to `durable_archive`.
 
 ### Interpretation B — complete local-custody synchronization
 
-`synchronize_invoice_work` performs the same transport work, then orchestrates the delivered exact manifest/card/source evidence through `durable_archive.accept_transfer_manifest`. For accepted or already-accepted archive outcomes it obtains authoritative proof through `durable_archive.verify_durable_acceptance`, and returns the receipt/proof in `SynchronizationOutcome`.
+`synchronize_invoice_work` could perform the accepted State 4 sequence by presenting the exact delivered package to `accept_transfer_manifest` and, for accepted/already-accepted receipts, obtaining authoritative proof through `verify_durable_acceptance`.
 
-This interpretation realizes the complete State 4 business flow and the Stage 7.1 handoff graph.
+Both interpretations respected the negative rule that delivery is not acceptance, but only Interpretation B fulfilled the end-to-end business promise. The original slice was therefore `AMBIGUITY` with a flow-level placeholder risk.
 
-## Material difference
+## Repair
 
-Both interpretations preserve the rule that delivery is not durable acceptance, but only Interpretation B can make the trigger "synchronize invoice to local archive" reach its accepted terminal business outcome in one generated flow.
+The earliest affected owner was State 3 synchronization orchestration ownership, propagated to State 5 and State 7.
 
-Interpretation A can terminate after successful transport with no archive acceptance attempt at all. That is materially different observable behavior, not internal implementation variation.
+The repair establishes:
 
-## Why current downstream constraints do not close the gap
+1. For an exact **delivered** package, `synchronize_invoice_work` MUST present the exact manifest/Card/source evidence to `durable_archive.accept_transfer_manifest`.
+2. The returned `InvoiceTransferReceipt` MUST be preserved in `SynchronizationOutcome.receipt`.
+3. For `accepted` or `already_accepted`, `synchronize_invoice_work` MUST obtain authoritative proof from `durable_archive.verify_durable_acceptance` for the same exact invoice revision/evidence identity.
+4. Positive `SynchronizationOutcome.durable_acceptance` may come only from that authoritative archive verification.
+5. Authentication failure, incompatibility, transport failure, remote unavailability, and unresolved/ambiguous delivery may return without archive evidence because no exact delivered package exists for acceptance.
+6. A delivered package may lack positive durable acceptance only because the archive returned a classified non-accepted result or authoritative verification is negative/not-verifiable — never because synchronization silently skipped the archive boundary.
+7. Archive validation, duplicate, integrity, quarantine, atomicity, and proof-sufficiency decisions remain exclusively owned by `durable_archive`.
 
-Current constraints are strong about what synchronization **must not claim**:
+Repair artifacts:
 
-- transport delivery must not be promoted to durable acceptance;
-- ambiguous transport outcomes remain reconcilable;
-- classified transport failures must not become accepted outcomes.
+- `30_modules_flow1_semantic_repair.md`;
+- `50_public_apis_flow1_semantic_repair.md`;
+- `80_notes_flow1_semantic_repair.md`.
 
-They are not yet strong about what the owning flow **must do after a delivered exact package**.
+## Adversarial ambiguity re-check
 
-`accept_transfer_manifest` correctly owns archive policy, but its existence and its `Callers: module:synchronization` declaration do not by themselves force the generated synchronization callable to invoke it on the delivered branch.
+> Construct the strongest materially different alternative observable semantics that still satisfies the repaired complete specification slice.
 
-Likewise, `verify_durable_acceptance` correctly owns authoritative proof, but the current synchronization notes do not require the accepted/already-accepted branch to obtain that proof before exposing durable acceptance in `SynchronizationOutcome`.
+### Attempted alternative — delivered transport terminates without archive call
 
-## Placeholder-resistance result
+This is no longer conforming. The State 3 repair makes synchronization own the required cross-module sequencing, the State 5 repair requires the delivered branch to invoke archive acceptance, and the State 7 repair explicitly forbids a delivered result with `receipt=None` when the archive boundary was reachable and no archive call was attempted.
 
-Status: **PLACEHOLDER_RISK** for the complete Flow 1 business promise.
+### Attempted alternative — accepted receipt returned without durable verification
 
-A transport-only implementation is not a syntactic stub, but it is a semantic skeleton for the end-to-end flow: it may stop after transport and leave both archive fields empty on every delivered result while still satisfying the current synchronization-local notes.
+This is no longer conforming. The repaired State 5/7 semantics require `verify_durable_acceptance` after `accepted` or `already_accepted` and prohibit manufacturing positive proof from receipt or transport evidence.
 
-The individual archive callables are not themselves shown to be placeholder-permitting by this finding; the gap is orchestration ownership between the transport result and those archive operations.
+### Remaining implementation freedom
 
-## Finding record
+Implementations may differ internally in transport mechanism, persistence sequencing inside the owning modules, logging, retries permitted by accepted transport rules, and local helper decomposition. Those differences do not change the observable business semantics.
+
+Classification: **PASS_INTERNAL_VARIATION**.
+
+## Semantic pseudotest re-check
+
+### S1 — successful transfer does not skip durable verification
+
+**PASS.** Delivered exact evidence must reach `accept_transfer_manifest`; accepted/already-accepted receipt must then reach `verify_durable_acceptance`; transport evidence cannot substitute for proof.
+
+### S2 — ambiguous transport outcome remains reconcilable
+
+**PASS.** The original synchronization rules and notes preserve unresolved/ambiguous delivery as an explicit reconcilable synchronization state. The repair does not force a fabricated archive call when no exact delivered package exists.
+
+### S3 — rejected archive evidence is not partially accepted
+
+**PASS.** `durable_archive.accept_transfer_manifest` remains the sole acceptance owner and its existing notes require unsupported, integrity-invalid, conflicting, duplicate-review, incomplete, and quarantine-required evidence to remain classified non-accepted outcomes without partially exposing an accepted manifest set.
+
+### S4 — repeated equivalent acceptance is idempotent
+
+**PASS.** The archive acceptance notes require repeated equivalent acceptance not to create a second logical durable acceptance, while synchronization preserves the resulting receipt/proof instead of inventing another acceptance.
+
+## Placeholder-resistance re-check
+
+Status: **PASS** for Flow 1.
+
+A transport-only semantic skeleton can no longer satisfy the repaired slice on the delivered branch. A conforming implementation must cross the archive acceptance boundary and, on accepted/already-accepted outcomes, the authoritative verification boundary.
+
+The following trivial behaviors are therefore non-conforming for a delivered package:
+
+- always returning `receipt=None`;
+- always returning `durable_acceptance=None` after an accepted/already-accepted receipt;
+- treating delivery as positive durable proof;
+- blindly forwarding a transport outcome without the required archive sequencing.
+
+The individual archive callables retain their existing non-placeholder behavioral constraints.
+
+## Final review record
 
 ```text
 flow: flow:synchronize_invoice_to_local_archive
-status: AMBIGUITY
-material_alternative_found: yes
-placeholder_implementation_found: yes
-scenario_gaps:
-  - S1 is not derivable from the current generated-callable obligations because no callable is forced to hand delivered evidence to durable_archive.
-  - The accepted/already-accepted branch is not forced to obtain authoritative durable verification before durable_acceptance is populated.
+status: semantic_closed
+material_alternative_found: no
+placeholder_implementation_found: no
+scenario_gaps: []
 findings:
   - owner: upstream_business
     scope: synchronization orchestration ownership at State 3/5, propagated to State 7 notes
-    interpretation_A: delivered transport may terminate with receipt=None and durable_acceptance=None without any archive acceptance attempt
-    interpretation_B: delivered exact package must be handed to durable_archive; accepted/already-accepted receipt must be followed by authoritative durable verification
-    required_resolution: make one existing generated callable explicitly own this cross-module sequencing while preserving durable_archive as the sole owner of the acceptance decision
+    original_status: AMBIGUITY
+    resolution: delivered exact package must cross durable_archive acceptance; accepted/already-accepted receipt must cross authoritative durable verification
+    recheck: PASS_INTERNAL_VARIATION
 ```
-
-## Earliest repair owner
-
-The earliest affected design state is **State 3 module responsibility / State 5 public-operation semantics**, not State 1 and not the contract signature.
-
-Recommended repair:
-
-1. Keep `module:durable_archive` as the sole owner of acceptance policy and durable proof.
-2. Make `module:synchronization` explicitly own orchestration of the delivered exact package across that existing public boundary as part of `synchronize_invoice_work`.
-3. State that a delivered exact package must be presented to `accept_transfer_manifest`; transport-only termination is valid only when the transport branch itself is non-delivered/unresolved or the archive returns a classified non-accepted outcome.
-4. For `accepted` / `already_accepted` receipts, require `verify_durable_acceptance` before `SynchronizationOutcome.durable_acceptance` may carry positive proof.
-5. Propagate the obligation into the State 5 operation and State 7 `[ORCHESTRATION]` notes.
-6. Re-run S1–S4 and the adversarial ambiguity question after repair.
-
-This repair adds no new business behavior. It makes the already accepted State 4 sequence generation-obligatory.
 
 ## Flow 1 gate
 
-`semantic_closed`: **no**
+`semantic_closed`: **yes**
 
-Do not mark Flow 1 closed until the upstream orchestration obligation is repaired and the full slice is reviewed again.
+The semantic scenarios S1–S4 are now eligible to be materialized as implementation-independent runtime acceptance tests during the Stage 7.1 test-artifact work. Those tests must preserve these accepted semantics and must not later be rewritten merely to match generated code.
