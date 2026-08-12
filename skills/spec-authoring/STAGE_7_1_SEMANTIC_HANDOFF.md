@@ -4,6 +4,40 @@ This is a Workbench authoring/review stage, not a new `global_spec.json` section
 
 Use this stage after deterministic structural closure and the State 7 Notes gate, before declaring Notes semantically closed.
 
+## Goal — semantic round-trip validation
+
+States 1–2 contain the richest accepted description of the intended system: domain identity, business meaning, rules, invariants, authority boundaries, evidence requirements, and important failure/recovery semantics. States 3–7 progressively compress that meaning into a generation-ready specification.
+
+Stage 7.1 performs the reverse check. Starting from the completed structured specification and Notes, reconstruct the application's observable end-to-end behavior as behavior graphs and pre-code acceptance scenarios, then compare that reconstructed meaning with the accepted business semantics of States 1–2.
+
+The goal is **not** to recover one unique implementation. Multiple implementations are valid when they preserve the same observable semantics.
+
+The goal is to detect semantic information loss introduced during specification compression: business meaning that was lost, weakened, contradicted, or made materially ambiguous while moving from States 1–2 through modules, flows, APIs, contracts, deterministic structures, and Notes.
+
+Central invariant:
+
+> **The completed specification must be a lossless representation of the accepted observable business semantics of States 1–2, modulo implementation freedom.**
+
+If two materially different observable behaviors can be reconstructed from the same completed specification, the specification is not semantically closed even when all structural validators pass.
+
+A Stage 7.1 finding must be repaired at the earliest design state that owns the missing or contradictory decision, then propagated forward and reviewed again. Do not patch a downstream note merely to hide information that was already lost upstream.
+
+The semantic scenarios produced by this review are implementation-independent acceptance requirements. After code generation they may be materialized as runtime tests against generated code. This makes the same semantic oracle check both ends of the round trip:
+
+```text
+States 1–2 rich business meaning
+        ↓ encode / progressively compress
+States 3–7 generation-ready specification
+        ↓ decode / reconstruct
+Stage 7.1 behavior graph + semantic scenarios
+        ↓ compare with accepted meaning
+Generated code
+        ↓
+Runtime acceptance tests derived from the same scenarios
+```
+
+Code is acceptable when its observable behavior reconstructs the accepted business semantics of States 1–2 through the completed specification, while preserving legitimate implementation freedom.
+
 ## Why this stage exists
 
 A note can be syntactically valid, correctly classified, fully addressed, and still permit two materially different implementations. Reviewing notes one line at a time is insufficient because ambiguity often exists across a complete business flow: ownership, guards, state transitions, external effects, recovery, and terminal outcomes.
