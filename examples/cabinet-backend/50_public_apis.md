@@ -410,7 +410,7 @@ Authorized local protected-operation adapters.
 Exact confirmed Invoice Card revision identity, authorized actor context, and accepted publication prerequisites/evidence.
 
 ### Outputs
-Logical publication outcome/state including verified success, eligibility refusal, unknown/reconciliation-required state, or existing logical publication.
+Logical publication state for an eligible request: verified success, an explicitly reconciliation-pending state after an ambiguous technical create outcome, or an existing equivalent logical publication.
 
 ### Observable effect
 May create logical publication/attempt state and invoke the technical Holded gateway while hiding its sequencing from callers.
@@ -419,7 +419,7 @@ May create logical publication/attempt state and invoke the technical Holded gat
 Eligibility, exact revision binding, duplicate logical publication prevention, one-attempt correlation, and verified-success requirement.
 
 ### Errors
-Ineligible invoice/source/context, existing conflicting publication, gateway technical failure, verification failure, unknown outcome.
+`HoldedPublicationIneligibleError` when the exact revision fails accepted eligibility, duplicate-prevention, authorization, or required-source preconditions. Technical ambiguity that cannot be settled by the create path remains a reconciliation-pending publication state rather than being reported as successful publication.
 
 ### State impact
 Mutates logical publication lifecycle; never mutates Invoice Card facts.
@@ -438,7 +438,7 @@ Authorized local protected-operation adapters.
 Exact logical publication/attempt identity currently requiring reconciliation.
 
 ### Outputs
-Settled verified publication, still-unknown state, conflict/reconciliation-required result, or explicit failure evidence.
+Settled verified publication after read-only recovery evidence identifies exactly one fully verified matching remote purchase.
 
 ### Observable effect
 May advance logical publication lifecycle using read-only gateway recovery evidence.
@@ -447,7 +447,7 @@ May advance logical publication lifecycle using read-only gateway recovery evide
 No automatic second POST after ambiguous create; only verified remote evidence may settle publication.
 
 ### Errors
-Unknown attempt, zero/multiple marker matches, payload mismatch, lookup/GET failure, inconsistent attempt evidence.
+`HoldedReconciliationRequiredError` when zero matches, multiple matches, payload mismatch, lookup/GET failure, inconsistent attempt evidence, or other unresolved/conflicting evidence prevents a verified settlement.
 
 ### State impact
 Mutates logical publication/reconciliation state only.
@@ -522,7 +522,7 @@ Manual-release adapters.
 Exact Registry `project_id` or working-set identity plus the release request context.
 
 ### Outputs
-Allowed/blocked release evaluation with exact affected set and required durable/replica evidence.
+Allowed release evaluation with the exact affected set and the durable/replica evidence that proves the accepted release preconditions.
 
 ### Observable effect
 May record evaluation evidence; performs no physical deletion.
@@ -531,7 +531,7 @@ May record evaluation evidence; performs no physical deletion.
 Manual baseline, durable-local proof before release, no Registry-status deletion authority, exact working-set scope.
 
 ### Errors
-Missing/unverified durable replicas, unavailable synchronization observation, unknown working set, inconsistent retention evidence.
+`VpsReleaseBlockedError` when durable-local proof, synchronization observation, working-set identity, or retention evidence is missing, unavailable, inconsistent, or otherwise fails the accepted release preconditions.
 
 ### State impact
 May append retention evaluation/audit state only.
@@ -550,7 +550,7 @@ Manual-release adapters after an allowed evaluation.
 Exact eligible working-set identity, explicit actor decision, and accepted release-evaluation evidence.
 
 ### Outputs
-Recorded authorized release decision or blocked/idempotent/conflicting decision result.
+Recorded authorized release decision, or the existing equivalent decision for an idempotent repeated request.
 
 ### Observable effect
 Records authorization for physical VPS working-copy release; a storage adapter performs the later physical effect.
@@ -559,7 +559,7 @@ Records authorization for physical VPS working-copy release; a storage adapter p
 Explicit manual intent, exact target, durable preconditions, decision idempotency, and audit history.
 
 ### Errors
-Eligibility no longer satisfied, stale/mismatched evidence, conflicting target, duplicate request with incompatible evidence.
+`VpsReleaseBlockedError` when eligibility is no longer satisfied or the supplied evaluation is stale, mismatched, conflicting, or otherwise insufficient for the requested target.
 
 ### State impact
 Mutates release-decision history only; does not itself delete physical replicas.
