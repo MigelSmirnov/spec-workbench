@@ -52,6 +52,11 @@ aggregate readiness gate. Use `--check <name>` for a detailed owner report;
 future MCP wrappers must call `assembly_workbench` instead of reimplementing
 the orchestration.
 
+Before semantic closure, build one final packet per assembled module with
+`python tools/design_module_review.py examples/<case> --module <name> --slice
+--json`. Run `--review` for deterministic gaps, then perform the Stage 7.1
+adversarial review from the packet; note count alone is not completeness.
+
 Before moving from State 2 to State 3:
 
 1. read `skills/spec-authoring/SECURITY_REVIEW_EVIDENCE.md`;

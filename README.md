@@ -101,6 +101,19 @@ python tools/design_assembly.py examples/<case> --check identity
 The transport-neutral `assembly_workbench` delegates to the identity, data,
 contract, notes, and router owners and returns a compact MCP-ready report.
 
+For the final business-to-implementation comparison, build a module review
+packet from the assembled specification:
+
+```bash
+python tools/design_module_review.py examples/<case> --list
+python tools/design_module_review.py examples/<case> --module <name> --slice --json
+python tools/design_module_review.py examples/<case> --module <name> --review
+```
+
+`module_review_workbench` keeps accepted evidence, lowered specification, and
+assembled generation constraints separate so a human or LLM can perform the
+Stage 7.1 adversarial semantic review without reconstructing context ad hoc.
+
 ### State 3 stable addresses and handoff
 
 A State 3 responsibility heading such as:
