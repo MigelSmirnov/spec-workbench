@@ -3,8 +3,9 @@
 
 The export is intentionally blocked unless the Workbench and Factory copies of
 SPEC_STANDARD.md are byte-identical and the Factory's canonical validator
-accepts the source specification.  Provenance is written beside generated
-working artifacts, never into global_spec.json.
+accepts the source specification. Provenance is written beside generated working
+artifacts, never into global_spec.json. A case may additionally declare
+semantic-closed runtime acceptance tests for byte-exact handoff to the Factory.
 """
 
 from __future__ import annotations
@@ -13,6 +14,7 @@ import argparse
 import hashlib
 import json
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -20,8 +22,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-
 HANDOFF_SCHEMA = "spec_workbench_handoff.v1"
+SEMANTIC_EXPORT_SCHEMA = "spec_workbench_semantic_test_export.v1"
+SEMANTIC_EXPORT_MANIFEST = "71_semantic_test_export.json"
 PROJECT_RE = re.compile(r"^[A-Za-z0-9_-]+$")
 
 
@@ -43,21 +46,13 @@ def utc_now() -> str:
 
 
 def git_value(root: Path, *args: str) -> str | None:
-    result = subprocess.run(
-        ["git", *args], cwd=root, text=True, capture_output=True, check=False
-    )
+    result = subprocess.run(["git", *args], cwd=root, text=True, capture_output=True, check=False)
     value = result.stdout.strip()
     return value if result.returncode == 0 and value else None
 
 
 def git_metadata(root: Path) -> dict[str, Any]:
-    dirty = subprocess.run(
-        ["git", "status", "--porcelain"],
-        cwd=root,
-        text=True,
-        capture_output=True,
-        check=False,
-    )
+    dirty = subprocess.run(["git", "status", "--porcelain"], cwd=root, text=True, capture_output=True, check=False)
     return {
         "commit": git_value(root, "rev-parse", "HEAD"),
         "branch": git_value(root, "branch", "--show-current"),
@@ -78,10 +73,7 @@ def load_json(path: Path) -> Any:
 def write_json_atomic(path: Path, data: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_suffix(path.suffix + ".tmp")
-    temporary.write_text(
-        json.dumps(data, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
-        encoding="utf-8",
-    )
+    temporary.write_text(json.dumps(data, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     temporary.replace(path)
 
 
@@ -118,19 +110,7 @@ def resolve_spec(workbench_root: Path, case: str | None, spec: Path | None) -> P
 def run_factory_validator(validator: Path, source: Path) -> dict[str, Any]:
     with tempfile.TemporaryDirectory(prefix="spec-workbench-") as temp_dir:
         report_path = Path(temp_dir) / "validation.json"
-        result = subprocess.run(
-            [
-                sys.executable,
-                str(validator),
-                str(source),
-                "--out",
-                str(report_path),
-                "--quiet",
-            ],
-            text=True,
-            capture_output=True,
-            check=False,
-        )
+        result = subprocess.run([sys.executable, str(validator), str(source), "--out", str(report_path), "--quiet"], text=True, capture_output=True, check=False)
         if result.stdout:
             print(result.stdout, end="")
         if result.stderr:
@@ -145,14 +125,84 @@ def run_factory_validator(validator: Path, source: Path) -> dict[str, Any]:
 def project_paths(factory_root: Path, structure: dict[str, Any], project: str) -> dict[str, Path]:
     configured_root = Path(structure.get("root", factory_root))
     if configured_root.resolve() != factory_root.resolve():
-        raise SystemExit(
-            f"factory structure root points elsewhere: {configured_root} != {factory_root}"
-        )
+        raise SystemExit(f"factory structure root points elsewhere: {configured_root} != {factory_root}")
     project_root = factory_root / structure["projects_dir"] / project
     return {
         "root": project_root,
         "canonical": project_root / structure["files"]["global_spec"],
         "working": project_root / structure["dirs"]["working"],
+    }
+
+
+def semantic_export_plan(source: Path, case: str | None) -> tuple[Path, dict[str, Any]] | None:
+    if not case:
+        return None
+    case_root = source.parent
+    manifest_path = case_root / SEMANTIC_EXPORT_MANIFEST
+    if not manifest_path.is_file():
+        return None
+    manifest = load_json(manifest_path)
+    if manifest.get("schema_version") != SEMANTIC_EXPORT_SCHEMA:
+        raise SystemExit(f"unsupported semantic export manifest schema: {manifest_path}")
+    if manifest.get("status") != "semantic_closed":
+        raise SystemExit("semantic test export manifest exists but is not semantic_closed")
+    flows = manifest.get("flows")
+    if not isinstance(flows, list) or not flows:
+        raise SystemExit("semantic test export manifest must declare at least one flow")
+    seen: set[str] = set()
+    for item in flows:
+        relative = item.get("path") if isinstance(item, dict) else None
+        if not isinstance(relative, str) or not relative:
+            raise SystemExit("semantic test export flow has no path")
+        source_test = (case_root / relative).resolve()
+        if not source_test.is_relative_to(case_root.resolve()) or not source_test.is_file():
+            raise SystemExit(f"semantic test source is missing or escapes case root: {relative}")
+        if relative in seen:
+            raise SystemExit(f"duplicate semantic test path in export manifest: {relative}")
+        seen.add(relative)
+    return manifest_path, manifest
+
+
+def export_semantic_tests(plan: tuple[Path, dict[str, Any]] | None, project_root: Path, update_existing: bool) -> dict[str, Any] | None:
+    if plan is None:
+        return None
+    manifest_path, manifest = plan
+    case_root = manifest_path.parent
+    target_root = project_root / manifest.get("target_dir", "tests/semantic")
+    copied: list[dict[str, str]] = []
+    for item in manifest["flows"]:
+        relative = item["path"]
+        source_test = (case_root / relative).resolve()
+        source_dir = manifest.get("source_dir", "tests/semantic").rstrip("/") + "/"
+        if not relative.startswith(source_dir):
+            raise SystemExit(f"semantic test path is outside declared source_dir: {relative}")
+        target_relative = relative[len(source_dir):]
+        target_test = (target_root / target_relative).resolve()
+        if not target_test.is_relative_to(project_root.resolve()):
+            raise SystemExit(f"semantic test target escapes Factory project: {target_test}")
+        source_sha = sha256_file(source_test)
+        if target_test.exists():
+            target_sha = sha256_file(target_test)
+            if target_sha != source_sha and not update_existing:
+                raise SystemExit(f"semantic test differs in Factory; pass --update-existing to replace: {target_test}")
+        target_test.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(source_test, target_test)
+        target_sha = sha256_file(target_test)
+        if target_sha != source_sha:
+            raise SystemExit(f"semantic test copy verification failed: {target_test}")
+        copied.append({
+            "flow_id": item["flow_id"],
+            "source_path": str(source_test.relative_to(case_root)),
+            "target_path": str(target_test.relative_to(project_root)),
+            "sha256": source_sha,
+        })
+    return {
+        "schema_version": manifest["schema_version"],
+        "status": manifest["status"],
+        "source_manifest_path": str(manifest_path.relative_to(case_root)),
+        "runtime_binding": manifest.get("runtime_binding"),
+        "factory_execution_verified": False,
+        "files": copied,
     }
 
 
@@ -163,22 +213,9 @@ def main() -> int:
     source_group.add_argument("--case", help="Case name under examples/")
     source_group.add_argument("--spec", type=Path, help="Explicit global_spec.json path")
     parser.add_argument("--project", required=True, help="Target project under Factory projects/")
-    parser.add_argument(
-        "--factory-root",
-        type=Path,
-        default=workbench_root.parent / "code_factory",
-        help="Sibling Code Factory checkout",
-    )
-    parser.add_argument(
-        "--update-existing",
-        action="store_true",
-        help="Explicitly replace an existing project's canonical specification",
-    )
-    parser.add_argument(
-        "--allow-dirty-source",
-        action="store_true",
-        help="Allow a non-reproducible export from a dirty Workbench checkout",
-    )
+    parser.add_argument("--factory-root", type=Path, default=workbench_root.parent / "code_factory", help="Sibling Code Factory checkout")
+    parser.add_argument("--update-existing", action="store_true", help="Explicitly replace an existing project's canonical specification and differing semantic tests")
+    parser.add_argument("--allow-dirty-source", action="store_true", help="Allow a non-reproducible export from a dirty Workbench checkout")
     args = parser.parse_args()
 
     if not PROJECT_RE.fullmatch(args.project):
@@ -187,6 +224,7 @@ def main() -> int:
     factory_root = args.factory_root.resolve()
     required = require_factory(factory_root)
     source = resolve_spec(workbench_root, args.case, args.spec)
+    semantic_plan = semantic_export_plan(source, args.case)
     source_spec = load_json(source)
     if not isinstance(source_spec, dict):
         raise SystemExit("source specification must contain a JSON object")
@@ -199,10 +237,7 @@ def main() -> int:
     workbench_standard_sha = sha256_file(workbench_standard)
     factory_standard_sha = sha256_file(required["standard"])
     if workbench_standard_sha != factory_standard_sha:
-        raise SystemExit(
-            "SPEC_STANDARD mismatch: update or pin both repositories before exporting "
-            f"(workbench={workbench_standard_sha}, factory={factory_standard_sha})"
-        )
+        raise SystemExit("SPEC_STANDARD mismatch: update or pin both repositories before exporting " f"(workbench={workbench_standard_sha}, factory={factory_standard_sha})")
 
     validation_report = run_factory_validator(required["validator"], source)
     expected_validator_sha = canonical_spec_sha(source_spec)
@@ -211,14 +246,7 @@ def main() -> int:
 
     structure = load_json(required["structure"])
     paths = project_paths(factory_root, structure, args.project)
-    command = [
-        sys.executable,
-        str(required["bootstrap"]),
-        "--project",
-        args.project,
-        "--spec",
-        str(source),
-    ]
+    command = [sys.executable, str(required["bootstrap"]), "--project", args.project, "--spec", str(source)]
     if args.update_existing:
         command.extend(["--allow-existing", "--force-spec"])
     bootstrap = subprocess.run(command, cwd=factory_root, check=False)
@@ -232,6 +260,7 @@ def main() -> int:
     if source_sha != canonical_sha:
         raise SystemExit("canonical Factory specification differs from the validated source")
 
+    semantic_handoff = export_semantic_tests(semantic_plan, paths["root"], args.update_existing)
     validation_path = paths["working"] / "spec_workbench_validation.json"
     write_json_atomic(validation_path, validation_report)
     factory_git = git_metadata(factory_root)
@@ -254,6 +283,7 @@ def main() -> int:
             "validation_report_path": str(validation_path.relative_to(factory_root)),
             "validation_status": validation_report.get("status"),
             "validation_spec_sha": validation_report.get("spec_sha"),
+            "semantic_tests": semantic_handoff,
         },
     }
     manifest_path = paths["working"] / "spec_workbench_handoff.json"
@@ -261,6 +291,8 @@ def main() -> int:
 
     print(f"exported spec: {source}")
     print(f"canonical spec: {paths['canonical']}")
+    if semantic_handoff:
+        print(f"semantic tests: {len(semantic_handoff['files'])} copied byte-exact; Factory execution not verified")
     print(f"handoff manifest: {manifest_path}")
     return 0
 
