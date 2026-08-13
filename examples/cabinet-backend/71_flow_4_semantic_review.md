@@ -2,13 +2,11 @@
 
 Flow: `flow:calculate_plan_actual`
 
-Status: **AMBIGUITY — upstream business/rule repair required**
+Status: **semantic_closed**
 
-This review applies `skills/spec-authoring/STAGE_7_1_SEMANTIC_HANDOFF.md` to Flow 4. The finding is recorded before any attempted repair.
+This review applies `skills/spec-authoring/STAGE_7_1_SEMANTIC_HANDOFF.md` to Flow 4. The initial upstream business ambiguity was recorded before repair. The accepted State 2 plan/actual decision now closes the calculation semantics and has been propagated through State 1, State 3, State 5, and State 7.
 
-## Reconstructed accepted behavior
-
-The accepted slice currently establishes:
+## Reconstructed accepted behavior after repair
 
 ```text
 exact accepted invoice revisions
@@ -19,104 +17,126 @@ exact accepted invoice revisions
         ↓
 calculate_plan_actual
         ↓
-validate evidence identity, assignment, matches, and comparability
+validate evidence identity, assignment, matches, unit/currency/basis comparability
         ├─ failed precondition -> PlanActualPreconditionError
-        └─ valid -> reproducible PlanActualAnalysis
+        └─ valid -> deterministic non-placeholder PlanActualAnalysis
 ```
 
-It also establishes that:
+For every analysed Estimate Item:
 
-- source Invoice Card, Registry, and PresuPro records are immutable inputs;
-- similarity cannot become a confirmed estimate match;
-- unmatched invoice lines remain explicit analytical facts;
-- missing/incompatible/unresolved pinned evidence must not be guessed;
-- identical PresuPro content is snapshot-idempotent;
-- a changed PresuPro content state creates another immutable EstimateSnapshot.
+```text
+planned_quantity = EstimateItemSnapshot.quantity
+actual_quantity = sum(confirmed-matched InvoiceLine.quantity)
+quantity_variance = actual_quantity - planned_quantity
+remaining_quantity = planned_quantity - actual_quantity
 
-## Adversarial ambiguity question
+planned_amount = EstimateItemSnapshot.total
+actual_amount = sum(confirmed-matched InvoiceLine.total)
+amount_variance = actual_amount - planned_amount
+```
 
-> Construct the strongest materially different alternative observable semantics that still satisfies the complete specification slice.
+For project totals:
 
-### Interpretation A — quantity-first matched-item analysis
+```text
+project_planned_amount = sum(analysed EstimateItemSnapshot.total)
+matched_actual_amount = sum(confirmed-matched InvoiceLine.total)
+unmatched_actual_amount = sum(explicit-unmatched InvoiceLine.total)
+project_actual_amount = matched_actual_amount + unmatched_actual_amount
+project_amount_variance = project_actual_amount - project_planned_amount
+```
 
-For each confirmed invoice-line/estimate-item match, calculate actual purchased quantity from matched invoice lines, compare it to the Estimate Item planned quantity, derive remaining quantity and a quantity variance, and separately aggregate monetary actuals. Unmatched lines remain explicit and do not affect matched-item planned quantity.
+Unmatched lines never create placeholder Estimate Items and never increase the actual value of a matched item. Direct quantity comparison requires semantically identical units unless exact accepted conversion evidence is pinned. Direct money comparison requires compatible currency and monetary/tax basis unless exact accepted conversion/basis evidence is pinned. No forecast is synthesized without separately accepted forecast assumptions.
 
-### Interpretation B — monetary-first estimate-total analysis
+## Initial adversarial ambiguity
 
-Aggregate accepted matched invoice monetary totals against Estimate Snapshot monetary totals, expose amount variance as the principal plan/actual result, and leave quantity/remaining values absent or only warning-level when the implementation does not choose to calculate them.
+Before repair, two materially different interpretations remained legal:
 
-Both interpretations can preserve pinned evidence, confirmed matches, unmatched facts, source immutability, and reproducibility. They nevertheless produce materially different observable analysis for the same accepted inputs.
+- quantity-first matched-item analysis with remaining quantity and item variance;
+- monetary-first aggregate analysis that could omit quantity/remaining semantics.
 
-Further materially different choices remain open in the current slice:
+The same pinned evidence could also produce opposite variance signs, different monetary bases, different unmatched contribution, and even a provenance-only successful result.
 
-- whether `variance` is `actual - planned` or `planned - actual`;
-- whether planned monetary value uses estimate subtotal, post-discount value, tax-inclusive total, margin/waste-adjusted value, or another accepted PresuPro amount;
-- whether actual monetary value uses Invoice Card line subtotal, tax-inclusive amount, allocated document total, or another amount;
-- how many invoice lines matched to one estimate item are aggregated;
-- which unit conversions, if any, are accepted and how an explicit conversion assumption is represented;
-- what mandatory fields make `PlanActualAnalysis` non-empty and observable;
-- whether unmatched facts contribute only coverage/warnings or also an explicit unmatched actual amount;
-- what exact semantic equality is required for repeated calculations over identical pinned inputs.
+That ambiguity was correctly classified as an upstream State 2 business gap rather than repaired only in Notes.
 
-## Material difference
+## Repair applied
 
-The same pinned invoice revisions, project context, EstimateSnapshot and confirmed match set can yield different planned values, actual values, variance signs, remaining quantities and coverage totals while still satisfying the current State 4/5/7 prose.
+1. State 2 now defines the exact plan/actual grain, source fields, aggregation, variance sign, remaining convention, unmatched contribution, comparability policy, project totals, semantic reproducibility, and forecast boundary.
+2. State 1 now gives `PlanActualAnalysis` a mandatory non-placeholder baseline shape and introduces the derived per-item result shape.
+3. State 3 assigns deterministic calculation and comparability enforcement to `module:plan_actual` without granting source-system mutation authority.
+4. State 5 binds `calculate_plan_actual` to the accepted formulas and error semantics without changing its callable signature.
+5. State 7 Notes prohibit alternate formulas, guessed conversions, placeholder success, or invented forecast values.
 
-This is not implementation freedom. These values are user-visible business analysis.
-
-## Placeholder resistance
-
-Status: **PLACEHOLDER_RISK**.
-
-`PlanActualAnalysis` is currently described as a calculated view that *may contain* planned amount, actual amount, average actual price, remaining quantity, variance, unmatched coverage, warnings and forecasts. The compressed public API requires a reproducible result and explicit unmatched facts, but it does not define a minimum mandatory calculated result shape.
-
-Therefore a semantically hollow implementation can plausibly return a provenance-only or warning-only `PlanActualAnalysis` while avoiding source mutation and still appear consistent with the existing contract prose.
-
-## Scenario review
+## Scenario rerun
 
 ### P1 — equal pinned evidence produces reproducible analysis
 
-**Not fully derivable.** Input pinning is explicit, but the semantic value set whose equality must be reproducible is not closed.
+**PASS.** Semantic equality now covers the mandatory per-item quantities/amounts/variances/remaining values, unmatched identities/amount, project totals, and deterministic warning codes. Runtime timestamps/cache metadata are explicitly excluded from business equality.
 
 ### P2 — unmatched facts remain explicit
 
-**PASS for preservation**, but the exact analytical contribution/coverage semantics of unmatched facts remain unspecified.
+**PASS.** Unmatched invoice lines are preserved explicitly, contribute only to `unmatched_actual_amount` and project actual spend, and never create or populate a placeholder Estimate Item.
 
-### P3 — incomparable units block calculation
+### P3 — incomparable units or monetary basis block calculation
 
-**PASS for refusal** because `PlanActualPreconditionError` is required when accepted comparability preconditions fail. However, the accepted set of comparable units/conversions is not defined strongly enough to determine all positive branches.
+**PASS.** Different units require exact accepted conversion evidence. Currency or monetary/tax-basis mismatch requires exact accepted conversion/basis evidence. Otherwise `PlanActualPreconditionError` is mandatory; no implicit conversion is legal.
 
 ### P4 — invalid PresuPro observation never creates partial snapshot
 
-**PASS.** Snapshot rejection/idempotency semantics are already sufficiently constrained by A40/A43 and State 5/7.
+**PASS.** Existing A40/A43 semantics remain unchanged: identical canonical content is idempotent, changed content creates another immutable snapshot, rejected observations do not create partial snapshots, and no lineage is inferred.
+
+## Overspend and remaining edge case
+
+For `planned_quantity = 10` and `actual_quantity = 13`:
+
+```text
+quantity_variance = 3
+remaining_quantity = -3
+```
+
+The negative remaining value is preserved rather than clamped.
+
+For `planned_amount = 100` and `actual_amount = 125`:
+
+```text
+amount_variance = 25
+```
+
+Positive amount variance therefore means overspend.
+
+## Placeholder resistance
+
+**PASS.** A successful result must expose the accepted mandatory calculation fields. Empty, provenance-only, warning-only, TODO-shaped, fabricated-zero, or guessed-conversion results are not conforming successful implementations.
+
+## Adversarial ambiguity rerun
+
+The previous material alternatives no longer both satisfy the specification:
+
+- reversing the variance sign violates the accepted formulas;
+- clamping remaining quantity violates the accepted remaining convention;
+- using reconstructed invoice values or re-running PresuPro arithmetic violates source-field rules;
+- omitting unmatched spend from project actual violates project aggregation;
+- attaching unmatched lines to similar Estimate Items violates confirmed-match authority;
+- silently converting units/currency/tax basis violates explicit-assumption rules;
+- returning a provenance-only analysis violates the mandatory result shape.
+
+Remaining freedom concerns internal implementation only: iteration order, repository layout, caching strategy, helper decomposition, and equivalent arithmetic execution that yields the same accepted semantic values.
+
+Adversarial result: **PASS_INTERNAL_VARIATION**.
 
 ## Finding record
 
 ```text
 flow: flow:calculate_plan_actual
-status: AMBIGUITY
-material_alternative_found: yes
-placeholder_implementation_found: yes
-scenario_gaps:
-  - P1 lacks a closed mandatory semantic result set and calculation definitions.
-  - P2 preserves unmatched facts but does not close their analytical contribution.
-  - P3 closes refusal for incomparable evidence but not the positive comparability/conversion policy.
-findings:
-  - owner: upstream_business
-    scope: State 2 plan/actual calculation semantics and State 1 PlanActualAnalysis shape
-    interpretation_A: quantity-first matched-item calculation
-    interpretation_B: monetary-first aggregate calculation
-    required_resolution: accept exact calculation vocabulary, formulas/sign conventions, aggregation scope, unmatched contribution, unit-conversion policy, and minimum result fields before propagating to model/API/notes
+status: semantic_closed
+material_alternative_found_after_repair: no
+placeholder_implementation_found_after_repair: no
+repair_owner: State 2 business semantics, propagated through State 1/3/5/7
+contract_signature_changed: no
+runtime_oracle_allowed: yes
 ```
-
-## Earliest repair owner
-
-The earliest repair owner is **State 2 rules/business semantics**. State 1 must then be refined so `PlanActualAnalysis` has a mandatory non-placeholder shape, followed by propagation through State 3–7.
-
-Do not repair this only in State 7 Notes and do not invent formulas from generic accounting conventions.
 
 ## Flow 4 gate
 
-`semantic_closed`: **no**
+`semantic_closed`: **yes**
 
-A runtime acceptance oracle must not be materialized yet because doing so would encode one unaccepted calculation interpretation as product truth.
+The runtime acceptance oracle may now be materialized from these accepted semantics.
