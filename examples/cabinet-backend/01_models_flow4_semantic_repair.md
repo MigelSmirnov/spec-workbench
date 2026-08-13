@@ -4,7 +4,7 @@
 
 Bounded State 1 repair required by the accepted State 2 plan/actual calculation decision. It refines the existing `PlanActualAnalysis` meaning without changing source-system ownership or introducing mutable analytical state.
 
-## `PlanActualItemResult`
+## Model M54 — PlanActualItemResult
 
 Immutable value for one analysed `EstimateItemSnapshot`.
 
@@ -22,6 +22,34 @@ Required fields:
 - `matched_invoice_line_ids: tuple[str, ...]`.
 
 The values are calculated only after accepted quantity and monetary comparability preconditions are satisfied. They are derived values and do not mutate either source system.
+
+### Identity
+
+value
+
+### Identity evidence
+
+Substitution: equal pinned Estimate Item identity and equal calculated quantities, amounts, unit, and matched line identities are interchangeable. Continuity: changed source evidence produces another calculated value; the result has no independent lifecycle.
+
+### Meaning
+
+The immutable calculated plan/actual result for one item in a pinned EstimateSnapshot.
+
+### Source of truth
+
+Derived from the pinned estimate snapshot, accepted invoice revisions, confirmed matches, and assumptions.
+
+### Lifecycle
+
+No independent lifecycle; recalculation produces a new value.
+
+### Persistence candidate
+
+Calculated on demand or cached only as reproducible derived data.
+
+### Open questions
+
+None for identity closure.
 
 ## Refined `PlanActualAnalysis`
 

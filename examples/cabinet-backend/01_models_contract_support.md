@@ -1,4 +1,4 @@
-# State 1 repair — contract-support value models
+# State 1 repair — contract-support models
 
 ## Status
 
@@ -28,6 +28,14 @@ Fields:
 The current authorization store remains authoritative for revocation and capability
 checks; this value does not cache authorization truth.
 
+### Identity
+
+value
+
+### Identity evidence
+
+Substitution: equal authenticated-call facts are interchangeable as context. Continuity: later authentication, revocation, or capability changes produce new context rather than mutate this value.
+
 ---
 
 ## Model M36 — AuthorizationDecision
@@ -43,6 +51,14 @@ Fields:
 - `evidence_id: str`;
 - `decided_at: datetime`.
 
+### Identity
+
+value
+
+### Identity evidence
+
+Substitution: equal operation, principal, outcome, evidence, and decision-time facts carry the same authorization meaning. Continuity: every check produces an immutable result; `evidence_id` pins its proof but does not create a continuing decision object.
+
 ---
 
 ## Model M37 — SynchronizationWorkSelection
@@ -56,6 +72,14 @@ Fields:
 - `source_node_id: str`;
 - `target_node_id: str`;
 - `requested_at: datetime`.
+
+### Identity
+
+value
+
+### Identity evidence
+
+Substitution: equal obligation and endpoint facts select the same work. Continuity: a changed request or manifest produces another selection; no selection lifecycle is tracked.
 
 ---
 
@@ -73,6 +97,14 @@ Fields:
 A delivered synchronization with no durable proof remains distinguishable from an
 accepted import.
 
+### Identity
+
+value
+
+### Identity evidence
+
+Substitution: equal synchronization, receipt, and durable-verification facts are interchangeable as the public outcome. Continuity: it is an immutable returned composition, not the continuing synchronization entity it contains.
+
 ---
 
 ## Model M39 — SynchronizationStatusObservation
@@ -89,6 +121,14 @@ Fields:
 - `observed_at: datetime`.
 
 The value makes no durable-acceptance claim.
+
+### Identity
+
+value
+
+### Identity evidence
+
+Substitution: equal target, status, replica, synchronization, and observation-time facts express the same observation. Continuity: later observations are new values; the referenced synchronization and replica retain their own identities.
 
 ---
 
@@ -108,6 +148,14 @@ Fields:
 
 `accepted = true` is valid only when the accepted durable-local proof is complete.
 
+### Identity
+
+value
+
+### Identity evidence
+
+Substitution: equal acceptance result, covered sources, evidence reference, and verification time are interchangeable. Continuity: re-verification creates a new immutable observation and does not mutate durable archive entities.
+
 ---
 
 ## Model M41 — LocalSourceFile
@@ -124,6 +172,14 @@ Fields:
 
 Filename and media type never create storage/path authority.
 
+### Identity
+
+value
+
+### Identity evidence
+
+Substitution: equal submitted bytes and declared expectations are interchangeable before acceptance. Continuity: the submission has no independent history; accepted custody is represented by SourceBinary and SourceBinaryReplica entities.
+
 ---
 
 ## Model M42 — SourceAttachmentItemResult
@@ -137,6 +193,14 @@ Fields:
 - `content_hash: str`;
 - `result: str` — accepted values are `attached`, `already_attached`, or `rejected`;
 - `safe_error_code: str | None`.
+
+### Identity
+
+value
+
+### Identity evidence
+
+Substitution: equal file, hash, source, result, and safe-error facts are interchangeable. Continuity: the outcome is issued for one attachment attempt and does not change afterward.
 
 ---
 
@@ -153,6 +217,14 @@ Fields:
 - `complete: bool`;
 - `observed_at: datetime`.
 
+### Identity
+
+value
+
+### Identity evidence
+
+Substitution: equal invoice, availability sets, completeness, failures, and observation time express the same status. Continuity: later archive evidence yields a new status value.
+
 ---
 
 ## Model M44 — SourceAttachmentBatchResult
@@ -166,6 +238,14 @@ Fields:
 - `source_status: SourceStatus`.
 
 Partial success remains explicit through the per-item results.
+
+### Identity
+
+value
+
+### Identity evidence
+
+Substitution: equal invoice, ordered item outcomes, and resulting source status are interchangeable. Continuity: the batch result is immutable and has no identity beyond its complete contents.
 
 ---
 
@@ -183,6 +263,14 @@ Fields:
 
 No customer or completion fields are added.
 
+### Identity
+
+value
+
+### Identity evidence
+
+Substitution: equal Registry row facts are interchangeable as one upstream observation. Continuity: Registry changes produce another observation; continuing project identity belongs to Registry and WorkObject, not this value.
+
 ---
 
 ## Model M46 — RegistryRefreshResult
@@ -196,6 +284,14 @@ Fields:
 - `observed_at: datetime`.
 
 Absence from the refresh does not imply deletion.
+
+### Identity
+
+value
+
+### Identity evidence
+
+Substitution: equal accepted snapshots, work-object results, and observation time express the same refresh result. Continuity: each refresh returns a new immutable summary while contained entities retain their own identities.
 
 ---
 
@@ -217,6 +313,14 @@ Fields:
 `canonical_content` is the deterministic serialized estimate content used for
 content hashing and snapshot construction; it is not a generic application DTO.
 
+### Identity
+
+value
+
+### Identity evidence
+
+Substitution: equal upstream estimate facts, canonical content, and observation time are interchangeable. Continuity: a changed PresuPro observation becomes another value; accepted continuity is represented by EstimateSnapshot.
+
 ---
 
 ## Model M48 — HoldedPurchasePayloadItem
@@ -232,6 +336,14 @@ Fields:
 - `discount: Decimal | None`;
 - `tax: Decimal`;
 - `sku: str | None`.
+
+### Identity
+
+value
+
+### Identity evidence
+
+Substitution: equal typed purchase-line fields are interchangeable in the outbound contract. Continuity: it is immutable payload content with no independent lifecycle.
 
 ---
 
@@ -253,6 +365,14 @@ Fields:
 
 The `desc` field carries the stable non-financial attempt marker required by A52.
 
+### Identity
+
+value
+
+### Identity evidence
+
+Substitution: equal complete create payloads are interchangeable for the same technical call. Continuity: attempt history belongs to HoldedPublicationAttempt; this payload does not change independently.
+
 ---
 
 ## Model M50 — HoldedPurchaseLookupEvidence
@@ -273,6 +393,14 @@ Fields:
 It contains technical evidence only; `module:holded_publication` owns the logical
 publication classification.
 
+### Identity
+
+value
+
+### Identity evidence
+
+Substitution: equal lookup target, matches, verification, outcome, and observation time are interchangeable technical evidence. Continuity: repeated recovery lookup issues another observation rather than mutating prior evidence.
+
 ---
 
 ## Model M51 — VpsReleaseRequestContext
@@ -287,6 +415,14 @@ Fields:
 
 At least one of Registry `project_id` (the operation argument) or `working_set_id`
 must identify the exact target before evaluation.
+
+### Identity
+
+value
+
+### Identity evidence
+
+Substitution: equal requester, request time, and working-set target carry the same request context. Continuity: it is immutable input to evaluation and is not a tracked release request entity.
 
 ---
 
@@ -305,6 +441,14 @@ Fields:
 - `evaluated_at: datetime`.
 
 No physical deletion occurs during evaluation.
+
+### Identity
+
+value
+
+### Identity evidence
+
+Substitution: equal target, allow/block result, complete evidence, reason, and evaluation time are interchangeable. Continuity: changed evidence requires a new evaluation; no evaluation state is mutated.
 
 ---
 
@@ -325,3 +469,55 @@ Fields:
 
 The physical VPS adapter consumes an authorized decision but cannot broaden its
 target or weaken its evidence.
+
+### Identity
+
+entity
+
+### Identity evidence
+
+Substitution: decisions with different `decision_id` values are not interchangeable even when their projected target and result match, because each records a distinct authorization obligation and provenance. Continuity: an equivalent repeated manual-release request resolves to the existing decision with the same stable `decision_id`; the issued decision remains immutable.
+
+---
+
+## Model M55 — PlanActualRequest
+
+Immutable application request that pins the accepted evidence used for one plan/actual calculation.
+
+Fields:
+
+- `invoice_revisions: tuple[InvoiceCardRevisionReference, ...]`;
+- `project_id: str`;
+- `estimate_snapshot_id: str`;
+- `match_ids: tuple[str, ...]`;
+- `assumption_ids: tuple[str, ...]`.
+
+The DTO carries identities only; it never embeds mutable replacements for accepted source records.
+
+### Identity
+
+value
+
+### Identity evidence
+
+Substitution: equal pinned revision, project, snapshot, match, and assumption identities request the same calculation. Continuity: changing any pinned evidence creates another request; no request history or mutation is tracked.
+
+### Meaning
+
+The complete evidence selection for a reproducible plan/actual calculation.
+
+### Source of truth
+
+Constructed by the application caller from accepted Cabinet evidence identities.
+
+### Lifecycle
+
+No independent lifecycle; consumed as immutable calculation input.
+
+### Persistence candidate
+
+Runtime input; durable persistence is not required.
+
+### Open questions
+
+None for identity closure.

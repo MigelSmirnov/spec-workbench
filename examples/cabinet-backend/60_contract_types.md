@@ -2,16 +2,16 @@
 
 ## Status
 
-These declarations are introduced by exact-contract authoring. They are not new
-product behavior. `PlanActualRequest` is an application request DTO that pins
-already accepted evidence. `AccessControlBackend` is the narrow runtime port
-required by deterministic HTTP authentication/authorization wiring.
+These declarations complete exact-contract authoring without adding product
+behavior. `PlanActualRequest` lowers the canonical State 1 value model that
+pins already accepted evidence. `AccessControlBackend` is the narrow runtime
+port required by deterministic HTTP authentication/authorization wiring.
 
 ---
 
 ## `PlanActualRequest`
 
-Identity: value.
+Identity: value, as established by State 1 model M55.
 
 Fields:
 

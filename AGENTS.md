@@ -38,7 +38,10 @@ When working on State 1:
 2. list models with `python tools/design_index.py examples/<case> --list --state 1 --kind model`;
 3. patch a model section through `tools/design_editor.py`;
 4. run `python tools/design_lint.py examples/<case> --state 1`;
-5. do not enter State 2 until identity closure passes.
+5. when an assembled specification exists, run
+   `python tools/design_identity_closure.py examples/<case>`;
+6. do not enter State 2 or declare assembly validated until identity closure
+   passes.
 
 Before moving from State 2 to State 3:
 
