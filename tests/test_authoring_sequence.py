@@ -60,4 +60,4 @@ def test_router_cannot_be_signature_source() -> None:
 def test_legacy_named_data_tool_declares_pre_contract_role() -> None:
     doc = design_stage6_data.__doc__ or ""
     assert "pre-contract" in doc.casefold()
-    assert "semantic State 6 is exact contracts" in doc
+    assert "semantic state 6 is exact contracts" in doc.casefold()

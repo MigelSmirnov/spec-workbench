@@ -23,6 +23,7 @@ ROOT = Path(__file__).resolve().parents[1]
 CABINET = ROOT / "examples" / "cabinet-backend"
 CATALOG = "70_router_closure.json"
 FIRST_EXTERNAL = "public_op:durable_archive.attach_local_source"
+FIRST_UNRESOLVED = "public_op:durable_archive.accept_incomplete_source_evidence"
 INTERNAL_OPERATION = "public_op:access_control.authorize_operation"
 UNKNOWN_OPERATION = "public_op:durable_archive.not_canonical"
 
@@ -77,6 +78,16 @@ def _resolve_all(project: Path) -> None:
     payload["items"] = [
         _table(item["operation"], [{"ref": "literal", "value": index}], index=index)
         for index, item in enumerate(payload["items"])
+    ]
+    _write(project, payload)
+
+
+def _make_unresolved(project: Path) -> None:
+    payload = _payload(project)
+    payload["irregular_ownership"] = None
+    payload["items"] = [
+        {"operation": item["operation"], "emission": "unresolved"}
+        for item in payload["items"]
     ]
     _write(project, payload)
 
@@ -172,6 +183,7 @@ def test_fully_resolved_catalog_counts_irregular_as_resolved(tmp_path: Path) -> 
 
 def test_resolved_and_unresolved_counts_are_exact(tmp_path: Path) -> None:
     project = _project(tmp_path)
+    _make_unresolved(project)
     payload = _payload(project)
     payload["items"][0] = _table(payload["items"][0]["operation"])
     _write(project, payload)
@@ -453,6 +465,7 @@ def test_coverage_boundary_violations_have_complete_findings(
     tmp_path: Path, mutation: str, code: str, operation: str
 ) -> None:
     project = _project(tmp_path)
+    _make_unresolved(project)
     payload = _payload(project)
     if mutation == "missing":
         payload["items"].pop()
@@ -483,13 +496,14 @@ def test_coverage_boundary_violations_have_complete_findings(
 
 def test_catalog_order_does_not_change_coverage_or_next(tmp_path: Path) -> None:
     project = _project(tmp_path)
+    _make_unresolved(project)
     original_coverage = service.coverage(project)
     original_next = service.next_operation(project)["next"]["operation"]
     payload = _payload(project)
     payload["items"].reverse()
     _write(project, payload)
     assert service.coverage(project) == original_coverage
-    assert service.next_operation(project)["next"]["operation"] == original_next == FIRST_EXTERNAL
+    assert service.next_operation(project)["next"]["operation"] == original_next == FIRST_UNRESOLVED
 
 
 def test_report_serialization_is_byte_stable_for_identical_input() -> None:
@@ -537,8 +551,12 @@ def test_cli_lint_validation_failure_returns_one(tmp_path: Path, capsys: pytest.
     assert report["summary"]["errors"] > 0
 
 
-def test_cli_coverage_readiness_failure_returns_one(capsys: pytest.CaptureFixture[str]) -> None:
-    assert design_router_closure.main([str(CABINET), "--coverage", "--json"]) == 1
+def test_cli_coverage_readiness_failure_returns_one(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    project = _project(tmp_path)
+    _make_unresolved(project)
+    assert design_router_closure.main([str(project), "--coverage", "--json"]) == 1
     payload = json.loads(capsys.readouterr().out)
     assert payload["schema_version"] == COVERAGE_SCHEMA
     assert payload["summary"]["handoff_ready"] is False
@@ -553,11 +571,15 @@ def test_cli_coverage_success_returns_zero(tmp_path: Path, capsys: pytest.Captur
     assert payload["summary"]["handoff_ready"] is True
 
 
-def test_cli_next_json_success_and_schema(capsys: pytest.CaptureFixture[str]) -> None:
-    assert design_router_closure.main([str(CABINET), "--next", "--json"]) == 0
+def test_cli_next_json_success_and_schema(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    project = _project(tmp_path)
+    _make_unresolved(project)
+    assert design_router_closure.main([str(project), "--next", "--json"]) == 0
     payload = json.loads(capsys.readouterr().out)
     assert payload["schema_version"] == NEXT_SCHEMA
-    assert payload["next"]["operation"] == FIRST_EXTERNAL
+    assert payload["next"]["operation"] == FIRST_UNRESOLVED
 
 
 def test_cli_next_complete_project_returns_zero(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
@@ -582,10 +604,14 @@ def test_next_is_not_complete_when_all_items_are_resolved_but_invalid(tmp_path: 
     assert report["complete"] is False
 
 
-def test_cli_json_output_is_byte_stable(capsys: pytest.CaptureFixture[str]) -> None:
-    assert design_router_closure.main([str(CABINET), "--coverage", "--json"]) == 1
+def test_cli_json_output_is_byte_stable(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    project = _project(tmp_path)
+    _make_unresolved(project)
+    assert design_router_closure.main([str(project), "--coverage", "--json"]) == 1
     first = capsys.readouterr().out
-    assert design_router_closure.main([str(CABINET), "--coverage", "--json"]) == 1
+    assert design_router_closure.main([str(project), "--coverage", "--json"]) == 1
     second = capsys.readouterr().out
     assert first == second
     assert json.loads(first)["schema_version"] == COVERAGE_SCHEMA

@@ -112,9 +112,9 @@ def test_ready_handoff_contains_operation_and_handler_contracts() -> None:
     assert handler["router_operation"] == FIRST_EXTERNAL
 
 
-def test_authoring_gate_advances_to_state7_after_complete_router_ir_closure() -> None:
+def test_authoring_gate_advances_to_assembly_after_notes_are_closed() -> None:
     report = design_authoring_next.next_step(CABINET)
-    assert report["phase"] == "state7_notes"
+    assert report["phase"] == "state8_assembly"
     assert report["blocked"] is False
     assert report["router_allowed"] is True
     assert report["next_command"] is None

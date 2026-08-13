@@ -42,7 +42,8 @@ def build_slice(project: Path, module: str) -> dict[str, Any]:
     persistent_ownership = module_owned_persistence(project, module_name, set(persistence_catalog))
     models = referenced_models(spec, contracts, symbols, persistent_ownership)
     persistence = {name: value for name, value in spec.get("persistence", {}).items() if name in models}
-    router = spec.get("rules", {}).get("http_router_backend", {})
+    router_handoff = spec.get("rules", {}).get("http_router_backend", {})
+    router = router_handoff.get("rules", {}).get("http_router_backend", router_handoff)
     routes = [route for route in router.get("routes", []) if route.get("handler") in symbols]
     deterministic_callables = sorted(
         route["handler"] for route in routes
