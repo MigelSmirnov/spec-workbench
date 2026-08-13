@@ -32,10 +32,10 @@ def _make_unresolved(project: Path, function: str = "attach_local_source") -> No
 def test_cabinet_state6_contracts_are_closed_and_ready() -> None:
     report = design_stage6_contracts.coverage(CABINET)
     assert report["summary"] == {
-        "planned_functions": 36,
-        "public_functions": 20,
-        "internal_functions": 16,
-        "resolved": 36,
+        "planned_functions": 40,
+        "public_functions": 22,
+        "internal_functions": 18,
+        "resolved": 40,
         "unresolved": 0,
         "errors": 0,
         "plan_closed": True,
@@ -55,7 +55,7 @@ def test_next_function_is_complete_after_state6_handoff() -> None:
 def test_public_operation_mapping_is_complete() -> None:
     report = design_stage6_contracts.coverage(CABINET)
     public_ops = {row["public_operation"] for row in report["functions"] if row["visibility"] == "public"}
-    assert len(public_ops) == 20
+    assert len(public_ops) == 22
     assert None not in public_ops
     assert not any(item["code"] == "missing_public_function" for item in report["findings"])
 
@@ -63,8 +63,8 @@ def test_public_operation_mapping_is_complete() -> None:
 def test_every_external_operation_has_one_canonical_handler_contract() -> None:
     report = design_stage6_contracts.coverage(CABINET)
     handlers = [row for row in report["functions"] if row["router_operation"] is not None]
-    assert len(handlers) == 11
-    assert len({row["router_operation"] for row in handlers}) == 11
+    assert len(handlers) == 13
+    assert len({row["router_operation"] for row in handlers}) == 13
     irregular = [row for row in handlers if row["module"] == "module:api_irregular"]
     assert [row["function"] for row in irregular] == ["attach_local_source_handler"]
     assert irregular[0]["router_operation"] == FIRST_EXTERNAL
@@ -82,8 +82,8 @@ def test_internal_functions_require_explicit_plan_entries(tmp_path: Path) -> Non
     })
     plan_path.write_text(json.dumps(plan), encoding="utf-8")
     report = design_stage6_contracts.coverage(project)
-    assert report["summary"]["planned_functions"] == 37
-    assert report["summary"]["internal_functions"] == 17
+    assert report["summary"]["planned_functions"] == 41
+    assert report["summary"]["internal_functions"] == 19
     assert "_persist_manifest_atomically" in report["unresolved_functions"]
     assert report["summary"]["handoff_ready"] is False
 
@@ -103,7 +103,7 @@ def test_missing_router_handler_mapping_is_fail_closed(tmp_path: Path) -> None:
 def test_ready_handoff_contains_operation_and_handler_contracts() -> None:
     handoff = design_stage6_contracts.handoff(CABINET)
     assert handoff["ready"] is True
-    assert handoff["summary"]["resolved"] == 36
+    assert handoff["summary"]["resolved"] == 40
     domain = handoff["contracts"]["attach_local_source"]
     handler = handoff["contracts"]["attach_local_source_handler"]
     assert domain["public_operation"] == FIRST_EXTERNAL

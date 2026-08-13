@@ -521,3 +521,89 @@ Runtime input; durable persistence is not required.
 ### Open questions
 
 None for identity closure.
+
+---
+
+## Model M56 — IncompleteSourceAcceptance
+
+Immutable auditable decision permitting one exact confirmed Card revision to enter normal archive truth with explicitly incomplete source evidence.
+
+Fields:
+
+- `acceptance_id: str`;
+- `card_revision: InvoiceCardRevisionReference`;
+- `missing_source_references: tuple[ContentReference, ...]`;
+- `actor: ActorReference`;
+- `reason: str`;
+- `decided_at: datetime`.
+
+### Identity
+
+entity
+
+### Identity evidence
+
+Substitution: decisions with different acceptance ids, actors, revisions, or missing-source sets are not interchangeable. Continuity: replay of the same accepted decision resolves to the existing immutable evidence identified by `acceptance_id`.
+
+### Meaning
+
+Explicit authorization evidence for accepting incomplete source custody without claiming missing bytes were stored.
+
+### Source of truth
+
+Cabinet Backend durable archive records the authorized decision.
+
+### Lifecycle
+
+Issued immutable evidence; later attachment changes source completeness but never erases this history.
+
+### Persistence candidate
+
+Durable issued decision evidence.
+
+### Open questions
+
+None for identity closure.
+
+---
+
+## Model M57 — SourceLossDecision
+
+Immutable evidence that an authorized actor declared exact required source references unrecoverable.
+
+Fields:
+
+- `decision_id: str`;
+- `invoice_id: str`;
+- `source_references: tuple[ContentReference, ...]`;
+- `actor: ActorReference`;
+- `explanation: str | None`;
+- `decided_at: datetime`.
+
+### Identity
+
+entity
+
+### Identity evidence
+
+Substitution: decisions with different ids, actors, targets, or affected sources are not interchangeable. Continuity: one issued loss decision remains immutable in history even if later verified attachment restores source completeness.
+
+### Meaning
+
+Auditable evidence supporting the `source_lost` archive status for exact missing originals.
+
+### Source of truth
+
+Cabinet Backend durable archive records the authorized manual decision.
+
+### Lifecycle
+
+Issued immutable evidence; may later be historically superseded by recovered verified custody without deletion.
+
+### Persistence candidate
+
+Durable issued decision evidence.
+
+### Open questions
+
+None for identity closure.

@@ -11,6 +11,8 @@ attach_local_source: [ORCHESTRATION] Evaluate every submitted file independently
 attach_local_source: [BEHAVIOR] After classifiable per-file outcomes are applied, return one SourceAttachmentBatchResult containing every submitted file's attached, already_attached, or rejected outcome plus source_status recomputed from accepted archive truth.
 attach_local_source: [VALIDATION_ERROR] Raise InvoiceNotFoundError when the exact accepted invoice target cannot be resolved. Raise SourceAttachmentRejectedError only when a request-level source-attachment condition prevents trustworthy independent per-file classification; do not use it for an ordinary file-local rejection that can be represented as SourceAttachmentItemResult(result="rejected").
 attach_local_source: [PROVENANCE] Preserve previously accepted provenance when equivalent bytes are reattached; repeated attempts may add attempt evidence but must not silently replace the provenance of already accepted source evidence.
+
+attach_local_source: [BEHAVIOR] A later verified attachment that satisfies every remaining required source changes awaiting_source or source_lost to complete while preserving all earlier incomplete-acceptance and loss-decision history.
 ```
 
 ## Irregular HTTP seam

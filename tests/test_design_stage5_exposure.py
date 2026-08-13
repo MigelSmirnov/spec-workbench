@@ -11,8 +11,8 @@ PROJECT = Path(__file__).resolve().parents[1] / "examples" / "cabinet-backend"
 
 def test_cabinet_exposure_plan_is_complete_and_valid():
     report = design_stage5_exposure.lint(PROJECT)
-    assert report["summary"]["operations"] == 20
-    assert report["summary"]["classified"] == 20
+    assert report["summary"]["operations"] == 22
+    assert report["summary"]["classified"] == 22
     assert report["summary"]["errors"] == 0
     assert "public_op:holded_gateway.create_holded_purchase" in report["internal_only_operations"]
     assert "public_op:durable_archive.attach_local_source" in report["external_operations"]

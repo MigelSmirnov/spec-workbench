@@ -6,7 +6,10 @@ from typing import Any
 from notes_workbench import service as notes_service
 
 from module_review_workbench.model import MODULES_SCHEMA, REVIEW_SCHEMA, SLICE_SCHEMA, ModuleReviewError
-from module_review_workbench.sources import assembled_notes, decisions, load_json, referenced_models, rule_values, state1_models
+from module_review_workbench.sources import (
+    assembled_notes, decisions, load_json, module_owned_persistence,
+    referenced_models, rule_values, state1_models,
+)
 
 def _spec(project: Path) -> dict[str, Any]:
     return load_json(project / "global_spec.json")
@@ -35,7 +38,9 @@ def build_slice(project: Path, module: str) -> dict[str, Any]:
         }
     exports = spec.get("imports", {}).get("internal", {}).get(module_name, [])
     dependencies = spec.get("imports", {}).get("module_internal", {}).get(module_name, {})
-    models = referenced_models(spec, contracts, symbols)
+    persistence_catalog = spec.get("persistence", {})
+    persistent_ownership = module_owned_persistence(project, module_name, set(persistence_catalog))
+    models = referenced_models(spec, contracts, symbols, persistent_ownership)
     persistence = {name: value for name, value in spec.get("persistence", {}).items() if name in models}
     router = spec.get("rules", {}).get("http_router_backend", {})
     routes = [route for route in router.get("routes", []) if route.get("handler") in symbols]

@@ -115,7 +115,7 @@ def _codes(findings: list[Any]) -> set[str]:
 # Report schemas and resolved/unresolved readiness
 
 
-def test_cabinet_coverage_schema_is_closed_and_unresolved() -> None:
+def test_cabinet_coverage_schema_is_closed_and_resolved() -> None:
     report = service.coverage(CABINET)
     assert set(report) == {"schema_version", "project_root", "summary", "unresolved_operations", "findings"}
     assert report["schema_version"] == COVERAGE_SCHEMA
@@ -124,15 +124,14 @@ def test_cabinet_coverage_schema_is_closed_and_unresolved() -> None:
         "external_operations", "catalog_items", "resolved", "unresolved", "errors", "handoff_ready",
     }
     assert report["summary"] == {
-        "external_operations": 11,
-        "catalog_items": 11,
-        "resolved": 0,
-        "unresolved": 11,
+        "external_operations": 13,
+        "catalog_items": 13,
+        "resolved": 13,
+        "unresolved": 0,
         "errors": 0,
-        "handoff_ready": False,
+        "handoff_ready": True,
     }
-    assert report["unresolved_operations"] == sorted(report["unresolved_operations"])
-    assert report["unresolved_operations"][0] == FIRST_EXTERNAL
+    assert report["unresolved_operations"] == []
     assert report["findings"] == []
 
 
@@ -141,9 +140,9 @@ def test_fully_resolved_synthetic_cabinet_is_handoff_ready(tmp_path: Path) -> No
     _resolve_all(project)
     report = service.coverage(project)
     assert report["summary"] == {
-        "external_operations": 11,
-        "catalog_items": 11,
-        "resolved": 11,
+        "external_operations": 13,
+        "catalog_items": 13,
+        "resolved": 13,
         "unresolved": 0,
         "errors": 0,
         "handoff_ready": True,
@@ -165,7 +164,7 @@ def test_fully_resolved_catalog_counts_irregular_as_resolved(tmp_path: Path) -> 
     payload["items"][0] = _irregular(payload["items"][0]["operation"])
     _write(project, payload)
     report = service.coverage(project)
-    assert report["summary"]["resolved"] == 11
+    assert report["summary"]["resolved"] == 13
     assert report["summary"]["unresolved"] == 0
     assert report["summary"]["errors"] == 0
     assert report["summary"]["handoff_ready"] is True
@@ -178,7 +177,7 @@ def test_resolved_and_unresolved_counts_are_exact(tmp_path: Path) -> None:
     _write(project, payload)
     summary = service.coverage(project)["summary"]
     assert summary["resolved"] == 1
-    assert summary["unresolved"] == 10
+    assert summary["unresolved"] == 12
     assert summary["handoff_ready"] is False
 
 
@@ -189,7 +188,7 @@ def test_resolution_is_not_sufficient_when_validation_fails(tmp_path: Path) -> N
     payload["items"][0]["delegate"]["args"] = ["payload.invoice_id"]
     _write(project, payload)
     report = service.coverage(project)
-    assert report["summary"]["resolved"] == 11
+    assert report["summary"]["resolved"] == 13
     assert report["summary"]["unresolved"] == 0
     assert report["summary"]["errors"] == 1
     assert report["summary"]["handoff_ready"] is False
@@ -203,27 +202,15 @@ def test_lint_and_next_report_schemas_are_closed() -> None:
     assert set(lint["summary"]) == {
         "external_operations", "catalog_items", "resolved", "unresolved", "errors", "handoff_ready", "warnings",
     }
-    assert lint["summary"]["warnings"] == 11
+    assert lint["summary"]["warnings"] == 0
     assert [item["operation"] for item in lint["findings"]] == sorted(item["operation"] for item in lint["findings"])
-    warning = lint["findings"][0]
-    assert set(warning) == {"severity", "code", "message", "operation"}
-    assert warning["severity"] == "warning"
-    assert warning["code"] == "unresolved_closure"
-    assert "handoff" in warning["message"].casefold()
+    assert lint["findings"] == []
 
     next_report = service.next_operation(CABINET)
     assert set(next_report) == {"schema_version", "project_root", "complete", "next", "summary"}
     assert next_report["schema_version"] == NEXT_SCHEMA
-    assert next_report["complete"] is False
-    assert set(next_report["next"]) == {"operation", "semantic_slice"}
-    assert next_report["next"]["operation"] == FIRST_EXTERNAL
-    semantic_slice = next_report["next"]["semantic_slice"]
-    assert set(semantic_slice) == {
-        "schema_version", "module", "responsibility", "capabilities", "flows",
-        "public_operation", "structured_refs",
-    }
-    assert semantic_slice["module"] == "module:durable_archive"
-    assert semantic_slice["public_operation"]["key"] == FIRST_EXTERNAL
+    assert next_report["complete"] is True
+    assert next_report["next"] is None
 
 
 # Typed refs: the closed http_router_backend/v1 language
@@ -486,12 +473,12 @@ def test_coverage_boundary_violations_have_complete_findings(
     assert report["summary"]["errors"] >= 1
     assert report["summary"]["handoff_ready"] is False
     if mutation == "duplicate":
-        assert report["summary"]["catalog_items"] == 12
+        assert report["summary"]["catalog_items"] == 14
         assert report["summary"]["resolved"] == 0
-        assert report["summary"]["unresolved"] == 11
+        assert report["summary"]["unresolved"] == 13
     if mutation in {"internal", "unknown"}:
         assert report["summary"]["resolved"] == 0
-        assert report["summary"]["unresolved"] == 11
+        assert report["summary"]["unresolved"] == 13
 
 
 def test_catalog_order_does_not_change_coverage_or_next(tmp_path: Path) -> None:
@@ -536,7 +523,7 @@ def test_cli_lint_json_success_and_schema(capsys: pytest.CaptureFixture[str]) ->
     payload = json.loads(output.out)
     assert output.err == ""
     assert payload["schema_version"] == LINT_SCHEMA
-    assert payload["summary"]["warnings"] == 11
+    assert payload["summary"]["warnings"] == 0
 
 
 def test_cli_lint_validation_failure_returns_one(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:

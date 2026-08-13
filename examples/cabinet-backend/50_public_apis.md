@@ -174,6 +174,62 @@ Mutates source evidence only; accepted Card bytes/content hash remain immutable.
 
 ---
 
+## `public_op:durable_archive.accept_incomplete_source_evidence`
+
+### Owner
+`module:durable_archive`
+
+### Callers
+Authorized local protected-operation adapters.
+
+### Inputs
+One immutable IncompleteSourceAcceptance decision and exact-operation authorization.
+
+### Outputs
+Updated truthful SourceStatus for the exact invoice.
+
+### Observable effect
+Records auditable acceptance of an exact confirmed Card revision with an explicitly identified incomplete source set.
+
+### Enforces
+Explicit user intent, exact revision/source binding, authorization, idempotent decision replay, and preservation of missing-source truth.
+
+### Errors
+`InvoiceNotFoundError` for an unknown exact revision and `SourceAttachmentRejectedError` for stale, mismatched, empty, or conflicting acceptance evidence.
+
+### State impact
+May admit the Card to normal archive truth with `awaiting_source`; never claims missing bytes are stored and never rewrites Card content.
+
+---
+
+## `public_op:durable_archive.record_source_loss`
+
+### Owner
+`module:durable_archive`
+
+### Callers
+Authorized local protected-operation adapters.
+
+### Inputs
+One immutable SourceLossDecision and exact-operation authorization.
+
+### Outputs
+Updated truthful SourceStatus for the exact invoice.
+
+### Observable effect
+Appends source-loss evidence and changes affected missing-source status to `source_lost`.
+
+### Enforces
+Exact affected source identity, authorization, immutable history, idempotent replay, and reversible recovery by later verified attachment.
+
+### Errors
+`InvoiceNotFoundError` for an unknown invoice and `SourceAttachmentRejectedError` for empty, already available, wrong-target, stale, or conflicting loss evidence.
+
+### State impact
+Changes source completeness evidence only; it neither deletes source/Card history nor blocks later return to `complete`.
+
+---
+
 ## `public_op:durable_archive.get_source_status`
 
 ### Owner

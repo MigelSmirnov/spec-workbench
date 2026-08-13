@@ -31,9 +31,9 @@ def _write(project: Path, payload: dict[str, object]) -> None:
 def test_current_cabinet_route_catalog_is_contract_aware_ready() -> None:
     report = authoring.coverage(CABINET)
     assert report["summary"] == {
-        "external_operations": 11,
-        "catalog_items": 11,
-        "resolved": 11,
+        "external_operations": 13,
+        "catalog_items": 13,
+        "resolved": 13,
         "unresolved": 0,
         "errors": 0,
         "handoff_ready": True,
@@ -78,7 +78,7 @@ def test_final_router_ir_is_deterministically_assembled() -> None:
     assert ir["kind"] == "http_router_backend"
     assert ir["schema_version"] == 1
     assert ir["backend"] == {"framework": "fastapi", "emitter": "fastapi_sync_v1"}
-    assert len(ir["routes"]) == 11
+    assert len(ir["routes"]) == 13
     assert all("operation" not in route for route in ir["routes"])
     assert sum(route["emission"] == "irregular" for route in ir["routes"]) == 1
     irregular = next(route for route in ir["routes"] if route["emission"] == "irregular")

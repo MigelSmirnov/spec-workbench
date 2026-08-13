@@ -26,7 +26,7 @@ def _copy_identity_inputs(tmp_path: Path) -> Path:
 
 def test_cabinet_assembled_model_identity_is_closed() -> None:
     report = design_identity_closure.lint(CABINET)
-    assert report["summary"]["assembled_runtime_models"] == 49
+    assert report["summary"]["assembled_runtime_models"] == 51
     assert report["summary"]["errors"] == 0
 
 
@@ -34,10 +34,10 @@ def test_inventory_is_stable_for_mcp_consumers() -> None:
     report = inventory(CABINET)
     assert report["schema_version"] == "spec_workbench_identity_inventory.v1"
     assert report["summary"] == {
-        "models": 55,
-        "state1_models": 55,
-        "closure_models": 49,
-        "assembled_runtime_models": 49,
+        "models": 57,
+        "state1_models": 57,
+        "closure_models": 51,
+        "assembled_runtime_models": 51,
         "source_errors": 0,
     }
     assert [model["name"] for model in report["models"]] == sorted(

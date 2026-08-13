@@ -114,6 +114,8 @@ Deep security-policy module. It hides identity separation, capability policy, cr
 - atomic visibility of an accepted manifest required set;
 - normal archive visibility versus quarantined/diagnostic visibility;
 - source attachment transitions owned by the local Backend;
+- explicit incomplete-source acceptance evidence and source-loss decision history;
+- reversible source completeness transitions among awaiting_source, source_lost, and complete;
 - durable archive evidence required before VPS working-copy release may be authorized.
 
 ### Knows
@@ -135,6 +137,23 @@ Deep security-policy module. It hides identity separation, capability policy, cr
 - archive indexes and persistence mapping;
 - duplicate-review persistence.
 
+### Owned persistent records
+
+```text
+StoredInvoiceCard
+StoredInvoiceCardRevision
+InvoiceCardValidationRecord
+DuplicateCandidateReview
+SourceBinary
+SourceBinaryReplica
+InvoiceTransferManifest
+InvoiceImport
+ImportQuarantine
+InvoiceTransferReceipt
+IncompleteSourceAcceptance
+SourceLossDecision
+```
+
 ### Must not own
 
 - network delivery state;
@@ -154,6 +173,8 @@ resolve_import_quarantine
 get_archived_invoice
 search_archive
 attach_local_source
+accept_incomplete_source_evidence
+record_source_loss
 get_source_status
 verify_durable_acceptance
 ```

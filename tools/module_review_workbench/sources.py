@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 import design_index
+import design_stage3
 
 from module_review_workbench.model import ModuleReviewError
 
@@ -65,9 +66,36 @@ def assembled_notes(spec: dict[str, Any], module: str, symbols: set[str]) -> lis
         })
     return result
 
-def referenced_models(spec: dict[str, Any], contracts: dict[str, str], owned: set[str]) -> dict[str, Any]:
+def module_owned_persistence(project: Path, module: str, persistence_names: set[str]) -> set[str]:
+    item = design_stage3.get_module(project, module)
+    if item is None:
+        return set()
+    source = item["source"]
+    lines = (project / source["path"]).read_text(encoding="utf-8").splitlines()
+    module_lines = lines[source["start_line"] - 1:source["end_line"]]
+    in_section = False
+    in_fence = False
+    result: set[str] = set()
+    for raw in module_lines:
+        stripped = raw.strip()
+        if stripped.startswith("### "):
+            in_section = stripped[4:].strip().casefold() == "owned persistent records"
+            in_fence = False
+            continue
+        if not in_section:
+            continue
+        if stripped.startswith("```"):
+            in_fence = not in_fence
+            continue
+        if in_fence and stripped in persistence_names:
+            result.add(stripped)
+    return result
+
+def referenced_models(
+    spec: dict[str, Any], contracts: dict[str, str], owned: set[str], extra: set[str] | None = None
+) -> dict[str, Any]:
     models = spec.get("models", {})
-    names = (set(models) & owned) | (
+    names = (set(models) & owned) | (set(models) & (extra or set())) | (
         set(models) & {token for signature in contracts.values() for token in TYPE_NAME.findall(signature)}
     )
     queue = list(names)
