@@ -71,6 +71,17 @@ def test_global_router_context_is_ready() -> None:
     assert report["findings"] == []
 
 
+def test_credential_extractor_has_canonical_factory_fields() -> None:
+    context = design_router_context.load(CABINET)
+    assert context["wiring"]["credential_extractors"]["bearer"] == {
+        "kind": "header_scheme",
+        "function": "extract_bearer_credential",
+        "header": "Authorization",
+        "scheme": "Bearer",
+        "reject_with": "AuthenticationRequiredError",
+    }
+
+
 def test_final_router_ir_is_deterministically_assembled() -> None:
     handoff = design_router_ir.assemble(CABINET)
     assert handoff["ready"] is True
@@ -84,3 +95,9 @@ def test_final_router_ir_is_deterministically_assembled() -> None:
     irregular = next(route for route in ir["routes"] if route["emission"] == "irregular")
     assert irregular["handler"] == "attach_local_source_handler"
     assert ir["irregular_ownership"] == {"module": "api_irregular"}
+
+
+def test_assembled_spec_contains_normative_router_ir_without_handoff_wrapper() -> None:
+    spec = json.loads((CABINET / "global_spec.json").read_text(encoding="utf-8"))
+    handoff = design_router_ir.assemble(CABINET)
+    assert spec["rules"]["http_router_backend"] == handoff["rules"]["http_router_backend"]

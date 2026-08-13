@@ -76,7 +76,9 @@ def coverage(project: Path) -> dict[str, Any]:
             continue
         if extractor.get("function") not in contract_map:
             findings.append({"severity":"error","code":"unknown_extractor_function","message":name})
-        if extractor.get("exception") in {None, "", "unresolved"}:
+        if extractor.get("header") in {None, "", "unresolved"}:
+            findings.append({"severity":"error","code":"unresolved_extractor_header","message":name})
+        if extractor.get("reject_with") in {None, "", "unresolved"}:
             findings.append({"severity":"error","code":"unresolved_extractor_exception","message":name})
 
     principals = payload.get("principals")
