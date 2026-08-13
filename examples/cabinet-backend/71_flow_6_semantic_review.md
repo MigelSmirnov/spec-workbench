@@ -2,11 +2,11 @@
 
 Flow: `flow:release_vps_working_copy`
 
-Status: **AMBIGUITY — repair required**
+Status: **semantic_closed**
 
 ## Reconstructed accepted behavior
 
-The accepted State 4 / handoff behavior is:
+The accepted behavior is:
 
 ```text
 manual actor intent + exact project/working-set target
@@ -17,63 +17,70 @@ resolve exact affected working set
         ↓
 obtain synchronization/replica observations
 + authoritative local durable verification for every required invoice/source obligation
-        ├─ any required obligation missing/unverified/inconsistent → VpsReleaseBlockedError
+        ├─ any required obligation missing/unverified/inconsistent/uncovered → VpsReleaseBlockedError
         └─ complete positive coverage → allowed VpsReleaseEvaluation
                ↓
 request_manual_vps_release
         ↓
-re-check exact target + still-applicable evidence
-        ├─ stale/mismatched/newly ineligible → VpsReleaseBlockedError
+re-check exact target/membership + still-applicable complete evidence
+        ├─ stale/mismatch/changed membership/new ineligibility → VpsReleaseBlockedError
         └─ record idempotent authorization decision
+               ↓
+          later physical adapter may execute exact authorized release
 ```
 
 Registry status alone is never release authority, and neither domain operation physically deletes VPS working data.
 
-## Adversarial ambiguity
+## Finding that required repair
 
-### Interpretation A — complete working-set proof
+Before repair, compressed State 5/7 semantics allowed a materially unsafe alternative: a positive subset of durable evidence could plausibly authorize a larger working set. For `{invoice_A, invoice_B}`, proof for invoice_A alone could therefore appear sufficient even when invoice_B still lacked a required local source replica.
 
-`evaluate_vps_release` resolves every required release obligation in the exact working set and requires authoritative positive durable-local verification for each one. If one required invoice/source replica is absent, unverified, inconsistent, or not covered by the evidence set, evaluation is blocked.
+The repair is recorded in:
 
-### Interpretation B — any positive proof is sufficient
+- `30_modules_flow6_semantic_repair.md`;
+- `50_public_apis_flow6_semantic_repair.md`;
+- `80_notes_flow6_semantic_repair.md`.
 
-`evaluate_vps_release` receives a tuple of durable evidence and allows release whenever at least one positive `DurableAcceptanceVerification` exists, while other working-set members are missing from the evidence set. The current State 5/7 wording requires durable-local proof but does not explicitly require exhaustive proof coverage of every required member.
+No new DTO/signature was required because `VpsReleaseEvaluation` already carries multiple durable evidence records.
 
-## Material difference
+## Re-run scenarios
 
-For working set `{invoice_A, invoice_B}` where `invoice_A` is durably verified and `invoice_B` still lacks one required local source replica, Interpretation A blocks release. Interpretation B authorizes deletion of the whole VPS working set and can remove the last intact copy for invoice_B. This is materially different observable retention behavior.
+### V1 — durable-local proof is mandatory
 
-## Placeholder resistance
+**PASS.** Missing, unverified, inconsistent, stale, or uncovered required durable evidence raises `VpsReleaseBlockedError`; no authorization is recorded.
 
-Status: **PLACEHOLDER_RISK** for `evaluate_vps_release`.
+### V2 — Registry status alone cannot allow release
 
-An implementation that checks `any(v.accepted for v in durable_evidence)` can appear to satisfy the compressed durable-proof requirement while failing the accepted complete-working-set safety condition.
+**PASS.** Registry archived/complete-like state cannot fill an evidence gap and supplies no deletion authority.
 
-## Scenario review before repair
+### V3 — allowed evaluation performs no physical deletion
 
-- V1 missing all durable proof: PASS.
-- V2 Registry status alone cannot authorize release: PASS.
-- V3 allowed evaluation performs no physical deletion: PASS for effect separation, but complete proof coverage is not generation-obligatory.
-- V4 stale evaluation cannot authorize release: PASS at the public-operation level.
-- V5 repeated equivalent decision is idempotent: PASS.
+**PASS.** Allowed evaluation requires exhaustive coverage of the exact affected working set and remains a policy/evidence artifact only; physical release belongs to a later adapter.
 
-## Finding
+### V4 — stale evaluation cannot authorize release
 
-```text
-flow: flow:release_vps_working_copy
-status: AMBIGUITY
-material_alternative_found: yes
-placeholder_implementation_found: yes
-findings:
-  - owner: structure
-    scope: State 3/5 retention-release proof completeness propagated to State 7
-    interpretation_A: every required working-set member/replica obligation must have authoritative positive local durable evidence
-    interpretation_B: one or a subset of positive proofs can authorize the entire exact working set
-    required_resolution: require exhaustive evidence coverage for the resolved affected working set and block on any missing, unverified, inconsistent, or uncovered required obligation
-```
+**PASS.** `request_manual_vps_release` must re-check exact target identity/membership and still-valid complete evidence. Changed membership or stale/mismatched evidence blocks authorization.
 
-## Earliest repair owner
+### V5 — repeated equivalent manual decision is idempotent
 
-State 4 is already explicit that every required local source replica for the target working set must be present and verified. State 1/contract support already allows multiple durable evidence records in `VpsReleaseEvaluation`. Repair State 3/5 semantics and propagate to State 7 Notes; no signature change is required.
+**PASS.** Repeating the same exact still-valid evaluation/target preserves or returns the existing equivalent decision and creates no duplicate release obligation.
 
-`semantic_closed`: **no**, pending repair and rerun.
+## Adversarial ambiguity rerun
+
+The previous alternative `any positive durable proof -> allow entire working set` now directly violates the exhaustive coverage obligation in State 3/5/7 repairs.
+
+Remaining implementation variation is internal only: evidence lookup/order, persistence layout, and physical adapter mechanics may vary while observable allow/block semantics remain fixed.
+
+Result: **PASS_INTERNAL_VARIATION**.
+
+## Placeholder resistance rerun
+
+A placeholder implementation based on `any(...)`, non-empty evidence, Registry status, or synchronization success alone cannot satisfy the repaired operation semantics. An allowed evaluation must demonstrate complete exact-set coverage.
+
+Result: **PASS**.
+
+## Flow 6 gate
+
+`semantic_closed`: **yes**
+
+The V1–V5 scenarios may now be materialized as runtime acceptance tests without inventing new product behavior.
