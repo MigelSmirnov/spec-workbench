@@ -14,7 +14,7 @@ synchronize_invoice_work: [ORCHESTRATION] Preserve the InvoiceTransferReceipt re
 
 synchronize_invoice_work: [ORCHESTRATION] When and only when the archive receipt is accepted or already_accepted, obtain authoritative proof for the same exact invoice revision/evidence identity through durable_archive.verify_durable_acceptance and preserve that result in SynchronizationOutcome.durable_acceptance.
 
-synchronize_invoice_work: [FORBIDDEN] Never populate positive durable_acceptance from transport delivery, transfer receipt presence, or synchronization-local evidence; only a positive DurableAcceptanceVerification returned by durable_archive may establish it.
+synchronize_invoice_work: [FORBIDDEN_ACTION] Never populate positive durable_acceptance from transport delivery, transfer receipt presence, or synchronization-local evidence; only a positive DurableAcceptanceVerification returned by durable_archive may establish it.
 
 synchronize_invoice_work: [BEHAVIOR] Authentication failure, incompatibility, transport failure, remote unavailability, and unresolved or ambiguous delivery may return without an archive receipt because no exact delivered package is available for acceptance; preserve those states explicitly for reconciliation instead of fabricating archive work.
 
