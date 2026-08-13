@@ -2,11 +2,9 @@
 
 Flow: `flow:refresh_registry_and_validate_assignment`
 
-Status: **AMBIGUITY — repair required**
+Status: **semantic_closed**
 
 ## Reconstructed accepted behavior
-
-The accepted State 2/4 semantics are:
 
 ```text
 complete Registry observation
@@ -23,51 +21,71 @@ validate exact immutable Card assignment against current Registry evidence
 record validation separately from immutable Card assignment
 ```
 
-Registry is read-only from Cabinet. Absence from one later full poll is not deletion evidence. Validation evidence may change; the Card assignment may not.
+Registry remains read-only from Cabinet. Absence from one later full poll is not deletion evidence. Validation evidence may change while the Card assignment remains immutable.
 
-## Adversarial ambiguity
+## Original finding
 
-### Interpretation A — active exact match validates
+The initial compressed State 5/7 wording allowed an implementation to return `inconclusive` or another review-required result for every assignment, including exact current active matches. That materially contradicted accepted State 2 A34 semantics, where Registry `active` means available for normal automatic assignment.
 
-When the exact project referenced by the immutable Card revision exists in the accepted current Registry observation with status `active`, and no material identity/context conflict is present, `validate_card_assignment` emits `ObjectAssignmentValidation.result = "valid"`. Archived or absent projects produce non-valid review evidence.
+## Repair applied
 
-### Interpretation B — unconditional review
+The bounded repairs in `50_public_apis_flow3_semantic_repair.md` and `80_notes_flow3_semantic_repair.md` now require:
 
-`validate_card_assignment` always emits `inconclusive` or another review-required result, including for exact active project matches. It never rewrites the Card, never invents deletion, and therefore still satisfies the current State 5/7 wording that validation may produce explicit review-required evidence.
+- exact current active project match with no material conflict → `ObjectAssignmentValidation.result = "valid"`;
+- archived or missing current project → truthful non-valid review-required evidence;
+- archived is never reinterpreted as authoritative completion or `late_project_cost`;
+- unusable Registry context → `RegistryContextUnavailableError` rather than guessed classification;
+- validation evidence remains separate from and cannot rewrite the immutable Card assignment;
+- `get_assignment_validation` returns recorded evidence only and raises `AssignmentValidationNotFoundError` when none exists.
 
-Interpretation B loses accepted A34 semantics: Registry `active` means available for normal automatic project assignment.
+No contract or model change was required.
 
-## Material difference
+## Rerun of semantic scenarios
 
-With an exact immutable Card assignment to project `P1` and a current accepted Registry observation containing `P1` as `active`, Interpretation A removes unnecessary review by producing `valid`; Interpretation B leaves the assignment perpetually review-required. This changes downstream observability and eligibility and is not implementation variation.
+### R1 — refresh is one-way and preserves Cabinet-owned state
 
-## Placeholder resistance
+**PASS.** Registry-derived fields refresh by stable `project_id`; Cabinet-owned fields remain preserved and no Registry write-back is permitted.
 
-Status: **PLACEHOLDER_RISK** for `validate_card_assignment`.
+### R2 — absence from later Registry response does not imply deletion
 
-An implementation that returns `inconclusive` for every resolvable assignment is a semantic skeleton that can satisfy the current compressed operation/notes while failing the accepted State 2 classification.
+**PASS.** Existing WorkObjects absent from a later accepted full observation remain preserved; absence alone cannot delete or mark them completed.
 
-## Finding
+### R3 — changed Registry evidence cannot rewrite Card assignment
+
+**PASS.** Active exact matches validate; archived/missing/changed evidence may change review classification, but the immutable Card assignment is unchanged.
+
+### R4 — missing validation is not guessed from current Registry state
+
+**PASS.** `get_assignment_validation` is a read of recorded evidence and raises `AssignmentValidationNotFoundError` when no accepted evidence exists.
+
+## Adversarial ambiguity rerun
+
+Question: can a materially different implementation keep every resolvable exact active assignment permanently `inconclusive` while satisfying the repaired slice?
+
+**No.** That would violate the explicit active-match classification requirement.
+
+Remaining choices such as persistence indexing, refresh implementation, and the exact existing non-valid result used for truthful archived/missing evidence are internal variations as long as the observable review semantics remain preserved.
+
+Classification: **PASS_INTERNAL_VARIATION**.
+
+## Placeholder resistance rerun
+
+- universal `inconclusive` → fails repaired notes;
+- empty/default validation → fails exact evidence and classification requirements;
+- rewriting the Card to match current Registry → fails immutability boundary;
+- deleting absent WorkObjects → fails refresh semantics;
+- synthesizing a read result in `get_assignment_validation` → fails recorded-evidence rule.
+
+Result: **PASS**.
+
+## Final gate
 
 ```text
 flow: flow:refresh_registry_and_validate_assignment
-status: AMBIGUITY
-material_alternative_found: yes
-placeholder_implementation_found: yes
-scenario_gaps:
-  - R1 and R2 are derivable from refresh semantics.
-  - R3 preserves Card immutability but does not force the accepted active/archived/missing classification.
-  - R4 is already explicit for missing recorded validation evidence.
-findings:
-  - owner: structure
-    scope: State 5 validation output semantics propagated to State 7 notes
-    interpretation_A: exact current active project match produces valid assignment evidence
-    interpretation_B: every assignment may remain review-required/inconclusive
-    required_resolution: bind validation classification to accepted A34 Registry semantics without changing Registry or Card truth
+status: semantic_closed
+material_alternative_found: no
+placeholder_implementation_found: no
+scenario_gaps: []
 ```
 
-## Earliest repair owner
-
-State 2 A34 is already explicit and State 1 has a sufficient result vocabulary. Repair State 5 first and propagate the deterministic classification obligation to State 7 Notes.
-
-`semantic_closed`: **no**, pending repair and rerun.
+`semantic_closed`: **yes**
