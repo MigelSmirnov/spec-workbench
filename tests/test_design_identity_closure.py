@@ -5,6 +5,8 @@ import shutil
 from pathlib import Path
 
 import design_identity_closure
+from identity_workbench import inspect_model, inventory
+from identity_workbench.model import IdentityWorkbenchError
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -26,6 +28,41 @@ def test_cabinet_assembled_model_identity_is_closed() -> None:
     report = design_identity_closure.lint(CABINET)
     assert report["summary"]["assembled_runtime_models"] == 49
     assert report["summary"]["errors"] == 0
+
+
+def test_inventory_is_stable_for_mcp_consumers() -> None:
+    report = inventory(CABINET)
+    assert report["schema_version"] == "spec_workbench_identity_inventory.v1"
+    assert report["summary"] == {
+        "models": 55,
+        "state1_models": 55,
+        "closure_models": 49,
+        "assembled_runtime_models": 49,
+        "source_errors": 0,
+    }
+    assert [model["name"] for model in report["models"]] == sorted(
+        model["name"] for model in report["models"]
+    )
+
+
+def test_model_inspection_exposes_source_locations() -> None:
+    report = inspect_model(CABINET, "VpsReleaseDecision")
+    assert report["consistent"] is True
+    assert {
+        key: value["identity"] for key, value in report["sources"].items()
+    } == {"state1": "entity", "closure": "entity", "assembled": "entity"}
+    assert report["sources"]["state1"]["location"].startswith(
+        "01_models_contract_support.md:"
+    )
+
+
+def test_unknown_model_inspection_fails_closed() -> None:
+    try:
+        inspect_model(CABINET, "InventedModel")
+    except IdentityWorkbenchError as error:
+        assert str(error) == "Unknown model: InventedModel"
+    else:
+        raise AssertionError("Unknown model must not produce an empty inspection.")
 
 
 def test_assembled_identity_mismatch_is_rejected(tmp_path: Path) -> None:

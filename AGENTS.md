@@ -43,6 +43,15 @@ When working on State 1:
 6. do not enter State 2 or declare assembly validated until identity closure
    passes.
 
+For agent or future MCP inspection, use the workbench's `--inventory` and
+`--get ModelName` operations. Transport wrappers must call
+`identity_workbench` and must not reimplement identity parsing or comparison.
+
+After assembly, run `python tools/design_assembly.py examples/<case>` for the
+aggregate readiness gate. Use `--check <name>` for a detailed owner report;
+future MCP wrappers must call `assembly_workbench` instead of reimplementing
+the orchestration.
+
 Before moving from State 2 to State 3:
 
 1. read `skills/spec-authoring/SECURITY_REVIEW_EVIDENCE.md`;

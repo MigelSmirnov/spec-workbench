@@ -79,6 +79,28 @@ python tools/design_router.py examples/cabinet-backend verify-state3
 
 Use `--json` for agent and future MCP integration. The router is read-only: it returns ordered tool arguments, command previews, review checkpoints, and stop conditions, but never executes a command or infers design semantics.
 
+For post-assembly model identity inspection, use the transport-neutral identity
+workbench:
+
+```bash
+python tools/design_identity_closure.py examples/<case> --inventory
+python tools/design_identity_closure.py examples/<case> --get ModelName
+python tools/design_identity_closure.py examples/<case> --json
+```
+
+The underlying `identity_workbench` module exposes the same inventory,
+inspection, and verification operations for future MCP registration.
+
+Run the complete post-assembly gate with:
+
+```bash
+python tools/design_assembly.py examples/<case>
+python tools/design_assembly.py examples/<case> --check identity
+```
+
+The transport-neutral `assembly_workbench` delegates to the identity, data,
+contract, notes, and router owners and returns a compact MCP-ready report.
+
 ### State 3 stable addresses and handoff
 
 A State 3 responsibility heading such as:
