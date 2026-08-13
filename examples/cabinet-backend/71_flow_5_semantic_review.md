@@ -2,7 +2,7 @@
 
 Flow: `flow:publish_invoice_to_holded`
 
-Status: **AMBIGUITY — repair required**
+Status: **semantic_closed**
 
 ## Reconstructed accepted behavior
 
@@ -23,52 +23,61 @@ exact eligible immutable invoice revision
 
 The attempt marker is correlation evidence only. Holded numeric status is stored raw and has no accepted business meaning. Holded recalculation never rewrites Invoice Card facts.
 
-## Adversarial ambiguity
+## Original ambiguity
 
-### Interpretation A — verified publication
+Before repair, compressed State 5/7 semantics allowed two materially different implementations:
 
-A clear create response containing `documentId` is only technical attempt evidence. `request_holded_publication` obtains read-only evidence for that exact document through the Holded gateway, performs the complete A51 business verification, and marks the logical publication successful only when verification passes.
+- A: a clear create response containing `documentId` was followed by exact-document GET and complete A51 verification before logical success;
+- B: the POST response itself settled logical publication success.
 
-### Interpretation B — POST-success publication
+That difference is material because Holded may create a document whose returned representation disagrees in gross total, line order/count, tax, or another required business field.
 
-A successful technical create response containing `documentId` immediately settles `HoldedPublication` as successful. The implementation stores the identifier and may omit the GET/read-back verification entirely.
+## Repair applied
 
-Interpretation B can satisfy the current compressed State 5/7 wording about a "verified-success requirement" by treating the returned create response as sufficient verification evidence; no current generated-callable obligation explicitly sequences clear create success into `lookup_holded_purchase`/GET verification.
+The bounded repair chain is:
 
-## Material difference
+- `30_modules_flow5_semantic_repair.md` — `module:holded_publication` explicitly owns sequencing clear create success through the existing read-only gateway boundary and business verification;
+- `50_public_apis_flow5_semantic_repair.md` — `request_holded_publication` must obtain exact-document read evidence and pass complete A51 verification before success;
+- `80_notes_flow5_semantic_repair.md` — generated code is forbidden from treating HTTP/create success, `documentId`, marker match, or raw numeric Holded status as Cabinet publication success.
 
-A remote document can be created with a wrong gross total, changed line order/count, wrong tax, or other business mismatch. Interpretation A returns non-success/reconciliation-required. Interpretation B reports publication success. This is materially different observable accounting behavior.
+No new gateway API, result type, or business rule was introduced.
 
-## Placeholder resistance
+## Scenario rerun
 
-Status: **PLACEHOLDER_RISK** for the successful-create branch.
+### H1 — eligible exact revision + clear create result
 
-A gateway implementation that POSTs once and returns the technical result is not itself a placeholder. The semantic skeleton is in `request_holded_publication`: it may accept that technical result as logical success without executing the accepted A51 verification sequence.
+**PASS.** The one permitted create result is technical evidence only. A returned canonical `documentId` must be read back through the existing Holded gateway read operation. Logical success requires complete A51 verification of supplier identity/name, supplier invoice number, date, currency, line count/order/names/quantities/tax rates, and gross total within accepted currency precision.
 
-## Scenario review before repair
+A read failure or business mismatch remains non-success/reconciliation-required and does not authorize another automatic POST.
 
-- H1 exact eligible revision + clear create response: **not fully derivable** because GET verification is not generation-obligatory.
-- H2 ambiguous create outcome: single-POST/no-retry rule is explicit; recovery verification is substantially constrained.
-- H3 zero/multiple/mismatched recovered candidates: explicit non-success/reconciliation behavior is constrained.
-- H4 raw numeric status and Holded rounding never rewrite Card truth: constrained by upstream rules, but should remain explicit in generation notes.
+### H2 — ambiguous create outcome
 
-## Finding
+**PASS.** One logical attempt permits at most one automatic POST. Ambiguity enters read-only marker recovery. No zero-match, timeout, process interruption, or response-loss branch authorizes an automatic retry.
 
-```text
-flow: flow:publish_invoice_to_holded
-status: AMBIGUITY
-material_alternative_found: yes
-placeholder_implementation_found: yes
-findings:
-  - owner: structure
-    scope: State 3/5 orchestration ownership propagated to State 7
-    interpretation_A: clear POST success must be followed by exact-document GET and complete A51 verification before logical success
-    interpretation_B: returned documentId from POST is enough to settle logical publication
-    required_resolution: make holded_publication own mandatory clear-response read-back sequencing through the existing read-only holded_gateway operation, while gateway remains owner of credentials/transport and publication remains owner of business verification/settlement
-```
+### H3 — recovered candidate classification
 
-## Earliest repair owner
+**PASS.** Zero exact marker matches remain outcome-unknown; multiple matches remain duplicate conflict; one mismatched candidate remains reconciliation-required; exactly one candidate may settle only after GET and complete A51 verification.
 
-State 2 and State 4 are already explicit. The loss occurs in State 3/5 orchestration compression. Repair module/API semantics and propagate to State 7 Notes. No new result type or gateway operation is required.
+### H4 — external evidence does not rewrite Cabinet truth
 
-`semantic_closed`: **no**, pending repair and rerun.
+**PASS.** Holded intermediate rounding and raw numeric status remain external evidence. Invoice Card totals/content are immutable. Intermediate monetary differences are tolerated only under A51 when source line semantics are preserved and final gross matches within accepted currency precision.
+
+## Adversarial ambiguity rerun
+
+The former Interpretation B — “POST returned `documentId`, therefore publication succeeded” — now directly violates State 3/5/7 obligations.
+
+Other implementation choices such as HTTP client library, persistence layout, internal helper decomposition, or polling timing within the bounded recovery policy do not change observable business semantics.
+
+Result: **PASS_INTERNAL_VARIATION**.
+
+## Placeholder resistance rerun
+
+A semantic skeleton that only calls `create_holded_purchase` cannot satisfy the successful clear-response branch. Likewise, marker lookup without GET/business verification cannot satisfy recovered success.
+
+Result: **PASS**.
+
+## Flow 5 gate
+
+`semantic_closed`: **yes**
+
+Flow 5 may now be materialized as a runtime semantic acceptance oracle without inventing new product behavior.
