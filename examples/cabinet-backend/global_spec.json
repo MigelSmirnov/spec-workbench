@@ -24,6 +24,16 @@
     "request_manual_vps_release": "(evaluation: VpsReleaseEvaluation, authorization: AuthorizationDecision) -> VpsReleaseDecision",
     "AccessControlBackend.authenticate": "(self, credential: str) -> AuthenticatedPrincipalContext",
     "AccessControlBackend.authorize": "(self, principal: AuthenticatedPrincipalContext, operation: str) -> AuthorizationDecision",
+    "PostgresAccessControlBackend.__init__": "(self, database_url: str, credential_pepper: str) -> None",
+    "PostgresAccessControlBackend.authenticate": "(self, credential: str) -> AuthenticatedPrincipalContext",
+    "PostgresAccessControlBackend.authorize": "(self, principal: AuthenticatedPrincipalContext, operation: str) -> AuthorizationDecision",
+    "PostgresAccessControlBackend.enroll_local_service": "(self, display_name: str, principal_kind: str, capabilities: tuple[str, ...]) -> IssuedServiceCredential",
+    "PostgresAccessControlBackend.rotate_local_service_credential": "(self, principal_id: str) -> IssuedServiceCredential",
+    "PostgresAccessControlBackend.revoke_local_service_principal": "(self, principal_id: str) -> None",
+    "create_local_app": "() -> FastAPI",
+    "enroll_local_agent": "(display_name: str, capabilities: tuple[str, ...]) -> IssuedServiceCredential",
+    "rotate_local_agent_credential": "(principal_id: str) -> IssuedServiceCredential",
+    "revoke_local_agent": "(principal_id: str) -> None",
     "create_app": "(access_control: AccessControlBackend) -> FastAPI",
     "extract_bearer_credential": "(request: Request) -> str",
     "resolve_local_principal": "(access_control: AccessControlBackend, credential: str) -> AuthenticatedPrincipalContext",
@@ -48,6 +58,25 @@
     "AccessControlBackend.authenticate: [VALIDATION_ERROR] Raise AuthenticationRequiredError when the supplied credential cannot establish a valid active local principal.",
     "AccessControlBackend.authorize: [SECURITY_BOUNDARY] Evaluate the principal against the exact operation and current access-control state; keep local service authority distinct from synchronization-node identity.",
     "AccessControlBackend.authorize: [VALIDATION_ERROR] Raise OperationForbiddenError when the authenticated principal is not authorized for the exact requested operation.",
+    "PostgresAccessControlBackend.__init__: [SECURITY_BOUNDARY] Bind the concrete backend to the configured PostgreSQL database and credential pepper; fail construction when either input is empty and never log the pepper or database credentials.",
+    "PostgresAccessControlBackend.authenticate: [RULE_REFERENCE] Begin progressive delay at = rules.access_control.progressive_delay_after_failures and temporary blocking at = rules.access_control.temporary_block_after_failures.",
+    "PostgresAccessControlBackend.authenticate: [RULE_REFERENCE] Keep temporary refusal active for = rules.access_control.temporary_block_seconds and verify credentials using = rules.access_control.credential_hash_algorithm.",
+    "PostgresAccessControlBackend.authenticate: [SECURITY_BOUNDARY] Verify the presented bearer secret against one active stored credential, require its principal to remain active, and return a context containing identifiers but no reusable secret.",
+    "PostgresAccessControlBackend.authenticate: [VALIDATION_ERROR] Reject malformed, unknown, revoked, delayed, or temporarily blocked credentials with AuthenticationRequiredError before protected state changes.",
+    "PostgresAccessControlBackend.authenticate: [BEHAVIOR] Update throttle state and append secret-free security evidence atomically with each authentication outcome; successful authentication resets the active consecutive-failure counter without deleting audit history.",
+    "PostgresAccessControlBackend.authorize: [SECURITY_BOUNDARY] Reread current principal and credential state and allow only an exact operation present in the stored capability set; stale context, localhost origin, client name, prompt, or entity identifier is not authority.",
+    "PostgresAccessControlBackend.authorize: [VALIDATION_ERROR] Raise AuthenticationRequiredError for a stale or revoked context and OperationForbiddenError for an active principal lacking the exact capability; append refusal evidence without performing the protected operation.",
+    "PostgresAccessControlBackend.authorize: [FIELD_ASSIGNMENT] Populate AuthorizationDecision from the exact principal, operation, outcome, timestamp, reason code, and persisted SecurityAuditRecord evidence_id; never fabricate evidence identifiers.",
+    "PostgresAccessControlBackend.enroll_local_service: [BEHAVIOR] Generate a cryptographically random bearer secret, persist only its Argon2id verifier, commit principal, credential, and audit records atomically, and return the plaintext exactly once in IssuedServiceCredential.",
+    "PostgresAccessControlBackend.rotate_local_service_credential: [BEHAVIOR] Atomically create one replacement credential and revoke every prior active credential for the exact principal while preserving its identity and capabilities; return the new plaintext secret once and never log it.",
+    "PostgresAccessControlBackend.revoke_local_service_principal: [BEHAVIOR] Atomically perform terminal principal revocation, revoke all active credentials, and append evidence; never delete security history.",
+    "create_local_app: [CONFIG_REFERENCE] Read the PostgreSQL URL only from the environment variable named by = config.access_control.database_url_env.",
+    "create_local_app: [CONFIG_REFERENCE] Read the credential pepper only from the environment variable named by = config.access_control.credential_pepper_env and use = config.access_control.deployment_owner_uid_env for the offline-owner boundary.",
+    "create_local_app: [VALIDATION_ERROR] Fail startup when required environment values are absent or backend initialization fails; never substitute an in-memory, anonymous, or allow-all backend.",
+    "enroll_local_agent: [SECURITY_BOUNDARY] Permit enrollment only from the offline local administration entry point running as the configured Linux deployment owner; never expose this operation through HTTP or MCP.",
+    "enroll_local_agent: [RETURN_SHAPE] Return IssuedServiceCredential exactly once to the invoking owner and never persist or log its credential field.",
+    "rotate_local_agent_credential: [SECURITY_BOUNDARY] Require the offline Linux-owner boundary and delegate one exact active principal to PostgreSQL rotation.",
+    "revoke_local_agent: [SECURITY_BOUNDARY] Require the offline Linux-owner boundary and delegate one exact active principal to terminal revocation.",
     "synchronize_invoice_work: [RULE_REFERENCE] Preserve delivery as a transport fact and never promote it to durable acceptance; use = rules.synchronization.delivery_implies_durable_acceptance.",
     "synchronize_invoice_work: [ORCHESTRATION] Correlate transfer attempts and reconciliation with the supplied work selection and node identity so an ambiguous transport outcome remains explicitly reconcilable.",
     "synchronize_invoice_work: [BEHAVIOR] Return authentication, compatibility, transport, remote-unavailability, and unresolved-delivery conditions as explicit synchronization outcome states rather than manufacturing an accepted result.",
@@ -174,6 +203,11 @@
     "schema_version": 1,
     "source_upload": {
       "max_file_size_bytes": 52428800
+    },
+    "access_control": {
+      "database_url_env": "CABINET_DATABASE_URL",
+      "credential_pepper_env": "CABINET_CREDENTIAL_PEPPER",
+      "deployment_owner_uid_env": "CABINET_DEPLOYMENT_OWNER_UID"
     }
   },
   "models": {
@@ -394,6 +428,11 @@
         "safe_error_code": "str | None"
       }
     },
+    "LocalServicePrincipal": {"identity":"entity","fields":{"principal_id":"str","display_name":"str","principal_kind":"str","status":"str","capabilities":"tuple[str, ...]","created_at":"datetime","revoked_at":"datetime | None = None"}},
+    "LocalServiceCredential": {"identity":"entity","fields":{"credential_id":"str","principal_id":"str","secret_hash":"str","status":"str","issued_at":"datetime","rotated_from_credential_id":"str | None = None","revoked_at":"datetime | None = None","last_authenticated_at":"datetime | None = None"}},
+    "AuthenticationThrottleState": {"identity":"entity","fields":{"abuse_context_hash":"str","credential_id":"str | None = None","consecutive_failures":"int","delay_until":"datetime | None = None","blocked_until":"datetime | None = None","updated_at":"datetime"}},
+    "SecurityAuditRecord": {"identity":"entity","fields":{"evidence_id":"str","event_type":"str","principal_id":"str | None = None","credential_id":"str | None = None","operation":"str | None = None","result":"str","reason_code":"str | None = None","occurred_at":"datetime"}},
+    "IssuedServiceCredential": {"identity":"value","fields":{"principal_id":"str","credential_id":"str","credential":"str","issued_at":"datetime"}},
     "AuthenticatedPrincipalContext": {
       "identity": "value",
       "fields": {
@@ -812,6 +851,13 @@
   "rules": {
     "role": "data",
     "schema_version": 1,
+    "access_control": {
+      "progressive_delay_after_failures": 5,
+      "temporary_block_after_failures": 10,
+      "temporary_block_seconds": 900,
+      "credential_hash_algorithm": "argon2id",
+      "offline_administration_only": true
+    },
     "synchronization": {
       "delivery_implies_durable_acceptance": false
     },
@@ -1601,6 +1647,18 @@
     },
     "SourceLossDecision": {
       "class": "issued"
+    },
+    "LocalServicePrincipal": {
+      "class": "master"
+    },
+    "LocalServiceCredential": {
+      "class": "master"
+    },
+    "AuthenticationThrottleState": {
+      "class": "master"
+    },
+    "SecurityAuditRecord": {
+      "class": "issued"
     }
   },
   "properties": {},
@@ -1611,7 +1669,9 @@
       "from decimal import Decimal"
     ],
     "third_party": [
-      "from fastapi import FastAPI, Request"
+      "from fastapi import FastAPI, Request",
+      "from argon2 import PasswordHasher",
+      "import psycopg"
     ],
     "internal": {
       "models": [
@@ -1632,6 +1692,11 @@
         "EstimateSnapshot",
         "HoldedPublication",
         "HoldedPublicationAttempt",
+        "LocalServicePrincipal",
+        "LocalServiceCredential",
+        "AuthenticationThrottleState",
+        "SecurityAuditRecord",
+        "IssuedServiceCredential",
         "AuthenticatedPrincipalContext",
         "AuthorizationDecision",
         "SynchronizationWorkSelection",
@@ -1670,6 +1735,7 @@
       "access_control": [
         "authorize_operation",
         "AccessControlBackend",
+        "PostgresAccessControlBackend",
         "AuthenticationRequiredError",
         "OperationForbiddenError"
       ],
@@ -1722,6 +1788,12 @@
       ],
       "api_irregular": [
         "attach_local_source_handler"
+      ],
+      "bootstrap": [
+        "create_local_app",
+        "enroll_local_agent",
+        "rotate_local_agent_credential",
+        "revoke_local_agent"
       ]
     },
     "module_internal": {
@@ -1849,6 +1921,17 @@
           "IncompleteSourceAcceptance",
           "SourceLossDecision"
         ]
+      },
+      "bootstrap": {
+        "access_control": [
+          "PostgresAccessControlBackend"
+        ],
+        "api": [
+          "create_app"
+        ],
+        "models": [
+          "IssuedServiceCredential"
+        ]
       }
     }
   },
@@ -1871,6 +1954,11 @@
       "EstimateSnapshot",
       "HoldedPublication",
       "HoldedPublicationAttempt",
+      "LocalServicePrincipal",
+      "LocalServiceCredential",
+      "AuthenticationThrottleState",
+      "SecurityAuditRecord",
+      "IssuedServiceCredential",
       "AuthenticatedPrincipalContext",
       "AuthorizationDecision",
       "SynchronizationWorkSelection",
@@ -1909,6 +1997,7 @@
     "access_control": [
       "authorize_operation",
       "AccessControlBackend",
+      "PostgresAccessControlBackend",
       "AuthenticationRequiredError",
       "OperationForbiddenError"
     ],
@@ -1975,6 +2064,12 @@
     ],
     "api_irregular": [
       "attach_local_source_handler"
+    ],
+    "bootstrap": [
+      "create_local_app",
+      "enroll_local_agent",
+      "rotate_local_agent_credential",
+      "revoke_local_agent"
     ]
   },
   "module_order": [
@@ -1988,7 +2083,8 @@
     "holded_publication",
     "retention_release",
     "api_irregular",
-    "api"
+    "api",
+    "bootstrap"
   ],
   "function_order": [
     "authorize_operation",
@@ -2013,6 +2109,16 @@
     "lookup_holded_purchase",
     "evaluate_vps_release",
     "request_manual_vps_release",
+    "PostgresAccessControlBackend.__init__",
+    "PostgresAccessControlBackend.authenticate",
+    "PostgresAccessControlBackend.authorize",
+    "PostgresAccessControlBackend.enroll_local_service",
+    "PostgresAccessControlBackend.rotate_local_service_credential",
+    "PostgresAccessControlBackend.revoke_local_service_principal",
+    "create_local_app",
+    "enroll_local_agent",
+    "rotate_local_agent_credential",
+    "revoke_local_agent",
     "create_app",
     "extract_bearer_credential",
     "resolve_local_principal",
@@ -2041,7 +2147,8 @@
     "holded_publication": "cabinet_backend/holded_publication",
     "retention_release": "cabinet_backend/retention_release",
     "api_irregular": "cabinet_backend/api_irregular",
-    "api": "cabinet_backend/api"
+    "api": "cabinet_backend/api",
+    "bootstrap": "cabinet_backend/bootstrap"
   },
   "default_module": "api"
 }
