@@ -43,6 +43,20 @@ def test_transport_module_without_state3_owner_still_slices() -> None:
     assert packet["accepted_evidence"]["responsibility"] is None
     assert packet["lowered_specification"]["routes"]
 
+def test_dependency_contracts_expand_context_without_rewriting_import_edges() -> None:
+    packet = build_slice(CABINET, "holded_publication")
+    lowered = packet["lowered_specification"]
+    assert set(lowered["dependency_contracts"]) == {
+        "create_holded_purchase", "get_archived_invoice", "lookup_holded_purchase",
+    }
+    assert {
+        "HoldedPublicationAttempt", "HoldedPurchaseAttemptPayload",
+        "HoldedPurchaseLookupEvidence", "StoredInvoiceCardRevision",
+    } <= set(lowered["models"])
+    assert lowered["dependencies"]["models"] == [
+        "HoldedPublication", "AuthorizationDecision",
+    ]
+
 def test_models_slice_includes_owned_declarations_and_state1_evidence() -> None:
     packet = build_slice(CABINET, "models")
     assert len(packet["lowered_specification"]["models"]) == 51

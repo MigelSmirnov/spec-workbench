@@ -38,9 +38,26 @@ def build_slice(project: Path, module: str) -> dict[str, Any]:
         }
     exports = spec.get("imports", {}).get("internal", {}).get(module_name, [])
     dependencies = spec.get("imports", {}).get("module_internal", {}).get(module_name, {})
+    dependency_symbols = {
+        symbol
+        for provider_symbols in dependencies.values()
+        if isinstance(provider_symbols, list)
+        for symbol in provider_symbols
+        if isinstance(symbol, str)
+    }
+    dependency_contracts = {
+        name: value
+        for name, value in spec.get("contracts", {}).items()
+        if name in dependency_symbols or name.split(".", 1)[0] in dependency_symbols
+    }
     persistence_catalog = spec.get("persistence", {})
     persistent_ownership = module_owned_persistence(project, module_name, set(persistence_catalog))
-    models = referenced_models(spec, contracts, symbols, persistent_ownership)
+    models = referenced_models(
+        spec,
+        {**contracts, **dependency_contracts},
+        symbols | dependency_symbols,
+        persistent_ownership,
+    )
     persistence = {name: value for name, value in spec.get("persistence", {}).items() if name in models}
     router_handoff = spec.get("rules", {}).get("http_router_backend", {})
     router = router_handoff.get("rules", {}).get("http_router_backend", router_handoff)
@@ -64,6 +81,7 @@ def build_slice(project: Path, module: str) -> dict[str, Any]:
             "owned_symbols": owned,
             "exports": exports,
             "contracts": contracts,
+            "dependency_contracts": dependency_contracts,
             "models": models,
             "persistence": persistence,
             "dependencies": dependencies,

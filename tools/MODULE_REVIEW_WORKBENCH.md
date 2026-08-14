@@ -15,8 +15,9 @@ Each slice separates:
 
 1. accepted evidence — owned/consumed State 2 decisions, responsibility, flows,
    and public operations;
-2. lowered specification — symbols, exports, contracts, transitive models,
-   persistence, dependencies, routes, and resolved rule values;
+2. lowered specification — symbols, exports, owned contracts, dependency
+   contracts, transitive model context, persistence, direct runtime
+   dependencies, routes, and resolved rule values;
 3. generation constraints — every applicable note from the final assembled
    `global_spec.json`, including semantic-repair notes.
 
@@ -25,6 +26,11 @@ Each slice separates:
 The deterministic review detects only provable cross-layer gaps. It does not
 claim that note counts establish completeness and does not invent missing
 business meaning.
+
+Dependency contract types expand the review packet's model context without
+silently adding them to `imports.module_internal`. The latter remains the
+minimal direct runtime import surface required by `SPEC_STANDARD`; context
+closure and Python dependency edges are deliberately different concepts.
 
 An LLM or human reviewer consumes the packet and performs the Stage 7.1
 adversarial questions included in `review_protocol`. Any ambiguity must be
