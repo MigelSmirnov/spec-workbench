@@ -41,7 +41,34 @@ evidence, lowered assembled specification, and generation constraints so that
 the reviewer can inspect one final module boundary without reconstructing its
 context ad hoc.
 
-For every module, review the packet manually and ask explicitly:
+## Generation paths
+
+Do not apply LLM-module completeness criteria to deterministic output.
+
+The following Cabinet surfaces are assembled by deterministic Factory
+backends:
+
+- `models`;
+- the `api` router;
+- `api_irregular`;
+- structured data blocks, including `config`, `rules`, and `persistence`.
+
+Review those surfaces by inspecting their canonical specification input,
+closed registries and references, validation result, and deterministic
+lowering/emission. Their absence of generation notes is not a semantic gap.
+Do not request notes merely to restate a model field, route row, data value,
+storage projection, or another result derived by the applicable backend.
+
+For a deterministic surface ask explicitly:
+
+- is every input accepted by the backend closed, canonical, and validated?
+- does every type, reference, route argument, projection, error mapping, data
+  leaf, persistence class, and codec resolve according to `SPEC_STANDARD.md`?
+- does lowering preserve the declared input without introducing a project
+  decision or relying on LLM inference?
+- does the emitter fail closed for unsupported or ambiguous input?
+
+For an LLM-generated behavioral module ask explicitly:
 
 - does the module preserve the accepted business meaning assigned to it?
 - do its public exports remain narrow and semantic?
