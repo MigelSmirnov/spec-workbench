@@ -9,11 +9,13 @@ repeat the flow review or execute the Factory runtime handoff.
 Before editing the assembled Cabinet specification or declaring Stage 8.1
 closed, read in this order:
 
-1. `../../tools/MODULE_REVIEW_WORKBENCH.md`;
-2. `71_semantic_e2e_handoff.md`;
-3. list the assembled modules;
-4. build the complete review slice for the target module;
-5. read the accepted upstream State 1–7 sources whenever the slice exposes a
+1. `81_module_review_status.json` for compact progress and stale-slice status;
+2. `../../tools/MODULE_REVIEW_WORKBENCH.md`;
+3. `71_semantic_e2e_handoff.md`;
+4. list the assembled modules;
+5. build the complete review slice for the target module;
+6. read the target's `review_record` only when it is present and relevant;
+7. read the accepted upstream State 1–7 sources whenever the slice exposes a
    semantic question.
 
 List the assembled modules with:
@@ -84,6 +86,13 @@ For an LLM-generated behavioral module ask explicitly:
 Record findings module by module. A zero-block result from `--review` means
 only that no deterministic cross-layer gap was proven; it does not establish
 semantic completeness.
+
+After every manual review, update `81_module_review_status.json` with the
+semantic result, structural counts, concise summary, optional detailed record,
+and SHA-256 of the exact JSON slice. If a later specification change alters a
+reviewed slice hash, mark that module `STALE` until it is reviewed again. Keep
+the ledger compact; detailed evidence belongs in the referenced review record,
+not inline in the ledger.
 
 Repair every confirmed finding at the earliest design state that owns the
 decision, propagate it through all affected later states, rebuild
