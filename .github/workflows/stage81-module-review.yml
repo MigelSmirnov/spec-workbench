@@ -12,6 +12,10 @@ permissions:
 jobs:
   durable-archive-review:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        module: [${{ matrix.module }}, registry_context]
     steps:
       - name: Checkout branch
         uses: actions/checkout@v4
@@ -24,20 +28,20 @@ jobs:
       - name: List assembled modules
         run: python tools/design_module_review.py examples/cabinet-backend --list
 
-      - name: Run deterministic durable_archive review
+      - name: Run deterministic ${{ matrix.module }} review
         shell: bash
         run: |
           mkdir -p stage81-output
           set +e
-          python tools/design_module_review.py examples/cabinet-backend --module durable_archive --review --json > stage81-output/durable_archive_review.json
+          python tools/design_module_review.py examples/cabinet-backend --module ${{ matrix.module }} --review --json > stage81-output/${{ matrix.module }}_review.json
           code=$?
           set -e
-          echo "$code" > stage81-output/durable_archive_review.exit
+          echo "$code" > stage81-output/${{ matrix.module }}_review.exit
 
-      - name: Build durable_archive slice
+      - name: Build ${{ matrix.module }} slice
         run: |
-          python tools/design_module_review.py examples/cabinet-backend --module durable_archive --slice --json > stage81-output/durable_archive_slice.json
-          sha256sum stage81-output/durable_archive_slice.json | tee stage81-output/durable_archive_slice.sha256
+          python tools/design_module_review.py examples/cabinet-backend --module ${{ matrix.module }} --slice --json > stage81-output/${{ matrix.module }}_slice.json
+          sha256sum stage81-output/${{ matrix.module }}_slice.json | tee stage81-output/${{ matrix.module }}_slice.sha256
 
       - name: Upload review evidence
         if: always()
@@ -49,4 +53,4 @@ jobs:
 
       - name: Enforce review result
         if: always()
-        run: test "$(cat stage81-output/durable_archive_review.exit)" = "0"
+        run: test "$(cat stage81-output/${{ matrix.module }}_review.exit)" = "0"
