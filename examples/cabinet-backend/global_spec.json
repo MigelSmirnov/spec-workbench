@@ -130,9 +130,10 @@
     "HoldedAttemptRepository.reserve_attempt": "(self, attempt: HoldedPublicationAttempt) -> HoldedPublicationAttempt",
     "HoldedAttemptRepository.mark_request_issued": "(self, publication_attempt_id: str, issued_at: datetime) -> HoldedPublicationAttempt",
     "HoldedAttemptRepository.append_attempt_outcome": "(self, attempt: HoldedPublicationAttempt) -> None",
-    "HoldedAttemptRepository.append_lookup_evidence": "(self, publication_attempt_id: str, evidence: HoldedPurchaseLookupEvidence) -> None",
+    "HoldedAttemptRepository.append_lookup_evidence": "(self, attempt_marker: str, evidence: HoldedPurchaseLookupEvidence) -> None",
     "PostgresHoldedAttemptRepository.__init__": "(self, database_url: str) -> None",
-    "HttpxHoldedHttpClient.__init__": "(self, base_url: str, api_key: str, timeout_seconds: int, max_response_bytes: int, max_recovery_pages: int) -> None"
+    "HttpxHoldedHttpClient.__init__": "(self, base_url: str, api_key: str, timeout_seconds: int, max_response_bytes: int, max_recovery_pages: int) -> None",
+    "HoldedAttemptRepository.load_attempt_by_marker": "(self, attempt_marker: str) -> HoldedPublicationAttempt | None"
   },
   "notes": [
     "authorize_operation: [SECURITY_BOUNDARY] Evaluate authorization only for the exact operation supplied by the caller and return the decision without performing the protected business operation.",
@@ -390,7 +391,7 @@
     "HoldedGatewayService.create_holded_purchase: [BEHAVIOR] Never issue POST when the attempt already records issued, ambiguous, or terminal evidence; equivalent re-entry returns existing evidence without mutation.",
     "HoldedGatewayService.create_holded_purchase: [FALLBACK] Classify timeout, connection loss, response loss, or interruption after issuance as ambiguous secret-free evidence and never retry POST.",
     "HoldedGatewayService.lookup_holded_purchase: [ORCHESTRATION] Use GET for a supplied document identifier or bounded list pages for an exact marker and append typed observation evidence without remote mutation.",
-    "HoldedGatewayService.lookup_holded_purchase: [BEHAVIOR] Preserve zero, one, and multiple exact matches, malformed responses, unknown documents, and transport failures distinctly; never perform A51 business settlement or interpret raw status.",
+    "HoldedGatewayService.lookup_holded_purchase: [BEHAVIOR] Preserve zero, one, and multiple exact matches, malformed responses, unknown documents, and transport failures distinctly; return the typed observed document for one candidate but never perform A51 comparison or interpret raw status.",
     "HoldedHttpClient.create_purchase: [FORBIDDEN_ACTION] Issue exactly one POST per invocation with mutation retries and replaying redirects disabled.",
     "HoldedHttpClient.list_purchases: [BEHAVIOR] Perform one read-only bounded page request and return typed summaries in stable document-id order.",
     "HoldedHttpClient.get_purchase: [BEHAVIOR] Perform one read-only request for the exact document identifier and return bounded external evidence.",
@@ -402,7 +403,7 @@
     "HoldedAttemptRepository.reserve_attempt: [BEHAVIOR] Reuse an existing reservation only when attempt identity, payload hash, and marker are exactly equivalent; reject conflicts.",
     "HoldedAttemptRepository.mark_request_issued: [BEHAVIOR] Persist the single-create authority transition before network mutation and reject repeated or skipped issuance.",
     "HoldedAttemptRepository.append_attempt_outcome: [BEHAVIOR] Append immutable secret-free technical outcome evidence and reject stale or conflicting transitions.",
-    "HoldedAttemptRepository.append_lookup_evidence: [BEHAVIOR] Append immutable read-only recovery evidence for the exact attempt without settling Cabinet publication.",
+    "HoldedAttemptRepository.append_lookup_evidence: [BEHAVIOR] Resolve the exact durable attempt by its unique marker and append immutable read-only recovery evidence without settling Cabinet publication.",
     "PostgresHoldedAttemptRepository.__init__: [SECURITY_BOUNDARY] Bind to the supplied PostgreSQL URL, validate connectivity, treat the URL as secret, and never read environment variables or log credentials.",
     "HttpxHoldedHttpClient.__init__: [VALIDATION_ERROR] Require an absolute HTTPS base URL without embedded credentials or fragment, a non-empty API key, and positive finite timeout, response-size, and page bounds.",
     "HttpxHoldedHttpClient.__init__: [SECURITY_BOUNDARY] Keep the API key only in the outbound authorization header, enable TLS verification, and never log or return reusable credential material.",
@@ -415,7 +416,8 @@
     "create_app: [DEPENDENCY_BOUNDARY] Bind the supplied HoldedGatewayService into application state for Holded publication handlers without exposing credentials.",
     "create_local_app: [CONFIG_REFERENCE] Read the Holded API key and base URL only from the environment variables named by = config.holded_runtime.api_key_env and = config.holded_runtime.base_url_env.",
     "create_local_app: [ORCHESTRATION] Reuse the Cabinet database URL, construct PostgresHoldedAttemptRepository, HttpxHoldedHttpClient, and HoldedGatewayService, then supply the service to create_app before exposing FastAPI.",
-    "create_local_app: [VALIDATION_ERROR] Fail startup on missing or invalid Holded configuration or adapter construction; never substitute a disabled, anonymous, or in-memory gateway."
+    "create_local_app: [VALIDATION_ERROR] Fail startup on missing or invalid Holded configuration or adapter construction; never substitute a disabled, anonymous, or in-memory gateway.",
+    "HoldedAttemptRepository.load_attempt_by_marker: [BEHAVIOR] Return the exact attempt for one unique marker or None; reject duplicate persisted markers and never infer an attempt from payload similarity."
   ],
   "adapters": {},
   "config": {
@@ -882,9 +884,9 @@
         "match_count": "int",
         "document_id": "str | None = None",
         "raw_status": "int | None = None",
-        "business_verified": "bool",
         "outcome": "str",
-        "observed_at": "datetime"
+        "observed_at": "datetime",
+        "document": "HoldedRemotePurchaseDocument | None = None"
       }
     },
     "VpsReleaseEvaluation": {
@@ -1177,6 +1179,32 @@
       "fields": {
         "items": "tuple[HoldedRemotePurchaseSummary, ...]",
         "next_page": "int | None = None",
+        "observed_at": "datetime"
+      }
+    },
+    "HoldedRemotePurchaseItem": {
+      "identity": "value",
+      "fields": {
+        "name": "str",
+        "description": "str | None = None",
+        "units": "Decimal",
+        "tax": "Decimal",
+        "subtotal": "Decimal | None = None"
+      }
+    },
+    "HoldedRemotePurchaseDocument": {
+      "identity": "value",
+      "fields": {
+        "document_id": "str",
+        "supplier_code": "str | None = None",
+        "supplier_name": "str",
+        "supplier_invoice_number": "str",
+        "document_date": "str",
+        "currency": "str",
+        "description": "str | None = None",
+        "items": "tuple[HoldedRemotePurchaseItem, ...]",
+        "gross_total": "Decimal",
+        "raw_status": "int | None = None",
         "observed_at": "datetime"
       }
     }
@@ -2091,7 +2119,9 @@
         "ArchiveBytePublication",
         "HoldedTransportResponse",
         "HoldedRemotePurchaseSummary",
-        "HoldedPurchaseListPage"
+        "HoldedPurchaseListPage",
+        "HoldedRemotePurchaseItem",
+        "HoldedRemotePurchaseDocument"
       ],
       "access_control": [
         "authorize_operation",
@@ -2356,7 +2386,9 @@
           "HoldedPurchaseLookupEvidence",
           "HoldedTransportResponse",
           "HoldedRemotePurchaseSummary",
-          "HoldedPurchaseListPage"
+          "HoldedPurchaseListPage",
+          "HoldedRemotePurchaseItem",
+          "HoldedRemotePurchaseDocument"
         ]
       }
     }
@@ -2422,7 +2454,9 @@
       "ArchiveBytePublication",
       "HoldedTransportResponse",
       "HoldedRemotePurchaseSummary",
-      "HoldedPurchaseListPage"
+      "HoldedPurchaseListPage",
+      "HoldedRemotePurchaseItem",
+      "HoldedRemotePurchaseDocument"
     ],
     "access_control": [
       "authorize_operation",
