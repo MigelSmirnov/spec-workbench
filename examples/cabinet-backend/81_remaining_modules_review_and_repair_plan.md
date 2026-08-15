@@ -95,3 +95,40 @@ After propagation, rebuild all affected slices. Review in dependency order:
 
 Run full assembly, identity closure, deterministic-data validation, and module
 slice hash refresh only after the semantic findings are closed.
+
+## Accepted durable archive runtime decision
+
+The product owner accepted the following local Linux lowering for the first
+implementation. This closes the mechanism choice but does not close the module
+review until the decision is propagated and the rebuilt slice passes.
+
+- PostgreSQL is the authoritative metadata and recovery journal.
+- Source bytes are held by one Backend-owned local filesystem store rooted at a
+  required deployment-configured absolute path.
+- A candidate file is written under a non-public staging name, flushed, reopened,
+  and SHA-256 verified before it can be referenced by accepted archive metadata.
+- The PostgreSQL unit of work records the candidate identity, expected final
+  content-addressed location, and transition state in the same transaction as
+  the archive mutation.
+- Publication uses an atomic same-filesystem rename from staging to the final
+  content-addressed path. A final path is never replaced by different bytes.
+- A transaction failure before commit removes the candidate staging file. A
+  failure after metadata commit remains a recoverable pending-publication
+  operation; startup recovery verifies and finalizes it or records a safe
+  failed state without exposing the replica as available.
+- Archive reads treat a source replica as available only after both committed
+  metadata and a reopened, hash-matching final file are present.
+- Deletion and compensation never remove a previously accepted replica and
+  never weaken immutable Card, incomplete-acceptance, or source-loss evidence.
+- Cross-process races are resolved by PostgreSQL uniqueness/locking plus
+  content-addressed final paths; check-then-act filesystem observations are not
+  an authority boundary.
+- Bootstrap must fail closed when the PostgreSQL URL or byte-store root is
+  absent, relative, unusable, or located on a filesystem that cannot provide
+  atomic rename between staging and final paths.
+
+The generated behavioral module must receive narrow persistence/unit-of-work
+and byte-custody dependencies explicitly. Adapters provide mechanisms only;
+all archive acceptance, provenance, source-completeness, and recovery decisions
+remain owned by `durable_archive`.
+
