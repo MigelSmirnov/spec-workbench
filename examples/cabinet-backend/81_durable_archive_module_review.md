@@ -48,3 +48,41 @@ acceptance policy inside `durable_archive`; adapters must provide mechanisms onl
 
 After propagation through contracts and generation notes, rebuild this slice and
 repeat the Stage 8.1 review.
+
+## Repair implementation checkpoint
+
+Status: **STALE — semantic repair assembled; deterministic slice rerun required**.
+
+The accepted repair now declares:
+
+- ArchiveBytePublication as the durable PostgreSQL recovery journal entity;
+- ArchiveUnitOfWork and SourceByteStore as narrow mechanism ports;
+- PostgresArchiveUnitOfWork and LocalFilesystemSourceByteStore as concrete local
+  Linux implementations;
+- DurableArchiveService as the single cohesive dependency received explicitly
+  by behavioral consumers;
+- staged, flushed, reopened and hash-verified candidates;
+- one metadata transaction for journal plus archive mutation;
+- content-addressed same-filesystem atomic publication;
+- pre-commit cleanup and post-commit startup recovery;
+- fail-closed bootstrap and app-state injection;
+- typed unit-of-work methods for every accepted archive mutation.
+
+Connector-side closure checks found and repaired two assembly defects:
+
+1. duplicate ownership of the interface symbols between models and
+   durable_archive;
+2. an incomplete unit-of-work surface that originally covered recovery but not
+   all existing archive mutations.
+
+The current assembly has no duplicate symbol owners, no dependency edge to a
+symbol outside its provider, no unowned contract, and all three interfaces have
+method contracts. Consumer review also removed unnecessary archive parameters
+from get_sync_status and refresh_estimate_snapshot and added explicit app-state
+wiring notes to every real archive consumer.
+
+Do not change this record to PASS until design_module_review.py rebuilds the
+exact durable_archive slice, structural review reports zero blocks, the new
+slice SHA-256 is stored in 81_module_review_status.json, and the rebuilt packet
+passes the manual adversarial review.
+
