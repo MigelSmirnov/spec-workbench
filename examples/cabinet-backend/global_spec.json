@@ -102,8 +102,6 @@
     "PostgresRegistryContextRepository.rollback": "(self) -> None",
     "RegistryContextRepository.lock_catalogue": "(self) -> None",
     "PostgresRegistryContextRepository.lock_catalogue": "(self) -> None",
-    "RegistryContextRepository.replace_work_objects": "(self, work_objects: tuple[WorkObject, ...]) -> None",
-    "PostgresRegistryContextRepository.replace_work_objects": "(self, work_objects: tuple[WorkObject, ...]) -> None",
     "RegistryContextRepository.load_work_object": "(self, project_id: str) -> WorkObject | None",
     "PostgresRegistryContextRepository.load_work_object": "(self, project_id: str) -> WorkObject | None",
     "RegistryContextRepository.save_assignment_validation": "(self, validation: ObjectAssignmentValidation) -> None",
@@ -111,11 +109,13 @@
     "RegistryContextRepository.load_assignment_validation": "(self, invoice_id: str, content_hash: str) -> ObjectAssignmentValidation | None",
     "PostgresRegistryContextRepository.load_assignment_validation": "(self, invoice_id: str, content_hash: str) -> ObjectAssignmentValidation | None",
     "PostgresRegistryContextRepository.__init__": "(self, database_url: str) -> None",
-    "RegistryContextService.__init__": "(self, repository: RegistryContextRepository) -> None",
+    "RegistryContextService.__init__": "(self, repository: RegistryContextRepository, archive: DurableArchiveService) -> None",
     "RegistryContextService.refresh_registry_context": "(self, projects: tuple[RegistryProjectObservation, ...]) -> RegistryRefreshResult",
     "RegistryContextService.validate_card_assignment": "(self, invoice_id: str, content_hash: str) -> ObjectAssignmentValidation",
     "RegistryContextService.get_assignment_validation": "(self, invoice_id: str, content_hash: str) -> ObjectAssignmentValidation",
-    "RegistryContextService.get_work_object": "(self, project_id: str) -> WorkObject"
+    "RegistryContextService.get_work_object": "(self, project_id: str) -> WorkObject",
+    "RegistryContextRepository.merge_work_objects": "(self, work_objects: tuple[WorkObject, ...]) -> None",
+    "PostgresRegistryContextRepository.merge_work_objects": "(self, work_objects: tuple[WorkObject, ...]) -> None"
   },
   "notes": [
     "authorize_operation: [SECURITY_BOUNDARY] Evaluate authorization only for the exact operation supplied by the caller and return the decision without performing the protected business operation.",
@@ -337,7 +337,6 @@
     "RegistryContextRepository.commit: [BEHAVIOR] MUST commit the active transaction exactly once and release its resources.",
     "RegistryContextRepository.rollback: [FALLBACK] MUST rollback idempotently, release resources, and preserve the original failure.",
     "RegistryContextRepository.lock_catalogue: [BEHAVIOR] MUST serialize competing complete catalogue replacements before current WorkObject state is read.",
-    "RegistryContextRepository.replace_work_objects: [BEHAVIOR] MUST replace the complete typed WorkObject projection inside the active catalogue-locked transaction without exposing a partial catalogue.",
     "RegistryContextRepository.load_work_object: [BEHAVIOR] MUST return the exact committed WorkObject or None and MUST NOT synthesize context.",
     "RegistryContextRepository.save_assignment_validation: [PROVENANCE] MUST append the exact immutable ObjectAssignmentValidation evidence in the active transaction.",
     "RegistryContextRepository.load_assignment_validation: [BEHAVIOR] MUST return the exact validation selected by invoice_id and content_hash or None.",
@@ -346,7 +345,6 @@
     "PostgresRegistryContextRepository.commit: [BEHAVIOR] MUST commit the active transaction exactly once and release its connection.",
     "PostgresRegistryContextRepository.rollback: [FALLBACK] MUST rollback idempotently and release its connection without hiding the original error.",
     "PostgresRegistryContextRepository.lock_catalogue: [BEHAVIOR] MUST acquire PostgreSQL serialization for one complete Registry catalogue replacement.",
-    "PostgresRegistryContextRepository.replace_work_objects: [BEHAVIOR] MUST atomically replace the typed WorkObject projection and MUST NOT expose mixed catalogue observations.",
     "PostgresRegistryContextRepository.load_work_object: [BEHAVIOR] MUST return the exact committed WorkObject or None.",
     "PostgresRegistryContextRepository.save_assignment_validation: [PROVENANCE] MUST append immutable validation evidence and MUST NOT replace a different decision.",
     "PostgresRegistryContextRepository.load_assignment_validation: [BEHAVIOR] MUST return the exact persisted validation or None.",
@@ -364,7 +362,12 @@
     "validate_card_assignment_handler: [DEPENDENCY_BOUNDARY] MUST obtain the exact RegistryContextService bound to request.app.state.registry and pass it to validate_card_assignment.",
     "get_assignment_validation_handler: [DEPENDENCY_BOUNDARY] MUST obtain the exact RegistryContextService bound to request.app.state.registry and pass it to get_assignment_validation.",
     "create_app: [ORCHESTRATION] MUST bind the exact supplied RegistryContextService to the declared registry application-state attribute before route registration.",
-    "create_local_app: [ORCHESTRATION] MUST construct PostgresRegistryContextRepository from the declared Cabinet PostgreSQL URL, construct RegistryContextService, and pass it to create_app; an in-memory fallback is forbidden."
+    "create_local_app: [ORCHESTRATION] MUST construct PostgresRegistryContextRepository from the declared Cabinet PostgreSQL URL, construct RegistryContextService, and pass it to create_app; an in-memory fallback is forbidden.",
+    "RegistryContextRepository.merge_work_objects: [BEHAVIOR] MUST atomically merge Registry-derived fields by stable project_id, preserve Cabinet-owned fields, and preserve existing WorkObjects absent from the current observation as unresolved rather than deleted.",
+    "PostgresRegistryContextRepository.merge_work_objects: [BEHAVIOR] MUST atomically merge the typed projection by stable project_id, preserve Cabinet-owned fields and absent existing objects, and MUST NOT expose mixed catalogue observations.",
+    "RegistryContextService.__init__: [DEPENDENCY_BOUNDARY] MUST retain the exact supplied RegistryContextRepository and DurableArchiveService; adapter construction, direct archive persistence, environment reads, nullable dependencies, and module-global fallbacks are forbidden.",
+    "RegistryContextService.validate_card_assignment: [DEPENDENCY_BOUNDARY] MUST resolve the exact accepted immutable Card revision through the supplied DurableArchiveService before applying Registry assignment policy; invoice_id and content_hash alone are not evidence.",
+    "create_local_app: [ORCHESTRATION] MUST construct RegistryContextService with the exact PostgresRegistryContextRepository and the already constructed DurableArchiveService, preserving one archive boundary."
   ],
   "adapters": {},
   "config": {
@@ -2236,6 +2239,17 @@
       "durable_archive": {
         "models": [
           "ArchiveBytePublication"
+        ]
+      },
+      "registry_context": {
+        "durable_archive": [
+          "DurableArchiveService"
+        ],
+        "models": [
+          "RegistryProjectObservation",
+          "RegistryRefreshResult",
+          "ObjectAssignmentValidation",
+          "WorkObject"
         ]
       }
     }
