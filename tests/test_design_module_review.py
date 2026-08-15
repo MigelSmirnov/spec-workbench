@@ -72,9 +72,7 @@ def test_models_slice_includes_owned_declarations_and_state1_evidence() -> None:
         model["name"] for model in packet["accepted_evidence"]["state1_models"]
     }
     assert state1_models <= lowered_models
-    assert lowered_models - state1_models == {
-        "SynchronizationRepository", "VpsSynchronizationTransport",
-    }
+    assert lowered_models == state1_models
     assert {
         "VpsReleaseDecision", "ArchiveBytePublication",
         "HoldedRemotePurchaseDocument", "VpsInvoiceTransferPackage",

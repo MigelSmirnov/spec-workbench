@@ -6,6 +6,7 @@
     "reconcile_transfer_outcome": "(service: SynchronizationService, synchronization_id: str) -> SynchronizationOutcome",
     "publish_registry_catalogue": "(service: SynchronizationService, delivery: RegistryCatalogueDelivery) -> RegistryCataloguePublication",
     "observe_vps_connection": "(service: SynchronizationService) -> VpsConnectionObservation",
+    "get_working_set_membership": "(service: SynchronizationService, project_id: str, working_set_id: str) -> VpsWorkingSetMembership",
     "accept_transfer_manifest": "(archive: DurableArchiveService, manifest: InvoiceTransferManifest, card_revision: StoredInvoiceCardRevision, source_replicas: tuple[SourceBinaryReplica, ...]) -> InvoiceTransferReceipt",
     "verify_durable_acceptance": "(archive: DurableArchiveService, invoice_id: str, content_hash: str | None = None) -> DurableAcceptanceVerification",
     "attach_local_source": "(archive: DurableArchiveService, invoice_id: str, files: tuple[LocalSourceFile, ...], authorization: AuthorizationDecision, expected_sources: tuple[ContentReference, ...] = ()) -> SourceAttachmentBatchResult",
@@ -17,14 +18,19 @@
     "validate_card_assignment": "(registry: RegistryContextService, invoice_id: str, content_hash: str) -> ObjectAssignmentValidation",
     "get_assignment_validation": "(registry: RegistryContextService, invoice_id: str, content_hash: str) -> ObjectAssignmentValidation",
     "get_work_object": "(registry: RegistryContextService, project_id: str) -> WorkObject",
-    "refresh_estimate_snapshot": "(observation: PresuProEstimateObservation) -> EstimateSnapshot",
-    "calculate_plan_actual": "(archive: DurableArchiveService, registry: RegistryContextService, request: PlanActualRequest) -> PlanActualAnalysis",
-    "request_holded_publication": "(archive: DurableArchiveService, gateway: HoldedGatewayService, invoice_id: str, content_hash: str, authorization: AuthorizationDecision) -> HoldedPublication",
-    "reconcile_holded_publication": "(archive: DurableArchiveService, gateway: HoldedGatewayService, publication_id: str, authorization: AuthorizationDecision) -> HoldedPublication",
+    "refresh_estimate_snapshot": "(service: PlanActualService, observation: PresuProEstimateObservation) -> EstimateSnapshot",
+    "propose_invoice_line_matches": "(service: PlanActualService, invoice_id: str, content_hash: str, estimate_snapshot_id: str) -> tuple[InvoiceLineMatchProposal, ...]",
+    "record_match_decision": "(service: PlanActualService, decision: InvoiceLineEstimateMatch) -> InvoiceLineEstimateMatch",
+    "get_unmatched_items": "(service: PlanActualService, project_id: str, estimate_snapshot_id: str) -> UnmatchedPlanActualItems",
+    "calculate_plan_actual": "(service: PlanActualService, request: PlanActualRequest) -> PlanActualAnalysis",
+    "request_holded_publication": "(service: HoldedPublicationService, invoice_id: str, content_hash: str, authorization: AuthorizationDecision) -> HoldedPublication",
+    "reconcile_holded_publication": "(service: HoldedPublicationService, publication_id: str, authorization: AuthorizationDecision) -> HoldedPublication",
+    "get_holded_publication_status": "(service: HoldedPublicationService, publication_id: str) -> HoldedPublication",
     "create_holded_purchase": "(gateway: HoldedGatewayService, payload: HoldedPurchaseAttemptPayload, publication_attempt_id: str) -> HoldedPublicationAttempt",
     "lookup_holded_purchase": "(gateway: HoldedGatewayService, attempt_marker: str, document_id: str | None = None) -> HoldedPurchaseLookupEvidence",
-    "evaluate_vps_release": "(archive: DurableArchiveService, project_id: str, working_set_id: str | None, authorization: AuthorizationDecision) -> VpsReleaseEvaluation",
-    "request_manual_vps_release": "(archive: DurableArchiveService, evaluation: VpsReleaseEvaluation, authorization: AuthorizationDecision) -> VpsReleaseDecision",
+    "evaluate_vps_release": "(service: RetentionReleaseService, project_id: str, working_set_id: str | None, authorization: AuthorizationDecision) -> VpsReleaseEvaluation",
+    "request_manual_vps_release": "(service: RetentionReleaseService, evaluation: VpsReleaseEvaluation, authorization: AuthorizationDecision) -> VpsReleaseDecision",
+    "get_retention_status": "(service: RetentionReleaseService, project_id: str, working_set_id: str) -> VpsReleaseDecision | None",
     "AccessControlBackend.authenticate": "(self, credential: str) -> AuthenticatedPrincipalContext",
     "AccessControlBackend.authorize": "(self, principal: AuthenticatedPrincipalContext, operation: str) -> AuthorizationDecision",
     "PostgresAccessControlBackend.__init__": "(self, database_url: str, credential_pepper: str) -> None",
@@ -37,7 +43,7 @@
     "enroll_local_agent": "(display_name: str, capabilities: tuple[str, ...]) -> IssuedServiceCredential",
     "rotate_local_agent_credential": "(principal_id: str) -> IssuedServiceCredential",
     "revoke_local_agent": "(principal_id: str) -> None",
-    "create_app": "(access_control: AccessControlBackend, archive: DurableArchiveService, registry: RegistryContextService, holded_gateway: HoldedGatewayService, synchronization: SynchronizationService) -> FastAPI",
+    "create_app": "(access_control: AccessControlBackend, archive: DurableArchiveService, registry: RegistryContextService, holded_gateway: HoldedGatewayService, synchronization: SynchronizationService, plan_actual: PlanActualService, holded_publication: HoldedPublicationService, retention_release: RetentionReleaseService) -> FastAPI",
     "extract_bearer_credential": "(request: Request) -> str",
     "resolve_local_principal": "(access_control: AccessControlBackend, credential: str) -> AuthenticatedPrincipalContext",
     "attach_local_source_handler": "(request: Request, invoice_id: str) -> SourceAttachmentBatchResult",
@@ -160,7 +166,53 @@
     "SynchronizationRepository.save_catalogue_acknowledgement": "(self, acknowledgement: VpsCatalogueAcknowledgement) -> None",
     "SynchronizationRepository.append_connection_observation": "(self, observation: VpsConnectionObservation) -> None",
     "PostgresSynchronizationRepository.__init__": "(self, database_url: str) -> None",
-    "HttpxVpsSynchronizationTransport.__init__": "(self, base_url: str, node_credential: str, timeout_seconds: int, max_response_bytes: int) -> None"
+    "HttpxVpsSynchronizationTransport.__init__": "(self, base_url: str, node_credential: str, timeout_seconds: int, max_response_bytes: int) -> None",
+    "PlanActualService.__init__": "(self, repository: PlanActualRepository, archive: DurableArchiveService, registry: RegistryContextService) -> None",
+    "PlanActualService.refresh_estimate_snapshot": "(self, observation: PresuProEstimateObservation) -> EstimateSnapshot",
+    "PlanActualService.propose_invoice_line_matches": "(self, invoice_id: str, content_hash: str, estimate_snapshot_id: str) -> tuple[InvoiceLineMatchProposal, ...]",
+    "PlanActualService.record_match_decision": "(self, decision: InvoiceLineEstimateMatch) -> InvoiceLineEstimateMatch",
+    "PlanActualService.get_unmatched_items": "(self, project_id: str, estimate_snapshot_id: str) -> UnmatchedPlanActualItems",
+    "PlanActualService.calculate_plan_actual": "(self, request: PlanActualRequest) -> PlanActualAnalysis",
+    "PlanActualRepository.begin": "(self) -> None",
+    "PlanActualRepository.commit": "(self) -> None",
+    "PlanActualRepository.rollback": "(self) -> None",
+    "PlanActualRepository.lock_estimate": "(self, presupro_estimate_id: str) -> None",
+    "PlanActualRepository.lock_invoice_line": "(self, invoice_id: str, content_hash: str, invoice_line_id: str) -> None",
+    "PlanActualRepository.load_snapshot": "(self, snapshot_id: str) -> EstimateSnapshot | None",
+    "PlanActualRepository.load_snapshot_by_content": "(self, presupro_estimate_id: str, content_hash: str) -> EstimateSnapshot | None",
+    "PlanActualRepository.save_snapshot": "(self, snapshot: EstimateSnapshot) -> None",
+    "PlanActualRepository.save_proposals": "(self, proposals: tuple[InvoiceLineMatchProposal, ...]) -> None",
+    "PlanActualRepository.load_match_decisions": "(self, match_ids: tuple[str, ...]) -> tuple[InvoiceLineEstimateMatch, ...]",
+    "PlanActualRepository.save_match_decision": "(self, decision: InvoiceLineEstimateMatch) -> None",
+    "PlanActualRepository.list_active_matches": "(self, project_id: str, estimate_snapshot_id: str) -> tuple[InvoiceLineEstimateMatch, ...]",
+    "PostgresPlanActualRepository.__init__": "(self, database_url: str) -> None",
+    "HoldedPublicationService.__init__": "(self, repository: HoldedPublicationRepository, archive: DurableArchiveService, gateway: HoldedGatewayService) -> None",
+    "HoldedPublicationService.request_holded_publication": "(self, invoice_id: str, content_hash: str, authorization: AuthorizationDecision) -> HoldedPublication",
+    "HoldedPublicationService.reconcile_holded_publication": "(self, publication_id: str, authorization: AuthorizationDecision) -> HoldedPublication",
+    "HoldedPublicationService.get_holded_publication_status": "(self, publication_id: str) -> HoldedPublication",
+    "HoldedPublicationRepository.begin": "(self) -> None",
+    "HoldedPublicationRepository.commit": "(self) -> None",
+    "HoldedPublicationRepository.rollback": "(self) -> None",
+    "HoldedPublicationRepository.lock_publication": "(self, publication_id: str) -> None",
+    "HoldedPublicationRepository.lock_invoice_revision": "(self, invoice_id: str, content_hash: str) -> None",
+    "HoldedPublicationRepository.load_publication": "(self, publication_id: str) -> HoldedPublication | None",
+    "HoldedPublicationRepository.load_by_invoice_revision": "(self, invoice_id: str, content_hash: str) -> HoldedPublication | None",
+    "HoldedPublicationRepository.reserve_publication": "(self, publication: HoldedPublication) -> HoldedPublication",
+    "HoldedPublicationRepository.save_transition": "(self, publication: HoldedPublication) -> None",
+    "PostgresHoldedPublicationRepository.__init__": "(self, database_url: str) -> None",
+    "SynchronizationService.get_working_set_membership": "(self, project_id: str, working_set_id: str) -> VpsWorkingSetMembership",
+    "RetentionReleaseService.__init__": "(self, repository: RetentionReleaseRepository, archive: DurableArchiveService, synchronization: SynchronizationService) -> None",
+    "RetentionReleaseService.evaluate_vps_release": "(self, project_id: str, working_set_id: str | None, authorization: AuthorizationDecision) -> VpsReleaseEvaluation",
+    "RetentionReleaseService.request_manual_vps_release": "(self, evaluation: VpsReleaseEvaluation, authorization: AuthorizationDecision) -> VpsReleaseDecision",
+    "RetentionReleaseService.get_retention_status": "(self, project_id: str, working_set_id: str) -> VpsReleaseDecision | None",
+    "RetentionReleaseRepository.begin": "(self) -> None",
+    "RetentionReleaseRepository.commit": "(self) -> None",
+    "RetentionReleaseRepository.rollback": "(self) -> None",
+    "RetentionReleaseRepository.lock_working_set": "(self, project_id: str, working_set_id: str) -> None",
+    "RetentionReleaseRepository.save_evaluation": "(self, evaluation: VpsReleaseEvaluation) -> None",
+    "RetentionReleaseRepository.load_decision": "(self, project_id: str, working_set_id: str) -> VpsReleaseDecision | None",
+    "RetentionReleaseRepository.reserve_decision": "(self, decision: VpsReleaseDecision) -> VpsReleaseDecision",
+    "PostgresRetentionReleaseRepository.__init__": "(self, database_url: str) -> None"
   },
   "notes": [
     "authorize_operation: [SECURITY_BOUNDARY] Evaluate authorization only for the exact operation supplied by the caller and return the decision without performing the protected business operation.",
@@ -479,7 +531,74 @@
     "create_local_app: [CONFIG_REFERENCE] Read VPS URL and node credential only from the environment variables named by = config.synchronization_runtime.base_url_env and = config.synchronization_runtime.node_credential_env.",
     "create_local_app: [ORCHESTRATION] Reuse the Cabinet database URL and exact archive, construct PostgresSynchronizationRepository, HttpxVpsSynchronizationTransport, and SynchronizationService, then supply the service to create_app.",
     "create_local_app: [VALIDATION_ERROR] Fail startup on missing or invalid synchronization configuration or adapter construction; no anonymous or in-memory fallback is permitted.",
-    "create_app: [DEPENDENCY_BOUNDARY] Bind the exact supplied SynchronizationService into application state without exposing its credential."
+    "create_app: [DEPENDENCY_BOUNDARY] Bind the exact supplied SynchronizationService into application state without exposing its credential.",
+    "PlanActualService.__init__: [DEPENDENCY_BOUNDARY] Retain the exact supplied repository, archive, and Registry services; never construct adapters or discover alternate runtimes.",
+    "PlanActualService.refresh_estimate_snapshot: [ORCHESTRATION] Lock stable PresuPro identity, reuse exact canonical content, or append one immutable snapshot atomically.",
+    "PlanActualService.propose_invoice_line_matches: [BEHAVIOR] Resolve exact archived and estimate evidence, return stable ordered non-authoritative proposals, and perform no confirmation transition.",
+    "PlanActualService.record_match_decision: [BEHAVIOR] Lock the exact invoice line, preserve decision history, and enforce at most one active confirmed match before commit.",
+    "PlanActualService.get_unmatched_items: [DETERMINISM_OR_ORDERING] Compute unmatched invoice-line and estimate-item identities from exact pinned evidence and active confirmed decisions in stable ID order.",
+    "PlanActualService.calculate_plan_actual: [ORCHESTRATION] Resolve every pinned snapshot, match, invoice, and project input through the supplied boundaries before applying accepted deterministic formulas.",
+    "PlanActualRepository.begin: [DEPENDENCY_BOUNDARY] Open one PostgreSQL transaction for the exact plan/actual transition and reject nested begin.",
+    "PlanActualRepository.commit: [BEHAVIOR] Commit the active typed transition once and expose no partial state.",
+    "PlanActualRepository.rollback: [FALLBACK] Roll back idempotently, release resources, and preserve the original failure.",
+    "PlanActualRepository.lock_estimate: [BEHAVIOR] Serialize immutable snapshot acceptance for the exact PresuPro identity.",
+    "PlanActualRepository.lock_invoice_line: [BEHAVIOR] Serialize match decisions for the exact immutable invoice line before active state is read.",
+    "PlanActualRepository.load_snapshot: [BEHAVIOR] Return the exact immutable snapshot or None and never substitute the latest snapshot.",
+    "PlanActualRepository.load_snapshot_by_content: [BEHAVIOR] Return only the exact PresuPro identity and canonical-content match or None.",
+    "PlanActualRepository.save_snapshot: [PROVENANCE] Append one immutable snapshot and reject conflicting identity or content bindings.",
+    "PlanActualRepository.save_proposals: [PROVENANCE] Append stable non-authoritative proposal evidence without creating confirmed matches.",
+    "PlanActualRepository.load_match_decisions: [DETERMINISM_OR_ORDERING] Return every exact requested decision in match-id order and fail when a pinned identity is absent.",
+    "PlanActualRepository.save_match_decision: [PROVENANCE] Append confirmed, rejected, or invalidated decision history and reject conflicting active confirmation.",
+    "PlanActualRepository.list_active_matches: [DETERMINISM_OR_ORDERING] Return only active confirmed matches for the exact project and snapshot in stable match-id order.",
+    "PostgresPlanActualRepository.__init__: [SECURITY_BOUNDARY] Validate the supplied PostgreSQL connection, treat the URL as secret, and read no environment variables.",
+    "refresh_estimate_snapshot: [DEPENDENCY_BOUNDARY] Delegate through the exact supplied PlanActualService and never access persistence directly.",
+    "propose_invoice_line_matches: [DEPENDENCY_BOUNDARY] Delegate through the exact supplied PlanActualService; proposals never become decisions implicitly.",
+    "record_match_decision: [DEPENDENCY_BOUNDARY] Delegate the exact explicit decision through the supplied PlanActualService.",
+    "get_unmatched_items: [DEPENDENCY_BOUNDARY] Delegate exact unmatched reads through the supplied PlanActualService and never fabricate placeholder items.",
+    "calculate_plan_actual: [DEPENDENCY_BOUNDARY] Delegate through the exact supplied PlanActualService and never read archive, Registry, or plan/actual persistence directly.",
+    "create_local_app: [ORCHESTRATION] Reuse the Cabinet database and exact archive and Registry services to construct PostgresPlanActualRepository and PlanActualService before create_app.",
+    "create_local_app: [VALIDATION_ERROR] Fail startup when plan/actual repository or service construction fails; no in-memory or nullable fallback is permitted.",
+    "create_app: [DEPENDENCY_BOUNDARY] Bind the exact supplied PlanActualService into application state before route registration.",
+    "HoldedPublicationService.__init__: [DEPENDENCY_BOUNDARY] Retain the exact repository, archive, and gateway; never construct adapters or discover alternate services.",
+    "HoldedPublicationService.request_holded_publication: [ORCHESTRATION] Lock the exact revision, resolve archive truth, reuse an equivalent publication or commit one logical publication before the sole gateway create.",
+    "HoldedPublicationService.reconcile_holded_publication: [FORBIDDEN_ACTION] Reload exact logical state and use read-only gateway recovery; never repeat create or change the bound revision.",
+    "HoldedPublicationService.get_holded_publication_status: [VALIDATION_ERROR] Return exact committed state or raise HoldedPublicationNotFoundError; never fabricate pending or success.",
+    "HoldedPublicationRepository.begin: [DEPENDENCY_BOUNDARY] Open one PostgreSQL transaction for the exact publication transition and reject nested begin.",
+    "HoldedPublicationRepository.commit: [BEHAVIOR] Commit one valid lifecycle transition and expose no partial state.",
+    "HoldedPublicationRepository.rollback: [FALLBACK] Roll back idempotently and preserve the original publication failure.",
+    "HoldedPublicationRepository.lock_publication: [BEHAVIOR] Serialize the exact logical publication before its state is read.",
+    "HoldedPublicationRepository.lock_invoice_revision: [BEHAVIOR] Serialize duplicate-prevention decisions for the exact immutable revision.",
+    "HoldedPublicationRepository.load_publication: [BEHAVIOR] Return exact persisted state or None and never infer it from gateway evidence.",
+    "HoldedPublicationRepository.load_by_invoice_revision: [BEHAVIOR] Return only the publication bound to the exact invoice revision or None.",
+    "HoldedPublicationRepository.reserve_publication: [BEHAVIOR] Reuse only an equivalent logical publication and reject conflicting active state before gateway mutation.",
+    "HoldedPublicationRepository.save_transition: [PROVENANCE] Append valid verified or unresolved lifecycle evidence and reject stale, skipped, or conflicting transitions.",
+    "PostgresHoldedPublicationRepository.__init__: [SECURITY_BOUNDARY] Validate the supplied PostgreSQL connection, treat the URL as secret, and read no environment variables.",
+    "request_holded_publication: [DEPENDENCY_BOUNDARY] Delegate through the exact supplied HoldedPublicationService and never access archive, gateway, or persistence directly.",
+    "reconcile_holded_publication: [DEPENDENCY_BOUNDARY] Delegate through the exact supplied HoldedPublicationService; direct recovery or repeated create is forbidden.",
+    "get_holded_publication_status: [DEPENDENCY_BOUNDARY] Delegate exact status reads through the supplied HoldedPublicationService.",
+    "create_local_app: [ORCHESTRATION] Reuse the Cabinet database and exact archive and gateway services to construct PostgresHoldedPublicationRepository and HoldedPublicationService.",
+    "create_local_app: [VALIDATION_ERROR] Fail startup when Holded publication repository or service construction fails; no in-memory fallback is permitted.",
+    "create_app: [DEPENDENCY_BOUNDARY] Bind the exact supplied HoldedPublicationService into application state before route registration.",
+    "SynchronizationService.get_working_set_membership: [DETERMINISM_OR_ORDERING] Return exact PostgreSQL-authoritative working-set membership in stable invoice-revision order and never infer membership from Registry status.",
+    "get_working_set_membership: [DEPENDENCY_BOUNDARY] Delegate exact read-only membership through the supplied SynchronizationService.",
+    "RetentionReleaseService.__init__: [DEPENDENCY_BOUNDARY] Retain the exact repository, archive, and synchronization services; never construct or discover alternates.",
+    "RetentionReleaseService.evaluate_vps_release: [ORCHESTRATION] Resolve exact membership and require synchronization and durable proof for every member before persisting an allowed evaluation.",
+    "RetentionReleaseService.request_manual_vps_release: [ORCHESTRATION] Lock the exact target, reload membership and all proof, reject any change or gap, and reserve one idempotent authorization.",
+    "RetentionReleaseService.get_retention_status: [BEHAVIOR] Return the exact decision or None and never claim that physical deletion completed.",
+    "RetentionReleaseRepository.begin: [DEPENDENCY_BOUNDARY] Open one PostgreSQL transaction for the exact release lifecycle and reject nested begin.",
+    "RetentionReleaseRepository.commit: [BEHAVIOR] Commit one valid evidence transition and expose no partial state.",
+    "RetentionReleaseRepository.rollback: [FALLBACK] Roll back idempotently and preserve the original release failure.",
+    "RetentionReleaseRepository.lock_working_set: [BEHAVIOR] Serialize evaluation and decision changes for the exact project and working-set identity.",
+    "RetentionReleaseRepository.save_evaluation: [PROVENANCE] Append immutable complete-coverage or blocked evaluation evidence.",
+    "RetentionReleaseRepository.load_decision: [BEHAVIOR] Return the exact persisted decision or None without inferring physical release.",
+    "RetentionReleaseRepository.reserve_decision: [BEHAVIOR] Reuse only an equivalent still-valid authorization and reject stale, broadened, or conflicting decisions.",
+    "PostgresRetentionReleaseRepository.__init__: [SECURITY_BOUNDARY] Validate the supplied PostgreSQL connection, protect the URL, and read no environment variables.",
+    "evaluate_vps_release: [DEPENDENCY_BOUNDARY] Delegate complete-coverage evaluation through the exact supplied RetentionReleaseService.",
+    "request_manual_vps_release: [DEPENDENCY_BOUNDARY] Delegate re-check and authorization through the exact supplied RetentionReleaseService.",
+    "get_retention_status: [DEPENDENCY_BOUNDARY] Delegate exact decision reads through the supplied RetentionReleaseService.",
+    "create_local_app: [ORCHESTRATION] Reuse the database and exact archive and synchronization services to construct PostgresRetentionReleaseRepository and RetentionReleaseService.",
+    "create_local_app: [VALIDATION_ERROR] Fail startup when retention repository or service construction fails; no in-memory fallback is permitted.",
+    "create_app: [DEPENDENCY_BOUNDARY] Bind the exact supplied RetentionReleaseService into application state before route registration."
   ],
   "adapters": {},
   "config": {
@@ -888,6 +1007,42 @@
         "safe_error_code": "str | None = None"
       }
     },
+    "VpsWorkingSetMembership": {
+      "identity": "value",
+      "fields": {
+        "project_id": "str",
+        "working_set_id": "str",
+        "invoice_revisions": "tuple[InvoiceCardRevisionReference, ...]",
+        "node_id": "str",
+        "observed_at": "datetime"
+      }
+    },
+    "InvoiceLineMatchProposal": {
+      "identity": "value",
+      "fields": {
+        "proposal_id": "str",
+        "invoice_revision": "InvoiceCardRevisionReference",
+        "invoice_line_id": "str",
+        "estimate_snapshot_id": "str",
+        "estimate_item_id": "str",
+        "score": "Decimal",
+        "reason_codes": "tuple[str, ...]",
+        "proposed_at": "datetime"
+      }
+    },
+    "UnmatchedPlanActualItems": {
+      "identity": "value",
+      "fields": {
+        "project_id": "str",
+        "estimate_snapshot_id": "str",
+        "unmatched_invoice_line_ids": "tuple[str, ...]",
+        "unmatched_estimate_item_ids": "tuple[str, ...]",
+        "observed_at": "datetime"
+      }
+    },
+    "PlanActualRepository": {"kind": "interface"},
+    "HoldedPublicationRepository": {"kind": "interface"},
+    "RetentionReleaseRepository": {"kind": "interface"},
     "SynchronizationRepository": {"kind": "interface"},
     "VpsSynchronizationTransport": {"kind": "interface"},
     "DurableAcceptanceVerification": {
@@ -2064,6 +2219,18 @@
       "synchronization": {
         "factory_parameter": "synchronization",
         "state_attribute": "synchronization"
+      },
+      "plan_actual": {
+        "factory_parameter": "plan_actual",
+        "state_attribute": "plan_actual"
+      },
+      "holded_publication": {
+        "factory_parameter": "holded_publication",
+        "state_attribute": "holded_publication"
+      },
+      "retention_release": {
+        "factory_parameter": "retention_release",
+        "state_attribute": "retention_release"
       }
         }
       }
@@ -2150,6 +2317,18 @@
     },
     "InvoiceLineEstimateMatch": {
       "class": "master"
+    },
+    "EstimateSnapshot": {
+      "class": "issued"
+    },
+    "InvoiceLineMatchProposal": {
+      "class": "issued"
+    },
+    "VpsReleaseEvaluation": {
+      "class": "issued"
+    },
+    "VpsReleaseDecision": {
+      "class": "issued"
     },
     "HoldedPublication": {
       "class": "master"
@@ -2260,8 +2439,9 @@
         "RegistryCatalogueDelivery",
         "VpsCatalogueAcknowledgement",
         "VpsConnectionObservation",
-        "SynchronizationRepository",
-        "VpsSynchronizationTransport"
+        "InvoiceLineMatchProposal",
+        "UnmatchedPlanActualItems",
+        "VpsWorkingSetMembership"
       ],
       "access_control": [
         "authorize_operation",
@@ -2276,6 +2456,7 @@
         "reconcile_transfer_outcome",
         "publish_registry_catalogue",
         "observe_vps_connection",
+        "get_working_set_membership",
         "SynchronizationRepository",
         "VpsSynchronizationTransport",
         "PostgresSynchronizationRepository",
@@ -2312,13 +2493,24 @@
       "plan_actual": [
         "refresh_estimate_snapshot",
         "calculate_plan_actual",
+        "propose_invoice_line_matches",
+        "record_match_decision",
+        "get_unmatched_items",
+        "PlanActualRepository",
+        "PostgresPlanActualRepository",
+        "PlanActualService",
         "EstimateObservationRejectedError",
         "PlanActualPreconditionError"
       ],
       "holded_publication": [
         "request_holded_publication",
         "reconcile_holded_publication",
+        "get_holded_publication_status",
+        "HoldedPublicationRepository",
+        "PostgresHoldedPublicationRepository",
+        "HoldedPublicationService",
         "HoldedPublicationIneligibleError",
+        "HoldedPublicationNotFoundError",
         "HoldedReconciliationRequiredError"
       ],
       "holded_gateway": [
@@ -2333,6 +2525,10 @@
       "retention_release": [
         "evaluate_vps_release",
         "request_manual_vps_release",
+        "get_retention_status",
+        "RetentionReleaseRepository",
+        "PostgresRetentionReleaseRepository",
+        "RetentionReleaseService",
         "VpsReleaseBlockedError"
       ],
       "api": [
@@ -2377,6 +2573,9 @@
         "models": [
           "PresuProEstimateObservation",
           "EstimateSnapshot",
+          "InvoiceLineMatchProposal",
+          "InvoiceLineEstimateMatch",
+          "UnmatchedPlanActualItems",
           "PlanActualRequest",
           "PlanActualAnalysis"
         ]
@@ -2402,11 +2601,14 @@
           "verify_durable_acceptance"
         ],
         "synchronization": [
-          "get_sync_status"
+          "SynchronizationService",
+          "get_sync_status",
+          "get_working_set_membership"
         ],
         "models": [
           "VpsReleaseEvaluation",
           "VpsReleaseDecision",
+          "VpsWorkingSetMembership",
           "AuthorizationDecision"
         ]
       },
@@ -2518,6 +2720,18 @@
           "PostgresSynchronizationRepository",
           "HttpxVpsSynchronizationTransport",
           "SynchronizationService"
+        ],
+        "plan_actual": [
+          "PostgresPlanActualRepository",
+          "PlanActualService"
+        ],
+        "holded_publication": [
+          "PostgresHoldedPublicationRepository",
+          "HoldedPublicationService"
+        ],
+        "retention_release": [
+          "PostgresRetentionReleaseRepository",
+          "RetentionReleaseService"
         ]
       },
       "durable_archive": {
@@ -2619,8 +2833,9 @@
       "RegistryCatalogueDelivery",
       "VpsCatalogueAcknowledgement",
       "VpsConnectionObservation",
-      "SynchronizationRepository",
-      "VpsSynchronizationTransport"
+      "InvoiceLineMatchProposal",
+      "UnmatchedPlanActualItems",
+      "VpsWorkingSetMembership"
     ],
     "access_control": [
       "authorize_operation",
@@ -2635,6 +2850,7 @@
       "reconcile_transfer_outcome",
       "publish_registry_catalogue",
       "observe_vps_connection",
+      "get_working_set_membership",
       "SynchronizationRepository",
       "VpsSynchronizationTransport",
       "PostgresSynchronizationRepository",
@@ -2671,13 +2887,24 @@
     "plan_actual": [
       "refresh_estimate_snapshot",
       "calculate_plan_actual",
+      "propose_invoice_line_matches",
+      "record_match_decision",
+      "get_unmatched_items",
+      "PlanActualRepository",
+      "PostgresPlanActualRepository",
+      "PlanActualService",
       "EstimateObservationRejectedError",
       "PlanActualPreconditionError"
     ],
     "holded_publication": [
       "request_holded_publication",
       "reconcile_holded_publication",
+      "get_holded_publication_status",
+      "HoldedPublicationRepository",
+      "PostgresHoldedPublicationRepository",
+      "HoldedPublicationService",
       "HoldedPublicationIneligibleError",
+      "HoldedPublicationNotFoundError",
       "HoldedReconciliationRequiredError"
     ],
     "holded_gateway": [
@@ -2692,6 +2919,10 @@
     "retention_release": [
       "evaluate_vps_release",
       "request_manual_vps_release",
+      "get_retention_status",
+      "RetentionReleaseRepository",
+      "PostgresRetentionReleaseRepository",
+      "RetentionReleaseService",
       "VpsReleaseBlockedError"
     ],
     "api": [
@@ -2742,6 +2973,7 @@
     "reconcile_transfer_outcome",
     "publish_registry_catalogue",
     "observe_vps_connection",
+    "get_working_set_membership",
     "accept_transfer_manifest",
     "verify_durable_acceptance",
     "attach_local_source",
@@ -2755,12 +2987,17 @@
     "get_work_object",
     "refresh_estimate_snapshot",
     "calculate_plan_actual",
+    "propose_invoice_line_matches",
+    "record_match_decision",
+    "get_unmatched_items",
     "request_holded_publication",
     "reconcile_holded_publication",
+    "get_holded_publication_status",
     "create_holded_purchase",
     "lookup_holded_purchase",
     "evaluate_vps_release",
     "request_manual_vps_release",
+    "get_retention_status",
     "PostgresAccessControlBackend.__init__",
     "PostgresAccessControlBackend.authenticate",
     "PostgresAccessControlBackend.authorize",
@@ -2810,7 +3047,53 @@
     "SynchronizationRepository.save_catalogue_acknowledgement",
     "SynchronizationRepository.append_connection_observation",
     "PostgresSynchronizationRepository.__init__",
-    "HttpxVpsSynchronizationTransport.__init__"
+    "HttpxVpsSynchronizationTransport.__init__",
+    "PlanActualService.__init__",
+    "PlanActualService.refresh_estimate_snapshot",
+    "PlanActualService.propose_invoice_line_matches",
+    "PlanActualService.record_match_decision",
+    "PlanActualService.get_unmatched_items",
+    "PlanActualService.calculate_plan_actual",
+    "PlanActualRepository.begin",
+    "PlanActualRepository.commit",
+    "PlanActualRepository.rollback",
+    "PlanActualRepository.lock_estimate",
+    "PlanActualRepository.lock_invoice_line",
+    "PlanActualRepository.load_snapshot",
+    "PlanActualRepository.load_snapshot_by_content",
+    "PlanActualRepository.save_snapshot",
+    "PlanActualRepository.save_proposals",
+    "PlanActualRepository.load_match_decisions",
+    "PlanActualRepository.save_match_decision",
+    "PlanActualRepository.list_active_matches",
+    "PostgresPlanActualRepository.__init__",
+    "HoldedPublicationService.__init__",
+    "HoldedPublicationService.request_holded_publication",
+    "HoldedPublicationService.reconcile_holded_publication",
+    "HoldedPublicationService.get_holded_publication_status",
+    "HoldedPublicationRepository.begin",
+    "HoldedPublicationRepository.commit",
+    "HoldedPublicationRepository.rollback",
+    "HoldedPublicationRepository.lock_publication",
+    "HoldedPublicationRepository.lock_invoice_revision",
+    "HoldedPublicationRepository.load_publication",
+    "HoldedPublicationRepository.load_by_invoice_revision",
+    "HoldedPublicationRepository.reserve_publication",
+    "HoldedPublicationRepository.save_transition",
+    "PostgresHoldedPublicationRepository.__init__",
+    "SynchronizationService.get_working_set_membership",
+    "RetentionReleaseService.__init__",
+    "RetentionReleaseService.evaluate_vps_release",
+    "RetentionReleaseService.request_manual_vps_release",
+    "RetentionReleaseService.get_retention_status",
+    "RetentionReleaseRepository.begin",
+    "RetentionReleaseRepository.commit",
+    "RetentionReleaseRepository.rollback",
+    "RetentionReleaseRepository.lock_working_set",
+    "RetentionReleaseRepository.save_evaluation",
+    "RetentionReleaseRepository.load_decision",
+    "RetentionReleaseRepository.reserve_decision",
+    "PostgresRetentionReleaseRepository.__init__"
   ],
   "module_paths": {
     "models": "cabinet_backend/models",

@@ -4,9 +4,9 @@ Module: `synchronization`
 
 Status: **PASS_INTERNAL_VARIATION**
 
-Slice SHA-256: `be6853a574d224df11b073c888166fff1d6a52d948ca8a08d8b4c45aeca8f76f`
+Slice SHA-256: `f35eabfe59b3257932de48d0ee2148b57896cb06bd3bb76c6c83bc7816d92d89`
 
-Structural review: 29 contracts, 43 notes, 0 blocks, 0 deterministic review prompts.
+Structural review: 31 contracts, 45 notes, 0 blocks, 0 deterministic review prompts.
 
 ## Closed portion
 
@@ -68,3 +68,7 @@ internal SQL layout, helper decomposition, serialization details within the type
 boundary, and retry timing for operations that do not replay mutations.
 
 Classification: **PASS_INTERNAL_VARIATION**.
+
+The final Stage 8.1 revalidation also adds a typed, read-only exact working-set
+membership operation for retention coverage. It does not broaden synchronization
+mutation authority and preserves the same classification.
