@@ -17,3 +17,5 @@ Bootstrap constructs the PostgreSQL repository from the already required Cabinet
 ## Isolation rule
 
 RegistryContextRepository is separate from ArchiveUnitOfWork. Sharing the deployment database and connection-pool mechanism does not merge transactions, schemas, persistence methods, or domain ownership.
+
+RegistryContextService also receives DurableArchiveService to resolve the exact accepted immutable Card revision required by assignment validation. Registry context must not read archive persistence directly.
