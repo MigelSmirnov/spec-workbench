@@ -435,6 +435,12 @@ lookup_holded_purchase
 get_holded_attempt_result
 ```
 
+### Trace inputs
+
+- A51
+- A52
+- A71
+
 ### Depth assessment
 
 Deep external-integration adapter. It is separate because credentials, remote protocol knowledge, retry behavior, and technical reconciliation change independently from Cabinet publication policy.
