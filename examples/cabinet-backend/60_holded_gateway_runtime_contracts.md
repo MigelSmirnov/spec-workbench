@@ -21,10 +21,11 @@ Existing module functions remain façades with an explicit `HoldedGatewayService
 - HoldedAttemptRepository.rollback(self) -> None
 - HoldedAttemptRepository.lock_attempt(self, publication_attempt_id: str) -> None
 - HoldedAttemptRepository.load_attempt(self, publication_attempt_id: str) -> HoldedPublicationAttempt | None
+- HoldedAttemptRepository.load_attempt_by_marker(self, attempt_marker: str) -> HoldedPublicationAttempt | None
 - HoldedAttemptRepository.reserve_attempt(self, attempt: HoldedPublicationAttempt) -> HoldedPublicationAttempt
 - HoldedAttemptRepository.mark_request_issued(self, publication_attempt_id: str, issued_at: datetime) -> HoldedPublicationAttempt
 - HoldedAttemptRepository.append_attempt_outcome(self, attempt: HoldedPublicationAttempt) -> None
-- HoldedAttemptRepository.append_lookup_evidence(self, publication_attempt_id: str, evidence: HoldedPurchaseLookupEvidence) -> None
+- HoldedAttemptRepository.append_lookup_evidence(self, attempt_marker: str, evidence: HoldedPurchaseLookupEvidence) -> None
 
 Generic query dictionaries and untyped save methods are forbidden.
 
@@ -33,9 +34,9 @@ Generic query dictionaries and untyped save methods are forbidden.
 - PostgresHoldedAttemptRepository.__init__(self, database_url: str) -> None
 - HttpxHoldedHttpClient.__init__(self, base_url: str, api_key: str, timeout_seconds: int, max_response_bytes: int, max_recovery_pages: int) -> None
 
-Constructors validate their inputs but do not read environment variables.
+Constructors validate inputs but do not read environment variables.
 
-## Bootstrap and composition
+## Composition
 
 - create_local_app() constructs both adapters and `HoldedGatewayService`.
 - create_app(access_control: AccessControlBackend, archive: DurableArchiveService, registry: RegistryContextService, holded_gateway: HoldedGatewayService) -> FastAPI
