@@ -2,7 +2,7 @@
 
 ## Result
 
-`AMBIGUITY`
+`PASS — runtime boundary repaired and re-reviewed`
 
 The assembled slice is structurally complete (`7` contracts, `27` generation
 notes, no structural blocks), and its archive policy is sufficiently explicit.
@@ -51,7 +51,7 @@ repeat the Stage 8.1 review.
 
 ## Repair implementation checkpoint
 
-Status: **STALE — semantic repair assembled; deterministic slice rerun required**.
+Status: **PASS — semantic repair assembled and deterministic slice re-run clean**.
 
 The accepted repair now declares:
 
@@ -85,4 +85,25 @@ Do not change this record to PASS until design_module_review.py rebuilds the
 exact durable_archive slice, structural review reports zero blocks, the new
 slice SHA-256 is stored in 81_module_review_status.json, and the rebuilt packet
 passes the manual adversarial review.
+
+## Final verification
+
+GitHub Actions run 31880106221 executed the canonical commands on commit
+2e2bdb68cf02ad3b50ed1f697b48ede365cd0740.
+
+Deterministic result:
+
+- contracts: 51;
+- assembled notes: 79;
+- accepted decisions: 13;
+- flows: 5;
+- blocks: 0;
+- review prompts: 0;
+- slice SHA-256:
+  d0e3f07adb61fc3640f188518a8d9e503c997c578292b06f90a7f925d11dbb37.
+
+The rebuilt packet and the preceding adversarial review establish that the
+local Linux implementation has one explicit PostgreSQL metadata boundary, one
+explicit byte-custody boundary, closed cross-resource recovery semantics, and
+fail-closed composition. The original ambiguity is closed.
 
