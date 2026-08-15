@@ -65,13 +65,23 @@ get_archived_invoice: [VALIDATION_ERROR] Raise InvoiceNotFoundError when the req
 refresh_registry_context: [RULE_REFERENCE] Treat Registry as an upstream read-only authority and never write back through this operation; use = rules.registry_context.registry_is_read_only_from_cabinet.
 refresh_registry_context: [BEHAVIOR] Refresh Registry-derived WorkObject context from the supplied complete observation while preserving Cabinet-owned fields and without inferring deletion merely because an earlier object is absent from a later response.
 refresh_registry_context: [VALIDATION_ERROR] Raise RegistryContextUnavailableError when the supplied Registry observation is unavailable, invalid, or cannot be translated and accepted safely; do not partially apply an unverifiable refresh.
+refresh_registry_context: [DEPENDENCY_BOUNDARY] Use only the supplied RegistryContextRepository for durable reads and mutation; apply every complete refresh atomically and never open a database connection or read persistence configuration inside this module.
 validate_card_assignment: [RULE_REFERENCE] Validation may change review evidence but must never rewrite the immutable Card assignment; use = rules.registry_context.registry_status_rewrites_immutable_card.
 validate_card_assignment: [BEHAVIOR] Produce explicit assignment-validation evidence against the exact Card revision and current Registry context, preserving unresolved or review-required status when observable evidence does not validate the earlier choice.
 validate_card_assignment: [VALIDATION_ERROR] Raise RegistryContextUnavailableError when the current Registry context required to perform the validation cannot be resolved safely.
+validate_card_assignment: [DEPENDENCY_BOUNDARY] Read current project context and append immutable validation evidence only through the supplied RegistryContextRepository; a persistence conflict or unavailable transaction must not be translated into a positive validation.
 get_assignment_validation: [BEHAVIOR] Return the current recorded validation evidence for the exact assignment identity without guessing a result from current Registry state.
 get_assignment_validation: [VALIDATION_ERROR] Raise AssignmentValidationNotFoundError when no accepted validation evidence exists for the exact requested Card revision context.
+get_assignment_validation: [DEPENDENCY_BOUNDARY] Read only committed evidence through the supplied RegistryContextRepository and never derive a validation as a repository fallback.
 get_work_object: [BEHAVIOR] Return the current WorkObject for the exact Registry project identity with Registry-derived and Cabinet-owned context remaining distinguishable.
 get_work_object: [VALIDATION_ERROR] Raise RegistryContextUnavailableError when the requested WorkObject or required Registry project context cannot be resolved safely instead of constructing a placeholder object.
+get_work_object: [DEPENDENCY_BOUNDARY] Read the exact committed WorkObject through the supplied RegistryContextRepository; the repository provides persistence mechanics and does not choose assignment policy.
+RegistryContextRepository.apply_refresh: [BEHAVIOR] Commit all supplied project snapshots and resulting WorkObjects for one observation atomically, reject a stale observation or write conflict, and expose no partial refresh.
+RegistryContextRepository.list_work_objects: [RETURN_SHAPE] Return only committed WorkObjects in stable project_id order.
+RegistryContextRepository.get_project_snapshot: [BEHAVIOR] Return the committed current snapshot for the exact project_id or None; never infer a replacement or completion state.
+RegistryContextRepository.get_work_object: [BEHAVIOR] Return the committed WorkObject for the exact project_id or None without constructing a placeholder.
+RegistryContextRepository.append_assignment_validation: [BEHAVIOR] Append immutable validation evidence idempotently by its exact identity and reject conflicting evidence instead of overwriting history.
+RegistryContextRepository.get_assignment_validation: [BEHAVIOR] Return committed validation evidence for the exact invoice_id and content_hash or None without deriving it from current Registry state.
 
 # plan_actual
 
@@ -98,8 +108,30 @@ reconcile_holded_publication: [VALIDATION_ERROR] Raise HoldedReconciliationRequi
 create_holded_purchase: [ORCHESTRATION] Perform the one technical remote create for the supplied already-authorized payload and stable publication-attempt identity, then persist immutable technical outcome evidence.
 create_holded_purchase: [SECURITY_BOUNDARY] Keep Holded credentials inside the gateway boundary and redact reusable secret material from logs, returned business objects, and ordinary attempt evidence.
 create_holded_purchase: [BEHAVIOR] Preserve credential failure, remote rejection, timeout, malformed response, or ambiguous network outcome as explicit immutable technical attempt evidence rather than retrying the mutation or claiming remote failure/success without proof.
+create_holded_purchase: [DEPENDENCY_BOUNDARY] Commit the supplied attempt through HoldedGatewayRepository before calling HoldedHttpClient.post_purchase; an existing started/terminal attempt or repository failure forbids another POST, and the classified result must be appended through the repository before return.
 lookup_holded_purchase: [BEHAVIOR] Perform read-only recovery lookup using the supplied stable attempt marker and optional document identifier and return observed technical match evidence without mutating Holded.
 lookup_holded_purchase: [BEHAVIOR] Preserve zero-match, multi-match, malformed-response, unknown-document, and transport-failure observations explicitly as lookup evidence for publication reconciliation.
+lookup_holded_purchase: [DEPENDENCY_BOUNDARY] Use HoldedHttpClient only for bounded read-only recovery, wrap the returned observation in an immutable HoldedPurchaseLookupRecord bound to the exact publication attempt, append that record through HoldedGatewayRepository, and never infer retry permission from zero matches.
+HoldedHttpClient.post_purchase: [SECURITY_BOUNDARY] Inject the required credential only into the authenticated HTTPS request, enforce configured connect/read bounds, redact authorization material from all errors and logs, and never retry POST.
+HoldedHttpClient.lookup_purchase: [BEHAVIOR] Perform only bounded list/GET requests, translate provider and parsing failures to safe technical evidence, and never issue POST, PUT, DELETE, approval, payment, or attachment calls.
+HoldedGatewayRepository.begin_attempt: [BEHAVIOR] Commit immutable started evidence before remote mutation and reject an existing or conflicting publication_attempt_id so concurrent callers cannot both authorize POST.
+HoldedGatewayRepository.get_attempt: [BEHAVIOR] Return committed attempt evidence for the exact identity or None without manufacturing an unstarted attempt.
+HoldedGatewayRepository.finish_attempt: [BEHAVIOR] Append one terminal technical outcome idempotently and reject conflicting replacement of prior evidence.
+HoldedGatewayRepository.append_lookup_evidence: [BEHAVIOR] Append the exact immutable HoldedPurchaseLookupRecord idempotently to its named attempt history without changing create-attempt permission or overwriting prior observations.
+build_holded_http_client: [VALIDATION_ERROR] Construct the concrete authenticated HTTPS client only from explicit startup values; reject an empty credential, a non-HTTPS base URL, non-positive timeouts, or recovery bounds where interval exceeds maximum wait.
+build_holded_http_client: [SECURITY_BOUNDARY] Resolve api_key_secret_key only through the supplied CredentialProvider, keep the resulting secret only in private client state, never include it in repr, returned models, exception text, URLs, or logs, and fail startup instead of returning a partially configured client.
+
+# bootstrap
+
+CredentialProvider.get_required_secret: [SECURITY_BOUNDARY] Resolve only an allowed configured key, reject missing or empty values, and never emit the secret through repr, exceptions, URLs, returned domain models, or logs.
+build_environment_credential_provider: [SECURITY_BOUNDARY] Construct a provider restricted to the exact supplied non-empty key allow-list; do not expose unrestricted environment lookup to business modules.
+build_registry_context_repository: [DEPENDENCY_BOUNDARY] Resolve only the configured PostgreSQL DSN key through CredentialProvider, construct the concrete shared-runtime repository adapter, and fail closed on missing secret, migration, or connection prerequisites.
+build_holded_gateway_repository: [DEPENDENCY_BOUNDARY] Resolve only the configured PostgreSQL DSN key through CredentialProvider, construct the concrete durable attempt repository, and fail closed on missing secret, migration, or connection prerequisites.
+build_local_linux_application: [CONFIG_REFERENCE] Restrict secret resolution to = config.runtime.local_linux.credential_keys and use = config.runtime.local_linux.postgres_dsn_secret_key for both PostgreSQL repository constructors.
+build_local_linux_application: [CONFIG_REFERENCE] Construct the Holded client with = config.runtime.local_linux.holded_api_key_secret_key and = config.runtime.local_linux.holded_base_url.
+build_local_linux_application: [CONFIG_REFERENCE] Apply finite Holded bounds from = config.runtime.local_linux.holded_connect_timeout_seconds and = config.runtime.local_linux.holded_read_timeout_seconds.
+build_local_linux_application: [CONFIG_REFERENCE] Apply bounded recovery from = config.runtime.local_linux.holded_recovery_poll_interval_seconds and = config.runtime.local_linux.holded_recovery_max_wait_seconds.
+build_local_linux_application: [ORCHESTRATION] Construct the credential provider, Registry repository, Holded gateway repository, and Holded HTTP client exactly once, then pass all required bindings to create_app; never read undeclared environment keys, substitute in-memory repositories, omit a dependency, or continue after missing, duplicate, cyclic, or failed resource construction.
 
 # retention_release
 
@@ -113,7 +145,7 @@ request_manual_vps_release: [VALIDATION_ERROR] Raise VpsReleaseBlockedError when
 
 # deterministic HTTP seams
 
-create_app: [ORCHESTRATION] Construct the application using the already-declared deterministic router wiring and bind the supplied access-control backend into application state without adding business policy.
+create_app: [ORCHESTRATION] Construct the application using the already-declared deterministic router wiring and bind the supplied access-control backend and Registry context repository into application state without adding business policy.
 extract_bearer_credential: [SECURITY_BOUNDARY] Extract only the accepted bearer credential from the request boundary without interpreting business authorization.
 extract_bearer_credential: [VALIDATION_ERROR] Raise AuthenticationRequiredError when the required bearer authentication material is absent or malformed.
 resolve_local_principal: [SECURITY_BOUNDARY] Resolve the extracted credential through the access-control backend and return the canonical principal context used by protected handlers.

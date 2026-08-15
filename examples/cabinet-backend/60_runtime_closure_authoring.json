@@ -1,0 +1,285 @@
+{
+  "schema_version": "spec_workbench_runtime_closure_authoring.v1-candidate",
+  "status": "in_progress",
+  "deployment_profile": "local_linux",
+  "declaration_policy": {
+    "behavioral_callable_disposition_required": true,
+    "allowed_dispositions": ["pure", "effects", "deterministic_backend", "deferred", "removed"],
+    "undeclared_effects_are_errors": true,
+    "durability_disposition_required_for_restart_surviving_outputs": true
+  },
+  "completed_scope": ["module:access_control", "module:registry_context", "module:holded_gateway", "module:bootstrap"],
+  "remaining_scope": [
+    "module:durable_archive",
+    "module:synchronization",
+    "module:plan_actual",
+    "module:holded_publication",
+    "module:retention_release"
+  ],
+  "runtime_resources": {
+    "deployment_credentials": {
+      "kind": "credential_provider",
+      "interface_model": "CredentialProvider",
+      "method_contracts": ["CredentialProvider.get_required_secret"],
+      "owner": "module:bootstrap",
+      "lifecycle": "application",
+      "required_config_refs": ["config.runtime.local_linux.credential_keys"],
+      "startup_optional": false
+    },
+    "access_control_postgres": {
+      "kind": "postgres_service",
+      "interface_model": "AccessControlBackend",
+      "method_contracts": ["AccessControlBackend.authenticate", "AccessControlBackend.authorize"],
+      "owner": "module:access_control",
+      "lifecycle": "application",
+      "required_config_refs": [
+        "config.access_control.database_url_env",
+        "config.access_control.credential_pepper_env"
+      ],
+      "startup_optional": false
+    },
+    "registry_context_postgres": {
+      "kind": "postgres_uow",
+      "interface_model": "RegistryContextRepository",
+      "method_contracts": [
+        "RegistryContextRepository.apply_refresh",
+        "RegistryContextRepository.list_work_objects",
+        "RegistryContextRepository.get_project_snapshot",
+        "RegistryContextRepository.get_work_object",
+        "RegistryContextRepository.append_assignment_validation",
+        "RegistryContextRepository.get_assignment_validation"
+      ],
+      "owner": "module:registry_context",
+      "lifecycle": "application",
+      "required_config_refs": ["config.runtime.local_linux.postgres_dsn_secret_key"],
+      "startup_optional": false
+    },
+    "holded_gateway_postgres": {
+      "kind": "postgres_uow",
+      "interface_model": "HoldedGatewayRepository",
+      "method_contracts": [
+        "HoldedGatewayRepository.begin_attempt",
+        "HoldedGatewayRepository.get_attempt",
+        "HoldedGatewayRepository.finish_attempt",
+        "HoldedGatewayRepository.append_lookup_evidence"
+      ],
+      "owner": "module:holded_gateway",
+      "lifecycle": "application",
+      "required_config_refs": ["config.runtime.local_linux.postgres_dsn_secret_key"],
+      "startup_optional": false
+    },
+    "holded_http": {
+      "kind": "http_client",
+      "interface_model": "HoldedHttpClient",
+      "method_contracts": ["HoldedHttpClient.post_purchase", "HoldedHttpClient.lookup_purchase"],
+      "owner": "module:holded_gateway",
+      "lifecycle": "application",
+      "required_config_refs": [
+        "config.runtime.local_linux.holded_base_url",
+        "config.runtime.local_linux.holded_api_key_secret_key",
+        "config.runtime.local_linux.holded_connect_timeout_seconds",
+        "config.runtime.local_linux.holded_read_timeout_seconds",
+        "config.runtime.local_linux.holded_recovery_poll_interval_seconds",
+        "config.runtime.local_linux.holded_recovery_max_wait_seconds"
+      ],
+      "startup_optional": false
+    }
+  },
+  "concrete_implementations": {
+    "local_environment_credentials": {
+      "resource": "deployment_credentials",
+      "constructor_contract": "build_environment_credential_provider",
+      "profile": "local_linux",
+      "implementation_module": "module:bootstrap",
+      "required_config_refs": ["config.runtime.local_linux.credential_keys"]
+    },
+    "local_access_control_postgres": {
+      "resource": "access_control_postgres",
+      "constructor_contract": "PostgresAccessControlBackend.__init__",
+      "profile": "local_linux",
+      "implementation_module": "module:access_control",
+      "required_config_refs": [
+        "config.access_control.database_url_env",
+        "config.access_control.credential_pepper_env"
+      ]
+    },
+    "local_registry_context_postgres": {
+      "resource": "registry_context_postgres",
+      "constructor_contract": "build_registry_context_repository",
+      "profile": "local_linux",
+      "implementation_module": "module:bootstrap",
+      "required_config_refs": ["config.runtime.local_linux.postgres_dsn_secret_key"]
+    },
+    "local_holded_gateway_postgres": {
+      "resource": "holded_gateway_postgres",
+      "constructor_contract": "build_holded_gateway_repository",
+      "profile": "local_linux",
+      "implementation_module": "module:bootstrap",
+      "required_config_refs": ["config.runtime.local_linux.postgres_dsn_secret_key"]
+    },
+    "local_holded_http": {
+      "resource": "holded_http",
+      "constructor_contract": "build_holded_http_client",
+      "profile": "local_linux",
+      "implementation_module": "module:holded_gateway",
+      "required_config_refs": [
+        "config.runtime.local_linux.holded_base_url",
+        "config.runtime.local_linux.holded_api_key_secret_key",
+        "config.runtime.local_linux.holded_connect_timeout_seconds",
+        "config.runtime.local_linux.holded_read_timeout_seconds",
+        "config.runtime.local_linux.holded_recovery_poll_interval_seconds",
+        "config.runtime.local_linux.holded_recovery_max_wait_seconds"
+      ]
+    }
+  },
+  "function_dispositions": {
+    "refresh_registry_context": {
+      "disposition": "effects",
+      "persistent_reads": ["WorkObject"],
+      "persistent_writes": ["RegistryProjectSnapshot", "WorkObject"],
+      "resources": ["registry_context_postgres"],
+      "remote_effect": "none",
+      "secret_access": false,
+      "atomic_effect_group": "registry_refresh_transaction"
+    },
+    "validate_card_assignment": {
+      "disposition": "effects",
+      "persistent_reads": ["RegistryProjectSnapshot", "WorkObject"],
+      "persistent_writes": ["ObjectAssignmentValidation"],
+      "resources": ["registry_context_postgres"],
+      "remote_effect": "none",
+      "secret_access": false,
+      "atomic_effect_group": null
+    },
+    "get_assignment_validation": {
+      "disposition": "effects",
+      "persistent_reads": ["ObjectAssignmentValidation"],
+      "persistent_writes": [],
+      "resources": ["registry_context_postgres"],
+      "remote_effect": "none",
+      "secret_access": false,
+      "atomic_effect_group": null
+    },
+    "get_work_object": {
+      "disposition": "effects",
+      "persistent_reads": ["WorkObject"],
+      "persistent_writes": [],
+      "resources": ["registry_context_postgres"],
+      "remote_effect": "none",
+      "secret_access": false,
+      "atomic_effect_group": null
+    },
+    "create_holded_purchase": {
+      "disposition": "effects",
+      "persistent_reads": ["HoldedPublicationAttempt"],
+      "persistent_writes": ["HoldedPublicationAttempt"],
+      "resources": ["holded_gateway_postgres", "holded_http"],
+      "remote_effect": "mutation",
+      "secret_access": true,
+      "atomic_effect_group": "holded_create_outbox_reconciliation"
+    },
+    "lookup_holded_purchase": {
+      "disposition": "effects",
+      "persistent_reads": ["HoldedPublicationAttempt"],
+      "persistent_writes": ["HoldedPurchaseLookupRecord"],
+      "resources": ["holded_gateway_postgres", "holded_http"],
+      "remote_effect": "read",
+      "secret_access": true,
+      "atomic_effect_group": null
+    }
+  },
+  "capability_dispositions": {
+    "capability:registry_context.refresh_registry_context": {"disposition": "contracted", "contract": "refresh_registry_context"},
+    "capability:registry_context.build_registry_catalogue": {"disposition": "removed", "decision_ref": "A73"},
+    "capability:registry_context.get_work_object": {"disposition": "contracted", "contract": "get_work_object"},
+    "capability:registry_context.validate_card_assignment": {"disposition": "contracted", "contract": "validate_card_assignment"},
+    "capability:registry_context.get_assignment_validation": {"disposition": "contracted", "contract": "get_assignment_validation"},
+    "capability:holded_gateway.create_holded_purchase": {"disposition": "contracted", "contract": "create_holded_purchase"},
+    "capability:holded_gateway.lookup_holded_purchase": {"disposition": "contracted", "contract": "lookup_holded_purchase"},
+    "capability:holded_gateway.get_holded_attempt_result": {"disposition": "removed", "decision_ref": "A73"},
+    "capability:bootstrap.build_local_linux_application": {"disposition": "contracted", "contract": "build_local_linux_application"}
+  },
+  "durable_evidence": {
+    "RegistryProjectSnapshot": {"persistence_class": "issued", "producer": "refresh_registry_context"},
+    "WorkObject": {"persistence_class": "master", "producer": "refresh_registry_context"},
+    "ObjectAssignmentValidation": {"persistence_class": "issued", "producer": "validate_card_assignment"},
+    "HoldedPublicationAttempt": {"persistence_class": "issued", "producer": "create_holded_purchase"},
+    "HoldedPurchaseLookupRecord": {"persistence_class": "issued", "producer": "lookup_holded_purchase"}
+  },
+  "atomic_effect_groups": {
+    "registry_refresh_transaction": {
+      "function": "refresh_registry_context",
+      "resources": ["registry_context_postgres"],
+      "strategy": "one_transactional_resource_boundary",
+      "decision_ref": "A70"
+    },
+    "holded_create_outbox_reconciliation": {
+      "function": "create_holded_purchase",
+      "resources": ["holded_gateway_postgres", "holded_http"],
+      "strategy": "durable_outbox_reconciliation",
+      "decision_ref": "A71"
+    }
+  },
+  "bindings": {
+    "access_control": {
+      "constructor": "PostgresAccessControlBackend.__init__",
+      "args": [
+        {"parameter": "database_url", "source": "config", "ref": "config.access_control.database_url_env"},
+        {"parameter": "credential_pepper", "source": "config", "ref": "config.access_control.credential_pepper_env"}
+      ]
+    },
+    "credentials": {
+      "constructor": "build_environment_credential_provider",
+      "args": [{"parameter": "allowed_keys", "source": "config", "ref": "config.runtime.local_linux.credential_keys"}]
+    },
+    "registry_context_repository": {
+      "constructor": "build_registry_context_repository",
+      "args": [
+        {"parameter": "credentials", "source": "binding", "ref": "credentials"},
+        {"parameter": "postgres_dsn_key", "source": "config", "ref": "config.runtime.local_linux.postgres_dsn_secret_key"}
+      ]
+    },
+    "holded_gateway_repository": {
+      "constructor": "build_holded_gateway_repository",
+      "args": [
+        {"parameter": "credentials", "source": "binding", "ref": "credentials"},
+        {"parameter": "postgres_dsn_key", "source": "config", "ref": "config.runtime.local_linux.postgres_dsn_secret_key"}
+      ]
+    },
+    "holded_http_client": {
+      "constructor": "build_holded_http_client",
+      "args": [
+        {"parameter": "credentials", "source": "binding", "ref": "credentials"},
+        {"parameter": "base_url", "source": "config", "ref": "config.runtime.local_linux.holded_base_url"},
+        {"parameter": "api_key_secret_key", "source": "config", "ref": "config.runtime.local_linux.holded_api_key_secret_key"},
+        {"parameter": "connect_timeout_seconds", "source": "config", "ref": "config.runtime.local_linux.holded_connect_timeout_seconds"},
+        {"parameter": "read_timeout_seconds", "source": "config", "ref": "config.runtime.local_linux.holded_read_timeout_seconds"},
+        {"parameter": "recovery_poll_interval_seconds", "source": "config", "ref": "config.runtime.local_linux.holded_recovery_poll_interval_seconds"},
+        {"parameter": "recovery_max_wait_seconds", "source": "config", "ref": "config.runtime.local_linux.holded_recovery_max_wait_seconds"}
+      ]
+    },
+    "application": {
+      "constructor": "create_app",
+      "args": [
+        {"parameter": "access_control", "source": "binding", "ref": "access_control"},
+        {"parameter": "registry_context_repository", "source": "binding", "ref": "registry_context_repository"},
+        {"parameter": "holded_gateway_repository", "source": "binding", "ref": "holded_gateway_repository"},
+        {"parameter": "holded_http_client", "source": "binding", "ref": "holded_http_client"}
+      ]
+    }
+  },
+  "composition_roots": {
+    "build_local_linux_application": {
+      "profile": "local_linux",
+      "product_binding": "application",
+      "exposure": "offline_startup"
+    }
+  },
+  "blockers": [
+    {
+      "code": "RC006",
+      "message": "Capabilities outside completed_scope still require final dispositions.",
+      "repair_state": 3
+    }
+  ]
+}

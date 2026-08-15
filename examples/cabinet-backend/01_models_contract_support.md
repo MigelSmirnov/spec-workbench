@@ -295,6 +295,121 @@ Substitution: equal accepted snapshots, work-object results, and observation tim
 
 ---
 
+## Model M58 — RegistryContextRepository
+
+Runtime persistence port owned by `module:registry_context`. It exposes only the
+state operations required to apply one complete Registry observation, append
+immutable assignment-validation evidence, and read accepted Registry context.
+
+The port is implemented by the Backend PostgreSQL adapter and is supplied by
+composition. Business functions do not open database connections, read database
+environment variables, or choose transaction policy.
+
+### Kind
+
+interface
+
+### Boundary semantics
+
+- `apply_refresh` atomically persists the complete set of new project snapshots
+  and resulting WorkObjects for one observation; no partial refresh becomes
+  visible.
+- WorkObject merge decisions are made by `module:registry_context` before the
+  repository is called. The repository does not infer deletion, completion, or
+  replacement projects.
+- `append_assignment_validation` is append-only issued evidence and rejects an
+  identity conflict instead of overwriting history.
+- read methods return only committed records and never synthesize domain values.
+- the concrete implementation uses the shared PostgreSQL runtime transaction
+  mechanism and fails closed when that runtime is unavailable.
+
+---
+
+## Model M59 — HoldedHttpClient
+
+Runtime transport port for the accepted Holded purchase API subset. The concrete
+Backend implementation owns HTTPS request construction, credential injection,
+timeouts, bounded response parsing, and safe translation of provider failures.
+It does not own logical publication eligibility, automatic retry permission, or
+durable attempt history.
+
+### Kind
+
+interface
+
+---
+
+## Model M60 — HoldedGatewayRepository
+
+Durable technical-evidence port owned by `module:holded_gateway`. It exposes the
+minimum operations needed to prove whether the single create call has already
+been started, append its immutable outcome, and append read-only lookup evidence.
+
+### Kind
+
+interface
+
+### Boundary semantics
+
+- `begin_attempt` durably records the stable attempt identity before HTTP POST
+  and rejects a conflicting or already-started identity;
+- `finish_attempt` appends one terminal technical outcome without overwriting the
+  start evidence;
+- lookup evidence is append-only;
+- reads return committed evidence only;
+- the concrete implementation uses the shared PostgreSQL transaction mechanism
+  and never decides publication success.
+
+---
+
+## Model M61 — CredentialProvider
+
+Application-lifecycle secret boundary used only by concrete runtime constructors.
+It resolves a closed allow-list of deployment-owned secret keys without placing
+secret values in deterministic config, domain models, business-module imports,
+or ordinary logs.
+
+### Kind
+
+interface
+
+### Boundary semantics
+
+- only keys supplied by the composition binding may be resolved;
+- missing, empty, or inaccessible required secrets fail construction;
+- secret values are returned only to the concrete adapter constructor that owns
+  the corresponding credential boundary;
+- the provider is never exposed to HTTP handlers or business operations.
+
+---
+
+## Model M62 — HoldedPurchaseLookupRecord
+
+Immutable restart-surviving record that binds one technical Holded lookup
+observation to its stable publication attempt.
+
+Fields:
+
+- `record_id: str`;
+- `publication_attempt_id: str`;
+- `evidence: HoldedPurchaseLookupEvidence`.
+
+### Identity
+
+entity
+
+### Identity evidence
+
+Substitution: two records with different record ids remain distinct audit events
+even when their lookup evidence is equal. Continuity: the issued record is
+immutable; another lookup creates another record.
+
+### Persistence candidate
+
+Durable issued evidence.
+
+---
+
 ## Model M47 — PresuProEstimateObservation
 
 One current PresuPro estimate observation presented for immutable snapshot

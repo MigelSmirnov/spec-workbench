@@ -1,25 +1,37 @@
 # Stage 8.1 — remaining module review and repair plan
 
+## Progress
+
+| Module | Status | Current result |
+|---|---|---|
+| `durable_archive` | semantic surface repaired | Archive operations and evidence are lowered; shared runtime persistence and byte-store composition remain part of the cross-cutting repair. |
+| `registry_context` | candidate runtime-closed | Repository resource, concrete local-Linux binding, effects, durable evidence, atomic group, capability dispositions, and composition arguments are declared in the candidate Runtime IR. |
+| `holded_gateway` | candidate runtime-closed | Credential provider, HTTP/repository resources, concrete bindings, single-POST atomic strategy, durable lookup evidence, effects, and capability dispositions are declared. |
+| `synchronization` | next | VPS transport and accepted reconciliation/catalogue responsibilities remain open. |
+| `plan_actual` | pending | Persistent match operations and repository boundary remain open. |
+| `holded_publication` | pending | Logical publication repository/UoW and composition remain open. |
+| `retention_release` | pending | Durable release-decision recording and atomic recheck remain open. |
+| `bootstrap` | in progress | Access control plus Registry/Holded constructor graph is explicit; remaining-module resources still block complete local-Linux closure. |
+
+## Forward Runtime Closure preparation
+
+`60_runtime_closure_authoring.json` records a candidate form of the proposed
+Runtime Closure IR without changing the current `global_spec.json` schema. For
+the completed Registry/Holded scope it includes mandatory callable effect
+dispositions, resources, concrete constructors, config references, capability
+dispositions, durable evidence, atomic strategies, and composition bindings.
+
+The full profile intentionally remains `in_progress`: the concrete access-control
+binding is accepted, while resources and effects of the remaining behavioral
+modules stay explicit blockers rather than implicit generation work.
+
 ## Diagnostic result
 
-All twelve assembled module slices were reviewed. Deterministic Factory surfaces
-(`models`, `api`, and `api_irregular`) are structurally closed and do not require
-behavioral generation notes. The remaining findings are concentrated in the
-behavioral runtime and its composition.
-
-| Module | Result | Finding |
-|---|---|---|
-| `registry_context` | `AMBIGUITY` | Archive reads and mutations have no declared repository/unit-of-work runtime boundary. |
-| `holded_gateway` | `AMBIGUITY` | No concrete Holded HTTP client, credential/config boundary, or composition contract is available to the generated gateway. |
-| `synchronization` | `AMBIGUITY` | No concrete authenticated VPS transport is declared; accepted reconciliation/catalogue/connection responsibilities are not lowered to contracts. |
-| `plan_actual` | `AMBIGUITY` | Persistent match state has no runtime boundary, and accepted propose/record/unmatched operations are absent from the contract surface. |
-| `holded_publication` | `AMBIGUITY` | Logical publication state has no repository/unit-of-work runtime boundary or bootstrap wiring. |
-| `retention_release` | `AMBIGUITY` | The operation promises to record an immutable release decision, but `VpsReleaseDecision` is not persistent and no state boundary is declared. |
-| `api_irregular` | `PASS` | Factory-owned irregular multipart seam is structurally closed; behavioral archive policy remains delegated. |
-| `api` | `PASS` | Factory-owned router and handler lowering is structurally closed. |
-
-The earlier `durable_archive` finding remains open: PostgreSQL archive access,
-source-byte custody, cross-resource failure semantics, and composition are not
+The deterministic Factory surfaces (`models`, `api`, and `api_irregular`) are
+structurally closed. Remaining findings are concentrated in the behavioral
+runtime and composition. The earlier `durable_archive` finding also remains
+open at the concrete runtime level: PostgreSQL archive access, source-byte
+custody, cross-resource failure semantics, and full composition are not yet
 declared.
 
 ## Repair strategy

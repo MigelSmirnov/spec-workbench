@@ -115,11 +115,14 @@ Registry remains authoritative for Registry-owned project facts. Cabinet Backend
 
 1. `module:registry_context` performs the accepted full Registry project observation and constructs the compact project context from the verified fields only.
 2. Registry-derived fields are projected into Cabinet WorkObjects keyed by stable Registry `project_id`; existing Cabinet-owned local fields remain untouched.
-3. Existing WorkObjects absent from a later catalogue response are preserved. Absence is treated as unresolved source availability rather than confirmed deletion.
-4. For an Invoice Card assignment under review, `module:registry_context` validates the exact Card/project context against the refreshed observation through `capability:registry_context.validate_card_assignment`.
-5. Active Registry context may validate normal availability. Archived or currently missing project context requires review and must not be interpreted as authoritative project completion.
-6. The validation result is stored separately from the immutable Card object block. A changed Registry observation may change Backend-owned review state but never silently rewrite the Card assignment.
-7. `capability:registry_context.get_assignment_validation` exposes the resulting validation/review evidence to callers.
+3. The new project snapshots and resulting WorkObjects are committed through the
+   supplied `RegistryContextRepository` as one PostgreSQL transaction. No caller
+   can observe a mixture of the old and new catalogue observation.
+4. Existing WorkObjects absent from a later catalogue response are preserved. Absence is treated as unresolved source availability rather than confirmed deletion.
+5. For an Invoice Card assignment under review, `module:registry_context` validates the exact Card/project context against the refreshed observation through `capability:registry_context.validate_card_assignment`.
+6. Active Registry context may validate normal availability. Archived or currently missing project context requires review and must not be interpreted as authoritative project completion.
+7. The validation result is appended through the same repository boundary separately from the immutable Card object block. A changed Registry observation may change Backend-owned review state but never silently rewrite the Card assignment.
+8. `capability:registry_context.get_assignment_validation` exposes committed validation/review evidence to callers.
 
 ### Outcomes
 
@@ -132,6 +135,9 @@ The refreshed WorkObject projection preserves both observed Registry facts and C
 `module:registry_context` owns Registry observation/translation, catalogue freshness, WorkObject projection, and assignment-validation errors.
 
 A Registry transport/client adapter may report technical failure but may not infer deletion, completion, replacement project, or Card mutation from that failure.
+
+The PostgreSQL adapter may report transaction, availability, or conflict failure,
+but it may not partially publish a refresh or choose Registry business outcomes.
 
 If Registry lacks an authoritative fact required for a new business classification, the result remains unresolved/review-required rather than being guessed inside this flow.
 
@@ -190,7 +196,11 @@ Cabinet publication eligibility and logical publication lifecycle belong to `mod
 1. `module:access_control` authorizes the exact Holded publication operation for the authenticated actor; reusable Holded credentials are never exposed to that actor or to `module:holded_publication`.
 2. The exact confirmed Invoice Card revision is loaded from `module:durable_archive`. `module:holded_publication` evaluates Cabinet eligibility against accepted conditions, including required source evidence and any required resolved operational context, without modifying the Card.
 3. Before network mutation, the publication lifecycle persists the logical publication/attempt identity and exact revision binding required by the accepted Holded rules.
-4. `module:holded_gateway` performs at most one automatic create POST for that logical attempt through `capability:holded_gateway.create_holded_purchase`; it preserves the technical request/response evidence and returned Holded document identifier when available.
+4. `module:holded_gateway` commits attempt-start evidence through the supplied
+   `HoldedGatewayRepository`, then performs at most one automatic create POST for
+   that logical attempt through the supplied `HoldedHttpClient` and
+   `capability:holded_gateway.create_holded_purchase`. A repository failure or an
+   already-started attempt prevents the POST.
 5. A clear create result is followed by read-back verification of the exact Holded document. Business-field verification, including accepted gross-total precision, settles the logical publication only when the returned representation proves success.
 6. If the create outcome is ambiguous, no automatic second POST is allowed. `module:holded_publication` enters reconciliation and `module:holded_gateway` uses read-only marker lookup through `capability:holded_gateway.lookup_holded_purchase` followed by GET/business verification as required by the accepted recovery protocol.
 7. Zero marker matches keep the outcome unknown; one verified exact match may settle the publication as recovered; multiple matches or payload disagreement require reconciliation/conflict handling rather than silent success.
@@ -208,7 +218,7 @@ Unverified Holded update, refund, attachment, approval, payment, status interpre
 
 `module:access_control` owns protected-operation authorization failure. `module:durable_archive` owns inability to resolve accepted immutable source evidence. `module:holded_publication` owns Cabinet eligibility, logical duplicate prevention, publication state, and reconciliation classification. `module:holded_gateway` owns credential, transport, raw remote-response, single-create technical attempt, and lookup/GET errors.
 
-No HTTP/MCP/CLI adapter may repeat POST, reinterpret unknown Holded status, or mark publication successful merely from a transport response.
+No HTTP/MCP/CLI adapter may repeat POST, reinterpret unknown Holded status, or mark publication successful merely from a transport response. Client and repository adapters translate only technical failures and never decide publication semantics.
 
 ---
 

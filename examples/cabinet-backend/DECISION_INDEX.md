@@ -67,12 +67,16 @@ For machine-readable State 2 → State 3 ownership coverage and handoff, `30_tra
 | A51 | Create one Holded purchase and verify it by GET | 02_rules.md |
 | A52 | Marker-based Holded purchase create recovery | 02_rules.md |
 
-### Platform boundary and security (A60–A69)
+### Platform boundary, security, and runtime (A60–A73)
 
 | ID | Decision | Primary document |
 |----|----------|------------------|
 | A60 | Platform integrations belong to Cabinet Backend | 01_models.md |
 | A61 | Separate machine and local-user identities | 02_rules.md |
+| A70 | Registry context uses the shared PostgreSQL transaction mechanism | 02_rules_runtime_persistence.md |
+| A71 | Holded transport and attempt persistence are explicit startup dependencies | 02_rules_holded_runtime.md |
+| A72 | Local Linux composition is explicit and fail-closed | 02_rules_runtime_composition.md |
+| A73 | Candidate capability disposition for repaired runtime modules | 02_rules_runtime_composition.md |
 
 ---
 

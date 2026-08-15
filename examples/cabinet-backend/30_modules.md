@@ -250,6 +250,9 @@ Deep boundary module. It hides authenticated transport, retries, reconciliation,
 
 ### Owns
 
+- the `RegistryContextRepository` port used for durable Registry-context state;
+- transaction-level acceptance of one complete Registry observation, while the
+  concrete PostgreSQL adapter owns only persistence mechanics;
 - reading accepted Registry project context through the Registry integration boundary;
 - immutable Registry project snapshots;
 - local `WorkObject` projection keyed by Registry `project_id`;
@@ -268,6 +271,7 @@ Deep boundary module. It hides authenticated transport, retries, reconciliation,
 
 ### Hides
 
+- repository transaction sequencing and conflict translation from callers;
 - Registry client calls;
 - snapshot-diff mechanics;
 - catalogue indexing;
@@ -275,6 +279,8 @@ Deep boundary module. It hides authenticated transport, retries, reconciliation,
 
 ### Must not own
 
+- PostgreSQL connection creation, credentials, migrations, pooling, or startup
+  configuration;
 - Invoice Card editing;
 - synchronization transport;
 - PresuPro estimate/match rules;
@@ -397,6 +403,9 @@ Deep business-control module. It owns whether Cabinet is allowed to publish and 
 
 ### Owns
 
+- the `HoldedHttpClient` and `HoldedGatewayRepository` ports;
+- the durable-before-POST guard for one automatic create per attempt identity;
+
 - Holded authentication credentials and their secret storage boundary;
 - exact Holded transport requests and responses;
 - technical retry policy permitted by the accepted Holded rules;
@@ -413,6 +422,9 @@ Deep business-control module. It owns whether Cabinet is allowed to publish and 
 
 ### Hides
 
+- authenticated HTTPS construction, timeout/error translation, and PostgreSQL
+  technical-evidence transactions;
+
 - HTTP client configuration;
 - credential loading;
 - serialization;
@@ -420,6 +432,8 @@ Deep business-control module. It owns whether Cabinet is allowed to publish and 
 - Holded-specific error translation.
 
 ### Must not own
+
+- credential discovery from ambient environment or startup fallback defaults;
 
 - Cabinet publication eligibility;
 - choosing the Invoice Card revision to publish;
@@ -486,6 +500,48 @@ Policy module. It exists because evidence release has independent safety invaria
 ---
 
 # 2. Boundary adapters are not policy modules
+
+## `bootstrap`
+
+### Owns
+
+- construction of the selected deployment profile's complete dependency graph;
+- the closed credential-provider allow-list;
+- concrete PostgreSQL Registry/Holded repository construction;
+- concrete Holded HTTP client construction;
+- fail-closed validation of required configuration before `create_app`.
+
+### Knows
+
+- runtime resource declarations and concrete binding graph;
+- deterministic configuration addresses for the selected deployment profile;
+- which secret keys each concrete adapter may request.
+
+### Hides
+
+- environment/secret-provider access;
+- constructor ordering;
+- shared PostgreSQL connection/pool mechanics;
+- application-lifecycle resource cleanup.
+
+### Must not own
+
+- Registry, Holded publication, archive, synchronization, or authorization policy;
+- HTTP route behavior;
+- fallback credentials, URLs, timeouts, or repositories.
+
+### Candidate public capabilities
+
+```text
+build_local_linux_application
+```
+
+### Depth assessment
+
+Composition module. It owns deployment construction only and exposes no business
+capability to HTTP/MCP callers.
+
+---
 
 The following are expected adapters or deployment surfaces, not primary owners of Cabinet rules:
 

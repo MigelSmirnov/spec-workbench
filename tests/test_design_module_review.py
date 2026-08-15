@@ -11,7 +11,7 @@ CABINET = ROOT / "examples" / "cabinet-backend"
 def test_lists_final_assembled_modules() -> None:
     report = list_modules(CABINET)
     assert report["schema_version"] == "spec_workbench_module_review_modules.v1"
-    assert len(report["modules"]) == 11
+    assert len(report["modules"]) == 12
     assert report["modules"][0] == "models"
 
 def test_durable_archive_slice_connects_business_and_lowered_spec() -> None:
@@ -38,6 +38,34 @@ def test_review_uses_all_assembled_notes() -> None:
     assert report["summary"]["blocks"] == 0
     assert report["semantic_review_required"] is True
 
+def test_registry_context_slice_has_explicit_transactional_repository() -> None:
+    packet = build_slice(CABINET, "registry_context")
+    lowered = packet["lowered_specification"]
+    assert lowered["models"]["RegistryContextRepository"] == {"kind": "interface"}
+    assert lowered["contracts"]["refresh_registry_context"].startswith(
+        "(repository: RegistryContextRepository,"
+    )
+    assert lowered["contracts"]["RegistryContextRepository.apply_refresh"].endswith(
+        ") -> None"
+    )
+    assert lowered["contracts"]["RegistryContextRepository.append_assignment_validation"].endswith(
+        ") -> None"
+    )
+    assert packet["generation_constraints"]["note_count"] >= 25
+
+def test_holded_gateway_slice_has_explicit_client_and_attempt_repository() -> None:
+    packet = build_slice(CABINET, "holded_gateway")
+    lowered = packet["lowered_specification"]
+    assert lowered["models"]["HoldedHttpClient"] == {"kind": "interface"}
+    assert lowered["models"]["HoldedGatewayRepository"] == {"kind": "interface"}
+    assert lowered["contracts"]["create_holded_purchase"].startswith(
+        "(repository: HoldedGatewayRepository, client: HoldedHttpClient,"
+    )
+    assert "HoldedGatewayRepository.begin_attempt" in lowered["contracts"]
+    assert "HoldedHttpClient.post_purchase" in lowered["contracts"]
+    assert "build_holded_http_client" in lowered["contracts"]
+    assert packet["generation_constraints"]["note_count"] >= 15
+
 def test_transport_module_without_state3_owner_still_slices() -> None:
     packet = build_slice(CABINET, "api")
     assert packet["accepted_evidence"]["responsibility"] is None
@@ -48,6 +76,10 @@ def test_dependency_contracts_expand_context_without_rewriting_import_edges() ->
     lowered = packet["lowered_specification"]
     assert set(lowered["dependency_contracts"]) == {
         "create_holded_purchase", "get_archived_invoice", "lookup_holded_purchase",
+        "HoldedHttpClient.post_purchase", "HoldedHttpClient.lookup_purchase",
+        "HoldedGatewayRepository.begin_attempt", "HoldedGatewayRepository.get_attempt",
+        "HoldedGatewayRepository.finish_attempt",
+        "HoldedGatewayRepository.append_lookup_evidence",
     }
     assert {
         "HoldedPublicationAttempt", "HoldedPurchaseAttemptPayload",
@@ -59,8 +91,8 @@ def test_dependency_contracts_expand_context_without_rewriting_import_edges() ->
 
 def test_models_slice_includes_owned_declarations_and_state1_evidence() -> None:
     packet = build_slice(CABINET, "models")
-    assert len(packet["lowered_specification"]["models"]) == 51
-    assert len(packet["accepted_evidence"]["state1_models"]) == 51
+    assert len(packet["lowered_specification"]["models"]) == 57
+    assert len(packet["accepted_evidence"]["state1_models"]) == 57
     assert "VpsReleaseDecision" in packet["lowered_specification"]["models"]
 
 def test_unknown_assembled_module_fails_closed() -> None:

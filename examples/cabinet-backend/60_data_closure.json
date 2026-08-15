@@ -10,6 +10,18 @@
         "database_url_env": "CABINET_DATABASE_URL",
         "credential_pepper_env": "CABINET_CREDENTIAL_PEPPER",
         "deployment_owner_uid_env": "CABINET_DEPLOYMENT_OWNER_UID"
+      },
+      "runtime": {
+        "local_linux": {
+          "credential_keys": ["CABINET_POSTGRES_DSN", "HOLDED_V1_API_KEY"],
+          "postgres_dsn_secret_key": "CABINET_POSTGRES_DSN",
+          "holded_api_key_secret_key": "HOLDED_V1_API_KEY",
+          "holded_base_url": "https://api.holded.com/api/invoicing/v1",
+          "holded_connect_timeout_seconds": 30,
+          "holded_read_timeout_seconds": 30,
+          "holded_recovery_poll_interval_seconds": 2,
+          "holded_recovery_max_wait_seconds": 30
+      }
       }
     },
     "rules": {
@@ -56,6 +68,7 @@
       "SourceBinaryReplica": {"class": "master"},
       "RegistryCataloguePublication": {"class": "master"},
       "RegistryCatalogueReplica": {"class": "master"},
+      "RegistryProjectSnapshot": {"class": "issued"},
       "WorkObject": {"class": "master"},
       "CardObjectAssignmentObservation": {"class": "issued"},
       "ObjectAssignmentValidation": {"class": "issued"},
@@ -69,6 +82,7 @@
       "InvoiceLineEstimateMatch": {"class": "master"},
       "HoldedPublication": {"class": "master"},
       "HoldedPublicationAttempt": {"class": "issued"},
+      "HoldedPurchaseLookupRecord": {"class": "issued"},
       "IncompleteSourceAcceptance": {"class": "issued"},
       "SourceLossDecision": {"class": "issued"},
       "LocalServicePrincipal": {"class": "master"},
@@ -80,6 +94,16 @@
     "determinism": {}
   },
   "placements": [
+    {"address":"persistence.RegistryProjectSnapshot.class","source_refs":["M12","A70"],"reason":"Each accepted Registry observation is immutable restart-surviving issued evidence used by WorkObject and validation history."},
+    {"address":"persistence.HoldedPurchaseLookupRecord.class","source_refs":["M62","A52","A71"],"reason":"Each recovery lookup is immutable restart-surviving technical evidence bound to one publication attempt."},
+    {"address":"config.runtime.local_linux.credential_keys","source_refs":["A72"],"reason":"The composition root exposes only the closed secret-key allow-list required by this profile."},
+    {"address":"config.runtime.local_linux.postgres_dsn_secret_key","source_refs":["A72"],"reason":"The profile declares the deployment-owned PostgreSQL secret key name without storing the secret value."},
+    {"address":"config.runtime.local_linux.holded_api_key_secret_key","source_refs":["A72"],"reason":"The profile declares the Holded credential key owned by the gateway boundary."},
+    {"address":"config.runtime.local_linux.holded_base_url","source_refs":["A51","A72"],"reason":"The concrete Holded client requires one explicit HTTPS API root."},
+    {"address":"config.runtime.local_linux.holded_connect_timeout_seconds","source_refs":["A71","A72"],"reason":"The concrete Holded client must have a finite connect bound."},
+    {"address":"config.runtime.local_linux.holded_read_timeout_seconds","source_refs":["A71","A72"],"reason":"The concrete Holded client must have a finite response bound."},
+    {"address":"config.runtime.local_linux.holded_recovery_poll_interval_seconds","source_refs":["A52","A72"],"reason":"Read-only recovery polling must use an explicit finite interval."},
+    {"address":"config.runtime.local_linux.holded_recovery_max_wait_seconds","source_refs":["A52","A72"],"reason":"Read-only recovery must terminate at an explicit finite bound."},
     {"address":"rules.synchronization.delivery_implies_durable_acceptance","source_refs":["flow:synchronize_invoice_to_local_archive"],"reason":"Delivery and durable acceptance are separate accepted states."},
     {"address":"rules.retention_release.mode","source_refs":["source:02_rules_vps_retention.md#accepted-decision","flow:release_vps_working_copy"],"reason":"Manual release is the accepted baseline policy, not an implementation detail."},
     {"address":"rules.retention_release.require_durable_local_verification_before_release","source_refs":["source:02_rules_vps_retention.md#normative-rules","flow:release_vps_working_copy"],"reason":"Release is blocked until required local replicas are durably verified."},

@@ -310,7 +310,9 @@ Registry authority, one-way projection, accepted field set, no inferred deletion
 `RegistryContextUnavailableError` when the supplied Registry observation is unavailable, invalid, incomplete, or cannot be translated and accepted safely. No partial unverifiable refresh is a normal result.
 
 ### State impact
-Mutates Registry-derived local projection only; never writes Registry.
+Atomically mutates Registry-derived local projection through the explicitly
+supplied `RegistryContextRepository`; never writes Registry. A failed refresh
+leaves the prior committed projection visible.
 
 ---
 
@@ -338,7 +340,8 @@ Registry status affects classification/review but does not rewrite or reject an 
 `RegistryContextUnavailableError` when the current Registry observation required to perform a trustworthy validation is unavailable or cannot be accepted safely. Observable disagreement or review-worthy status is returned as validation evidence rather than guessed away.
 
 ### State impact
-Mutates validation/review evidence only.
+Appends validation/review evidence through the explicitly supplied
+`RegistryContextRepository`; never overwrites earlier evidence.
 
 ---
 
@@ -366,7 +369,7 @@ Unresolved facts remain unresolved rather than guessed.
 `AssignmentValidationNotFoundError` when no accepted assignment-validation evidence exists for the exact requested Card revision context.
 
 ### State impact
-None.
+None. Reads committed repository evidence only.
 
 ---
 
@@ -394,7 +397,7 @@ One Registry project maps to at most one current WorkObject and Registry-derived
 `RegistryContextUnavailableError` when the requested WorkObject or Registry context required to resolve it cannot be obtained safely. The operation must not construct a placeholder WorkObject.
 
 ### State impact
-None.
+None. Reads the committed WorkObject from the supplied repository only.
 
 ---
 
@@ -534,7 +537,9 @@ Holded credential secrecy, exact request contract, maximum automatic POST count 
 Failure to construct or durably preserve trustworthy technical attempt evidence at all. Classifiable remote and transport outcomes belong in `HoldedPublicationAttempt` and do not authorize hidden mutation retries.
 
 ### State impact
-Persists technical attempt evidence; does not decide Cabinet publication eligibility/success.
+Uses the explicitly supplied repository to commit attempt start before the
+explicitly supplied client may POST, then appends the classified technical
+outcome. It does not decide Cabinet publication eligibility/success.
 
 ---
 
@@ -562,7 +567,8 @@ Recovery uses observed Holded evidence without hidden mutation or business inter
 Failure to obtain or construct trustworthy lookup evidence at all. Classifiable lookup outcomes remain evidence for `holded_publication` and are not silently converted to verified success.
 
 ### State impact
-May append technical observation evidence only.
+May append technical observation evidence through the explicitly supplied
+repository only; the supplied client performs bounded reads only.
 
 ---
 
