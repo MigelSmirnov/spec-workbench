@@ -1,0 +1,42 @@
+name: Stage 8.1 module review
+
+on:
+  push:
+    branches:
+      - agent/cabinet-backend-state-0
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  durable-archive-review:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: List assembled modules
+        run: python tools/design_module_review.py examples/cabinet-backend --list
+
+      - name: Run deterministic durable_archive review
+        run: |
+          mkdir -p stage81-output
+          python tools/design_module_review.py examples/cabinet-backend             --module durable_archive --review             | tee stage81-output/durable_archive_review.txt
+
+      - name: Build durable_archive slice
+        run: |
+          python tools/design_module_review.py examples/cabinet-backend             --module durable_archive --slice --json             > stage81-output/durable_archive_slice.json
+          sha256sum stage81-output/durable_archive_slice.json             | tee stage81-output/durable_archive_slice.sha256
+
+      - name: Upload review evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: stage81-durable-archive-review
+          path: stage81-output/
+          if-no-files-found: error
