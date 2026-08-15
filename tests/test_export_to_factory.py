@@ -115,11 +115,19 @@ def test_export_creates_canonical_spec_and_bound_handoff(
     assert export_to_factory.main() == 0
     canonical = factory / "projects/demo/specs/base/global_spec.json"
     manifest_path = factory / "projects/demo/specs/working/spec_workbench_handoff.json"
+    lineage_path = factory / "projects/demo/specs/working/spec_editor_manifest.json"
     assert json.loads(canonical.read_text(encoding="utf-8")) == spec
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     assert manifest["schema_version"] == "spec_workbench_handoff.v1"
     assert manifest["source"]["spec_sha256"] == export_to_factory.sha256_file(canonical)
     assert manifest["factory"]["validation_status"] == "PASS"
+    lineage = json.loads(lineage_path.read_text(encoding="utf-8"))
+    assert lineage["accepted"] is True
+    assert lineage["status"] == "pass"
+    assert lineage["verdict"] == "PASS"
+    assert lineage["producer"]["route"] == "spec_workbench_stage9"
+    assert lineage["change_summary"]["changed_modules"] == ["global"]
+    assert lineage["outputs"]["base_spec_sha256_after"] == export_to_factory.sha256_file(canonical)
 
 
 def test_export_blocks_standard_drift_before_project_creation(

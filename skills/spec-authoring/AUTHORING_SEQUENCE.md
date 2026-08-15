@@ -23,8 +23,10 @@ State 0  Product frame
   -> deterministic HTTP global context closure
   -> deterministic http_router_backend/v1 assembly
   -> State 7  Notes
-  -> adapters / final specification assembly / validation
-  -> Factory handoff
+  -> adapters / final specification assembly / validation (Stage 8)
+  -> assembled module review (Stage 8.1)
+  -> Factory admission and handoff (Stage 9)
+  -> Factory Route B
 ```
 
 The intermediate structured-data closure is **not State 6**. Existing artifacts
@@ -170,3 +172,35 @@ agents must interpret them by purpose:
 
 Any future orchestration tool must read the machine-readable companion
 `authoring_sequence.json` rather than reconstructing order from filenames.
+
+## Stage 9 — Factory admission and handoff
+
+Stage 9 is an operational boundary, not a new semantic State and not an
+extension of `global_spec.json`. It proves that the exact assembled artifact
+accepted by Workbench is admissible to the current Factory checkout.
+
+The read-only gate is mandatory:
+
+```bash
+python tools/design_factory_admission.py examples/<case> \
+  --project <factory-project> --update-existing
+```
+
+It verifies the committed Workbench source, current Stage 8.1 slice hashes,
+aggregate assembly, byte-identical `SPEC_STANDARD.md`, the real Factory
+canonical validator, semantic test handoff, explicit target replacement intent,
+and fingerprints of the Factory admission toolchain. It never writes to either
+project.
+
+Only a `READY_TO_EXPORT` report authorizes the mutation step:
+
+```bash
+python tools/export_to_factory.py --case <case> \
+  --project <factory-project> --update-existing
+```
+
+The exporter executes the same admission service again, copies the canonical
+specification and declared semantic tests, and writes both admission and handoff
+receipts under the Factory project's `specs/working/` directory. Generated code,
+deploy, verification and terminal OTK remain inside Factory Route B and are not
+Stage 9 completion criteria.

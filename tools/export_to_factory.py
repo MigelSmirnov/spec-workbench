@@ -22,6 +22,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from factory_admission_workbench import check as check_factory_admission
+
 HANDOFF_SCHEMA = "spec_workbench_handoff.v1"
 SEMANTIC_EXPORT_SCHEMA = "spec_workbench_semantic_test_export.v1"
 SEMANTIC_EXPORT_MANIFEST = "71_semantic_test_export.json"
@@ -206,7 +208,75 @@ def export_semantic_tests(plan: tuple[Path, dict[str, Any]] | None, project_root
     }
 
 
+def stage9_lineage_manifest(
+    *,
+    project: str,
+    source_sha: str,
+    source_commit: str | None,
+    started_at: str,
+    base_spec_path: Path,
+    base_spec_sha_before: str | None,
+    base_spec_sha_after: str,
+    admission_path: Path,
+    validation_path: Path,
+    handoff_path: Path,
+) -> dict[str, Any]:
+    identity = source_commit[:16] if source_commit else source_sha[:16]
+    return {
+        "schema_version": 1,
+        "project": project,
+        "spec_editor_run_id": f"{project}-spec-workbench-{identity}",
+        "spec_patch_id": f"{project}-spec-workbench-handoff-{source_sha[:16]}",
+        "started_at": started_at,
+        "finished_at": utc_now(),
+        "status": "pass",
+        "verdict": "PASS",
+        "accepted": True,
+        "producer": {
+            "entrypoint": "tools/export_to_factory.py",
+            "route": "spec_workbench_stage9",
+            "mode": "external_canonical_handoff",
+            "source": "spec_workbench",
+            "argv": sys.argv,
+        },
+        "scope": {
+            "module": "global",
+            "allow_functions": [],
+            "allow_notes": [],
+            "forbid_contract_edits": False,
+            "allowed_ops": ["accept_external_canonical_spec"],
+        },
+        "inputs": {
+            "base_spec_path": str(base_spec_path),
+            "base_spec_sha256_before": base_spec_sha_before,
+            "source_spec_sha256": source_sha,
+            "source_commit": source_commit,
+        },
+        "outputs": {
+            "base_spec_sha256_after": base_spec_sha_after,
+            "factory_admission_path": str(admission_path),
+            "factory_validation_path": str(validation_path),
+            "spec_workbench_handoff_path": str(handoff_path),
+        },
+        "change_summary": {
+            "diff_non_empty": True,
+            "lineage_adoption": True,
+            "changed_modules": ["global"],
+            "changed_functions": [],
+            "changed_notes": [],
+            "changed_contracts": [],
+            "changed_addresses": [],
+            "applied_count": 1,
+            "no_op_count": 0,
+            "errors_count": 0,
+            "removed_modules": [],
+        },
+        "findings": [],
+    }
+
+
 def main() -> int:
+    export_started_at = utc_now()
     workbench_root = Path(__file__).resolve().parents[1]
     parser = argparse.ArgumentParser(description=__doc__)
     source_group = parser.add_mutually_exclusive_group(required=True)
@@ -216,6 +286,7 @@ def main() -> int:
     parser.add_argument("--factory-root", type=Path, default=workbench_root.parent / "code_factory", help="Sibling Code Factory checkout")
     parser.add_argument("--update-existing", action="store_true", help="Explicitly replace an existing project's canonical specification and differing semantic tests")
     parser.add_argument("--allow-dirty-source", action="store_true", help="Allow a non-reproducible export from a dirty Workbench checkout")
+    parser.add_argument("--check", action="store_true", help="Run the Stage 9 admission gate without modifying Factory")
     args = parser.parse_args()
 
     if not PROJECT_RE.fullmatch(args.project):
@@ -230,8 +301,24 @@ def main() -> int:
         raise SystemExit("source specification must contain a JSON object")
 
     workbench_git = git_metadata(workbench_root)
-    if workbench_git["dirty"] and not args.allow_dirty_source:
-        raise SystemExit("Workbench checkout is dirty; commit the accepted source or pass --allow-dirty-source")
+    admission = check_factory_admission(
+        workbench_root=workbench_root,
+        source=source,
+        project=args.project,
+        factory_root=factory_root,
+        case_root=source.parent if args.case else None,
+        update_existing=args.update_existing,
+        allow_dirty_source=args.allow_dirty_source,
+        source_git=workbench_git,
+    )
+    if args.check:
+        print(json.dumps(admission, ensure_ascii=False, indent=2, sort_keys=True))
+        return 0 if admission["ready"] else 1
+    if not admission["ready"]:
+        blockers = [
+            item["summary"] for item in admission["checks"] if item["status"] == "BLOCK"
+        ]
+        raise SystemExit("Factory admission blocked: " + "; ".join(blockers))
 
     workbench_standard = workbench_root / "skills" / "spec-authoring" / "SPEC_STANDARD.md"
     workbench_standard_sha = sha256_file(workbench_standard)
@@ -239,13 +326,16 @@ def main() -> int:
     if workbench_standard_sha != factory_standard_sha:
         raise SystemExit("SPEC_STANDARD mismatch: update or pin both repositories before exporting " f"(workbench={workbench_standard_sha}, factory={factory_standard_sha})")
 
-    validation_report = run_factory_validator(required["validator"], source)
+    validation_report = admission["factory_validation"]
+    if not isinstance(validation_report, dict):
+        raise SystemExit("Factory admission did not return a canonical validation report")
     expected_validator_sha = canonical_spec_sha(source_spec)
     if validation_report.get("spec_sha") != expected_validator_sha:
         raise SystemExit("factory validation report is not bound to the source specification")
 
     structure = load_json(required["structure"])
     paths = project_paths(factory_root, structure, args.project)
+    base_spec_sha_before = sha256_file(paths["canonical"]) if paths["canonical"].is_file() else None
     command = [sys.executable, str(required["bootstrap"]), "--project", args.project, "--spec", str(source)]
     if args.update_existing:
         command.extend(["--allow-existing", "--force-spec"])
@@ -257,12 +347,19 @@ def main() -> int:
         raise SystemExit(f"factory did not create the canonical spec: {paths['canonical']}")
     source_sha = sha256_file(source)
     canonical_sha = sha256_file(paths["canonical"])
-    if source_sha != canonical_sha:
-        raise SystemExit("canonical Factory specification differs from the validated source")
+    canonical_spec = load_json(paths["canonical"])
+    canonical_semantic_sha = canonical_spec_sha(canonical_spec)
+    if canonical_spec != source_spec or canonical_semantic_sha != expected_validator_sha:
+        raise SystemExit("canonical Factory specification differs semantically from the validated source")
 
     semantic_handoff = export_semantic_tests(semantic_plan, paths["root"], args.update_existing)
     validation_path = paths["working"] / "spec_workbench_validation.json"
     write_json_atomic(validation_path, validation_report)
+    admission_path = paths["working"] / "spec_workbench_factory_admission.json"
+    exported_admission = dict(admission)
+    exported_admission["status"] = "EXPORTED"
+    exported_admission["ready"] = True
+    write_json_atomic(admission_path, exported_admission)
     factory_git = git_metadata(factory_root)
     manifest = {
         "schema_version": HANDOFF_SCHEMA,
@@ -272,28 +369,51 @@ def main() -> int:
             "case": args.case,
             "path": str(source.relative_to(workbench_root)) if source.is_relative_to(workbench_root) else str(source),
             "spec_sha256": source_sha,
+            "canonical_spec_sha": expected_validator_sha,
             "standard_sha256": workbench_standard_sha,
             **workbench_git,
         },
         "factory": {
             "canonical_spec_path": str(paths["canonical"].relative_to(factory_root)),
             "canonical_spec_sha256": canonical_sha,
+            "canonical_spec_sha": canonical_semantic_sha,
             "standard_sha256": factory_standard_sha,
             "commit": factory_git["commit"],
             "validation_report_path": str(validation_path.relative_to(factory_root)),
+            "admission_report_path": str(admission_path.relative_to(factory_root)),
+            "admission_status": exported_admission["status"],
             "validation_status": validation_report.get("status"),
             "validation_spec_sha": validation_report.get("spec_sha"),
             "semantic_tests": semantic_handoff,
         },
     }
     manifest_path = paths["working"] / "spec_workbench_handoff.json"
+    lineage_path = paths["working"] / "spec_editor_manifest.json"
+    manifest["factory"]["accepted_lineage_manifest_path"] = str(lineage_path.relative_to(factory_root))
     write_json_atomic(manifest_path, manifest)
+    lineage = stage9_lineage_manifest(
+        project=args.project,
+        source_sha=source_sha,
+        source_commit=workbench_git.get("commit"),
+        started_at=export_started_at,
+        base_spec_path=paths["canonical"],
+        base_spec_sha_before=base_spec_sha_before,
+        base_spec_sha_after=canonical_sha,
+        admission_path=admission_path,
+        validation_path=validation_path,
+        handoff_path=manifest_path,
+    )
+    write_json_atomic(lineage_path, lineage)
+    recorded_sha = lineage["outputs"]["base_spec_sha256_after"]
+    if recorded_sha != sha256_file(paths["canonical"]):
+        raise SystemExit("accepted Stage 9 lineage does not cover the canonical Factory spec")
 
     print(f"exported spec: {source}")
     print(f"canonical spec: {paths['canonical']}")
     if semantic_handoff:
         print(f"semantic tests: {len(semantic_handoff['files'])} copied byte-exact; Factory execution not verified")
     print(f"handoff manifest: {manifest_path}")
+    print(f"accepted lineage: {lineage_path}")
     return 0
 
 

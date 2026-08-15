@@ -28,6 +28,6 @@
 
 ## Bootstrap
 
-- create_local_app [CONFIG_REFERENCE]: read the API key and base URL only from the environment variables named by `config.holded_runtime.api_key_env` and `config.holded_runtime.base_url_env`.
+- create_local_app [CONFIG_REFERENCE]: read the API key and base URL only from the environment variables named by `config.holded_runtime.credential_env` and `config.holded_runtime.base_url_env`.
 - create_local_app [ORCHESTRATION]: reuse the Cabinet database URL, construct the repository, HTTP client, and service, and bind the service before exposing FastAPI.
 - create_local_app [VALIDATION_ERROR]: fail closed on missing/invalid Holded configuration or adapter construction; no disabled, anonymous, or in-memory fallback is permitted.

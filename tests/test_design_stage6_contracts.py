@@ -133,6 +133,8 @@ def test_authoring_gate_returns_to_state6_when_contract_is_unresolved(tmp_path: 
 def test_router_semantic_slice_contains_both_canonical_contracts() -> None:
     payload = contract_aware_operation_slice(CABINET, FIRST_EXTERNAL)
     assert payload["canonical_contract"]["public_operation"] == FIRST_EXTERNAL
-    assert payload["canonical_contract"]["signature"].startswith("(invoice_id: str, files:")
+    assert payload["canonical_contract"]["signature"].startswith(
+        "(archive: DurableArchiveService, invoice_id: str, files:"
+    )
     assert payload["canonical_handler_contract"]["router_operation"] == FIRST_EXTERNAL
     assert payload["canonical_handler_contract"]["signature"] == "(request: Request, invoice_id: str) -> SourceAttachmentBatchResult"

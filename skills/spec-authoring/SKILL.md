@@ -564,6 +564,34 @@ If assembly exposes missing models, unclear ownership, generic contracts, or vag
 
 After assembly, use the existing factory validators and inspectors. Do not duplicate them inside this skill.
 
+### Stage 8.1 — Assembled module review
+
+Review every complete assembled module slice after Stage 8. A structural
+zero-block result is not a semantic verdict: record the human classification
+and exact slice hash, and mark a review stale whenever later assembly changes
+that hash.
+
+### Stage 9 — Factory admission and handoff
+
+Stage 9 is operational, not a new semantic State. Run the read-only admission
+gate against the exact target Factory checkout before copying any artifact:
+
+```bash
+python tools/design_factory_admission.py examples/<case> \
+  --project <factory-project> --update-existing
+```
+
+Proceed only from `READY_TO_EXPORT`. The gate requires a clean committed source,
+closed and current Stage 8.1 review when present, ready Workbench assembly,
+matching standards, a PASS from the real Factory canonical validator, a closed
+semantic-test handoff when declared, and explicit authorization to replace a
+different canonical target.
+
+Use `tools/export_to_factory.py` only after that result. Export records the
+source commit, source and target hashes, Factory tool fingerprints, validation
+evidence and semantic-test hashes. Route B, deploy, runtime verification and
+terminal OTK are Factory responsibilities after Stage 9.
+
 ## Placeholder taxonomy
 
 Use this taxonomy during every state.

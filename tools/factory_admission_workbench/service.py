@@ -1,0 +1,439 @@
+from __future__ import annotations
+
+import hashlib
+import json
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+from typing import Any
+
+from assembly_workbench import verify as verify_assembly
+from module_review_workbench import build_slice
+
+from factory_admission_workbench.model import (
+    CHECK_BLOCK,
+    CHECK_NOT_APPLICABLE,
+    CHECK_PASS,
+    CHECK_WARNING,
+    REPORT_SCHEMA,
+    AdmissionCheck,
+)
+
+
+SEMANTIC_EXPORT_SCHEMA = "spec_workbench_semantic_test_export.v1"
+SEMANTIC_EXPORT_MANIFEST = "71_semantic_test_export.json"
+REVIEW_LEDGER = "81_module_review_status.json"
+
+
+def _load_json(path: Path) -> Any:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _canonical_spec_sha(spec: object) -> str:
+    payload = json.dumps(spec, sort_keys=True, ensure_ascii=False).encode("utf-8")
+    return "sha256:" + hashlib.sha256(payload).hexdigest()
+
+
+def _git_value(root: Path, *args: str) -> str | None:
+    result = subprocess.run(
+        ["git", *args], cwd=root, text=True, capture_output=True, check=False
+    )
+    value = result.stdout.strip()
+    return value if result.returncode == 0 and value else None
+
+
+def git_metadata(root: Path) -> dict[str, Any]:
+    dirty = subprocess.run(
+        ["git", "status", "--porcelain"],
+        cwd=root,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    return {
+        "commit": _git_value(root, "rev-parse", "HEAD"),
+        "branch": _git_value(root, "branch", "--show-current"),
+        "remote": _git_value(root, "remote", "get-url", "origin"),
+        "dirty": bool(dirty.stdout.strip()) if dirty.returncode == 0 else None,
+    }
+
+
+def _source_clean_check(metadata: dict[str, Any], allow_dirty_source: bool) -> AdmissionCheck:
+    if metadata.get("dirty") is True:
+        if allow_dirty_source:
+            return AdmissionCheck(
+                "FA001",
+                CHECK_WARNING,
+                "Dirty Workbench source was explicitly allowed; handoff will be non-reproducible.",
+                metadata,
+            )
+        return AdmissionCheck(
+            "FA001",
+            CHECK_BLOCK,
+            "Workbench checkout is dirty; commit the accepted source before handoff.",
+            metadata,
+        )
+    if metadata.get("dirty") is None:
+        return AdmissionCheck(
+            "FA001",
+            CHECK_WARNING,
+            "Workbench git cleanliness could not be determined.",
+            metadata,
+        )
+    return AdmissionCheck(
+        "FA001", CHECK_PASS, "Workbench source is committed and clean.", metadata
+    )
+
+
+def _review_check(case_root: Path | None) -> AdmissionCheck:
+    if case_root is None:
+        return AdmissionCheck(
+            "FA002",
+            CHECK_NOT_APPLICABLE,
+            "Explicit --spec admission has no case-level Stage 8.1 ledger.",
+            {},
+        )
+    ledger_path = case_root / REVIEW_LEDGER
+    if not ledger_path.is_file():
+        return AdmissionCheck(
+            "FA002",
+            CHECK_NOT_APPLICABLE,
+            "Case has no Stage 8.1 module-review ledger.",
+            {"path": str(ledger_path)},
+        )
+    ledger = _load_json(ledger_path)
+    summary = ledger.get("summary", {})
+    modules = ledger.get("modules", [])
+    closed = (
+        ledger.get("status") == "closed"
+        and summary.get("reviewed") == summary.get("module_count")
+        and summary.get("passed") == summary.get("module_count")
+        and summary.get("ambiguities") == 0
+        and summary.get("pending") == 0
+        and summary.get("stale") == 0
+    )
+    changed: list[str] = []
+    if closed:
+        for item in modules:
+            packet = build_slice(case_root, item["module"])
+            rendered = json.dumps(
+                packet, indent=2, ensure_ascii=False, sort_keys=True
+            ) + "\n"
+            actual = hashlib.sha256(rendered.encode("utf-8")).hexdigest()
+            if actual != item.get("slice_sha256"):
+                changed.append(item["module"])
+    if not closed or changed:
+        return AdmissionCheck(
+            "FA002",
+            CHECK_BLOCK,
+            "Stage 8.1 is not closed against the current assembled module slices.",
+            {"path": str(ledger_path), "summary": summary, "changed_modules": changed},
+        )
+    return AdmissionCheck(
+        "FA002",
+        CHECK_PASS,
+        "Stage 8.1 is closed and every recorded module slice hash is current.",
+        {"path": str(ledger_path), "summary": summary},
+    )
+
+
+def _assembly_check(case_root: Path | None) -> AdmissionCheck:
+    if case_root is None:
+        return AdmissionCheck(
+            "FA003",
+            CHECK_NOT_APPLICABLE,
+            "Explicit --spec admission has no Workbench assembly project.",
+            {},
+        )
+    report = verify_assembly(case_root)
+    return AdmissionCheck(
+        "FA003",
+        CHECK_PASS if report["ready"] else CHECK_BLOCK,
+        "Workbench assembly is ready." if report["ready"] else "Workbench assembly is blocked.",
+        report["summary"],
+    )
+
+
+def _standard_check(workbench_root: Path, factory_root: Path) -> AdmissionCheck:
+    workbench = workbench_root / "skills/spec-authoring/SPEC_STANDARD.md"
+    factory = factory_root / "SPEC_STANDARD.md"
+    if not workbench.is_file() or not factory.is_file():
+        return AdmissionCheck(
+            "FA004",
+            CHECK_BLOCK,
+            "SPEC_STANDARD.md is missing from Workbench or Factory.",
+            {"workbench": str(workbench), "factory": str(factory)},
+        )
+    workbench_sha = _sha256_file(workbench)
+    factory_sha = _sha256_file(factory)
+    status = CHECK_PASS if workbench_sha == factory_sha else CHECK_BLOCK
+    summary = (
+        "Workbench and Factory SPEC_STANDARD.md are byte-identical."
+        if status == CHECK_PASS
+        else f"SPEC_STANDARD mismatch: workbench={workbench_sha}, factory={factory_sha}"
+    )
+    return AdmissionCheck(
+        "FA004",
+        status,
+        summary,
+        {"workbench_sha256": workbench_sha, "factory_sha256": factory_sha},
+    )
+
+
+def _factory_validation_check(factory_root: Path, source: Path) -> tuple[AdmissionCheck, dict[str, Any] | None]:
+    validator = factory_root / "tools/validate_spec.py"
+    if not validator.is_file():
+        return AdmissionCheck(
+            "FA005",
+            CHECK_BLOCK,
+            "Factory canonical validator is missing.",
+            {"path": str(validator)},
+        ), None
+    with tempfile.TemporaryDirectory(prefix="spec-workbench-admission-") as temp_dir:
+        report_path = Path(temp_dir) / "validation.json"
+        result = subprocess.run(
+            [sys.executable, str(validator), str(source), "--out", str(report_path), "--quiet"],
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        if not report_path.is_file():
+            return AdmissionCheck(
+                "FA005",
+                CHECK_BLOCK,
+                "Factory validator did not produce a bound report.",
+                {"returncode": result.returncode, "stderr": result.stderr.strip()},
+            ), None
+        report = _load_json(report_path)
+    source_spec = _load_json(source)
+    expected_sha = _canonical_spec_sha(source_spec)
+    ready = (
+        report.get("status") == "PASS"
+        and report.get("summary", {}).get("error") == 0
+        and report.get("spec_sha") == expected_sha
+        and result.returncode in (0, 2)
+    )
+    return AdmissionCheck(
+        "FA005",
+        CHECK_PASS if ready else CHECK_BLOCK,
+        "Factory canonical validator accepts the source specification."
+        if ready
+        else "Factory canonical validator rejects the source specification.",
+        {
+            "returncode": result.returncode,
+            "status": report.get("status"),
+            "summary": report.get("summary"),
+            "spec_sha": report.get("spec_sha"),
+            "expected_spec_sha": expected_sha,
+            "findings": report.get("findings", []),
+        },
+    ), report
+
+
+def _semantic_check(case_root: Path | None) -> AdmissionCheck:
+    if case_root is None:
+        return AdmissionCheck(
+            "FA006",
+            CHECK_NOT_APPLICABLE,
+            "Explicit --spec admission has no semantic handoff manifest.",
+            {},
+        )
+    manifest_path = case_root / SEMANTIC_EXPORT_MANIFEST
+    if not manifest_path.is_file():
+        return AdmissionCheck(
+            "FA006",
+            CHECK_NOT_APPLICABLE,
+            "Case declares no semantic runtime-test handoff.",
+            {"path": str(manifest_path)},
+        )
+    manifest = _load_json(manifest_path)
+    errors: list[str] = []
+    files: list[dict[str, str]] = []
+    if manifest.get("schema_version") != SEMANTIC_EXPORT_SCHEMA:
+        errors.append("unsupported schema_version")
+    if manifest.get("status") != "semantic_closed":
+        errors.append("status is not semantic_closed")
+    flows = manifest.get("flows")
+    if not isinstance(flows, list) or not flows:
+        errors.append("flows is empty")
+    else:
+        for item in flows:
+            relative = item.get("path") if isinstance(item, dict) else None
+            if not isinstance(relative, str):
+                errors.append("flow path is missing")
+                continue
+            path = (case_root / relative).resolve()
+            if not path.is_relative_to(case_root.resolve()) or not path.is_file():
+                errors.append(f"missing or escaping semantic test: {relative}")
+                continue
+            files.append({"path": relative, "sha256": _sha256_file(path)})
+    return AdmissionCheck(
+        "FA006",
+        CHECK_BLOCK if errors else CHECK_PASS,
+        "Semantic runtime-test handoff is closed and byte-addressable."
+        if not errors
+        else "Semantic runtime-test handoff is invalid.",
+        {"path": str(manifest_path), "errors": errors, "files": files},
+    )
+
+
+def _target_check(factory_root: Path, project: str, source: Path, update_existing: bool) -> AdmissionCheck:
+    canonical = factory_root / "projects" / project / "specs/base/global_spec.json"
+    lineage_path = factory_root / "projects" / project / "specs/working/spec_editor_manifest.json"
+    source_sha = _sha256_file(source)
+    source_spec_sha = _canonical_spec_sha(_load_json(source))
+    if not canonical.is_file():
+        return AdmissionCheck(
+            "FA007",
+            CHECK_PASS,
+            "Factory target is new and may be created.",
+            {
+                "action": "create",
+                "canonical_path": str(canonical),
+                "source_sha256": source_sha,
+                "source_spec_sha": source_spec_sha,
+            },
+        )
+    canonical_sha = _sha256_file(canonical)
+    canonical_spec_sha = _canonical_spec_sha(_load_json(canonical))
+    if canonical_spec_sha == source_spec_sha:
+        lineage = _load_json(lineage_path) if lineage_path.is_file() else {}
+        lineage_fresh = (
+            lineage.get("accepted") is True
+            and lineage.get("status") == "pass"
+            and lineage.get("verdict") == "PASS"
+            and (lineage.get("outputs") or {}).get("base_spec_sha256_after") == canonical_sha
+            and bool((lineage.get("change_summary") or {}).get("changed_modules"))
+        )
+        return AdmissionCheck(
+            "FA007",
+            CHECK_PASS,
+            "Factory already contains the exact source specification and accepted lineage."
+            if lineage_fresh
+            else "Factory contains the exact source specification; export will adopt it into accepted lineage.",
+            {
+                "action": "noop" if lineage_fresh else "accept_lineage",
+                "canonical_path": str(canonical),
+                "lineage_path": str(lineage_path),
+                "lineage_fresh": lineage_fresh,
+                "source_sha256": source_sha,
+                "canonical_sha256": canonical_sha,
+                "source_spec_sha": source_spec_sha,
+                "canonical_spec_sha": canonical_spec_sha,
+            },
+        )
+    if not update_existing:
+        return AdmissionCheck(
+            "FA007",
+            CHECK_BLOCK,
+            "Factory target has a different canonical spec; explicit --update-existing is required.",
+            {
+                "action": "blocked_update",
+                "canonical_path": str(canonical),
+                "source_sha256": source_sha,
+                "canonical_sha256": canonical_sha,
+                "source_spec_sha": source_spec_sha,
+                "canonical_spec_sha": canonical_spec_sha,
+            },
+        )
+    return AdmissionCheck(
+        "FA007",
+        CHECK_PASS,
+        "Explicit replacement of the existing Factory canonical spec is authorized.",
+        {
+            "action": "update",
+            "canonical_path": str(canonical),
+            "source_sha256": source_sha,
+            "canonical_sha256": canonical_sha,
+            "source_spec_sha": source_spec_sha,
+            "canonical_spec_sha": canonical_spec_sha,
+        },
+    )
+
+
+def _factory_toolchain_check(factory_root: Path) -> AdmissionCheck:
+    metadata = git_metadata(factory_root)
+    required = [
+        factory_root / "SPEC_STANDARD.md",
+        factory_root / "tools/validate_spec.py",
+        factory_root / "tools/bootstrap_project.py",
+        factory_root / "project_index/structure.json",
+    ]
+    fingerprints = {
+        str(path.relative_to(factory_root)): _sha256_file(path)
+        for path in required
+        if path.is_file()
+    }
+    status = CHECK_WARNING if metadata.get("dirty") else CHECK_PASS
+    summary = (
+        "Factory checkout is dirty; exact admission tool fingerprints will be recorded."
+        if status == CHECK_WARNING
+        else "Factory admission toolchain is clean and fingerprinted."
+    )
+    return AdmissionCheck(
+        "FA008", status, summary, {"git": metadata, "fingerprints": fingerprints}
+    )
+
+
+def check(
+    *,
+    workbench_root: Path,
+    source: Path,
+    project: str,
+    factory_root: Path,
+    case_root: Path | None = None,
+    update_existing: bool = False,
+    allow_dirty_source: bool = False,
+    source_git: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    workbench_root = workbench_root.resolve()
+    source = source.resolve()
+    factory_root = factory_root.resolve()
+    case_root = case_root.resolve() if case_root is not None else None
+    metadata = source_git if source_git is not None else git_metadata(workbench_root)
+    checks: list[AdmissionCheck] = [
+        _source_clean_check(metadata, allow_dirty_source),
+        _review_check(case_root),
+        _assembly_check(case_root),
+        _standard_check(workbench_root, factory_root),
+    ]
+    validation_check, validation_report = _factory_validation_check(factory_root, source)
+    checks.extend([
+        validation_check,
+        _semantic_check(case_root),
+        _target_check(factory_root, project, source, update_existing),
+        _factory_toolchain_check(factory_root),
+    ])
+    blocks = sum(item.status == CHECK_BLOCK for item in checks)
+    warnings = sum(item.status == CHECK_WARNING for item in checks)
+    passes = sum(item.status == CHECK_PASS for item in checks)
+    return {
+        "schema_version": REPORT_SCHEMA,
+        "stage": "9",
+        "status": "READY_TO_EXPORT" if blocks == 0 else "BLOCKED",
+        "ready": blocks == 0,
+        "project": project,
+        "source": {
+            "path": str(source),
+            "sha256": _sha256_file(source),
+            "git": metadata,
+        },
+        "factory_root": str(factory_root),
+        "summary": {
+            "checks": len(checks),
+            "passes": passes,
+            "blocks": blocks,
+            "warnings": warnings,
+        },
+        "checks": [item.to_dict() for item in checks],
+        "factory_validation": validation_report,
+    }

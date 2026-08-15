@@ -162,7 +162,14 @@ workspace/
 └── spec-workbench/
 ```
 
-Export an accepted case into a new Factory project with:
+Run the official Stage 9 read-only admission gate first:
+
+```bash
+python tools/design_factory_admission.py examples/hydraulic-diagram-service \
+  --project hydraulic_diagram_service
+```
+
+Export an admitted case into a new Factory project with:
 
 ```bash
 python tools/export_to_factory.py \
@@ -171,3 +178,9 @@ python tools/export_to_factory.py \
 ```
 
 Use `--update-existing` only when intentionally replacing an existing canonical specification. The export is blocked when the two repositories have different `SPEC_STANDARD.md` content, the Workbench checkout is dirty, or the Factory's canonical validator reports errors. Provenance and validation evidence are written to `projects/<project>/specs/working/`; `global_spec.json` remains in the factory-defined format.
+
+`export_to_factory.py --check` exposes the same read-only admission report for
+automation. The standalone `design_factory_admission.py` command is the
+normative human-facing gate. Stage 9 ends after the exact canonical spec and
+handoff receipts are present in Factory; Route B generation and terminal OTK
+belong to Factory.

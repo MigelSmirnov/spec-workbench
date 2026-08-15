@@ -47,6 +47,21 @@ def test_intermediate_closures_do_not_consume_state_numbers() -> None:
     assert payload["invariants"]["artifact_prefixes_define_semantic_state"] is False
 
 
+def test_factory_admission_is_stage_9_not_a_semantic_state() -> None:
+    payload = _sequence()
+    stages = {entry["stage"]: entry for entry in payload["operational_stages"]}
+    assert stages["9"] == {
+        "stage": "9",
+        "id": "factory_admission_and_handoff",
+        "after": "assembled_module_review",
+        "read_only_gate": "tools/design_factory_admission.py",
+        "mutation_tool": "tools/export_to_factory.py",
+        "ends_before": "factory_route_b",
+    }
+    assert payload["invariants"]["factory_handoff_requires_admission"] is True
+    assert payload["invariants"]["factory_route_b_is_outside_stage_9"] is True
+
+
 def test_router_cannot_be_signature_source() -> None:
     invariants = _sequence()["invariants"]
     assert invariants["canonical_python_signatures_owner"] == "exact_contracts_internal_functions"

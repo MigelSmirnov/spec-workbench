@@ -1,10 +1,25 @@
 # Cabinet Backend agent handoff
 
-Current work is **Stage 8.1 — assembled module review**.
+Current work is **Stage 9 — Factory admission and handoff**.
 
-Stage 7.1 semantic E2E review is closed. Its accepted findings, repairs, and
-runtime oracles remain authoritative inputs, but the current task is not to
-repeat the flow review or execute the Factory runtime handoff.
+Stage 7.1 semantic E2E review and Stage 8.1 assembled module review are closed.
+Their accepted findings, repairs, runtime oracles and exact slice hashes remain
+authoritative inputs.
+
+Before Stage 9 work:
+
+1. read `81_module_review_status.json` and require `closed` with no stale slice;
+2. run `tools/design_assembly.py`;
+3. run `tools/design_factory_admission.py` against `cabinet_backend` with
+   `--update-existing`;
+4. repair every admission defect at its earliest owning design state and
+   propagate through `global_spec.json` last;
+5. re-review every changed Stage 8.1 slice before repeating admission;
+6. export only from `READY_TO_EXPORT` and verify the handoff receipt and Factory
+   accepted-spec lineage before entering Route B.
+
+Stage 9 does not generate product code, deploy it, run verification, or claim a
+terminal OTK result. Those actions belong to Factory Route B.
 
 Before editing the assembled Cabinet specification or declaring Stage 8.1
 closed, read in this order:
