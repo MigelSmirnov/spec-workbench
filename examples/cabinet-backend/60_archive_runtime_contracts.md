@@ -30,7 +30,7 @@ Both dependencies are required. There is no nullable, default, in-memory, or mod
 - ArchiveUnitOfWork.mark_publication_published(self, publication_id: str, updated_at: datetime) -> ArchiveBytePublication
 - ArchiveUnitOfWork.mark_publication_failed(self, publication_id: str, failure_code: str, updated_at: datetime) -> ArchiveBytePublication
 
-Additional repository methods required by existing archive transitions must use concrete domain models. Generic save(object), query(dict), or policy-bearing repository methods are forbidden.
+The accepted archive transitions additionally require typed load_transfer_receipt, load_source_binaries, save_transfer_acceptance, save_source_attachment, save_incomplete_source_acceptance, and save_source_loss_decision methods using their exact existing domain models. Generic save(object), query(dict), or policy-bearing repository methods are forbidden.
 
 ## Byte-store port
 
