@@ -1,0 +1,33 @@
+# State 7 repair — Holded gateway runtime notes
+
+## HoldedGatewayService
+
+- Constructor [DEPENDENCY_BOUNDARY]: require the exact supplied repository and HTTP client; never construct adapters, read environment variables, or use nullable/global fallbacks.
+- create_holded_purchase [ORCHESTRATION]: under the attempt lock, reuse an equivalent durable reservation or reject a conflicting identity, commit the reservation before network mutation, and atomically mark the request issued before performing the sole permitted POST.
+- create_holded_purchase [BEHAVIOR]: never issue POST when the attempt already records issued, ambiguous, or terminal evidence; equivalent re-entry returns the existing evidence without mutation.
+- create_holded_purchase [FALLBACK]: classify timeout, connection loss, response loss, or interruption after issuance as ambiguous and append secret-free evidence; never retry POST.
+- create_holded_purchase [SECURITY_BOUNDARY]: hash and compare canonical payload evidence without persisting credentials or authorization headers.
+- lookup_holded_purchase [ORCHESTRATION]: use GET for a supplied document id or bounded list pages for an exact marker, then return typed observation evidence without mutation.
+- lookup_holded_purchase [BEHAVIOR]: preserve zero, one, and multiple exact matches, malformed responses, unknown documents, and transport failures distinctly; do not perform A51 business settlement or interpret raw status.
+- lookup_holded_purchase [DETERMINISM_OR_ORDERING]: process pages and candidates in stable remote-page then document-id order and stop at the configured finite bound.
+
+## PostgreSQL repository
+
+- Transaction methods [DEPENDENCY_BOUNDARY]: use one PostgreSQL transaction per state transition and acquire the exact attempt row/uniqueness lock before deciding whether POST may be issued.
+- reserve_attempt [BEHAVIOR]: return an existing reservation only when attempt identity, payload hash, and marker are exactly equivalent; reject conflicts.
+- Evidence methods [BEHAVIOR]: append immutable technical observations and reject skipped, repeated-mutation, stale, or conflicting lifecycle transitions.
+- Constructor [SECURITY_BOUNDARY]: treat the database URL as secret and never log it.
+
+## HTTP client
+
+- Constructor [VALIDATION_ERROR]: require HTTPS, no embedded credentials or fragment, non-empty API key, and positive finite timeout/size/page bounds.
+- create_purchase [FORBIDDEN_ACTION]: issue exactly one POST per invocation with transport retries and replaying redirects disabled.
+- list_purchases [BEHAVIOR]: perform one read-only bounded page request and return only typed summaries required for exact-marker filtering.
+- get_purchase [BEHAVIOR]: perform one read-only exact-document request.
+- All operations [SECURITY_BOUNDARY]: keep the API key only in the outbound authorization header, redact headers and query secrets, enforce TLS verification, bound bytes before JSON parsing, and return secret-free safe evidence.
+
+## Bootstrap
+
+- create_local_app [CONFIG_REFERENCE]: read the API key and base URL only from the environment variables named by `config.holded_runtime.api_key_env` and `config.holded_runtime.base_url_env`.
+- create_local_app [ORCHESTRATION]: reuse the Cabinet database URL, construct the repository, HTTP client, and service, and bind the service before exposing FastAPI.
+- create_local_app [VALIDATION_ERROR]: fail closed on missing/invalid Holded configuration or adapter construction; no disabled, anonymous, or in-memory fallback is permitted.
