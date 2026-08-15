@@ -16,10 +16,10 @@
     "get_work_object": "(registry: RegistryContextService, project_id: str) -> WorkObject",
     "refresh_estimate_snapshot": "(observation: PresuProEstimateObservation) -> EstimateSnapshot",
     "calculate_plan_actual": "(archive: DurableArchiveService, registry: RegistryContextService, request: PlanActualRequest) -> PlanActualAnalysis",
-    "request_holded_publication": "(archive: DurableArchiveService, invoice_id: str, content_hash: str, authorization: AuthorizationDecision) -> HoldedPublication",
-    "reconcile_holded_publication": "(archive: DurableArchiveService, publication_id: str, authorization: AuthorizationDecision) -> HoldedPublication",
-    "create_holded_purchase": "(payload: HoldedPurchaseAttemptPayload, publication_attempt_id: str) -> HoldedPublicationAttempt",
-    "lookup_holded_purchase": "(attempt_marker: str, document_id: str | None = None) -> HoldedPurchaseLookupEvidence",
+    "request_holded_publication": "(archive: DurableArchiveService, gateway: HoldedGatewayService, invoice_id: str, content_hash: str, authorization: AuthorizationDecision) -> HoldedPublication",
+    "reconcile_holded_publication": "(archive: DurableArchiveService, gateway: HoldedGatewayService, publication_id: str, authorization: AuthorizationDecision) -> HoldedPublication",
+    "create_holded_purchase": "(gateway: HoldedGatewayService, payload: HoldedPurchaseAttemptPayload, publication_attempt_id: str) -> HoldedPublicationAttempt",
+    "lookup_holded_purchase": "(gateway: HoldedGatewayService, attempt_marker: str, document_id: str | None = None) -> HoldedPurchaseLookupEvidence",
     "evaluate_vps_release": "(archive: DurableArchiveService, project_id: str, working_set_id: str | None, authorization: AuthorizationDecision) -> VpsReleaseEvaluation",
     "request_manual_vps_release": "(archive: DurableArchiveService, evaluation: VpsReleaseEvaluation, authorization: AuthorizationDecision) -> VpsReleaseDecision",
     "AccessControlBackend.authenticate": "(self, credential: str) -> AuthenticatedPrincipalContext",
@@ -34,7 +34,7 @@
     "enroll_local_agent": "(display_name: str, capabilities: tuple[str, ...]) -> IssuedServiceCredential",
     "rotate_local_agent_credential": "(principal_id: str) -> IssuedServiceCredential",
     "revoke_local_agent": "(principal_id: str) -> None",
-    "create_app": "(access_control: AccessControlBackend, archive: DurableArchiveService, registry: RegistryContextService) -> FastAPI",
+    "create_app": "(access_control: AccessControlBackend, archive: DurableArchiveService, registry: RegistryContextService, holded_gateway: HoldedGatewayService) -> FastAPI",
     "extract_bearer_credential": "(request: Request) -> str",
     "resolve_local_principal": "(access_control: AccessControlBackend, credential: str) -> AuthenticatedPrincipalContext",
     "attach_local_source_handler": "(request: Request, invoice_id: str) -> SourceAttachmentBatchResult",
@@ -115,7 +115,24 @@
     "RegistryContextService.get_assignment_validation": "(self, invoice_id: str, content_hash: str) -> ObjectAssignmentValidation",
     "RegistryContextService.get_work_object": "(self, project_id: str) -> WorkObject",
     "RegistryContextRepository.merge_work_objects": "(self, work_objects: tuple[WorkObject, ...]) -> None",
-    "PostgresRegistryContextRepository.merge_work_objects": "(self, work_objects: tuple[WorkObject, ...]) -> None"
+    "PostgresRegistryContextRepository.merge_work_objects": "(self, work_objects: tuple[WorkObject, ...]) -> None",
+    "HoldedGatewayService.__init__": "(self, repository: HoldedAttemptRepository, http_client: HoldedHttpClient) -> None",
+    "HoldedGatewayService.create_holded_purchase": "(self, payload: HoldedPurchaseAttemptPayload, publication_attempt_id: str) -> HoldedPublicationAttempt",
+    "HoldedGatewayService.lookup_holded_purchase": "(self, attempt_marker: str, document_id: str | None = None) -> HoldedPurchaseLookupEvidence",
+    "HoldedHttpClient.create_purchase": "(self, payload: HoldedPurchaseAttemptPayload) -> HoldedTransportResponse",
+    "HoldedHttpClient.list_purchases": "(self, page: int) -> HoldedPurchaseListPage",
+    "HoldedHttpClient.get_purchase": "(self, document_id: str) -> HoldedTransportResponse",
+    "HoldedAttemptRepository.begin": "(self) -> None",
+    "HoldedAttemptRepository.commit": "(self) -> None",
+    "HoldedAttemptRepository.rollback": "(self) -> None",
+    "HoldedAttemptRepository.lock_attempt": "(self, publication_attempt_id: str) -> None",
+    "HoldedAttemptRepository.load_attempt": "(self, publication_attempt_id: str) -> HoldedPublicationAttempt | None",
+    "HoldedAttemptRepository.reserve_attempt": "(self, attempt: HoldedPublicationAttempt) -> HoldedPublicationAttempt",
+    "HoldedAttemptRepository.mark_request_issued": "(self, publication_attempt_id: str, issued_at: datetime) -> HoldedPublicationAttempt",
+    "HoldedAttemptRepository.append_attempt_outcome": "(self, attempt: HoldedPublicationAttempt) -> None",
+    "HoldedAttemptRepository.append_lookup_evidence": "(self, publication_attempt_id: str, evidence: HoldedPurchaseLookupEvidence) -> None",
+    "PostgresHoldedAttemptRepository.__init__": "(self, database_url: str) -> None",
+    "HttpxHoldedHttpClient.__init__": "(self, base_url: str, api_key: str, timeout_seconds: int, max_response_bytes: int, max_recovery_pages: int) -> None"
   },
   "notes": [
     "authorize_operation: [SECURITY_BOUNDARY] Evaluate authorization only for the exact operation supplied by the caller and return the decision without performing the protected business operation.",
@@ -367,7 +384,38 @@
     "PostgresRegistryContextRepository.merge_work_objects: [BEHAVIOR] MUST atomically merge the typed projection by stable project_id, preserve Cabinet-owned fields and absent existing objects, and MUST NOT expose mixed catalogue observations.",
     "RegistryContextService.__init__: [DEPENDENCY_BOUNDARY] MUST retain the exact supplied RegistryContextRepository and DurableArchiveService; adapter construction, direct archive persistence, environment reads, nullable dependencies, and module-global fallbacks are forbidden.",
     "RegistryContextService.validate_card_assignment: [DEPENDENCY_BOUNDARY] MUST resolve the exact accepted immutable Card revision through the supplied DurableArchiveService before applying Registry assignment policy; invoice_id and content_hash alone are not evidence.",
-    "create_local_app: [ORCHESTRATION] MUST construct RegistryContextService with the exact PostgresRegistryContextRepository and the already constructed DurableArchiveService, preserving one archive boundary."
+    "create_local_app: [ORCHESTRATION] MUST construct RegistryContextService with the exact PostgresRegistryContextRepository and the already constructed DurableArchiveService, preserving one archive boundary.",
+    "HoldedGatewayService.__init__: [DEPENDENCY_BOUNDARY] Retain the exact supplied repository and HTTP client; reject missing dependencies and never construct adapters, read environment variables, or use module-global fallbacks.",
+    "HoldedGatewayService.create_holded_purchase: [ORCHESTRATION] Under the exact attempt lock, reuse an equivalent durable reservation or reject a conflict, commit reservation before network mutation, and durably mark request issuance before the sole permitted POST.",
+    "HoldedGatewayService.create_holded_purchase: [BEHAVIOR] Never issue POST when the attempt already records issued, ambiguous, or terminal evidence; equivalent re-entry returns existing evidence without mutation.",
+    "HoldedGatewayService.create_holded_purchase: [FALLBACK] Classify timeout, connection loss, response loss, or interruption after issuance as ambiguous secret-free evidence and never retry POST.",
+    "HoldedGatewayService.lookup_holded_purchase: [ORCHESTRATION] Use GET for a supplied document identifier or bounded list pages for an exact marker and append typed observation evidence without remote mutation.",
+    "HoldedGatewayService.lookup_holded_purchase: [BEHAVIOR] Preserve zero, one, and multiple exact matches, malformed responses, unknown documents, and transport failures distinctly; never perform A51 business settlement or interpret raw status.",
+    "HoldedHttpClient.create_purchase: [FORBIDDEN_ACTION] Issue exactly one POST per invocation with mutation retries and replaying redirects disabled.",
+    "HoldedHttpClient.list_purchases: [BEHAVIOR] Perform one read-only bounded page request and return typed summaries in stable document-id order.",
+    "HoldedHttpClient.get_purchase: [BEHAVIOR] Perform one read-only request for the exact document identifier and return bounded external evidence.",
+    "HoldedAttemptRepository.begin: [DEPENDENCY_BOUNDARY] Begin one PostgreSQL transaction on the repository connection used for the exact gateway state transition.",
+    "HoldedAttemptRepository.commit: [BEHAVIOR] Commit only a valid typed attempt transition and expose no partial state.",
+    "HoldedAttemptRepository.rollback: [BEHAVIOR] Roll back the current gateway transaction without deleting prior immutable technical evidence.",
+    "HoldedAttemptRepository.lock_attempt: [BEHAVIOR] Acquire the PostgreSQL uniqueness or row lock for the exact publication attempt before deciding whether POST may be issued.",
+    "HoldedAttemptRepository.load_attempt: [BEHAVIOR] Return the exact persisted technical attempt or None without fabricating a default.",
+    "HoldedAttemptRepository.reserve_attempt: [BEHAVIOR] Reuse an existing reservation only when attempt identity, payload hash, and marker are exactly equivalent; reject conflicts.",
+    "HoldedAttemptRepository.mark_request_issued: [BEHAVIOR] Persist the single-create authority transition before network mutation and reject repeated or skipped issuance.",
+    "HoldedAttemptRepository.append_attempt_outcome: [BEHAVIOR] Append immutable secret-free technical outcome evidence and reject stale or conflicting transitions.",
+    "HoldedAttemptRepository.append_lookup_evidence: [BEHAVIOR] Append immutable read-only recovery evidence for the exact attempt without settling Cabinet publication.",
+    "PostgresHoldedAttemptRepository.__init__: [SECURITY_BOUNDARY] Bind to the supplied PostgreSQL URL, validate connectivity, treat the URL as secret, and never read environment variables or log credentials.",
+    "HttpxHoldedHttpClient.__init__: [VALIDATION_ERROR] Require an absolute HTTPS base URL without embedded credentials or fragment, a non-empty API key, and positive finite timeout, response-size, and page bounds.",
+    "HttpxHoldedHttpClient.__init__: [SECURITY_BOUNDARY] Keep the API key only in the outbound authorization header, enable TLS verification, and never log or return reusable credential material.",
+    "create_holded_purchase: [DEPENDENCY_BOUNDARY] Delegate through the exact supplied HoldedGatewayService; no ad-hoc client, repository, environment read, or fallback is permitted.",
+    "lookup_holded_purchase: [DEPENDENCY_BOUNDARY] Delegate read-only recovery through the exact supplied HoldedGatewayService and never issue a mutation.",
+    "request_holded_publication: [DEPENDENCY_BOUNDARY] MUST use the supplied HoldedGatewayService for the sole create and all Holded reads; direct HTTP and credentials are forbidden.",
+    "reconcile_holded_publication: [DEPENDENCY_BOUNDARY] MUST use the supplied HoldedGatewayService for bounded read-only recovery; it cannot construct a client or repeat POST.",
+    "request_holded_publication_handler: [DEPENDENCY_BOUNDARY] MUST obtain the exact HoldedGatewayService bound to request.app.state.holded_gateway and pass it to request_holded_publication.",
+    "reconcile_holded_publication_handler: [DEPENDENCY_BOUNDARY] MUST obtain the exact HoldedGatewayService bound to request.app.state.holded_gateway and pass it to reconcile_holded_publication.",
+    "create_app: [DEPENDENCY_BOUNDARY] Bind the supplied HoldedGatewayService into application state for Holded publication handlers without exposing credentials.",
+    "create_local_app: [CONFIG_REFERENCE] Read the Holded API key and base URL only from the environment variables named by = config.holded_runtime.api_key_env and = config.holded_runtime.base_url_env.",
+    "create_local_app: [ORCHESTRATION] Reuse the Cabinet database URL, construct PostgresHoldedAttemptRepository, HttpxHoldedHttpClient, and HoldedGatewayService, then supply the service to create_app before exposing FastAPI.",
+    "create_local_app: [VALIDATION_ERROR] Fail startup on missing or invalid Holded configuration or adapter construction; never substitute a disabled, anonymous, or in-memory gateway."
   ],
   "adapters": {},
   "config": {
@@ -383,6 +431,13 @@
     },
     "archive_runtime": {
       "byte_store_root_env": "CABINET_SOURCE_STORE_ROOT"
+    },
+    "holded_runtime": {
+      "api_key_env": "CABINET_HOLDED_API_KEY",
+      "base_url_env": "CABINET_HOLDED_BASE_URL",
+      "request_timeout_seconds": 30,
+      "max_response_bytes": 1048576,
+      "max_recovery_pages": 10
     }
   },
   "models": {
@@ -1099,6 +1154,31 @@
     },
     "RegistryContextRepository": {
       "kind": "interface"
+    },
+    "HoldedTransportResponse": {
+      "identity": "value",
+      "fields": {
+        "status_code": "int",
+        "body": "bytes",
+        "request_id": "str | None = None",
+        "received_at": "datetime"
+      }
+    },
+    "HoldedRemotePurchaseSummary": {
+      "identity": "value",
+      "fields": {
+        "document_id": "str",
+        "description": "str | None = None",
+        "raw_status": "int | None = None"
+      }
+    },
+    "HoldedPurchaseListPage": {
+      "identity": "value",
+      "fields": {
+        "items": "tuple[HoldedRemotePurchaseSummary, ...]",
+        "next_page": "int | None = None",
+        "observed_at": "datetime"
+      }
     }
   },
   "rules": {
@@ -2008,7 +2088,10 @@
         "InvoiceLineEstimateMatch",
         "IncompleteSourceAcceptance",
         "SourceLossDecision",
-        "ArchiveBytePublication"
+        "ArchiveBytePublication",
+        "HoldedTransportResponse",
+        "HoldedRemotePurchaseSummary",
+        "HoldedPurchaseListPage"
       ],
       "access_control": [
         "authorize_operation",
@@ -2062,7 +2145,12 @@
       ],
       "holded_gateway": [
         "create_holded_purchase",
-        "lookup_holded_purchase"
+        "lookup_holded_purchase",
+        "HoldedHttpClient",
+        "HoldedAttemptRepository",
+        "HttpxHoldedHttpClient",
+        "PostgresHoldedAttemptRepository",
+        "HoldedGatewayService"
       ],
       "retention_release": [
         "evaluate_vps_release",
@@ -2117,6 +2205,7 @@
           "get_archived_invoice"
         ],
         "holded_gateway": [
+          "HoldedGatewayService",
           "create_holded_purchase",
           "lookup_holded_purchase"
         ],
@@ -2214,6 +2303,9 @@
           "VpsReleaseDecision",
           "IncompleteSourceAcceptance",
           "SourceLossDecision"
+        ],
+        "holded_gateway": [
+          "HoldedGatewayService"
         ]
       },
       "bootstrap": {
@@ -2234,6 +2326,11 @@
         "registry_context": [
           "PostgresRegistryContextRepository",
           "RegistryContextService"
+        ],
+        "holded_gateway": [
+          "HttpxHoldedHttpClient",
+          "PostgresHoldedAttemptRepository",
+          "HoldedGatewayService"
         ]
       },
       "durable_archive": {
@@ -2250,6 +2347,16 @@
           "RegistryRefreshResult",
           "ObjectAssignmentValidation",
           "WorkObject"
+        ]
+      },
+      "holded_gateway": {
+        "models": [
+          "HoldedPublicationAttempt",
+          "HoldedPurchaseAttemptPayload",
+          "HoldedPurchaseLookupEvidence",
+          "HoldedTransportResponse",
+          "HoldedRemotePurchaseSummary",
+          "HoldedPurchaseListPage"
         ]
       }
     }
@@ -2312,7 +2419,10 @@
       "InvoiceLineEstimateMatch",
       "IncompleteSourceAcceptance",
       "SourceLossDecision",
-      "ArchiveBytePublication"
+      "ArchiveBytePublication",
+      "HoldedTransportResponse",
+      "HoldedRemotePurchaseSummary",
+      "HoldedPurchaseListPage"
     ],
     "access_control": [
       "authorize_operation",
@@ -2366,7 +2476,12 @@
     ],
     "holded_gateway": [
       "create_holded_purchase",
-      "lookup_holded_purchase"
+      "lookup_holded_purchase",
+      "HoldedHttpClient",
+      "HoldedAttemptRepository",
+      "HttpxHoldedHttpClient",
+      "PostgresHoldedAttemptRepository",
+      "HoldedGatewayService"
     ],
     "retention_release": [
       "evaluate_vps_release",
