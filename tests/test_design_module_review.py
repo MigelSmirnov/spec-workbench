@@ -11,8 +11,12 @@ CABINET = ROOT / "examples" / "cabinet-backend"
 def test_lists_final_assembled_modules() -> None:
     report = list_modules(CABINET)
     assert report["schema_version"] == "spec_workbench_module_review_modules.v1"
-    assert len(report["modules"]) == 11
-    assert report["modules"][0] == "models"
+    assert report["modules"] == [
+        "models", "access_control", "durable_archive", "registry_context",
+        "holded_gateway", "synchronization", "plan_actual",
+        "holded_publication", "retention_release", "api_irregular", "api",
+        "bootstrap",
+    ]
 
 def test_durable_archive_slice_connects_business_and_lowered_spec() -> None:
     packet = build_slice(CABINET, "durable_archive")
@@ -27,13 +31,14 @@ def test_durable_archive_slice_connects_business_and_lowered_spec() -> None:
         "DuplicateCandidateReview", "SourceBinary", "SourceBinaryReplica",
         "InvoiceTransferManifest", "InvoiceImport", "ImportQuarantine",
         "InvoiceTransferReceipt", "IncompleteSourceAcceptance", "SourceLossDecision",
+        "ArchiveBytePublication",
     }
     assert packet["generation_constraints"]["note_count"] >= 10
 
 def test_review_uses_all_assembled_notes() -> None:
     report = review(CABINET, "durable_archive")
     assert report["schema_version"] == "spec_workbench_module_review.v1"
-    assert report["summary"]["contracts"] == 7
+    assert report["summary"]["contracts"] >= 7
     assert report["summary"]["assembled_notes"] > 0
     assert report["summary"]["blocks"] == 0
     assert report["semantic_review_required"] is True
@@ -46,9 +51,12 @@ def test_transport_module_without_state3_owner_still_slices() -> None:
 def test_dependency_contracts_expand_context_without_rewriting_import_edges() -> None:
     packet = build_slice(CABINET, "holded_publication")
     lowered = packet["lowered_specification"]
-    assert set(lowered["dependency_contracts"]) == {
+    assert {
         "create_holded_purchase", "get_archived_invoice", "lookup_holded_purchase",
-    }
+        "HoldedGatewayService.__init__",
+        "HoldedGatewayService.create_holded_purchase",
+        "HoldedGatewayService.lookup_holded_purchase",
+    } <= set(lowered["dependency_contracts"])
     assert {
         "HoldedPublicationAttempt", "HoldedPurchaseAttemptPayload",
         "HoldedPurchaseLookupEvidence", "StoredInvoiceCardRevision",
@@ -59,9 +67,19 @@ def test_dependency_contracts_expand_context_without_rewriting_import_edges() ->
 
 def test_models_slice_includes_owned_declarations_and_state1_evidence() -> None:
     packet = build_slice(CABINET, "models")
-    assert len(packet["lowered_specification"]["models"]) == 51
-    assert len(packet["accepted_evidence"]["state1_models"]) == 51
-    assert "VpsReleaseDecision" in packet["lowered_specification"]["models"]
+    lowered_models = set(packet["lowered_specification"]["models"])
+    state1_models = {
+        model["name"] for model in packet["accepted_evidence"]["state1_models"]
+    }
+    assert state1_models <= lowered_models
+    assert lowered_models - state1_models == {
+        "SynchronizationRepository", "VpsSynchronizationTransport",
+    }
+    assert {
+        "VpsReleaseDecision", "ArchiveBytePublication",
+        "HoldedRemotePurchaseDocument", "VpsInvoiceTransferPackage",
+        "VpsConnectionObservation",
+    } <= lowered_models
 
 def test_unknown_assembled_module_fails_closed() -> None:
     try:

@@ -1,8 +1,11 @@
 {
   "contracts": {
     "authorize_operation": "(backend: AccessControlBackend, principal: AuthenticatedPrincipalContext, operation: str) -> AuthorizationDecision",
-    "synchronize_invoice_work": "(archive: DurableArchiveService, selection: SynchronizationWorkSelection, node: CabinetNodeIdentity) -> SynchronizationOutcome",
-    "get_sync_status": "(invoice_id: str, node_id: str) -> SynchronizationStatusObservation",
+    "synchronize_invoice_work": "(service: SynchronizationService, selection: SynchronizationWorkSelection, node: CabinetNodeIdentity) -> SynchronizationOutcome",
+    "get_sync_status": "(service: SynchronizationService, invoice_id: str, node_id: str) -> SynchronizationStatusObservation",
+    "reconcile_transfer_outcome": "(service: SynchronizationService, synchronization_id: str) -> SynchronizationOutcome",
+    "publish_registry_catalogue": "(service: SynchronizationService, delivery: RegistryCatalogueDelivery) -> RegistryCataloguePublication",
+    "observe_vps_connection": "(service: SynchronizationService) -> VpsConnectionObservation",
     "accept_transfer_manifest": "(archive: DurableArchiveService, manifest: InvoiceTransferManifest, card_revision: StoredInvoiceCardRevision, source_replicas: tuple[SourceBinaryReplica, ...]) -> InvoiceTransferReceipt",
     "verify_durable_acceptance": "(archive: DurableArchiveService, invoice_id: str, content_hash: str | None = None) -> DurableAcceptanceVerification",
     "attach_local_source": "(archive: DurableArchiveService, invoice_id: str, files: tuple[LocalSourceFile, ...], authorization: AuthorizationDecision, expected_sources: tuple[ContentReference, ...] = ()) -> SourceAttachmentBatchResult",
@@ -34,7 +37,7 @@
     "enroll_local_agent": "(display_name: str, capabilities: tuple[str, ...]) -> IssuedServiceCredential",
     "rotate_local_agent_credential": "(principal_id: str) -> IssuedServiceCredential",
     "revoke_local_agent": "(principal_id: str) -> None",
-    "create_app": "(access_control: AccessControlBackend, archive: DurableArchiveService, registry: RegistryContextService, holded_gateway: HoldedGatewayService) -> FastAPI",
+    "create_app": "(access_control: AccessControlBackend, archive: DurableArchiveService, registry: RegistryContextService, holded_gateway: HoldedGatewayService, synchronization: SynchronizationService) -> FastAPI",
     "extract_bearer_credential": "(request: Request) -> str",
     "resolve_local_principal": "(access_control: AccessControlBackend, credential: str) -> AuthenticatedPrincipalContext",
     "attach_local_source_handler": "(request: Request, invoice_id: str) -> SourceAttachmentBatchResult",
@@ -133,7 +136,31 @@
     "HoldedAttemptRepository.append_lookup_evidence": "(self, attempt_marker: str, evidence: HoldedPurchaseLookupEvidence) -> None",
     "PostgresHoldedAttemptRepository.__init__": "(self, database_url: str) -> None",
     "HttpxHoldedHttpClient.__init__": "(self, base_url: str, api_key: str, timeout_seconds: int, max_response_bytes: int, max_recovery_pages: int) -> None",
-    "HoldedAttemptRepository.load_attempt_by_marker": "(self, attempt_marker: str) -> HoldedPublicationAttempt | None"
+    "HoldedAttemptRepository.load_attempt_by_marker": "(self, attempt_marker: str) -> HoldedPublicationAttempt | None",
+    "SynchronizationService.__init__": "(self, repository: SynchronizationRepository, transport: VpsSynchronizationTransport, archive: DurableArchiveService) -> None",
+    "SynchronizationService.synchronize_invoice_work": "(self, selection: SynchronizationWorkSelection, node: CabinetNodeIdentity) -> SynchronizationOutcome",
+    "SynchronizationService.get_sync_status": "(self, invoice_id: str, node_id: str) -> SynchronizationStatusObservation",
+    "SynchronizationService.reconcile_transfer_outcome": "(self, synchronization_id: str) -> SynchronizationOutcome",
+    "SynchronizationService.publish_registry_catalogue": "(self, delivery: RegistryCatalogueDelivery) -> RegistryCataloguePublication",
+    "SynchronizationService.observe_vps_connection": "(self) -> VpsConnectionObservation",
+    "VpsSynchronizationTransport.transfer_invoice": "(self, selection: SynchronizationWorkSelection, node: CabinetNodeIdentity) -> VpsInvoiceTransferPackage",
+    "VpsSynchronizationTransport.reconcile_transfer": "(self, synchronization_id: str) -> VpsTransferReconciliationEvidence",
+    "VpsSynchronizationTransport.publish_catalogue": "(self, delivery: RegistryCatalogueDelivery) -> VpsCatalogueAcknowledgement",
+    "VpsSynchronizationTransport.observe_connection": "(self) -> VpsConnectionObservation",
+    "SynchronizationRepository.begin": "(self) -> None",
+    "SynchronizationRepository.commit": "(self) -> None",
+    "SynchronizationRepository.rollback": "(self) -> None",
+    "SynchronizationRepository.lock_synchronization": "(self, synchronization_id: str) -> None",
+    "SynchronizationRepository.reserve_synchronization": "(self, synchronization: InvoiceSynchronization) -> InvoiceSynchronization",
+    "SynchronizationRepository.mark_transfer_issued": "(self, synchronization_id: str, issued_at: datetime) -> InvoiceSynchronization",
+    "SynchronizationRepository.save_synchronization_outcome": "(self, outcome: SynchronizationOutcome) -> None",
+    "SynchronizationRepository.load_sync_status": "(self, invoice_id: str, node_id: str) -> SynchronizationStatusObservation | None",
+    "SynchronizationRepository.load_synchronization": "(self, synchronization_id: str) -> InvoiceSynchronization | None",
+    "SynchronizationRepository.reserve_catalogue_publication": "(self, publication: RegistryCataloguePublication) -> RegistryCataloguePublication",
+    "SynchronizationRepository.save_catalogue_acknowledgement": "(self, acknowledgement: VpsCatalogueAcknowledgement) -> None",
+    "SynchronizationRepository.append_connection_observation": "(self, observation: VpsConnectionObservation) -> None",
+    "PostgresSynchronizationRepository.__init__": "(self, database_url: str) -> None",
+    "HttpxVpsSynchronizationTransport.__init__": "(self, base_url: str, node_credential: str, timeout_seconds: int, max_response_bytes: int) -> None"
   },
   "notes": [
     "authorize_operation: [SECURITY_BOUNDARY] Evaluate authorization only for the exact operation supplied by the caller and return the decision without performing the protected business operation.",
@@ -417,7 +444,42 @@
     "create_local_app: [CONFIG_REFERENCE] Read the Holded API key and base URL only from the environment variables named by = config.holded_runtime.api_key_env and = config.holded_runtime.base_url_env.",
     "create_local_app: [ORCHESTRATION] Reuse the Cabinet database URL, construct PostgresHoldedAttemptRepository, HttpxHoldedHttpClient, and HoldedGatewayService, then supply the service to create_app before exposing FastAPI.",
     "create_local_app: [VALIDATION_ERROR] Fail startup on missing or invalid Holded configuration or adapter construction; never substitute a disabled, anonymous, or in-memory gateway.",
-    "HoldedAttemptRepository.load_attempt_by_marker: [BEHAVIOR] Return the exact attempt for one unique marker or None; reject duplicate persisted markers and never infer an attempt from payload similarity."
+    "HoldedAttemptRepository.load_attempt_by_marker: [BEHAVIOR] Return the exact attempt for one unique marker or None; reject duplicate persisted markers and never infer an attempt from payload similarity.",
+    "SynchronizationService.__init__: [DEPENDENCY_BOUNDARY] Retain the exact supplied repository, transport, and archive; never construct or discover alternates.",
+    "SynchronizationService.synchronize_invoice_work: [ORCHESTRATION] Durably reserve and mark issued before transport, persist every conclusive or unknown outcome, and send an exact delivered package through archive acceptance and verification.",
+    "SynchronizationService.synchronize_invoice_work: [FALLBACK] Classify timeout, connection loss, or response loss after issuance as unknown_outcome and never repeat the logical transfer automatically.",
+    "SynchronizationService.get_sync_status: [BEHAVIOR] Return only PostgreSQL-authoritative evidence and preserve absent, unknown, stale, and unavailable states explicitly.",
+    "SynchronizationService.reconcile_transfer_outcome: [FORBIDDEN_ACTION] Use only read-only remote reconciliation for a persisted unknown attempt and never issue another transfer.",
+    "SynchronizationService.publish_registry_catalogue: [ORCHESTRATION] Bind catalogue id, ordered content hash, endpoints, and idempotency key before publication and preserve exact acknowledgement evidence.",
+    "SynchronizationService.observe_vps_connection: [BEHAVIOR] Report typed current evidence without changing synchronization or archive state.",
+    "SynchronizationRepository.begin: [DEPENDENCY_BOUNDARY] Open one PostgreSQL transaction for the exact synchronization transition and reject nested begin.",
+    "SynchronizationRepository.commit: [BEHAVIOR] Commit the active typed transition exactly once and expose no partial state.",
+    "SynchronizationRepository.rollback: [FALLBACK] Roll back idempotently, release resources, and preserve the original synchronization failure.",
+    "SynchronizationRepository.lock_synchronization: [BEHAVIOR] Acquire the exact PostgreSQL row or uniqueness lock before deciding whether transport may be issued.",
+    "SynchronizationRepository.reserve_synchronization: [BEHAVIOR] Reuse only an exactly equivalent identity, idempotency-key, and manifest-hash binding; reject conflicts before transport.",
+    "SynchronizationRepository.mark_transfer_issued: [BEHAVIOR] Persist issuance before network mutation and reject repeated or skipped issuance.",
+    "SynchronizationRepository.save_synchronization_outcome: [PROVENANCE] Persist typed conclusive or unknown evidence without deleting prior observations.",
+    "SynchronizationRepository.load_sync_status: [BEHAVIOR] Return the exact committed observation or None and never synthesize a synchronized default.",
+    "SynchronizationRepository.load_synchronization: [BEHAVIOR] Return the exact persisted attempt or None without inferring identity from invoice similarity.",
+    "SynchronizationRepository.reserve_catalogue_publication: [BEHAVIOR] Reuse only an exact catalogue, endpoint, and idempotency binding and reject conflicts before publication.",
+    "SynchronizationRepository.save_catalogue_acknowledgement: [PROVENANCE] Append the exact typed acknowledgement and reject stale or conflicting publication transitions.",
+    "SynchronizationRepository.append_connection_observation: [PROVENANCE] Append secret-free typed connection evidence without changing transfer or archive state.",
+    "PostgresSynchronizationRepository.__init__: [SECURITY_BOUNDARY] Bind to the supplied PostgreSQL URL, validate connectivity, treat the URL as secret, and never read environment variables.",
+    "VpsSynchronizationTransport.transfer_invoice: [FORBIDDEN_ACTION] Issue at most one service-authorized outbound transfer with transport retries and replaying redirects disabled.",
+    "VpsSynchronizationTransport.reconcile_transfer: [BEHAVIOR] Perform one bounded read-only lookup for the exact persisted synchronization identity.",
+    "VpsSynchronizationTransport.publish_catalogue: [FORBIDDEN_ACTION] Issue at most one service-authorized publication for the exact delivery with replaying redirects and mutation retries disabled.",
+    "VpsSynchronizationTransport.observe_connection: [BEHAVIOR] Perform one bounded read-only authenticated observation and preserve unavailable or incompatible evidence explicitly.",
+    "HttpxVpsSynchronizationTransport.__init__: [VALIDATION_ERROR] Require HTTPS without embedded credentials or fragment, a non-empty dedicated node credential, and positive finite bounds.",
+    "HttpxVpsSynchronizationTransport.__init__: [SECURITY_BOUNDARY] Verify TLS and never log or return credentials, authorization headers, or unbounded response bodies.",
+    "synchronize_invoice_work: [DEPENDENCY_BOUNDARY] Delegate through the exact supplied SynchronizationService; no ad-hoc client, repository, archive, or environment read is permitted.",
+    "get_sync_status: [DEPENDENCY_BOUNDARY] Delegate through the exact supplied SynchronizationService and never fabricate status.",
+    "reconcile_transfer_outcome: [DEPENDENCY_BOUNDARY] Delegate read-only reconciliation through the exact supplied SynchronizationService.",
+    "publish_registry_catalogue: [DEPENDENCY_BOUNDARY] Delegate exact catalogue delivery through the supplied SynchronizationService.",
+    "observe_vps_connection: [DEPENDENCY_BOUNDARY] Delegate observation through the supplied SynchronizationService.",
+    "create_local_app: [CONFIG_REFERENCE] Read VPS URL and node credential only from the environment variables named by = config.synchronization_runtime.base_url_env and = config.synchronization_runtime.node_credential_env.",
+    "create_local_app: [ORCHESTRATION] Reuse the Cabinet database URL and exact archive, construct PostgresSynchronizationRepository, HttpxVpsSynchronizationTransport, and SynchronizationService, then supply the service to create_app.",
+    "create_local_app: [VALIDATION_ERROR] Fail startup on missing or invalid synchronization configuration or adapter construction; no anonymous or in-memory fallback is permitted.",
+    "create_app: [DEPENDENCY_BOUNDARY] Bind the exact supplied SynchronizationService into application state without exposing its credential."
   ],
   "adapters": {},
   "config": {
@@ -440,6 +502,12 @@
       "request_timeout_seconds": 30,
       "max_response_bytes": 1048576,
       "max_recovery_pages": 10
+    },
+    "synchronization_runtime": {
+      "base_url_env": "CABINET_VPS_BASE_URL",
+      "node_credential_env": "CABINET_SYNC_NODE_CREDENTIAL",
+      "request_timeout_seconds": 30,
+      "max_response_bytes": 8388608
     }
   },
   "models": {
@@ -768,6 +836,60 @@
         "observed_at": "datetime"
       }
     },
+    "VpsInvoiceTransferPackage": {
+      "identity": "value",
+      "fields": {
+        "synchronization": "InvoiceSynchronization",
+        "manifest": "InvoiceTransferManifest",
+        "card_revision": "StoredInvoiceCardRevision",
+        "source_replicas": "tuple[SourceBinaryReplica, ...]"
+      }
+    },
+    "VpsTransferReconciliationEvidence": {
+      "identity": "value",
+      "fields": {
+        "synchronization_id": "str",
+        "idempotency_key": "str",
+        "manifest_hash": "str",
+        "observed_status": "str",
+        "receipt": "InvoiceTransferReceipt | None = None",
+        "observed_at": "datetime",
+        "safe_error_code": "str | None = None"
+      }
+    },
+    "RegistryCatalogueDelivery": {
+      "identity": "value",
+      "fields": {
+        "catalogue_id": "str",
+        "projects": "tuple[RegistryProjectSnapshot, ...]",
+        "source_node_id": "str",
+        "target_node_id": "str",
+        "idempotency_key": "str",
+        "created_at": "datetime"
+      }
+    },
+    "VpsCatalogueAcknowledgement": {
+      "identity": "value",
+      "fields": {
+        "publication_id": "str",
+        "catalogue_id": "str",
+        "status": "str",
+        "acknowledged_at": "datetime | None = None",
+        "safe_error_code": "str | None = None"
+      }
+    },
+    "VpsConnectionObservation": {
+      "identity": "value",
+      "fields": {
+        "available": "bool",
+        "authenticated": "bool",
+        "remote_contract_version": "str | None = None",
+        "observed_at": "datetime",
+        "safe_error_code": "str | None = None"
+      }
+    },
+    "SynchronizationRepository": {"kind": "interface"},
+    "VpsSynchronizationTransport": {"kind": "interface"},
     "DurableAcceptanceVerification": {
       "identity": "value",
       "fields": {
@@ -1220,7 +1342,10 @@
       "offline_administration_only": true
     },
     "synchronization": {
-      "delivery_implies_durable_acceptance": false
+      "delivery_implies_durable_acceptance": false,
+      "direction": "backend_to_vps_only",
+      "unknown_outcome_reconciliation": "read_only",
+      "durable_reservation_before_mutation": true
     },
     "retention_release": {
       "mode": "manual",
@@ -1928,10 +2053,18 @@
             "factory_parameter": "archive",
             "state_attribute": "archive"
           },
-          "registry": {
-            "factory_parameter": "registry",
-            "state_attribute": "registry"
-          }
+      "registry": {
+        "factory_parameter": "registry",
+        "state_attribute": "registry"
+      },
+      "holded_gateway": {
+        "factory_parameter": "holded_gateway",
+        "state_attribute": "holded_gateway"
+      },
+      "synchronization": {
+        "factory_parameter": "synchronization",
+        "state_attribute": "synchronization"
+      }
         }
       }
     },
@@ -2121,7 +2254,14 @@
         "HoldedRemotePurchaseSummary",
         "HoldedPurchaseListPage",
         "HoldedRemotePurchaseItem",
-        "HoldedRemotePurchaseDocument"
+        "HoldedRemotePurchaseDocument",
+        "VpsInvoiceTransferPackage",
+        "VpsTransferReconciliationEvidence",
+        "RegistryCatalogueDelivery",
+        "VpsCatalogueAcknowledgement",
+        "VpsConnectionObservation",
+        "SynchronizationRepository",
+        "VpsSynchronizationTransport"
       ],
       "access_control": [
         "authorize_operation",
@@ -2132,7 +2272,15 @@
       ],
       "synchronization": [
         "synchronize_invoice_work",
-        "get_sync_status"
+        "get_sync_status",
+        "reconcile_transfer_outcome",
+        "publish_registry_catalogue",
+        "observe_vps_connection",
+        "SynchronizationRepository",
+        "VpsSynchronizationTransport",
+        "PostgresSynchronizationRepository",
+        "HttpxVpsSynchronizationTransport",
+        "SynchronizationService"
       ],
       "durable_archive": [
         "accept_transfer_manifest",
@@ -2210,7 +2358,11 @@
         "models": [
           "SynchronizationWorkSelection",
           "CabinetNodeIdentity",
-          "SynchronizationOutcome"
+          "SynchronizationOutcome",
+          "SynchronizationStatusObservation",
+          "RegistryCatalogueDelivery",
+          "RegistryCataloguePublication",
+          "VpsConnectionObservation"
         ]
       },
       "plan_actual": {
@@ -2361,6 +2513,11 @@
           "HttpxHoldedHttpClient",
           "PostgresHoldedAttemptRepository",
           "HoldedGatewayService"
+        ],
+        "synchronization": [
+          "PostgresSynchronizationRepository",
+          "HttpxVpsSynchronizationTransport",
+          "SynchronizationService"
         ]
       },
       "durable_archive": {
@@ -2456,7 +2613,14 @@
       "HoldedRemotePurchaseSummary",
       "HoldedPurchaseListPage",
       "HoldedRemotePurchaseItem",
-      "HoldedRemotePurchaseDocument"
+      "HoldedRemotePurchaseDocument",
+      "VpsInvoiceTransferPackage",
+      "VpsTransferReconciliationEvidence",
+      "RegistryCatalogueDelivery",
+      "VpsCatalogueAcknowledgement",
+      "VpsConnectionObservation",
+      "SynchronizationRepository",
+      "VpsSynchronizationTransport"
     ],
     "access_control": [
       "authorize_operation",
@@ -2467,7 +2631,15 @@
     ],
     "synchronization": [
       "synchronize_invoice_work",
-      "get_sync_status"
+      "get_sync_status",
+      "reconcile_transfer_outcome",
+      "publish_registry_catalogue",
+      "observe_vps_connection",
+      "SynchronizationRepository",
+      "VpsSynchronizationTransport",
+      "PostgresSynchronizationRepository",
+      "HttpxVpsSynchronizationTransport",
+      "SynchronizationService"
     ],
     "durable_archive": [
       "accept_transfer_manifest",
@@ -2567,6 +2739,9 @@
     "authorize_operation",
     "synchronize_invoice_work",
     "get_sync_status",
+    "reconcile_transfer_outcome",
+    "publish_registry_catalogue",
+    "observe_vps_connection",
     "accept_transfer_manifest",
     "verify_durable_acceptance",
     "attach_local_source",
@@ -2611,7 +2786,31 @@
     "evaluate_vps_release_handler",
     "request_manual_vps_release_handler",
     "accept_incomplete_source_evidence_handler",
-    "record_source_loss_handler"
+    "record_source_loss_handler",
+    "SynchronizationService.__init__",
+    "SynchronizationService.synchronize_invoice_work",
+    "SynchronizationService.get_sync_status",
+    "SynchronizationService.reconcile_transfer_outcome",
+    "SynchronizationService.publish_registry_catalogue",
+    "SynchronizationService.observe_vps_connection",
+    "VpsSynchronizationTransport.transfer_invoice",
+    "VpsSynchronizationTransport.reconcile_transfer",
+    "VpsSynchronizationTransport.publish_catalogue",
+    "VpsSynchronizationTransport.observe_connection",
+    "SynchronizationRepository.begin",
+    "SynchronizationRepository.commit",
+    "SynchronizationRepository.rollback",
+    "SynchronizationRepository.lock_synchronization",
+    "SynchronizationRepository.reserve_synchronization",
+    "SynchronizationRepository.mark_transfer_issued",
+    "SynchronizationRepository.save_synchronization_outcome",
+    "SynchronizationRepository.load_sync_status",
+    "SynchronizationRepository.load_synchronization",
+    "SynchronizationRepository.reserve_catalogue_publication",
+    "SynchronizationRepository.save_catalogue_acknowledgement",
+    "SynchronizationRepository.append_connection_observation",
+    "PostgresSynchronizationRepository.__init__",
+    "HttpxVpsSynchronizationTransport.__init__"
   ],
   "module_paths": {
     "models": "cabinet_backend/models",
