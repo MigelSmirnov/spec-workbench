@@ -33,12 +33,18 @@ def test_intermediate_closures_do_not_consume_state_numbers() -> None:
     payload = _sequence()
     phases = {entry["id"]: entry for entry in payload["intermediate_phases"]}
     data = phases["pre_contract_structured_data_closure"]
+    persistence = phases["deterministic_persistence_backend_closure"]
     routes = phases["deterministic_http_route_closure"]
     context = phases["deterministic_http_router_context_closure"]
     assembly = phases["deterministic_http_router_ir_assembly"]
     assert data["after"] == "public_module_operations"
     assert data["before"] == "exact_contracts_internal_functions"
-    assert routes["after"] == "exact_contracts_internal_functions"
+    assert persistence["after"] == "exact_contracts_internal_functions"
+    assert persistence["before"] == "deterministic_http_route_closure"
+    assert persistence["conditional"] == "rules.persistence_backend is used"
+    assert persistence["compatibility_artifacts"] == ["70_persistence_closure.json"]
+    assert persistence["deterministic_tool"] == "tools/design_persistence_authoring.py"
+    assert routes["after"] == "deterministic_persistence_backend_closure"
     assert routes["before"] == "deterministic_http_router_context_closure"
     assert context["after"] == "deterministic_http_route_closure"
     assert context["before"] == "deterministic_http_router_ir_assembly"
@@ -62,9 +68,14 @@ def test_factory_admission_is_stage_9_not_a_semantic_state() -> None:
     assert payload["invariants"]["factory_route_b_is_outside_stage_9"] is True
 
 
-def test_router_cannot_be_signature_source() -> None:
+def test_deterministic_backends_cannot_be_signature_sources() -> None:
     invariants = _sequence()["invariants"]
     assert invariants["canonical_python_signatures_owner"] == "exact_contracts_internal_functions"
+    assert invariants["pre_contract_data_may_define_contract_dependent_backend_ir"] is False
+    assert invariants["persistence_requires_canonical_contracts"] is True
+    assert invariants["persistence_may_define_signatures"] is False
+    assert invariants["persistence_final_ir_is_deterministic_projection"] is True
+    assert invariants["invalid_persistence_backend_allows_llm_fallback"] is False
     assert invariants["router_requires_canonical_contracts"] is True
     assert invariants["router_requires_canonical_handler_per_external_operation"] is True
     assert invariants["router_may_define_signatures"] is False
