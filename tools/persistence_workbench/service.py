@@ -7,6 +7,7 @@ from typing import Any
 from persistence_workbench import catalog
 from persistence_workbench.contract_validation import validate_contracts
 from persistence_workbench.model import COVERAGE_SCHEMA, Finding, PersistenceBackendError
+from persistence_workbench.projection_validation import validate_projection
 from persistence_workbench.validator import validate
 
 
@@ -142,10 +143,14 @@ def coverage(project: Path) -> dict[str, Any]:
         structural_findings = validate(payload)
         findings.extend(structural_findings)
         structural_errors = sum(item.severity == "error" for item in structural_findings)
-        repositories = payload.get("repositories") if isinstance(payload, dict) else None
-        repository_rows = [row for row in repositories if isinstance(row, dict)] if isinstance(repositories, list) else []
-        if structural_errors == 0 and repository_rows:
-            findings.extend(validate_contracts(spec, payload))
+        if structural_errors == 0:
+            projection_findings = validate_projection(spec, payload)
+            findings.extend(projection_findings)
+            projection_errors = sum(item.severity == "error" for item in projection_findings)
+            repositories = payload.get("repositories") if isinstance(payload, dict) else None
+            repository_rows = [row for row in repositories if isinstance(row, dict)] if isinstance(repositories, list) else []
+            if projection_errors == 0 and repository_rows:
+                findings.extend(validate_contracts(spec, payload))
 
     return _report(
         project,
