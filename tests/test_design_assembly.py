@@ -20,17 +20,20 @@ def test_cabinet_assembly_is_blocked_by_language_migration() -> None:
     assert report["schema_version"] == "spec_workbench_assembly_verification.v1"
     assert report["ready"] is False
     assert report["summary"] == {
-        "checks": 6,
-        "ready_checks": 5,
+        "checks": 7,
+        "ready_checks": 6,
         "errors": 2,
         "warnings": 0,
     }
     assert [check["name"] for check in report["checks"]] == [
-        "language", "identity", "data", "contracts", "notes", "router"
+        "language", "identity", "data", "contracts", "notes", "router", "persistence"
     ]
     language = report["checks"][0]
     assert language["ready"] is False
     assert language["errors"] == 2
+    persistence = report["checks"][-1]
+    assert persistence["ready"] is True
+    assert persistence["summary"]["handoff_ready"] is True
 
 def test_language_check_inspection_preserves_owner_report() -> None:
     report = inspect_check(CABINET, "language")
@@ -38,6 +41,14 @@ def test_language_check_inspection_preserves_owner_report() -> None:
     assert report["check"]["schema_version"] == "spec_workbench_language_gate.v1"
     assert report["check"]["ready"] is False
     assert report["check"]["errors"] == 2
+
+def test_persistence_check_preserves_optional_llm_path() -> None:
+    report = inspect_check(CABINET, "persistence")
+    assert report["schema_version"] == "spec_workbench_assembly_check.v1"
+    assert report["check"]["schema_version"] == "spec_workbench_persistence_backend_coverage.v1"
+    assert report["check"]["ready"] is True
+    assert report["check"]["summary"]["repositories"] == 0
+    assert report["check"]["summary"]["errors"] == 0
 
 def test_check_inspection_preserves_owner_report() -> None:
     report = inspect_check(CABINET, "notes")
