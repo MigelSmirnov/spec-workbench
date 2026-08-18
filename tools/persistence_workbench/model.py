@@ -5,13 +5,17 @@ from typing import Any
 
 
 COVERAGE_SCHEMA = "spec_workbench_persistence_backend_coverage.v1"
+AUTHORING_SCHEMA = "spec_workbench_persistence_closure_coverage.v1"
+CATALOG_SCHEMA = "spec_workbench_persistence_closure.v1"
+CATALOG_FILE = "70_persistence_closure.json"
+CATALOG_STATUSES = frozenset({"open", "closed"})
 SUPPORTED_SCHEMA_VERSION = 2
 SUPPORTED_ENGINE = "sqlite"
 SUPPORTED_EMITTER = "sqlite_sync_v2"
 
 
 class PersistenceBackendError(ValueError):
-    """The assembled persistence backend IR cannot be inspected safely."""
+    """The persistence backend IR or its authoring closure cannot be inspected safely."""
 
 
 @dataclass(frozen=True)
