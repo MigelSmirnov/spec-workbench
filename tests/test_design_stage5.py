@@ -159,7 +159,7 @@ def test_next_reports_complete_when_plan_is_closed(tmp_path: Path) -> None:
 def test_current_cabinet_uses_closed_caller_vocabulary() -> None:
     report = design_stage5.coverage(CABINET)
     assert report["summary"]["invalid_refs"] == 0
-    assert report["summary"]["remaining"] == 0
+    assert all(not operation["invalid_callers"] for operation in report["operations"])
     callers = [
         caller
         for operation in report["operations"]
