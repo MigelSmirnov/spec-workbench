@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from persistence_workbench import catalog
+from persistence_workbench.codec_coverage import evaluate_codec_coverage
 from persistence_workbench.contract_validation import validate_contracts
 from persistence_workbench.model import COVERAGE_SCHEMA, Finding, PersistenceBackendError
 from persistence_workbench.projection_validation import validate_projection
@@ -30,6 +31,7 @@ def _report(
     enabled: bool,
     payload: Any,
     findings: list[Finding],
+    codec_coverage: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     tables = payload.get("tables") if isinstance(payload, dict) and isinstance(payload.get("tables"), list) else []
     aggregates = payload.get("aggregates") if isinstance(payload, dict) and isinstance(payload.get("aggregates"), list) else []
@@ -61,8 +63,41 @@ def _report(
         },
         "deterministic_modules": deterministic_modules,
         "irregular_modules": irregular_modules,
+        "codec_coverage": codec_coverage,
         "findings": [item.to_dict() for item in findings],
     }
+
+
+def _codec_findings(report: dict[str, Any]) -> list[Finding]:
+    findings: list[Finding] = []
+    unresolved = report.get("unresolved_columns")
+    if (
+        report.get("status") == "incomplete"
+        and report.get("registry_resolved") is False
+        and isinstance(unresolved, list)
+        and any(isinstance(item, dict) and item.get("reason") == "backend_registry_unavailable" for item in unresolved)
+    ):
+        findings.append(Finding(
+            "warning",
+            "codec_registry_unavailable",
+            "codec coverage cannot be proven until the deterministic backend exposes its version-bound domain/storage registry",
+            location="rules.persistence_backend",
+        ))
+    gaps = report.get("gaps")
+    if isinstance(gaps, list):
+        for gap in gaps:
+            if not isinstance(gap, dict):
+                continue
+            deterministic_module = gap.get("deterministic_module")
+            llm_module = gap.get("llm_module")
+            pairs = gap.get("pairs")
+            findings.append(Finding(
+                "warning",
+                "codec_coverage_gap",
+                f"deterministic module {deterministic_module!r} and LLM module {llm_module!r} share codec pairs: {pairs!r}",
+                location="rules.persistence_backend",
+            ))
+    return findings
 
 
 def coverage(project: Path) -> dict[str, Any]:
@@ -72,6 +107,8 @@ def coverage(project: Path) -> dict[str, Any]:
     Once either side declares deterministic persistence, the other side must be
     present and exact: final assembly may only project the closed authoring
     ``backend_ir`` into ``rules.persistence_backend`` without semantic edits.
+    Codec assurance is nonblocking evidence: until the backend-owned registry is
+    available, Workbench records coverage as incomplete rather than guessing.
     """
     spec = _load_spec(project)
     rules = spec.get("rules")
@@ -86,26 +123,35 @@ def coverage(project: Path) -> dict[str, Any]:
                 "rules must be an object before persistence_backend can be inspected",
                 location="rules",
             )],
+            codec_coverage=None,
         )
 
     try:
         closure = catalog.load_optional(project)
     except PersistenceBackendError as exc:
+        payload = rules.get("persistence_backend")
         return _report(
             project,
             enabled=True,
-            payload=rules.get("persistence_backend"),
+            payload=payload,
             findings=[Finding(
                 "error",
                 "invalid_persistence_closure",
                 str(exc),
                 location="70_persistence_closure.json",
             )],
+            codec_coverage=evaluate_codec_coverage(spec, payload if isinstance(payload, dict) else None),
         )
 
     payload = rules.get("persistence_backend")
     if closure is None and payload is None:
-        return _report(project, enabled=False, payload=None, findings=[])
+        return _report(
+            project,
+            enabled=False,
+            payload=None,
+            findings=[],
+            codec_coverage=evaluate_codec_coverage(spec),
+        )
 
     findings: list[Finding] = []
     if closure is None:
@@ -139,6 +185,7 @@ def coverage(project: Path) -> dict[str, Any]:
                 location="rules.persistence_backend",
             ))
 
+    codec_report = evaluate_codec_coverage(spec, payload if isinstance(payload, dict) else None)
     if payload is not None:
         structural_findings = validate(payload)
         findings.extend(structural_findings)
@@ -149,12 +196,15 @@ def coverage(project: Path) -> dict[str, Any]:
             projection_errors = sum(item.severity == "error" for item in projection_findings)
             repositories = payload.get("repositories") if isinstance(payload, dict) else None
             repository_rows = [row for row in repositories if isinstance(row, dict)] if isinstance(repositories, list) else []
-            if projection_errors == 0 and repository_rows:
-                findings.extend(validate_contracts(spec, payload))
+            if projection_errors == 0:
+                findings.extend(_codec_findings(codec_report))
+                if repository_rows:
+                    findings.extend(validate_contracts(spec, payload))
 
     return _report(
         project,
         enabled=True,
         payload=payload,
         findings=findings,
+        codec_coverage=codec_report,
     )
