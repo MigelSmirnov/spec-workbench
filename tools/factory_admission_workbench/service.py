@@ -10,6 +10,7 @@ from typing import Any
 
 from assembly_workbench import verify as verify_assembly
 from module_review_workbench import build_slice
+from spec_language_workbench import SpecLanguageError, verify_payload as verify_language_payload
 
 from factory_admission_workbench.model import (
     CHECK_BLOCK,
@@ -189,6 +190,31 @@ def _standard_check(workbench_root: Path, factory_root: Path) -> AdmissionCheck:
     )
 
 
+def _language_check(source: Path) -> AdmissionCheck:
+    try:
+        report = verify_language_payload(_load_json(source), project_root=source.stem)
+    except (OSError, json.JSONDecodeError, SpecLanguageError) as exc:
+        return AdmissionCheck(
+            "FA009",
+            CHECK_BLOCK,
+            "Source specification language revision cannot be verified.",
+            {"path": str(source), "error": str(exc)},
+        )
+    return AdmissionCheck(
+        "FA009",
+        CHECK_PASS if report["ready"] else CHECK_BLOCK,
+        "Source specification declares the supported SPEC_STANDARD revision."
+        if report["ready"]
+        else "Source specification does not declare the supported SPEC_STANDARD revision.",
+        {
+            "path": str(source),
+            "standard_version": report["standard_version"],
+            "supported_standard_version": report["supported_standard_version"],
+            "findings": report["findings"],
+        },
+    )
+
+
 def _factory_validation_check(factory_root: Path, source: Path) -> tuple[AdmissionCheck, dict[str, Any] | None]:
     validator = factory_root / "tools/validate_spec.py"
     if not validator.is_file():
@@ -290,7 +316,9 @@ def _target_check(factory_root: Path, project: str, source: Path, update_existin
     canonical = factory_root / "projects" / project / "specs/base/global_spec.json"
     lineage_path = factory_root / "projects" / project / "specs/working/spec_editor_manifest.json"
     source_sha = _sha256_file(source)
-    source_spec_sha = _canonical_spec_sha(_load_json(source))
+    source_spec = _load_json(source)
+    source_spec_sha = _canonical_spec_sha(source_spec)
+    source_standard_version = source_spec.get("standard_version") if isinstance(source_spec, dict) else None
     if not canonical.is_file():
         return AdmissionCheck(
             "FA007",
@@ -301,25 +329,31 @@ def _target_check(factory_root: Path, project: str, source: Path, update_existin
                 "canonical_path": str(canonical),
                 "source_sha256": source_sha,
                 "source_spec_sha": source_spec_sha,
+                "standard_version": source_standard_version,
             },
         )
     canonical_sha = _sha256_file(canonical)
-    canonical_spec_sha = _canonical_spec_sha(_load_json(canonical))
+    canonical_spec = _load_json(canonical)
+    canonical_spec_sha = _canonical_spec_sha(canonical_spec)
+    canonical_standard_version = canonical_spec.get("standard_version") if isinstance(canonical_spec, dict) else None
     if canonical_spec_sha == source_spec_sha:
         lineage = _load_json(lineage_path) if lineage_path.is_file() else {}
+        lineage_inputs = lineage.get("inputs") or {}
         lineage_fresh = (
             lineage.get("accepted") is True
             and lineage.get("status") == "pass"
             and lineage.get("verdict") == "PASS"
             and (lineage.get("outputs") or {}).get("base_spec_sha256_after") == canonical_sha
+            and lineage_inputs.get("standard_version") == source_standard_version
+            and canonical_standard_version == source_standard_version
             and bool((lineage.get("change_summary") or {}).get("changed_modules"))
         )
         return AdmissionCheck(
             "FA007",
             CHECK_PASS,
-            "Factory already contains the exact source specification and accepted lineage."
+            "Factory already contains the exact source specification and accepted version-bound lineage."
             if lineage_fresh
-            else "Factory contains the exact source specification; export will adopt it into accepted lineage.",
+            else "Factory contains the exact source specification; export will adopt it into version-bound accepted lineage.",
             {
                 "action": "noop" if lineage_fresh else "accept_lineage",
                 "canonical_path": str(canonical),
@@ -329,6 +363,9 @@ def _target_check(factory_root: Path, project: str, source: Path, update_existin
                 "canonical_sha256": canonical_sha,
                 "source_spec_sha": source_spec_sha,
                 "canonical_spec_sha": canonical_spec_sha,
+                "source_standard_version": source_standard_version,
+                "canonical_standard_version": canonical_standard_version,
+                "lineage_standard_version": lineage_inputs.get("standard_version"),
             },
         )
     if not update_existing:
@@ -343,6 +380,8 @@ def _target_check(factory_root: Path, project: str, source: Path, update_existin
                 "canonical_sha256": canonical_sha,
                 "source_spec_sha": source_spec_sha,
                 "canonical_spec_sha": canonical_spec_sha,
+                "source_standard_version": source_standard_version,
+                "canonical_standard_version": canonical_standard_version,
             },
         )
     return AdmissionCheck(
@@ -356,6 +395,8 @@ def _target_check(factory_root: Path, project: str, source: Path, update_existin
             "canonical_sha256": canonical_sha,
             "source_spec_sha": source_spec_sha,
             "canonical_spec_sha": canonical_spec_sha,
+            "source_standard_version": source_standard_version,
+            "canonical_standard_version": canonical_standard_version,
         },
     )
 
@@ -400,11 +441,14 @@ def check(
     factory_root = factory_root.resolve()
     case_root = case_root.resolve() if case_root is not None else None
     metadata = source_git if source_git is not None else git_metadata(workbench_root)
+    source_spec = _load_json(source)
+    source_standard_version = source_spec.get("standard_version") if isinstance(source_spec, dict) else None
     checks: list[AdmissionCheck] = [
         _source_clean_check(metadata, allow_dirty_source),
         _review_check(case_root),
         _assembly_check(case_root),
         _standard_check(workbench_root, factory_root),
+        _language_check(source),
     ]
     validation_check, validation_report = _factory_validation_check(factory_root, source)
     checks.extend([
@@ -425,6 +469,7 @@ def check(
         "source": {
             "path": str(source),
             "sha256": _sha256_file(source),
+            "standard_version": source_standard_version,
             "git": metadata,
         },
         "factory_root": str(factory_root),
