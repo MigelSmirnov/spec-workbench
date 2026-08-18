@@ -116,20 +116,27 @@ def test_export_creates_canonical_spec_and_bound_handoff(
     assert export_to_factory.main() == 0
     canonical = factory / "projects/demo/specs/base/global_spec.json"
     manifest_path = factory / "projects/demo/specs/working/spec_workbench_handoff.json"
+    admission_path = factory / "projects/demo/specs/working/spec_workbench_factory_admission.json"
     lineage_path = factory / "projects/demo/specs/working/spec_editor_manifest.json"
     assert json.loads(canonical.read_text(encoding="utf-8")) == spec
+    admission = json.loads(admission_path.read_text(encoding="utf-8"))
+    codec_coverage = admission["codec_coverage"]
+    assert codec_coverage["status"] == "not_applicable"
+    assert codec_coverage["complete"] is True
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     assert manifest["schema_version"] == "spec_workbench_handoff.v1"
     assert manifest["source"]["spec_sha256"] == export_to_factory.sha256_file(canonical)
     assert manifest["source"]["standard_version"] == 2
     assert manifest["factory"]["standard_version"] == 2
     assert manifest["factory"]["validation_status"] == "PASS"
+    assert manifest["codec_coverage"] == codec_coverage
     lineage = json.loads(lineage_path.read_text(encoding="utf-8"))
     assert lineage["accepted"] is True
     assert lineage["status"] == "pass"
     assert lineage["verdict"] == "PASS"
     assert lineage["producer"]["route"] == "spec_workbench_stage9"
     assert lineage["inputs"]["standard_version"] == 2
+    assert lineage["inputs"]["codec_coverage"] == codec_coverage
     assert lineage["change_summary"]["changed_modules"] == ["global"]
     assert lineage["outputs"]["base_spec_sha256_after"] == export_to_factory.sha256_file(canonical)
 
