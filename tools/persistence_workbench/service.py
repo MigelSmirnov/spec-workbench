@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from persistence_workbench.contract_validation import validate_contracts
 from persistence_workbench.model import COVERAGE_SCHEMA, PersistenceBackendError
 from persistence_workbench.validator import validate
 
@@ -81,6 +82,10 @@ def coverage(project: Path) -> dict[str, Any]:
     aggregates = payload.get("aggregates") if isinstance(payload, dict) and isinstance(payload.get("aggregates"), list) else []
     repositories = payload.get("repositories") if isinstance(payload, dict) and isinstance(payload.get("repositories"), list) else []
     repository_rows = [row for row in repositories if isinstance(row, dict)]
+    structural_errors = sum(item.severity == "error" for item in findings)
+    if structural_errors == 0 and repository_rows:
+        findings.extend(validate_contracts(spec, payload))
+
     deterministic_modules = sorted({
         row["module"] for row in repository_rows
         if row.get("emission") == "table" and isinstance(row.get("module"), str) and row["module"]
