@@ -142,3 +142,41 @@ def test_irregular_handler_still_requires_note(tmp_path):
     report = gate.coverage(project)
     assert "missing_callable_note" in _codes(report)
     assert report["summary"]["handoff_ready"] is False
+
+
+def test_closed_persistence_method_is_deterministic_completeness_exemption(tmp_path, monkeypatch):
+    project = _project(tmp_path, "parse: [BEHAVIOR] MUST return normalized content.\n")
+    contracts = json.loads((tmp_path / "60_contracts.json").read_text(encoding="utf-8"))
+    contracts["contracts"]["InvoiceRepository.get_invoice"] = "(self, invoice_id: str) -> Invoice | None"
+    (tmp_path / "60_contracts.json").write_text(json.dumps(contracts), encoding="utf-8")
+    monkeypatch.setattr(
+        gate.persistence_authoring,
+        "coverage",
+        lambda project: {
+            "summary": {"handoff_ready": True},
+            "deterministic_method_scopes": ["InvoiceRepository.get_invoice"],
+        },
+    )
+    report = gate.coverage(project)
+    assert "missing_callable_note" not in _codes(report)
+    assert report["deterministic_callables"] == ["InvoiceRepository.get_invoice"]
+    assert report["summary"]["handoff_ready"] is True
+
+
+def test_open_persistence_closure_does_not_suppress_note_requirement(tmp_path, monkeypatch):
+    project = _project(tmp_path, "parse: [BEHAVIOR] MUST return normalized content.\n")
+    contracts = json.loads((tmp_path / "60_contracts.json").read_text(encoding="utf-8"))
+    contracts["contracts"]["InvoiceRepository.get_invoice"] = "(self, invoice_id: str) -> Invoice | None"
+    (tmp_path / "60_contracts.json").write_text(json.dumps(contracts), encoding="utf-8")
+    monkeypatch.setattr(
+        gate.persistence_authoring,
+        "coverage",
+        lambda project: {
+            "summary": {"handoff_ready": False},
+            "deterministic_method_scopes": ["InvoiceRepository.get_invoice"],
+        },
+    )
+    report = gate.coverage(project)
+    assert "missing_callable_note" in _codes(report)
+    assert "InvoiceRepository.get_invoice" not in report["deterministic_callables"]
+    assert report["summary"]["handoff_ready"] is False
