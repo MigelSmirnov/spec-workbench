@@ -12,6 +12,7 @@ from notes_workbench.note_standard import (
     SINGLETON_CLASSES,
     SUSPICIOUS_CLASS_PAIRS,
 )
+from persistence_workbench import authoring as persistence_authoring
 
 NOTE_RE = re.compile(r"^(?P<scope>[A-Za-z_][A-Za-z0-9_.]*):\s*\[(?P<class>[A-Z_]+)\]\s*(?P<text>.+?)\s*$")
 ADDRESS_RE = re.compile(r"=\s*(?P<address>(?:config|models|rules)(?:\.[A-Za-z_][A-Za-z0-9_]*)+)")
@@ -60,14 +61,8 @@ def _load_structured_addresses(project: Path) -> set[str]:
     return result
 
 
-def _load_deterministic_callable_scopes(project: Path) -> set[str]:
-    """Return callables whose implementation is fully owned by deterministic IR.
-
-    State 7 prose is not required for a table-emitted HTTP handler: its call graph,
-    argument refs, authorization and return behavior are already closed in router
-    IR. Irregular handlers are deliberately excluded because their implementation
-    still requires generation notes.
-    """
+def _load_router_deterministic_scopes(project: Path) -> set[str]:
+    """Return table-emitted HTTP handler scopes from Router Closure."""
     path = project / "70_router_closure.json"
     if not path.is_file():
         return set()
@@ -80,6 +75,33 @@ def _load_deterministic_callable_scopes(project: Path) -> set[str]:
         if isinstance(handler, str) and handler:
             result.add(handler)
     return result
+
+
+def _load_persistence_deterministic_scopes(project: Path) -> set[str]:
+    """Return scopes only from a fully closed, contract-bound persistence IR.
+
+    An open or invalid persistence closure must not suppress the State 7 note
+    requirement. Its own authoring gate remains responsible for reporting why it
+    cannot be handed off.
+    """
+    try:
+        report = persistence_authoring.coverage(project)
+    except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError):
+        return set()
+    if not report.get("summary", {}).get("handoff_ready"):
+        return set()
+    scopes = report.get("deterministic_method_scopes", [])
+    return {scope for scope in scopes if isinstance(scope, str) and scope}
+
+
+def _load_deterministic_callable_scopes(project: Path) -> set[str]:
+    """Return callables whose implementation is fully owned by deterministic IR.
+
+    State 7 prose is not required for table-emitted HTTP handlers or methods of
+    a closed table-emitted persistence repository. Irregular handlers and
+    irregular repositories remain LLM-owned and deliberately require notes.
+    """
+    return _load_router_deterministic_scopes(project) | _load_persistence_deterministic_scopes(project)
 
 
 def _address_resolves(address: str, known: set[str]) -> bool:
