@@ -3,10 +3,9 @@
 
 This is the workflow gate for the current authoring standard. Low-level
 workbenches remain independently testable, but this sequencer never routes an
-author into Router Closure before the canonical State 6 contract handoff is
-ready, never treats deterministic HTTP IR as ready until route/context closure
-is complete, and never hands off State 7 notes while structural, consistency,
-or semantic-stub findings remain unresolved.
+author into contract-dependent deterministic closure before the canonical State
+6 handoff is ready, and never hands off State 7 notes while an enabled
+deterministic backend closure remains open or invalid.
 """
 from __future__ import annotations
 
@@ -21,6 +20,7 @@ import design_router_context
 import design_stage6_contracts
 import design_stage6_data
 from notes_workbench import gate as notes_gate
+from persistence_workbench import authoring as persistence_authoring
 from router_workbench import authoring as router_authoring
 
 SCHEMA = "spec_workbench_authoring_next.v1"
@@ -51,11 +51,27 @@ def next_step(project: Path) -> dict[str, Any]:
             "project_root": project.resolve().name,
             "phase": "state6_exact_contracts",
             "blocked": False,
-            "reason": "State 6 owns canonical Python signatures and must close before Router Closure.",
+            "reason": "State 6 owns canonical Python signatures and must close before deterministic backend closure.",
             "next_command": _command("python", "tools/design_stage6_contracts.py", project_text, "--next", "--json"),
             "summary": contracts["summary"],
             "unresolved_functions": contracts["unresolved_functions"],
             "router_allowed": False,
+            "persistence_allowed": False,
+        }
+
+    persistence = persistence_authoring.coverage(project)
+    if not persistence["summary"]["handoff_ready"]:
+        return {
+            "schema_version": SCHEMA,
+            "project_root": project.resolve().name,
+            "phase": "deterministic_persistence_closure",
+            "blocked": bool(persistence["summary"]["errors"]),
+            "reason": "Canonical contracts are ready; the enabled persistence_backend/v2 closure must bind repository ownership and methods to State 6 before Notes.",
+            "next_command": _command("python", "tools/design_persistence_authoring.py", project_text, "--coverage", "--json"),
+            "summary": persistence["summary"],
+            "findings": persistence["findings"],
+            "router_allowed": True,
+            "persistence_allowed": True,
         }
 
     router = router_authoring.coverage(project)
@@ -70,6 +86,7 @@ def next_step(project: Path) -> dict[str, Any]:
             "summary": router["summary"],
             "unresolved_operations": router["unresolved_operations"],
             "router_allowed": True,
+            "persistence_allowed": True,
         }
 
     context = design_router_context.coverage(project)
@@ -84,6 +101,7 @@ def next_step(project: Path) -> dict[str, Any]:
             "summary": context["summary"],
             "unresolved_topics": context["unresolved_topics"],
             "router_allowed": True,
+            "persistence_allowed": True,
         }
 
     notes = notes_gate.coverage(project)
@@ -94,11 +112,12 @@ def next_step(project: Path) -> dict[str, Any]:
             "project_root": project.resolve().name,
             "phase": "state7_notes",
             "blocked": False if only_missing else bool(notes["summary"]["blocks"] or notes["summary"]["reviews"]),
-            "reason": "Deterministic structures are closed; author State 7 notes and resolve all address/class/reference, cross-note consistency, and semantic-stub findings before handoff.",
+            "reason": "Deterministic backend closures are closed; author State 7 notes and resolve all address/class/reference, cross-note consistency, and semantic-stub findings before handoff.",
             "next_command": _command("python", "tools/design_notes.py", project_text, "--gate", "--json"),
             "summary": notes["summary"],
             "findings": notes["findings"],
             "router_allowed": True,
+            "persistence_allowed": True,
         }
 
     return {
@@ -106,10 +125,11 @@ def next_step(project: Path) -> dict[str, Any]:
         "project_root": project.resolve().name,
         "phase": "state8_assembly",
         "blocked": False,
-        "reason": "State 6 contracts, deterministic Router closure, and State 7 notes gate are ready; continue to final specification assembly.",
+        "reason": "State 6 contracts, enabled deterministic backend closures, and State 7 notes gate are ready; continue to final specification assembly.",
         "next_command": None,
         "summary": notes["summary"],
         "router_allowed": True,
+        "persistence_allowed": True,
     }
 
 
