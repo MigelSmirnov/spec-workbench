@@ -55,14 +55,14 @@ The current focus is building a repeatable methodology and deterministic toolcha
 Large Markdown design states are handled through narrow deterministic tools:
 
 ```text
-design_router -> chooses the deterministic workflow
+design_router -> chooses the deterministic early-design workflow
 design_index  -> addresses and navigates State 1/2 design structure
 design_editor -> plans and atomically applies one structural splice
 design_lint   -> reports State 1 identity and State 2 authoring findings
 design_stage3 -> addresses modules, checks State 3, traces upstream decisions, emits handoff
 ```
 
-Ask the router for a plan before composing commands manually:
+Ask the router for a plan before composing early-design commands manually:
 
 ```bash
 python tools/design_router.py examples/cabinet-backend diagnose-state2
@@ -78,6 +78,59 @@ python tools/design_router.py examples/cabinet-backend verify-state3
 ```
 
 Use `--json` for agent and future MCP integration. The router is read-only: it returns ordered tool arguments, command previews, review checkpoints, and stop conditions, but never executes a command or infers design semantics.
+
+For the post-State-5 authoring order, use the deterministic sequencer rather
+than inferring semantic state from `60_*` / `70_*` filenames:
+
+```bash
+python tools/design_authoring_next.py examples/<case> --json
+```
+
+It routes through pre-contract data closure, State 6 exact contracts, optional
+deterministic backend closures, State 7 Notes, and then final assembly.
+
+### SPEC_STANDARD v2 language gate
+
+Current specifications declare `standard_version: 2`. The legacy top-level
+`adapters` section is not part of v2. Post-assembly verification starts with a
+language gate so an implicit or unknown specification revision cannot reach
+later consumers.
+
+For a legacy assembled spec whose `adapters` section is exactly empty, the
+mechanical envelope migration can be reviewed or applied without rewriting
+product semantics:
+
+```bash
+python tools/migrate_spec_v2.py examples/<case>/global_spec.json
+python tools/migrate_spec_v2.py examples/<case>/global_spec.json --apply
+```
+
+Non-empty legacy adapters fail closed because their call-site semantics require
+an explicit migration.
+
+### Deterministic persistence closure
+
+`persistence_backend/v2` is currently the closed SQLite backend
+(`sqlite_sync_v2`). It is post-contract because repository classes, schema
+functions, and methods must bind to canonical State 6 ownership and signatures.
+PostgreSQL and other unsupported persistence implementations remain on the
+ordinary generation path and do not create this closure merely because the
+project persists models.
+
+When deterministic SQLite persistence is selected, author and close:
+
+```bash
+python tools/design_persistence_authoring.py examples/<case> --coverage --json
+python tools/design_persistence_authoring.py examples/<case> --handoff --json
+```
+
+The optional `70_persistence_closure.json` owns the exact post-contract
+`backend_ir`. Final `global_spec.json` must project that value unchanged into
+`rules.persistence_backend`; the assembly persistence check validates exact
+handoff lineage, closed v2 structure, table/model/config/module references, and
+canonical contract ownership. Table-emitted repository methods are then known
+to Notes and module-review tooling as deterministic callables rather than
+LLM-owned code.
 
 For post-assembly model identity inspection, use the transport-neutral identity
 workbench:
@@ -95,11 +148,13 @@ Run the complete post-assembly gate with:
 
 ```bash
 python tools/design_assembly.py examples/<case>
-python tools/design_assembly.py examples/<case> --check identity
+python tools/design_assembly.py examples/<case> --check language
+python tools/design_assembly.py examples/<case> --check persistence
 ```
 
-The transport-neutral `assembly_workbench` delegates to the identity, data,
-contract, notes, and router owners and returns a compact MCP-ready report.
+The transport-neutral `assembly_workbench` delegates to the language, identity,
+data, contract, notes, router, and persistence owners and returns a compact
+MCP-ready report.
 
 For the final business-to-implementation comparison, build a module review
 packet from the assembled specification:
@@ -112,7 +167,9 @@ python tools/design_module_review.py examples/<case> --module <name> --review
 
 `module_review_workbench` keeps accepted evidence, lowered specification, and
 assembled generation constraints separate so a human or LLM can perform the
-Stage 7.1 adversarial semantic review without reconstructing context ad hoc.
+Stage 8.1 adversarial semantic review without reconstructing context ad hoc.
+Modules accepted by deterministic persistence receive their repository/table/
+aggregate slice as explicit lowering evidence.
 
 ### State 3 stable addresses and handoff
 
@@ -177,10 +234,11 @@ python tools/export_to_factory.py \
   --project hydraulic_diagram_service
 ```
 
-Use `--update-existing` only when intentionally replacing an existing canonical specification. The export is blocked when the two repositories have different `SPEC_STANDARD.md` content, the Workbench checkout is dirty, or the Factory's canonical validator reports errors. Provenance and validation evidence are written to `projects/<project>/specs/working/`; `global_spec.json` remains in the factory-defined format.
+Use `--update-existing` only when intentionally replacing an existing canonical specification. The export is blocked when the two repositories have different `SPEC_STANDARD.md` content, the Workbench checkout is dirty, the source does not declare the supported `standard_version`, or the Factory's canonical validator reports errors. Provenance and validation evidence are written to `projects/<project>/specs/working/`; `global_spec.json` remains in the factory-defined format.
 
 `export_to_factory.py --check` exposes the same read-only admission report for
 automation. The standalone `design_factory_admission.py` command is the
-normative human-facing gate. Stage 9 ends after the exact canonical spec and
-handoff receipts are present in Factory; Route B generation and terminal OTK
-belong to Factory.
+normative human-facing gate. Stage 9 lineage and handoff receipts record both
+the canonical spec identity and its `standard_version`. Stage 9 ends after the
+exact canonical spec and handoff receipts are present in Factory; Route B
+generation and terminal OTK belong to Factory.
