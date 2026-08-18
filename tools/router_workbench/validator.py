@@ -73,6 +73,15 @@ def validate(payload: dict[str, Any]) -> list[Finding]:
             allowed = required = IRREGULAR_FIELDS
             if not _non_empty_string(item.get("irregular_reason")):
                 findings.append(Finding("error", "missing_irregular_reason", "irregular closure requires a non-empty irregular_reason", operation, location))
+            handler = item.get("handler")
+            if _non_empty_string(handler) and "." in handler:
+                findings.append(Finding(
+                    "error",
+                    "irregular_member_handler",
+                    "irregular_ownership applies only to free route handlers; class members remain owned by their class",
+                    operation,
+                    f"{location}.handler",
+                ))
 
         extra = sorted(set(item) - allowed)
         missing = sorted(required - set(item))
