@@ -8,6 +8,7 @@ import design_stage6_data
 from identity_workbench import verify as verify_identity
 from notes_workbench import gate as notes_gate
 from router_workbench import service as router_service
+from spec_language_workbench import verify as verify_language
 
 from assembly_workbench.model import AssemblyWorkbenchError, CheckResult
 
@@ -21,7 +22,11 @@ def _normalize(name: str, report: dict[str, Any]) -> CheckResult:
     findings = report.get("findings", [])
     if not isinstance(summary, dict) or not isinstance(findings, list):
         raise AssemblyWorkbenchError(f"{name} returned an invalid report shape.")
-    if name == "identity":
+    if name == "language":
+        errors = int(summary.get("errors", len(findings)))
+        warnings = 0
+        ready = bool(report.get("ready")) and errors == 0
+    elif name == "identity":
         errors = int(summary.get("errors", len(findings)))
         warnings = 0
         ready = errors == 0
@@ -54,6 +59,7 @@ def _normalize(name: str, report: dict[str, Any]) -> CheckResult:
     )
 
 CHECKS: dict[str, ReportFunction] = {
+    "language": verify_language,
     "identity": verify_identity,
     "data": design_stage6_data.lint,
     "contracts": design_stage6_contracts.lint,
