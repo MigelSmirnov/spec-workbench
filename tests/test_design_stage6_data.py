@@ -27,6 +27,32 @@ def test_cabinet_data_closure_is_structurally_valid() -> None:
     }
 
 
+def test_contract_dependent_persistence_backend_is_rejected_pre_contract(tmp_path: Path) -> None:
+    payload = json.loads((CABINET / "60_data_closure.json").read_text(encoding="utf-8"))
+    payload["sections"]["rules"]["persistence_backend"] = {
+        "kind": "persistence_backend",
+        "schema_version": 2,
+    }
+    payload["placements"].extend([
+        {
+            "address": "rules.persistence_backend.kind",
+            "source_refs": ["test:persistence"],
+            "reason": "test",
+        },
+        {
+            "address": "rules.persistence_backend.schema_version",
+            "source_refs": ["test:persistence"],
+            "reason": "test",
+        },
+    ])
+    (tmp_path / "60_data_closure.json").write_text(json.dumps(payload), encoding="utf-8")
+    report = design_stage6_data.lint(tmp_path)
+    assert any(
+        item["code"] == "contract_dependent_backend_in_precontract_data"
+        for item in report["findings"]
+    )
+
+
 def test_untraced_structured_value_is_rejected(tmp_path: Path) -> None:
     payload = json.loads((CABINET / "60_data_closure.json").read_text(encoding="utf-8"))
     payload["sections"]["rules"]["holded_publication"]["invented_retry_limit"] = 7
