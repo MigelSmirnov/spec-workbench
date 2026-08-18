@@ -214,6 +214,7 @@ def stage9_lineage_manifest(
     source_sha: str,
     source_commit: str | None,
     standard_version: int,
+    codec_coverage: dict[str, Any],
     started_at: str,
     base_spec_path: Path,
     base_spec_sha_before: str | None,
@@ -253,6 +254,7 @@ def stage9_lineage_manifest(
             "source_spec_sha256": source_sha,
             "source_commit": source_commit,
             "standard_version": standard_version,
+            "codec_coverage": codec_coverage,
         },
         "outputs": {
             "base_spec_sha256_after": base_spec_sha_after,
@@ -316,6 +318,9 @@ def main() -> int:
         allow_dirty_source=args.allow_dirty_source,
         source_git=workbench_git,
     )
+    codec_coverage = admission.get("codec_coverage")
+    if not isinstance(codec_coverage, dict):
+        raise SystemExit("Factory admission did not return codec coverage evidence")
     if args.check:
         print(json.dumps(admission, ensure_ascii=False, indent=2, sort_keys=True))
         return 0 if admission["ready"] else 1
@@ -372,6 +377,7 @@ def main() -> int:
         "schema_version": HANDOFF_SCHEMA,
         "project": args.project,
         "exported_at": utc_now(),
+        "codec_coverage": codec_coverage,
         "source": {
             "case": args.case,
             "path": str(source.relative_to(workbench_root)) if source.is_relative_to(workbench_root) else str(source),
@@ -405,6 +411,7 @@ def main() -> int:
         source_sha=source_sha,
         source_commit=workbench_git.get("commit"),
         standard_version=standard_version,
+        codec_coverage=codec_coverage,
         started_at=export_started_at,
         base_spec_path=paths["canonical"],
         base_spec_sha_before=base_spec_sha_before,
@@ -419,6 +426,8 @@ def main() -> int:
         raise SystemExit("accepted Stage 9 lineage does not cover the canonical Factory spec")
     if lineage["inputs"].get("standard_version") != standard_version:
         raise SystemExit("accepted Stage 9 lineage does not cover the source standard_version")
+    if lineage["inputs"].get("codec_coverage") != codec_coverage:
+        raise SystemExit("accepted Stage 9 lineage does not cover source codec evidence")
 
     print(f"exported spec: {source}")
     print(f"canonical spec: {paths['canonical']}")
