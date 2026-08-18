@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from notes_workbench import service as notes_service
+from persistence_workbench.slice import module_slice as persistence_module_slice
 
 from module_review_workbench.model import MODULES_SCHEMA, REVIEW_SCHEMA, SLICE_SCHEMA, ModuleReviewError
 from module_review_workbench.sources import (
@@ -62,10 +63,35 @@ def build_slice(project: Path, module: str) -> dict[str, Any]:
     router_handoff = spec.get("rules", {}).get("http_router_backend", {})
     router = router_handoff.get("rules", {}).get("http_router_backend", router_handoff)
     routes = [route for route in router.get("routes", []) if route.get("handler") in symbols]
-    deterministic_callables = sorted(
+    router_deterministic = {
         route["handler"] for route in routes
         if route.get("emission") == "table" and route.get("handler") in contracts
-    )
+    }
+    persistence_backend = persistence_module_slice(spec, module_name)
+    persistence_deterministic = {
+        scope for scope in persistence_backend["deterministic_method_scopes"]
+        if scope in contracts
+    }
+    deterministic_callables = sorted(router_deterministic | persistence_deterministic)
+
+    lowered_specification = {
+        "owned_symbols": owned,
+        "exports": exports,
+        "contracts": contracts,
+        "dependency_contracts": dependency_contracts,
+        "models": models,
+        "persistence": persistence,
+        "dependencies": dependencies,
+        "routes": routes,
+        "deterministic_callables": deterministic_callables,
+        "rules": rule_values(spec, notes),
+    }
+    # Preserve existing review packet identity for projects that did not opt in
+    # to deterministic persistence. Once a module owns a backend repository, its
+    # exact persistence IR becomes required lowering evidence for that module.
+    if persistence_backend["enabled"] and persistence_backend["repository"] is not None:
+        lowered_specification["persistence_backend"] = persistence_backend
+
     return {
         "schema_version": SLICE_SCHEMA,
         "project_root": project.resolve().name,
@@ -77,18 +103,7 @@ def build_slice(project: Path, module: str) -> dict[str, Any]:
             "flows": semantic["flows"],
             "public_operations": semantic["public_operations"],
         },
-        "lowered_specification": {
-            "owned_symbols": owned,
-            "exports": exports,
-            "contracts": contracts,
-            "dependency_contracts": dependency_contracts,
-            "models": models,
-            "persistence": persistence,
-            "dependencies": dependencies,
-            "routes": routes,
-            "deterministic_callables": deterministic_callables,
-            "rules": rule_values(spec, notes),
-        },
+        "lowered_specification": lowered_specification,
         "generation_constraints": {
             "assembled_notes": notes,
             "note_count": len(notes),
