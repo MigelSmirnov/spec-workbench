@@ -27,15 +27,13 @@ def _write(project: Path, payload: dict) -> None:
     )
 
 
-def test_current_cabinet_is_blocked_by_v2_language_migration() -> None:
+def test_current_cabinet_is_valid_v2_language() -> None:
     report = verify(CABINET)
     assert report["schema_version"] == REPORT_SCHEMA
-    assert report["ready"] is False
-    assert report["standard_version"] is None
-    assert [item["code"] for item in report["findings"]] == [
-        "missing_standard_version",
-        "legacy_adapters_section",
-    ]
+    assert report["ready"] is True
+    assert report["standard_version"] == 2
+    assert report["summary"]["errors"] == 0
+    assert report["findings"] == []
 
 
 def test_standard_version_two_is_accepted(tmp_path: Path) -> None:
@@ -62,6 +60,20 @@ def test_unknown_standard_version_fails_closed(tmp_path: Path) -> None:
     assert report["ready"] is False
     assert [item["code"] for item in report["findings"]] == [
         "unsupported_standard_version"
+    ]
+
+
+def test_missing_standard_version_fails_closed(tmp_path: Path) -> None:
+    project = _copy_project(tmp_path)
+    payload = _load(project)
+    payload.pop("standard_version", None)
+    payload.pop("adapters", None)
+    _write(project, payload)
+
+    report = verify(project)
+    assert report["ready"] is False
+    assert [item["code"] for item in report["findings"]] == [
+        "missing_standard_version"
     ]
 
 
