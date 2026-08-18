@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from persistence_workbench import catalog
-from persistence_workbench.codec_coverage import evaluate_codec_coverage
+from persistence_workbench.codec_coverage import StorageResolver, evaluate_codec_coverage
 from persistence_workbench.contract_validation import validate_contracts
 from persistence_workbench.model import COVERAGE_SCHEMA, Finding, PersistenceBackendError
 from persistence_workbench.projection_validation import validate_projection
@@ -100,7 +100,7 @@ def _codec_findings(report: dict[str, Any]) -> list[Finding]:
     return findings
 
 
-def coverage(project: Path) -> dict[str, Any]:
+def coverage(project: Path, *, storage_resolver: StorageResolver | None = None) -> dict[str, Any]:
     """Verify final persistence IR and its exact post-contract authoring lineage.
 
     No closure plus no assembled backend is a valid ordinary-generation path.
@@ -109,6 +109,7 @@ def coverage(project: Path) -> dict[str, Any]:
     ``backend_ir`` into ``rules.persistence_backend`` without semantic edits.
     Codec assurance is nonblocking evidence: until the backend-owned registry is
     available, Workbench records coverage as incomplete rather than guessing.
+    A backend integration may inject its exact version-bound resolver here.
     """
     spec = _load_spec(project)
     rules = spec.get("rules")
@@ -140,7 +141,11 @@ def coverage(project: Path) -> dict[str, Any]:
                 str(exc),
                 location="70_persistence_closure.json",
             )],
-            codec_coverage=evaluate_codec_coverage(spec, payload if isinstance(payload, dict) else None),
+            codec_coverage=evaluate_codec_coverage(
+                spec,
+                payload if isinstance(payload, dict) else None,
+                storage_resolver=storage_resolver,
+            ),
         )
 
     payload = rules.get("persistence_backend")
@@ -150,7 +155,7 @@ def coverage(project: Path) -> dict[str, Any]:
             enabled=False,
             payload=None,
             findings=[],
-            codec_coverage=evaluate_codec_coverage(spec),
+            codec_coverage=evaluate_codec_coverage(spec, storage_resolver=storage_resolver),
         )
 
     findings: list[Finding] = []
@@ -185,7 +190,11 @@ def coverage(project: Path) -> dict[str, Any]:
                 location="rules.persistence_backend",
             ))
 
-    codec_report = evaluate_codec_coverage(spec, payload if isinstance(payload, dict) else None)
+    codec_report = evaluate_codec_coverage(
+        spec,
+        payload if isinstance(payload, dict) else None,
+        storage_resolver=storage_resolver,
+    )
     if payload is not None:
         structural_findings = validate(payload)
         findings.extend(structural_findings)
