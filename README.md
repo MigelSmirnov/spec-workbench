@@ -156,6 +156,28 @@ The transport-neutral `assembly_workbench` delegates to the language, identity,
 data, contract, notes, router, and persistence owners and returns a compact
 MCP-ready report.
 
+### Notes language and dependency bindings
+
+Passing the notes coverage gate does not mean the Factory will generate from
+those notes. Its pre-generation gate counts a note as evidence only when the
+note is scoped to the bare callable name, carries a semantic note class, and
+states a **positive modal** — `MUST`, `SHOULD`, or `MAY`. A note written in the
+imperative mood satisfies this repository and is rejected downstream, after the
+specification has already been exported and accepted.
+
+```bash
+python tools/design_notes.py examples/<case> --language
+python tools/design_notes.py examples/<case> --language --json
+```
+
+`notes_workbench/language.py` replicates that rule against the assembled
+`global_spec.json` and points at the authored Markdown line to repair, reading
+every `80_notes*.md` file rather than `80_notes.md` alone. It also cross-checks
+notes that name a runtime dependency: when a note says to obtain a type bound to
+`request.app.state.*` and pass it to a callable, the named type must be the one
+that callable's contract requires. Such a note counts as coverage either way, so
+a wrong binding is otherwise invisible until runtime verification.
+
 For the final business-to-implementation comparison, build a module review
 packet from the assembled specification:
 

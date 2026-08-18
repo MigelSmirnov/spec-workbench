@@ -7,7 +7,7 @@ import json
 import sys
 from pathlib import Path
 
-from notes_workbench import gate, service
+from notes_workbench import gate, language, service
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -19,6 +19,7 @@ def main(argv: list[str] | None = None) -> int:
     action.add_argument("--review", action="store_true")
     action.add_argument("--gate", action="store_true")
     action.add_argument("--handoff", action="store_true")
+    action.add_argument("--language", action="store_true")
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args(argv)
     if not args.project.is_dir():
@@ -30,17 +31,24 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.gate:
             payload = gate.coverage(args.project)
+        elif args.language:
+            payload = language.report(args.project)
         elif args.handoff:
             payload = gate.handoff(args.project)
         else:
             payload = service.module_slice(args.project, args.module) if args.slice else service.module_review(args.project, args.module)
-    except (ValueError, json.JSONDecodeError) as exc:
+    except (OSError, ValueError, json.JSONDecodeError) as exc:
         print(f"design_notes: error: {exc}", file=sys.stderr)
         return 2
     if args.json:
         print(json.dumps(payload, indent=2, sort_keys=True))
     else:
-        if args.slice:
+        if args.language:
+            summary = payload["summary"]
+            print(f"Notes language: {summary['findings']} findings; {summary['blocking']} blocking")
+            for code, count in sorted(summary["by_code"].items()):
+                print(f"  {code}: {count}")
+        elif args.slice:
             print(f"{payload['module']}: {len(payload['obligations'])} obligations")
         elif args.review:
             summary = payload["summary"]
@@ -49,6 +57,8 @@ def main(argv: list[str] | None = None) -> int:
             summary = payload["summary"]
             ready = payload.get("ready", summary["handoff_ready"])
             print(f"State 7 notes: {summary['notes']} notes; {summary['blocks']} blocks; {summary['reviews']} reviews; handoff_ready={str(ready).lower()}")
+    if args.language:
+        return 0 if payload["status"] == "pass" else 1
     if args.gate:
         return 0 if payload["summary"]["handoff_ready"] else 1
     if args.handoff:
