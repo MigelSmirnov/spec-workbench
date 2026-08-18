@@ -64,6 +64,7 @@ def _write_project(
     rules: object | None = None,
     contracts: dict | None = None,
     module_functions: dict | None = None,
+    write_closure: bool = True,
 ) -> Path:
     project = tmp_path / "project"
     project.mkdir()
@@ -80,6 +81,15 @@ def _write_project(
         "module_functions": module_functions or {},
     }
     (project / "global_spec.json").write_text(json.dumps(payload), encoding="utf-8")
+    if persistence_backend is not None and write_closure:
+        (project / "70_persistence_closure.json").write_text(
+            json.dumps({
+                "schema_version": "spec_workbench_persistence_closure.v1",
+                "status": "closed",
+                "backend_ir": persistence_backend,
+            }),
+            encoding="utf-8",
+        )
     return project
 
 
@@ -104,6 +114,50 @@ def test_empty_v2_backend_is_structurally_valid(tmp_path: Path) -> None:
         "errors": 0,
         "handoff_ready": True,
     }
+
+
+def test_assembled_backend_without_authoring_closure_is_blocked(tmp_path: Path) -> None:
+    report = coverage(_write_project(
+        tmp_path,
+        persistence_backend=_backend(),
+        write_closure=False,
+    ))
+    assert report["ready"] is False
+    assert any(
+        item["code"] == "untracked_assembled_persistence_backend"
+        for item in report["findings"]
+    )
+
+
+def test_closed_closure_must_match_assembled_backend_exactly(tmp_path: Path) -> None:
+    project = _write_project(tmp_path, persistence_backend=_backend())
+    closure = json.loads((project / "70_persistence_closure.json").read_text(encoding="utf-8"))
+    closure["backend_ir"]["conventions"]["guard_reraise"] = "changed"
+    (project / "70_persistence_closure.json").write_text(json.dumps(closure), encoding="utf-8")
+    report = coverage(project)
+    assert report["ready"] is False
+    assert any(
+        item["code"] == "persistence_backend_handoff_mismatch"
+        for item in report["findings"]
+    )
+
+
+def test_closed_closure_without_assembled_backend_is_blocked(tmp_path: Path) -> None:
+    project = _write_project(tmp_path, persistence_backend=None)
+    (project / "70_persistence_closure.json").write_text(
+        json.dumps({
+            "schema_version": "spec_workbench_persistence_closure.v1",
+            "status": "closed",
+            "backend_ir": _backend(),
+        }),
+        encoding="utf-8",
+    )
+    report = coverage(project)
+    assert report["ready"] is False
+    assert any(
+        item["code"] == "missing_assembled_persistence_backend"
+        for item in report["findings"]
+    )
 
 
 def test_backend_root_is_closed() -> None:
