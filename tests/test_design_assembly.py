@@ -15,19 +15,29 @@ def _copy_project(tmp_path: Path) -> Path:
     shutil.copytree(CABINET, project)
     return project
 
-def test_cabinet_assembly_is_ready() -> None:
+def test_cabinet_assembly_is_blocked_by_language_version() -> None:
     report = verify(CABINET)
     assert report["schema_version"] == "spec_workbench_assembly_verification.v1"
-    assert report["ready"] is True
+    assert report["ready"] is False
     assert report["summary"] == {
-        "checks": 5,
+        "checks": 6,
         "ready_checks": 5,
-        "errors": 0,
+        "errors": 1,
         "warnings": 0,
     }
     assert [check["name"] for check in report["checks"]] == [
-        "identity", "data", "contracts", "notes", "router"
+        "language", "identity", "data", "contracts", "notes", "router"
     ]
+    language = report["checks"][0]
+    assert language["ready"] is False
+    assert language["errors"] == 1
+
+def test_language_check_inspection_preserves_owner_report() -> None:
+    report = inspect_check(CABINET, "language")
+    assert report["schema_version"] == "spec_workbench_assembly_check.v1"
+    assert report["check"]["schema_version"] == "spec_workbench_language_gate.v1"
+    assert report["check"]["ready"] is False
+    assert report["check"]["errors"] == 1
 
 def test_check_inspection_preserves_owner_report() -> None:
     report = inspect_check(CABINET, "notes")
