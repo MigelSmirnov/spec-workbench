@@ -10,37 +10,41 @@ from assembly_workbench.model import AssemblyWorkbenchError
 ROOT = Path(__file__).resolve().parents[1]
 CABINET = ROOT / "examples" / "cabinet-backend"
 
+
 def _copy_project(tmp_path: Path) -> Path:
     project = tmp_path / "cabinet-backend"
     shutil.copytree(CABINET, project)
     return project
 
-def test_cabinet_assembly_is_blocked_by_language_migration() -> None:
+
+def test_cabinet_assembly_is_ready_after_v2_language_migration() -> None:
     report = verify(CABINET)
     assert report["schema_version"] == "spec_workbench_assembly_verification.v1"
-    assert report["ready"] is False
+    assert report["ready"] is True
     assert report["summary"] == {
         "checks": 7,
-        "ready_checks": 6,
-        "errors": 2,
+        "ready_checks": 7,
+        "errors": 0,
         "warnings": 0,
     }
     assert [check["name"] for check in report["checks"]] == [
         "language", "identity", "data", "contracts", "notes", "router", "persistence"
     ]
     language = report["checks"][0]
-    assert language["ready"] is False
-    assert language["errors"] == 2
+    assert language["ready"] is True
+    assert language["errors"] == 0
     persistence = report["checks"][-1]
     assert persistence["ready"] is True
     assert persistence["summary"]["handoff_ready"] is True
 
-def test_language_check_inspection_preserves_owner_report() -> None:
+
+def test_language_check_inspection_preserves_ready_owner_report() -> None:
     report = inspect_check(CABINET, "language")
     assert report["schema_version"] == "spec_workbench_assembly_check.v1"
     assert report["check"]["schema_version"] == "spec_workbench_language_gate.v1"
-    assert report["check"]["ready"] is False
-    assert report["check"]["errors"] == 2
+    assert report["check"]["ready"] is True
+    assert report["check"]["errors"] == 0
+
 
 def test_persistence_check_preserves_optional_llm_path() -> None:
     report = inspect_check(CABINET, "persistence")
@@ -50,12 +54,14 @@ def test_persistence_check_preserves_optional_llm_path() -> None:
     assert report["check"]["summary"]["repositories"] == 0
     assert report["check"]["summary"]["errors"] == 0
 
+
 def test_check_inspection_preserves_owner_report() -> None:
     report = inspect_check(CABINET, "notes")
     assert report["schema_version"] == "spec_workbench_assembly_check.v1"
     assert report["check"]["schema_version"] == "spec_workbench_state7_notes_gate.v1"
     assert report["check"]["summary"]["notes"] == 94
     assert report["check"]["ready"] is True
+
 
 def test_identity_failure_blocks_assembly(tmp_path: Path) -> None:
     project = _copy_project(tmp_path)
@@ -68,6 +74,7 @@ def test_identity_failure_blocks_assembly(tmp_path: Path) -> None:
     identity = next(check for check in report["checks"] if check["name"] == "identity")
     assert identity["ready"] is False
     assert identity["errors"] == 2
+
 
 def test_unknown_check_fails_closed() -> None:
     try:
