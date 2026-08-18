@@ -8,7 +8,8 @@ functions; see skills/spec-authoring/AUTHORING_SEQUENCE.md.
 
 The workbench places already accepted semantic facts into structured
 specification homes before exact contracts and notes. It does not invent values.
-Empty sections are valid when no accepted value belongs there yet.
+Contract-dependent deterministic backend IR is post-State-6 authoring and is
+forbidden here. Empty sections are valid when no accepted value belongs there yet.
 """
 from __future__ import annotations
 
@@ -24,6 +25,7 @@ REPORT_SCHEMA = "spec_workbench_state6_data_lint.v2"
 DEFAULT_FILE = "60_data_closure.json"
 ALLOWED_SECTIONS = {"config", "rules", "persistence", "properties", "determinism"}
 PERSISTENCE_CLASSES = {"master", "derived", "issued", "mirrored"}
+CONTRACT_DEPENDENT_RULE_NAMESPACES = {"persistence_backend"}
 
 
 def load(project: Path) -> dict[str, Any]:
@@ -63,6 +65,18 @@ def lint(project: Path) -> dict[str, Any]:
             findings.append({"severity":"error","code":"missing_data_section","message":f"missing structured data section: {key}"})
         elif not isinstance(sections[key], dict):
             findings.append({"severity":"error","code":"invalid_data_section","message":f"section {key} must be an object"})
+
+    rules = sections.get("rules", {})
+    if isinstance(rules, dict):
+        for namespace in sorted(CONTRACT_DEPENDENT_RULE_NAMESPACES & set(rules)):
+            findings.append({
+                "severity": "error",
+                "code": "contract_dependent_backend_in_precontract_data",
+                "message": (
+                    f"rules.{namespace} depends on canonical State 6 contracts and must be authored "
+                    "through the post-contract deterministic backend closure, not 60_data_closure.json"
+                ),
+            })
 
     persistence = sections.get("persistence", {})
     persistence_counts = {name: 0 for name in sorted(PERSISTENCE_CLASSES)}
