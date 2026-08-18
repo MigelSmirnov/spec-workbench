@@ -64,6 +64,8 @@ def _write_project(
     rules: object | None = None,
     contracts: dict | None = None,
     module_functions: dict | None = None,
+    config: dict | None = None,
+    models: dict | None = None,
     write_closure: bool = True,
 ) -> Path:
     project = tmp_path / "project"
@@ -77,6 +79,8 @@ def _write_project(
     payload = {
         "standard_version": 2,
         "rules": rules_payload,
+        "config": config or {"role": "data", "schema_version": 1},
+        "models": models or {"role": "data", "schema_version": 1},
         "contracts": contracts or {},
         "module_functions": module_functions or {},
     }
@@ -91,6 +95,24 @@ def _write_project(
             encoding="utf-8",
         )
     return project
+
+
+def _invoice_projection() -> dict:
+    return {
+        "config": {
+            "role": "data",
+            "schema_version": 1,
+            "storage": {"invoice_table": "invoices"},
+        },
+        "models": {
+            "role": "data",
+            "schema_version": 1,
+            "Invoice": {
+                "identity": "entity",
+                "fields": {"invoice_id": "str"},
+            },
+        },
+    }
 
 
 def test_absent_backend_keeps_llm_path_ready(tmp_path: Path) -> None:
@@ -276,6 +298,7 @@ def test_aggregate_relation_shape_is_closed() -> None:
 
 
 def test_coverage_binds_table_repository_to_canonical_contracts(tmp_path: Path) -> None:
+    projection = _invoice_projection()
     project = _write_project(
         tmp_path,
         persistence_backend=_table_backend(),
@@ -286,6 +309,7 @@ def test_coverage_binds_table_repository_to_canonical_contracts(tmp_path: Path) 
         module_functions={
             "invoice_repository": ["InvoiceRepository", "create_invoice_schema"],
         },
+        **projection,
     )
     report = coverage(project)
     assert report["ready"] is True
@@ -293,7 +317,28 @@ def test_coverage_binds_table_repository_to_canonical_contracts(tmp_path: Path) 
     assert report["summary"]["errors"] == 0
 
 
+def test_unresolved_table_projection_blocks_coverage(tmp_path: Path) -> None:
+    projection = _invoice_projection()
+    projection["models"]["Invoice"]["fields"] = {"other_id": "str"}
+    project = _write_project(
+        tmp_path,
+        persistence_backend=_table_backend(),
+        contracts={
+            "create_invoice_schema": "() -> None",
+            "InvoiceRepository.get_invoice": "(self, invoice_id: str) -> Invoice | None",
+        },
+        module_functions={
+            "invoice_repository": ["InvoiceRepository", "create_invoice_schema"],
+        },
+        **projection,
+    )
+    report = coverage(project)
+    assert report["ready"] is False
+    assert any(item["code"] == "unknown_model_field" for item in report["findings"])
+
+
 def test_missing_repository_method_contract_blocks_coverage(tmp_path: Path) -> None:
+    projection = _invoice_projection()
     project = _write_project(
         tmp_path,
         persistence_backend=_table_backend(),
@@ -301,6 +346,7 @@ def test_missing_repository_method_contract_blocks_coverage(tmp_path: Path) -> N
         module_functions={
             "invoice_repository": ["InvoiceRepository", "create_invoice_schema"],
         },
+        **projection,
     )
     report = coverage(project)
     assert report["ready"] is False
@@ -310,6 +356,7 @@ def test_missing_repository_method_contract_blocks_coverage(tmp_path: Path) -> N
 def test_transaction_methods_are_not_deterministic_backend_owned(tmp_path: Path) -> None:
     payload = _table_backend()
     payload["repositories"][0]["methods"][0]["method"] = "commit"
+    projection = _invoice_projection()
     project = _write_project(
         tmp_path,
         persistence_backend=payload,
@@ -320,6 +367,7 @@ def test_transaction_methods_are_not_deterministic_backend_owned(tmp_path: Path)
         module_functions={
             "invoice_repository": ["InvoiceRepository", "create_invoice_schema"],
         },
+        **projection,
     )
     report = coverage(project)
     assert report["ready"] is False
