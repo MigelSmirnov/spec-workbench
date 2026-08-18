@@ -23,7 +23,48 @@ def _backend() -> dict:
     }
 
 
-def _write_project(tmp_path: Path, *, persistence_backend: dict | None, rules: object | None = None) -> Path:
+def _table_backend() -> dict:
+    payload = _backend()
+    payload["tables"] = [{
+        "table": "invoices",
+        "table_name_ref": "config.storage.invoice_table",
+        "model": "Invoice",
+        "read_by": "invoice_repository",
+        "columns": [{
+            "column": "invoice_id",
+            "field": "invoice_id",
+            "storage": "text",
+            "nullable": False,
+            "check": None,
+            "element_model": None,
+        }],
+        "primary_key": ["invoice_id"],
+        "unique": [],
+    }]
+    payload["repositories"] = [{
+        "repository": "InvoiceRepository",
+        "module": "invoice_repository",
+        "schema_function": "create_invoice_schema",
+        "emission": "table",
+        "methods": [{
+            "method": "get_invoice",
+            "query": "get_by_key",
+            "table": "invoices",
+            "filter": {"invoice_id": "opaque-until-closed-registry-is-specified"},
+            "select": ["invoice_id"],
+        }],
+    }]
+    return payload
+
+
+def _write_project(
+    tmp_path: Path,
+    *,
+    persistence_backend: dict | None,
+    rules: object | None = None,
+    contracts: dict | None = None,
+    module_functions: dict | None = None,
+) -> Path:
     project = tmp_path / "project"
     project.mkdir()
     if rules is None:
@@ -32,10 +73,13 @@ def _write_project(tmp_path: Path, *, persistence_backend: dict | None, rules: o
             rules_payload = {"persistence_backend": persistence_backend}
     else:
         rules_payload = rules
-    (project / "global_spec.json").write_text(
-        json.dumps({"standard_version": 2, "rules": rules_payload}),
-        encoding="utf-8",
-    )
+    payload = {
+        "standard_version": 2,
+        "rules": rules_payload,
+        "contracts": contracts or {},
+        "module_functions": module_functions or {},
+    }
+    (project / "global_spec.json").write_text(json.dumps(payload), encoding="utf-8")
     return project
 
 
@@ -93,37 +137,7 @@ def test_table_identity_and_columns_are_resolved() -> None:
 
 
 def test_valid_table_repository_and_method() -> None:
-    payload = _backend()
-    payload["tables"] = [{
-        "table": "invoices",
-        "table_name_ref": "config.storage.invoice_table",
-        "model": "Invoice",
-        "read_by": "invoice_repository",
-        "columns": [{
-            "column": "invoice_id",
-            "field": "invoice_id",
-            "storage": "text",
-            "nullable": False,
-            "check": None,
-            "element_model": None,
-        }],
-        "primary_key": ["invoice_id"],
-        "unique": [],
-    }]
-    payload["repositories"] = [{
-        "repository": "InvoiceRepository",
-        "module": "invoice_repository",
-        "schema_function": "create_invoice_schema",
-        "emission": "table",
-        "methods": [{
-            "method": "get_invoice",
-            "query": "get_by_key",
-            "table": "invoices",
-            "filter": {"invoice_id": "opaque-until-closed-registry-is-specified"},
-            "select": ["invoice_id"],
-        }],
-    }]
-    findings = validate(payload)
+    findings = validate(_table_backend())
     assert findings == []
 
 
@@ -205,3 +219,54 @@ def test_aggregate_relation_shape_is_closed() -> None:
     }]
     findings = validate(payload)
     assert any(item.code == "relation_column_arity_mismatch" for item in findings)
+
+
+def test_coverage_binds_table_repository_to_canonical_contracts(tmp_path: Path) -> None:
+    project = _write_project(
+        tmp_path,
+        persistence_backend=_table_backend(),
+        contracts={
+            "create_invoice_schema": "() -> None",
+            "InvoiceRepository.get_invoice": "(self, invoice_id: str) -> Invoice | None",
+        },
+        module_functions={
+            "invoice_repository": ["InvoiceRepository", "create_invoice_schema"],
+        },
+    )
+    report = coverage(project)
+    assert report["ready"] is True
+    assert report["deterministic_modules"] == ["invoice_repository"]
+    assert report["summary"]["errors"] == 0
+
+
+def test_missing_repository_method_contract_blocks_coverage(tmp_path: Path) -> None:
+    project = _write_project(
+        tmp_path,
+        persistence_backend=_table_backend(),
+        contracts={"create_invoice_schema": "() -> None"},
+        module_functions={
+            "invoice_repository": ["InvoiceRepository", "create_invoice_schema"],
+        },
+    )
+    report = coverage(project)
+    assert report["ready"] is False
+    assert any(item["code"] == "missing_repository_method_contract" for item in report["findings"])
+
+
+def test_transaction_methods_are_not_deterministic_backend_owned(tmp_path: Path) -> None:
+    payload = _table_backend()
+    payload["repositories"][0]["methods"][0]["method"] = "commit"
+    project = _write_project(
+        tmp_path,
+        persistence_backend=payload,
+        contracts={
+            "create_invoice_schema": "() -> None",
+            "InvoiceRepository.commit": "(self) -> None",
+        },
+        module_functions={
+            "invoice_repository": ["InvoiceRepository", "create_invoice_schema"],
+        },
+    )
+    report = coverage(project)
+    assert report["ready"] is False
+    assert any(item["code"] == "backend_owns_transaction_method" for item in report["findings"])
