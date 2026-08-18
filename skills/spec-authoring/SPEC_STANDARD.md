@@ -18,9 +18,9 @@
 
 ```json
 {
+  "standard_version": 2,
   "contracts": { ... },
   "notes": [ ... ],
-  "adapters": { ... },
   "config": { ... },
   "models": { ... },
   "rules": { ... },
@@ -35,6 +35,13 @@
   "default_module": "app"
 }
 ```
+
+`standard_version` — обязательная целочисленная редакция этого стандарта.
+Отсутствующее или неизвестное значение является BLOCK: умолчание и чтение по
+«ближайшей» версии запрещены. Нормализатор сохраняет значение без изменения;
+editor, deploy, handoff, verification и terminal OTK записывают его в lineage
+рядом с хэшами base и normalized spec. Изменение нормативного прочтения
+существующего ключа требует новой редакции, даже если JSON-форма не изменилась.
 
 ---
 
@@ -187,47 +194,22 @@
 - Дублирование contracts: сигнатура уже есть в contracts, не повторяй
 - Inline-данные: таблицы соответствий, allow-lists, пороги, TTL, пути, рейтинги, размеры, словари alias'ов. Для них используй `config`, `models` или `rules`, а note оставляй address-only: `MUST use = rules.some_policy`.
 
----
+**Несовпадение форм на стыке вызова:**
 
-## 3. adapters
+Если caller располагает данными в форме, отличной от контракта callee, это
+поведение принадлежит конкретному вызову и записывается классифицированной
+нотой caller-а, например:
 
-**Что это:** правила преобразования аргументов при вызове функции из другого модуля.
-
-**Когда нужен адаптер:** когда вызывающий модуль имеет данные в одном формате, а вызываемая функция ожидает другой.
-
-**Формат:**
-
-Вариант A — распаковка объекта в аргументы:
-```json
-{
-  "validate_file": {
-    "from": "UploadedFile",
-    "mapping": ["file_bytes", "file.name"],
-    "requires_cache": true
-  }
-}
+```text
+process_upload: [ORCHESTRATION] MUST call validate_file with the uploaded byte content and filename and MUST read the byte content once
 ```
-Означает: вызывающий код имеет `UploadedFile` объект, нужно вызывать как `validate_file(file.getvalue(), file.name)`.
 
-Вариант B — маппинг параметров:
-```json
-{
-  "normalize_dpi": {
-    "mapping": {
-      "image": "arg0",
-      "target_dpi": "literal:300"
-    }
-  }
-}
-```
-Означает: `image` берётся из первого аргумента, `target_dpi` всегда равен 300.
-
-**Правила:**
-- Адаптер привязывается к имени функции, НЕ к имени модуля
-- `requires_cache: true` — подсказка агенту, что нужно прочитать данные один раз (например `file.getvalue()`)
-- Адаптер нужен только если формат аргументов отличается между caller и callee
-
-**Частая ошибка:** забыть адаптер. Если функция принимает `(bytes, str)`, а вызывающий модуль имеет объект `UploadedFile` — без адаптера агент передаст объект целиком.
+Владелец такой ноты — caller/callsite, не callee. Нота остаётся требованием к
+поведению: выражения, вызовы методов, точечная навигация и строковый
+микро-синтаксис в ней запрещены. Нормативные значения размещаются процедурой
+15.2 и адресуются ссылкой. Если точный внешний способ извлечения значения
+является частью контракта, он объявляется отдельным портом/контрактом, а не
+прячется псевдокодом в note.
 
 ---
 
@@ -368,7 +350,8 @@ authorizer, gateway). Интерфейс не вводит нового синт
 
 ## 6. rules
 
-**Что это:** read-only structured policy data: нормативные правила, layout policy, routing policy, fallback policy, threshold tables.
+**Что это:** read-only structured normative data двух непересекающихся видов:
+project policy data и зарезервированные versioned backend IR.
 
 ```json
 {
@@ -387,10 +370,43 @@ authorizer, gateway). Интерфейс не вводит нового синт
 - `role` имеет служебное значение `"data"`; `schema_version` на верхнем
   уровне — целое число версии секции. Имена зарезервированы и не являются
   политиками.
-- `rules` — не исполняемый код и не псевдокод. Представляй политику декларативно.
+- Обычный ключ `rules` содержит декларативную domain/policy semantics и не
+  является исполняемым кодом или псевдокодом.
+- Зарезервированный backend namespace имеет `kind`, `schema_version` и
+  `backend`; его полную закрытую форму определяет соответствующий подраздел
+  этого стандарта. Backend IR не является project policy и не может молча
+  наследовать поля другой версии.
 - Не смешивай `rules` с `config`: config — runtime knobs, rules — domain/policy semantics.
 - Не переносись сюда schema/model definitions.
 - Notes ссылаются на rules адресно: `"derive_policy: [RULE_REFERENCE] MUST use = rules.example_policy.threshold"`.
+
+### 6.0 Закрытый словарь backend IR
+
+Детерминированный backend читает только форму, полностью известную его версии.
+Ссылка на источник значения внутри backend IR является объектом закрытого
+словаря, а не строковым выражением:
+
+```json
+{"ref": "parameter", "path": ["invoice_id"]}
+{"ref": "literal", "value": 300}
+```
+
+**Правила (нарушение = невалидная спека):**
+
+- `ref` — листовой объект. Значения всех его полей — JSON-скаляры либо массивы
+  JSON-скаляров. Вложенный объект, вложенный `ref` и массив объектов запрещены.
+- `literal:300`, `arg0`, `payload.email`, `file.getvalue()`, `Capability.X` и
+  иной строковый микро-синтаксис запрещены.
+- Допустимые `ref`, их точные поля и значения принадлежат версии конкретного
+  backend-а. Допустимость ref в другом backend-е ничего не разрешает.
+- Неизвестный ref, поле или enum-значение останавливает сборку fail-closed.
+- Реестр конструкций backend-а не содержит проектных имён. Проектные имена
+  являются значениями валидных ячеек IR, но не расширяют словарь конструкций.
+- Последовательность операций не является значением спеки. Спека объявляет
+  форму; порядок и число операций lowering-а детерминированы backend version.
+
+§6.0 действует только для backend IR. Notes остаются прозой требований, однако
+общий запрет псевдокода в notes сохраняется.
 
 ### 6.1 `http_router_backend/v1`
 
@@ -473,6 +489,11 @@ HTTP-router. Он описывает экспонирование handler-ов, 
 - Маршрут `emission: "irregular"` не содержит скрытого тела. Он объявляет
   `irregular_reason`, а handler обязан принадлежать ровно companion-модулю из
   `irregular_ownership.module`. Router только импортирует и регистрирует его.
+- `irregular_ownership` является механизмом реестра маршрутов: handler —
+  свободная функция, а обязательство router-а исчерпывается регистрацией.
+  Механизм неприменим к членам типа. Перенос метода класса в другой модуль не
+  освобождает класс от реализации метода; распространение companion ownership
+  на repositories и другие типы является дефектом спеки.
 - `error_policy` задаёт единое отображение exception → HTTP status. Доступные
   router-модулю исключения обязаны быть прямыми imports; намеренно недоступные
   перечисляются в `unavailable_to_module` и lower-ятся backend-ом без
@@ -487,6 +508,122 @@ HTTP-router. Он описывает экспонирование handler-ов, 
 Версия backend является частью значения. Новая форма extractor-а, ref-а,
 response mode или lowering требует новой поддерживаемой версии; emitter не
 угадывает форму по существующему Python-коду.
+
+### 6.2 `persistence_backend/v2`
+
+`rules.persistence_backend` — нормативный IR детерминированной сборки SQLite
+repository-модулей. `persistence_backend/v1` был донормативной реализацией без
+текста стандарта и не поддерживается. Первая нормативная версия — 2.
+
+Верхнеуровневая форма v2 закрыта:
+
+```json
+{
+  "kind": "persistence_backend",
+  "schema_version": 2,
+  "backend": {"engine": "sqlite", "emitter": "sqlite_sync_v2"},
+  "conventions": {
+    "assert_open": "inside_try",
+    "guard_reraise": "unchanged",
+    "codec_naming": "row_to_snake_model",
+    "primary_key_not_null": "always"
+  },
+  "tables": [],
+  "aggregates": [],
+  "repositories": []
+}
+```
+
+Дополнительные поля запрещены на каждом узле. Коллекции являются списками;
+идентификаторы таблиц, агрегатов, репозиториев и методов уникальны.
+
+#### Таблицы и колонки
+
+Каждая table row содержит ровно `table`, `table_name_ref`, `model`, `read_by`,
+`columns`, `primary_key`, `unique`. Column row содержит ровно `column`, `field`,
+`storage`, `nullable`, `check`, `element_model`. Эти ячейки ссылаются на уже
+объявленные models/config и не повторяют тип поля. `primary_key` и строки
+`unique` — непустые списки имён колонок. `read_by` равен module name или null;
+`check` и `element_model` имеют закрытые формы валидатора версии.
+
+#### Aggregate persistence
+
+Если repository contract принимает или возвращает объявленный aggregate,
+состоящий из персистируемых моделей в форме реестра v2, backend обязан принять
+и детерминированно lower-ить эту форму. Неподдержка является `DEFECT` версии,
+а не разрешённым пропуском или основанием для генерации по догадке.
+
+Aggregate row имеет ровно `aggregate`, `root` и `relations`. Root row содержит
+`field`, `model`, `table`, `key`. Relation row содержит `field`, `model`,
+`table`, `cardinality`, `root_columns`, `related_columns`, `order_by`.
+`root_columns` и `related_columns` — равнодлинные непустые списки скаляров;
+поэлементные пары задают join и допускают разные имена колонок. `field`
+обязан резолвиться в поле aggregate model с соответствующим model type;
+`cardinality: "one"` требует неoptional поле и ровно одну строку,
+`cardinality: "many"` — `list[Model]`. Версия 2 знает только обязательную
+`one` и коллекционную `many`; появление допустимого repository aggregate с
+иной cardinality означает `DEFECT` версии.
+
+Все поля aggregate model обязаны быть покрыты root/relations. Runtime outcome,
+default, fallback и иное неперсистируемое значение не добавляются literal-ом в
+aggregate IR: они принадлежат другой модели/слою. Поэтому значение вроде
+`replayed` не может быть угадано lowering-ом.
+
+Repository row имеет одну из двух закрытых форм:
+
+- deterministic: ровно `repository`, `module`, `schema_function`,
+  `emission: "table"`, `methods`;
+- irregular: ровно `repository`, `module`, `schema_function`,
+  `emission: "irregular"`, `irregular_reason`.
+
+Один persistence module владеет ровно одной repository class и её schema
+function. Нерегулярность одного метода делает весь такой module irregular;
+частичная эмиссия класса/файла и companion-делегирование отсутствуют.
+
+Для обычной table method версия 2 сохраняет закрытые виды `insert`,
+`insert_many`, `get_by_key`, `get_unique`, `list_by`, `update_fields`,
+`update_many`, `upsert`. Их обязательные ячейки соответственно:
+
+```text
+insert, insert_many                 -> table, columns
+get_by_key                          -> table, filter, select
+get_unique                          -> table, filter, select, on_multiple
+list_by                             -> table, filter, select, order_by
+update_fields, update_many          -> table, filter, updates, require_existing
+upsert                              -> table, columns, conflict, updates
+```
+
+Aggregate methods образуют закрытый реестр:
+
+```text
+get_aggregate_by_key                -> aggregate, filter
+get_aggregate_by_unique             -> aggregate, filter, on_multiple
+list_aggregates_by                  -> aggregate, filter, order_by
+insert_aggregate                    -> aggregate
+replace_aggregate                   -> aggregate
+```
+
+Method row всегда содержит `method` и `query` плюс ровно ячейки выбранного
+вида. `filter`, `order_by`, column lists и `on_multiple` используют закрытые
+формы этой версии; field/column/model names обязаны резолвиться. Список шагов,
+SQL, временные значения и передача результата между запросами отсутствуют.
+Чтение root, обязательных one relations и many relations, а также запись или
+замена их строк разворачиваются lowering-ом на переданном соединении.
+
+#### Владение транзакцией и guarded mutation
+
+Backend не владеет `begin`, `commit`, `rollback` или `close`: открытое
+соединение передаёт внешний Unit of Work. Это не запрещает lowering-у выполнить
+несколько SQL-операций внутри уже открытой транзакции.
+
+Условие записи, зависящее от доменного состояния другой сущности, не является
+storage shape. Например, разрешение записи только при project-specific enum
+state принадлежит policy/use case или порту и не расширяет persistence IR.
+Метод с таким требованием irregular, пока требование остаётся на repository
+boundary.
+
+Версия backend является частью значения. Новая форма relation, query,
+constraint или storage representation требует новой поддерживаемой версии.
 
 ---
 
@@ -534,7 +671,7 @@ response mode или lowering требует новой поддерживаем
 - `module_internal[consumer][provider]` содержит **минимальный прямой runtime
   import surface** consumer-модуля, а не копию публичного API provider-а.
   Добавляй символ только если consumer обязан импортировать его для своих
-  contracts, adapters, classified notes или иного явно объявленного
+  contracts, classified notes или иного явно объявленного
   module-local поведения. Само наличие символа в `models`,
   `imports.internal` или `module_functions[provider]` зависимостью не является
 - Для provider-а `models` перечисляй только модели, enum и interface, которые
@@ -587,6 +724,10 @@ response mode или lowering требует новой поддерживаем
 **Правила:**
 - Каждая функция и константа из `contracts` должна быть ровно в одном модуле
 - Для классов — указывай имя класса, методы подтянутся автоматически
+- Класс неделим при назначении модулю: методы следуют за классом. Если один
+  метод не принят deterministic backend-ом, весь владеющий persistence module
+  (`schema_function` плюс одна repository class) остаётся на LLM-path.
+  Частичное смешивание и companion-делегирование для членов типа запрещены.
 - Константы (UPPER_CASE) тоже включай
 - Если функция не указана — она попадёт в модуль из `default_module` (по умолчанию `"app"`)
 - Предпочитай глубокие модули с ясными смысловыми границами. Если функция является guard/policy/catalog/storage/render helper, вынеси её в соответствующий модуль, а не оставляй в толстом endpoint/script.
@@ -1100,6 +1241,17 @@ backend, также принадлежат компилятору, а не пр�
     -> ровно один канонический codec backend-а
 ```
 
+Storage representation и SQLite affinity — разные уровни. Версия backend-а
+объявляет закрытый реестр representations (`text`, `integer`, `real`, `blob`,
+а также закрытые codec-backed формы вроде `uuid`, `datetime`, `decimal`,
+`enum`, `json`) и детерминированно lower-ит их в SQLite affinities `TEXT`,
+`NUMERIC`, `INTEGER`, `REAL`, `BLOB`. `NULL` является storage class, не
+affinity; nullable semantics берётся только из типа model field.
+
+Реестр и допустимые пары не содержат проектных имён. Проект выбирает только из
+разрешённых для domain type representations; если выбор единственный, он
+выводится и не дублируется.
+
 **Правила (нарушение = невалидная спека или DEFECT backend-а):**
 
 - Допустимые storage representations образуют закрытый реестр конкретного
@@ -1125,6 +1277,20 @@ backend, также принадлежат компилятору, а не пр�
 - Два repository-модуля, хранящие одну и ту же пару domain/storage типов,
   не могут иметь разные форматы преобразования. Различие означает либо другую
   явно объявленную storage representation, либо дефект.
+
+#### 15.5.2 Область codec coverage
+
+Равенство codec машинно обеспечивается только для модулей, целиком принятых
+deterministic persistence backend. LLM-module не получает это утверждение по
+умолчанию и не компенсирует разрыв classified note.
+
+Если LLM-module и deterministic module используют хотя бы одну общую пару
+`(domain type, storage representation)`, валидатор выдаёт отдельную
+неблокирующую диагностику `codec_coverage_gap`. Она перечисляет обе стороны и
+каждую общую пару. Диагностика не блокирует сборку, но делает состояние
+`codec_coverage=complete` ложным и обязана попасть в lineage/OTK evidence.
+Пары вычисляются из validated v2 table projection, не из существующего или
+сгенерированного Python-кода. При отсутствии общих пар gap не возникает.
 
 ---
 
@@ -1302,6 +1468,12 @@ backend, также принадлежат компилятору, а не пр�
   `contracts`, `module_functions` или notes
 - перенос наблюдаемой legacy-конвенции в новую спеку только потому, что она
   встречается чаще остальных
+- расширение или отказ от расширения backend IR по частоте случая в текущем
+  корпусе; критерий — замкнутость относительно уже разрешённых форм
+- строковый микро-синтаксис и вложенный `ref` внутри backend IR
+- последовательность операций как значение спеки
+- перенос `irregular_ownership` за пределы router registry
+- проектные имена как элементы реестра конструкций backend-а
 - подача значений в контекст генерации кода
 - смешанное владение файлом между генератором данных и моделью
 - `NOT_APPLICABLE` как результат невыполненной процедуры размещения
@@ -1321,7 +1493,8 @@ backend, также принадлежат компилятору, а не пр�
 
 4. **Нет неоднозначных имён?** `__init__`, `to_dict`, `close` — всегда с классом: `"Database.__init__:"`.
 
-5. **Адаптеры на стыках?** Если модуль A вызывает функцию модуля B, и A имеет данные в другом формате — нужен адаптер.
+5. **Стыки вызовов описаны?** Несовпадение форм аргументов зафиксировано
+   classified note у caller; секции `adapters` в спеке нет.
 
 6. **Импортная поверхность точная?** `imports.internal` содержит полный
    публичный API provider-ов, а каждый `module_internal` — только прямые
@@ -1366,8 +1539,18 @@ backend, также принадлежат компилятору, а не пр�
     запись в `persistence`; `issued` хранит снапшот значений; `mirrored` имеет
     `remote_id`, `synced_at` и переводящий слой.
 
+19a. **Persistence IR нормативен?** Если присутствует `persistence_backend`,
+     это версия 2; v1 отсутствует. Aggregate покрыт root/one/many без списка
+     шагов, а `codec_coverage_gap` перечисляет разрывы покрытия.
+
 20. **Историчность обеспечена?** Значения, цитируемые в `issued`, имеют период
     действия; документ фиксирует момент расчёта.
+
+21. **Версия стандарта проставлена?** `standard_version` равен поддерживаемой
+    редакции и перенесён в normalized spec и lineage.
+
+22. **Backend refs листовые?** Нет вложенных ref, объектов внутри ref,
+    строкового микро-синтаксиса и неизвестных ref-полей.
 
 21. **Версии и переход объявлены?** `schema_version` присутствует в трёх
     блоках; несовместимое изменение сопровождается фазами expand/contract.
@@ -1394,6 +1577,7 @@ backend, также принадлежат компилятору, а не пр�
 
 ```json
 {
+  "standard_version": 2,
   "contracts": {
     "fetch_data": "(url: str, timeout: int = 30) -> dict",
     "transform": "(data: dict) -> list[Item]",
@@ -1407,7 +1591,6 @@ backend, также принадлежат компилятору, а не пр�
     "transform: [DETERMINISM_OR_ORDERING] MUST sort by created_at descending",
     "save: [CONFIG_REFERENCE] MUST write JSON using = config.output.json_format"
   ],
-  "adapters": {},
   "config": {
     "role": "data",
     "schema_version": 1,
