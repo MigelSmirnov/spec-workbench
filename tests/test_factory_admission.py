@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 
@@ -80,6 +81,8 @@ def test_explicit_spec_is_ready_when_factory_accepts_it(tmp_path: Path) -> None:
     assert report["ready"] is True
     assert report["source"]["standard_version"] == 2
     assert report["summary"]["blocks"] == 0
+    assert report["codec_coverage"]["status"] == "not_applicable"
+    assert report["codec_coverage"]["complete"] is True
     language = next(item for item in report["checks"] if item["id"] == "FA009")
     assert language["status"] == "PASS"
     assert language["evidence"]["standard_version"] == 2
@@ -184,7 +187,7 @@ def test_old_lineage_without_standard_version_is_not_fresh(tmp_path: Path) -> No
         "status": "pass",
         "verdict": "PASS",
         "inputs": {},
-        "outputs": {"base_spec_sha256_after": __import__("hashlib").sha256(canonical.read_bytes()).hexdigest()},
+        "outputs": {"base_spec_sha256_after": hashlib.sha256(canonical.read_bytes()).hexdigest()},
         "change_summary": {"changed_modules": ["global"]},
     })
     admitted = check(
@@ -198,6 +201,36 @@ def test_old_lineage_without_standard_version_is_not_fresh(tmp_path: Path) -> No
     assert target["evidence"]["action"] == "accept_lineage"
     assert target["evidence"]["lineage_fresh"] is False
     assert target["evidence"]["lineage_standard_version"] is None
+
+
+def test_old_lineage_without_codec_snapshot_is_not_fresh(tmp_path: Path) -> None:
+    report = _run(tmp_path)
+    factory = Path(report["factory_root"])
+    source = tmp_path / "spec-workbench/accepted/global_spec.json"
+    canonical = factory / "projects/demo/specs/base/global_spec.json"
+    canonical.parent.mkdir(parents=True, exist_ok=True)
+    canonical.write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
+    lineage_path = factory / "projects/demo/specs/working/spec_editor_manifest.json"
+    _write_json(lineage_path, {
+        "accepted": True,
+        "status": "pass",
+        "verdict": "PASS",
+        "inputs": {"standard_version": 2},
+        "outputs": {"base_spec_sha256_after": hashlib.sha256(canonical.read_bytes()).hexdigest()},
+        "change_summary": {"changed_modules": ["global"]},
+    })
+    admitted = check(
+        workbench_root=tmp_path / "spec-workbench",
+        source=source,
+        project="demo",
+        factory_root=factory,
+        source_git=CLEAN_GIT,
+    )
+    target = next(item for item in admitted["checks"] if item["id"] == "FA007")
+    assert target["evidence"]["action"] == "accept_lineage"
+    assert target["evidence"]["lineage_fresh"] is False
+    assert target["evidence"]["source_codec_coverage"] == admitted["codec_coverage"]
+    assert target["evidence"]["lineage_codec_coverage"] is None
 
 
 def test_dirty_source_is_blocked_unless_explicitly_allowed(tmp_path: Path) -> None:
