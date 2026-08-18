@@ -5,7 +5,7 @@ from typing import Any
 
 REPORT_SCHEMA = "spec_workbench_assembly_verification.v1"
 INSPECTION_SCHEMA = "spec_workbench_assembly_check.v1"
-CHECK_ORDER = ("language", "identity", "data", "contracts", "notes", "router")
+CHECK_ORDER = ("language", "identity", "data", "contracts", "notes", "router", "persistence")
 
 class AssemblyWorkbenchError(ValueError):
     """Assembly verification cannot be completed safely."""
