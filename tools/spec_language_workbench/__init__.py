@@ -9,7 +9,7 @@ REPORT_SCHEMA = "spec_workbench_language_gate.v1"
 
 
 class SpecLanguageError(ValueError):
-    """The assembled specification cannot be inspected safely."""
+    """The specification language revision cannot be inspected safely."""
 
 
 def _load_spec(project: Path) -> dict[str, Any]:
@@ -25,16 +25,11 @@ def _load_spec(project: Path) -> dict[str, Any]:
     return payload
 
 
-def verify(project: Path) -> dict[str, Any]:
-    """Verify only language-version invariants owned by SPEC_STANDARD itself.
-
-    Backend-specific IR validation deliberately belongs to the corresponding
-    backend workbench. This gate prevents consumers from interpreting a spec
-    under an implicit or unknown language revision.
-    """
-    spec = _load_spec(project)
+def verify_payload(spec: Any, *, project_root: str) -> dict[str, Any]:
+    """Verify language-version invariants for an already loaded spec object."""
+    if not isinstance(spec, dict):
+        raise SpecLanguageError("specification must contain an object")
     findings: list[dict[str, Any]] = []
-
     version = spec.get("standard_version")
     if not isinstance(version, int) or isinstance(version, bool):
         findings.append({
@@ -62,15 +57,23 @@ def verify(project: Path) -> dict[str, Any]:
     errors = sum(item["severity"] == "error" for item in findings)
     return {
         "schema_version": REPORT_SCHEMA,
-        "project_root": project.resolve().name,
+        "project_root": project_root,
         "standard_version": version,
         "supported_standard_version": SUPPORTED_STANDARD_VERSION,
         "ready": errors == 0,
-        "summary": {
-            "errors": errors,
-        },
+        "summary": {"errors": errors},
         "findings": findings,
     }
+
+
+def verify(project: Path) -> dict[str, Any]:
+    """Verify only language-version invariants owned by SPEC_STANDARD itself.
+
+    Backend-specific IR validation deliberately belongs to the corresponding
+    backend workbench. This gate prevents consumers from interpreting a spec
+    under an implicit or unknown language revision.
+    """
+    return verify_payload(_load_spec(project), project_root=project.resolve().name)
 
 
 __all__ = [
@@ -78,4 +81,5 @@ __all__ = [
     "SUPPORTED_STANDARD_VERSION",
     "SpecLanguageError",
     "verify",
+    "verify_payload",
 ]
