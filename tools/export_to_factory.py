@@ -213,6 +213,7 @@ def stage9_lineage_manifest(
     project: str,
     source_sha: str,
     source_commit: str | None,
+    standard_version: int,
     started_at: str,
     base_spec_path: Path,
     base_spec_sha_before: str | None,
@@ -251,6 +252,7 @@ def stage9_lineage_manifest(
             "base_spec_sha256_before": base_spec_sha_before,
             "source_spec_sha256": source_sha,
             "source_commit": source_commit,
+            "standard_version": standard_version,
         },
         "outputs": {
             "base_spec_sha256_after": base_spec_sha_after,
@@ -299,6 +301,9 @@ def main() -> int:
     source_spec = load_json(source)
     if not isinstance(source_spec, dict):
         raise SystemExit("source specification must contain a JSON object")
+    standard_version = source_spec.get("standard_version")
+    if not isinstance(standard_version, int) or isinstance(standard_version, bool):
+        raise SystemExit("source specification has no valid standard_version")
 
     workbench_git = git_metadata(workbench_root)
     admission = check_factory_admission(
@@ -351,6 +356,8 @@ def main() -> int:
     canonical_semantic_sha = canonical_spec_sha(canonical_spec)
     if canonical_spec != source_spec or canonical_semantic_sha != expected_validator_sha:
         raise SystemExit("canonical Factory specification differs semantically from the validated source")
+    if not isinstance(canonical_spec, dict) or canonical_spec.get("standard_version") != standard_version:
+        raise SystemExit("canonical Factory specification does not preserve source standard_version")
 
     semantic_handoff = export_semantic_tests(semantic_plan, paths["root"], args.update_existing)
     validation_path = paths["working"] / "spec_workbench_validation.json"
@@ -370,6 +377,7 @@ def main() -> int:
             "path": str(source.relative_to(workbench_root)) if source.is_relative_to(workbench_root) else str(source),
             "spec_sha256": source_sha,
             "canonical_spec_sha": expected_validator_sha,
+            "standard_version": standard_version,
             "standard_sha256": workbench_standard_sha,
             **workbench_git,
         },
@@ -377,6 +385,7 @@ def main() -> int:
             "canonical_spec_path": str(paths["canonical"].relative_to(factory_root)),
             "canonical_spec_sha256": canonical_sha,
             "canonical_spec_sha": canonical_semantic_sha,
+            "standard_version": standard_version,
             "standard_sha256": factory_standard_sha,
             "commit": factory_git["commit"],
             "validation_report_path": str(validation_path.relative_to(factory_root)),
@@ -395,6 +404,7 @@ def main() -> int:
         project=args.project,
         source_sha=source_sha,
         source_commit=workbench_git.get("commit"),
+        standard_version=standard_version,
         started_at=export_started_at,
         base_spec_path=paths["canonical"],
         base_spec_sha_before=base_spec_sha_before,
@@ -407,6 +417,8 @@ def main() -> int:
     recorded_sha = lineage["outputs"]["base_spec_sha256_after"]
     if recorded_sha != sha256_file(paths["canonical"]):
         raise SystemExit("accepted Stage 9 lineage does not cover the canonical Factory spec")
+    if lineage["inputs"].get("standard_version") != standard_version:
+        raise SystemExit("accepted Stage 9 lineage does not cover the source standard_version")
 
     print(f"exported spec: {source}")
     print(f"canonical spec: {paths['canonical']}")
