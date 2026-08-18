@@ -36,11 +36,17 @@
 - `[FALLBACK]` — degraded behavior, tolerated incomplete input.
 - `[ORCHESTRATION]` — route registration, import-and-call, thin wrapper, exception handler.
 
+Если caller располагает аргументами в форме, отличной от контракта callee,
+не создавай `adapters`: v2 удалил эту секцию. Зафиксируй требование у caller-а
+через `[ORCHESTRATION]` без Python-подобного микро-синтаксиса. Точная внешняя
+операция извлечения значения, если она сама является контрактом, оформляется
+отдельным портом/контрактом.
+
 ## Куда выносить данные
 
 - `config` — runtime/product knobs: лимиты, TTL, paths, feature knobs, небольшие списки пользовательских ключей.
 - `models` — DTO/schema плюс domain catalogs/mapping tables/upstream-downstream contracts.
-- `rules` — read-only policy tables: нормативы, routing/layout/fallback/threshold policy.
+- `rules` — read-only policy tables плюс зарезервированные versioned backend IR.
 
 Не merge-ить таблицы по похожей форме. Решение только по change-axis: меняются ли они вместе и по одной причине.
 
@@ -84,6 +90,29 @@ predicate или method shape не замкнуты, diagnostic emitter возв
 `legacy project → probe → missing decisions → spec → emitter → DEFECT/success`
 на нескольких разных проектах и собери повторяющиеся классы незамкнутости.
 
+## Если persistence собирается детерминированно
+
+Нормативная схема: [раздел 6.2](SPEC_STANDARD.md#62-persistence_backendv2).
+Порядок authoring фиксирует [AUTHORING_SEQUENCE.md](AUTHORING_SEQUENCE.md).
+
+- `persistence_backend/v2` сейчас SQLite-only: `engine=sqlite`, emitter
+  `sqlite_sync_v2`. PostgreSQL-модули не переводятся в этот IR автоматически.
+- Полный backend IR contract-dependent: его нельзя помещать в pre-contract
+  `60_data_closure.json`.
+- После готового State 6 создай `70_persistence_closure.json`; его `backend_ir`
+  должен замкнуться через `tools/design_persistence_authoring.py`.
+- Repository class, `schema_function` и backend-owned methods обязаны
+  резолвиться в один canonical State 6 module.
+- `begin`, `commit`, `rollback`, `close` принадлежат внешнему Unit of Work и не
+  являются deterministic persistence methods.
+- Один persistence module владеет одной repository class; partial class
+  emission и companion ownership для методов запрещены.
+- Финальный `rules.persistence_backend` должен точно совпадать с закрытым
+  authoring `backend_ir`; `tools/design_assembly.py --check persistence`
+  проверяет lineage и структуру.
+- Отсутствие persistence closure/IR означает обычный generation path.
+  Присутствующий, но невалидный IR не разрешает silent LLM fallback.
+
 ## Если router собирается детерминированно
 
 Нормативная схема: [раздел 6.1](SPEC_STANDARD.md#61-http_router_backendv1).
@@ -96,6 +125,8 @@ predicate или method shape не замкнуты, diagnostic emitter возв
   из `contracts[handler]`.
 - Аргументы вызовов — только typed refs (`slot`, `credential`, `parameter`,
   `enum`, scalar `literal`), не строки с Python-выражениями.
+- `irregular_ownership` применим только к свободному route handler; class member
+  остаётся методом своего класса и не может быть вынесен в companion module.
 - Project-specific state names, capability members и companion module
   задаются данными IR; backend их не прошивает.
 - Присутствующий, но невалидный IR блокирует сборку. LLM fallback допустим
@@ -116,8 +147,8 @@ predicate или method shape не замкнуты, diagnostic emitter возв
 
 - `imports.internal[provider]` — полный публичный export surface provider-а.
 - `imports.module_internal[consumer][provider]` — только минимальный набор
-  символов, которые consumer прямо импортирует для contracts, adapters,
-  classified notes или иного явно объявленного module-local поведения.
+  символов, которые consumer прямо импортирует для contracts, classified notes,
+  deterministic backend wiring или иного явно объявленного module-local поведения.
 - Не копируй в consumer весь `imports.internal[provider]` и не добавляй весь
   реестр `models` «на всякий случай»: явные записи расширяют dependency graph,
   affected-set и prompt context.
@@ -180,11 +211,11 @@ python tools/spec_dep_slice.py \
 - `--scope` — функция или модель; `--module` — взять все символы модуля целью.
 - Срез строится поверх графа Spec Inspector (`build_graph`/`run_checks`), не из
   сырого JSON.
-- `used_by` — обратные рёбра (контракты, модели-владельцы поля, адаптеры,
-  caller-ноты): кто сломается при изменении.
+- `used_by` — обратные рёбра (контракты, модели-владельцы поля, caller-ноты,
+  deterministic backend refs): кто сломается при изменении.
 - `affected_modules` — owner-модули всех потребителей: кандидаты на rebuild/deploy.
   Закрывает Route B-косяк «регенерить не весь набор затронутых модулей».
-- `uses` — что узел тянет вниз (типы, вызовы, адаптер).
+- `uses` — что узел тянет вниз: типы, вызовы и структурные backend refs.
 - `findings` — разрывы/висяки Spec Inspector, отфильтрованные по scope: видно,
   создаёт ли зона правки уже существующую проблему.
 
@@ -193,9 +224,11 @@ call-факт), а не из `imports.internal`. Это advisory-инструм�
 
 ## Мини-чеклист перед commit
 
-1. `notes[]` не содержит новых inline-таблиц/лимитов/allow-lists.
-2. Новый marker не продуктовый (`CIRCUIT_LOGIC`, `RENDERING_RULES` и т.п. не добавлять).
-3. Адреса `= config/models/rules.*` реально существуют.
-4. `module_order`, `imports.internal`, `module_internal`, `module_paths`
+1. `standard_version` равен поддерживаемой редакции (`2` для текущего стандарта),
+   а top-level `adapters` отсутствует.
+2. `notes[]` не содержит новых inline-таблиц/лимитов/allow-lists.
+3. Новый marker не продуктовый (`CIRCUIT_LOGIC`, `RENDERING_RULES` и т.п. не добавлять).
+4. Адреса `= config/models/rules.*` реально существуют.
+5. `module_order`, `imports.internal`, `module_internal`, `module_paths`
    обновлены, если добавлен модуль; `module_internal` не шире прямых runtime-зависимостей.
-5. API не стал владельцем бизнес-логики.
+6. API не стал владельцем бизнес-логики.
