@@ -90,6 +90,7 @@ def test_export_creates_canonical_spec_and_bound_handoff(
     factory = _fake_factory(tmp_path, standard)
     source = workbench_root / "examples/demo/global_spec.json"
     spec = {
+        "standard_version": 2,
         "contracts": {"main": "() -> None"},
         "module_functions": {"app": ["main"]},
         "imports": {"stdlib": [], "third_party": [], "internal": {}},
@@ -120,12 +121,15 @@ def test_export_creates_canonical_spec_and_bound_handoff(
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     assert manifest["schema_version"] == "spec_workbench_handoff.v1"
     assert manifest["source"]["spec_sha256"] == export_to_factory.sha256_file(canonical)
+    assert manifest["source"]["standard_version"] == 2
+    assert manifest["factory"]["standard_version"] == 2
     assert manifest["factory"]["validation_status"] == "PASS"
     lineage = json.loads(lineage_path.read_text(encoding="utf-8"))
     assert lineage["accepted"] is True
     assert lineage["status"] == "pass"
     assert lineage["verdict"] == "PASS"
     assert lineage["producer"]["route"] == "spec_workbench_stage9"
+    assert lineage["inputs"]["standard_version"] == 2
     assert lineage["change_summary"]["changed_modules"] == ["global"]
     assert lineage["outputs"]["base_spec_sha256_after"] == export_to_factory.sha256_file(canonical)
 
@@ -139,7 +143,7 @@ def test_export_blocks_standard_drift_before_project_creation(
     _write(workbench_root / "skills/spec-authoring/SPEC_STANDARD.md", standard)
     factory = _fake_factory(tmp_path, "# incompatible standard\n")
     source = workbench_root / "examples/demo/global_spec.json"
-    _write_json(source, {})
+    _write_json(source, {"standard_version": 2})
     monkeypatch.setattr(export_to_factory, "__file__", str(workbench_root / "tools/export_to_factory.py"))
     monkeypatch.setattr(export_to_factory, "git_metadata", _clean_git_metadata)
     monkeypatch.setattr(
