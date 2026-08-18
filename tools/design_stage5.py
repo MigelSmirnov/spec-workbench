@@ -3,8 +3,10 @@
 
 State 5 freezes only cross-boundary public operations proven by reviewed State 4
 flows. ``public_op:<module>.<name>`` denotes an operation owned by a project
-module. Deterministic HTTP exposure is designed later from accepted operations
-and contracts; see ROUTER_IR_GUIDE.
+module. Caller references are closed: ``module:<name>`` denotes an internal
+project caller and ``boundary:<name>`` denotes an external/runtime boundary.
+Deterministic HTTP exposure is designed later from accepted operations and
+contracts; see ROUTER_IR_GUIDE.
 """
 from __future__ import annotations
 
@@ -31,6 +33,7 @@ PUBLIC_OP_RE = re.compile(
 HEADING_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*$")
 STATE5_RE = re.compile(r"\bState\s+5\b", re.IGNORECASE)
 MODULE_REF_RE = re.compile(r"`(module:[a-z][a-z0-9_]*)`")
+BOUNDARY_REF_RE = re.compile(r"^boundary:[a-z][a-z0-9_]*$")
 REQUIRED_SECTIONS = (
     "Owner", "Callers", "Inputs", "Outputs", "Observable effect",
     "Enforces", "Errors", "State impact",
@@ -210,11 +213,17 @@ def coverage(project: Path) -> dict[str, object]:
         capability = entry["capability"]
         declared_flows = list(entry["flows"])
         callers = list(entry["callers"])
+        invalid_callers: list[str] = []
         if capability not in known_capabilities:
             invalid_refs.append({"operation": key, "ref": capability, "kind": "capability"})
         for caller in callers:
-            if caller.startswith("module:") and caller not in known_modules:
-                invalid_refs.append({"operation": key, "ref": caller, "kind": "caller_module"})
+            if caller.startswith("module:"):
+                if caller not in known_modules:
+                    invalid_refs.append({"operation": key, "ref": caller, "kind": "caller_module"})
+                    invalid_callers.append(caller)
+            elif BOUNDARY_REF_RE.fullmatch(caller) is None:
+                invalid_refs.append({"operation": key, "ref": caller, "kind": "caller"})
+                invalid_callers.append(caller)
         missing_flow_evidence: list[str] = []
         for flow_key in declared_flows:
             flow = flows.get(flow_key)
@@ -231,6 +240,7 @@ def coverage(project: Path) -> dict[str, object]:
             "capability": capability,
             "flows": declared_flows,
             "callers": callers,
+            "invalid_callers": invalid_callers,
             "implemented": item is not None,
             "expected_owner": expected_owner,
             "owner_missing": owner_missing,
@@ -241,7 +251,10 @@ def coverage(project: Path) -> dict[str, object]:
     unplanned = sorted(set(actual) - planned)
     complete = sum(
         1 for row in rows
-        if row["implemented"] and not row["owner_missing"] and not row["flow_evidence_missing"]
+        if row["implemented"]
+        and not row["owner_missing"]
+        and not row["flow_evidence_missing"]
+        and not row["invalid_callers"]
     )
     return {
         "schema_version": COVERAGE_SCHEMA,
@@ -263,7 +276,12 @@ def coverage(project: Path) -> dict[str, object]:
 def next_operation(project: Path) -> dict[str, object]:
     report = coverage(project)
     for row in report["operations"]:
-        if not row["implemented"] or row["owner_missing"] or row["flow_evidence_missing"]:
+        if (
+            not row["implemented"]
+            or row["owner_missing"]
+            or row["flow_evidence_missing"]
+            or row["invalid_callers"]
+        ):
             return {"schema_version": COVERAGE_SCHEMA, "project_root": project.resolve().name,
                     "complete": False, "next": row, "summary": report["summary"]}
     return {"schema_version": COVERAGE_SCHEMA, "project_root": project.resolve().name,
@@ -296,9 +314,19 @@ def lint(project: Path) -> dict[str, object]:
     if _load_plan(project, required=False) is not None:
         report = coverage(project)
         for invalid in report["invalid_refs"]:
-            findings.append(Finding("error", "invalid_plan_ref", invalid["operation"],
-                                    f"Planned {invalid['kind']} reference {invalid['ref']!r} is not valid State 3/4 evidence.",
-                                    SourceRange(DEFAULT_PLAN_FILE, 1, 1)))
+            if invalid["kind"] == "caller":
+                message = (
+                    f"Planned caller reference {invalid['ref']!r} is invalid; callers must use "
+                    "module:<known_module> or boundary:<name>."
+                )
+            elif invalid["kind"] == "caller_module":
+                message = f"Planned caller module reference {invalid['ref']!r} is not a known State 3 module."
+            else:
+                message = f"Planned {invalid['kind']} reference {invalid['ref']!r} is not valid State 3/4 evidence."
+            findings.append(Finding(
+                "error", "invalid_plan_ref", invalid["operation"], message,
+                SourceRange(DEFAULT_PLAN_FILE, 1, 1),
+            ))
         for row in report["operations"]:
             if row["flow_evidence_missing"]:
                 findings.append(Finding("error", "missing_flow_evidence", row["key"],
