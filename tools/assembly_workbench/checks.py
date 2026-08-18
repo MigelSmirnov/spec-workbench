@@ -7,6 +7,7 @@ import design_stage6_contracts
 import design_stage6_data
 from identity_workbench import verify as verify_identity
 from notes_workbench import gate as notes_gate
+from persistence_workbench import coverage as persistence_coverage
 from router_workbench import service as router_service
 from spec_language_workbench import verify as verify_language
 
@@ -46,6 +47,10 @@ def _normalize(name: str, report: dict[str, Any]) -> CheckResult:
         errors = int(summary.get("errors", 0))
         warnings = _severity_count(findings, {"warning", "review"})
         ready = bool(summary.get("handoff_ready"))
+    elif name == "persistence":
+        errors = int(summary.get("errors", 0))
+        warnings = _severity_count(findings, {"warning", "review"})
+        ready = bool(summary.get("handoff_ready"))
     else:
         raise AssemblyWorkbenchError(f"Unknown assembly check: {name}")
     return CheckResult(
@@ -65,6 +70,7 @@ CHECKS: dict[str, ReportFunction] = {
     "contracts": design_stage6_contracts.lint,
     "notes": notes_gate.coverage,
     "router": router_service.coverage,
+    "persistence": persistence_coverage,
 }
 
 def run(project: Path, name: str) -> CheckResult:
