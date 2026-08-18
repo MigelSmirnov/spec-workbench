@@ -60,7 +60,7 @@ def _run(tmp_path: Path, *, valid: bool = True, update_existing: bool = False) -
     workbench = tmp_path / "spec-workbench"
     _write(workbench / "skills/spec-authoring/SPEC_STANDARD.md", STANDARD)
     source = workbench / "accepted/global_spec.json"
-    _write_json(source, {"contracts": {}})
+    _write_json(source, {"standard_version": 2, "contracts": {}})
     factory = _factory(tmp_path, valid=valid)
     return check(
         workbench_root=workbench,
@@ -78,7 +78,28 @@ def test_explicit_spec_is_ready_when_factory_accepts_it(tmp_path: Path) -> None:
     assert report["stage"] == "9"
     assert report["status"] == "READY_TO_EXPORT"
     assert report["ready"] is True
+    assert report["source"]["standard_version"] == 2
     assert report["summary"]["blocks"] == 0
+    language = next(item for item in report["checks"] if item["id"] == "FA009")
+    assert language["status"] == "PASS"
+    assert language["evidence"]["standard_version"] == 2
+
+
+def test_missing_standard_version_blocks_admission_before_handoff(tmp_path: Path) -> None:
+    report = _run(tmp_path)
+    source = tmp_path / "spec-workbench/accepted/global_spec.json"
+    _write_json(source, {"contracts": {}})
+    blocked = check(
+        workbench_root=tmp_path / "spec-workbench",
+        source=source,
+        project="demo",
+        factory_root=Path(report["factory_root"]),
+        source_git=CLEAN_GIT,
+    )
+    language = next(item for item in blocked["checks"] if item["id"] == "FA009")
+    assert blocked["ready"] is False
+    assert language["status"] == "BLOCK"
+    assert language["evidence"]["findings"][0]["code"] == "missing_standard_version"
 
 
 def test_factory_validator_findings_block_admission(tmp_path: Path) -> None:
@@ -96,7 +117,7 @@ def test_existing_different_target_requires_explicit_update(tmp_path: Path) -> N
     factory = Path(report["factory_root"])
     _write_json(
         factory / "projects/demo/specs/base/global_spec.json",
-        {"contracts": {"old": "() -> None"}},
+        {"standard_version": 2, "contracts": {"old": "() -> None"}},
     )
     workbench = tmp_path / "spec-workbench"
     blocked = check(
@@ -121,6 +142,8 @@ def test_existing_different_target_requires_explicit_update(tmp_path: Path) -> N
     assert admitted["ready"] is True
     target = next(item for item in admitted["checks"] if item["id"] == "FA007")
     assert target["evidence"]["action"] == "update"
+    assert target["evidence"]["source_standard_version"] == 2
+    assert target["evidence"]["canonical_standard_version"] == 2
 
 
 def test_formatting_only_target_difference_requires_lineage_acceptance(tmp_path: Path) -> None:
@@ -145,6 +168,36 @@ def test_formatting_only_target_difference_requires_lineage_acceptance(tmp_path:
     assert target["evidence"]["action"] == "accept_lineage"
     assert target["evidence"]["source_sha256"] != target["evidence"]["canonical_sha256"]
     assert target["evidence"]["source_spec_sha"] == target["evidence"]["canonical_spec_sha"]
+    assert target["evidence"]["source_standard_version"] == 2
+
+
+def test_old_lineage_without_standard_version_is_not_fresh(tmp_path: Path) -> None:
+    report = _run(tmp_path)
+    factory = Path(report["factory_root"])
+    source = tmp_path / "spec-workbench/accepted/global_spec.json"
+    canonical = factory / "projects/demo/specs/base/global_spec.json"
+    canonical.parent.mkdir(parents=True, exist_ok=True)
+    canonical.write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
+    lineage_path = factory / "projects/demo/specs/working/spec_editor_manifest.json"
+    _write_json(lineage_path, {
+        "accepted": True,
+        "status": "pass",
+        "verdict": "PASS",
+        "inputs": {},
+        "outputs": {"base_spec_sha256_after": __import__("hashlib").sha256(canonical.read_bytes()).hexdigest()},
+        "change_summary": {"changed_modules": ["global"]},
+    })
+    admitted = check(
+        workbench_root=tmp_path / "spec-workbench",
+        source=source,
+        project="demo",
+        factory_root=factory,
+        source_git=CLEAN_GIT,
+    )
+    target = next(item for item in admitted["checks"] if item["id"] == "FA007")
+    assert target["evidence"]["action"] == "accept_lineage"
+    assert target["evidence"]["lineage_fresh"] is False
+    assert target["evidence"]["lineage_standard_version"] is None
 
 
 def test_dirty_source_is_blocked_unless_explicitly_allowed(tmp_path: Path) -> None:
