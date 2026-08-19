@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from notes_workbench import note_parser, review, service
+from notes_workbench import gate, note_parser, review, service
 
 ROOT = Path(__file__).resolve().parents[1]
 CABINET = ROOT / "examples" / "cabinet-backend"
@@ -46,3 +46,8 @@ def test_review_flags_exact_duplicate_and_stub() -> None:
     codes = [item["code"] for item in report["findings"]]
     assert "suspected_stub" in codes
     assert "suspected_duplicate" in codes
+
+
+def test_cabinet_canonical_notes_gate_is_handoff_ready() -> None:
+    payload = gate.coverage(CABINET)
+    assert payload["summary"]["handoff_ready"], payload["findings"]

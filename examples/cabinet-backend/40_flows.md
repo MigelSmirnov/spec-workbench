@@ -16,16 +16,16 @@ A synchronization cycle initiated by Local Cabinet Backend observes one exact VP
 
 The transport boundary enters through `module:synchronization`. Transport delivery is not durable acceptance. Local archive acceptance belongs only to `module:durable_archive`.
 
-The flow may use the candidate State 3 needs `capability:synchronization.synchronize_invoice_work`, `capability:durable_archive.accept_transfer_manifest`, and `capability:durable_archive.verify_durable_acceptance`. These names remain candidate capabilities until State 5.
+The flow may use the candidate State 3 needs `capability:synchronization.synchronize_invoice_work`, `capability:synchronization.observe_vps_connection`, `capability:synchronization.reconcile_transfer_outcome`, `capability:durable_archive.accept_transfer_manifest`, and `capability:durable_archive.verify_durable_acceptance`. These names remain candidate capabilities until State 5.
 
 ### Steps
 
-1. `module:synchronization` authenticates and performs the accepted outbound synchronization protocol using the synchronization-only node identity; local service or human authorization is not substituted for that credential boundary.
+1. `module:synchronization` may first obtain a typed read-only connection observation through `capability:synchronization.observe_vps_connection`, then authenticates and performs the accepted outbound synchronization protocol using the synchronization-only node identity; local service or human authorization is not substituted for that credential boundary.
 2. `module:synchronization` receives or constructs the exact transfer package and preserves its transfer identity, hashes, and delivery/reconciliation evidence without claiming business acceptance.
 3. The package required set is presented to `module:durable_archive` for local acceptance under the accepted manifest, source-integrity, duplicate, quarantine, and atomic-visibility rules.
 4. `module:durable_archive` validates the exact immutable Invoice Card revision and required source evidence, then either accepts the required set atomically, recognizes an already accepted idempotent transfer, or records the accepted failure/quarantine outcome.
 5. Only after `module:durable_archive` proves durable acceptance may synchronization record or transmit the corresponding acceptance receipt. A successful network delivery by itself never creates an accepted archive fact.
-6. If the transport outcome is unknown, `module:synchronization` reconciles by read/status evidence and must not create a second logical transfer merely because the previous network result was ambiguous.
+6. If the transport outcome is unknown, `module:synchronization` reconciles by read/status evidence through `capability:synchronization.reconcile_transfer_outcome` and must not create a second logical transfer merely because the previous network result was ambiguous.
 
 ### Outcomes
 
@@ -107,14 +107,14 @@ Cabinet Backend refreshes Registry project context, or an existing Invoice Card 
 
 ### Boundary
 
-All Registry-derived project observation and Cabinet WorkObject projection belong to `module:registry_context`. The flow uses `capability:registry_context.refresh_registry_context`, `capability:registry_context.validate_card_assignment`, and `capability:registry_context.get_assignment_validation`.
+All Registry-derived project observation and Cabinet WorkObject projection belong to `module:registry_context`. The flow uses `capability:registry_context.refresh_registry_context`, `capability:registry_context.validate_card_assignment`, and `capability:registry_context.get_assignment_validation`. When the refreshed exact catalogue is delivered to VPS Cabinet, transport ownership remains in `module:synchronization` through `capability:synchronization.publish_registry_catalogue`; synchronization does not choose or filter Registry truth.
 
 Registry remains authoritative for Registry-owned project facts. Cabinet Backend never writes WorkObject or assignment changes back into Registry.
 
 ### Steps
 
 1. `module:registry_context` performs the accepted full Registry project observation and constructs the compact project context from the verified fields only.
-2. Registry-derived fields are projected into Cabinet WorkObjects keyed by stable Registry `project_id`; existing Cabinet-owned local fields remain untouched.
+2. Registry-derived fields are projected into Cabinet WorkObjects keyed by stable Registry `project_id`; existing Cabinet-owned local fields remain untouched. When catalogue publication is requested, the exact already-produced catalogue delivery is passed to `capability:synchronization.publish_registry_catalogue` without moving catalogue-content policy into synchronization.
 3. Existing WorkObjects absent from a later catalogue response are preserved. Absence is treated as unresolved source availability rather than confirmed deletion.
 4. For an Invoice Card assignment under review, `module:registry_context` validates the exact Card/project context against the refreshed observation through `capability:registry_context.validate_card_assignment`.
 5. Active Registry context may validate normal availability. Archived or currently missing project context requires review and must not be interpreted as authoritative project completion.
@@ -145,7 +145,7 @@ A Cabinet user or agent requests reproducible plan-versus-actual analysis for a 
 
 ### Boundary
 
-Analytical policy belongs to `module:plan_actual`. It may obtain exact archived purchase evidence through `capability:durable_archive.get_archived_invoice`, exact project context through `capability:registry_context.get_work_object`, preserve a current PresuPro observation through `capability:plan_actual.refresh_estimate_snapshot`, and calculate through `capability:plan_actual.calculate_plan_actual`.
+Analytical policy belongs to `module:plan_actual`. It may obtain exact archived purchase evidence through `capability:durable_archive.get_archived_invoice`, exact project context through `capability:registry_context.get_work_object`, preserve a current PresuPro observation through `capability:plan_actual.refresh_estimate_snapshot`, produce non-authoritative proposals through `capability:plan_actual.propose_invoice_line_matches`, record an explicit decision through `capability:plan_actual.record_match_decision`, expose exact unmatched identities through `capability:plan_actual.get_unmatched_items`, and calculate through `capability:plan_actual.calculate_plan_actual`.
 
 Neither PresuPro nor Registry facts are rewritten by the calculation.
 
@@ -154,7 +154,7 @@ Neither PresuPro nor Registry facts are rewritten by the calculation.
 1. The flow resolves the exact accepted Invoice Card revision(s) required for the analysis from `module:durable_archive` rather than from mutable transport payloads.
 2. The applicable WorkObject/project context is read from `module:registry_context`; unresolved assignment state remains explicit and may prevent project-specific analysis where State 2 requires a confirmed assignment.
 3. When a fresh PresuPro observation is requested, `module:plan_actual` records it as an immutable EstimateSnapshot when its canonical content differs from the latest stored snapshot for the same PresuPro estimate identity. Identical observed content is idempotent.
-4. The analysis selects exact immutable estimate snapshot identity and uses only accepted/pinned matching decisions. Similarity alone never becomes a confirmed invoice-line/estimate-item match.
+4. The analysis selects exact immutable estimate snapshot identity. `capability:plan_actual.propose_invoice_line_matches` may produce stable non-authoritative proposals, but similarity alone never becomes a confirmed invoice-line/estimate-item match; only an explicit transition through `capability:plan_actual.record_match_decision` may create or change a durable decision. `capability:plan_actual.get_unmatched_items` exposes the resulting unmatched identities without fabricating placeholder items, and calculation uses only accepted/pinned confirmed decisions.
 5. Unmatched invoice lines remain valid analytical facts and are included explicitly rather than causing placeholder estimate items or invoice rejection.
 6. `module:plan_actual` checks quantity/unit and other accepted comparison preconditions, then computes plan, actual, variance, remaining or other accepted deterministic results from the pinned evidence.
 7. The result preserves the identities of the invoice revision, estimate snapshot, project context, accepted matches, and any explicit conversion/forecast assumptions needed for reproducibility.
@@ -183,7 +183,7 @@ An authenticated actor explicitly requests publication of one exact confirmed In
 
 Protected-operation authorization enters through `module:access_control` and `capability:access_control.authorize_operation`. Exact archived Invoice Card evidence is read through `module:durable_archive` and `capability:durable_archive.get_archived_invoice`.
 
-Cabinet publication eligibility and logical publication lifecycle belong to `module:holded_publication` through `capability:holded_publication.request_holded_publication` and `capability:holded_publication.reconcile_holded_publication`. Holded credentials, HTTP mutation/read mechanics, attempt receipts, and technical lookup belong to `module:holded_gateway` through `capability:holded_gateway.create_holded_purchase` and `capability:holded_gateway.lookup_holded_purchase`.
+Cabinet publication eligibility and logical publication lifecycle belong to `module:holded_publication` through `capability:holded_publication.request_holded_publication`, `capability:holded_publication.reconcile_holded_publication`, and the read-only `capability:holded_publication.get_holded_publication_status`. Holded credentials, HTTP mutation/read mechanics, attempt receipts, and technical lookup belong to `module:holded_gateway` through `capability:holded_gateway.create_holded_purchase` and `capability:holded_gateway.lookup_holded_purchase`.
 
 ### Steps
 
@@ -194,7 +194,7 @@ Cabinet publication eligibility and logical publication lifecycle belong to `mod
 5. A clear create result is followed by read-back verification of the exact Holded document. Business-field verification, including accepted gross-total precision, settles the logical publication only when the returned representation proves success.
 6. If the create outcome is ambiguous, no automatic second POST is allowed. `module:holded_publication` enters reconciliation and `module:holded_gateway` uses read-only marker lookup through `capability:holded_gateway.lookup_holded_purchase` followed by GET/business verification as required by the accepted recovery protocol.
 7. Zero marker matches keep the outcome unknown; one verified exact match may settle the publication as recovered; multiple matches or payload disagreement require reconciliation/conflict handling rather than silent success.
-8. `capability:holded_publication.reconcile_holded_publication` exposes the logical settlement/review action without leaking raw gateway credentials or turning an unverified numeric Holded status into business meaning.
+8. `capability:holded_publication.reconcile_holded_publication` exposes the logical settlement/review action without leaking raw gateway credentials or turning an unverified numeric Holded status into business meaning. A caller may read the exact PostgreSQL-authoritative logical state through `capability:holded_publication.get_holded_publication_status` without substituting gateway evidence.
 
 ### Outcomes
 
@@ -220,19 +220,19 @@ A user explicitly requests manual release/removal of one identified VPS Cabinet 
 
 ### Boundary
 
-Release eligibility and decision history belong to `module:retention_release` through `capability:retention_release.evaluate_vps_release` and `capability:retention_release.request_manual_vps_release`.
+Release eligibility and decision history belong to `module:retention_release` through `capability:retention_release.evaluate_vps_release`, `capability:retention_release.request_manual_vps_release`, and the read-only `capability:retention_release.get_retention_status`.
 
-Required durable-local proof is read from `module:durable_archive` through `capability:durable_archive.verify_durable_acceptance`, and relevant transfer/replica status may be observed from `module:synchronization` through `capability:synchronization.get_sync_status`.
+Required durable-local proof is read from `module:durable_archive` through `capability:durable_archive.verify_durable_acceptance`, and exact working-set membership plus relevant transfer/replica status are read from `module:synchronization` through `capability:synchronization.get_working_set_membership` and `capability:synchronization.get_sync_status`.
 
 The VPS storage/deletion adapter executes an authorized release decision but does not decide whether release is safe.
 
 ### Steps
 
 1. The caller identifies the Registry `project_id` or exact Cabinet working set targeted by the manual release request. Registry inactivity, archive state, or synchronization success alone never creates this trigger.
-2. `module:retention_release` evaluates the request through `capability:retention_release.evaluate_vps_release`, gathering the exact durable-acceptance evidence required from `module:durable_archive` and relevant replica/synchronization observations from `module:synchronization`.
+2. `module:retention_release` first resolves the exact target membership through `capability:synchronization.get_working_set_membership`, then evaluates the request through `capability:retention_release.evaluate_vps_release`, gathering the exact durable-acceptance evidence required from `module:durable_archive` and relevant replica/synchronization observations from `module:synchronization`.
 3. `module:durable_archive` proves whether every required local source replica for the target working set is present and verified in durable local storage. Network delivery alone is insufficient evidence.
 4. If any required local replica is missing or unverified, the release decision is blocked and the VPS working copy remains intact.
-5. If the preconditions are satisfied, `capability:retention_release.request_manual_vps_release` records the explicit release decision and its evidence/history. Repeating the same accepted release request is idempotent at the decision level.
+5. If the preconditions are satisfied, `capability:retention_release.request_manual_vps_release` records the explicit release decision and its evidence/history. Repeating the same accepted release request is idempotent at the decision level, and `capability:retention_release.get_retention_status` may read the exact persisted decision without claiming physical deletion.
 6. The VPS adapter may then perform the physical working-copy release authorized by that recorded decision and report the technical execution result. It may not broaden the selected working set or reinterpret Registry status as deletion authority.
 7. Technical deletion/release failure leaves the policy decision/evidence auditable and must not be represented as completed physical release until the adapter confirms the effect.
 

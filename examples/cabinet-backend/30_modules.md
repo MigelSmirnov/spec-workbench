@@ -234,6 +234,7 @@ publish_registry_catalogue
 reconcile_transfer_outcome
 get_sync_status
 observe_vps_connection
+get_working_set_membership
 ```
 
 ### Ownership invariant

@@ -2,7 +2,7 @@
 
 # access_control
 
-authorize_operation: [SECURITY_BOUNDARY] Evaluate authorization only for the exact operation supplied by the caller and return the decision without performing the protected business operation.
+authorize_operation: [SECURITY_BOUNDARY] MUST evaluate authorization only for the exact operation supplied by the caller and return the decision without performing the protected business operation.
 authorize_operation: [VALIDATION_ERROR] Raise AuthenticationRequiredError when no valid authenticated principal exists and OperationForbiddenError when the authenticated principal lacks authority for the exact requested operation; possession of an entity identifier is never authority.
 AccessControlBackend.authenticate: [SECURITY_BOUNDARY] Resolve the supplied local credential to one canonical authenticated principal context and do not expose reusable credential material in the returned context.
 AccessControlBackend.authenticate: [VALIDATION_ERROR] Raise AuthenticationRequiredError when the supplied credential cannot establish a valid active local principal.
@@ -23,18 +23,22 @@ PostgresAccessControlBackend.revoke_local_service_principal: [BEHAVIOR] Atomical
 create_local_app: [CONFIG_REFERENCE] Read the PostgreSQL URL only from the environment variable named by = config.access_control.database_url_env.
 create_local_app: [CONFIG_REFERENCE] Read the credential pepper only from the environment variable named by = config.access_control.credential_pepper_env and use = config.access_control.deployment_owner_uid_env for the offline-owner boundary.
 create_local_app: [VALIDATION_ERROR] Fail startup when required environment values are absent or backend initialization fails; never substitute an in-memory, anonymous, or allow-all backend.
-enroll_local_agent: [SECURITY_BOUNDARY] Permit enrollment only from the offline local administration entry point running as the configured Linux deployment owner; never expose this operation through HTTP or MCP.
+enroll_local_agent: [SECURITY_BOUNDARY] MUST permit enrollment only from the offline local administration entry point running as the configured Linux deployment owner; never expose this operation through HTTP or MCP.
 enroll_local_agent: [RETURN_SHAPE] Return IssuedServiceCredential exactly once to the invoking owner and never persist or log its credential field.
-rotate_local_agent_credential: [SECURITY_BOUNDARY] Require the offline Linux-owner boundary and delegate one exact active principal to PostgreSQL rotation.
-revoke_local_agent: [SECURITY_BOUNDARY] Require the offline Linux-owner boundary and delegate one exact active principal to terminal revocation.
+rotate_local_agent_credential: [SECURITY_BOUNDARY] MUST require the offline Linux-owner boundary and delegate one exact active principal to PostgreSQL rotation.
+revoke_local_agent: [SECURITY_BOUNDARY] MUST require the offline Linux-owner boundary and delegate one exact active principal to terminal revocation.
 
 # synchronization
 
 synchronize_invoice_work: [RULE_REFERENCE] Preserve delivery as a transport fact and never promote it to durable acceptance; use = rules.synchronization.delivery_implies_durable_acceptance.
 synchronize_invoice_work: [ORCHESTRATION] Correlate transfer attempts and reconciliation with the supplied work selection and node identity so an ambiguous transport outcome remains explicitly reconcilable.
 synchronize_invoice_work: [BEHAVIOR] Return authentication, compatibility, transport, remote-unavailability, and unresolved-delivery conditions as explicit synchronization outcome states rather than manufacturing an accepted result.
-get_sync_status: [BEHAVIOR] Return the currently observed synchronization or replica state without making any durable-archive acceptance claim.
+get_sync_status: [BEHAVIOR] MUST return the currently observed synchronization or replica state without making any durable-archive acceptance claim.
 get_sync_status: [BEHAVIOR] Preserve unknown, unavailable, stale, or insufficient observations explicitly instead of fabricating a default synchronized state.
+reconcile_transfer_outcome: [DEPENDENCY_BOUNDARY] MUST delegate read-only reconciliation through the exact supplied SynchronizationService.
+publish_registry_catalogue: [DEPENDENCY_BOUNDARY] MUST delegate exact catalogue delivery through the supplied SynchronizationService.
+observe_vps_connection: [DEPENDENCY_BOUNDARY] MUST delegate observation through the supplied SynchronizationService.
+get_working_set_membership: [DEPENDENCY_BOUNDARY] MUST delegate exact read-only membership through the supplied SynchronizationService.
 
 # durable_archive
 
@@ -75,9 +79,12 @@ get_work_object: [VALIDATION_ERROR] Raise RegistryContextUnavailableError when t
 
 # plan_actual
 
-refresh_estimate_snapshot: [BEHAVIOR] Create a new immutable estimate snapshot only when the canonical observed estimate content is not already represented by the same stable source identity.
+refresh_estimate_snapshot: [BEHAVIOR] MUST create a new immutable estimate snapshot only when the canonical observed estimate content is not already represented by the same stable source identity.
 refresh_estimate_snapshot: [PROVENANCE] Preserve enough source identity and observation evidence for later plan/actual calculations to pin the exact estimate snapshot they consumed.
 refresh_estimate_snapshot: [VALIDATION_ERROR] Raise EstimateObservationRejectedError when the PresuPro observation lacks stable source identity or contains unsupported or unprocessable content; never accept a partial snapshot.
+propose_invoice_line_matches: [DEPENDENCY_BOUNDARY] MUST delegate through the exact supplied PlanActualService; proposals never become decisions implicitly.
+record_match_decision: [DEPENDENCY_BOUNDARY] MUST delegate the exact explicit decision through the supplied PlanActualService.
+get_unmatched_items: [DEPENDENCY_BOUNDARY] MUST delegate exact unmatched reads through the supplied PlanActualService and never fabricate placeholder items.
 calculate_plan_actual: [RULE_REFERENCE] Consume only confirmed matching decisions when calculating plan versus actual; use = rules.plan_actual.confirmed_matches_only.
 calculate_plan_actual: [RULE_REFERENCE] Treat source invoice, Registry, and estimate records as immutable inputs; use = rules.plan_actual.source_records_are_immutable.
 calculate_plan_actual: [BEHAVIOR] Produce a reproducible analysis pinned to the exact supplied evidence identities and retain explicit unmatched facts and non-blocking warnings instead of silently coercing incomparable inputs.
@@ -92,13 +99,14 @@ request_holded_publication: [VALIDATION_ERROR] Raise HoldedPublicationIneligible
 reconcile_holded_publication: [RULE_REFERENCE] A recovered remote candidate may settle the publication only after full verification; use = rules.holded_publication.recovered_candidate_requires_full_verification.
 reconcile_holded_publication: [BEHAVIOR] Reconcile an ambiguous logical attempt using read-only remote evidence and return a settled publication only when the evidence identifies exactly one fully verified matching remote purchase.
 reconcile_holded_publication: [VALIDATION_ERROR] Raise HoldedReconciliationRequiredError when zero matches, multiple matches, payload mismatch, lookup failure, or inconsistent attempt evidence leaves the logical publication unresolved or conflicting.
+get_holded_publication_status: [DEPENDENCY_BOUNDARY] MUST delegate exact status reads through the supplied HoldedPublicationService.
 
 # holded_gateway
 
-create_holded_purchase: [ORCHESTRATION] Perform the one technical remote create for the supplied already-authorized payload and stable publication-attempt identity, then persist immutable technical outcome evidence.
+create_holded_purchase: [ORCHESTRATION] MUST perform the one technical remote create for the supplied already-authorized payload and stable publication-attempt identity, then persist immutable technical outcome evidence.
 create_holded_purchase: [SECURITY_BOUNDARY] Keep Holded credentials inside the gateway boundary and redact reusable secret material from logs, returned business objects, and ordinary attempt evidence.
 create_holded_purchase: [BEHAVIOR] Preserve credential failure, remote rejection, timeout, malformed response, or ambiguous network outcome as explicit immutable technical attempt evidence rather than retrying the mutation or claiming remote failure/success without proof.
-lookup_holded_purchase: [BEHAVIOR] Perform read-only recovery lookup using the supplied stable attempt marker and optional document identifier and return observed technical match evidence without mutating Holded.
+lookup_holded_purchase: [BEHAVIOR] MUST perform read-only recovery lookup using the supplied stable attempt marker and optional document identifier and return observed technical match evidence without mutating Holded.
 lookup_holded_purchase: [BEHAVIOR] Preserve zero-match, multi-match, malformed-response, unknown-document, and transport-failure observations explicitly as lookup evidence for publication reconciliation.
 
 # retention_release
@@ -110,13 +118,20 @@ evaluate_vps_release: [BEHAVIOR] Return an allowed evaluation for the exact affe
 evaluate_vps_release: [VALIDATION_ERROR] Raise VpsReleaseBlockedError when durable replica proof, synchronization observation, working-set identity, or retention evidence is missing, inconsistent, or does not satisfy the accepted release preconditions.
 request_manual_vps_release: [BEHAVIOR] Record an explicit release decision only for the exact target covered by a still-applicable allowed evaluation; repeated equivalent requests must be idempotent and return the existing equivalent decision.
 request_manual_vps_release: [VALIDATION_ERROR] Raise VpsReleaseBlockedError when the evaluation is stale, mismatched, newly ineligible, or conflicts with the requested target instead of authorizing physical deletion.
+get_retention_status: [DEPENDENCY_BOUNDARY] MUST delegate exact decision reads through the supplied RetentionReleaseService.
 
 # deterministic HTTP seams
 
 create_app: [ORCHESTRATION] Construct the application using the already-declared deterministic router wiring and bind the supplied access-control backend into application state without adding business policy.
-extract_bearer_credential: [SECURITY_BOUNDARY] Extract only the accepted bearer credential from the request boundary without interpreting business authorization.
+extract_bearer_credential: [SECURITY_BOUNDARY] MUST extract only the accepted bearer credential from the request boundary without interpreting business authorization.
 extract_bearer_credential: [VALIDATION_ERROR] Raise AuthenticationRequiredError when the required bearer authentication material is absent or malformed.
-resolve_local_principal: [SECURITY_BOUNDARY] Resolve the extracted credential through the access-control backend and return the canonical principal context used by protected handlers.
+resolve_local_principal: [SECURITY_BOUNDARY] MUST resolve the extracted credential through the access-control backend and return the canonical principal context used by protected handlers.
 resolve_local_principal: [VALIDATION_ERROR] Propagate AuthenticationRequiredError when the extracted credential cannot establish a valid local principal.
 attach_local_source_handler: [ORCHESTRATION] Own only the multipart transport transformation that cannot be lowered by the deterministic table router, then delegate archive policy to attach_local_source.
 attach_local_source_handler: [DEPENDENCY_BOUNDARY] Do not duplicate source-acceptance, authorization, archive, or persistence policy inside the irregular HTTP companion handler.
+refresh_estimate_snapshot_handler: [DEPENDENCY_BOUNDARY] MUST obtain the exact PlanActualService bound to request.app.state.plan_actual and pass it to refresh_estimate_snapshot.
+calculate_plan_actual_handler: [DEPENDENCY_BOUNDARY] MUST obtain the exact PlanActualService bound to request.app.state.plan_actual and pass it to calculate_plan_actual.
+request_holded_publication_handler: [DEPENDENCY_BOUNDARY] MUST obtain the exact HoldedPublicationService bound to request.app.state.holded_publication and pass it to request_holded_publication.
+reconcile_holded_publication_handler: [DEPENDENCY_BOUNDARY] MUST obtain the exact HoldedPublicationService bound to request.app.state.holded_publication and pass it to reconcile_holded_publication.
+evaluate_vps_release_handler: [DEPENDENCY_BOUNDARY] MUST obtain the exact RetentionReleaseService bound to request.app.state.retention_release and pass it to evaluate_vps_release.
+request_manual_vps_release_handler: [DEPENDENCY_BOUNDARY] MUST obtain the exact RetentionReleaseService bound to request.app.state.retention_release and pass it to request_manual_vps_release.

@@ -7,7 +7,25 @@ import json
 import sys
 from pathlib import Path
 
-from notes_workbench import gate, language, service
+from notes_workbench import gate, language, propagation, service
+
+
+def _propagation_human(payload: dict[str, object]) -> str:
+    summary = payload["summary"]
+    lines = [
+        "Notes propagation: "
+        f"{summary['changes']} changes; "
+        f"Factory blockers {summary['factory_coverage_blocks_before']}"
+        f"->{summary['factory_coverage_blocks_after']}; "
+        f"dependency blockers {summary['dependency_binding_blocks_before']}"
+        f"->{summary['dependency_binding_blocks_after']}; "
+        f"status={payload['status']}"
+    ]
+    for finding in payload.get("findings", []):
+        lines.append(
+            f"{finding['severity'].upper()} {finding['code']} - {finding['message']}"
+        )
+    return "\n".join(lines)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -20,6 +38,20 @@ def main(argv: list[str] | None = None) -> int:
     action.add_argument("--gate", action="store_true")
     action.add_argument("--handoff", action="store_true")
     action.add_argument("--language", action="store_true")
+    action.add_argument("--propagate", action="store_true")
+    parser.add_argument(
+        "--base-ref",
+        default="HEAD",
+        help=(
+            "Git revision containing the pre-edit 80_notes.md used by "
+            "--propagate (default: HEAD)"
+        ),
+    )
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="With --propagate, report drift without writing global_spec.json.",
+    )
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args(argv)
     if not args.project.is_dir():
@@ -28,6 +60,12 @@ def main(argv: list[str] | None = None) -> int:
     if (args.slice or args.review) and not args.module:
         print("design_notes: error: --module is required with --slice/--review", file=sys.stderr)
         return 2
+    if args.check and not args.propagate:
+        print("design_notes: error: --check is valid only with --propagate", file=sys.stderr)
+        return 2
+    if args.base_ref != "HEAD" and not args.propagate:
+        print("design_notes: error: --base-ref is valid only with --propagate", file=sys.stderr)
+        return 2
     try:
         if args.gate:
             payload = gate.coverage(args.project)
@@ -35,6 +73,12 @@ def main(argv: list[str] | None = None) -> int:
             payload = language.report(args.project)
         elif args.handoff:
             payload = gate.handoff(args.project)
+        elif args.propagate:
+            payload = propagation.propagate(
+                args.project,
+                base_ref=args.base_ref,
+                write=not args.check,
+            )
         else:
             payload = service.module_slice(args.project, args.module) if args.slice else service.module_review(args.project, args.module)
     except (OSError, ValueError, json.JSONDecodeError) as exc:
@@ -48,6 +92,8 @@ def main(argv: list[str] | None = None) -> int:
             print(f"Notes language: {summary['findings']} findings; {summary['blocking']} blocking")
             for code, count in sorted(summary["by_code"].items()):
                 print(f"  {code}: {count}")
+        elif args.propagate:
+            print(_propagation_human(payload))
         elif args.slice:
             print(f"{payload['module']}: {len(payload['obligations'])} obligations")
         elif args.review:
@@ -57,6 +103,12 @@ def main(argv: list[str] | None = None) -> int:
             summary = payload["summary"]
             ready = payload.get("ready", summary["handoff_ready"])
             print(f"State 7 notes: {summary['notes']} notes; {summary['blocks']} blocks; {summary['reviews']} reviews; handoff_ready={str(ready).lower()}")
+    if args.propagate:
+        if not payload["ready"]:
+            return 2
+        if args.check:
+            return 1 if payload["changed"] else 0
+        return 0
     if args.language:
         return 0 if payload["status"] == "pass" else 1
     if args.gate:
