@@ -23,9 +23,18 @@ implements `AccessControlBackend`. It owns:
 
 ### Public surface
 
-Runtime consumers continue to depend only on `AccessControlBackend` and
-`authorize_operation`. The concrete class is exported only to the application
-composition root and offline administration entry point.
+Runtime consumers continue to depend only on `AccessControlBackend`,
+`authorize_operation`, and `resolve_local_principal`. The concrete class is
+exported only to the application composition root and offline administration
+entry point.
+
+`resolve_local_principal` maps one already-extracted credential to the canonical
+authenticated principal context. It is a free function over the abstract
+backend, exactly parallel to `authorize_operation`, and belongs here rather than
+in the router module: establishing identity from a credential is an
+access-control decision, not transport. The router keeps only
+`extract_bearer_credential`, which reads the credential out of the HTTP request
+without interpreting it, so this module still owns no request parsing.
 
 ### Internal capabilities
 
