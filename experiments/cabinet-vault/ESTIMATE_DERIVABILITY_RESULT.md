@@ -2,222 +2,199 @@
 
 ## Status
 
-Validated in a real checkout on Termux on 2026-08-20.
-
-Focused experiment result:
+The first estimate derivability/composition suite was validated in a real Termux checkout on 2026-08-20:
 
 ```text
 25 passed in 0.65s
 ```
 
-Executed:
+A follow-up local PresuPro monetary reconnaissance then investigated the two proof obligations emitted by that probe.
+
+## PresuPro monetary reconnaissance result
+
+### `money.currency` — CLOSED at source contract level
+
+The real PresuPro contract does not store currency on `Estimate` or on the project model. Currency is an application-level contract constant:
 
 ```text
-tests/test_box_derivability.py
-tests/test_box_composition.py
-tests/test_estimate_derivability.py
-tests/test_cabinet_backend_box_manifest.py
+config.app.currency = EUR
 ```
 
-This is local-run evidence, not GitHub Actions CI evidence.
+`calculate_estimate_totals` exposes the same deterministic `EUR` currency in its totals result.
 
-## What the probe tested
-
-Source: `presupro_estimate_box_v0.yaml`.
-Target: `cabinet_estimate_context_box_v0.yaml`.
-
-The target is provider-agnostic. Cabinet describes the estimate meanings and authority it needs; it does not require a PresuPro client, PresuPro DTO identity, or permanent PresuPro-to-Cabinet adapter.
-
-`tools/box_derivability.py` proves or rejects the mapping. `tools/box_composition.py` compiles the proof into:
+Therefore the source box can truthfully self-describe:
 
 ```text
-source capability invocation
-  -> exact semantic projection
-  -> target capability invocation
+semantic: money.currency
+authority: estimate.source.authority
+source.kind: contract_constant
+source.contract: config.app.currency
+source.value: EUR
 ```
 
-No hand-written mapping is accepted by the composition compiler.
+This is not an adapter default and not inference from locale/project context. It is verified source-product contract data.
 
-## Observed derivation
+The experimental `presupro_estimate_box_v0.yaml` now exposes that fact, and generic Cabinet estimate-observation acceptance requires currency but no longer invents plan/actual monetary-basis semantics at this boundary.
 
-The current source self-description is sufficient for:
+### Aggregate pricing semantics — deterministic
+
+The local reconnaissance pinned the backend pricing order with a synthetic test:
 
 ```text
-source estimate identity
-project identity
-source update timestamp
-status
-locked flag
-canonical content
+effective_unit_price =
+    item.unit_price
+    else preferred material product.last_price
+    else 0
+
+effective_qty = round(quantity * (1 + waste / 100), 4)
+base_line = round(effective_qty * effective_unit_price, 2)
+
+discount = round(base_line * discount_percent / 100, 2)
+discounted_line = round(base_line - discount, 2)
+
+line_with_margin = round(
+    discounted_line * (1 + margin_percent / 100),
+    2
+)
+margin = round(line_with_margin - discounted_line, 2)
+
+iva_rate = item.iva_percent if set else estimate.iva_percent
+line_iva = round(line_with_margin * iva_rate / 100, 2)
+
+materials/labor subtotal = sum(discounted_line), split by item.type
+taxable_subtotal = materials_subtotal + labor_subtotal + margin_total
+grand_total = taxable_subtotal + iva_total
 ```
 
-The mapping remains unresolved for exactly two Cabinet-required meanings:
+This proves that backend aggregate `grand_total` is tax-inclusive and that the tax-exclusive taxable base is formed after waste, discount, and margin.
+
+### `money.monetary_tax_basis` — NOT CLOSED as one generic estimate fact
+
+The reconnaissance found no single authoritative monetary-basis carrier that can be applied to every amount in an estimate observation.
+
+In particular there is no canonical domain `item_total` shared by all PresuPro surfaces:
+
+- backend aggregate calculation has a deterministic internal pricing sequence;
+- export `Line Total` uses a different line representation;
+- frontend line display uses another post-waste/post-margin/post-discount value;
+- Holded projection transmits raw quantity, unit price, discount, and IVA without waste/margin as one canonical line-total field.
+
+Therefore a single field such as:
 
 ```text
-money.currency
-money.monetary_tax_basis
+monetary_basis: gross_tax_inclusive
 ```
 
-Reported gaps:
+on the generic estimate observation would overstate what the source contract actually guarantees.
+
+## Stronger gap discovered in accepted Cabinet design
+
+The accepted Cabinet core model contains:
 
 ```text
-SEMANTIC_SOURCE_NOT_FOUND -> EstimateObservationInput.currency
-SEMANTIC_SOURCE_NOT_FOUND -> EstimateObservationInput.monetary_basis
+EstimateItemSnapshot.total: Decimal
 ```
 
-The compiler must not infer either value from field names, project context, locale, existing Cabinet data, product conventions, or model judgment.
-
-## Why the gaps matter
-
-Accepted plan/actual semantics require planned and actual monetary values to share both currency and monetary/tax basis. Implicit currency conversion and implicit net/gross/tax-basis reinterpretation are forbidden.
-
-Therefore an adapter that supplies either missing value would be making a business decision that belongs in durable specification.
-
-The completeness rule is working as intended:
+and the accepted plan/actual rule says:
 
 ```text
-compiler must choose
-  -> mapping is not derivable
-  -> emit a proof obligation
-  -> repair the owning semantic contract
+planned_amount = EstimateItemSnapshot.total
 ```
 
-## Closure test
+while also saying Cabinet must consume this as an accepted PresuPro result rather than reapply PresuPro arithmetic.
 
-The test suite proves that if the source manifest is augmented with authoritative declarations for:
+But the PresuPro reconnaissance found no single canonical source item-total meaning that supports that field as currently described.
+
+This is more precise than the original generic `money.monetary_tax_basis` gap:
 
 ```text
-money.currency
-money.monetary_tax_basis
+What exactly is EstimateItemSnapshot.total?
+What source value/derivation authoritatively produces it?
+What monetary/tax basis does that exact planned amount carry?
 ```
 
-then the same compiler derives the complete mapping without any compiler-code change.
+The experimental probe now moves this obligation to a dedicated plan/actual amount boundary instead of forcing it into generic estimate-observation acceptance.
 
-That test is hypothetical closure evidence only. It does **not** authorize adding those fields until the real source contract proves that it owns and exposes those meanings.
+## Refined derivability architecture
 
-## Composition result
-
-`tools/box_composition.py` compiles a deterministic three-node plan and refuses to execute an unresolved composition.
-
-The unresolved estimate test proves that neither source nor target callback is invoked when mapping cannot be proven. A failed semantic preflight therefore cannot accidentally cause a box effect.
-
-For a derived mapping, only the proven projection is passed to the target. Extra source fields are not forwarded by default.
-
-## Trace back into the accepted Cabinet design
-
-The derivability gaps were traced back through the accepted design states after the green test run.
-
-### Currency — boundary closure mismatch
-
-State 1 `Model M28 — EstimateSnapshot` already says an immutable estimate snapshot contains `currency` and that PresuPro owns the estimate composition facts.
-
-The closed core model also contains:
+The two concerns are now separated:
 
 ```text
-EstimateSnapshot.currency: str
+PresuPro estimate observation
+  -> identity/project/status/lock/content/currency
+  -> Cabinet immutable observation
+  -> fully derivable cross-box plumbing expected
+
+PresuPro pricing semantics
+  -> ??? authoritative per-item planned amount
+  -> ??? exact planned amount basis
+  -> Cabinet plan/actual amount requirement
+  -> intentionally unresolved until specification repair
 ```
 
-But the closed inbound support model is:
+This is the intended behavior: a mapping gap moves to the semantic boundary that actually owns the missing decision.
+
+## New plan/actual amount probe
+
+The branch now contains:
+
+- `presupro_pricing_contract_v0.yaml` — only factual pricing semantics proved by the local reconnaissance;
+- `cabinet_plan_actual_amount_requirement_v0.yaml` — the Cabinet requirement extracted from `EstimateItemSnapshot.total` and plan/actual comparability;
+- `tests/test_plan_actual_amount_derivability.py` — executable proof that:
+  - `money.currency` derives;
+  - aggregate `grand_total: Decimal` cannot substitute for item planned amount merely because the type matches;
+  - canonical item planned amount remains unresolved;
+  - its exact monetary basis remains unresolved;
+  - adding explicit authoritative item-amount semantics would close the same compiler without compiler special-casing.
+
+## Required design repair
+
+Do not repair this by choosing a convenient existing PresuPro display/export value.
+
+The earliest accepted design state must define what Cabinet means by the planned monetary amount of one `EstimateItemSnapshot`.
+
+Possible legitimate outcomes include, but are not limited to:
+
+- PresuPro exposes/defines a canonical per-item gross amount;
+- PresuPro exposes/defines a canonical per-item tax-exclusive amount;
+- Cabinet explicitly derives one amount from a declared PresuPro pricing algebra and records that derivation as part of snapshot semantics;
+- the analysis grain changes so plan/actual does not pretend an unsupported canonical item amount exists.
+
+Whichever decision is accepted must also define the exact basis used when comparing with `InvoiceLine.total`.
+
+That actual-side amount basis should be verified separately rather than assumed.
+
+## Evidence status
+
+PresuPro local monetary probe reported:
 
 ```text
-PresuProEstimateObservation:
-  presupro_estimate_id
-  project_id
-  presupro_updated_at
-  status
-  locked
-  canonical_content
-  observed_at
+1 passed in 0.33s
 ```
 
-with no currency field.
-
-The public contract is still:
+for the focused synthetic pricing test, and:
 
 ```text
-refresh_estimate_snapshot(
-  observation: PresuProEstimateObservation
-) -> EstimateSnapshot
+4 passed in 0.33s
 ```
 
-and the generation notes say the operation must reject a partial/unprocessable observation rather than fabricate a snapshot. No accepted rule or note identifies another authoritative source from which `EstimateSnapshot.currency` is obtained.
+for the full pricing test file. `git diff --check` passed in that local PresuPro workspace.
 
-**Conclusion:** `money.currency` is not merely absent from the experimental source manifest. The accepted classical boundary itself does not currently close how required snapshot currency arrives.
-
-Earliest repair owner: the State 1 external estimate projection/input model boundary, then propagation through State 2 acceptance rules and later contracts/notes.
-
-### Monetary/tax basis — missing semantic carrier
-
-The deeper gap is `money.monetary_tax_basis`.
-
-The accepted plan/actual semantic decision requires planned and actual values to have the same accepted monetary/tax basis and explicitly forbids implicit basis conversion.
-
-However the closed `EstimateSnapshot` model has no monetary-basis field, and the closed `PresuProEstimateObservation` has no such field either.
-
-`PlanActualRequest` contains `assumption_ids`, but the current closed core/support model sets do not define a corresponding accepted assumption/evidence model that carries a monetary-basis decision.
-
-**Conclusion:** there is currently no explicit durable semantic carrier that proves the monetary/tax basis required by the calculation rule.
-
-Earliest repair owner: State 1 must either define the missing basis/evidence concept or prove that basis is a fixed property of an already accepted source contract. State 2 must then define exactly how that evidence authorizes comparability. A later adapter, service note, or calculation fallback is too late.
-
-## What not to do
-
-Do not repair either gap by:
-
-- parsing `canonical_content` using an undocumented convention;
-- assuming EUR from deployment/project context;
-- assuming gross or net from IVA fields;
-- adding a PresuPro-specific adapter default;
-- letting an LLM choose a basis;
-- treating `assumption_ids` as proof when no accepted assumption model defines what those IDs reference.
-
-Any of those would move the missing decision into implementation instead of closing specification.
-
-## Required source reconnaissance before semantic repair
-
-The existing `presupro_estimate_lineage_discovery.md` verified identity, mutability, locking, status, and lineage. It did **not** establish currency or monetary-total basis semantics.
-
-Before changing the accepted models, perform a focused PresuPro monetary-contract reconnaissance that answers:
-
-1. Is estimate currency an explicit stored/API field, a project-level fact, or absent?
-2. Who is authoritative for that currency?
-3. Do estimate/item totals represent net, gross/tax-inclusive, or another declared basis?
-4. Is the basis fixed by contract or variable per estimate/item?
-5. How do IVA, discount, waste, margin, unit price, line total, and estimate total relate deterministically?
-6. Which exact fields survive API/export and can be self-described by a source box?
-7. Can the monetary basis be stated as a contract-level semantic constant, or must it travel as data/evidence?
-
-Only evidence from the actual source contract should close these proof obligations.
+These are user-provided local execution results from the PresuPro workspace, not GitHub Actions evidence in this repository.
 
 ## Architectural conclusion
 
-The experiment now has evidence for two distinct integration cases:
-
-1. Registry-like project catalogue -> Cabinet project observation: completely derivable from declared semantics.
-2. PresuPro-like estimate observation -> Cabinet estimate observation: mostly derivable, but blocked by two genuine monetary semantic gaps that trace into the accepted product design itself.
-
-This supports the working rule:
-
-> Keep meaning durable. Everything provably derivable from that meaning should be a cheap disposable compilation artifact.
-
-The integration boundary is:
+The detector did more than reject an adapter. It distinguished:
 
 ```text
-derivable mapping
-  -> compile disposable plumbing
+source fact really exists but was not surfaced
+  -> repair source self-description
 
-non-derivable mapping
-  -> expose missing semantic decision
-  -> trace it to its owning design state
+source aggregate semantics exist but target asks a different semantic question
+  -> do not coerce one into the other
+
+accepted product model names a value whose authoritative source meaning is not closed
+  -> repair the earliest owning design state
 ```
 
-## Next experiment
-
-Create a focused, evidence-driven PresuPro monetary reconnaissance rather than making the estimate mapping green by assertion.
-
-After source evidence is known:
-
-1. repair the earliest owning semantic state;
-2. propagate the decision to box self-description;
-3. rerun the unchanged derivability/composition compiler;
-4. require the mapping to become derived without adapter code or compiler special-casing.
+This is exactly the desired specification-completeness behavior.
