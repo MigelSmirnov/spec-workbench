@@ -12,15 +12,7 @@ The working hypothesis is:
 
 ## Core architecture
 
-A box owns its own:
-
-- schemas and identity;
-- data and storage locality;
-- invariants and lifecycle;
-- capabilities;
-- authorization/effect policy;
-- disclosure policy;
-- provenance and audit requirements.
+A box owns its own schemas/identity, data/storage locality, invariants/lifecycle, capabilities, authorization/effect policy, disclosure policy, and provenance/audit requirements.
 
 A box MUST NOT know neighbouring products by address, API, DTO, client, adapter, or deployment dependency.
 
@@ -68,14 +60,10 @@ Box/host retains data/effect authority.
 ```
 
 Agent owns transient intent, discovery, routing, orchestration, and bounded semantic/model operations where genuine interpretation remains.
-
 Compiler owns transient derivable plumbing: semantic projection, compatible typed adaptation, declared deterministic transformations, proof, and structured gaps.
-
 Box/host owns durable meaning, auth/grants, schema validation, capability semantics, policy, transaction/effect control, storage, protected credentials/files, disclosure, and audit/provenance.
 
 ## No permanent cross-box adapters by default
-
-Do not introduce durable product-specific integration code merely because one task spans products.
 
 Prefer:
 
@@ -127,8 +115,9 @@ The branch contains:
 - `tools/box_derivability.py` — deterministic mapping proof/gap detector;
 - `tools/box_composition.py` — compiler/executor for disposable cross-box composition plans;
 - Registry-like source and Cabinet provider-agnostic project-catalogue manifests;
-- PresuPro-like source and Cabinet provider-agnostic estimate manifests;
-- focused tests for box boundaries, derivability, composition, and estimate proof obligations.
+- PresuPro estimate-observation and pricing semantic manifests;
+- Cabinet provider-agnostic estimate observation and plan/actual amount requirement manifests;
+- focused tests for box boundaries, derivability, composition, estimate observation, and plan/actual amount proof obligations.
 
 ## Derivability v0
 
@@ -156,7 +145,7 @@ A successful derivation is executable through an exact projection. An unresolved
 
 ## Composition compiler result
 
-`tools/box_composition.py` compiles a three-node plan:
+`tools/box_composition.py` compiles:
 
 ```text
 source capability
@@ -165,8 +154,7 @@ source capability
 ```
 
 The compiler does not accept a hand-written mapping argument.
-
-Derivability is completed before either box is invoked. If the plan is unresolved, execution stops before source or target callbacks run. A derived projection forwards only proven target fields; unrelated source fields do not cross by default.
+Derivability completes before either box is invoked. An unresolved plan stops before source or target callbacks run. A derived projection forwards only proven target fields.
 
 ## First real cross-box probe — project catalogue
 
@@ -174,76 +162,123 @@ Registry-like project catalogue -> Cabinet project observation is fully derivabl
 
 Cabinet does not require a Registry client, Registry DTO, or Registry-named semantic surface.
 
-This validates the disposable-adapter hypothesis for a straightforward real domain case.
+## Second real cross-box probe — estimate observation
 
-## Second real cross-box probe — estimate
-
-PresuPro-like estimate -> Cabinet estimate observation is intentionally **not fully derivable yet**.
-
-The current accepted source observation is sufficient for:
-
-```text
-source estimate identity
-project identity
-source update timestamp
-status
-locked flag
-canonical content
-```
-
-The compiler reports exactly two remaining proof obligations:
+The first estimate probe initially reported two missing meanings:
 
 ```text
 money.currency
 money.monetary_tax_basis
 ```
 
-These correspond to Cabinet-required fields:
+A focused local PresuPro monetary reconnaissance then distinguished two different cases.
+
+### Currency is a real source-contract fact
+
+PresuPro does not store currency on each Estimate or project. Its accepted application contract fixes:
 
 ```text
-EstimateObservationInput.currency
-EstimateObservationInput.monetary_basis
+config.app.currency = EUR
 ```
 
-This is a meaningful semantic gap, not a compiler defect. Accepted plan/actual rules require currency and monetary/tax-basis compatibility and explicitly forbid implicit currency or net/gross reinterpretation.
+and `calculate_estimate_totals` surfaces the same deterministic currency.
 
-The test also proves that adding authoritative declarations for those two meanings to the source manifest closes the mapping **without compiler-code change**.
+Therefore `presupro_estimate_box_v0.yaml` now truthfully exposes `money.currency` as a source-contract constant. This is not locale inference or an adapter default.
 
-See `ESTIMATE_DERIVABILITY_RESULT.md` for the recorded experiment result.
+Generic Cabinet estimate-observation acceptance requires that currency and can be fully derived without knowing PresuPro as a neighbour.
 
-## Test evidence
+### Generic monetary basis does not belong on observation acceptance
 
-On 2026-08-20 the following focused suite was executed in a real Termux checkout:
+The same reconnaissance proved deterministic aggregate pricing, including tax-inclusive `grand_total`, but did **not** prove one canonical item-total value or one monetary basis that can be applied to every estimate amount.
+
+Therefore `cabinet_estimate_context_box_v0.yaml` no longer forces a generic `monetary_basis` into the observation boundary merely to make plan/actual easier later.
+
+The gap moves to the semantic operation that actually needs it.
+
+## Third probe — plan/actual planned item amount
+
+The accepted Cabinet core model contains:
 
 ```text
-tests/test_box_derivability.py
-tests/test_box_composition.py
-tests/test_estimate_derivability.py
-tests/test_cabinet_backend_box_manifest.py
+EstimateItemSnapshot.total: Decimal
 ```
 
-Result:
+and accepted plan/actual semantics state:
+
+```text
+planned_amount = EstimateItemSnapshot.total
+```
+
+while also saying Cabinet should consume that as an accepted PresuPro result rather than independently reapply PresuPro pricing arithmetic.
+
+The local PresuPro monetary reconnaissance found no single canonical source `item_total` shared by backend aggregate logic, export, frontend line display, and Holded projection.
+
+This is now represented by:
+
+- `presupro_pricing_contract_v0.yaml` — only pricing semantics actually proved by PresuPro evidence;
+- `cabinet_plan_actual_amount_requirement_v0.yaml` — the exact Cabinet planned-item amount requirement;
+- `tests/test_plan_actual_amount_derivability.py` — fail-closed detector.
+
+Expected derivation:
+
+```text
+money.currency
+  -> derived
+
+estimate.item.planned_amount
+  -> unresolved
+
+estimate.item.planned_amount_basis
+  -> unresolved
+```
+
+A `Decimal` aggregate `grand_total` cannot satisfy the item amount merely because its type matches. Semantic identity must match.
+
+This is a stronger finding than the original generic monetary-basis gap: the accepted classical design itself has not yet closed what authoritative source meaning produces `EstimateItemSnapshot.total`.
+
+See `ESTIMATE_DERIVABILITY_RESULT.md`.
+
+## Evidence from local execution
+
+On 2026-08-20 the earlier focused workbench suite was executed in Termux:
 
 ```text
 25 passed in 0.65s
 ```
 
-This is real local-run evidence. The experiment branch is still not covered by the existing automatic Stage 8.1 GitHub Actions trigger, so do not describe it as CI-green.
+The separate local PresuPro monetary test reported:
+
+```text
+1 passed in 0.33s
+```
+
+for the focused synthetic pricing case and:
+
+```text
+4 passed in 0.33s
+```
+
+for the full pricing test file, with `git diff --check` passing in that local workspace.
+
+These are real local-run results, not GitHub Actions CI evidence.
+
+The newest workbench refinement after that evidence still needs a fresh checkout run; do not call it green until executed.
 
 ## Next work when resuming
 
-Do **not** make the estimate probe green by inventing currency or monetary basis in the adapter.
+Do **not** choose a convenient PresuPro line display/export value and call it `EstimateItemSnapshot.total`.
 
 Next steps:
 
-1. trace `money.currency` and `money.monetary_tax_basis` to the earliest owning accepted design state;
-2. determine whether the source authority can actually expose them, whether Cabinet requires separately authoritative assumption/evidence, or whether the current observation boundary is incomplete;
-3. close the estimate mapping only by repairing the owning semantic contract;
-4. connect the generic composition-plan IR to the broader agent execution-graph/discovery path so derived mappings are inserted automatically;
-5. only after those probes, define the smallest reusable semantic vocabulary and deterministic transformation algebra — no universal business ontology by default;
-6. compile `cabinet_backend_box_v0.yaml` into a small generic host IR/runtime and prove one archive/source capability without reintroducing service/repository/router ownership;
-7. define the minimum prepare/execute/observe/settle protocol for external effects using Holded as the adversarial case;
-8. classify local/VPS topology and compare the resulting implementation surface against the classical branch.
+1. run the refined workbench tests and confirm estimate observation is now fully derivable while planned item amount remains intentionally unresolved;
+2. trace `EstimateItemSnapshot.total` to the earliest owning State 1/State 2 decision and repair its exact semantic meaning;
+3. separately verify the actual-side `InvoiceLine.total` monetary/tax basis so planned-vs-actual comparability is proved on both sides;
+4. after the planned amount decision is accepted, propagate it into the source self-description and rerun the unchanged derivability compiler;
+5. connect generic composition-plan IR to broader agent discovery/execution so derived mappings are inserted automatically;
+6. define only the smallest reusable semantic vocabulary/operator algebra demonstrated by these probes;
+7. compile `cabinet_backend_box_v0.yaml` into a generic host IR/runtime and prove one archive/source capability without service/repository/router ownership;
+8. define the minimum prepare/execute/observe/settle protocol for external effects using Holded as the adversarial case;
+9. classify local/VPS topology and compare implementation surface against the classical branch.
 
 ## Success condition
 
@@ -253,4 +288,4 @@ The experiment succeeds if useful products can be deployed as:
 generic host + compiled self-described box + local data/storage
 ```
 
-while independent boxes can be composed without permanent pairwise adapters, and every non-trivial mapping is either provably compiled from declared meaning or rejected with a structured semantic gap that tells the specification author what remains undefined.
+while independent boxes can be composed without permanent pairwise adapters, and every non-trivial mapping is either provably compiled from declared meaning or rejected with a structured semantic gap that points to the owning specification decision.
