@@ -1,12 +1,9 @@
 from __future__ import annotations
 
-from copy import deepcopy
 from pathlib import Path
 
-import pytest
-
 from box_composition import compile_composition, execute_composition
-from box_derivability import BoxDerivabilityError, derive_capability_mapping, load_definition
+from box_derivability import derive_capability_mapping, load_definition
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -18,9 +15,8 @@ def definitions():
     return load_definition(SOURCE), load_definition(TARGET)
 
 
-def derive(source=None, target=None):
-    if source is None or target is None:
-        source, target = definitions()
+def derive():
+    source, target = definitions()
     return derive_capability_mapping(
         source,
         "estimate.observe",
@@ -29,10 +25,11 @@ def derive(source=None, target=None):
     )
 
 
-def test_accepted_estimate_surface_exposes_real_monetary_proof_obligations():
+def test_estimate_observation_mapping_is_now_fully_derived():
     report = derive()
 
-    assert report.status == "unresolved"
+    assert report.status == "derived"
+    assert report.gaps == ()
     assert [step.target_path for step in report.mapping] == [
         "EstimateObservationInput.source_estimate_id",
         "EstimateObservationInput.project_id",
@@ -40,22 +37,26 @@ def test_accepted_estimate_surface_exposes_real_monetary_proof_obligations():
         "EstimateObservationInput.status",
         "EstimateObservationInput.locked",
         "EstimateObservationInput.canonical_content",
+        "EstimateObservationInput.currency",
     ]
-    assert [(gap.code, gap.target_path, gap.semantic) for gap in report.gaps] == [
-        (
-            "SEMANTIC_SOURCE_NOT_FOUND",
-            "EstimateObservationInput.currency",
-            "money.currency",
-        ),
-        (
-            "SEMANTIC_SOURCE_NOT_FOUND",
-            "EstimateObservationInput.monetary_basis",
-            "money.monetary_tax_basis",
-        ),
-    ]
+    mapping = {step.target_path: step.source_path for step in report.mapping}
+    assert mapping["EstimateObservationInput.currency"] == "PresuProEstimateObservation.currency"
 
 
-def test_unresolved_estimate_mapping_cannot_run_and_neither_box_is_called():
+def test_currency_is_declared_as_verified_source_contract_constant():
+    source, _ = definitions()
+    currency = source["schemas"]["PresuProEstimateObservation"]["fields"]["currency"]
+
+    assert currency["semantic"] == "money.currency"
+    assert currency["authority"] == "estimate.source.authority"
+    assert currency["source"] == {
+        "kind": "contract_constant",
+        "contract": "config.app.currency",
+        "value": "EUR",
+    }
+
+
+def test_compiled_estimate_composition_passes_only_proven_observation_fields():
     source, target = definitions()
     plan = compile_composition(
         source,
@@ -63,50 +64,48 @@ def test_unresolved_estimate_mapping_cannot_run_and_neither_box_is_called():
         target,
         "estimate.observation.accept",
     )
-    calls: list[str] = []
+    received: list[dict[str, object]] = []
 
     def source_invoke(_capability, _args):
-        calls.append("source")
-        return {}
+        return {
+            "estimate_id": "est-17",
+            "project_id": "project-4",
+            "updated_at": "2026-08-20T18:00:00Z",
+            "status": "accepted",
+            "locked": False,
+            "canonical_content": "{\"id\":\"est-17\"}",
+            "currency": "EUR",
+            "observed_at": "2026-08-20T18:01:00Z",
+            "provider_only_debug_value": "must not cross",
+        }
 
-    def target_invoke(_capability, _args):
-        calls.append("target")
-        return {}
+    def target_invoke(capability, args):
+        assert capability == "estimate.observation.accept"
+        received.append(args)
+        return {"accepted": True}
 
-    with pytest.raises(BoxDerivabilityError, match="cannot execute an unresolved composition"):
-        execute_composition(plan, source_invoke, target_invoke)
-    assert calls == []
+    execution = execute_composition(plan, source_invoke, target_invoke)
 
-
-def test_declaring_missing_source_semantics_closes_gap_without_compiler_change():
-    source, target = definitions()
-    completed = deepcopy(source)
-    fields = completed["schemas"]["PresuProEstimateObservation"]["fields"]
-    fields["currency"] = {
-        "type": "str",
-        "semantic": "money.currency",
-        "authority": "estimate.source.authority",
-    }
-    fields["basis"] = {
-        "type": "str",
-        "semantic": "money.monetary_tax_basis",
-        "authority": "estimate.source.authority",
-    }
-
-    report = derive(completed, target)
-
-    assert report.status == "derived"
-    assert report.gaps == ()
-    mapping = {step.target_path: step.source_path for step in report.mapping}
-    assert mapping["EstimateObservationInput.currency"] == "PresuProEstimateObservation.currency"
-    assert mapping["EstimateObservationInput.monetary_basis"] == "PresuProEstimateObservation.basis"
+    assert execution.result == {"accepted": True}
+    assert received == [
+        {
+            "source_estimate_id": "est-17",
+            "project_id": "project-4",
+            "source_updated_at": "2026-08-20T18:00:00Z",
+            "status": "accepted",
+            "locked": False,
+            "canonical_content": "{\"id\":\"est-17\"}",
+            "currency": "EUR",
+        }
+    ]
 
 
-def test_cabinet_estimate_contract_is_provider_agnostic_and_forbids_inference():
+def test_generic_observation_contract_does_not_invent_plan_actual_basis():
     _, target = definitions()
 
     semantic_surface = str(target["schemas"]) + str(target["capabilities"])
     assert "PresuPro" not in semantic_surface
+    assert "monetary_basis" not in target["schemas"]["EstimateObservationInput"]["fields"]
     assert target["external_dependencies"] == []
     assert target["experiment_boundaries"]["currency_inference_allowed"] is False
-    assert target["experiment_boundaries"]["monetary_basis_inference_allowed"] is False
+    assert target["experiment_boundaries"]["plan_actual_monetary_basis_inference_allowed"] is False
