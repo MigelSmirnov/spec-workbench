@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import ast
+import hashlib
 import json
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -51,6 +52,15 @@ def current_implementations() -> dict[str, frozenset[str]]:
         "box_derivability": DERIVABILITY_RULES,
         "box_composition": COMPOSITION_RULES,
     }
+
+
+def _git_blob_sha(path: Path) -> str | None:
+    try:
+        payload = path.read_bytes()
+    except OSError:
+        return None
+    header = f"blob {len(payload)}\0".encode()
+    return hashlib.sha1(header + payload).hexdigest()
 
 
 def _test_exists(root: Path, node_id: str) -> bool:
@@ -115,6 +125,36 @@ def audit_language(
                 )
             )
             continue
+
+        implementation_path = binding.get("implementation")
+        expected_blob_sha = binding.get("implementation_blob_sha")
+        if not isinstance(implementation_path, str) or not implementation_path:
+            findings.append(
+                AuditFinding(
+                    "MISSING_IMPLEMENTATION_PATH",
+                    tool_name,
+                    "tool binding must name its implementation path",
+                )
+            )
+        elif not isinstance(expected_blob_sha, str) or not expected_blob_sha:
+            findings.append(
+                AuditFinding(
+                    "MISSING_IMPLEMENTATION_FINGERPRINT",
+                    tool_name,
+                    "tool binding must pin the reviewed compiler blob",
+                )
+            )
+        else:
+            actual_blob_sha = _git_blob_sha(root / implementation_path)
+            if actual_blob_sha != expected_blob_sha:
+                findings.append(
+                    AuditFinding(
+                        "IMPLEMENTATION_FINGERPRINT_DRIFT",
+                        tool_name,
+                        f"declared {expected_blob_sha}, observed {actual_blob_sha}",
+                    )
+                )
+
         declared = binding.get("declared_rules")
         if not isinstance(declared, list) or not all(isinstance(item, str) for item in declared):
             findings.append(
