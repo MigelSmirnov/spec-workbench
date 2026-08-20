@@ -41,22 +41,33 @@ required_host_primitives:
 machine_contracts:
   GHL-REL-001:
     statement: every_required_interface_port_has_exactly_one_selected_machine_declared_implementation_relation
+    tools:
+      - host_lowering_plan
     evidence_required:
       - interface_identity
       - selected_backend_identity
       - implementation_relation
     failure: block_lowering
+    conformance_tests:
+      - tests/test_host_lowering_plan.py::test_missing_required_interface_relation_blocks_lowering
+      - tests/test_host_lowering_plan.py::test_ambiguous_required_interface_relation_blocks_lowering
 
   GHL-PROJ-001:
     statement: selected_lowering_projection_includes_every_declared_required_runtime_dependency
+    tools:
+      - host_lowering_plan
     evidence_required:
       - selected_lowering_identity
       - declared_runtime_dependencies
       - projected_runtime_dependencies
     failure: block_lowering
+    conformance_tests:
+      - tests/test_host_lowering_plan.py::test_lost_psycopg_projection_blocks_lowering_before_execution
 
   GHL-VERIFY-001:
     statement: verification_status_has_closed_fail_safe_meaning
+    tools:
+      - host_lowering_plan
     statuses:
       PASS: required_evidence_executed_and_passed
       FAIL: required_evidence_executed_and_failed
@@ -66,19 +77,49 @@ machine_contracts:
       required_missing: UNVERIFIED
       required_skip: UNVERIFIED
     failure: block_verified_claim
+    conformance_tests:
+      - tests/test_host_lowering_plan.py::test_required_skip_normalizes_to_unverified
 
   GHL-VERIFY-002:
     statement: aggregate_verified_status_requires_every_required_probe_to_be_pass
+    tools:
+      - host_lowering_plan
     pass_condition: all_required_probes_are_PASS
     failure: block_verified_claim
+    conformance_tests:
+      - tests/test_host_lowering_plan.py::test_verification_gate_passes_only_when_every_required_provider_passes
 
   GHL-SEM-001:
     statement: lowering_must_not_resolve_missing_domain_authority_disclosure_or_effect_meaning
+    tools: []
     on_missing_meaning: return_semantic_gap
     forbidden_fallbacks:
       - field_name_guess
       - type_only_guess
       - hidden_default
       - product_specific_adapter_heuristic
+    note: >-
+      This semantic guard is not implemented by host_lowering_plan. The planner
+      consumes already-declared box host requirements and provider relations; it
+      has no field-mapping or product-semantic choice API. Future host execution
+      tooling must bind this rule explicitly before implementing semantic fallback
+      behavior.
+
+tool_bindings:
+  host_lowering_plan:
+    implementation: tools/host_lowering_plan.py
+    implementation_blob_sha: 53228e3b5ad5819d5b333137197ab026b2162ee7
+    declared_rules:
+      - GHL-REL-001
+      - GHL-PROJ-001
+      - GHL-VERIFY-001
+      - GHL-VERIFY-002
+
+change_policy:
+  implementation_fingerprint_drift: block
+  hidden_implementation_rule: block
+  declared_rule_missing_from_implementation: block
+  missing_conformance_test: block
+  semantic_guard_without_explicit_future_binding: block_before_execution_tool
 
 product_specific_dependencies: []
