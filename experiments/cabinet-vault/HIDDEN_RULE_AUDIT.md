@@ -92,6 +92,17 @@ The audit blocks when:
 
 The fingerprint rule is deliberate. Any compiler-code change forces an explicit language review before the gate can pass again. This catches a future deterministic rule added directly to Python even when the author forgets to add a new rule ID.
 
+## Mandatory change discipline
+
+Treat `python tools/box_language_audit.py` as a required gate before accepting any change to the box compiler or composition runtime.
+
+A compiler fingerprint drift is not repaired by refreshing the fingerprint alone. Review the code change first and determine whether it:
+
+1. implements an already-declared language rule without changing observable semantics; or
+2. introduces or changes an architectural rule, in which case the language contract and its conformance case must change together.
+
+If deterministic compilation was expected but its declared preconditions fail, fail closed and report the reason. Do not silently switch to model generation, generated code, a heuristic adapter, or another compilation mode.
+
 ## Conformance suite
 
 `tests/test_box_language_conformance.py` exercises the observable behavior of every declared v0 rule.
@@ -145,8 +156,33 @@ compiler
 
 Domain decisions such as choosing Invoice Card V1 `net_amount` versus `gross_amount` still belong to the product specification. They must not migrate into `box_derivability.py` merely because a deterministic choice would be easy to code.
 
-## Test status
+## Validated test evidence
 
-The parent box/derivability suite was previously validated through 29 tests in a real checkout. The actual-side monetary detector and this hidden-rule audit were added afterward.
+Validated in a clean real checkout after synchronization to commit `5aed452` on 2026-08-20.
 
-Do not call the newest combined suite green until it is rerun in a checkout.
+Main current experiment suite:
+
+```text
+53 passed, 1 warning in 1.11s
+```
+
+Built-in adversarial mutation/audit cases:
+
+```text
+3 passed, 1 warning in 0.32s
+```
+
+CLI audit result:
+
+```json
+{
+  "status": "pass",
+  "checked_tools": ["box_composition", "box_derivability"],
+  "checked_rules": 15,
+  "findings": []
+}
+```
+
+The warnings were only inability to write `.pytest_cache` in a read-only checkout and did not affect test results. No external mutation framework such as `mutmut` is configured; the repository's built-in adversarial mutation gate was used.
+
+This is real local-run evidence, not GitHub Actions CI evidence.
