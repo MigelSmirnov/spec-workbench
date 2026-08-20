@@ -185,7 +185,7 @@ and `calculate_estimate_totals` surfaces the same deterministic currency.
 
 Therefore `presupro_estimate_box_v0.yaml` now truthfully exposes `money.currency` as a source-contract constant. This is not locale inference or an adapter default.
 
-Generic Cabinet estimate-observation acceptance requires that currency and can be fully derived without knowing PresuPro as a neighbour.
+Generic Cabinet estimate-observation acceptance requires that currency and is fully derivable without knowing PresuPro as a neighbour.
 
 ### Generic monetary basis does not belong on observation acceptance
 
@@ -213,13 +213,13 @@ while also saying Cabinet should consume that as an accepted PresuPro result rat
 
 The local PresuPro monetary reconnaissance found no single canonical source `item_total` shared by backend aggregate logic, export, frontend line display, and Holded projection.
 
-This is now represented by:
+This is represented by:
 
 - `presupro_pricing_contract_v0.yaml` — only pricing semantics actually proved by PresuPro evidence;
 - `cabinet_plan_actual_amount_requirement_v0.yaml` — the exact Cabinet planned-item amount requirement;
 - `tests/test_plan_actual_amount_derivability.py` — fail-closed detector.
 
-Expected derivation:
+Current proven derivation:
 
 ```text
 money.currency
@@ -240,13 +240,27 @@ See `ESTIMATE_DERIVABILITY_RESULT.md`.
 
 ## Evidence from local execution
 
-On 2026-08-20 the earlier focused workbench suite was executed in Termux:
+On 2026-08-20 the refined focused workbench suite was executed in a real checkout after the currency/source-contract repair and planned-item-amount probe were added.
+
+Executed:
 
 ```text
-25 passed in 0.65s
+tests/test_box_derivability.py
+tests/test_box_composition.py
+tests/test_estimate_derivability.py
+tests/test_plan_actual_amount_derivability.py
+tests/test_cabinet_backend_box_manifest.py
 ```
 
-The separate local PresuPro monetary test reported:
+Result:
+
+```text
+29 passed, 1 warning in 0.79s
+```
+
+The warning was only inability to write `.pytest_cache` in that environment and did not affect test results.
+
+The separate local PresuPro monetary tests reported:
 
 ```text
 1 passed in 0.33s
@@ -262,17 +276,15 @@ for the full pricing test file, with `git diff --check` passing in that local wo
 
 These are real local-run results, not GitHub Actions CI evidence.
 
-The newest workbench refinement after that evidence still needs a fresh checkout run; do not call it green until executed.
-
 ## Next work when resuming
 
 Do **not** choose a convenient PresuPro line display/export value and call it `EstimateItemSnapshot.total`.
 
 Next steps:
 
-1. run the refined workbench tests and confirm estimate observation is now fully derivable while planned item amount remains intentionally unresolved;
-2. trace `EstimateItemSnapshot.total` to the earliest owning State 1/State 2 decision and repair its exact semantic meaning;
-3. separately verify the actual-side `InvoiceLine.total` monetary/tax basis so planned-vs-actual comparability is proved on both sides;
+1. verify the actual-side `InvoiceLine.total` contract from the real Cabinet Invoice Card V1 source: exact amount meaning, currency binding, tax inclusion/basis, discounts, quantities/units, and whether line total is canonical input truth or derived arithmetic;
+2. represent only those proved actual-side semantics in a source self-description and add a derivability probe for the actual amount requirement;
+3. with both planned and actual sides explicit, repair the earliest State 1/State 2 decision that owns `EstimateItemSnapshot.total` and monetary comparability;
 4. after the planned amount decision is accepted, propagate it into the source self-description and rerun the unchanged derivability compiler;
 5. connect generic composition-plan IR to broader agent discovery/execution so derived mappings are inserted automatically;
 6. define only the smallest reusable semantic vocabulary/operator algebra demonstrated by these probes;
