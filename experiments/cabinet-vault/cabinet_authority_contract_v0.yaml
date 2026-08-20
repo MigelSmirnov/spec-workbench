@@ -1,0 +1,199 @@
+contract_version: cabinet_authority_contract.v0
+status: exploratory
+
+purpose: >-
+  Extract the durable Cabinet authority semantics from the accepted classical
+  access-control decisions while leaving authentication storage, hashing,
+  throttling, session, database, and transport mechanisms to the generic host.
+
+source_baseline:
+  - examples/cabinet-backend/02_rules.md
+  - examples/cabinet-backend/02_rules_local_agent_identity.md
+  - examples/cabinet-backend/01_models_local_access_control.md
+  - examples/cabinet-backend/02_rules_local_access_control.md
+  - examples/cabinet-backend/02_security_review.md
+  - experiments/cabinet-vault/cabinet_backend_box_v0.yaml
+
+semantic_principles:
+  - id: AUTH-SEM-001
+    statement: endpoint_process_or_entity_id_possession_never_grants_authority
+  - id: AUTH-SEM-002
+    statement: every_protected_invocation_has_one_authenticated_principal
+  - id: AUTH-SEM-003
+    statement: authorization_requires_exact_capability_and_exact_resource_scope
+  - id: AUTH-SEM-004
+    statement: credential_classes_are_not_interchangeable_across_trust_boundaries
+  - id: AUTH-SEM-005
+    statement: actor_and_delegation_provenance_are_host_bound_not_caller_asserted
+  - id: AUTH-SEM-006
+    statement: effect_and_disclosure_authority_are_explicit_and_default_deny
+  - id: AUTH-SEM-007
+    statement: authorization_and_effect_outcomes_produce_append_only_audit_evidence
+  - id: AUTH-SEM-008
+    statement: revocation_removes_future_authority_without_changing_business_entity_identity
+
+principal_contract:
+  principal_identity:
+    required: true
+    stable_across_credential_rotation: true
+  principal_kinds:
+    - human
+    - agent
+    - service
+    - synchronization_node
+  lifecycle:
+    active:
+      may_authenticate: true
+    revoked:
+      may_authenticate: false
+      terminal: true
+  separation_rules:
+    - synchronization_node_identity_cannot_authorize_local_agent_operations
+    - local_agent_or_service_identity_cannot_authorize_synchronization
+    - human_interactive_context_is_not_implicitly_a_service_principal
+
+credential_contract:
+  semantics:
+    - credential_authenticates_exactly_one_principal_within_one_trust_boundary
+    - credential_material_is_secret_and_never_business_data
+    - credential_rotation_preserves_principal_identity
+    - credential_revocation_removes_future_authentication_authority
+    - reusable_credential_material_is_never_agent_visible_business_output
+  host_mechanisms_not_product_semantics:
+    - verifier_algorithm
+    - verifier_storage_backend
+    - credential_pepper_storage
+    - random_secret_generator
+    - login_session_implementation
+    - throttling_storage
+    - operating_system_administration_command
+
+resource_grant_contract:
+  default: deny
+  required_dimensions:
+    - principal_id
+    - capability
+    - resource_scope
+  optional_dimensions:
+    - effect_scope
+    - disclosure_scope
+    - expiry_or_replay_bound
+  rules:
+    - grant_is_host_authority_state_not_agent_input
+    - stable_entity_id_is_a_target_reference_not_authorization_proof
+    - capability_match_is_exact
+    - resource_scope_must_cover_exact_target
+    - stale_authenticated_context_does_not_override_current_revocation_or_grant_state
+
+actor_binding_contract:
+  host_constructed: true
+  fields:
+    - principal_id
+    - actor_kind
+    - delegated_by
+    - interaction_id
+  rules:
+    - caller_cannot_supply_authorization_decision_as_proof
+    - caller_cannot_self_assert_delegated_by
+    - explicit_user_or_delegated_intent_is_required_for_declared_high_risk_effects
+
+capability_policy_contract:
+  each_capability_declares:
+    - required_grant
+    - resource_scope_rule
+    - effects
+    - disclosure_allow
+    - disclosure_deny
+    - audit_requirement
+  defaults:
+    effect: deny_unless_declared
+    disclosure: deny_unless_allowed
+
+protected_host_values:
+  - authenticated_principal
+  - authorization_decision
+  - grant_state
+  - actor_from_authenticated_principal
+  - interaction_id
+  - audit_evidence_id
+  - credential_material
+  - storage_credentials
+
+security_audit_contract:
+  append_only: true
+  required_for:
+    - authentication_failure
+    - authorization_refusal
+    - protected_read_when_capability_requires_audit
+    - protected_mutation
+    - credential_issue_rotate_revoke
+    - grant_change
+  minimum_semantic_fields:
+    - evidence_id
+    - principal_id_or_unknown
+    - capability_or_operation
+    - resource_scope_or_target
+    - result
+    - reason_code
+    - occurred_at
+  when_effectful:
+    additionally_record:
+      - declared_effect
+      - effect_evidence
+  rules:
+    - audit_evidence_never_contains_reusable_secret
+    - audit_evidence_is_not_authority_for_a_future_invocation
+
+host_enforcement_requirements:
+  - authenticate_presented_principal_evidence
+  - read_current_principal_status
+  - read_current_credential_status
+  - read_current_grants
+  - enforce_exact_capability
+  - enforce_exact_resource_scope
+  - enforce_declared_effect_policy
+  - enforce_disclosure_policy
+  - bind_actor_and_interaction_provenance
+  - persist_append_only_audit_evidence
+
+classical_lowering_not_durable_identity:
+  - PostgresAccessControlBackend
+  - AccessControlBackend
+  - PostgreSQL
+  - Argon2id
+  - environment_variable_names
+  - Linux_deployment_owner
+  - HTTP
+  - MCP
+  - IPC
+  - browser_session_storage
+  - throttle_table_shape
+
+verification_obligations:
+  - id: AUTH-PROBE-001
+    statement: caller_supplied_authorization_decision_cannot_authorize_invocation
+  - id: AUTH-PROBE-002
+    statement: revoked_principal_or_credential_cannot_authorize_new_invocation
+  - id: AUTH-PROBE-003
+    statement: capability_without_exact_resource_scope_is_denied
+  - id: AUTH-PROBE-004
+    statement: synchronization_credential_is_rejected_at_local_agent_boundary
+  - id: AUTH-PROBE-005
+    statement: local_agent_credential_is_rejected_as_synchronization_authority
+  - id: AUTH-PROBE-006
+    statement: unauthorized_effect_or_disclosure_is_denied
+  - id: AUTH-PROBE-007
+    statement: protected_mutation_binds_actor_from_authenticated_principal
+  - id: AUTH-PROBE-008
+    statement: audit_evidence_contains_no_reusable_credential_material
+
+open_questions:
+  - id: AUTH-OQ-001
+    question: >-
+      What is the smallest generic grant representation that can prove exact
+      resource, effect, disclosure, expiry, and replay bounds across independent
+      boxes without importing Cabinet role names into the host kernel?
+  - id: AUTH-OQ-002
+    question: >-
+      Which audit event vocabulary is generic host language and which event
+      meanings remain Cabinet capability-specific?
