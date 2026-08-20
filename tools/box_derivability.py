@@ -10,6 +10,20 @@ from typing import Any
 
 
 REPORT_SCHEMA_VERSION = "spec_workbench_box_derivability.v0"
+IMPLEMENTED_BOX_LANGUAGE_RULES = frozenset(
+    {
+        "BXL-DERIVE-001",
+        "BXL-DERIVE-002",
+        "BXL-DERIVE-003",
+        "BXL-DERIVE-004",
+        "BXL-DERIVE-005",
+        "BXL-DERIVE-006",
+        "BXL-DERIVE-007",
+        "BXL-DERIVE-008",
+        "BXL-DERIVE-009",
+        "BXL-DERIVE-010",
+    }
+)
 
 
 class BoxDerivabilityError(RuntimeError):
@@ -56,6 +70,7 @@ class DerivationReport:
     target_schema: str
     mapping: tuple[MappingStep, ...]
     gaps: tuple[DerivationGap, ...]
+    language_rules: tuple[str, ...]
 
 
 def load_definition(path: Path) -> dict[str, Any]:
@@ -292,6 +307,7 @@ def derive_capability_mapping(
         target_schema=target_schema_name,
         mapping=tuple(mapping),
         gaps=tuple(gaps),
+        language_rules=tuple(sorted(IMPLEMENTED_BOX_LANGUAGE_RULES)),
     )
 
 
@@ -333,6 +349,7 @@ def render_human(report: DerivationReport) -> str:
         f"Derivability: {report.status}",
         f"Source: {report.source_capability} -> {report.source_schema}",
         f"Target: {report.target_capability} <- {report.target_schema}",
+        "Language rules: " + ", ".join(report.language_rules),
     ]
     if report.mapping:
         lines.append("")
