@@ -12,33 +12,34 @@ host implementation is runnable or behaviorally verified.
 
 ```text
 experiments/cabinet-vault/cabinet_backend_box_v0.yaml
+experiments/cabinet-vault/cabinet_authority_contract_v0.yaml
 experiments/cabinet-vault/generic_host_lowering_contract_v0.yaml
 experiments/cabinet-vault/generic_host_profile_candidate_v0.yaml
+experiments/cabinet-vault/generic_host_provider_verification_v0.yaml
 ```
 
-Planner:
+Planner and guards:
 
 ```text
 tools/host_lowering_plan.py
-```
-
-Conformance:
-
-```text
 tests/test_host_lowering_plan.py
+tests/test_host_provider_verification.py
+tests/test_cabinet_authority_contract.py
+tests/test_cabinet_authority_manifest.py
 ```
 
 ## Why this exists
 
-The failed classical Cabinet generation exposed two generic lowering failures:
+The failed classical Cabinet generation exposed generic lowering failures:
 
 ```text
 missing interface -> concrete implementation relation
 lost psycopg runtime projection
+required verification skipped while the route appeared complete
 ```
 
 Those failures are not Cabinet business semantics. They belong to reusable host
-lowering rules.
+lowering rules and verification gates.
 
 The planner therefore answers only:
 
@@ -88,7 +89,7 @@ protected_configuration_kernel
 
 The profile contains no product-specific dependency.
 
-The first projected third-party runtime dependencies are:
+The projected third-party runtime dependencies are:
 
 ```text
 pydantic
@@ -98,7 +99,7 @@ psycopg
 The explicit `psycopg` projection is intentional evidence against the failure
 observed in the classical generated backend.
 
-## Verification state
+## Structural result
 
 Every candidate provider currently declares:
 
@@ -118,12 +119,11 @@ runtime_dependencies:
   - psycopg
 ```
 
-`compiled` here means only that the declared interface relations and dependency
+`compiled` here means only that declared interface relations and dependency
 projection are structurally closed.
 
-It does **not** mean executable or verified.
-
-The CLI exits non-zero while required provider verification is not `PASS`.
+It does **not** mean executable or verified. The CLI exits non-zero while any
+required provider verification is not `PASS`.
 
 ## Fail-closed conformance cases
 
@@ -140,47 +140,84 @@ The test suite requires:
 - the planner implementation rule set and source fingerprint to match the
   declared lowering contract exactly.
 
-## Relationship to Cabinet authority
+## Authority split
 
 The candidate `authority_kernel` does not define Cabinet business roles or
 credential-storage mechanics.
 
-Durable authority semantics are extracted separately in:
+`cabinet_authority_contract_v0.yaml` preserves durable semantics for principal
+separation, exact capability/resource scope, host-bound actor provenance,
+explicit effect/disclosure authority, revocation meaning, and audit meaning.
+
+PostgreSQL, Argon2id, session/verifier/throttling storage, Linux administration,
+and transport choice remain host mechanisms/lowering.
+
+The archive box manifest is guarded so an agent cannot supply its own authority
+evidence and every capability explicitly declares grant, scope, effect,
+disclosure, and audit requirements.
+
+## Provider verification packets
+
+`generic_host_provider_verification_v0.yaml` now defines the minimum proof
+obligations for all five candidate providers.
+
+### authority_kernel
+
+Covers authentication, bounded grants, exact resource scope, effect policy, and
+disclosure policy. Its probes are the `AUTH-PROBE-001..008` vocabulary declared
+by `cabinet_authority_contract_v0.yaml`.
+
+### typed_schema_kernel
+
+Must prove invalid input rejection before effects, rejection of undeclared fields
+for closed boundary schemas, and output validation before disclosure/settlement.
+Its packet explicitly carries the `pydantic` runtime dependency.
+
+### postgres_record_kernel
+
+Must prove the `psycopg` dependency is present in the selected runtime plus
+transaction atomicity/rollback, exact-resource locking, absence of partial state,
+and append-only audit persistence.
+
+### local_private_byte_vault
+
+Must prove host-owned opaque paths, stage/reopen/hash verification, conflicting
+content exclusion, atomic publication/recovery, readiness blocking on unresolved
+recovery, and path/symlink/device escape rejection.
+
+### protected_configuration_kernel
+
+Must prove required secret configuration fails closed when absent and protected
+values cannot enter caller-visible business data or audit evidence.
+
+Every packet probe is currently `UNVERIFIED`.
+
+The packet guards require:
 
 ```text
-experiments/cabinet-vault/cabinet_authority_contract_v0.yaml
+one packet per candidate provider
+packet requirements == provider satisfies requirements
+packet runtime dependencies == provider runtime dependencies
+PASS probe -> executed=true + non-empty recorded evidence
+provider PASS -> every packet probe PASS
 ```
 
-That contract preserves principal separation, exact capability/resource scope,
-host-bound actor provenance, explicit effect/disclosure authority, revocation
-semantics, and audit meaning while classifying PostgreSQL, Argon2id, session
-storage, throttling storage, and Linux administration as host mechanisms/lowering.
+Therefore no provider may be promoted to `PASS` merely by editing the candidate
+profile.
 
-The Cabinet archive manifest is guarded by:
+## Current blocking boundary
 
-```text
-tests/test_cabinet_authority_contract.py
-tests/test_cabinet_authority_manifest.py
-```
+The declarative architecture work has now reached the point where further
+promotion requires **real provider implementations and executed runtime evidence**.
 
-## Next proof obligations
+Without that evidence, implementing a capability execution runtime and calling it
+verified would repeat the exact failure mode exposed by the classical generation.
 
-Do not mark providers `PASS` by editing the profile.
-
-For each provider, obtain executed evidence against a concrete implementation and
-record the evidence that satisfies its declared host requirements.
-
-The next useful implementation step is to define the smallest provider
-verification packets for:
-
-1. authority enforcement;
-2. typed schema validation;
-3. PostgreSQL record/transaction/locking/audit behavior;
-4. local private byte-vault stage/verify/publish/recovery behavior;
-5. protected configuration.
-
-Only after required provider evidence is executed and passed may the host plan
-verification gate become `pass`.
+The next runtime work must begin with one concrete provider implementation and run
+its packet probes. A useful first provider is the PostgreSQL record kernel because
+it directly exercises the previously lost `psycopg` projection plus transaction
+and locking obligations. The byte-vault provider is the next natural pair for the
+real `invoice.source.attach` capability.
 
 A later capability execution compiler must remain separate from this structural
 planner and must not invent missing Cabinet semantics while lowering a capability.
