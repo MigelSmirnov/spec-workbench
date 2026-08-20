@@ -6,14 +6,10 @@ Experimental classification overlay for `agent/cabinet-vault-experiment`.
 
 This document does **not** modify the accepted `examples/cabinet-backend` design,
 `SPEC_STANDARD`, or the classical `agent/cabinet-backend-state-0` lowering. It
-classifies the already accepted Cabinet Backend semantics under the hypothesis in
-`DIRECTION.md`:
+classifies accepted Cabinet semantics under the box hypothesis in `DIRECTION.md`.
 
-> durable product truth should compile into a self-describing Cabinet box and a
-> generic trusted host; cross-product orchestration belongs to the agent session.
-
-The accepted Cabinet Backend case is deliberately treated as evidence, not as a
-set of Python classes that must survive unchanged.
+The accepted case is evidence. Stage 8.1 Python classes are not presumed to be
+durable product identity.
 
 ## Classification rule
 
@@ -29,29 +25,36 @@ storage/transport lowering
 truly unresolved behavior
 ```
 
-A class, module, repository, router, client, or service name is not durable merely
-because Stage 8.1 needed it to make the classical application generation path
-implementation-complete.
+A second rule now applies to cross-box integration:
+
+> **If a mapping is provably determined by two self-described surfaces, it is a
+> disposable compiler artifact, not durable pairwise architecture. If it is not
+> provable, return a semantic gap instead of guessing.**
+
+A box describes its own meaning and required authority. It must not need a
+neighbour's API, DTO, client, endpoint, or adapter merely to state its own input
+contract.
 
 ## Product-wide result
 
 The real Cabinet design already contains a substantial box-shaped semantic core:
 immutable Card revisions, source-byte custody, durable acceptance, explicit
-identity, Registry and PresuPro observations, confirmed matching decisions,
-Holded publication evidence, retention decisions, authorization rules, and audit
-requirements.
+identity, project-catalogue and estimate observations, confirmed matching
+decisions, Holded publication evidence, retention decisions, authorization rules,
+and audit requirements.
 
-The largest removable surface is the application lowering added around that
-core: service classes, repository classes, concrete PostgreSQL classes, FastAPI
-routers/app-state wiring, bootstrap composition, and permanent product-specific
-clients.
+The largest removable surface is the classical application lowering around that
+core: service/repository classes, concrete PostgreSQL/filesystem classes,
+FastAPI/app-state wiring, bootstrap composition, and permanent product clients.
 
-The important split is not `domain` versus `infrastructure`. It is:
+The important split is:
 
 ```text
 Cabinet-owned durable truth and allowed effects
 vs.
-agent-owned transient composition across independent authorities
+agent-owned choice/orchestration across independent authorities
+vs.
+compiler-owned derivable transient plumbing
 vs.
 generic host lowering/mechanism
 ```
@@ -60,144 +63,149 @@ generic host lowering/mechanism
 
 | Classical module/surface | Box classification | Experimental disposition |
 | --- | --- | --- |
-| `domain_models` | data/schema | Survives as durable schemas, identity, lifecycle, and value semantics. Python model classes are a lowering. |
-| `access_control` | policy/invariant + generic host authority | Cabinet-specific operation/resource rules survive. Authentication, grant verification, throttling, credential storage, revocation, and audit enforcement belong to the trusted host kernel. `PostgresAccessControlBackend` and bootstrap wiring are not product semantics. |
-| `durable_archive` | data/schema + policy/invariant + capability + deterministic composition | Strongest Cabinet-box core. Immutable revisions, durable acceptance, source integrity, missing/lost-source decisions, and disclosure remain Cabinet semantics. `DurableArchiveService`, `ArchiveUnitOfWork`, concrete PostgreSQL UoW, and filesystem store are classical lowerings of generic record/transaction/blob-vault primitives. |
-| `synchronization` | split: local evidence/policy + agent/infrastructure orchestration | Cabinet may own durable acceptance and local transfer evidence. Discovery, remote delivery, connection observation, retries, and composition with another Cabinet/VPS authority should not require a permanent product client. The agent or infrastructure transport layer coordinates independent boxes. |
-| `registry_context` | data/schema + deterministic capability; cross-box fetch moves to agent | Cabinet-owned `WorkObject`, Registry snapshots, and assignment-validation evidence remain. Registry polling/client/API knowledge disappears from Cabinet. Agent discovers Registry, obtains a typed result, maps it transiently, then invokes a Cabinet observation/merge capability. |
-| `plan_actual` | data/schema + deterministic operators + bounded model operation | Immutable estimate snapshots, confirmed match decisions, unmatched identities, and plan-vs-actual arithmetic remain. Fetching PresuPro moves to agent composition. `calculate_plan_actual` is deterministic. `propose_invoice_line_matches` is the clearest current candidate for a bounded, non-authoritative model operation. |
-| `holded_publication` | local policy/evidence + effect-state capability; external mutation moves to agent composition | Cabinet keeps publication eligibility, idempotency intent, attempt/evidence state, and settlement rules. A permanent Holded API client is not required inside Cabinet. Agent composes Cabinet state transitions with a separately discovered Holded capability and returns bounded typed observations for Cabinet verification/settlement. |
-| `holded_gateway` | storage/transport lowering or separate external authority | Does not belong to the Cabinet semantic core merely because the classical app needed HTTP/API-key machinery. `HoldedHttpClient`, `HttpxHoldedHttpClient`, gateway service, API-key config, and remote response DTOs leave the Cabinet product surface unless Holded is intentionally wrapped as its own box/connector. |
-| `retention_release` | policy/invariant + deterministic capability + effect control | Local evidence evaluation and deletion/release authority stay with the data-owning box. Cross-node coordination is agent orchestration; the box must still decide whether its own destructive effect is allowed. |
-| HTTP/MCP routers and handlers | storage/transport lowering | Thin transports over the same capability surface. No business ownership. |
-| service classes | classical application lowering | May disappear when capability semantics compile directly into generic host plans/lowerings. A service class is not required as a normative intermediate artifact. |
-| repository/UoW classes | storage lowering | Replace with generic host record/transaction primitives plus compiled schema/index/locking requirements where expressible. Product-specific repository names need not survive. |
-| `bootstrap` / app-state dependency injection | deployment lowering | Generic host loads a compiled box, host configuration, storage backends, and grants. Product-specific constructor graphs should not be durable semantics. |
+| `domain_models` | data/schema | Durable schemas, identity, lifecycle, value semantics. Python classes are lowering. |
+| `access_control` | policy/invariant + generic host authority | Cabinet operation/resource rules survive. Authentication, grants, throttling, credential storage, revocation, and audit enforcement belong to the host kernel. |
+| `durable_archive` | data/schema + policy + capability + deterministic composition | Strong Cabinet core. `DurableArchiveService`, UoW/repository classes, PostgreSQL and filesystem implementations are candidate lowerings of generic transaction/record/blob-vault primitives. |
+| `synchronization` | split local evidence/policy + orchestration | Cabinet owns local truth/evidence. Discovery, remote delivery, retries, and cross-node composition do not justify permanent product clients. |
+| `registry_context` | data/schema + deterministic capability + derivable cross-box projection | Cabinet needs authoritative project-catalogue observations and assignment-validation evidence. It does not need a Registry-shaped API/DTO/client surface. A compatible source manifest can be projected transiently by the derivability compiler. |
+| `plan_actual` | data/schema + deterministic operators + bounded model operation | Immutable estimate observations, explicit match decisions, unmatched identities, and arithmetic remain. External fetching is composed. Calculation is deterministic; match proposal may be bounded/non-authoritative. |
+| `holded_publication` | local policy/evidence + effect-state capability | Cabinet keeps eligibility, idempotency intent, attempt evidence, and settlement rules. The external mutation is separately composed and later settled from typed evidence. |
+| `holded_gateway` | transport/external authority | HTTP/API-key/gateway classes are not Cabinet semantic core merely because the classical app needed them. |
+| `retention_release` | policy + deterministic capability + effect control | The data-owning box decides its destructive effect. Cross-node coordination is orchestration. |
+| routers/handlers | transport lowering | Thin transports over capabilities. No business ownership. |
+| service classes | classical application lowering | May disappear when capabilities compile directly into host plans/lowerings. |
+| repository/UoW classes | storage lowering | Replaceable by generic host record/transaction primitives where semantics permit. |
+| bootstrap/app-state wiring | deployment lowering | Generic host loads compiled box + configuration + backends + grants. |
 
-## Callable disposition
-
-### Generic host authority
+## Generic host authority
 
 `authorize_operation` is not an agent-callable business capability. Authentication,
 grant/resource-scope checking, effect authorization, disclosure checking, replay
-bounds, and security audit should wrap every capability invocation in the host.
-An `AuthorizationDecision` therefore must not be supplied by an agent as proof of
-its own authority.
+bounds, and audit wrap every invocation in the host. An agent cannot provide an
+`AuthorizationDecision` as proof of its own authority.
 
-### Cabinet-native capabilities
+## Cabinet-native capabilities
 
-The following accepted operations map directly or nearly directly to Cabinet
-capabilities:
+Accepted operations that map directly or nearly directly to Cabinet capabilities
+include:
 
 - archive lookup and durable-acceptance verification;
-- local source attachment and source-status observation;
-- accepting explicit incomplete-source evidence;
-- recording explicit source-loss decisions;
-- Cabinet-owned Registry observation merge and assignment validation;
-- persistence of explicit plan/actual match decisions;
+- local source attachment/status;
+- explicit incomplete-source acceptance and source-loss decisions;
+- project-catalogue observation acceptance and assignment validation;
+- explicit plan/actual match decisions;
 - unmatched-item derivation;
 - deterministic plan/actual calculation;
 - local retention eligibility/effect decisions.
 
-Their Python service/repository shapes are not part of the capability identity.
+Their service/repository shapes are not capability identity.
 
-### Cross-box operations that must be split
+## Cross-box operations that must be split
 
 The classical callables below mix Cabinet semantics with knowledge of another
-system and therefore should not survive unchanged as Cabinet capabilities:
+system and should not survive unchanged:
 
-- `refresh_registry_context` — split into `Registry -> typed result`, transient
-  agent mapping, then a Cabinet-owned observation/merge capability;
-- `refresh_estimate_snapshot` — split into `PresuPro -> typed estimate result`,
-  transient mapping, then Cabinet snapshot acceptance;
-- `synchronize_invoice_work`, Registry catalogue publication, VPS connection
-  observation, and transfer reconciliation — split by authority; transport and
-  remote calls are not Cabinet business semantics;
-- `create_holded_purchase` and `lookup_holded_purchase` — external Holded
-  capabilities/connector operations, not Cabinet capabilities;
-- `request_holded_publication` / reconciliation — retain Cabinet-owned
-  preparation, idempotency, evidence, and settlement transitions but compose the
-  actual Holded effect in the agent execution graph.
+- `refresh_registry_context` becomes source capability -> **proved transient
+  projection** -> Cabinet-owned `project.catalogue_observation.accept`-style
+  capability. The agent chooses the composition; the compiler derives plumbing
+  when the two manifests prove semantic/type/authority compatibility;
+- `refresh_estimate_snapshot` should become estimate-source capability -> proved
+  transient projection/transformation -> Cabinet-owned estimate observation;
+- synchronization/catalogue publication/VPS connection/reconciliation split by
+  authority and transport ownership;
+- `create_holded_purchase` and `lookup_holded_purchase` are external
+  capability/connector operations, not Cabinet capabilities;
+- Holded publication keeps Cabinet prepare/evidence/settle truth while the actual
+  external effect is composed separately.
 
 No permanent `registry_client`, `presupro_client`, `holded_gateway`, or
 Cabinet/VPS bridge is required by this model.
 
+## Derivability result
+
+The first executable probe is now in:
+
+```text
+tools/box_derivability.py
+experiments/cabinet-vault/registry_project_box_v0.yaml
+experiments/cabinet-vault/cabinet_registry_context_box_v0.yaml
+tests/test_box_derivability.py
+```
+
+For v0, the compiler derives only exact projection. A target field must declare
+its own `type`, `semantic`, and (when relevant) required `authority`. The source
+must provide exactly one compatible field.
+
+Field names do not prove meaning. The source can rename `id` to
+`registry_project_key` and the mapping remains derivable because the semantic ID
+is `project.identity`; conversely a same-name/same-type field without semantics
+is rejected.
+
+The Cabinet side is intentionally provider-agnostic. It requires
+`project.catalogue.authority` rather than a Registry client/DTO dependency.
+
+A successful report is executable by `apply_exact_projection`, making the
+adapter a disposable compilation artifact. An unresolved report cannot execute.
+Current gap codes distinguish missing target meaning, missing source semantics,
+type mismatch, authority mismatch, ambiguity, and unsupported transformations.
+
+This is the integration equivalent of the existing placeholder detector: a
+compiler reaching for a guess is evidence that the durable specification still
+contains an unresolved decision.
+
 ## Deterministic operators versus model operations
 
-### Deterministic now
+Already deterministic under the accepted design:
 
-The accepted design is already specific enough to lower these without an LLM:
-
-- exact identity and content-hash checks;
+- exact identity/content-hash checks;
 - immutable revision selection;
-- source completeness and durable-acceptance verification;
-- exact-scope filtering and status derivation;
-- Registry observation merge rules;
-- confirmed-match filtering;
-- unmatched-set derivation;
+- source completeness and durable acceptance;
+- exact-scope filtering/status derivation;
+- project-catalogue observation merge rules;
+- confirmed-match filtering/unmatched-set derivation;
 - plan-vs-actual aggregation and variances;
 - unit/currency/tax-basis precondition rejection;
-- Holded attempt/idempotency state transitions and bounded verification rules;
-- retention eligibility checks;
-- transaction, lock, staging, hash verification, atomic publication, and recovery
-  sequences where the accepted rules already close their ordering.
+- Holded idempotency/evidence state transitions;
+- retention eligibility;
+- transaction/lock/stage/hash/publish/recovery sequences whose ordering is
+  already closed.
 
-### Bounded model operation candidate
+`propose_invoice_line_matches` remains the clearest bounded model candidate. Its
+output is non-authoritative until an explicit Cabinet decision records a match.
+No evidence requires an LLM for `calculate_plan_actual`.
 
-`propose_invoice_line_matches` is the clearest current runtime model-semantic
-operation. Similarity may propose a candidate but cannot confirm a match or
-change authority. Its input and output must remain typed and bounded, and its
-result remains non-authoritative until an explicit Cabinet match-decision
-capability records a human/agent-approved decision.
+## Generic local host requirements
 
-No evidence currently requires an LLM for `calculate_plan_actual` itself.
-
-## Generic local host requirements extracted from the classical design
-
-The first real Cabinet box needs a host kernel with reusable primitives for:
+The box path still needs reusable host primitives for:
 
 1. principal authentication and bounded grants;
-2. typed manifest discovery filtered by grant;
-3. input/output schema validation;
-4. capability, resource-scope, effect, and disclosure enforcement;
-5. deterministic record selection/mutation and transaction/locking control;
-6. an opaque source-byte vault with stage/verify/publish/recovery semantics;
-7. protected configuration and credentials;
-8. startup recovery for committed-but-unfinished local effects;
-9. audit/provenance evidence for accepted requests, policy version, effects, and
-   disclosed results;
-10. thin MCP/tool/IPC/HTTP transports that do not own semantics.
+2. grant-filtered manifest discovery;
+3. input/output validation;
+4. capability/scope/effect/disclosure enforcement;
+5. deterministic record mutation plus transaction/locking;
+6. opaque source-byte vault stage/verify/publish/recovery;
+7. protected configuration/credentials;
+8. startup recovery;
+9. audit/provenance;
+10. thin MCP/tool/IPC/HTTP transport.
 
-PostgreSQL and a local filesystem remain valid first lowerings, but `Postgres*`,
-`LocalFilesystem*`, FastAPI, and app-state injection are not required in the
-Cabinet semantic language.
+PostgreSQL and local filesystem remain valid first lowerings. Their class names
+are not required in the Cabinet semantic language.
 
-## First real manifest slice
+## First real Cabinet manifest slice
 
-The first manifest in `cabinet_backend_box_v0.yaml` intentionally covers
-**archive inspection and local source custody** rather than the whole classical
-application.
+`cabinet_backend_box_v0.yaml` intentionally covers archive inspection and local
+source custody. It is locally authoritative, has accepted integrity/concurrency/
+recovery/disclosure rules, and requires no permanent external product client.
 
-This slice is chosen because:
-
-- it is a real accepted Cabinet use case;
-- the authority and data are local to Cabinet;
-- the classical design already closes integrity, concurrency, recovery, and
-  disclosure constraints;
-- it requires generic host record/transaction/blob-vault mechanisms but no
-  permanent Registry, PresuPro, Holded, or VPS client;
-- it exposes immediately whether service/repository/router classes are needed as
-  durable product artifacts.
-
-The slice deliberately does not redesign cross-node transfer ingestion yet. The
-accepted classical transfer signature contains transport-era replica evidence;
-changing that boundary before the cross-box authority protocol is classified
-would invent semantics rather than extract them.
+Cross-node transfer ingest remains deferred because the classical signature
+contains transport-era replica evidence that should not be copied into a box
+before the cross-box authority/effect protocol is classified.
 
 ## Classical implementation surface expected to disappear
 
-If compilation succeeds, these names should not be needed in the durable Cabinet
-product definition merely to preserve accepted behavior:
+If compilation succeeds, durable Cabinet definition should not require names such
+as:
 
 ```text
 DurableArchiveService
@@ -205,62 +213,54 @@ PlanActualService
 RegistryContextService
 SynchronizationService
 HoldedGatewayService
-
 ArchiveUnitOfWork
 PlanActualRepository
 RegistryContextRepository
 SynchronizationRepository
 HoldedAttemptRepository
-
-PostgresArchiveUnitOfWork
-PostgresPlanActualRepository
-PostgresRegistryContextRepository
-PostgresSynchronizationRepository
-PostgresAccessControlBackend
+Postgres*
 LocalFilesystemSourceByteStore
 HttpxHoldedHttpClient
-
 FastAPI router/handler ownership
 app.state dependency wiring
 product-specific bootstrap constructor graph
 Registry/PresuPro/Holded integration clients
 ```
 
-Equivalent storage indexes, transaction rules, byte-store constraints, and
-security requirements may still compile into host configuration/lowering. What
-is expected to disappear is their status as product-specific application
-architecture.
+Equivalent indexes, transaction rules, byte-store constraints, and security
+requirements still compile into host configuration/lowering where needed.
 
-## Truly unresolved experiment questions
+## Remaining experiment questions
 
-1. **Inbound observations.** Define canonical Cabinet-owned typed observation
-   schemas for Registry, PresuPro, Holded, and remote Cabinet evidence without
-   importing another product's DTO/API identity into Cabinet.
-2. **Cross-box effects.** Define the minimum prepare/execute/observe/settle
-   protocol needed for effects such as Holded publication without giving the
-   agent authority to manufacture Cabinet success.
-3. **Local/VPS topology.** Decide which existing VPS responsibilities are a
-   separate box versus infrastructure transport around the same semantic box.
-4. **Model execution.** Define where bounded semantic model operations run and
-   how grants, disclosure, provenance, and deterministic fallbacks constrain
-   them.
-5. **Compilation.** Identify which existing `SPEC_STANDARD` fields compile
-   directly into box schemas/policies/capabilities and which application-oriented
-   fields are merely one lowering.
-
-These are experiment questions, not permission to reopen already accepted
-Cabinet business semantics.
+1. **Semantic vocabulary.** How small can the reusable field semantics/authority/
+   identity/revision vocabulary remain while still proving real mappings? Do not
+   create a global ontology by default.
+2. **Deterministic transformations.** Which transformations beyond
+   `exact_project` deserve closed typed operators, and what declarations prove
+   them safe?
+3. **Inbound estimate observation.** Can a PresuPro-like source derive into a
+   provider-agnostic Cabinet estimate contract without hidden currency, tax,
+   lineage, or revision decisions?
+4. **Cross-box effects.** What minimum prepare/execute/observe/settle protocol is
+   needed for Holded-like mutations without allowing the agent to manufacture
+   Cabinet success?
+5. **Local/VPS topology.** Which VPS responsibilities are separate authority
+   boxes versus transport around one semantic box?
+6. **Compilation.** Which `SPEC_STANDARD` information compiles into box
+   semantics/policy/capabilities and which fields are only application lowering?
 
 ## Next validation
 
-After the archive/source-custody slice, the highest-value next slice is
-`plan_actual` because it exercises all three target mechanisms at once:
+The next derivability probe is the estimate path. It should exercise richer
+semantic requirements before a general-purpose adapter framework is attempted:
 
 ```text
-external typed observation accepted into Cabinet
-+ bounded semantic match proposal
-+ deterministic confirmed-result calculation
+estimate-source self-description
+        -> derivability detector/compiler
+        -> Cabinet-owned estimate observation
+        -> explicit match decisions
+        -> deterministic plan/actual calculation
 ```
 
-It should be possible to implement that slice without a PresuPro client inside
-Cabinet and without a permanent `PlanActualService`/repository architecture.
+Every new semantic field should be justified by a concrete failed proof, not by
+an attempt to model the whole business world in advance.
