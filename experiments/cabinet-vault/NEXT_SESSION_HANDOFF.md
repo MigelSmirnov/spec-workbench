@@ -29,30 +29,27 @@ Cross-product work is composed outside Cabinet. Cabinet should not permanently
 own Registry, PresuPro, Holded, VPS, HTTP, or product-specific transport clients
 merely because a workflow crosses those systems.
 
-The central rule remains:
+Core rules:
 
 > Keep meaning durable. Treat everything provably derivable from that meaning as
 > a cheap disposable compilation artifact.
 
-And the compiler/host rule remains:
-
 > Deterministic implementation may implement declared rules. It must not silently
 > extend the language or choose missing product meaning.
 
-## Latest completed architecture passes
-
-Read first:
+## Read first
 
 ```text
 GENERATED_BACKEND_BOUNDARY_AUDIT.md
 GENERIC_HOST_LOWERING_RESULT.md
+PLAN_ACTUAL_MONETARY_DERIVABILITY_RESULT.md
 ```
 
 The old generated classical backend was not repaired.
 
-### Generated-backend boundary audit
+## Generated-backend boundary audit
 
-Implemented artifacts:
+Implemented:
 
 ```text
 tools/cabinet_boundary_audit.py
@@ -60,40 +57,31 @@ experiments/cabinet-vault/generated_backend_failure_evidence_v0.yaml
 tests/test_cabinet_boundary_audit.py
 ```
 
-The audit classifies failures into three dispositions.
-
-Remove from Cabinet product specification:
+Dispositions:
 
 ```text
 BOUNDARY_LEAK
-```
+  -> remove from Cabinet product specification
 
-Move to generic host/lowering:
-
-```text
 LANGUAGE_RELATION_GAP
 PROJECTION_GAP
 VERIFICATION_NOT_EXECUTED
 LOWERING_GAP
-```
+  -> generic host/lowering contract
 
-Keep and close in Cabinet semantic specification:
-
-```text
 AUTHORITY_SEMANTIC_GAP
 DOMAIN_SEMANTIC_GAP
+  -> keep and close in Cabinet semantic specification
 ```
 
 Representative evidence includes the missing interface implementation relation,
-lost `psycopg` projection, skipped required runtime/semantic verification,
-external-boundary stub concentration, authority construction mismatches, and
-unresolved PlanActual/RetentionRelease behavior.
+lost `psycopg` projection, skipped required verification, external-boundary stub
+concentration, authority construction mismatches, and unresolved
+PlanActual/RetentionRelease behavior.
 
 Classification success is not backend verification.
 
-## Verification remains fail closed
-
-Use only:
+## Verification rule
 
 ```text
 PASS       required evidence executed and passed
@@ -109,13 +97,9 @@ missing -> UNVERIFIED
 SKIP    -> UNVERIFIED
 ```
 
-The real failed generated-backend evidence intentionally keeps a blocking
-verification gate.
+The real failed generated-backend evidence intentionally keeps a blocking gate.
 
 ## Authority semantic split
-
-The accepted classical access-control design was separated into durable authority
-meaning versus generic host mechanism.
 
 Artifacts:
 
@@ -125,7 +109,7 @@ tests/test_cabinet_authority_contract.py
 tests/test_cabinet_authority_manifest.py
 ```
 
-Durable Cabinet/box authority semantics now include:
+Durable authority semantics now include:
 
 ```text
 principal identity and trust-boundary separation
@@ -138,7 +122,8 @@ default-deny disclosure authority
 append-only audit meaning
 ```
 
-The following are not Cabinet semantic identity:
+The following remain generic host mechanisms/lowering rather than Cabinet
+semantic identity:
 
 ```text
 PostgresAccessControlBackend
@@ -149,14 +134,7 @@ Linux administration command shape
 HTTP / MCP / IPC transport choice
 ```
 
-These are host mechanisms/lowerings.
-
-The archive box manifest is guarded so caller inputs cannot supply host-owned
-authorization evidence, every protected capability declares grant/scope/effect/
-disclosure/audit requirements, and effectful capabilities bind actor authority
-from authenticated host context.
-
-Two authority questions remain explicit rather than hidden:
+Open authority questions remain explicit:
 
 ```text
 AUTH-OQ-001
@@ -167,9 +145,9 @@ AUTH-OQ-002
   event meaning
 ```
 
-Do not solve these by importing Cabinet role names into the generic host kernel.
+Do not solve them by importing Cabinet role names into the generic host kernel.
 
-## Generic host lowering — first structural plan
+## Generic host lowering — structural planner
 
 Artifacts:
 
@@ -181,7 +159,7 @@ tests/test_generic_host_lowering_contract.py
 tests/test_host_lowering_plan.py
 ```
 
-The planner implements exactly these declared rules:
+Planner rules:
 
 ```text
 GHL-REL-001
@@ -191,18 +169,18 @@ GHL-VERIFY-002
 ```
 
 The lowering contract pins the reviewed planner source blob and names
-conformance tests. `GHL-SEM-001` is deliberately not declared implemented by the
-planner: the planner has no field/domain semantic-choice API.
+conformance tests. `GHL-SEM-001` is deliberately not implemented by this
+structural planner; it has no product-semantic mapping API.
 
-The candidate profile supplies one provider relation for every host requirement
-of `cabinet_backend_box_v0.yaml` and explicitly projects:
+The candidate profile resolves every host requirement of
+`cabinet_backend_box_v0.yaml` to one provider and projects:
 
 ```text
 pydantic
 psycopg
 ```
 
-The expected structural result is:
+Expected state:
 
 ```text
 status = compiled
@@ -210,16 +188,91 @@ gaps = []
 verification_gate = block
 ```
 
-Every candidate provider remains:
+All candidate providers remain `UNVERIFIED`.
+
+## Provider verification packets
+
+Artifacts:
 
 ```text
-required = true
-status = UNVERIFIED
+experiments/cabinet-vault/generic_host_provider_verification_v0.yaml
+tests/test_host_provider_verification.py
 ```
 
-Therefore structural compilation is not executable verification. Do not mark a
-provider `PASS` by editing the profile; obtain executed evidence against a
-concrete provider implementation.
+Packets now exist for:
+
+```text
+authority_kernel
+typed_schema_kernel
+postgres_record_kernel
+local_private_byte_vault
+protected_configuration_kernel
+```
+
+Each packet covers exactly the requirements its profile provider claims and
+carries the same runtime dependency declaration.
+
+Important proof obligations include:
+
+```text
+authority_kernel
+  AUTH-PROBE-001..008
+
+typed_schema_kernel
+  invalid input before effect
+  closed-schema extra-field rejection
+  invalid output before disclosure/settlement
+  dependency: pydantic
+
+postgres_record_kernel
+  dependency: psycopg
+  atomic commit/rollback
+  exact-resource locking
+  no partial metadata state
+  append-only audit persistence
+
+local_private_byte_vault
+  opaque host-owned paths
+  stage/reopen/hash verification
+  conflict exclusion
+  atomic publication/recovery
+  readiness block on unresolved recovery
+  symlink/device/non-regular escape rejection
+
+protected_configuration_kernel
+  required secret absence blocks readiness
+  secrets never enter caller-visible data/audit
+  configuration references do not become business data
+```
+
+Every probe is currently:
+
+```text
+UNVERIFIED
+```
+
+Guards require:
+
+```text
+PASS probe -> executed=true + recorded evidence
+provider PASS -> every required packet probe PASS
+```
+
+Do not promote profile status manually.
+
+## Current runtime boundary
+
+Declarative architecture has reached the point where the next advancement requires
+**a concrete provider implementation and executed runtime evidence**.
+
+Do not build capability execution and call it verified while providers are only
+candidate/UNVERIFIED. That would repeat the failure mode this experiment is meant
+to remove.
+
+The best first concrete provider is `postgres_record_kernel` because it directly
+exercises the previously lost `psycopg` projection plus transaction and locking
+obligations. `local_private_byte_vault` is the natural second provider for the
+real `invoice.source.attach` capability.
 
 ## Executed evidence status
 
@@ -231,29 +284,24 @@ built-in adversarial mutation/audit: 3 passed
 box language CLI audit: pass, 15 rules, 0 findings
 ```
 
-Those results predate the newest boundary, authority, host-lowering, and
-PlanActual changes.
+Those results predate the newest boundary, authority, host-lowering, provider
+packet, and PlanActual changes.
 
-A branch-specific GitHub Actions workflow exists at:
+Branch workflow:
 
 ```text
 .github/workflows/cabinet-vault-experiment.yml
 ```
 
-It is configured to run the focused box/Cabinet/PlanActual/authority/host-plan
-tests, the box-language audit, the boundary audit, and the candidate host plan.
-It asserts both expected fail-closed states:
+It is configured to run the focused box/Cabinet/PlanActual/authority/host tests,
+box-language audit, boundary audit, and candidate host plan. It asserts that the
+old generated backend and the candidate host plan remain fail-closed.
 
-```text
-old generated backend -> verification_gate = block
-candidate host plan    -> verification_gate = block
-```
+This connector session has not obtained a completed push-triggered Actions run
+result. Therefore the newest changes are **not recorded as PASS yet**. Workflow
+configuration is not execution evidence.
 
-This connector session still has not obtained a completed push-triggered Actions
-run result. Therefore the newest changes are **not recorded as PASS yet**.
-Workflow configuration is not execution evidence.
-
-## PlanActual repair status
+## PlanActual status
 
 Read:
 
@@ -264,20 +312,18 @@ examples/cabinet-backend/03_open_questions.md   # OQ-008
 PLAN_ACTUAL_MONETARY_DERIVABILITY_RESULT.md
 ```
 
-The previous monetary decision used:
+The former aliases:
 
 ```text
-planned_amount = EstimateItemSnapshot.total
-actual_amount = InvoiceLine.total
+EstimateItemSnapshot.total
+InvoiceLine.total
 ```
 
-Later factual probes proved those aliases are not closed source-contract facts:
+are no longer accepted as closed monetary semantics. PresuPro has no proved
+single canonical per-item total for this purpose; Invoice Card V1 has no
+`InvoiceLine.total` and exposes distinct `net_amount` and `gross_amount` bases.
 
-- PresuPro has no single proved canonical per-item total for this purpose;
-- Invoice Card V1 has no `InvoiceLine.total` and instead exposes distinct
-  `net_amount` and `gross_amount` meanings with different bases.
-
-The State 2 monetary decision is now:
+State 2 monetary semantics are:
 
 ```text
 REOPENED
@@ -298,8 +344,8 @@ PA-MONEY-003
   direct comparability or explicit accepted conversion evidence
 ```
 
-No answer has been invented in this branch. Existing derivability tests remain
-intentionally unresolved until explicit source/target meanings are accepted.
+No answer has been invented. Derivability remains intentionally unresolved until
+explicit source/target meaning is accepted.
 
 ## Immediate next work
 
@@ -307,42 +353,30 @@ Do not return to generated classical backend repairs.
 
 Proceed in this order:
 
-1. **Obtain executed evidence for the branch guards when available.**
-   A green workflow validates experiment tooling/guards only; it does not verify
-   the old generated backend.
+1. **Implement one concrete generic provider, starting with
+   `postgres_record_kernel`.**
+   It must be generic host code, not a Cabinet repository/UoW/service class.
 
-2. **Define provider verification packets, not more Cabinet service classes.**
-   For each candidate host provider, specify the minimum executable evidence
-   required to change its status from `UNVERIFIED` to `PASS`:
+2. **Execute its verification packet.**
+   At minimum prove `psycopg` availability in the selected runtime, atomic
+   commit/rollback, exact-resource locking, no partial state after failure, and
+   append-only audit persistence. Record real evidence before changing provider
+   status.
 
-   ```text
-   authority_kernel
-   typed_schema_kernel
-   postgres_record_kernel
-   local_private_byte_vault
-   protected_configuration_kernel
-   ```
+3. **Implement and verify `local_private_byte_vault`.**
+   This provides the second half needed for a real `invoice.source.attach` host
+   path.
 
-3. **Resolve AUTH-OQ-001 and AUTH-OQ-002 only as far as required by those
-   verification packets.**
-   Keep Cabinet role names and product workflow labels outside the generic host
-   language.
+4. **Only after required providers pass**, compile and execute one real
+   archive/source capability from `cabinet_backend_box_v0.yaml` without
+   reintroducing service/repository/router ownership.
 
-4. **Prove one real archive/source capability through the generic host boundary.**
-   Use `cabinet_backend_box_v0.yaml`; do not reintroduce service/repository/router
-   ownership. The capability execution path may advance only after required
-   provider relations, dependency projection, authority/effect/disclosure policy,
-   and verification evidence are explicit.
+5. Resolve AUTH-OQ-001/AUTH-OQ-002 only as needed for generic provider contracts,
+   without leaking Cabinet role names into the host kernel.
 
-5. **Resolve PlanActual monetary meaning only through an explicit Cabinet product
-   decision.**
-   Do not choose PA-MONEY-001..003 from field names, types, convenience, or
-   adapter context. After acceptance, propagate the decision into semantic
-   manifests and require the unchanged derivability compiler to close both
-   mappings.
-
-6. Only after monetary derivability closes, implement the full deterministic
-   monetary PlanActual calculation over proved inputs.
+6. Resolve PA-MONEY-001..003 only through an explicit Cabinet product decision;
+   after acceptance require the unchanged derivability compiler to close both
+   monetary mappings before implementing full monetary PlanActual.
 
 7. Later define the minimum prepare/execute/observe/settle protocol for external
    effects using Holded as the adversarial case and classify local/VPS topology.
@@ -359,8 +393,7 @@ Stop and report a semantic/architectural gap instead of adding code when:
 - provider status would become `PASS` without executed provider evidence;
 - fixing generated code would merely encode a decision absent from the durable
   specification;
-- PA-MONEY-001..003 are still unresolved and code would have to choose a
-  monetary meaning.
+- PA-MONEY-001..003 are unresolved and code would have to choose monetary meaning.
 
 ## Success criterion
 
