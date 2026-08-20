@@ -1,22 +1,23 @@
 # Cabinet Vault — next session handoff
 
-## Where we are going
+## Current direction
 
-The experiment is not trying to regenerate the classical Cabinet Backend application more accurately.
+The experiment is not trying to regenerate the classical Cabinet Backend
+application more accurately.
 
-The target is to separate the accepted Cabinet design into four layers:
+The target remains:
 
 ```text
 Cabinet durable semantic contract
         ↓
 compiled box capabilities / policies / schemas
         ↓
-generic local host and generic lowerings
+generic local host and declared generic lowerings
         ↓
 agent-side composition with independent external boxes/connectors
 ```
 
-The intended deployed shape is:
+Intended deployment shape:
 
 ```text
 generic host
@@ -24,223 +25,280 @@ generic host
 + local durable data/storage
 ```
 
-Cross-product work is composed outside Cabinet. Cabinet should not permanently own Registry, PresuPro, Holded, VPS, HTTP, or product-specific transport clients merely because a workflow crosses those systems.
+Cross-product work is composed outside Cabinet. Cabinet should not permanently
+own Registry, PresuPro, Holded, VPS, HTTP, or product-specific transport clients
+merely because a workflow crosses those systems.
 
-The central criterion remains:
+The central rule remains:
 
-> Keep meaning durable. Treat everything provably derivable from that meaning as a cheap disposable compilation artifact.
+> Keep meaning durable. Treat everything provably derivable from that meaning as
+> a cheap disposable compilation artifact.
 
-And the compiler rule is:
+And the compiler/host rule remains:
 
-> Compiler may implement the declared language. Compiler must not silently extend it.
+> Deterministic implementation may implement declared rules. It must not silently
+> extend the language or choose missing product meaning.
 
-## Why the failed generated Cabinet Backend matters
+## What was completed in the latest pass
 
-A classical Factory run reached `route_b_complete` but did not establish a verified backend. The useful evidence is not that generation was weak; it is that the generated failure surface exposed where the classical specification mixes semantic ownership with application lowering and external integrations.
+The bounded generated-backend architecture probe requested by the previous
+handoff is now implemented.
 
-Observed failure classes included:
-
-- missing machine relation between interface ports and concrete implementations;
-- local projection dropping required lowering imports such as `psycopg`;
-- required semantic/runtime verification being skipped while the overall route still appeared green;
-- concrete authority-model mismatches in audit/principal/credential construction;
-- a large concentration of missing/stubbed methods at Holded, Synchronization, VPS, and HTTP boundaries.
-
-Treat this generated backend as diagnostic evidence, not as a codebase to repair by hand.
-
-A stub is evidence that the specification or boundary must be inspected. Do not fill a stub merely to make generated code run.
-
-## The three buckets
-
-### 1. Problems the box architecture should remove from the Cabinet product specification
-
-These exist primarily because Cabinet was described as a classical application with permanent integration and framework structure.
-
-Examples:
+Read:
 
 ```text
-Holded HTTP adapters/gateway implementation
-VPS transport adapters
-product-specific synchronization clients
-Registry/PresuPro/Holded client classes
-FastAPI handler ownership
-request.app.state dependency wiring
-product-specific bootstrap constructor graph
-service-class architecture
-repository/UoW class graph
-Postgres* Cabinet product classes
-third-party import projection into Cabinet modules
+GENERATED_BACKEND_BOUNDARY_AUDIT.md
 ```
 
-Disposition:
+Primary artifacts:
 
 ```text
-DO NOT improve these as durable Cabinet architecture.
+tools/cabinet_boundary_audit.py
+experiments/cabinet-vault/generated_backend_failure_evidence_v0.yaml
+tests/test_cabinet_boundary_audit.py
+experiments/cabinet-vault/generic_host_lowering_contract_v0.yaml
+tests/test_generic_host_lowering_contract.py
+.github/workflows/cabinet-vault-experiment.yml
 ```
 
-External product/transport responsibilities move to independent boxes/connectors and agent-side composition. Framework/service/repository structure becomes disposable lowering where needed.
+The old generated classical backend was not repaired.
 
-A concentration of stubs at an external boundary is a `BOUNDARY_LEAK` signal, not automatically an implementation backlog.
+## Boundary audit result
 
-### 2. Problems that remain real but move into the generic host/runtime once
+The audit uses explicit finding classes and three deterministic dispositions.
 
-These mechanisms are necessary, but they should not be re-specified as Cabinet-specific class architecture for every product.
-
-Examples:
+### Remove from Cabinet product specification
 
 ```text
-storage backend implementation relation
-transactions and locking
-PostgreSQL driver/backend
-record persistence
-filesystem/blob vault
-schema validation
-transport exposure
-authentication mechanics
-grant enforcement
-audit persistence
-startup/recovery mechanics
+BOUNDARY_LEAK
 ```
 
-Disposition:
+Representative evidence:
 
 ```text
-GENERIC HOST / LOWERING CONTRACT
+Holded / Synchronization / VPS / HTTP stub concentration
 ```
 
-Cabinet declares what durability, authority, disclosure, transaction, and effect guarantees it requires. The host declares and proves how a selected backend satisfies those generic requirements.
-
-The parent Cabinet interface-ownership incident is the warning: host/compiler architectural rules must be explicit language rules, never hidden assumptions in deterministic code.
-
-### 3. Problems that must remain and be closed in the Cabinet semantic specification
-
-These are durable product meanings and policies. Box architecture does not make them disappear.
-
-Examples:
+Interpretation:
 
 ```text
-Invoice / estimate identity and immutable evidence
-source-byte custody and durable acceptance
-PlanActual meanings and comparability
-RetentionRelease policy
-principal semantics
-credential semantics
-grant/resource scope
-disclosure rules
-audit event semantics
-allowed effects
-provenance
-explicit match decisions
-local authority boundaries
+external product/transport responsibilities do not become Cabinet backlog
 ```
 
-Disposition:
+Do not fill these stubs merely to make the classical generated backend run.
 
-```text
-SPECIFY AND PROVE
-```
-
-Current known semantic gaps include the old PlanActual aliases:
-
-```text
-EstimateItemSnapshot.total
-InvoiceLine.total
-```
-
-The PresuPro probe found no single authoritative canonical item total. The real Invoice Card V1 contract has no `InvoiceLine.total`; it exposes distinct `net_amount` and `gross_amount` meanings. These require an explicit product decision later; they must not be repaired in an adapter or compiler heuristic.
-
-Authority defects found in generated code also belong here at the semantic level: the box/host contract must close principal, credential, audit-event, grant/scope, disclosure, and effect semantics before trusting a generated implementation.
-
-## Verification rule
-
-The earlier Factory route demonstrated that completion of a pipeline is not proof of behavior.
-
-For this experiment use:
-
-```text
-PASS       = required evidence executed and passed
-FAIL       = required evidence executed and failed
-UNVERIFIED = required evidence was not obtained
-SKIP       = evidence was not executed; never equivalent to PASS
-```
-
-Do not call a box or generated backend verified when required runtime/semantic tests did not execute.
-
-## Existing executable guards
-
-The experiment already has:
-
-- derivability detector: compatible box surfaces either compile or expose semantic gaps;
-- composition compiler: no hand-written mapping, fail-closed before invoking boxes;
-- hidden-rule audit: deterministic compiler behavior must be declared by `box_language_v0.yaml`;
-- conformance tests and compiler fingerprints to prevent silent language extension.
-
-Validated on 2026-08-20:
-
-```text
-main current experiment suite: 53 passed
-built-in adversarial mutation/audit: 3 passed
-box language CLI audit: pass, 15 rules, 0 findings
-```
-
-These results validate the experiment tooling only. They do not retroactively verify the previously generated classical Cabinet Backend.
-
-## Plan for the next session
-
-Do not start by repairing the generated classical backend and do not immediately return to the PlanActual monetary choice.
-
-First use the failed generated backend as a bounded architecture probe.
-
-1. Build a small **generated-backend/boundary audit** around known failures. It should classify findings rather than repair code. Initial classes:
+### Move to generic host/lowering contract
 
 ```text
 LANGUAGE_RELATION_GAP
 PROJECTION_GAP
 VERIFICATION_NOT_EXECUTED
-BOUNDARY_LEAK
 LOWERING_GAP
+```
+
+Representative evidence:
+
+```text
+missing interface -> selected implementation relation
+lost psycopg dependency projection
+required semantic/runtime verification skipped
+```
+
+`generic_host_lowering_contract_v0.yaml` now declares the first reusable
+obligations exposed by these failures:
+
+```text
+machine-declared selected implementation relation
+dependency-closed lowering projection
+fail-closed verification semantics
+generic lowering must not choose missing product meaning
+```
+
+This contract is deliberately separate from `box_language_v0.yaml`.
+The existing box language still describes the rules actually implemented by the
+current derivability/composition compiler. Do not add host-lowering behavior to
+Python first and document it later; that would recreate the hidden-rule problem.
+
+### Keep and close in Cabinet semantic specification
+
+```text
 AUTHORITY_SEMANTIC_GAP
 DOMAIN_SEMANTIC_GAP
 ```
 
-2. Encode the three-bucket disposition above so the audit can distinguish:
+Representative evidence:
 
 ```text
-remove from Cabinet product spec
-move to generic host/lowering
-keep and close in Cabinet semantic spec
+audit / principal / credential construction mismatches
+PlanActual unresolved domain behavior
+RetentionRelease unresolved domain behavior
 ```
 
-3. Make verification fail closed. Required evidence that was skipped/missing must produce `UNVERIFIED`, never `PASS`.
+These findings must return to the earliest owning semantic state rather than be
+patched in generated constructors, adapters, handlers, or repository code.
 
-4. Feed representative failures from the real generated Cabinet run into the audit. In particular:
+## Verification remains fail closed
+
+Use only:
 
 ```text
-missing concrete-interface implementation relation
-lost psycopg projection
-skipped semantic/runtime tests
-Holded/Synchronization/VPS/HTTP stub concentration
-audit/principal/credential construction mismatches
-PlanActual and RetentionRelease unresolved domain methods
+PASS       required evidence executed and passed
+FAIL       required evidence executed and failed
+UNVERIFIED required evidence was not obtained
+SKIP       evidence was not executed
 ```
 
-5. Only after this classification pass, decide the next implementation work:
+For required evidence:
 
-- external adapter/transport findings should shrink the Cabinet box boundary;
-- generic mechanism findings should define reusable host contracts;
-- authority/domain findings should return to the earliest owning semantic specification state.
+```text
+missing -> UNVERIFIED
+SKIP    -> UNVERIFIED
+```
 
-6. Then resume the PlanActual monetary repair with the clearer boundary, using the unchanged derivability compiler as the acceptance test.
+The generated-backend evidence intentionally produces a blocking verification
+gate. A successful classification audit does not verify the old backend.
+
+## Executed evidence status
+
+Historical evidence from 2026-08-20 remains:
+
+```text
+experiment suite: 53 passed
+built-in adversarial mutation/audit: 3 passed
+box language CLI audit: pass, 15 rules, 0 findings
+```
+
+Those results predate the newest boundary-audit, generic-host-contract, and
+PlanActual semantic-repair changes.
+
+A branch-specific GitHub Actions workflow now exists at:
+
+```text
+.github/workflows/cabinet-vault-experiment.yml
+```
+
+It is configured to execute the focused Cabinet/box/derivability tests,
+`box_language_audit.py`, and the boundary audit while asserting that the failed
+backend remains `UNVERIFIED`.
+
+At this handoff, this connector session has not obtained a completed Actions run
+result for the new workflow. Therefore the newest changes are **not recorded as
+PASS yet**. Workflow configuration is not execution evidence.
+
+## PlanActual repair status
+
+The boundary audit traced the PlanActual failure back to its owning design state.
+
+Read:
+
+```text
+examples/cabinet-backend/01_models_plan_actual_monetary_gap.md
+examples/cabinet-backend/02_rules_plan_actual_semantic_gap.md
+examples/cabinet-backend/03_open_questions.md   # OQ-008
+PLAN_ACTUAL_MONETARY_DERIVABILITY_RESULT.md
+```
+
+The previous monetary decision used:
+
+```text
+planned_amount = EstimateItemSnapshot.total
+actual_amount = InvoiceLine.total
+```
+
+Later factual probes proved those aliases are not closed source-contract facts:
+
+- PresuPro has no single proved canonical per-item total for this purpose;
+- Invoice Card V1 has no `InvoiceLine.total` and instead exposes distinct
+  `net_amount` and `gross_amount` meanings with different bases.
+
+The State 2 monetary decision is therefore now:
+
+```text
+REOPENED
+```
+
+Quantity semantics remain accepted.
+
+### Open PlanActual decisions
+
+```text
+PA-MONEY-001
+  choose the authoritative planned item amount and exact monetary/tax basis
+
+PA-MONEY-002
+  choose the actual Invoice Card V1 comparison meaning:
+  net_amount or gross_amount
+
+PA-MONEY-003
+  define direct comparability or explicit accepted conversion evidence
+```
+
+No answer has been invented in this branch.
+
+The planned and actual target manifests now reference the reopened State 1/2
+decision. The existing derivability tests intentionally remain unresolved until
+an explicit semantic choice is supplied. They already prove that the unchanged
+compiler closes a mapping when an authoritative source meaning / explicit target
+meaning exists.
+
+## Immediate next work
+
+Do not return to generated classical backend repairs.
+
+Proceed in this order:
+
+1. **Obtain executed evidence for the new branch guards.**
+   A green workflow may validate experiment tooling and semantic guards only; it
+   still must not be described as verification of the old generated backend.
+
+2. **Close the authority semantic contract before trusting generated authority
+   code.**
+   Inspect principal, credential, grant/resource scope, disclosure, audit-event,
+   and allowed-effect semantics under the box/host split. Reuse accepted Cabinet
+   semantics where they are genuinely closed; expose any remaining gap rather
+   than coercing constructors.
+
+3. **Keep generic lowering separate from product semantics.**
+   When implementing the first reusable lowering compiler/runtime, start from
+   `generic_host_lowering_contract_v0.yaml`. Make implementation relation,
+   dependency closure, and verification rules machine-addressable and tested
+   before deterministic code depends on them.
+
+4. **Resolve PlanActual monetary meaning only through an explicit Cabinet product
+   decision.**
+   Do not choose PA-MONEY-001..003 from field names, types, convenience, or
+   adapter context. When a decision is accepted, propagate it from State 1/2 into
+   the target/source manifests and require the unchanged derivability compiler to
+   close both mappings.
+
+5. **Only after monetary derivability closes**, implement the full deterministic
+   monetary PlanActual calculation over proved inputs.
+
+6. Then continue toward compiling `cabinet_backend_box_v0.yaml` into a generic
+   host IR/runtime and prove one real archive/source capability without permanent
+   service/repository/router ownership.
+
+7. Later define the minimum prepare/execute/observe/settle protocol for external
+   effects using Holded as the adversarial case, and classify local/VPS topology.
 
 ## Stop conditions
 
 Stop and report a semantic/architectural gap instead of adding code when:
 
 - a generated stub requires a product-specific external client inside Cabinet;
-- a deterministic compiler/host decision has no declared language rule;
+- a deterministic compiler/host decision has no declared machine rule;
 - a mapping requires choosing meaning from field names or types alone;
-- a disclosure/scope/authority decision is absent;
-- required verification cannot run;
-- fixing generated code would merely encode a decision absent from the durable specification.
+- principal, credential, scope, disclosure, audit, or effect meaning is absent;
+- required verification cannot run or has not produced evidence;
+- fixing generated code would merely encode a decision absent from the durable
+  specification;
+- PA-MONEY-001..003 are still unresolved and code would have to choose a
+  monetary meaning.
 
-The experiment succeeds when Cabinet's durable definition becomes substantially smaller than the classical application specification while preserving all real Cabinet data, authority, policy, invariants, effects, and provenance.
+## Success criterion
+
+The experiment succeeds when Cabinet's durable definition becomes substantially
+smaller than the classical application specification while preserving all real
+Cabinet data, authority, policy, invariants, effects, and provenance, and when
+all remaining application/lowering structure is either generically declared and
+proved or disposable derivation rather than hidden product architecture.
