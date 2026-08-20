@@ -4,13 +4,13 @@
 
 Validated in a real checkout on Termux on 2026-08-20.
 
-The focused experiment suite passed:
+Focused experiment result:
 
 ```text
 25 passed in 0.65s
 ```
 
-The executed set was:
+Executed:
 
 ```text
 tests/test_box_derivability.py
@@ -19,16 +19,16 @@ tests/test_estimate_derivability.py
 tests/test_cabinet_backend_box_manifest.py
 ```
 
-This result is local-run evidence, not GitHub Actions CI evidence.
+This is local-run evidence, not GitHub Actions CI evidence.
 
-## What the second probe tested
+## What the probe tested
 
-The source side is `presupro_estimate_box_v0.yaml`.
-The target side is `cabinet_estimate_context_box_v0.yaml`.
+Source: `presupro_estimate_box_v0.yaml`.
+Target: `cabinet_estimate_context_box_v0.yaml`.
 
-The target is intentionally provider-agnostic. Cabinet describes the estimate facts and authority it needs; it does not require a PresuPro client, PresuPro DTO identity, or a permanent PresuPro-to-Cabinet adapter.
+The target is provider-agnostic. Cabinet describes the estimate meanings and authority it needs; it does not require a PresuPro client, PresuPro DTO identity, or permanent PresuPro-to-Cabinet adapter.
 
-The mapping compiler is the same generic `tools/box_derivability.py` used by the Registry probe. Cross-box execution is compiled by `tools/box_composition.py` into:
+`tools/box_derivability.py` proves or rejects the mapping. `tools/box_composition.py` compiles the proof into:
 
 ```text
 source capability invocation
@@ -36,11 +36,11 @@ source capability invocation
   -> target capability invocation
 ```
 
-No hand-written field mapping is accepted by the composition compiler.
+No hand-written mapping is accepted by the composition compiler.
 
-## Observed result
+## Observed derivation
 
-The accepted source observation is sufficient to derive these Cabinet inputs:
+The current source self-description is sufficient for:
 
 ```text
 source estimate identity
@@ -51,29 +51,29 @@ locked flag
 canonical content
 ```
 
-The probe remains unresolved for exactly two Cabinet-required meanings:
+The mapping remains unresolved for exactly two Cabinet-required meanings:
 
 ```text
 money.currency
 money.monetary_tax_basis
 ```
 
-The reported gaps are `SEMANTIC_SOURCE_NOT_FOUND` for:
+Reported gaps:
 
 ```text
-EstimateObservationInput.currency
-EstimateObservationInput.monetary_basis
+SEMANTIC_SOURCE_NOT_FOUND -> EstimateObservationInput.currency
+SEMANTIC_SOURCE_NOT_FOUND -> EstimateObservationInput.monetary_basis
 ```
 
-This is intentional. The compiler must not infer either value from field names, project context, locale, existing Cabinet data, PresuPro conventions, or model judgment.
+The compiler must not infer either value from field names, project context, locale, existing Cabinet data, product conventions, or model judgment.
 
-## Why these gaps matter
+## Why the gaps matter
 
-The accepted plan/actual rules require planned and actual monetary values to share both currency and monetary/tax basis. They explicitly forbid implicit currency conversion and net/gross/tax-basis reinterpretation.
+Accepted plan/actual semantics require planned and actual monetary values to share both currency and monetary/tax basis. Implicit currency conversion and implicit net/gross/tax-basis reinterpretation are forbidden.
 
-Therefore an adapter that silently supplies either value would be making a business decision that belongs in durable specification.
+Therefore an adapter that supplies either missing value would be making a business decision that belongs in durable specification.
 
-The probe demonstrates the desired completeness rule:
+The completeness rule is working as intended:
 
 ```text
 compiler must choose
@@ -84,44 +84,123 @@ compiler must choose
 
 ## Closure test
 
-The test suite also proves that if the source manifest is augmented with fields declaring:
+The test suite proves that if the source manifest is augmented with authoritative declarations for:
 
 ```text
-semantic: money.currency
-authority: estimate.source.authority
-```
-
-and:
-
-```text
-semantic: money.monetary_tax_basis
-authority: estimate.source.authority
+money.currency
+money.monetary_tax_basis
 ```
 
 then the same compiler derives the complete mapping without any compiler-code change.
 
-That is the important property: semantic repair changes the specification, not the adapter implementation.
+That test is hypothetical closure evidence only. It does **not** authorize adding those fields until the real source contract proves that it owns and exposes those meanings.
 
 ## Composition result
 
-`tools/box_composition.py` compiles a deterministic three-node plan and refuses to execute when derivability is unresolved.
+`tools/box_composition.py` compiles a deterministic three-node plan and refuses to execute an unresolved composition.
 
-The unresolved estimate test proves that neither source nor target box callback is invoked when the mapping cannot be proven. This prevents a failed preflight from causing a source-side or target-side effect accidentally.
+The unresolved estimate test proves that neither source nor target callback is invoked when mapping cannot be proven. A failed semantic preflight therefore cannot accidentally cause a box effect.
 
-For a derived mapping, execution applies only the proven exact projection and then invokes the target capability. Extra source fields are not forwarded by default.
+For a derived mapping, only the proven projection is passed to the target. Extra source fields are not forwarded by default.
+
+## Trace back into the accepted Cabinet design
+
+The derivability gaps were traced back through the accepted design states after the green test run.
+
+### Currency — boundary closure mismatch
+
+State 1 `Model M28 — EstimateSnapshot` already says an immutable estimate snapshot contains `currency` and that PresuPro owns the estimate composition facts.
+
+The closed core model also contains:
+
+```text
+EstimateSnapshot.currency: str
+```
+
+But the closed inbound support model is:
+
+```text
+PresuProEstimateObservation:
+  presupro_estimate_id
+  project_id
+  presupro_updated_at
+  status
+  locked
+  canonical_content
+  observed_at
+```
+
+with no currency field.
+
+The public contract is still:
+
+```text
+refresh_estimate_snapshot(
+  observation: PresuProEstimateObservation
+) -> EstimateSnapshot
+```
+
+and the generation notes say the operation must reject a partial/unprocessable observation rather than fabricate a snapshot. No accepted rule or note identifies another authoritative source from which `EstimateSnapshot.currency` is obtained.
+
+**Conclusion:** `money.currency` is not merely absent from the experimental source manifest. The accepted classical boundary itself does not currently close how required snapshot currency arrives.
+
+Earliest repair owner: the State 1 external estimate projection/input model boundary, then propagation through State 2 acceptance rules and later contracts/notes.
+
+### Monetary/tax basis — missing semantic carrier
+
+The deeper gap is `money.monetary_tax_basis`.
+
+The accepted plan/actual semantic decision requires planned and actual values to have the same accepted monetary/tax basis and explicitly forbids implicit basis conversion.
+
+However the closed `EstimateSnapshot` model has no monetary-basis field, and the closed `PresuProEstimateObservation` has no such field either.
+
+`PlanActualRequest` contains `assumption_ids`, but the current closed core/support model sets do not define a corresponding accepted assumption/evidence model that carries a monetary-basis decision.
+
+**Conclusion:** there is currently no explicit durable semantic carrier that proves the monetary/tax basis required by the calculation rule.
+
+Earliest repair owner: State 1 must either define the missing basis/evidence concept or prove that basis is a fixed property of an already accepted source contract. State 2 must then define exactly how that evidence authorizes comparability. A later adapter, service note, or calculation fallback is too late.
+
+## What not to do
+
+Do not repair either gap by:
+
+- parsing `canonical_content` using an undocumented convention;
+- assuming EUR from deployment/project context;
+- assuming gross or net from IVA fields;
+- adding a PresuPro-specific adapter default;
+- letting an LLM choose a basis;
+- treating `assumption_ids` as proof when no accepted assumption model defines what those IDs reference.
+
+Any of those would move the missing decision into implementation instead of closing specification.
+
+## Required source reconnaissance before semantic repair
+
+The existing `presupro_estimate_lineage_discovery.md` verified identity, mutability, locking, status, and lineage. It did **not** establish currency or monetary-total basis semantics.
+
+Before changing the accepted models, perform a focused PresuPro monetary-contract reconnaissance that answers:
+
+1. Is estimate currency an explicit stored/API field, a project-level fact, or absent?
+2. Who is authoritative for that currency?
+3. Do estimate/item totals represent net, gross/tax-inclusive, or another declared basis?
+4. Is the basis fixed by contract or variable per estimate/item?
+5. How do IVA, discount, waste, margin, unit price, line total, and estimate total relate deterministically?
+6. Which exact fields survive API/export and can be self-described by a source box?
+7. Can the monetary basis be stated as a contract-level semantic constant, or must it travel as data/evidence?
+
+Only evidence from the actual source contract should close these proof obligations.
 
 ## Architectural conclusion
 
-The experiment now has evidence for two distinct cases:
+The experiment now has evidence for two distinct integration cases:
 
 1. Registry-like project catalogue -> Cabinet project observation: completely derivable from declared semantics.
-2. PresuPro-like estimate observation -> Cabinet estimate observation: mostly derivable, but blocked by two genuine monetary semantic gaps.
+2. PresuPro-like estimate observation -> Cabinet estimate observation: mostly derivable, but blocked by two genuine monetary semantic gaps that trace into the accepted product design itself.
 
 This supports the working rule:
 
 > Keep meaning durable. Everything provably derivable from that meaning should be a cheap disposable compilation artifact.
 
-The integration boundary is therefore not "prebuilt adapter versus no adapter". It is:
+The integration boundary is:
 
 ```text
 derivable mapping
@@ -129,18 +208,16 @@ derivable mapping
 
 non-derivable mapping
   -> expose missing semantic decision
+  -> trace it to its owning design state
 ```
 
 ## Next experiment
 
-Do not add currency or monetary basis to the source manifest merely to make the test green unless the source product specification actually owns and can authoritatively expose those meanings.
+Create a focused, evidence-driven PresuPro monetary reconnaissance rather than making the estimate mapping green by assertion.
 
-The next step is to trace those two proof obligations back to their earliest owning accepted design state and decide whether:
+After source evidence is known:
 
-- PresuPro/source authority really provides them explicitly;
-- Cabinet must accept a separately authoritative assumption/evidence input; or
-- the current plan/actual observation boundary is missing a required semantic source.
-
-Only after that decision should the estimate mapping be closed.
-
-In parallel, the generic composition plan is now strong enough to be connected to the broader agent execution-graph path without introducing a permanent product-specific adapter.
+1. repair the earliest owning semantic state;
+2. propagate the decision to box self-description;
+3. rerun the unchanged derivability/composition compiler;
+4. require the mapping to become derived without adapter code or compiler special-casing.
