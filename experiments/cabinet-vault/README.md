@@ -1,12 +1,12 @@
 # Cabinet vault prototype
 
-This experiment tests `CABINET_V0.md` with a minimal trusted runtime and then
-applies the same architecture to the accepted real `examples/cabinet-backend`
-design.
+This experiment tests whether accepted product semantics can compile into self-describing boxes plus a generic trusted host, while cross-product integration becomes disposable derived composition rather than permanent pairwise adapter code.
 
 Read `DIRECTION.md` first when resuming the branch.
 
-## What is durable
+## Durable versus disposable
+
+Durable:
 
 - box schemas and meaning;
 - identity and authority requirements;
@@ -15,14 +15,18 @@ Read `DIRECTION.md` first when resuming the branch.
 - data inside the box;
 - audit/provenance requirements.
 
-The agent does not receive a database connection, raw SQL capability, storage
-paths, or box credentials.
+Disposable when provably derivable:
 
-## Spike 1 — coarse capability
+- field projection;
+- typed cross-box plumbing;
+- deterministic composition graphs;
+- transport/lowering choices that do not change semantics or authority.
 
-`invoice.summary` accepts a project and optional date range. The trusted host
-lowers that capability to a parameterized SQLite aggregate. Requests outside the
-grant's project scope fail closed.
+The agent does not receive raw SQL, storage paths, box credentials, or authority merely by possessing an endpoint.
+
+## Spike 1 — coarse trusted capability
+
+`invoice.summary` demonstrated that a trusted host can expose a bounded semantic operation and lower it internally while enforcing grant scope.
 
 ```bash
 python tools/cabinet_host.py \
@@ -30,167 +34,115 @@ python tools/cabinet_host.py \
   --project project-1
 ```
 
-## Spike 2 — composable execution graph
+## Spike 2 — typed execution graph
 
-`cabinet_backend_execution_graph.yaml` replaces the coarse operation with atomic
-capabilities:
-
-```text
-invoice.select
-  -> invoice.filter_confirmed
-  -> invoice.filter_date
-  -> invoice.aggregate_total
-```
-
-The agent composes the graph; the host owns every lowering. Opaque invoice-set
-handles cannot escape the host. Graph preflight validates grants, argument
-shape, literal/reference types, node references, output type, scope, and opaque
-escape before data access.
+`cabinet_backend_execution_graph.yaml` decomposes the coarse capability into typed operators. The agent composes the graph; the host validates it before data access and keeps opaque invoice-set handles local.
 
 ```bash
 python tools/cabinet_graph_host.py \
   experiments/cabinet-vault/cabinet_backend_execution_graph.yaml
-
-pytest -q tests/test_cabinet_host.py tests/test_cabinet_graph_host.py
 ```
 
-## Spike 3 — extract a real Cabinet box
+## Spike 3 — real Cabinet box slice
 
-`CABINET_BACKEND_CLASSIFICATION.md` returns to the accepted
-`examples/cabinet-backend` design and classifies the real surface as data/schema,
-policy, capability, deterministic composition, bounded model operation,
-storage/transport lowering, or unresolved behavior.
+`CABINET_BACKEND_CLASSIFICATION.md` classifies the accepted real Cabinet Backend design into durable semantics versus generic lowering and transient cross-box work.
 
-`cabinet_backend_box_v0.yaml` is the first real manifest slice. It covers archive
-inspection and local source custody and deliberately has no permanent Registry,
-PresuPro, Holded, VPS, HTTP, ORM, repository, or service dependency in its
-semantic surface.
+`cabinet_backend_box_v0.yaml` is the first real archive/source-custody manifest. It has no permanent Registry, PresuPro, Holded, VPS, ORM, repository, or service dependency in its semantic surface. Authorization, actor identity, decision IDs/timestamps, and storage references remain host-owned.
 
-The manifest keeps authorization, actor identity, decision IDs/timestamps, and
-storage references host-owned. Source attachment is expressed as a deterministic
-stage/verify/commit/publish/recovery sequence rather than a normative
-`DurableArchiveService`/repository architecture.
+## Spike 4 — derivability is an instrument
 
-```bash
-pytest -q tests/test_cabinet_backend_box_manifest.py
-```
+`tools/box_derivability.py` implements the rule:
 
-## Spike 4 — derivability becomes an instrument
+> If mapping is determined by the two self-described box surfaces, compile it. If the compiler must choose, return a semantic gap instead of guessing.
 
-The integration rule is now executable:
-
-> If a mapping is determined by the two self-described box surfaces, compile it
-> as disposable plumbing. If the compiler must choose, return a semantic gap and
-> repair the owning specification instead of guessing.
-
-The first probe uses:
-
-- `registry_project_box_v0.yaml` — source-side project-catalogue facts;
-- `cabinet_registry_context_box_v0.yaml` — Cabinet-owned provider-agnostic
-  project-catalogue observation contract;
-- `tools/box_derivability.py` — deterministic proof/compiler;
-- `tests/test_box_derivability.py` — success and fail-closed cases.
-
-The Cabinet contract does **not** require a Registry API, DTO, client, adapter,
-or even a Registry-named input schema. It requires meanings such as
-`project.identity` and the authority role `project.catalogue.authority`.
-
-For v0 a field mapping is derivable only when there is one unambiguous source
-field with:
+For v0, a target field is derivable only from one unambiguous source field with:
 
 ```text
-same declared semantic id
+same semantic id
 + exact type
 + required authority
 ```
 
-Field names are not evidence. This deliberately derives mappings such as:
+Field names are not evidence.
+
+The Registry-like project-catalogue probe is fully derivable into the Cabinet provider-agnostic `ProjectCatalogueObservation` contract without a permanent Registry adapter.
+
+## Spike 5 — composition compiler
+
+`tools/box_composition.py` turns a derivability proof into a disposable execution plan:
 
 ```text
-RegistryProject.id
-  -> ProjectCatalogueObservation.project_id
-RegistryProject.name
-  -> ProjectCatalogueObservation.display_name
-RegistryProject.updated_at
-  -> ProjectCatalogueObservation.catalogue_updated_at
+source capability
+  -> exact_project
+  -> target capability
 ```
 
-A successful proof emits `exact_project` steps and can be executed through
-`apply_exact_projection`. Extra source fields are not disclosed by that
-projection. An unresolved proof cannot execute.
+The compiler does not accept a hand-written field mapping. If derivability is unresolved, execution stops before either source or target box is invoked. For a derived plan, only proven target fields are projected; unrelated source data does not cross by default.
 
-Structured gap codes currently include:
+## Spike 6 — estimate semantic-gap probe
+
+The second real probe uses:
+
+- `presupro_estimate_box_v0.yaml`;
+- `cabinet_estimate_context_box_v0.yaml`;
+- `tests/test_estimate_derivability.py`.
+
+The current mapping derives source estimate identity, project identity, source update time, status, locked flag, and canonical content.
+
+It intentionally remains unresolved for:
 
 ```text
-TARGET_FIELD_NOT_SELF_DESCRIBING
-SEMANTIC_NOT_DECLARED
-SEMANTIC_SOURCE_NOT_FOUND
-TYPE_MISMATCH
-AUTHORITY_MISMATCH
-AMBIGUOUS_SEMANTIC_SOURCE
-UNSUPPORTED_TRANSFORMATION
+money.currency
+money.monetary_tax_basis
 ```
 
-So `mapping: normalize`, unit conversion, monetary reinterpretation, status
-reinterpretation, or any other undeclared choice does not silently become model
-behavior or adapter code.
+Those gaps are useful: accepted plan/actual semantics require currency and monetary/tax-basis compatibility and explicitly forbid implicit conversion or net/gross reinterpretation.
 
-Run the probe:
+The test proves that adding authoritative declarations for these meanings to the source manifest closes the mapping without changing compiler code.
 
-```bash
-python tools/box_derivability.py \
-  experiments/cabinet-vault/registry_project_box_v0.yaml \
-  project.observe \
-  experiments/cabinet-vault/cabinet_registry_context_box_v0.yaml \
-  project.catalogue_observation.accept \
-  --json
+See `ESTIMATE_DERIVABILITY_RESULT.md` for the recorded result.
 
-pytest -q tests/test_box_derivability.py
-```
-
-## Architectural rule under test
-
-The split is now:
+## Current architectural split
 
 ```text
 Agent     -> chooses composition
-Compiler  -> derives provable transient plumbing
-Box       -> declares meaning, authority, policy, and allowed effects
-Host      -> enforces authority and executes trusted lowerings
+Compiler  -> proves and derives transient plumbing
+Box       -> declares meaning, authority, policy, allowed effects
+Host      -> enforces authority and trusted lowering
 ```
 
-The long-lived artifact is the semantic contract. A pairwise adapter should be
-throwaway output whenever its behavior is fully derivable from those contracts.
+The long-lived artifact is the semantic contract. Pairwise adapters should be throwaway output whenever their behavior is fully derivable.
 
-This changes integration growth from maintained pairwise bridges toward
-independently testable box specifications plus disposable compositions. It does
-not remove semantic complexity; it forces semantic decisions to live in the box
-that owns them instead of accumulating in integration code.
+## Test evidence
 
-## Next probe
+The following focused suite was executed in a real Termux checkout on 2026-08-20:
 
-The next high-value derivability case is a PresuPro-like estimate source into a
-Cabinet-owned provider-agnostic estimate observation. That case should force the
-detector to reveal which additional semantics are truly needed for identity,
-revision/observation, currency and monetary basis, status/locking, content hash,
-and lineage — without adding a global ontology up front.
+```bash
+python -m pytest -q \
+  tests/test_box_derivability.py \
+  tests/test_box_composition.py \
+  tests/test_estimate_derivability.py \
+  tests/test_cabinet_backend_box_manifest.py
+```
 
-After that, integrate the derived mapping IR with the execution-graph path and
-continue toward compilation of the real archive/source manifest into a generic
-host runtime.
+Result:
 
-## Not implemented yet
+```text
+25 passed in 0.65s
+```
 
-- signed grants, expiry, and replay protection;
-- cryptographic key management;
-- full schema-derived structural runtime validation;
-- a deterministic transformation algebra beyond exact projection;
-- multi-box discovery plus automatic insertion of derived mappings into the
-  execution graph;
-- compilation of the real archive/source manifest into the generic host;
-- cross-box effect prepare/execute/observe/settle protocol;
-- persistent audit storage.
+This is local-run evidence, not GitHub Actions CI evidence. The experiment branch is not covered by the existing automatic Stage 8.1 workflow trigger.
 
-The experiment branch is not covered by the current automatic Stage 8.1 CI
-trigger. Do not treat the committed test files as CI-green until they are run in
-a suitable checkout/runner.
+## Next work
+
+Do not make the estimate probe green by inventing currency or monetary basis in an adapter.
+
+Next:
+
+1. trace the two monetary proof obligations to their earliest owning accepted design state;
+2. decide whether source authority can expose them, Cabinet needs separate authoritative assumption/evidence, or the observation boundary is incomplete;
+3. close the mapping by semantic repair only;
+4. connect the generic composition-plan IR to agent discovery/execution-graph insertion;
+5. then define the smallest reusable semantic vocabulary/transformation algebra;
+6. continue toward compiling the real archive/source manifest into a generic host runtime;
+7. later exercise cross-box external effects with a prepare/execute/observe/settle protocol.
