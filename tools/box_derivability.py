@@ -295,6 +295,35 @@ def derive_capability_mapping(
     )
 
 
+def apply_exact_projection(
+    report: DerivationReport,
+    source_value: dict[str, Any],
+) -> dict[str, Any]:
+    """Apply a proven exact mapping. This helper performs no inference or authority decision."""
+    if report.status != "derived" or report.gaps:
+        raise BoxDerivabilityError("cannot execute an unresolved mapping")
+    if not isinstance(source_value, dict):
+        raise BoxDerivabilityError("source value must be a mapping")
+
+    result: dict[str, Any] = {}
+    for step in report.mapping:
+        if step.operator != "exact_project":
+            raise BoxDerivabilityError(f"unsupported compiled operator: {step.operator}")
+        source_schema, separator, source_field = step.source_path.partition(".")
+        target_schema, target_separator, target_field = step.target_path.partition(".")
+        if (
+            not separator
+            or not target_separator
+            or source_schema != report.source_schema
+            or target_schema != report.target_schema
+        ):
+            raise BoxDerivabilityError("compiled mapping contains an invalid field path")
+        if source_field not in source_value:
+            raise BoxDerivabilityError(f"source value is missing required field: {source_field}")
+        result[target_field] = source_value[source_field]
+    return result
+
+
 def render_json(report: DerivationReport) -> str:
     return json.dumps(asdict(report), indent=2, sort_keys=True) + "\n"
 
