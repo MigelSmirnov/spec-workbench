@@ -2,48 +2,39 @@
 
 ## Read this first
 
-This document is the session handoff and architectural north star for branch
-`agent/cabinet-vault-experiment`.
+This is the architectural handoff for branch `agent/cabinet-vault-experiment`.
 
-Do not restart from the question "should Cabinet Backend be a classical
-application?". The working hypothesis is stronger:
+The working hypothesis is:
 
-> Cabinet Backend should be tested as a locally running, self-describing data
-> box compiled from specification, not as a product-specific backend application.
+> Cabinet Backend should be tested as a locally running, self-describing data and authority box compiled from specification, not as a product-specific backend application.
 
-`SPEC_STANDARD` remains the Factory language. The experiment asks which parts of
-that language are durable semantic/data truth and which parts are disposable
-lowering or composition artifacts.
+`SPEC_STANDARD` remains the Factory language. This experiment identifies which parts are durable semantic truth and which parts are disposable lowering or composition artifacts.
 
 ## Core architecture
 
-A box is a durable semantic, data, and authority boundary.
-
-A box owns:
+A box owns its own:
 
 - schemas and identity;
 - data and storage locality;
 - invariants and lifecycle;
 - capabilities;
-- authorization and effect policy;
+- authorization/effect policy;
 - disclosure policy;
 - provenance and audit requirements.
 
-A box MUST NOT know neighbouring products by address, API, DTO, client, adapter,
-or deployment dependency.
+A box MUST NOT know neighbouring products by address, API, DTO, client, adapter, or deployment dependency.
 
-A useful shorthand is:
+Use this rule:
 
-> **A box describes what it means and what authority it requires, not what its
-> neighbours mean.**
+> **A box describes what it means and what authority it requires, not what its neighbours mean.**
 
-Therefore a Cabinet input may require `project.catalogue.authority`; it should
-not need a `RegistryClient` or even a Registry-shaped DTO merely to accept a
-project-catalogue observation.
+The agent chooses which independent capabilities to compose.
+The deterministic compiler derives how declared-compatible surfaces connect.
+Each box/host retains authority over its own data and effects.
 
 ## Derivability is a completeness rule
 
-The placeholder detector from the specification work generalizes to boxes:
+The placeholder detector generalizes directly to cross-box integration:
 
 ```text
 generator/compiler must choose
@@ -53,29 +44,15 @@ specification does not determine the answer
 return a structured semantic gap instead of guessing
 ```
 
-This applies to field mappings, disclosure, resource scope, authority, revision
-selection, monetary basis, lifecycle meaning, effect settlement, and other
-places where a generated implementation could otherwise invent a decision.
+This applies to field mapping, disclosure, scope, identity/revision, units, currency, monetary/tax basis, lifecycle meaning, lineage, effect settlement, and other semantic choices.
 
 The durable rule is:
 
-> **Keep meaning durable. Treat everything provably derivable from that meaning
-> as a cheap disposable compilation artifact.**
+> **Keep meaning durable. Treat everything provably derivable from that meaning as a cheap disposable compilation artifact.**
 
-A cross-box adapter is therefore not automatically durable architecture. If the
-source output and target input self-describe enough meaning for the mapping to
-be proved, the mapping should be compiled transiently from the two manifests.
-If it cannot be proved, the compiler must expose the missing semantic decision.
+Do not repair failed derivation with field-name heuristics, fuzzy model choices, hidden defaults, or pairwise bridges. Repair the specification that owns the missing meaning.
 
-Do not repair a failed derivation by adding a field-name heuristic, fuzzy model
-choice, or product-specific bridge. Repair the box contract that owns the
-missing meaning.
-
-## Agent, compiler, and box responsibilities
-
-Cross-product work belongs to the agent session, not to either box.
-
-The intended split is:
+## Agent, compiler, box, and host split
 
 ```text
 User intent
@@ -85,60 +62,20 @@ User intent
       -> Compiler proves or rejects mapping
            -> derived: emit disposable typed projection/graph
            -> unresolved: emit structured semantic gap
-      -> Agent executes the proved graph
+      -> execute proved graph
 
-Boxes retain authority over their own data and effects.
+Box/host retains data/effect authority.
 ```
 
-The agent owns transient:
+Agent owns transient intent, discovery, routing, orchestration, and bounded semantic/model operations where genuine interpretation remains.
 
-- intent interpretation;
-- discovery;
-- routing between boxes;
-- choice of which capabilities to compose;
-- orchestration;
-- bounded semantic/model operations when genuine interpretation is needed;
-- construction/execution of the current task graph.
+Compiler owns transient derivable plumbing: semantic projection, compatible typed adaptation, declared deterministic transformations, proof, and structured gaps.
 
-The deterministic compiler/runtime owns transient derivable plumbing:
+Box/host owns durable meaning, auth/grants, schema validation, capability semantics, policy, transaction/effect control, storage, protected credentials/files, disclosure, and audit/provenance.
 
-- exact semantic field projection;
-- compatible typed adaptation;
-- deterministic transformations whose rules are explicitly declared;
-- proof that source meaning, type, authority, and target requirement are
-  compatible;
-- structured gaps when proof is impossible.
+## No permanent cross-box adapters by default
 
-The box/host owns durable:
-
-- data authority;
-- authentication and grants;
-- type/schema validation;
-- capability semantics;
-- policy enforcement;
-- transaction/effect control;
-- deterministic local lowering;
-- storage access;
-- protected source files and credentials;
-- disclosure boundaries;
-- audit/provenance.
-
-The agent decides HOW allowed operations are composed.
-The compiler derives HOW declared compatible surfaces connect.
-The boxes decide WHAT their data and operations mean and WHAT is allowed.
-
-## No permanent cross-box adapters
-
-Do not introduce product-specific durable code such as:
-
-```text
-registry_client.py
-presupro_adapter.py
-portal_sync_service.py
-cabinet_registry_bridge.py
-```
-
-merely because one task spans products.
+Do not introduce durable product-specific integration code merely because one task spans products.
 
 Prefer:
 
@@ -149,143 +86,63 @@ Box A manifest + Box B manifest
         -> execution
 ```
 
-The mapping may be regenerated by another agent on another machine. Portability
-is lost only when required meaning lives outside the manifests.
-
-Physical endpoint discovery is infrastructure, not product semantics. Business
-specifications SHOULD refer to semantic authority/capability rather than
-hard-coded network addresses.
+Portability is lost only when required meaning lives outside the manifests.
 
 ## Determinism target
-
-The experiment is NOT "let an LLM generate arbitrary backend code".
 
 Preferred order:
 
 1. exact deterministic projection or typed capability;
 2. deterministic composition/transformation whose semantics are declared;
-3. bounded model/LLM operation with typed input/output only when real semantic
-   interpretation remains;
+3. bounded typed model operation only when real interpretation remains;
 4. sandboxed ephemeral generated code only as a last escape hatch.
 
-If a generated function is only select/filter/project/map/derive/aggregate/
-validate/mutate/publish with a fully determined answer, it is unnecessary durable
-implementation surface and may indicate a missing compiler/operator feature.
+If behavior is fully determined select/filter/project/map/derive/aggregate/validate/mutate/publish plumbing, it should not become permanent handwritten integration code.
 
-## Relationship to current SPEC_STANDARD / Factory work
+## Cabinet Backend classification to preserve
 
-Do not discard the accepted Cabinet Backend design.
+The accepted classical design currently maps approximately as follows:
 
-Reuse accepted decisions for:
+- `domain_models` -> durable data/schema;
+- `access_control` -> Cabinet policy plus generic host auth/grant/audit kernel;
+- `durable_archive` -> Cabinet-native semantics plus generic record/transaction/blob-vault lowering;
+- `registry_context` -> Cabinet-owned project observations and assignment validation; source polling/client knowledge is external;
+- `plan_actual` -> immutable observations/decisions + deterministic calculation; semantic match proposal is bounded and non-authoritative;
+- `holded_publication` -> Cabinet-owned eligibility/idempotency/evidence/settlement; external mutation is separately composed;
+- `holded_gateway` -> external connector/authority or transport infrastructure;
+- `synchronization` -> split local evidence/policy from remote delivery/orchestration;
+- `retention_release` -> data-owning box decides its destructive effect;
+- service/repository/Postgres/FastAPI/bootstrap/client classes -> classical lowering unless semantics prove otherwise.
 
-- models and identity;
-- invariants and lifecycle;
-- persistence semantics;
-- authority/access control;
-- provenance;
-- business behavior.
+`calculate_plan_actual` is deterministic under accepted rules. Do not introduce an LLM there.
 
-Classify application-oriented artifacts as:
+## Implemented spikes
 
-```text
-data/schema
-policy/invariant
-capability
-deterministic operator/composition
-model operation
-storage/transport lowering
-truly unresolved behavior
-```
+The branch contains:
 
-Modules, routers, service classes, repositories, and integration clients may be
-one classical lowering rather than durable product definition.
+- `CABINET_V0.md` — conceptual box model;
+- coarse trusted host and typed execution-graph spikes;
+- `CABINET_BACKEND_CLASSIFICATION.md`;
+- `cabinet_backend_box_v0.yaml` — real archive/source-custody manifest;
+- `tools/box_derivability.py` — deterministic mapping proof/gap detector;
+- `tools/box_composition.py` — compiler/executor for disposable cross-box composition plans;
+- Registry-like source and Cabinet provider-agnostic project-catalogue manifests;
+- PresuPro-like source and Cabinet provider-agnostic estimate manifests;
+- focused tests for box boundaries, derivability, composition, and estimate proof obligations.
 
-## Cabinet Backend target
+## Derivability v0
 
-The target under test is:
-
-```text
-Cabinet box specification
-        -> deterministic compilation
-        -> Local Cabinet Host
-             - schemas/manifest
-             - auth/grants
-             - typed capability checker
-             - policy engine
-             - deterministic execution/lowering
-             - PostgreSQL/storage backend
-             - source-file vault
-             - transactions
-             - audit/provenance
-             - thin MCP/tool/IPC transport
-```
-
-Cross-box composition is outside that host and should consume self-description,
-not permanent product clients.
-
-## Cabinet_web boundary
-
-Do not rewrite or migrate `Cabinet_web` in this experiment. It remains an
-existing consumer and a source of real Cabinet contracts when useful.
-
-## Current implemented spikes
-
-The branch now contains:
-
-- `CABINET_V0.md` — conceptual self-describing box model;
-- `cabinet_backend_invoice_summary.yaml` + `tools/cabinet_host.py` — coarse
-  trusted-capability spike;
-- `cabinet_backend_execution_graph.yaml` + `tools/cabinet_graph_host.py` — typed
-  graph spike with preflight and opaque intermediates;
-- `CABINET_BACKEND_CLASSIFICATION.md` — classification of the accepted real
-  Cabinet design;
-- `cabinet_backend_box_v0.yaml` — real archive/source-custody Cabinet manifest;
-- `tests/test_cabinet_backend_box_manifest.py` — host/authority/storage boundary
-  tests for that real slice;
-- `registry_project_box_v0.yaml` — minimal self-description of the source-side
-  project catalogue facts for the first cross-box probe;
-- `cabinet_registry_context_box_v0.yaml` — Cabinet-owned, provider-agnostic
-  project-catalogue observation contract;
-- `tools/box_derivability.py` — deterministic derivability detector/compiler;
-- `tests/test_box_derivability.py` — proof/gap tests for the first real mapping.
-
-### What the derivability spike currently proves
-
-`tools/box_derivability.py` compares one source capability output schema with one
-target capability input schema.
-
-For v0 it derives only `exact_project` steps and requires an unambiguous match on:
+A target field is derivable only when there is one unambiguous source field with:
 
 ```text
-semantic id
+same semantic id
 + exact type
-+ target-required authority (when declared)
++ required authority
 ```
 
-Field names are explicitly not evidence.
+Field names are not evidence.
 
-The successful Registry-source -> Cabinet-project-catalogue probe derives:
-
-```text
-RegistryProject.id
-  -> ProjectCatalogueObservation.project_id
-RegistryProject.name
-  -> ProjectCatalogueObservation.display_name
-RegistryProject.address
-  -> ProjectCatalogueObservation.address
-RegistryProject.status
-  -> ProjectCatalogueObservation.status
-RegistryProject.updated_at
-  -> ProjectCatalogueObservation.catalogue_updated_at
-```
-
-because the manifests declare compatible meanings and
-`project.catalogue.authority`.
-
-A successful report is also executable via `apply_exact_projection`; it is a
-small disposable adapter artifact. An unresolved report cannot execute.
-
-The detector currently emits structured gaps including:
+Current structured gaps include:
 
 - `TARGET_FIELD_NOT_SELF_DESCRIBING`;
 - `SEMANTIC_NOT_DECLARED`;
@@ -295,77 +152,98 @@ The detector currently emits structured gaps including:
 - `AMBIGUOUS_SEMANTIC_SOURCE`;
 - `UNSUPPORTED_TRANSFORMATION`.
 
-This is intentionally fail-closed. `mapping: normalize`, unit conversion,
-monetary conversion, lifecycle reinterpretation, or other transformations remain
-unresolved until the specification declares enough semantics to make a
-particular deterministic operator provable.
+A successful derivation is executable through an exact projection. An unresolved derivation cannot execute.
 
-## Classification result to preserve
+## Composition compiler result
 
-The accepted design currently classifies approximately as follows:
+`tools/box_composition.py` compiles a three-node plan:
 
-- `domain_models` -> durable data/schema;
-- `access_control` -> Cabinet policy plus generic host auth/grant/audit kernel;
-- `durable_archive` -> Cabinet-native semantics plus generic transaction/record/
-  blob-vault lowering;
-- `registry_context` -> Cabinet-owned project-catalogue observations and
-  assignment validation; source polling/client knowledge is not Cabinet
-  semantics; derivable mapping is compiler-owned transient plumbing;
-- `plan_actual` -> immutable observations/decisions + deterministic calculation;
-  semantic match proposal is the clearest bounded model-operation candidate;
-- `holded_publication` -> Cabinet-owned eligibility/idempotency/evidence/
-  settlement state; actual external effect is separately composed;
-- `holded_gateway` -> external connector/authority or transport infrastructure,
-  not Cabinet semantic core;
-- `synchronization` -> split local evidence/policy from remote delivery and
-  cross-node orchestration;
-- `retention_release` -> data-owning box decides its own destructive effect;
-- service/repository/Postgres/FastAPI/bootstrap/client classes -> classical
-  storage/transport/deployment lowering unless semantics prove otherwise.
+```text
+source capability
+  -> exact_project
+  -> target capability
+```
 
-`calculate_plan_actual` remains deterministic under the accepted rules. A model,
-if used, is confined to a typed non-authoritative match proposal that requires an
-explicit recorded decision before affecting confirmed calculation.
+The compiler does not accept a hand-written mapping argument.
+
+Derivability is completed before either box is invoked. If the plan is unresolved, execution stops before source or target callbacks run. A derived projection forwards only proven target fields; unrelated source fields do not cross by default.
+
+## First real cross-box probe — project catalogue
+
+Registry-like project catalogue -> Cabinet project observation is fully derivable from declared semantic IDs, exact types, and `project.catalogue.authority`.
+
+Cabinet does not require a Registry client, Registry DTO, or Registry-named semantic surface.
+
+This validates the disposable-adapter hypothesis for a straightforward real domain case.
+
+## Second real cross-box probe — estimate
+
+PresuPro-like estimate -> Cabinet estimate observation is intentionally **not fully derivable yet**.
+
+The current accepted source observation is sufficient for:
+
+```text
+source estimate identity
+project identity
+source update timestamp
+status
+locked flag
+canonical content
+```
+
+The compiler reports exactly two remaining proof obligations:
+
+```text
+money.currency
+money.monetary_tax_basis
+```
+
+These correspond to Cabinet-required fields:
+
+```text
+EstimateObservationInput.currency
+EstimateObservationInput.monetary_basis
+```
+
+This is a meaningful semantic gap, not a compiler defect. Accepted plan/actual rules require currency and monetary/tax-basis compatibility and explicitly forbid implicit currency or net/gross reinterpretation.
+
+The test also proves that adding authoritative declarations for those two meanings to the source manifest closes the mapping **without compiler-code change**.
+
+See `ESTIMATE_DERIVABILITY_RESULT.md` for the recorded experiment result.
+
+## Test evidence
+
+On 2026-08-20 the following focused suite was executed in a real Termux checkout:
+
+```text
+tests/test_box_derivability.py
+tests/test_box_composition.py
+tests/test_estimate_derivability.py
+tests/test_cabinet_backend_box_manifest.py
+```
+
+Result:
+
+```text
+25 passed in 0.65s
+```
+
+This is real local-run evidence. The experiment branch is still not covered by the existing automatic Stage 8.1 GitHub Actions trigger, so do not describe it as CI-green.
 
 ## Next work when resuming
 
-Do not expand a universal ontology or generic adapter framework first.
+Do **not** make the estimate probe green by inventing currency or monetary basis in the adapter.
 
-The next useful work is:
+Next steps:
 
-1. integrate the derived mapping IR with the execution-graph path so an agent can
-   discover two manifests, obtain a proof, and execute the compiled projection
-   without hand-written mapping code;
-2. run the second derivability probe: PresuPro-like estimate source -> a
-   Cabinet-owned provider-agnostic estimate observation. Add only semantics that
-   Cabinet actually needs (for example identity/revision, currency/monetary
-   basis, update observation, and lineage constraints) when the detector proves
-   they are missing;
-3. only after those probes, decide the smallest reusable semantic vocabulary and
-   deterministic transformation algebra. Do not build a global business
-   ontology by default;
-4. compile `cabinet_backend_box_v0.yaml` into a small generic host IR/runtime and
-   prove one archive/source capability against generic record/blob-vault
-   lowerings without reintroducing service/repository/router ownership;
-5. define the smallest cross-box prepare/execute/observe/settle protocol for
-   external effects, using Holded publication as the adversarial case;
-6. classify local/VPS topology so transport evidence is not confused with
-   durable acceptance authority;
-7. compare required implementation surface against the classical
-   `agent/cabinet-backend-state-0` path;
-8. use real Invoice/Card behavior from `Cabinet_web` as additional contract
-   validation without rewriting it.
-
-## Test status
-
-The branch CI does not automatically run for
-`agent/cabinet-vault-experiment`; the existing Stage 8.1 workflow is scoped to
-the classical branch/PR flow. Do not claim the repository test suite is green
-unless it has actually been executed in a suitable checkout/runner.
-
-The derivability implementation has been locally sanity-checked against the
-same exact-projection and fail-closed gap cases, but that is not a substitute for
-running the committed branch test file in CI or a full checkout.
+1. trace `money.currency` and `money.monetary_tax_basis` to the earliest owning accepted design state;
+2. determine whether the source authority can actually expose them, whether Cabinet requires separately authoritative assumption/evidence, or whether the current observation boundary is incomplete;
+3. close the estimate mapping only by repairing the owning semantic contract;
+4. connect the generic composition-plan IR to the broader agent execution-graph/discovery path so derived mappings are inserted automatically;
+5. only after those probes, define the smallest reusable semantic vocabulary and deterministic transformation algebra — no universal business ontology by default;
+6. compile `cabinet_backend_box_v0.yaml` into a small generic host IR/runtime and prove one archive/source capability without reintroducing service/repository/router ownership;
+7. define the minimum prepare/execute/observe/settle protocol for external effects using Holded as the adversarial case;
+8. classify local/VPS topology and compare the resulting implementation surface against the classical branch.
 
 ## Success condition
 
@@ -375,7 +253,4 @@ The experiment succeeds if useful products can be deployed as:
 generic host + compiled self-described box + local data/storage
 ```
 
-while agents can combine independent boxes without permanent pairwise adapters,
-and every non-trivial mapping is either provably compiled from declared meaning
-or rejected with a semantic gap that tells the specification author what remains
-undefined.
+while independent boxes can be composed without permanent pairwise adapters, and every non-trivial mapping is either provably compiled from declared meaning or rejected with a structured semantic gap that tells the specification author what remains undefined.
