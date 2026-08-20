@@ -208,7 +208,7 @@ The current experiment concerns the future local Cabinet Backend shape.
 
 ## Current implemented spikes
 
-The branch already contains:
+The branch now contains:
 
 - `CABINET_V0.md` — conceptual self-describing box model;
 - `cabinet_backend_invoice_summary.yaml` — one coarse capability example;
@@ -216,7 +216,15 @@ The branch already contains:
 - `tools/cabinet_host.py` — minimal trusted deterministic host;
 - `tools/cabinet_graph_host.py` — graph execution with opaque intermediate
   handles and typed preflight validation;
-- focused tests for grant/scope/type/output boundaries.
+- focused tests for grant/scope/type/output boundaries;
+- `CABINET_BACKEND_CLASSIFICATION.md` — classification pass over the accepted
+  real `examples/cabinet-backend` design, including the split between durable
+  Cabinet semantics, generic-host mechanisms, and agent-owned cross-box work;
+- `cabinet_backend_box_v0.yaml` — first real Cabinet manifest slice for archive
+  inspection and local source custody;
+- `tests/test_cabinet_backend_box_manifest.py` — manifest boundary tests that
+  reject permanent external dependencies and agent-supplied authority/storage
+  references.
 
 The graph spike demonstrates the intended split:
 
@@ -225,26 +233,86 @@ Agent owns composition.
 Host owns data, authority, lowering, and disclosure.
 ```
 
+The real-design classification adds a stronger result:
+
+```text
+accepted Cabinet semantics do not imply that
+Service + Repository + Router + product-specific Client
+must remain durable product architecture.
+```
+
+The first real manifest intentionally binds authentication/authorization, actor
+identity, decision identity/timestamps, and storage references inside the host.
+An agent cannot manufacture authority by including an `AuthorizationDecision`,
+filesystem path, or store reference in its request.
+
+The archive/source-custody slice does not yet include cross-node transfer ingest.
+That boundary is deliberately deferred because the classical transfer signature
+contains transport-era replica evidence. Do not copy that VPS integration shape
+into the box before the cross-box authority/effect protocol is classified.
+
+## Classification result to preserve
+
+The accepted real design currently classifies approximately as follows:
+
+- `domain_models` -> durable data/schema;
+- `access_control` -> Cabinet policy plus generic host auth/grant/audit kernel;
+- `durable_archive` -> Cabinet-native data/policy/capabilities plus generic
+  transaction/record/blob-vault lowering;
+- `registry_context` -> Cabinet-owned observations/assignment validation, but
+  Registry fetch/poll/client moves to transient agent composition;
+- `plan_actual` -> immutable observations/decisions + deterministic calculation;
+  semantic match proposal is the clearest bounded model-operation candidate;
+- `holded_publication` -> Cabinet-owned eligibility/idempotency/evidence/settlement
+  state, while the actual external Holded call belongs in agent composition;
+- `holded_gateway` -> external connector/authority or transport infrastructure,
+  not Cabinet semantic core;
+- `synchronization` -> split local evidence/policy from remote delivery and
+  cross-node orchestration;
+- `retention_release` -> data-owning box decides its own destructive effect;
+  cross-node coordination belongs to the agent;
+- service/repository/Postgres/FastAPI/bootstrap/client classes -> classical
+  storage/transport/deployment lowering unless a semantic requirement proves
+  otherwise.
+
+`calculate_plan_actual` is already deterministic under the accepted rules. Do
+not introduce an LLM there. If a model is used for plan/actual, constrain it to a
+typed, non-authoritative proposal operation whose result requires an explicit
+recorded match decision before it can affect confirmed calculation.
+
 ## Next work when resuming
 
-Do not expand the toy DSL first.
+Do not return to the completed inventory/classification pass and do not expand
+the toy graph DSL for its own sake.
 
-The next useful step is to return to the real `cabinet-backend` design and
-perform a classification pass:
+The next useful work is to make the **real** box path executable and to exercise
+a cross-box semantic case:
 
-1. inventory real accepted Cabinet Backend models/rules/contracts/notes;
-2. identify which notes can become deterministic typed operators;
-3. identify true model-semantic operations that still need an LLM at runtime;
-4. identify storage/auth/audit pieces that belong to the generic local host;
-5. identify classical application artifacts that can disappear entirely;
-6. produce a first real Cabinet Box manifest/spec from those accepted decisions;
-7. compare the resulting box implementation surface with the classical
-   `agent/cabinet-backend-state-0` path.
+1. validate/compile `cabinet_backend_box_v0.yaml` into a small generic host IR or
+   runtime surface without reintroducing `DurableArchiveService`, repository
+   classes, or router ownership as normative architecture;
+2. prove one archive/source capability against a generic record/blob-vault
+   lowering while keeping storage references and authority host-owned;
+3. extract a `plan_actual` box slice from accepted decisions:
+   - accept a Cabinet-owned typed estimate observation rather than embedding a
+     PresuPro client/DTO dependency;
+   - keep semantic match proposal typed, bounded, and non-authoritative;
+   - record explicit match decisions as Cabinet truth;
+   - lower confirmed plan/actual calculation deterministically;
+4. define the smallest cross-box prepare/execute/observe/settle protocol needed
+   for external effects, using Holded publication as the adversarial case;
+5. classify local/VPS topology so transport evidence is not confused with
+   durable acceptance authority;
+6. compare generated/required implementation surface against the classical
+   `agent/cabinet-backend-state-0` path and record which application artifacts
+   actually disappear;
+7. use real Invoice/Card behavior from `Cabinet_web` as an additional contract
+   validation without rewriting or migrating `Cabinet_web`.
 
-A particularly useful validation is to take real Invoice/Card behavior already
-present in `Cabinet_web` and determine whether the local box can expose the same
-semantic operations without creating product-specific service/router/repository
-layers.
+The current branch CI does not automatically run for
+`agent/cabinet-vault-experiment`; the existing Stage 8.1 workflow is scoped to
+the classical branch/PR flow. Therefore do not claim the new manifest tests are
+green unless they have actually been executed in a suitable environment.
 
 ## Success condition
 
