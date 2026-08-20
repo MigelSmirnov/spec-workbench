@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import inspect
 import json
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -19,6 +20,15 @@ from box_derivability import (
 
 
 PLAN_SCHEMA_VERSION = "spec_workbench_box_composition.v0"
+IMPLEMENTED_BOX_LANGUAGE_RULES = frozenset(
+    {
+        "BXL-COMPOSE-001",
+        "BXL-COMPOSE-002",
+        "BXL-COMPOSE-003",
+        "BXL-COMPOSE-004",
+        "BXL-COMPOSE-005",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -39,6 +49,7 @@ class CompositionPlan:
     derivation: DerivationReport
     nodes: tuple[CompositionNode, ...]
     plan_digest: str
+    language_rules: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -98,6 +109,7 @@ def compile_composition(
         "target_capability": target_capability,
         "derivation": asdict(derivation),
         "nodes": [asdict(node) for node in nodes],
+        "language_rules": sorted(IMPLEMENTED_BOX_LANGUAGE_RULES),
     }
     return CompositionPlan(
         schema_version=PLAN_SCHEMA_VERSION,
@@ -107,6 +119,7 @@ def compile_composition(
         derivation=derivation,
         nodes=nodes,
         plan_digest=_digest(digest_input),
+        language_rules=tuple(sorted(IMPLEMENTED_BOX_LANGUAGE_RULES)),
     )
 
 
@@ -156,6 +169,11 @@ def execute_composition(
     return CompositionExecution(plan_digest=plan.plan_digest, result=result, trace=trace)
 
 
+def compile_api_parameters() -> tuple[str, ...]:
+    """Machine-checkable evidence that the composition compiler has no mapping parameter."""
+    return tuple(inspect.signature(compile_composition).parameters)
+
+
 def render_json(plan: CompositionPlan) -> str:
     return json.dumps(asdict(plan), indent=2, sort_keys=True) + "\n"
 
@@ -187,6 +205,7 @@ def main(argv: list[str] | None = None) -> int:
     else:
         print(f"Composition: {plan.status}")
         print(f"Plan digest: {plan.plan_digest}")
+        print("Language rules: " + ", ".join(plan.language_rules))
         for node in plan.nodes:
             capability = f" {node.capability}" if node.capability else ""
             print(f"- {node.id}: {node.operator}{capability}")
