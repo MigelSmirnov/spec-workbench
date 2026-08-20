@@ -115,6 +115,89 @@ def test_factory_validator_findings_block_admission(tmp_path: Path) -> None:
     ]
 
 
+def _implementation_spec(*, concrete_methods: bool, obligations: bool = True) -> dict:
+    contracts = {
+        "WorkerPort.run": "(self, item: str) -> bool",
+        "Service.__init__": "(self, worker: WorkerPort) -> None",
+        "LocalWorker.__init__": "(self) -> None",
+    }
+    if concrete_methods:
+        contracts["LocalWorker.run"] = "(self, item: str) -> bool"
+    spec = {
+        "standard_version": 2,
+        "contracts": contracts,
+        "models": {
+            "role": "data",
+            "schema_version": 1,
+            "WorkerPort": {"kind": "interface"},
+        },
+        "module_functions": {"workers": ["WorkerPort", "Service", "LocalWorker"]},
+    }
+    if obligations:
+        spec["implementation_obligations"] = {
+            "WorkerPort": {
+                "disposition": "local",
+                "implementations": ["LocalWorker"],
+            }
+        }
+    return spec
+
+
+def test_missing_interface_implementation_disposition_blocks_admission(tmp_path: Path) -> None:
+    report = _run(tmp_path)
+    source = tmp_path / "spec-workbench/accepted/global_spec.json"
+    _write_json(source, _implementation_spec(concrete_methods=True, obligations=False))
+    blocked = check(
+        workbench_root=tmp_path / "spec-workbench",
+        source=source,
+        project="demo",
+        factory_root=Path(report["factory_root"]),
+        source_git=CLEAN_GIT,
+    )
+    implementation = next(item for item in blocked["checks"] if item["id"] == "FA010")
+    assert blocked["ready"] is False
+    assert implementation["status"] == "BLOCK"
+    assert implementation["evidence"]["findings"][0]["code"] == "missing_implementation_disposition"
+
+
+def test_local_implementation_without_port_methods_blocks_admission(tmp_path: Path) -> None:
+    report = _run(tmp_path)
+    source = tmp_path / "spec-workbench/accepted/global_spec.json"
+    _write_json(source, _implementation_spec(concrete_methods=False))
+    blocked = check(
+        workbench_root=tmp_path / "spec-workbench",
+        source=source,
+        project="demo",
+        factory_root=Path(report["factory_root"]),
+        source_git=CLEAN_GIT,
+    )
+    implementation = next(item for item in blocked["checks"] if item["id"] == "FA010")
+    assert implementation["status"] == "BLOCK"
+    assert implementation["evidence"]["findings"] == [{
+        "code": "missing_concrete_method_contract",
+        "interface": "WorkerPort",
+        "concrete": "LocalWorker",
+        "method": "run",
+        "expected_contract": "(self, item: str) -> bool",
+    }]
+
+
+def test_complete_local_implementation_obligation_passes_admission(tmp_path: Path) -> None:
+    report = _run(tmp_path)
+    source = tmp_path / "spec-workbench/accepted/global_spec.json"
+    _write_json(source, _implementation_spec(concrete_methods=True))
+    admitted = check(
+        workbench_root=tmp_path / "spec-workbench",
+        source=source,
+        project="demo",
+        factory_root=Path(report["factory_root"]),
+        source_git=CLEAN_GIT,
+    )
+    implementation = next(item for item in admitted["checks"] if item["id"] == "FA010")
+    assert implementation["status"] == "PASS"
+    assert implementation["evidence"]["findings"] == []
+
+
 def test_existing_different_target_requires_explicit_update(tmp_path: Path) -> None:
     report = _run(tmp_path)
     factory = Path(report["factory_root"])

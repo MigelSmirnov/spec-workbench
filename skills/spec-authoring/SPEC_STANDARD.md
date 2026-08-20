@@ -23,6 +23,7 @@
   "notes": [ ... ],
   "config": { ... },
   "models": { ... },
+  "implementation_obligations": { ... },
   "rules": { ... },
   "persistence": { ... },
   "properties": { ... },
@@ -345,6 +346,40 @@ authorizer, gateway). Интерфейс не вводит нового синт
 - восстанавливать методы интерфейса из реализаций (кода, ORM-классов)
   запрещено: спека — единственный источник истины; отсутствие method
   contracts у экспортированного порта — дефект спеки
+
+### 5.1 implementation_obligations
+
+`implementation_obligations` машинно связывает interface-typed dependency с
+его способом реализации. Это не прежний call-shape `adapters` DSL: секция не
+преобразует аргументы и не описывает вызовы. Она закрывает архитектурный вопрос,
+который нельзя восстанавливать из имён классов или текста notes.
+
+```json
+"implementation_obligations": {
+  "DiagramRepository": {
+    "disposition": "local",
+    "implementations": ["PostgresDiagramRepository"]
+  },
+  "IdentityProvider": {
+    "disposition": "external"
+  }
+}
+```
+
+**Правила (нарушение = BLOCK до Factory handoff):**
+
+- каждый `kind: interface`, используемый в type position параметра другого
+  контракта, обязан иметь ровно одну запись;
+- `disposition` принадлежит закрытому реестру `local|external`;
+- `local` содержит непустой уникальный список `implementations`; каждый символ
+  является объявленным concrete-классом в `module_functions` и имеет contract
+  для каждого метода interface с той же канонической сигнатурой;
+- `external` не содержит local implementations и явно оставляет создание
+  реализации внешнему composition/deployment boundary;
+- имя, общий суффикс, соседство в модуле и prose note не доказывают отношение
+  concrete↔interface;
+- генератор получает эту секцию в local spec как implementation obligations и
+  не вправе считать один только `__init__` полной реализацией порта.
 
 ---
 
@@ -692,6 +727,14 @@ constraint или storage representation требует новой поддер�
   один раз в структурную форму (module, symbol, alias); все последующие
   инструменты (resolver, validator, inspector, slicing, generator) работают
   только по структурной таблице, а не по regex-разбору Python-текста
+- `stdlib_by_module` и `third_party_by_module` — module → список полных import
+  строк, необходимых конкретному модулю. Для записи в этих таблицах projector
+  обязан перенести import в local spec без поиска имени библиотеки в notes или
+  contracts. Глобальные `stdlib`/`third_party` остаются каталогом допустимых
+  imports; module-scoped таблицы являются структурным доказательством
+  необходимости. Не объявленный там module import может быть сужен только по
+  связанному импортом symbol/type, но не по совпадению сырого текста import
+  statement с prose
 
 **`internal` и `module_internal` отвечают на разные вопросы:**
 - `internal` определяет полный публичный export surface provider-модуля
@@ -1516,6 +1559,10 @@ deterministic persistence backend. LLM-module не получает это ут�
 12. **Типы замкнуты?** Каждое имя в type position — builtin, объявленная модель или символ, связанный полной import-строкой; коллизий происхождения нет (раздел 12).
 
 13. **Порты полны?** Каждый экспортируемый `kind: interface` имеет полные method contracts; у каждого `discriminated_union` — discriminator, закрытые variants и `Literal`-теги.
+
+13a. **Реализации портов приземлены?** Каждый interface-typed dependency имеет
+     `implementation_obligations`; у `local` concrete contracts полностью и
+     сигнатурно покрывают port, а `external` не маскирует локальную заглушку.
 
 14. **Инварианты приземлены?** Каждый State 2 invariant имеет одного
 владельца и первичное представление в `rules`, classified note или

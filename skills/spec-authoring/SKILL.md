@@ -445,7 +445,8 @@ Expected specification output:
 
 - stable public entries in `imports.internal`;
 - stable top-level entries in `module_functions`;
-- preliminary adapter requirements.
+- explicit dependency-boundary decisions that can later be lowered into
+  `implementation_obligations`.
 
 ### State 6 — Contracts and internal functions
 
@@ -465,6 +466,13 @@ For each public operation:
 3. add internal functions to `module_functions`;
 4. add exact contracts for every public and private function;
 5. establish `function_order`.
+
+For every interface used as a dependency parameter, decide whether its runtime
+implementation is local or external. Record the decision structurally in
+`implementation_obligations`. A local concrete class must receive contracts for
+the complete interface method surface; a concrete `__init__` alone is never a
+complete implementation obligation. Do not infer the relation from class names
+or repeat it only in a composition note.
 
 Do not introduce new domain concepts silently at this stage.
 
@@ -487,7 +495,9 @@ Readiness questions:
 - Does every return value have a clear consumer?
 - Does each function belong to exactly one module?
 - Are public and private functions distinguishable by module API ownership?
-- Are adapters defined where caller and callee shapes differ?
+- Does every interface-typed dependency have an explicit local or external
+  implementation disposition?
+- Does each local concrete class contractually cover every port method?
 
 ### State 7 — Notes
 
@@ -546,7 +556,7 @@ Populate all sections required by `SPEC_STANDARD.md`:
 
 - `contracts`;
 - `notes`;
-- `adapters`;
+- `implementation_obligations`;
 - `config`;
 - `models`;
 - `rules`;
@@ -557,6 +567,10 @@ Populate all sections required by `SPEC_STANDARD.md`:
 - `module_hints`;
 - `module_paths`;
 - `default_module`.
+
+When an owned module needs a third-party or stdlib import, populate
+`imports.third_party_by_module` or `imports.stdlib_by_module`. Do not rely on
+the projector finding a library name in prose.
 
 Assembly should mostly serialize decisions already made. It must not become another creative design pass.
 
