@@ -31,7 +31,8 @@ jobs:
             tests/test_cabinet_*.py \
             tests/test_estimate_derivability.py \
             tests/test_plan_actual_*.py \
-            tests/test_generic_host_lowering_contract.py
+            tests/test_generic_host_lowering_contract.py \
+            tests/test_host_lowering_plan.py
 
       - name: Enforce declared box language
         run: python tools/box_language_audit.py
@@ -61,9 +62,37 @@ jobs:
           assert skipped["verification_status"] == "UNVERIFIED"
           PY
 
-      - name: Upload boundary audit evidence
+      - name: Compile candidate generic host plan fail closed
+        shell: bash
+        run: |
+          set +e
+          python tools/host_lowering_plan.py \
+            experiments/cabinet-vault/cabinet_backend_box_v0.yaml \
+            experiments/cabinet-vault/generic_host_profile_candidate_v0.yaml \
+            --json > generic-host-plan.json
+          code=$?
+          set -e
+          test "$code" = "2"
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          plan = json.loads(Path("generic-host-plan.json").read_text())
+          assert plan["status"] == "compiled"
+          assert plan["verification_gate"] == "block"
+          assert plan["gaps"] == []
+          assert set(plan["runtime_dependencies"]) == {"pydantic", "psycopg"}
+          assert all(
+              item["verification_status"] == "UNVERIFIED"
+              for item in plan["provider_verification"]
+          )
+          PY
+
+      - name: Upload experiment evidence
         uses: actions/upload-artifact@v4
         with:
-          name: cabinet-boundary-audit
-          path: cabinet-boundary-audit.json
+          name: cabinet-vault-experiment-evidence
+          path: |
+            cabinet-boundary-audit.json
+            generic-host-plan.json
           if-no-files-found: error
