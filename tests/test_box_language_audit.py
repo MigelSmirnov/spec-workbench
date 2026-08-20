@@ -58,6 +58,34 @@ def test_declared_rule_missing_from_compiler_blocks_audit():
     )
 
 
+def test_compiler_source_change_requires_language_review(tmp_path):
+    for relative in (
+        "experiments/cabinet-vault/box_language_v0.yaml",
+        "tools/box_derivability.py",
+        "tools/box_composition.py",
+        "tests/test_box_language_conformance.py",
+    ):
+        source = ROOT / relative
+        target = tmp_path / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(source.read_bytes())
+
+    compiler = tmp_path / "tools" / "box_derivability.py"
+    compiler.write_text(compiler.read_text(encoding="utf-8") + "\n# silent deterministic change\n", encoding="utf-8")
+
+    report = audit_language(
+        tmp_path / "experiments" / "cabinet-vault" / "box_language_v0.yaml",
+        root=tmp_path,
+    )
+
+    assert report.status == "block"
+    assert any(
+        finding.code == "IMPLEMENTATION_FINGERPRINT_DRIFT"
+        and finding.subject == "box_derivability"
+        for finding in report.findings
+    )
+
+
 def test_compilation_artifacts_expose_applied_language_rules():
     from box_composition import IMPLEMENTED_BOX_LANGUAGE_RULES as composition_rules
     from box_composition import compile_composition
