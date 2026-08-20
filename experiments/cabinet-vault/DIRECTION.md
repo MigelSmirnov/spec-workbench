@@ -102,7 +102,7 @@ The accepted classical design currently maps approximately as follows:
 - `retention_release` -> data-owning box decides its destructive effect;
 - service/repository/Postgres/FastAPI/bootstrap/client classes -> classical lowering unless semantics prove otherwise.
 
-`calculate_plan_actual` is deterministic under accepted rules. Do not introduce an LLM there.
+`calculate_plan_actual` remains a deterministic target. The new probes show that some of its **inputs were not semantically closed**, not that an LLM is needed for calculation.
 
 ## Implemented spikes
 
@@ -116,8 +116,10 @@ The branch contains:
 - `tools/box_composition.py` — compiler/executor for disposable cross-box composition plans;
 - Registry-like source and Cabinet provider-agnostic project-catalogue manifests;
 - PresuPro estimate-observation and pricing semantic manifests;
-- Cabinet provider-agnostic estimate observation and plan/actual amount requirement manifests;
-- focused tests for box boundaries, derivability, composition, estimate observation, and plan/actual amount proof obligations.
+- Cabinet provider-agnostic estimate observation and planned-amount requirement manifests;
+- Invoice Card V1 line monetary source self-description;
+- Cabinet actual-line-amount requirement manifest;
+- focused tests for box boundaries, derivability, composition, estimate observation, planned amount, and actual amount proof obligations.
 
 ## Derivability v0
 
@@ -171,7 +173,7 @@ money.currency
 money.monetary_tax_basis
 ```
 
-A focused local PresuPro monetary reconnaissance then distinguished two different cases.
+A focused local PresuPro monetary reconnaissance separated them.
 
 ### Currency is a real source-contract fact
 
@@ -183,19 +185,17 @@ config.app.currency = EUR
 
 and `calculate_estimate_totals` surfaces the same deterministic currency.
 
-Therefore `presupro_estimate_box_v0.yaml` now truthfully exposes `money.currency` as a source-contract constant. This is not locale inference or an adapter default.
+Therefore `presupro_estimate_box_v0.yaml` truthfully exposes `money.currency` as a source-contract constant. This is not locale inference or an adapter default.
 
-Generic Cabinet estimate-observation acceptance requires that currency and is fully derivable without knowing PresuPro as a neighbour.
+Generic Cabinet estimate-observation acceptance is now fully derivable.
 
 ### Generic monetary basis does not belong on observation acceptance
 
-The same reconnaissance proved deterministic aggregate pricing, including tax-inclusive `grand_total`, but did **not** prove one canonical item-total value or one monetary basis that can be applied to every estimate amount.
+The same reconnaissance proved deterministic aggregate pricing, including tax-inclusive `grand_total`, but did **not** prove one canonical item-total value or one monetary basis that applies to every estimate amount.
 
-Therefore `cabinet_estimate_context_box_v0.yaml` no longer forces a generic `monetary_basis` into the observation boundary merely to make plan/actual easier later.
+Therefore the generic estimate observation does not carry a made-up universal `monetary_basis`. The gap belongs to the semantic operation that actually needs a comparable item amount.
 
-The gap moves to the semantic operation that actually needs it.
-
-## Third probe — plan/actual planned item amount
+## Third probe — planned item amount
 
 The accepted Cabinet core model contains:
 
@@ -209,15 +209,15 @@ and accepted plan/actual semantics state:
 planned_amount = EstimateItemSnapshot.total
 ```
 
-while also saying Cabinet should consume that as an accepted PresuPro result rather than independently reapply PresuPro pricing arithmetic.
+while saying Cabinet should consume that as an accepted PresuPro result rather than independently reapply PresuPro arithmetic.
 
-The local PresuPro monetary reconnaissance found no single canonical source `item_total` shared by backend aggregate logic, export, frontend line display, and Holded projection.
+The factual PresuPro probe found no single canonical source item total shared by backend aggregate logic, export line total, frontend line display, and Holded projection.
 
-This is represented by:
+Represented by:
 
-- `presupro_pricing_contract_v0.yaml` — only pricing semantics actually proved by PresuPro evidence;
-- `cabinet_plan_actual_amount_requirement_v0.yaml` — the exact Cabinet planned-item amount requirement;
-- `tests/test_plan_actual_amount_derivability.py` — fail-closed detector.
+- `presupro_pricing_contract_v0.yaml`;
+- `cabinet_plan_actual_amount_requirement_v0.yaml`;
+- `tests/test_plan_actual_amount_derivability.py`.
 
 Current proven derivation:
 
@@ -232,60 +232,130 @@ estimate.item.planned_amount_basis
   -> unresolved
 ```
 
-A `Decimal` aggregate `grand_total` cannot satisfy the item amount merely because its type matches. Semantic identity must match.
+A Decimal aggregate `grand_total` cannot satisfy an item amount merely because its type matches.
 
-This is a stronger finding than the original generic monetary-basis gap: the accepted classical design itself has not yet closed what authoritative source meaning produces `EstimateItemSnapshot.total`.
+## Fourth probe — actual Invoice Card line amount
 
-See `ESTIMATE_DERIVABILITY_RESULT.md`.
+A factual probe against the real `Cabinet_web` source-of-truth checkout at commit `63f1752` proved that Invoice Card V1 has **no `InvoiceLine.total` field**.
+
+The canonical closed line shape instead exposes:
+
+```text
+net_amount
+  = ROUND_HALF_UP(quantity * unit_price_net - discount_amount, 2)
+  basis = post_discount_tax_exclusive
+
+gross_amount
+  = ROUND_HALF_UP(net_amount + tax_amount, 2)
+  basis = tax_inclusive
+```
+
+All line monetary values bind to the containing document's required root `invoice.currency`. The validator verifies the canonical Card values but does not rewrite them.
+
+The accepted plan/actual rule currently says:
+
+```text
+actual_amount = InvoiceLine.total
+```
+
+so the old rule names a source field that does not exist and leaves a real business choice unresolved: compare planned amounts against V1 `net_amount` or V1 `gross_amount`.
+
+This is represented by:
+
+- `invoice_card_v1_line_monetary_contract_v0.yaml` — both actually proved V1 monetary meanings;
+- `cabinet_plan_actual_actual_amount_requirement_v0.yaml` — the unresolved target requirement;
+- `tests/test_plan_actual_actual_amount_derivability.py` — fail-closed detector.
+
+Expected derivation:
+
+```text
+money.currency
+  -> derived
+
+invoice.line.actual_amount
+  -> unresolved
+
+invoice.line.actual_amount_basis
+  -> unresolved
+```
+
+The test also proves that if the target contract explicitly chooses net semantics **or** explicitly chooses gross semantics, the unchanged compiler derives the mapping. Therefore the missing decision belongs to `plan_actual`, not to Invoice Card V1 and not to an adapter.
+
+See `PLAN_ACTUAL_MONETARY_DERIVABILITY_RESULT.md`.
+
+## Combined monetary finding
+
+The old deterministic formula is not yet executable from semantically closed inputs because both aliases used by it are under-specified:
+
+```text
+EstimateItemSnapshot.total
+InvoiceLine.total
+```
+
+Planned side: no authoritative canonical PresuPro item amount has yet been identified.
+
+Actual side: the named field does not exist; V1 provides two explicit authoritative alternatives with different bases.
+
+The correct repair is not a generic `monetary_basis` string bolted onto the adapter. The earliest owning plan/actual State 1/State 2 decision must define exactly which planned amount and which actual amount are compared and why their bases are compatible.
 
 ## Evidence from local execution
 
-On 2026-08-20 the refined focused workbench suite was executed in a real checkout after the currency/source-contract repair and planned-item-amount probe were added.
+### Workbench
 
-Executed:
-
-```text
-tests/test_box_derivability.py
-tests/test_box_composition.py
-tests/test_estimate_derivability.py
-tests/test_plan_actual_amount_derivability.py
-tests/test_cabinet_backend_box_manifest.py
-```
-
-Result:
+On 2026-08-20 the refined workbench suite before the newest actual-side detector was run in a real checkout:
 
 ```text
 29 passed, 1 warning in 0.79s
 ```
 
-The warning was only inability to write `.pytest_cache` in that environment and did not affect test results.
+The warning was only inability to write `.pytest_cache` and did not affect results.
 
-The separate local PresuPro monetary tests reported:
+### PresuPro
+
+Focused monetary test:
 
 ```text
 1 passed in 0.33s
 ```
 
-for the focused synthetic pricing case and:
+Full pricing test file:
 
 ```text
 4 passed in 0.33s
 ```
 
-for the full pricing test file, with `git diff --check` passing in that local workspace.
+`git diff --check`: PASS.
+
+### Cabinet_web Invoice Card V1
+
+Focused synthetic line monetary test:
+
+```text
+1 passed in 0.18s
+```
+
+Validator suite:
+
+```text
+16 passed, 22 subtests passed in 0.18s
+```
+
+`git diff --check`: PASS.
 
 These are real local-run results, not GitHub Actions CI evidence.
 
+The newest workbench actual-side detector still requires a fresh checkout run before being called green.
+
 ## Next work when resuming
 
-Do **not** choose a convenient PresuPro line display/export value and call it `EstimateItemSnapshot.total`.
+Do **not** invent aliases for `EstimateItemSnapshot.total` or `InvoiceLine.total`.
 
 Next steps:
 
-1. verify the actual-side `InvoiceLine.total` contract from the real Cabinet Invoice Card V1 source: exact amount meaning, currency binding, tax inclusion/basis, discounts, quantities/units, and whether line total is canonical input truth or derived arithmetic;
-2. represent only those proved actual-side semantics in a source self-description and add a derivability probe for the actual amount requirement;
-3. with both planned and actual sides explicit, repair the earliest State 1/State 2 decision that owns `EstimateItemSnapshot.total` and monetary comparability;
-4. after the planned amount decision is accepted, propagate it into the source self-description and rerun the unchanged derivability compiler;
+1. run the newest workbench suite including `tests/test_plan_actual_actual_amount_derivability.py`;
+2. repair the earliest State 1/State 2 `plan_actual` semantic decision so it explicitly names the authoritative planned amount, its basis, the chosen actual V1 amount (`net_amount` or `gross_amount`), and the comparability rule;
+3. only after that decision, propagate the selected meanings into the box source/target manifests and require the unchanged derivability compiler to close both planned and actual mappings;
+4. then implement the deterministic calculation over those proved semantic inputs;
 5. connect generic composition-plan IR to broader agent discovery/execution so derived mappings are inserted automatically;
 6. define only the smallest reusable semantic vocabulary/operator algebra demonstrated by these probes;
 7. compile `cabinet_backend_box_v0.yaml` into a generic host IR/runtime and prove one archive/source capability without service/repository/router ownership;
