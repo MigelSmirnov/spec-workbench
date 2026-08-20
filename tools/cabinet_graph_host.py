@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Experimental CABINET_V0 host for bounded execution graphs."""
+"""Experimental CABINET_V0 host for typed bounded execution graphs."""
 from __future__ import annotations
 
 import argparse
 import json
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
@@ -39,7 +39,8 @@ class CabinetGraphHost:
             },
         }
 
-    def execute_graph(self, grant: Grant, graph: dict[str, Any]) -> dict[str, Any]:
+    def preflight_graph(self, grant: Grant, graph: dict[str, Any]) -> dict[str, Any]:
+        """Type-check and authorize a graph without touching cabinet data."""
         if grant.principal_status != "active":
             raise CabinetHostError("inactive_or_revoked_principal")
 
@@ -48,9 +49,8 @@ class CabinetGraphHost:
         if not isinstance(nodes, list) or not isinstance(output_spec, dict):
             raise CabinetHostError("invalid_execution_graph")
 
-        values: dict[str, Any] = {}
-        trace: list[dict[str, Any]] = []
-        seen: set[str] = set()
+        node_types: dict[str, str] = {}
+        checked_nodes: list[dict[str, str]] = []
         for node in nodes:
             if not isinstance(node, dict):
                 raise CabinetHostError("invalid_execution_node")
@@ -59,20 +59,63 @@ class CabinetGraphHost:
             raw_args = node.get("args", {})
             if not isinstance(node_id, str) or not node_id:
                 raise CabinetHostError("invalid_node_id")
-            if node_id in seen:
+            if node_id in node_types:
                 raise CabinetHostError("duplicate_node_id")
-            seen.add(node_id)
+            if not isinstance(raw_args, dict):
+                raise CabinetHostError("invalid_node_args")
 
-            self._authorize_capability(grant, capability)
+            spec = self._authorize_capability(grant, capability)
+            input_spec = spec.get("input", {})
+            output_type = spec.get("output")
+            if not isinstance(input_spec, dict) or not isinstance(output_type, str):
+                raise CabinetHostError("invalid_capability_signature")
+
+            self._typecheck_args(raw_args, input_spec, node_types)
+            node_types[node_id] = output_type
+            checked_nodes.append(
+                {"node": node_id, "capability": capability, "output_type": output_type}
+            )
+
+        output_id = output_spec.get("from")
+        if not isinstance(output_id, str) or output_id not in node_types:
+            raise CabinetHostError("invalid_graph_output")
+        output_type = node_types[output_id]
+        schema = self.definition.get("schemas", {}).get(output_type, {})
+        if isinstance(schema, dict) and schema.get("opaque") is True:
+            raise CabinetHostError("non_opaque_intermediate_escape")
+
+        return {
+            "valid": True,
+            "nodes": checked_nodes,
+            "output_node": output_id,
+            "output_type": output_type,
+        }
+
+    def execute_graph(self, grant: Grant, graph: dict[str, Any]) -> dict[str, Any]:
+        preflight = self.preflight_graph(grant, graph)
+        nodes = graph["nodes"]
+
+        values: dict[str, Any] = {}
+        trace: list[dict[str, Any]] = []
+        for node in nodes:
+            node_id = node["id"]
+            capability = node["capability"]
+            raw_args = node.get("args", {})
             args = self._resolve_args(raw_args, values)
             value = self._execute_node(grant, capability, args)
             values[node_id] = value
-            trace.append({"node": node_id, "capability": capability, "input_digest": _digest(raw_args)})
+            trace.append(
+                {
+                    "node": node_id,
+                    "capability": capability,
+                    "output_type": next(
+                        item["output_type"] for item in preflight["nodes"] if item["node"] == node_id
+                    ),
+                    "input_digest": _digest(raw_args),
+                }
+            )
 
-        output_id = output_spec.get("from")
-        if output_id not in values:
-            raise CabinetHostError("invalid_graph_output")
-        result = values[output_id]
+        result = values[preflight["output_node"]]
         if isinstance(result, InvoiceRefSet):
             raise CabinetHostError("non_opaque_intermediate_escape")
         if not isinstance(result, dict):
@@ -83,6 +126,7 @@ class CabinetGraphHost:
             "principal_id": grant.principal_id,
             "graph_digest": _digest(graph),
             "policy_version": grant.policy_version,
+            "preflight_output_type": preflight["output_type"],
             "trace": trace,
             "result_digest": _digest(result),
             "occurred_at": datetime.now(timezone.utc).isoformat(),
@@ -90,14 +134,73 @@ class CabinetGraphHost:
         self.audit_log.append(evidence)
         return {**result, "evidence": evidence}
 
-    def _authorize_capability(self, grant: Grant, capability: Any) -> None:
+    def _authorize_capability(self, grant: Grant, capability: Any) -> dict[str, Any]:
         declared = self.definition.get("capabilities", {})
         if capability not in declared:
             raise CabinetHostError("unknown_capability")
         if capability not in grant.capabilities:
             raise CabinetHostError("capability_not_granted")
-        if declared[capability].get("effects") not in (None, []):
+        spec = declared[capability]
+        if not isinstance(spec, dict):
+            raise CabinetHostError("invalid_capability_signature")
+        if spec.get("effects") not in (None, []):
             raise CabinetHostError("undeclared_effect")
+        return spec
+
+    def _typecheck_args(
+        self,
+        raw_args: dict[str, Any],
+        input_spec: dict[str, Any],
+        node_types: dict[str, str],
+    ) -> None:
+        expected_names = set(input_spec)
+        extra = set(raw_args) - expected_names
+        if extra:
+            raise CabinetHostError("unexpected_node_argument")
+
+        for name, type_decl in input_spec.items():
+            if not isinstance(type_decl, str):
+                raise CabinetHostError("invalid_capability_signature")
+            optional = type_decl.endswith("?")
+            expected_type = type_decl[:-1] if optional else type_decl
+            if name not in raw_args:
+                if optional:
+                    continue
+                raise CabinetHostError("missing_node_argument")
+            value = raw_args[name]
+            if isinstance(value, dict) and set(value) == {"from"}:
+                ref = value["from"]
+                if not isinstance(ref, str) or ref not in node_types:
+                    raise CabinetHostError("unknown_node_reference")
+                if node_types[ref] != expected_type:
+                    raise CabinetHostError("graph_type_mismatch")
+            elif not self._literal_matches_type(value, expected_type):
+                raise CabinetHostError("graph_type_mismatch")
+
+    def _literal_matches_type(self, value: Any, expected_type: str) -> bool:
+        if expected_type in {"WorkObjectId", "str"}:
+            return isinstance(value, str) and bool(value)
+        if expected_type == "Date":
+            if isinstance(value, date):
+                return True
+            if isinstance(value, str):
+                try:
+                    date.fromisoformat(value)
+                    return True
+                except ValueError:
+                    return False
+            return False
+        if expected_type == "int":
+            return isinstance(value, int) and not isinstance(value, bool)
+        if expected_type == "Decimal":
+            try:
+                Decimal(str(value))
+                return not isinstance(value, bool)
+            except Exception:
+                return False
+        # Named schema/opaque types are values produced by cabinet capabilities,
+        # not literals supplied by an agent in CABINET_V0.
+        return False
 
     def _resolve_args(self, value: Any, values: dict[str, Any]) -> Any:
         if isinstance(value, dict):
@@ -210,6 +313,7 @@ def main(argv: list[str] | None = None) -> int:
         nargs="?",
         default=Path("experiments/cabinet-vault/cabinet_backend_execution_graph.yaml"),
     )
+    parser.add_argument("--preflight", action="store_true")
     args = parser.parse_args(argv)
     definition = load_definition(args.definition)
     host = CabinetGraphHost(definition, build_demo_db())
@@ -220,7 +324,10 @@ def main(argv: list[str] | None = None) -> int:
         project_ids=frozenset(definition["grant"]["resource_scope"]["project_ids"]),
         grant_id="graph-demo-grant",
     )
-    result = host.execute_graph(grant, definition["execution_graph"])
+    if args.preflight:
+        result = host.preflight_graph(grant, definition["execution_graph"])
+    else:
+        result = host.execute_graph(grant, definition["execution_graph"])
     print(json.dumps(result, indent=2, sort_keys=True))
     return 0
 
