@@ -22,7 +22,10 @@ The VPS Cabinet and Local Cabinet Backend may expose compatible logical Cabinet 
 
 ### Knows
 
-- field structure, identity semantics, and type relationships only.
+- field structure, identity semantics, and type relationships;
+- the declared shape of every consumer port (`kind: interface`): its method
+  names and full signatures, and nothing about how any implementation
+  satisfies them.
 
 ### Must not own
 
@@ -35,7 +38,18 @@ The VPS Cabinet and Local Cabinet Backend may expose compatible logical Cabinet 
 
 ### Public surface
 
-Exports model types only.
+Exports model types and port declarations. A port is a type, not behaviour: it
+declares a boundary, while the class that satisfies it stays in the module that
+implements it — `PostgresArchiveUnitOfWork` in `archive_runtime`,
+`PostgresAccessControlBackend` in `access_control`, and so on. Owning the
+declaration here is what lets a consumer depend on the port without depending
+on the adapter, and it keeps the "must not own" list above intact: none of the
+lowering moves with the declaration.
+
+The specification requires this placement. Every entry of the `models` section,
+ports included, is owned by the `models` module; a port assigned to its
+implementing module is a spec defect and costs the whole module its
+deterministic emission. See SPEC_STANDARD.md sections 5 and `kind: interface`.
 
 ### Depth assessment
 
