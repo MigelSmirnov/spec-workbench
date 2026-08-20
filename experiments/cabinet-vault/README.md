@@ -14,7 +14,7 @@ This experiment tests `CABINET_V0.md` with a minimal trusted runtime.
 The agent does not receive a database connection, raw SQL capability, storage
 paths, or the cabinet encryption key.
 
-## Current vertical slice
+## Spike 1 — coarse capability
 
 `invoice.summary` accepts a project and optional date range. The trusted host
 lowers that capability to a parameterized SQLite aggregate and returns only:
@@ -28,10 +28,7 @@ lowers that capability to a parameterized SQLite aggregate and returns only:
 Unconfirmed invoices do not contribute. Requests outside the grant's project
 scope fail closed.
 
-## Run the demo
-
-The YAML loader uses PyYAML when the CLI is used. Core host execution itself is
-stdlib-only.
+Run it with:
 
 ```bash
 python tools/cabinet_host.py \
@@ -39,10 +36,35 @@ python tools/cabinet_host.py \
   --project project-1
 ```
 
-Run the focused tests with:
+## Spike 2 — composable execution graph
+
+`cabinet_backend_execution_graph.yaml` replaces the coarse operation with atomic
+capabilities:
+
+```text
+invoice.select
+  -> invoice.filter_confirmed
+  -> invoice.filter_date
+  -> invoice.aggregate_total
+```
+
+An agent may compose those capabilities into an execution graph, but the host
+still owns every lowering. Intermediate invoice sets are represented as opaque
+`InvoiceRefSet` handles that exist only inside the cabinet host. The graph cannot
+return one of those handles as its public result, and the agent never receives
+raw rows or generated SQL.
+
+Run the graph demo with:
 
 ```bash
-pytest -q tests/test_cabinet_host.py
+python tools/cabinet_graph_host.py \
+  experiments/cabinet-vault/cabinet_backend_execution_graph.yaml
+```
+
+Run focused tests with:
+
+```bash
+pytest -q tests/test_cabinet_host.py tests/test_cabinet_graph_host.py
 ```
 
 ## Security boundary under test
@@ -52,7 +74,16 @@ whether a cabinet can expose enough machine-readable semantics for an agent to
 compose useful work while the host retains authority over data access and
 lowering.
 
-For this spike, capability names are explicitly mapped to trusted lowerings.
+The second spike deliberately separates **composition authority** from **data
+authority**:
+
+- the agent chooses a graph of granted operations;
+- the host validates graph references, capability grants and resource scope;
+- the host executes trusted lowerings locally;
+- opaque intermediates stay inside the cabinet;
+- only a declared public result crosses the boundary;
+- audit evidence records the graph digest and per-node trace.
+
 Agent-supplied SQL is intentionally impossible.
 
 ## Not implemented yet
@@ -60,6 +91,7 @@ Agent-supplied SQL is intentionally impossible.
 - signed grants;
 - expiry and replay protection;
 - cryptographic key management;
+- static graph type-checking against declared input/output schemas;
 - generated-code or WASM sandboxing;
 - schema-derived request validation;
 - multi-cabinet composition;
