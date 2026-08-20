@@ -2,41 +2,49 @@
 
 ## Status
 
-**ACCEPTED — closes the Stage 7.1 Flow 4 semantic gap.**
+**REOPENED — quantity semantics remain accepted; monetary semantics are unresolved.**
 
-This decision defines the baseline deterministic meaning of Cabinet Backend plan-versus-actual analysis. It preserves the already accepted rules for immutable EstimateSnapshots, confirmed-match authority, explicit unmatched facts, pinned evidence, and source immutability.
+The earlier version of this decision treated `EstimateItemSnapshot.total` and
+`InvoiceLine.total` as accepted monetary source facts. Later factual probes proved
+that those aliases are not semantically closed:
 
-## Canonical analysis grain
+- no single authoritative PresuPro item total has been established for the
+  planned side;
+- Invoice Card V1 has no `InvoiceLine.total` field and instead exposes distinct
+  canonical `net_amount` and `gross_amount` meanings.
 
-The baseline analysis is organized by exact `EstimateItemSnapshot` identity, with explicit project-level totals and a separate unmatched-actual bucket.
+The monetary part of the earlier accepted decision is therefore withdrawn until
+the owning Cabinet business semantics are explicitly accepted. This is a repair
+of the earliest owning decision, not an adapter or compiler change.
 
-One estimate item may aggregate several confirmed invoice lines. One invoice line may contribute to at most one active confirmed estimate-item match. Splitting one invoice line across several estimate items remains unsupported.
+See `01_models_plan_actual_monetary_gap.md` for the corresponding State 1
+refinement.
 
-## Planned values
+## Preserved accepted analysis grain
+
+The baseline analysis remains organized by exact `EstimateItemSnapshot` identity,
+with explicit project-level aggregation and a separate unmatched-actual set.
+
+One estimate item may aggregate several confirmed invoice lines. One invoice line
+may contribute to at most one active confirmed estimate-item match. Splitting one
+invoice line across several estimate items remains unsupported.
+
+Only confirmed `InvoiceLineEstimateMatch` decisions may contribute as matches.
+Similarity evidence alone is never analytical truth.
+
+## Preserved quantity semantics
 
 For each analysed Estimate Item:
 
 ```text
 planned_quantity = EstimateItemSnapshot.quantity
-planned_amount = EstimateItemSnapshot.total
 ```
-
-`EstimateItemSnapshot.total` is consumed as the accepted PresuPro result for that immutable snapshot. Cabinet Backend must not independently reapply PresuPro waste, margin, discount, IVA, or other estimate arithmetic in order to derive another planned value.
-
-## Actual values
 
 For every confirmed Invoice Line matched to the Estimate Item:
 
 ```text
 actual_quantity = sum(matched InvoiceLine.quantity)
-actual_amount = sum(matched InvoiceLine.total)
 ```
-
-The accepted Invoice Card line total is consumed as source truth. Cabinet Backend must not replace it with a newly reconstructed `quantity * unit_price` value when calculating plan-versus-actual.
-
-Several confirmed invoice lines matched to one Estimate Item are aggregated by summation over the exact pinned matched lines.
-
-## Variance and remaining conventions
 
 For comparable quantities:
 
@@ -45,103 +53,167 @@ quantity_variance = actual_quantity - planned_quantity
 remaining_quantity = planned_quantity - actual_quantity
 ```
 
-For comparable monetary values:
+`remaining_quantity` is not clamped to zero. A negative result preserves the
+amount by which actual quantity exceeded planned quantity.
+
+Quantity comparison is allowed only when the Estimate Item unit and every
+contributing Invoice Line unit are semantically identical under the accepted unit
+vocabulary, or when the request pins explicit already accepted deterministic
+conversion evidence.
+
+Without accepted conversion evidence, a different-unit comparison raises
+`PlanActualPreconditionError`. No implicit unit conversion is accepted.
+
+## Reopened monetary semantics
+
+### Planned amount
+
+The previous rule:
 
 ```text
-amount_variance = actual_amount - planned_amount
+planned_amount = EstimateItemSnapshot.total
 ```
 
-A positive monetary variance means actual spend exceeds plan. A negative monetary variance means actual spend is below plan.
+is no longer accepted as a closed semantic rule.
 
-`remaining_quantity` is not clamped to zero. A negative result preserves the amount by which actual quantity exceeded planned quantity.
+State 1 does not currently identify one authoritative PresuPro item-level source
+fact with both:
 
-## Quantity comparability
+```text
+estimate.item.planned_amount
+estimate.item.planned_amount_basis
+```
 
-Quantity comparison is allowed when the analysed Estimate Item unit and every contributing matched Invoice Line unit are semantically identical under the accepted unit vocabulary.
+A Decimal field, aggregate estimate total, export value, frontend display value,
+or Holded projection must not be selected merely because it is available.
 
-Different units are not converted automatically.
+### Actual amount
 
-A different-unit comparison is allowed only when the request pins an explicit, already accepted conversion assumption/evidence that deterministically converts every contributing quantity into the Estimate Item unit. Conversion evidence must be part of the pinned assumption identity set used for reproducibility.
+The previous rule:
 
-Without such accepted conversion evidence, the operation raises `PlanActualPreconditionError` rather than guessing a conversion. No implicit `kg <-> t`, `m <-> cm`, package-to-piece, or other unit conversion is accepted by default.
+```text
+actual_amount = InvoiceLine.total
+```
 
-## Monetary comparability
+is invalid because Invoice Card V1 defines no such field.
 
-Direct monetary comparison requires the planned and actual values to share the same currency and the same accepted monetary/tax basis.
+The accepted Card contract exposes two different source truths:
 
-The baseline does not infer or normalize a mismatch between net and gross/tax-inclusive bases. When the pinned evidence does not establish compatible currency and monetary basis, `calculate_plan_actual` raises `PlanActualPreconditionError` unless an explicit accepted conversion/basis assumption is pinned in the request.
+```text
+InvoiceLine.net_amount
+  basis = post_discount_tax_exclusive
 
-No currency exchange or tax-basis conversion is implicit.
+InvoiceLine.gross_amount
+  basis = tax_inclusive
+```
+
+Cabinet plan/actual semantics must explicitly choose which of these meanings is
+the actual comparison amount. Backend, compiler, host, adapter, and model code
+must not choose on Cabinet's behalf.
+
+### Currency
+
+Currency remains a required comparability dimension. Source-contract evidence may
+provide it deterministically, but equal currency does not prove equal monetary or
+tax basis.
+
+## Open monetary decisions
+
+The following decisions must be accepted before baseline monetary analysis can be
+called semantically closed.
+
+### PA-MONEY-001 — authoritative planned item amount
+
+Specify exactly:
+
+- the authoritative source field or derived source-contract fact;
+- semantic identity;
+- monetary/tax basis;
+- why Cabinet consumes that value rather than another PresuPro representation.
+
+### PA-MONEY-002 — authoritative actual line amount
+
+Choose exactly one accepted Invoice Card V1 meaning for plan/actual comparison:
+
+```text
+invoice.line.net_amount
+or
+invoice.line.gross_amount
+```
+
+and preserve its source-owned basis.
+
+### PA-MONEY-003 — monetary comparability
+
+Define the rule that proves the selected planned and actual values are directly
+comparable.
+
+If they are not directly comparable, define the explicit accepted assumption or
+evidence that authorizes a deterministic conversion. No implicit currency,
+net/gross, discount, or tax-basis conversion is accepted.
+
+## Monetary fail-closed rule
+
+Until PA-MONEY-001 through PA-MONEY-003 are accepted, an operation that requires
+baseline monetary plan/actual outputs must not return a successful guessed result.
+
+It must raise `PlanActualPreconditionError` or an equivalent explicit semantic-gap
+result when the pinned evidence cannot prove the selected planned amount, actual
+amount, currency, and compatible basis.
+
+The following are forbidden repairs:
+
+- reconstructing `InvoiceLine.total`;
+- selecting `net_amount` or `gross_amount` by heuristic;
+- using PresuPro aggregate `grand_total` as an item amount;
+- selecting a source Decimal by type equality;
+- inferring basis from field names, locale, currency, or integration context;
+- hiding a conversion or choice in an adapter or generic lowering.
 
 ## Unmatched invoice lines
 
-An accepted invoice line without a confirmed Estimate Item match remains explicitly unmatched.
+An accepted invoice line without a confirmed Estimate Item match remains
+explicitly unmatched and must not create a placeholder Estimate Item.
 
-It contributes:
+The unmatched line identity set is deterministic and may be reported now.
 
-```text
-unmatched_actual_amount = sum(unmatched InvoiceLine.total)
-```
+`unmatched_actual_amount` and project monetary totals remain unavailable until the
+same actual-amount and monetary-comparability decisions used for matched lines are
+accepted. The system must not aggregate unmatched monetary values under an
+invented alias.
 
-when those line amounts share the accepted project monetary basis/currency required for aggregation.
+## Successful result boundary
 
-Unmatched lines do **not** increase the actual quantity or actual amount of any Estimate Item and must not cause creation of a placeholder Estimate Item.
+A quantity-only intermediate calculation may expose deterministic quantity facts
+when the caller and contract explicitly request only those facts.
 
-Project actual spend is:
+The baseline full `PlanActualAnalysis` previously required monetary planned,
+actual, and variance values. That full result is currently **not semantically
+closed** and must not be represented as verified until the monetary decisions are
+accepted and derivability succeeds from the declared source contracts.
 
-```text
-project_actual_amount = matched_actual_amount + unmatched_actual_amount
-```
-
-where all included amounts satisfy the same monetary comparability rules.
-
-## Minimum successful result
-
-Every successful `PlanActualAnalysis` must contain enough information to reproduce and inspect the calculation. At minimum it exposes:
-
-- exact analysed `project_id`;
-- exact `estimate_snapshot_id`;
-- exact pinned invoice revision identities;
-- exact confirmed match identities consumed;
-- exact accepted assumption identities consumed;
-- one item result for each analysed Estimate Item containing its item identity, planned quantity, actual quantity, quantity variance, remaining quantity, planned amount, actual amount, and amount variance when those dimensions are applicable and comparable;
-- explicit unmatched invoice-line identities and `unmatched_actual_amount`;
-- project `planned_amount`, `matched_actual_amount`, `unmatched_actual_amount`, `project_actual_amount`, and `amount_variance`;
-- explicit warnings that do not invalidate the calculation.
-
-A provenance-only, warning-only, empty, or placeholder analysis is not a successful result.
-
-If a required baseline quantity or monetary comparison cannot be constructed from the pinned evidence under the comparability rules above, the operation raises `PlanActualPreconditionError` rather than returning a partially invented successful analysis.
-
-## Project monetary totals
-
-Project totals are computed from the exact analysed EstimateSnapshot and accepted Invoice Lines:
-
-```text
-project_planned_amount = sum(EstimateItemSnapshot.total for analysed items)
-matched_actual_amount = sum(InvoiceLine.total for confirmed matched lines)
-unmatched_actual_amount = sum(InvoiceLine.total for explicit unmatched lines)
-project_actual_amount = matched_actual_amount + unmatched_actual_amount
-project_amount_variance = project_actual_amount - project_planned_amount
-```
-
-The same monetary currency/basis preconditions apply to every summed value.
+A provenance-only, warning-only, empty, or placeholder full analysis is not a
+successful substitute.
 
 ## Reproducibility
 
-For identical pinned invoice revisions, project identity/context, EstimateSnapshot, confirmed match identities, and accepted assumption identities, repeated calculation must produce equal semantic calculation fields:
+For identical pinned invoice revisions, project identity/context,
+`EstimateSnapshot`, confirmed match identities, and accepted assumption
+identities, repeated deterministic quantity calculations must produce equal
+semantic quantity fields and unmatched identity sets.
 
-- per-item planned/actual quantities and amounts;
-- per-item variances and remaining quantity;
-- unmatched invoice-line identity set and unmatched actual amount;
-- project planned, matched actual, unmatched actual, total actual, and amount variance;
-- deterministic warning codes derived solely from those pinned inputs.
+Once monetary semantics are accepted, monetary reproducibility must additionally
+pin the exact selected monetary semantics, bases, and any accepted conversion
+assumption identities.
 
-Runtime timestamps, persistence IDs, cache metadata, or execution ordering are not part of semantic equality unless separately accepted as domain evidence.
+Runtime timestamps, persistence IDs, cache metadata, or execution ordering are
+not part of semantic equality unless separately accepted as domain evidence.
 
 ## Forecast boundary
 
-Forecast values are not required for the baseline plan-versus-actual result. They may be included only when the request pins separately accepted forecast assumptions. Absence of forecast assumptions must not cause Cabinet Backend to invent a forecast.
+Forecast values remain outside the required baseline. They may be included only
+when the request pins separately accepted forecast assumptions. Absence of
+forecast assumptions must not cause Cabinet Backend to invent a forecast.
 
 ## Preserved invariants
 
@@ -153,20 +225,44 @@ Forecast values are not required for the baseline plan-versus-actual result. The
 - EstimateSnapshots and accepted Invoice Card revisions remain immutable;
 - matches remain pinned to their exact EstimateSnapshot;
 - newer EstimateSnapshots do not inherit matches automatically;
-- missing, stale, incompatible, unresolved, or incomparable pinned evidence fails with `PlanActualPreconditionError` rather than being guessed;
-- PresuPro lineage is never inferred from project identity, content similarity, timestamps, or naming.
+- missing, stale, incompatible, unresolved, or incomparable pinned evidence fails
+  closed rather than being guessed;
+- PresuPro lineage is never inferred from project identity, content similarity,
+  timestamps, or naming.
 
 ## Required tests
 
-1. Two identical pinned requests produce semantically equal calculation fields.
-2. Planned quantity comes from the exact Estimate Item quantity and planned amount from its accepted total.
-3. Two matched invoice lines for one Estimate Item are summed into that item's actual quantity and amount.
-4. `amount_variance = actual_amount - planned_amount`; positive means overspend.
-5. `remaining_quantity = planned_quantity - actual_quantity` and remains negative when actual exceeds plan.
-6. Different units without accepted conversion evidence raise `PlanActualPreconditionError`.
-7. An explicit pinned conversion assumption may enable a deterministic different-unit comparison.
-8. Currency or monetary-basis mismatch without accepted conversion/basis evidence raises `PlanActualPreconditionError`.
-9. Unmatched lines remain explicit, contribute to project actual spend, and do not mutate any Estimate Item actual.
-10. A successful analysis cannot be empty or provenance-only.
-11. Source Invoice Card, EstimateSnapshot, Registry context, and confirmed match records remain unchanged by calculation.
-12. No forecast is invented when no accepted forecast assumptions are pinned.
+1. Two identical pinned quantity-only requests produce semantically equal quantity
+   fields and unmatched identity sets.
+2. Planned quantity comes from the exact Estimate Item quantity.
+3. Two matched invoice lines for one Estimate Item are summed into that item's
+   actual quantity.
+4. `remaining_quantity = planned_quantity - actual_quantity` and remains negative
+   when actual exceeds plan.
+5. Different units without accepted conversion evidence raise
+   `PlanActualPreconditionError`.
+6. An explicit pinned unit-conversion assumption may enable a deterministic
+   different-unit quantity comparison.
+7. A request for full monetary analysis fails closed while PA-MONEY-001 through
+   PA-MONEY-003 are unresolved.
+8. Neither aggregate PresuPro totals nor type-compatible Decimal fields can close
+   the planned item amount by themselves.
+9. Neither Invoice Card V1 `net_amount` nor `gross_amount` is selected unless the
+   accepted target semantic decision names it explicitly.
+10. Currency equality without compatible monetary basis is insufficient.
+11. Unmatched lines remain explicit and do not mutate any Estimate Item actual.
+12. Source Invoice Card, EstimateSnapshot, Registry context, and confirmed match
+   records remain unchanged by calculation.
+13. No forecast is invented when no accepted forecast assumptions are pinned.
+
+## Closure condition
+
+This decision may return to **ACCEPTED** only after:
+
+1. PA-MONEY-001, PA-MONEY-002, and PA-MONEY-003 are explicitly resolved in the
+   owning Cabinet semantic design;
+2. the selected meanings are propagated into source/target box manifests without
+   changing the generic derivability rules;
+3. the unchanged derivability compiler proves both planned and actual monetary
+   mappings;
+4. the required fail-closed and successful-path tests execute and pass.
