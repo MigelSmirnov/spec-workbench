@@ -142,6 +142,11 @@ predicate или method shape не замкнуты, diagnostic emitter возв
 - В deterministic structural spec ops создавай такой порт через
   `add_model_interface`, затем отдельно добавляй method contracts и физический
   export owner. Не создавай временное фиктивное поле через `add_model`.
+- Этот владелец — всегда модуль `models`, как у любой другой записи секции
+  `models`; модуль-реализация импортирует свой порт оттуда и наследует его.
+  Отдать порт модулю-реализации нельзя: `models` целиком теряет
+  детерминированную эмиссию и уходит на LLM-путь. См.
+  [раздел 5](SPEC_STANDARD.md#5-models).
 
 ## Как заполнять module_internal
 
