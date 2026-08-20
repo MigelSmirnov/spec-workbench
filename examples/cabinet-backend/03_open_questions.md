@@ -9,7 +9,8 @@ real dependency on another application's accepted contract, repository evidence,
 or a later product decision.
 
 Accepted behavior already defined in `01_models*.md` and `02_rules.md` remains
-normative while these questions are open.
+normative while these questions are open, except where a later design-state
+refinement explicitly reopens an earlier decision after stronger source evidence.
 
 ---
 
@@ -140,6 +141,74 @@ synchronization-only authority. Local mutations require an authenticated active
 local user and the required role; agent actions use time-bounded local-user
 delegation. Machine credentials, local identities, Holded credentials, roles,
 sessions, and append-only audit evidence remain separate concerns.
+
+---
+
+## OQ-008 — PlanActual monetary comparison semantics
+
+**Status:** Reopened after stronger source-contract evidence.
+
+### Why it is open
+
+The earlier accepted plan/actual decision used:
+
+```text
+planned_amount = EstimateItemSnapshot.total
+actual_amount = InvoiceLine.total
+```
+
+Later factual probes established that neither alias is semantically closed:
+
+- PresuPro does not currently expose one proved canonical per-item amount shared
+  by the relevant representations;
+- Invoice Card V1 has no `InvoiceLine.total`; it exposes distinct canonical
+  `net_amount` and `gross_amount` values with different monetary/tax bases.
+
+The owning refinements are:
+
+```text
+01_models_plan_actual_monetary_gap.md
+02_rules_plan_actual_semantic_gap.md
+```
+
+The State 2 monetary decision is therefore reopened. Quantity semantics remain
+accepted.
+
+### Required product decisions
+
+`PA-MONEY-001` must identify the authoritative planned item amount and its exact
+monetary/tax basis.
+
+`PA-MONEY-002` must choose the authoritative actual comparison amount from the
+accepted Invoice Card V1 meanings (`net_amount` or `gross_amount`) and preserve
+its source-owned basis.
+
+`PA-MONEY-003` must define why the selected planned and actual values are directly
+comparable or name explicit accepted evidence/assumptions for a deterministic
+conversion.
+
+### Current deterministic boundary
+
+Until all three decisions are accepted:
+
+- quantity-only PlanActual calculations may proceed when their unit preconditions
+  are satisfied;
+- full monetary PlanActual analysis is not semantically closed;
+- no adapter, compiler, host, generated code, or model operation may choose the
+  missing monetary meaning;
+- missing monetary closure must fail explicitly rather than return a guessed or
+  partially fabricated successful result.
+
+### Explicit non-decisions
+
+Cabinet does not currently:
+
+- treat a PresuPro aggregate total as an item amount;
+- select a Decimal source field by type equality;
+- recreate `InvoiceLine.total`;
+- default to Card `net_amount` or `gross_amount`;
+- infer monetary basis from currency, locale, names, or integration context;
+- perform implicit net/gross, tax-basis, or currency conversion.
 
 ---
 
