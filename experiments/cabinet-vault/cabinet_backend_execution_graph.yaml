@@ -1,0 +1,135 @@
+experiment: cabinet_backend_execution_graph
+version: 0
+status: exploratory
+
+cabinet:
+  id: cabinet.local.archive
+  locality: local
+  trust_boundary: local_cabinet_backend
+
+principal:
+  principal_id: agent:local-example
+  required_status: active
+
+grant:
+  capabilities:
+    - invoice.select
+    - invoice.filter_confirmed
+    - invoice.filter_date
+    - invoice.aggregate_total
+  resource_scope:
+    project_ids:
+      - project-1
+  lifetime:
+    short_lived: true
+    single_use: true
+
+schemas:
+  InvoiceRefSet:
+    opaque: true
+    description: Host-owned handle to a bounded invoice working set. Raw rows never leave the cabinet.
+
+  InvoiceAggregate:
+    fields:
+      project_id:
+        type: WorkObjectId
+      invoice_count:
+        type: int
+      confirmed_total:
+        type: Decimal
+      currency:
+        type: str
+      evidence:
+        type: ExecutionEvidenceRef
+
+capabilities:
+  invoice.select:
+    input:
+      project_id: WorkObjectId
+    output: InvoiceRefSet
+    effects: []
+    semantics:
+      - select invoices inside granted project scope
+      - output is an opaque cabinet-local working-set handle
+
+  invoice.filter_confirmed:
+    input:
+      source: InvoiceRefSet
+    output: InvoiceRefSet
+    effects: []
+    semantics:
+      - retain only confirmed Cabinet interpretations
+
+  invoice.filter_date:
+    input:
+      source: InvoiceRefSet
+      date_from: Date?
+      date_to: Date?
+    output: InvoiceRefSet
+    effects: []
+    semantics:
+      - restrict by inclusive invoice date bounds
+
+  invoice.aggregate_total:
+    input:
+      source: InvoiceRefSet
+    output: InvoiceAggregate
+    effects: []
+    disclosure:
+      allow:
+        - project_id
+        - invoice_count
+        - confirmed_total
+        - currency
+      deny:
+        - raw_invoice_rows
+        - source_artifact_bytes
+        - raw_filesystem_paths
+        - database_credentials
+
+execution_graph:
+  nodes:
+    - id: selected
+      capability: invoice.select
+      args:
+        project_id: project-1
+
+    - id: confirmed
+      capability: invoice.filter_confirmed
+      args:
+        source:
+          from: selected
+
+    - id: dated
+      capability: invoice.filter_date
+      args:
+        source:
+          from: confirmed
+        date_from: 2026-07-01
+        date_to: 2026-07-31
+
+    - id: result
+      capability: invoice.aggregate_total
+      args:
+        source:
+          from: dated
+
+  output:
+    from: result
+
+validation:
+  fail_closed_on:
+    - unknown_capability
+    - capability_not_granted
+    - unknown_node_reference
+    - duplicate_node_id
+    - non_opaque_intermediate_escape
+    - resource_scope_expansion
+    - undeclared_effect
+    - invalid_graph_output
+
+result_boundary:
+  raw_rows_leave_cabinet: false
+  intermediate_handles_leave_cabinet: false
+  generated_sql_allowed: false
+  generated_code_is_authority: false
