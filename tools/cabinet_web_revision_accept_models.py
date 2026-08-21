@@ -10,10 +10,17 @@ DELIVERY_NAMESPACE = "cabinet.web_sync_delivery"
 
 
 def models():
-    from pydantic import BaseModel, ConfigDict, StrictInt, StrictStr  # type: ignore
+    from pydantic import BaseModel, StrictInt, StrictStr  # type: ignore
 
-    class ClosedModel(BaseModel):
-        model_config = ConfigDict(extra="forbid")
+    if hasattr(BaseModel, "model_validate"):
+        from pydantic import ConfigDict  # type: ignore
+
+        class ClosedModel(BaseModel):
+            model_config = ConfigDict(extra="forbid")
+    else:
+        class ClosedModel(BaseModel):
+            class Config:
+                extra = "forbid"
 
     class CabinetWebInvoiceRevisionDeliveryModel(ClosedModel):
         contract_version: StrictStr
