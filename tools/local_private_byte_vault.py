@@ -2,13 +2,16 @@
 """Generic private filesystem byte-vault provider for the Cabinet host experiment."""
 from __future__ import annotations
 
+import fcntl
 import hashlib
 import os
 import re
 import stat
 import uuid
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Iterator
 
 
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
@@ -68,13 +71,16 @@ class LocalPrivateByteVault:
         self.root = root_path.resolve(strict=True)
         self.staging_root = self.root / "staging"
         self.final_root = self.root / "final"
+        self.locks_root = self.root / "locks"
         self.staging_root.mkdir(mode=0o700, exist_ok=True)
         self.final_root.mkdir(mode=0o700, exist_ok=True)
+        self.locks_root.mkdir(mode=0o700, exist_ok=True)
         self.max_size_bytes = max_size_bytes
 
         self._assert_private_directory(self.root)
         self._assert_private_directory(self.staging_root)
         self._assert_private_directory(self.final_root)
+        self._assert_private_directory(self.locks_root)
         if os.stat(self.staging_root).st_dev != os.stat(self.final_root).st_dev:
             raise ByteVaultError("staging and final roots must be on one filesystem")
 
@@ -131,6 +137,31 @@ class LocalPrivateByteVault:
         finally:
             os.close(fd)
         return digest.hexdigest(), size
+
+    @contextmanager
+    def _publication_lock(self, content_hash: str) -> Iterator[None]:
+        self.final_reference(content_hash)
+        lock_path = self.locks_root / f"{content_hash}.lock"
+        flags = os.O_RDWR | os.O_CREAT
+        if hasattr(os, "O_CLOEXEC"):
+            flags |= os.O_CLOEXEC
+        if hasattr(os, "O_NOFOLLOW"):
+            flags |= os.O_NOFOLLOW
+        try:
+            fd = os.open(lock_path, flags, 0o600)
+        except OSError as exc:
+            raise ByteVaultSecurityError("cannot open byte-vault publication lock safely") from exc
+        try:
+            observed = os.fstat(fd)
+            if not stat.S_ISREG(observed.st_mode):
+                raise ByteVaultSecurityError("byte-vault publication lock must be a regular file")
+            fcntl.flock(fd, fcntl.LOCK_EX)
+            yield
+        finally:
+            try:
+                fcntl.flock(fd, fcntl.LOCK_UN)
+            finally:
+                os.close(fd)
 
     def reference_exists(self, reference: str) -> bool:
         try:
@@ -204,23 +235,28 @@ class LocalPrivateByteVault:
         final_directory.mkdir(mode=0o700, exist_ok=True)
         self._assert_private_directory(final_directory)
 
-        try:
-            os.link(staging_path, final_path, follow_symlinks=False)
+        with self._publication_lock(expected_hash):
+            if self.reference_exists(final_reference):
+                if not self.verify(final_reference, expected_hash, expected_size):
+                    raise ByteVaultConflictError(
+                        "content-addressed final reference already contains different bytes"
+                    )
+                self.remove_staging(staging_reference)
+                return final_reference
+
+            if not self.verify(staging_reference, expected_hash, expected_size):
+                raise ByteVaultError("staging candidate changed before atomic publication")
+
+            try:
+                os.replace(staging_path, final_path)
+            except OSError as exc:
+                raise ByteVaultError("atomic byte-vault publication rename failed") from exc
             _fsync_directory(final_directory)
-        except FileExistsError:
+            _fsync_directory(self.staging_root)
+
             if not self.verify(final_reference, expected_hash, expected_size):
-                raise ByteVaultConflictError(
-                    "content-addressed final reference already contains different bytes"
-                )
+                raise ByteVaultError("published bytes failed reopen/hash/size verification")
 
-        if not self.verify(final_reference, expected_hash, expected_size):
-            raise ByteVaultError("published bytes failed reopen/hash/size verification")
-
-        try:
-            os.unlink(staging_path)
-        except FileNotFoundError:
-            pass
-        _fsync_directory(self.staging_root)
         return final_reference
 
     def remove_staging(self, staging_reference: str) -> None:
