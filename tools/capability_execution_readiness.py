@@ -15,6 +15,7 @@ import yaml
 IMPLEMENTED_CAPABILITY_EXECUTION_RULES = (
     "CAP-EXEC-REL-001",
     "CAP-EXEC-PRE-001",
+    "CAP-EXEC-PROJ-001",
     "CAP-EXEC-VERIFY-001",
     "CAP-EXEC-SEM-001",
 )
@@ -55,8 +56,7 @@ def _status(value: Any) -> str:
     return value if isinstance(value, str) else "UNVERIFIED"
 
 
-def _provider_statuses(profile: dict[str, Any]) -> dict[str, str]:
-    providers = profile.get("providers")
+def _provider_statuses_from_mapping(providers: Any) -> dict[str, str]:
     if not isinstance(providers, dict):
         return {}
     result: dict[str, str] = {}
@@ -70,6 +70,34 @@ def _provider_statuses(profile: dict[str, Any]) -> dict[str, str]:
             continue
         result[str(provider_id)] = _status(verification.get("status"))
     return result
+
+
+def _provider_statuses(profile: dict[str, Any]) -> dict[str, str]:
+    return _provider_statuses_from_mapping(profile.get("providers"))
+
+
+def _execution_provider_statuses(contract: dict[str, Any]) -> dict[str, str]:
+    return _provider_statuses_from_mapping(contract.get("execution_providers"))
+
+
+def _execution_runtime_dependencies(contract: dict[str, Any]) -> tuple[set[str], set[str]]:
+    declared: set[str] = set()
+    providers = contract.get("execution_providers")
+    if isinstance(providers, dict):
+        for provider in providers.values():
+            if not isinstance(provider, dict):
+                continue
+            dependencies = provider.get("runtime_dependencies")
+            if isinstance(dependencies, list):
+                declared.update(str(item) for item in dependencies)
+
+    projection = contract.get("runtime_projection")
+    projected: set[str] = set()
+    if isinstance(projection, dict):
+        dependencies = projection.get("dependencies")
+        if isinstance(dependencies, list):
+            projected.update(str(item) for item in dependencies)
+    return declared, projected
 
 
 def _add_contract_drift(
@@ -219,11 +247,11 @@ def compile_readiness(
         source_contract.get("audit_required"),
     )
 
-    provider_statuses = _provider_statuses(profile)
-    required_provider_statuses = tuple(provider_statuses.values())
+    host_provider_statuses = _provider_statuses(profile)
+    required_host_statuses = tuple(host_provider_statuses.values())
     host_gate = (
         "pass"
-        if required_provider_statuses and all(status == "PASS" for status in required_provider_statuses)
+        if required_host_statuses and all(status == "PASS" for status in required_host_statuses)
         else "block"
     )
     if host_gate != "pass":
@@ -232,6 +260,28 @@ def compile_readiness(
                 "HOST_VERIFICATION_BLOCKED",
                 capability_id,
                 "capability execution requires every selected generic host provider to be PASS",
+            )
+        )
+
+    execution_provider_statuses = _execution_provider_statuses(contract)
+    collisions = sorted(set(host_provider_statuses) & set(execution_provider_statuses))
+    for provider_id in collisions:
+        gaps.append(
+            ReadinessGap(
+                "PROVIDER_ID_COLLISION",
+                provider_id,
+                "capability execution provider id collides with generic host provider id",
+            )
+        )
+    provider_statuses = {**host_provider_statuses, **execution_provider_statuses}
+
+    declared_runtime_dependencies, projected_runtime_dependencies = _execution_runtime_dependencies(contract)
+    for dependency in sorted(declared_runtime_dependencies - projected_runtime_dependencies):
+        gaps.append(
+            ReadinessGap(
+                "RUNTIME_DEPENDENCY_NOT_PROJECTED",
+                dependency,
+                "capability execution provider dependency is not present in runtime projection",
             )
         )
 
