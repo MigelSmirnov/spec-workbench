@@ -22,7 +22,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install focused test dependencies
-        run: python -m pip install pytest pyyaml
+        run: python -m pip install pytest pyyaml "psycopg[binary]"
 
       - name: Run Cabinet vault experiment tests
         run: |
@@ -33,7 +33,8 @@ jobs:
             tests/test_plan_actual_*.py \
             tests/test_generic_host_lowering_contract.py \
             tests/test_host_lowering_plan.py \
-            tests/test_host_provider_verification.py
+            tests/test_host_provider_verification.py \
+            tests/test_postgres_record_kernel.py
 
       - name: Enforce declared box language
         run: python tools/box_language_audit.py
@@ -89,6 +90,37 @@ jobs:
           )
           PY
 
+      - name: Prove PostgreSQL provider cannot pass without runtime DSN
+        shell: bash
+        run: |
+          set +e
+          env -u SPEC_WORKBENCH_TEST_POSTGRES_DSN \
+            python tools/postgres_record_kernel_probe.py > postgres-record-kernel-probe.json
+          code=$?
+          set -e
+          test "$code" = "2"
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          report = json.loads(Path("postgres-record-kernel-probe.json").read_text())
+          assert report["status"] == "block"
+          by_id = {item["probe_id"]: item for item in report["results"]}
+          assert by_id["RECORD-PROBE-001"]["status"] == "PASS"
+          assert {
+              by_id[probe_id]["status"]
+              for probe_id in (
+                  "RECORD-PROBE-002",
+                  "RECORD-PROBE-003",
+                  "RECORD-PROBE-004",
+                  "RECORD-PROBE-005",
+              )
+          } == {"UNVERIFIED"}
+          PY
+
+      - name: Check patch integrity
+        run: git diff --check HEAD^ HEAD
+
       - name: Upload experiment evidence
         uses: actions/upload-artifact@v4
         with:
@@ -96,4 +128,5 @@ jobs:
           path: |
             cabinet-boundary-audit.json
             generic-host-plan.json
+            postgres-record-kernel-probe.json
           if-no-files-found: error
