@@ -2,23 +2,21 @@
 
 ## Status
 
-Experimental boundary contract for `agent/cabinet-web-sync-contract`, derived from the accepted `agent/cabinet-vault-experiment` direction.
+Experimental transport-independent boundary contract for two autonomous applications.
 
-Machine-readable contract:
+Machine contract:
 
 ```text
 experiments/cabinet-vault/cabinet_web_sync_contract_v1.yaml
 ```
 
-This document does not make Cabinet Web a frontend of Cabinet Backend and does not make Cabinet Backend continuously available infrastructure for Cabinet Web.
+`Cabinet_web` is not a frontend of `cabinet_backend`, and `cabinet_backend` is not continuously required infrastructure for `Cabinet_web`.
 
-## Product topology
-
-The two applications are autonomous.
+## Ownership
 
 ```text
 Cabinet_web
-  owns working Card facts and Git history
+  owns Invoice Card facts, Card revisions, source identity and Git history
 
         ⇅ occasional synchronization
 
@@ -27,113 +25,78 @@ cabinet_backend local box
   local effects, processing evidence and operational audit
 ```
 
-Cabinet Web must remain usable when the local box is absent. The local box must not require Cabinet Web runtime classes, database structures or a live Web process in order to preserve accepted replicas.
+The backend never rewrites a confirmed Web Card. Web never imports backend database, vault or runtime models into its domain.
+
+## Accepted source identity
+
+The upstream source-identity decision is now accepted in:
+
+```text
+MigelSmirnov/Cabinet_web
+main @ d4419e3b948d49bd85a99a0941a350a73494cd27
+PR #16
+```
+
+Invoice Card V1 requires `source.source_id`. It is stable within the owning Card, survives source-storage metadata changes, and `invoice_source` payment evidence must reference it. The backend may reference this identity but may not invent or replace it.
+
+This closes `CW-SOURCE-ID-001`.
 
 ## Unit of synchronization
 
-The v1 Web → box unit is one exact **confirmed Invoice Card revision**.
+Web delivers one exact **confirmed Invoice Card revision**.
 
-It is identified by:
+Revision identity is:
 
 ```text
-invoice_id
-+ card_content_hash
+invoice_id + card_content_hash
 ```
 
-and accompanied by Git provenance:
+Git provenance travels separately as:
 
 ```text
 source_git_commit_sha
 card_repository_path
 ```
 
-`card_content_hash` is not a new integration hash. It is the existing Cabinet Web canonical revision hash from `tools.invoice_service.content_hash`:
+The complete Card document travels with the delivery. `card_content_hash` reuses the existing Cabinet Web canonical hash from `tools.invoice_service.content_hash`; the backend recomputes it before accepting the revision.
 
-```text
-sha256(canonical_json(card_document))
-```
+Git commit identity proves origin context but is not a substitute for the exact Card document or its canonical hash.
 
-where canonical JSON uses UTF-8, sorted keys and compact separators exactly as Cabinet Web already does.
+## Delivery and reconciliation
 
-The backend recomputes the hash. It does not trust a caller-supplied hash without the exact Card document.
+`delivery_id` identifies a retryable delivery attempt; it is not the Card revision identity.
 
-## Why the complete Card travels
+Rules:
 
-The local box must be able to preserve and validate the accepted revision without acquiring authority over the Cabinet Web repository or requiring a GitHub client as part of Cabinet semantics.
+1. same delivery ID + same revision → `already_accepted`;
+2. same delivery ID + different revision → `delivery_identity_conflict`;
+3. first delivery requires `base_backend_content_hash = null`;
+4. a later delivery states the backend revision Web believes is current;
+5. stale base → `reconciliation_required`, without overwrite;
+6. a newly accepted revision never deletes an older immutable replica;
+7. arrival order never defines Git revision ancestry.
 
-Therefore the delivery contains the exact Card document plus Git provenance. Git commit identity is evidence of origin; it is not a substitute for the Card bytes or canonical content hash.
+These rules are required because synchronization may be delayed or intermittent.
 
-The local box validates the received Card against the accepted Cabinet Web Invoice Card V1 contract before making a replica visible.
-
-## Source identity
-
-`source_id` belongs to Cabinet Web Card facts.
-
-The upstream repair is currently in:
-
-```text
-MigelSmirnov/Cabinet_web
-agent/source-id-contract-repair
-PR #16
-```
-
-The local box may reference this identity but may not create, replace or infer it.
-
-Changing source storage metadata or attaching protected bytes locally does not change the Web-owned source identity.
-
-## Card acceptance is not byte attachment
-
-These remain separate lifecycle operations:
+## Acceptance is not source-byte attachment
 
 ```text
 accept_cabinet_web_invoice_revision
 ```
 
-accepts an immutable confirmed Card revision.
+accepts the immutable confirmed Card revision.
 
 ```text
 invoice.source.attach
 ```
 
-is a later local-box effect that attaches verified protected bytes to an already accepted revision/source identity.
+is a separate local-box effect that attaches verified bytes to an already accepted Card/source identity.
 
-A successful Card receipt therefore does **not** claim that source bytes are stored.
-
-This separation leaves the existing media-type and no-expected-hash blockers visible rather than hiding them inside synchronization glue.
-
-## Idempotency and reconciliation
-
-Two identities are deliberately separate.
-
-```text
-delivery_id
-```
-
-identifies a delivery attempt and is reused for retries.
-
-```text
-(invoice_id, card_content_hash)
-```
-
-identifies the exact Card revision.
-
-Rules:
-
-1. same `delivery_id` + same revision → `already_accepted`;
-2. same `delivery_id` + different revision → `delivery_identity_conflict`;
-3. first accepted revision requires `base_backend_content_hash = null`;
-4. later revision delivery states the backend revision Web believes is current;
-5. if that base does not match the backend current revision, return `reconciliation_required` and do not overwrite anything;
-6. accepting a new revision never deletes the previous immutable replica;
-7. arrival order is not Git history and must not be interpreted as revision ancestry.
-
-The last rule matters for occasional/offline synchronization: delayed packages cannot silently become authoritative merely because they arrived last.
+A successful Card receipt therefore never claims that source bytes were stored.
 
 ## Receipt
 
-The backend returns a bounded receipt containing the synchronization identity and outcome, not its internal persistence model.
-
-Allowed information includes:
+The backend returns bounded synchronization metadata:
 
 ```text
 delivery_id
@@ -146,30 +109,25 @@ backend_current_content_hash
 bounded error_code
 ```
 
-It must not expose database primary keys, filesystem/vault paths, credentials or raw audit storage.
-
-The receipt is synchronization metadata. It is not written into the immutable confirmed Invoice Card.
+It does not disclose backend database IDs, filesystem/vault paths, credentials or raw audit storage. The receipt is not written into the immutable confirmed Card.
 
 ## Transport independence
 
-The same contract may later be carried over local IPC, HTTP, MCP, a file exchange, or an agent-mediated channel.
-
-Transport adapters must not:
+The same semantic contract may later use local IPC, HTTP, MCP, file exchange or an agent-mediated transport. Transport wrappers remain thin and may not:
 
 - construct or rewrite Card facts;
 - choose source identity;
-- guess MIME from `source.kind` or a filename;
-- turn revision conflict into last-write-wins;
-- move backend database/runtime concepts into Cabinet Web.
+- guess MIME from `source.kind` or filename;
+- resolve revision conflict by last-write-wins;
+- expose backend storage/runtime structure as Web domain state.
 
-## Gate impact
+This closes the design absence `CW-SYNC-001` without selecting a transport.
 
-This contract closes the **design absence** identified by `CW-SYNC-001`.
+## Remaining canary blockers
 
-It does not yet permit a real Cabinet Web canary. Remaining prerequisites are:
+A real Cabinet Web → local box canary is still forbidden until both remaining proofs close:
 
-1. upstream `source_id` repair accepted into Cabinet Web `main`;
-2. exact parser-backed media-type relation for source bytes (`CW-MEDIA-001`);
-3. executed no-expected-hash attachment evidence bound to this synchronization relation (`CW-HASH-001`).
+1. `CW-MEDIA-001` — exact parser-backed media identity for source bytes;
+2. `CW-HASH-001` — executed no-expected-hash source attachment bound to an accepted synchronized Card revision, while proving the confirmed Card remains unchanged.
 
-No adapter may manufacture those missing proofs.
+No adapter may manufacture either proof.
