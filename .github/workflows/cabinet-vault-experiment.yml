@@ -68,48 +68,29 @@ jobs:
           assert skipped["verification_status"] == "UNVERIFIED"
           PY
 
-      - name: Compile candidate generic host plan fail closed
-        shell: bash
+      - name: Compile verified candidate generic host plan
         run: |
-          set +e
           python tools/host_lowering_plan.py \
             experiments/cabinet-vault/cabinet_backend_box_v0.yaml \
             experiments/cabinet-vault/generic_host_profile_candidate_v0.yaml \
             --json > generic-host-plan.json
-          code=$?
-          set -e
-          test "$code" = "2"
           python - <<'PY'
           import json
           from pathlib import Path
 
           plan = json.loads(Path("generic-host-plan.json").read_text())
           assert plan["status"] == "compiled"
-          assert plan["verification_gate"] == "block"
+          assert plan["verification_gate"] == "pass"
           assert plan["gaps"] == []
           assert set(plan["runtime_dependencies"]) == {"pydantic", "psycopg"}
-          verification = {
-              item["provider_id"]: item["verification_status"]
+          assert {
+              item["verification_status"]
               for item in plan["provider_verification"]
-          }
-          assert {
-              provider_id
-              for provider_id, status in verification.items()
-              if status == "PASS"
-          } == {
-              "typed_schema_kernel",
-              "postgres_record_kernel",
-              "local_private_byte_vault",
-              "protected_configuration_kernel",
-          }
-          assert {
-              provider_id
-              for provider_id, status in verification.items()
-              if status == "UNVERIFIED"
-          } == {"authority_kernel"}
+          } == {"PASS"}
+          assert len(plan["provider_verification"]) == 5
           PY
 
-      - name: Prove PostgreSQL provider cannot pass without runtime DSN
+      - name: Prove PostgreSQL runtime probe still fails closed without DSN
         shell: bash
         run: |
           set +e
@@ -170,7 +151,7 @@ jobs:
           assert {item["status"] for item in report["results"]} == {"PASS"}
           PY
 
-      - name: Execute authority candidate probe without promoting profile
+      - name: Execute authority provider probe
         run: |
           python tools/authority_kernel_probe.py > authority-kernel-probe.json
           python - <<'PY'
