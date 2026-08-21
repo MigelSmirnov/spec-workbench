@@ -1,10 +1,11 @@
-readiness_id: cabinet_web_real_data_canary.v4
-status: blocked_embedded_invoice_not_normalized
+readiness_id: cabinet_web_real_data_canary.v5
+status: ready_for_real_data_canary
 reviewed_on: "2026-08-21"
 
 purpose: >-
-  Track the first real Cabinet_web invoice candidate through normalization into the
-  accepted Invoice Card V1 contract before the verified local-box real-data canary.
+  Pin the first real Cabinet_web Invoice Card and source identity that are ready for
+  execution through the verified local-box revision-acceptance and source-attachment
+  path.
 
 interop_prerequisites:
   cabinet_web_source_identity_contract: PASS
@@ -23,70 +24,74 @@ interop_prerequisites:
 source_repository:
   repository: MigelSmirnov/Cabinet_web
   ref: main
-  current_head_commit_sha: 6feeb39bfac3ae7999bc00202ddffe3b810a02d7
+  current_head_commit_sha: d3fac8e5d2b85c12904cba24060717b84e2757c2
   reviewed_contract_commit_sha: d4419e3b948d49bd85a99a0941a350a73494cd27
-  head_verification: documentation_only_commit_after_reviewed_contract
   contract_fingerprints_changed: false
+  normalization_pull_request: 17
 
 real_candidate:
   invoice_id: invoice-f260001
-  document_number: F260001
-  document_date: "2026-08-12"
+  invoice_card_path: data/cards/invoice-f260001/card.json
+  status: confirmed
+  source_id: source-f260001
+  source_kind: pdf
+  source_file_ref: null
+  source_file_status: pending
+  card_content_hash: sha256:e52e9d1fe3ff273b1510fd45d516daf576df4404320f75db4dfabc51c8f8a0cf
+  validation:
+    status: PASS
+    errors: 0
+    warnings: 0
+  normalization:
+    workflow: prepare_validate_create_draft_confirm
+    payment_method: cash
+    payment_method_basis: direct_user_confirmation
+    merged_to_main: true
+
+legacy_projections:
   client_card: data/cards/client-uliana-kolpacheva-20260815/card.json
   project_card: data/cards/project-uliana-floor-20260815/card.json
-  dedicated_invoice_card: absent
-  client_source:
-    id: invoice-f260001
-    media_type: application/pdf
-    document_type: invoice
-    file_status: pending
-  project_financials:
-    status: paid
-    net_amount: 900
-    tax_amount: 189
-    total_amount: 1089
-    line_items_present: true
-    payment_link_present: true
+  status: retained_pending_relationship_projection_migration
+  authority_rule: >-
+    The dedicated Invoice Card is now canonical for invoice facts. Legacy Client and
+    Project fields must not be used as a substitute Card payload for backend sync.
 
-previous_local_preflight:
-  result: PASS_FAIL_CLOSED_DIRECTORY_INVENTORY_ONLY
-  interpretation: >-
-    The preflight correctly refused backend effects because no dedicated Invoice Card
-    existed, but its conclusion that no real invoice candidate existed was a false
-    negative caused by scanning only data/cards/invoice-*/card.json.
-  backend_invocation_performed: false
-  postgres_effect_performed: false
-  source_attachment_performed: false
+blocking_condition: null
 
-blocking_condition:
-  id: CW-INVOICE-OWNERSHIP-001
-  class: EMBEDDED_INVOICE_NOT_NORMALIZED_TO_INVOICE_CARD
-  statement: >-
-    A real invoice candidate exists in Cabinet_web main, but canonical invoice facts
-    are embedded in Client and Project Cards and the document/source identity is
-    currently conflated as invoice-f260001. The accepted Invoice Card V1 contract is
-    therefore not yet the owner of this invoice's canonical facts.
-  owner: Cabinet_web/card-data-ownership
-  severity: BLOCK
+required_real_canary:
+  preflight:
+    - update_Cabinet_web_main
+    - update_spec_workbench_agent/cabinet-vault-experiment
+    - require_target_invoice_card_tracked_and_clean
+    - verify_reviewed_Cabinet_web_contract_fingerprints
+    - validate_exact_invoice_card
+    - require_card_content_hash_matches_pinned_value
+    - require_real_original_PDF_bytes_for_source-f260001
+  execution:
+    - build_delivery_with_tools/cabinet_web_checkout_sync_adapter.py
+    - invoke_invoice.archive.accept_revision
+    - retain_cabinet-backend-sync-receipt-v1
+    - require_receipt_outcome_accepted_or_already_accepted
+    - attach_real_PDF_bytes_as_source-f260001
+    - require_parser_validated_application/pdf
+    - require_local_calculated_source_sha256
+    - preserve_confirmed_Card_document_and_content_hash
+    - verify_acceptance_and_attachment_audit
+  first_revision_base_rule: >-
+    Use base_backend_content_hash=null only when the backend has no current revision
+    for invoice-f260001. If a current revision already exists, reconcile explicitly
+    and never guess or overwrite it.
 
-required_repair:
-  - create_data/cards/invoice-f260001/card.json_through_Cabinet_web_invoice_workflow
-  - separate_invoice_id_from_source_source_id
-  - preserve_only_truthful_existing_invoice_facts
-  - use_real_source_PDF_for_missing_invoice_details_when_available
-  - validate_with_current_Invoice_Card_V1_validator
-  - confirm_and_commit_exact_Card_revision
-  - reduce_Client_Project_invoice_fields_to_relationship_or_derived_projection_only
-
-forbidden_repairs:
-  - backend_adapter_builds_Invoice_Card_from_Project_financials
-  - treat_invoice-f260001_as_permanent_source_id
-  - invent_missing_invoice_line_semantics_to_satisfy_schema
+forbidden_shortcuts:
   - send_Client_or_Project_Card_to_invoice.archive.accept_revision
-  - call_embedded_projection_a_confirmed_Invoice_Card
+  - mutate_confirmed_Invoice_Card_during_canary
+  - write_local_media_or_hash_back_into_confirmed_Card
+  - bypass_invoice.archive.accept_revision_with_direct_PostgreSQL_write
+  - bypass_invoice.source.attach_with_direct_vault_or_database_write
+  - use_fixture_or_synthetic_source_bytes
 
-canary_transition: >-
-  After invoice-f260001 exists as a clean tracked confirmed Invoice Card V1 with a
-  stable source.source_id and the corresponding original PDF bytes are available,
-  build the exact delivery from Cabinet_web main and run the already verified
-  invoice.archive.accept_revision -> receipt -> invoice.source.attach sequence.
+success_transition: >-
+  Mark the real user-data canary PASS only after the exact confirmed F260001 Card
+  revision is accepted by the local box, the real PDF is attached to source-f260001,
+  the returned receipt and local evidence are safe, and the canonical Web Card
+  document/content hash remain unchanged.
