@@ -1,0 +1,209 @@
+execution_contract_version: cabinet_capability_execution.v0
+status: blocked_lowering_gap
+capability_id: invoice.source.attach
+
+purpose: >-
+  Bind the already-declared invoice.source.attach capability to verified generic
+  host providers before any executable composition is written. Every deterministic
+  lowering step and protected precondition must have a machine-declared binding or
+  remain an explicit blocking gap. Missing semantics or mechanisms may not be
+  hidden in Python glue.
+
+source_manifest:
+  path: experiments/cabinet-vault/cabinet_backend_box_v0.yaml
+  blob_sha: 621069100773b8e750b1d2819e28ebb8187881e9
+
+source_capability_contract:
+  input: AttachLocalSourceInput
+  output: SourceAttachmentBatchResult
+  effects:
+    - source_byte_write
+    - archive_source_evidence_write
+  requires:
+    - authenticated_principal
+    - grant:invoice.source.attach
+    - scope:exact_invoice
+    - accepted_archive_target_exists
+    - finite_file_size_policy
+    - verified_content_signature
+  deterministic_lowering:
+    - validate_declared_input
+    - resolve_exact_invoice_under_grant
+    - verify_expected_source_binding
+    - stage_bytes_in_host_vault
+    - reopen_and_verify_hash_and_size
+    - lock_invoice
+    - persist_publication_journal_and_source_transition
+    - commit_metadata
+    - atomically_publish_bytes
+    - reopen_and_verify_final_bytes
+    - return_per_file_result_and_source_status
+  disclosure_allow:
+    - per_file_safe_result
+    - source_ids
+    - content_hashes
+    - resulting_source_status
+  disclosure_deny:
+    - source_vault_storage_reference
+    - raw_filesystem_path
+    - database_identity
+    - credentials
+  audit_required: true
+
+execution_case_v0:
+  name: attach_expected_missing_source
+  scope: >-
+    First executable case repairs one already-declared missing source for one
+    already-accepted invoice. It does not define behavior for inventing a new
+    source identity or resolving an ambiguous invoice search.
+  required_input_conditions:
+    - invoice_id_is_explicit_stable_target
+    - each_file_has_expected_source_id
+    - expected_source_id_exists_in_declared_expected_sources
+    - if_expected_source_hash_exists_calculated_hash_must_match_exactly
+  excluded_cases:
+    - source_identity_generation_when_expected_source_id_is_absent
+    - invoice_number_search_or_disambiguation
+    - attachment_to_nonaccepted_invoice
+
+precondition_bindings:
+  authenticated_principal:
+    status: RESOLVED
+    binding: authority_kernel.authenticate
+  grant:invoice.source.attach:
+    status: RESOLVED
+    binding: authority_kernel.exact_capability_grant
+  scope:exact_invoice:
+    status: RESOLVED
+    binding: authority_kernel.exact_resource_scope
+  accepted_archive_target_exists:
+    status: RESOLVED
+    binding: postgres_record_kernel.exact_invoice_record_lookup
+  finite_file_size_policy:
+    status: RESOLVED
+    binding: deterministic_box_policy
+    source: policies.source_security.max_file_size_bytes
+    value: 52428800
+  verified_content_signature:
+    status: UNRESOLVED
+    gap_class: LOWERING_GAP
+    reason: >-
+      The Cabinet box declares a closed media set, content-signature verification,
+      bounded parsing, and rejection of malformed documents, but the selected
+      generic host profile does not yet declare a concrete content-validation
+      implementation relation or runtime dependency. Filename, extension, or
+      caller-declared media type alone are explicitly insufficient.
+    forbidden_fallbacks:
+      - filename_extension_only
+      - caller_media_type_only
+      - magic_prefix_only_as_complete_document_validation
+      - unbounded_parser
+      - hidden_product_specific_adapter
+
+step_bindings:
+  validate_declared_input:
+    status: RESOLVED
+    providers:
+      - typed_schema_kernel
+  resolve_exact_invoice_under_grant:
+    status: RESOLVED
+    providers:
+      - authority_kernel
+      - postgres_record_kernel
+  verify_expected_source_binding:
+    status: RESOLVED
+    ownership: cabinet_semantic_contract
+    sources:
+      - examples/cabinet-backend/02_rules.md
+      - experiments/cabinet-vault/cabinet_backend_box_v0.yaml
+    providers:
+      - postgres_record_kernel
+  stage_bytes_in_host_vault:
+    status: RESOLVED
+    providers:
+      - local_private_byte_vault
+  reopen_and_verify_hash_and_size:
+    status: RESOLVED
+    providers:
+      - local_private_byte_vault
+  lock_invoice:
+    status: RESOLVED
+    providers:
+      - postgres_record_kernel
+  persist_publication_journal_and_source_transition:
+    status: RESOLVED
+    ownership: cabinet_semantic_contract
+    sources:
+      - examples/cabinet-backend/02_rules_archive_runtime_atomicity.md
+      - examples/cabinet-backend/60_model_closure_support.json
+    providers:
+      - postgres_record_kernel
+  commit_metadata:
+    status: RESOLVED
+    providers:
+      - postgres_record_kernel
+  atomically_publish_bytes:
+    status: RESOLVED
+    providers:
+      - local_private_byte_vault
+  reopen_and_verify_final_bytes:
+    status: RESOLVED
+    providers:
+      - local_private_byte_vault
+  return_per_file_result_and_source_status:
+    status: RESOLVED
+    ownership: cabinet_semantic_contract
+    sources:
+      - examples/cabinet-backend/02_rules.md
+      - examples/cabinet-backend/60_model_closure_support.json
+    providers:
+      - typed_schema_kernel
+      - postgres_record_kernel
+
+audit_binding:
+  status: RESOLVED
+  authority_decision: authority_kernel
+  durable_persistence: postgres_record_kernel
+  rule: >-
+    Authorization and effect evidence must be persisted as append-only audit data;
+    in-memory authority evidence alone is insufficient for a verified capability.
+
+disclosure_binding:
+  status: RESOLVED
+  policy_provider: authority_kernel
+  output_validation_provider: typed_schema_kernel
+  forbidden_output_values:
+    - storage_reference
+    - staging_reference
+    - final_reference
+    - raw_filesystem_path
+    - credentials
+
+machine_rules:
+  CAP-EXEC-REL-001:
+    statement: every_declared_deterministic_lowering_step_has_one_machine_declared_binding_or_explicit_blocking_gap
+    failure: block_capability_execution
+  CAP-EXEC-PRE-001:
+    statement: every_capability_precondition_has_a_machine_declared_enforcement_binding_or_explicit_blocking_gap
+    failure: block_capability_execution
+  CAP-EXEC-VERIFY-001:
+    statement: capability_execution_requires_verified_generic_host_and_no_unresolved_required_binding
+    failure: block_capability_execution
+  CAP-EXEC-SEM-001:
+    statement: execution_composition_must_not_choose_missing_product_or_validation_meaning
+    binds_generic_rule: GHL-SEM-001
+    failure: return_semantic_or_lowering_gap
+
+expected_readiness:
+  host_verification_gate: pass
+  capability_readiness_gate: block
+  blocking_gaps:
+    - verified_content_signature
+
+change_policy:
+  source_manifest_fingerprint_drift: block
+  deterministic_lowering_step_drift: block
+  undeclared_step_binding: block
+  unresolved_required_precondition: block
+  hidden_semantic_fallback: block
+  capability_execution_while_readiness_blocked: block
