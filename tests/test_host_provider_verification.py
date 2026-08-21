@@ -62,7 +62,12 @@ def test_authority_packet_uses_the_declared_authority_probe_vocabulary():
 def test_concrete_provider_and_probe_runner_match_reviewed_fingerprints():
     packets = load(PACKETS)["provider_packets"]
 
-    for provider_id in ("postgres_record_kernel", "local_private_byte_vault"):
+    for provider_id in (
+        "typed_schema_kernel",
+        "postgres_record_kernel",
+        "local_private_byte_vault",
+        "protected_configuration_kernel",
+    ):
         packet = packets[provider_id]
         implementation = packet["implementation"]
         probe_runner = packet["probe_runner"]
