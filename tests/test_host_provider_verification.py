@@ -76,21 +76,33 @@ def test_postgres_provider_and_probe_runner_match_reviewed_fingerprints():
     assert probe_runner["blocking_exit"] == 2
 
 
-def test_candidate_packets_and_profile_remain_unverified_without_executed_evidence():
+def test_provider_verification_states_are_evidence_backed():
     profile = load(PROFILE)
     packets = load(PACKETS)["provider_packets"]
 
-    for provider_id, packet in packets.items():
-        probes = packet["probes"]
+    assert profile["providers"]["postgres_record_kernel"]["verification"]["status"] == "PASS"
+    assert {
+        provider_id
+        for provider_id, provider in profile["providers"].items()
+        if provider["verification"]["status"] == "UNVERIFIED"
+    } == {
+        "authority_kernel",
+        "typed_schema_kernel",
+        "local_private_byte_vault",
+        "protected_configuration_kernel",
+    }
+
+    for provider_id, provider in profile["providers"].items():
+        probes = packets[provider_id]["probes"]
         assert probes
+        if provider["verification"]["status"] == "PASS":
+            assert {probe["status"] for probe in probes} == {"PASS"}
+            continue
+        assert provider["verification"] == {"required": True, "status": "UNVERIFIED"}
         assert {probe["status"] for probe in probes} == {"UNVERIFIED"}
-        assert profile["providers"][provider_id]["verification"] == {
-            "required": True,
-            "status": "UNVERIFIED",
-        }
 
 
-def test_pass_probe_requires_recorded_executed_evidence_if_promoted_later():
+def test_pass_probe_requires_recorded_executed_evidence():
     packets = load(PACKETS)["provider_packets"]
 
     for packet in packets.values():
@@ -111,3 +123,6 @@ def test_provider_pass_requires_all_packet_probes_pass():
         if provider["verification"]["status"] != "PASS":
             continue
         assert all(probe["status"] == "PASS" for probe in packets[provider_id]["probes"])
+        evidence = provider["verification"].get("evidence")
+        assert isinstance(evidence, list) and evidence
+        assert all((ROOT / item).is_file() for item in evidence)
