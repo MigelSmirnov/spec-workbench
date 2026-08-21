@@ -74,7 +74,7 @@ def test_concrete_provider_and_probe_runner_match_reviewed_fingerprints():
     assert postgres_probe["no_dsn_status"] == "UNVERIFIED"
 
 
-def test_provider_verification_states_are_evidence_backed():
+def test_all_candidate_provider_verification_states_are_evidence_backed_pass():
     profile = load(PROFILE)
     packets = load(PACKETS)["provider_packets"]
 
@@ -82,26 +82,21 @@ def test_provider_verification_states_are_evidence_backed():
         provider_id
         for provider_id, provider in profile["providers"].items()
         if provider["verification"]["status"] == "PASS"
-    } == {
-        "typed_schema_kernel",
-        "postgres_record_kernel",
-        "local_private_byte_vault",
-        "protected_configuration_kernel",
-    }
-    assert {
+    } == set(profile["providers"])
+    assert not {
         provider_id
         for provider_id, provider in profile["providers"].items()
         if provider["verification"]["status"] == "UNVERIFIED"
-    } == {"authority_kernel"}
+    }
 
     for provider_id, provider in profile["providers"].items():
         probes = packets[provider_id]["probes"]
         assert probes
-        if provider["verification"]["status"] == "PASS":
-            assert {probe["status"] for probe in probes} == {"PASS"}
-            continue
-        assert provider["verification"] == {"required": True, "status": "UNVERIFIED"}
-        assert {probe["status"] for probe in probes} == {"UNVERIFIED"}
+        assert {probe["status"] for probe in probes} == {"PASS"}
+        assert provider["verification"]["required"] is True
+        evidence = provider["verification"].get("evidence")
+        assert isinstance(evidence, list) and evidence
+        assert all((ROOT / item).is_file() for item in evidence)
 
 
 def test_pass_probe_requires_recorded_executed_evidence():
