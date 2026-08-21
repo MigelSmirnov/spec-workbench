@@ -45,6 +45,26 @@ jobs:
       - name: Run static Cabinet Web interop guards
         run: python -m pytest -q tests/test_cabinet_web_*.py
 
+      - name: Execute Cabinet Web revision acceptance canary
+        env:
+          SPEC_WORKBENCH_TEST_POSTGRES_DSN: postgresql://postgres:postgres@127.0.0.1:5432/postgres
+        run: |
+          python tools/cabinet_web_revision_accept_runtime_probe.py > cabinet-web-revision-accept-canary.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          report = json.loads(Path("cabinet-web-revision-accept-canary.json").read_text())
+          assert report["status"] == "pass"
+          assert [item["probe_id"] for item in report["results"]] == [
+              "SYNC-RUNTIME-001",
+              "SYNC-RUNTIME-002",
+              "SYNC-RUNTIME-003",
+              "SYNC-RUNTIME-004",
+          ]
+          assert {item["status"] for item in report["results"]} == {"PASS"}
+          PY
+
       - name: Execute no-MIME no-hash source attach canary
         env:
           SPEC_WORKBENCH_TEST_POSTGRES_DSN: postgresql://postgres:postgres@127.0.0.1:5432/postgres
@@ -69,6 +89,8 @@ jobs:
       - name: Upload canary evidence
         uses: actions/upload-artifact@v4
         with:
-          name: cabinet-web-source-attach-canary
-          path: cabinet-web-source-attach-canary.json
+          name: cabinet-web-interop-canary
+          path: |
+            cabinet-web-revision-accept-canary.json
+            cabinet-web-source-attach-canary.json
           if-no-files-found: error
