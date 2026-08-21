@@ -51,6 +51,7 @@ def test_candidate_archive_host_plan_resolves_relations_and_dependency_projectio
     } == {
         "postgres_record_kernel",
         "local_private_byte_vault",
+        "protected_configuration_kernel",
     }
     assert {
         provider_id
@@ -59,7 +60,6 @@ def test_candidate_archive_host_plan_resolves_relations_and_dependency_projectio
     } == {
         "authority_kernel",
         "typed_schema_kernel",
-        "protected_configuration_kernel",
     }
 
 
@@ -67,9 +67,7 @@ def test_missing_required_interface_relation_blocks_lowering():
     box, profile = definitions()
     broken = deepcopy(profile)
     broken["providers"]["postgres_record_kernel"]["satisfies"].remove("resource_locking")
-
     plan = compile_host_lowering(box, broken)
-
     assert plan.status == "unresolved"
     assert plan.verification_gate == "block"
     assert any(
@@ -86,9 +84,7 @@ def test_ambiguous_required_interface_relation_blocks_lowering():
         "runtime_dependencies": [],
         "verification": {"required": True, "status": "UNVERIFIED"},
     }
-
     plan = compile_host_lowering(box, broken)
-
     assert plan.status == "unresolved"
     gap = next(gap for gap in plan.gaps if gap.code == "AMBIGUOUS_IMPLEMENTATION_RELATION")
     assert gap.subject == "resource_locking"
@@ -99,9 +95,7 @@ def test_lost_psycopg_projection_blocks_lowering_before_execution():
     box, profile = definitions()
     broken = deepcopy(profile)
     broken["runtime_projection"]["dependencies"].remove("psycopg")
-
     plan = compile_host_lowering(box, broken)
-
     assert plan.status == "unresolved"
     assert plan.verification_gate == "block"
     assert any(
@@ -114,12 +108,8 @@ def test_required_skip_normalizes_to_unverified():
     box, profile = definitions()
     changed = deepcopy(profile)
     changed["providers"]["authority_kernel"]["verification"]["status"] = "SKIP"
-
     plan = compile_host_lowering(box, changed)
-    authority = next(
-        item for item in plan.provider_verification if item.provider_id == "authority_kernel"
-    )
-
+    authority = next(item for item in plan.provider_verification if item.provider_id == "authority_kernel")
     assert authority.declared_status == "SKIP"
     assert authority.verification_status == "UNVERIFIED"
     assert plan.verification_gate == "block"
@@ -130,9 +120,7 @@ def test_verification_gate_passes_only_when_every_required_provider_passes():
     verified = deepcopy(profile)
     for provider in verified["providers"].values():
         provider["verification"]["status"] = "PASS"
-
     plan = compile_host_lowering(box, verified)
-
     assert plan.status == "compiled"
     assert plan.verification_gate == "pass"
     assert {item.verification_status for item in plan.provider_verification} == {"PASS"}
@@ -141,7 +129,6 @@ def test_verification_gate_passes_only_when_every_required_provider_passes():
 def test_planner_declares_exact_contract_rules_and_reviewed_source_fingerprint():
     contract = load(CONTRACT_PATH)
     binding = contract["tool_bindings"]["host_lowering_plan"]
-
     assert set(binding["declared_rules"]) == set(IMPLEMENTED_HOST_LOWERING_RULES)
     assert binding["implementation"] == "tools/host_lowering_plan.py"
     assert binding["implementation_blob_sha"] == git_blob_sha(TOOL_PATH)
@@ -149,5 +136,4 @@ def test_planner_declares_exact_contract_rules_and_reviewed_source_fingerprint()
 
 def test_candidate_profile_contains_no_product_specific_dependencies():
     _, profile = definitions()
-
     assert profile["product_specific_dependencies"] == []
