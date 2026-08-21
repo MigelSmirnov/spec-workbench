@@ -34,6 +34,13 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
+      - name: Check out reviewed Cabinet Web contract
+        uses: actions/checkout@v4
+        with:
+          repository: MigelSmirnov/Cabinet_web
+          ref: main
+          path: Cabinet_web-reviewed
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -105,6 +112,25 @@ jobs:
           }]
           PY
 
+      - name: Execute trusted local capability bridge probe
+        env:
+          SPEC_WORKBENCH_TEST_POSTGRES_DSN: postgresql://postgres:postgres@127.0.0.1:5432/postgres
+          SPEC_WORKBENCH_ATTACH_VAULT_ROOT: ${{ runner.temp }}/cabinet-bridge-vault
+          SPEC_WORKBENCH_CABINET_WEB_ROOT: ${{ github.workspace }}/Cabinet_web-reviewed
+        run: |
+          python tools/local_capability_bridge_probe.py > local-capability-bridge-probe.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          report = json.loads(Path("local-capability-bridge-probe.json").read_text())
+          assert report["status"] == "pass"
+          assert [item["probe_id"] for item in report["results"]] == [
+              f"BRIDGE-{index:03d}" for index in range(1, 12)
+          ]
+          assert {item["status"] for item in report["results"]} == {"PASS"}
+          PY
+
       - name: Upload canary evidence
         uses: actions/upload-artifact@v4
         with:
@@ -113,4 +139,5 @@ jobs:
             cabinet-web-revision-accept-canary.json
             cabinet-web-source-attach-canary.json
             cabinet-web-e2e-canary.json
+            local-capability-bridge-probe.json
           if-no-files-found: error
