@@ -7,6 +7,7 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 AUDIT = ROOT / "experiments" / "cabinet-vault" / "cabinet_web_interop_audit_v0.yaml"
+EVIDENCE = ROOT / "experiments" / "cabinet-vault" / "CABINET_WEB_ATTACH_CANARY_RUNTIME_EVIDENCE.md"
 
 
 def load():
@@ -19,7 +20,8 @@ def test_audit_is_pinned_to_reviewed_cabinet_web_main_state():
     audit = load()
     source = audit["source_repository"]
 
-    assert audit["audit_version"] == "cabinet_web_backend_interop.v1"
+    assert audit["audit_version"] == "cabinet_web_backend_interop.v2"
+    assert audit["status"] == "ready_for_real_data_canary"
     assert source["repository"] == "MigelSmirnov/Cabinet_web"
     assert source["ref"] == "main"
     assert source["commit_sha"] == "d4419e3b948d49bd85a99a0941a350a73494cd27"
@@ -45,7 +47,7 @@ def test_audit_is_pinned_to_reviewed_cabinet_web_main_state():
     }
 
 
-def test_source_identity_and_sync_design_are_closed_while_real_canary_stays_blocked():
+def test_all_known_interop_findings_are_closed_but_real_data_canary_is_not_yet_executed():
     audit = load()
     gate = audit["gate"]
     findings = {item["id"]: item for item in audit["findings"]}
@@ -53,23 +55,17 @@ def test_source_identity_and_sync_design_are_closed_while_real_canary_stays_bloc
     assert gate["isolated_box_runtime_evidence"] == "PASS"
     assert gate["cabinet_web_source_identity_contract"] == "PASS"
     assert gate["cabinet_web_sync_contract_design"] == "PASS"
-    assert gate["cabinet_web_interop_gate"] == "block"
-    assert gate["real_cabinet_web_canary"] == "forbidden_until_blockers_closed"
-    assert gate["blocking_findings"] == ["CW-MEDIA-001", "CW-HASH-001"]
-
-    assert findings["CW-SOURCE-ID-001"]["severity"] == "PASS"
-    assert findings["CW-SYNC-001"]["severity"] == "PASS"
-    assert {
-        finding_id
-        for finding_id, finding in findings.items()
-        if finding["severity"] == "BLOCK"
-    } == {"CW-MEDIA-001", "CW-HASH-001"}
+    assert gate["cabinet_web_media_lowering_runtime"] == "PASS"
+    assert gate["cabinet_web_no_expected_hash_runtime"] == "PASS"
+    assert gate["cabinet_web_interop_gate"] == "pass"
+    assert gate["real_cabinet_web_data_canary"] == "allowed_not_executed"
+    assert gate["real_user_data_canary_executed"] is False
+    assert gate["blocking_findings"] == []
+    assert {finding["severity"] for finding in findings.values()} == {"PASS"}
 
 
 def test_source_identity_is_owned_by_upstream_card_contract_not_backend_adapter():
-    audit = load()
-    finding = next(item for item in audit["findings"] if item["id"] == "CW-SOURCE-ID-001")
-
+    finding = next(item for item in load()["findings"] if item["id"] == "CW-SOURCE-ID-001")
     assert finding["class"] == "UPSTREAM_CONTRACT_ALIGNED"
     assert finding["owner"] == "Cabinet_web/card-contracts"
     assert set(finding["forbidden_regression"]) == {
@@ -80,9 +76,7 @@ def test_source_identity_is_owned_by_upstream_card_contract_not_backend_adapter(
 
 
 def test_sync_contract_preserves_revision_and_authority_rules():
-    audit = load()
-    finding = next(item for item in audit["findings"] if item["id"] == "CW-SYNC-001")
-
+    finding = next(item for item in load()["findings"] if item["id"] == "CW-SYNC-001")
     assert finding["class"] == "INTEGRATION_CONTRACT_DEFINED"
     assert finding["severity"] == "PASS"
     assert finding["contract"]["machine"] == "experiments/cabinet-vault/cabinet_web_sync_contract_v1.yaml"
@@ -97,34 +91,36 @@ def test_sync_contract_preserves_revision_and_authority_rules():
     } == set(finding["preserved_rules"])
 
 
-def test_lifecycle_and_authority_split_are_already_aligned():
+def test_media_and_no_expected_hash_findings_are_pinned_to_executed_evidence():
     audit = load()
     findings = {item["id"]: item for item in audit["findings"]}
+    executed = audit["executed_interop_evidence"]
 
+    assert findings["CW-MEDIA-001"]["class"] == "PARSER_BACKED_LOWERING_VERIFIED"
+    assert findings["CW-MEDIA-001"]["severity"] == "PASS"
+    assert findings["CW-HASH-001"]["class"] == "NO_EXPECTED_HASH_RUNTIME_VERIFIED"
+    assert findings["CW-HASH-001"]["severity"] == "PASS"
+    assert executed["workflow"]["run_id"] == 32507028221
+    assert executed["workflow"]["conclusion"] == "success"
+    assert executed["artifact"]["artifact_id"] == 9455627318
+    assert executed["artifact"]["digest"] == "sha256:1f7bcc1cabd2e8d4f58cb8310b915fc47944385d6f53d20d27e81a726b11c33e"
+    assert set(executed["probes"].values()) == {"PASS"}
+    assert EVIDENCE.is_file()
+
+
+def test_lifecycle_and_authority_split_remain_aligned():
+    findings = {item["id"]: item for item in load()["findings"]}
     assert findings["CW-LIFECYCLE-001"]["class"] == "ALIGNED_SPLIT"
     assert findings["CW-LIFECYCLE-001"]["severity"] == "PASS"
     assert findings["CW-AUTHORITY-001"]["class"] == "ALIGNED"
     assert findings["CW-AUTHORITY-001"]["severity"] == "PASS"
 
 
-def test_media_mapping_cannot_use_kind_filename_or_caller_mime_as_signature_proof():
-    audit = load()
-    finding = next(item for item in audit["findings"] if item["id"] == "CW-MEDIA-001")
-
-    assert finding["class"] == "LOWERING_GAP"
-    assert set(finding["forbidden_resolution"]) == {
-        "map_photo_to_JPEG_unconditionally",
-        "trust_filename_extension",
-        "trust_caller_MIME_without_parser_validation",
-    }
-
-
-def test_external_fingerprint_refresh_is_required_before_interop_claim_changes():
-    audit = load()
-    policy = audit["change_policy"]
-
+def test_external_fingerprint_and_fact_ownership_guards_remain_fail_closed():
+    policy = load()["change_policy"]
     assert policy["Cabinet_web_source_contract_change_requires_connector_review"] is True
     assert policy["source_repository_fingerprint_drift"] == "block_and_refresh_audit"
     assert policy["backend_adapter_may_not_resolve_upstream_contract_drift"] is True
     assert policy["synchronization_transport_may_not_own_business_semantics"] is True
-    assert policy["real_Cabinet_web_data_may_not_enter_box_until_interop_gate_passes"] is True
+    assert policy["detected_media_and_local_hash_may_not_become_Cabinet_web_facts_without_new_Card_revision"] is True
+    assert policy["real_Cabinet_web_data_may_enter_box_only_when_interop_gate_passes"] is True

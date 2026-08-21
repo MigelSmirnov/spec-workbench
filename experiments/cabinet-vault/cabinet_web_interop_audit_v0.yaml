@@ -1,5 +1,5 @@
-audit_version: cabinet_web_backend_interop.v1
-status: blocked
+audit_version: cabinet_web_backend_interop.v2
+status: ready_for_real_data_canary
 
 purpose: >-
   Determine whether the verified Cabinet local box can consume the currently
@@ -47,17 +47,34 @@ observed_boundary:
     - Cabinet_web_domain_imports_backend_runtime
     - backend_rewrites_confirmed_Invoice_Card_facts
 
+executed_interop_evidence:
+  contract: experiments/cabinet-vault/cabinet_web_source_attach_canary_v1.yaml
+  record: experiments/cabinet-vault/CABINET_WEB_ATTACH_CANARY_RUNTIME_EVIDENCE.md
+  workflow:
+    name: Cabinet Web attach canary
+    run_id: 32507028221
+    run_number: 2
+    head_sha: ca542b9b3dd60112f8cdd20c532f8a6f02c17d64
+    conclusion: success
+  artifact:
+    artifact_id: 9455627318
+    digest: sha256:1f7bcc1cabd2e8d4f58cb8310b915fc47944385d6f53d20d27e81a726b11c33e
+  probes:
+    WEB-ATTACH-001: PASS
+    WEB-ATTACH-002: PASS
+    WEB-ATTACH-003: PASS
+    WEB-ATTACH-004: PASS
+
 findings:
   - id: CW-SOURCE-ID-001
     class: UPSTREAM_CONTRACT_ALIGNED
     severity: PASS
     owner: Cabinet_web/card-contracts
     statement: >-
-      Cabinet_web main now defines source.source_id as stable identity within the
-      owning Invoice Card. Invoice Card V1 requires it, the deterministic validator
-      enforces its shape, invoice-source payment evidence must reference it, draft
-      preparation assigns or preserves it, and source metadata updates cannot
-      replace it.
+      Cabinet_web main defines source.source_id as stable identity within the owning
+      Invoice Card. Invoice Card V1 requires it, invoice-source payment evidence
+      references it, draft preparation assigns or preserves it, and source metadata
+      updates cannot replace it.
     accepted_evidence:
       - Cabinet_web PR 16 merged as d4419e3b948d49bd85a99a0941a350a73494cd27
       - domain and storage documents state stable source identity independent of byte availability
@@ -74,7 +91,7 @@ findings:
     severity: PASS
     owner: Cabinet_web_to_local_box_integration
     statement: >-
-      A transport-independent v1 synchronization contract now defines one exact
+      A transport-independent v1 synchronization contract defines one exact
       confirmed Card revision delivery, canonical content-hash verification, Git
       provenance, retry identity, base-revision reconciliation, immutable local
       acceptance semantics and a bounded receipt without transferring ownership.
@@ -91,71 +108,74 @@ findings:
       - Card_acceptance_does_not_claim_source_bytes_are_attached
 
   - id: CW-MEDIA-001
-    class: LOWERING_GAP
-    severity: BLOCK
+    class: PARSER_BACKED_LOWERING_VERIFIED
+    severity: PASS
     owner: Cabinet_web_to_local_box_integration
     statement: >-
-      Cabinet_web source.kind distinguishes photo/pdf/message/scan/other but does
-      not provide exact MIME identity. The verified box content validator requires
-      bounded parsing of one accepted exact media type and may not treat filename,
-      extension, source.kind, or caller MIME as sufficient proof of JPEG versus PNG
-      versus PDF.
-    resolution_required: >-
-      Define and execute a bounded parser-backed content-type relation for source
-      bytes that produces the exact accepted media type independently of source.kind.
-    forbidden_resolution:
+      Exact source-byte media identity is derived only from bounded parser evidence.
+      Cabinet_web source.kind, filename, extension and caller MIME do not choose the
+      parser. A runtime canary proved the no-predeclared-MIME path through the local
+      box while leaving the confirmed Card unchanged.
+    contract: experiments/cabinet-vault/cabinet_web_source_media_lowering_v1.yaml
+    runtime_evidence: experiments/cabinet-vault/CABINET_WEB_ATTACH_CANARY_RUNTIME_EVIDENCE.md
+    forbidden_regression:
       - map_photo_to_JPEG_unconditionally
       - trust_filename_extension
       - trust_caller_MIME_without_parser_validation
+      - write_detected_media_type_into_confirmed_Card
 
   - id: CW-HASH-001
-    class: VERIFICATION_GAP
-    severity: BLOCK
+    class: NO_EXPECTED_HASH_RUNTIME_VERIFIED
+    severity: PASS
     owner: Cabinet_web_to_local_box_integration
     statement: >-
-      Cabinet_web Invoice Card V1 source facts do not carry an expected binary
-      SHA-256. The sync v1 contract explicitly permits that absence and keeps a
-      locally calculated hash as backend evidence only, but the real no-expected-
-      hash attachment path still lacks executed Cabinet_web interop evidence.
-    resolution_required:
-      - execute_no_expected_hash_source_attachment_against_accepted_sync_revision
-      - prove_local_calculated_hash_becomes_backend_storage_evidence
-      - prove_confirmed_Card_document_and_card_content_hash_remain_unchanged
-      - prove_replay_conflict_and_recovery_hold
+      Cabinet_web Invoice Card V1 may omit an expected binary SHA-256. The executed
+      runtime canary proved that the local box calculates the source-byte SHA-256,
+      stores it as local custody evidence, preserves null durable upstream hash
+      expectation, preserves the confirmed Card document/content hash, handles
+      idempotent replay, rejects conflicting bytes and recovers after interrupted
+      publication.
+    runtime_evidence: experiments/cabinet-vault/CABINET_WEB_ATTACH_CANARY_RUNTIME_EVIDENCE.md
+    forbidden_regression:
+      - write_calculated_hash_into_confirmed_Card
+      - convert_local_hash_into_fabricated_upstream_expectation
+      - allow_conflicting_bytes_to_replace_source_identity
 
   - id: CW-LIFECYCLE-001
     class: ALIGNED_SPLIT
     severity: PASS
     owner: shared_boundary
     statement: >-
-      Cabinet_web invoice_attach_source is a draft Card metadata mutation. The
-      local box invoice.source.attach is a durable local byte attachment for an
-      accepted confirmed Card revision. These are distinct operations and are
-      connected by synchronization rather than mapped one-to-one.
+      Cabinet_web invoice_attach_source is a draft Card metadata mutation. The local
+      box invoice.source.attach is a durable local byte attachment for an accepted
+      confirmed Card revision. Synchronization connects them without collapsing the
+      lifecycle operations.
 
   - id: CW-AUTHORITY-001
     class: ALIGNED
     severity: PASS
     owner: shared_boundary
     statement: >-
-      Cabinet_web/GitHub remains the authority for Invoice Card facts and revision
-      history, while the local box owns local archive authority, source bytes,
-      effects, recovery, and audit. The backend preserves the exact confirmed Card
-      revision and does not import its database model into Cabinet_web.
+      Cabinet_web/GitHub remains authority for Invoice Card facts and revision
+      history, while the local box owns archive authority, source bytes, effects,
+      recovery and audit. The backend preserves exact confirmed Card revisions and
+      does not import its database model into Cabinet_web.
 
 gate:
   isolated_box_runtime_evidence: PASS
   cabinet_web_source_identity_contract: PASS
   cabinet_web_sync_contract_design: PASS
-  cabinet_web_interop_gate: block
-  real_cabinet_web_canary: forbidden_until_blockers_closed
-  blocking_findings:
-    - CW-MEDIA-001
-    - CW-HASH-001
+  cabinet_web_media_lowering_runtime: PASS
+  cabinet_web_no_expected_hash_runtime: PASS
+  cabinet_web_interop_gate: pass
+  real_cabinet_web_data_canary: allowed_not_executed
+  real_user_data_canary_executed: false
+  blocking_findings: []
 
 change_policy:
   Cabinet_web_source_contract_change_requires_connector_review: true
   source_repository_fingerprint_drift: block_and_refresh_audit
   backend_adapter_may_not_resolve_upstream_contract_drift: true
   synchronization_transport_may_not_own_business_semantics: true
-  real_Cabinet_web_data_may_not_enter_box_until_interop_gate_passes: true
+  detected_media_and_local_hash_may_not_become_Cabinet_web_facts_without_new_Card_revision: true
+  real_Cabinet_web_data_may_enter_box_only_when_interop_gate_passes: true

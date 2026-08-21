@@ -1,0 +1,130 @@
+contract_id: cabinet_web_source_attach_canary.v1
+status: verified_execution_case
+purpose: >-
+  Verify the Cabinet_web-compatible source attachment case where the accepted
+  confirmed Invoice Card owns source identity but contains neither an exact binary
+  media type nor an expected binary SHA-256. Parser-derived media/hash evidence
+  remains local-box evidence and does not rewrite confirmed Card facts.
+
+accepted_semantics:
+  sources:
+    - examples/cabinet-backend/02_rules.md#A3
+    - experiments/cabinet-vault/cabinet_web_sync_contract_v1.yaml
+    - experiments/cabinet-vault/cabinet_web_source_media_lowering_v1.yaml
+  rules:
+    - source_id_is_owned_by_Cabinet_web_Card
+    - Card_acceptance_and_source_byte_attachment_are_distinct
+    - missing_expected_binary_hash_is_allowed
+    - locally_calculated_hash_becomes_backend_storage_evidence_only
+    - exact_media_type_requires_bounded_parser_evidence
+    - confirmed_Card_document_and_content_hash_are_immutable_during_attachment
+
+implementation:
+  disposable_adapter:
+    path: tools/cabinet_web_source_attach_adapter.py
+    role: >-
+      Identify exact media/hash evidence from caller-owned bytes, derive an
+      immutable ContentReference from those observed bytes, and invoke the existing
+      authority-enforced invoice.source.attach runtime without changing its code.
+  parser_identification:
+    path: tools/bounded_media_identification.py
+  existing_verified_attach_runtime:
+    path: tools/invoice_source_attach_runtime.py
+    blob_sha: 4517dd23f68a81a065823941d686fec4026be433
+    must_remain_unmodified_by_this_canary: true
+  executable_probe:
+    path: tools/cabinet_web_source_attach_canary_probe.py
+
+input_case:
+  accepted_Card:
+    status: confirmed
+    source:
+      source_id: required
+      kind: non_authoritative_for_exact_media
+      expected_binary_sha256: absent
+      exact_media_type: absent
+  local_file:
+    source_id: exact_Card_source_id
+    content_bytes: required
+    filename: metadata_only
+    caller_media_type: absent
+    caller_expected_hash: absent
+
+lowering_rules:
+  - parser_identification_runs_only_over_closed_accepted_media_set
+  - zero_parser_matches_reject
+  - multiple_parser_matches_reject
+  - exactly_one_parser_match_yields_local_media_hash_size_parser_evidence
+  - derived_ContentReference_is_created_after_observing_bytes
+  - durable_expected_source_hash_remains_null_when_Card_has_no_hash
+  - durable_expected_source_media_type_remains_null_when_Card_has_no_exact_media
+  - per_call_detected_media_may_satisfy_current_runtime_equality_only_when_durable_media_is_null
+  - non_null_durable_media_is_never_overridden
+  - existing_attach_runtime_revalidates_bytes_before_effect
+
+required_runtime_probes:
+  WEB-ATTACH-001:
+    proves:
+      - no_MIME_no_hash_source_attaches_successfully
+      - parser_detected_media_persisted_as_local_source_evidence
+      - locally_calculated_hash_persisted_as_local_source_evidence
+      - durable_upstream_expectations_remain_null
+      - confirmed_Card_document_and_revision_hash_unchanged
+  WEB-ATTACH-002:
+    proves:
+      - equal_bytes_replay_is_idempotent
+      - different_bytes_same_source_id_conflict
+  WEB-ATTACH-003:
+    proves:
+      - crash_after_metadata_commit_leaves_recoverable_state
+      - startup_recovery_converges_on_verified_available_source
+      - recovery_does_not_change_confirmed_Card
+  WEB-ATTACH-004:
+    proves:
+      - unrecognized_bytes_fail_before_publication_effect
+
+runtime_environment:
+  database:
+    provider: PostgreSQL
+    CI_service_is_test_only: true
+  byte_vault:
+    provider: local_private_byte_vault
+    CI_root: runner_temp_private_test_directory
+  protected_configuration_required: true
+
+verification:
+  status: PASS
+  executed_on: "2026-08-21"
+  workflow:
+    name: Cabinet Web attach canary
+    run_id: 32507028221
+    run_number: 2
+    head_branch: agent/cabinet-web-attach-canary
+    head_sha: ca542b9b3dd60112f8cdd20c532f8a6f02c17d64
+    conclusion: success
+  artifact:
+    artifact_id: 9455627318
+    name: cabinet-web-source-attach-canary
+    digest: sha256:1f7bcc1cabd2e8d4f58cb8310b915fc47944385d6f53d20d27e81a726b11c33e
+  evidence_record: experiments/cabinet-vault/CABINET_WEB_ATTACH_CANARY_RUNTIME_EVIDENCE.md
+  probes:
+    WEB-ATTACH-001: PASS
+    WEB-ATTACH-002: PASS
+    WEB-ATTACH-003: PASS
+    WEB-ATTACH-004: PASS
+
+interop_gate_after_execution:
+  CW-MEDIA-001: PASS
+  CW-HASH-001: PASS
+  cabinet_web_interop_gate: pass
+  real_Cabinet_web_data_canary: allowed_not_executed
+  real_user_data_canary_executed: false
+
+forbidden_shortcuts:
+  - write_detected_media_type_into_confirmed_Card
+  - write_calculated_hash_into_confirmed_Card
+  - treat_filename_extension_as_media_proof
+  - treat_source_kind_as_media_proof
+  - treat_caller_MIME_as_media_proof
+  - silently_mutate_durable_upstream_expectations
+  - relabel_old_attach_runtime_evidence_as_new_canary_evidence
