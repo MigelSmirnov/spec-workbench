@@ -32,33 +32,17 @@ def git_blob_sha(path: Path) -> str:
     return hashlib.sha1(header + payload).hexdigest()
 
 
-def test_candidate_archive_host_plan_resolves_relations_and_dependency_projection():
+def test_candidate_archive_host_plan_resolves_relations_dependencies_and_verification():
     box, profile = definitions()
     plan = compile_host_lowering(box, profile)
 
     assert plan.status == "compiled"
-    assert plan.verification_gate == "block"
+    assert plan.verification_gate == "pass"
     assert plan.gaps == ()
     assert set(plan.runtime_dependencies) == {"pydantic", "psycopg"}
     assert {item.requirement for item in plan.relations} == set(box["host_requirements"])
     assert {item.provider_id for item in plan.provider_verification} == set(profile["providers"])
-
-    verification = {item.provider_id: item.verification_status for item in plan.provider_verification}
-    assert {
-        provider_id
-        for provider_id, status in verification.items()
-        if status == "PASS"
-    } == {
-        "typed_schema_kernel",
-        "postgres_record_kernel",
-        "local_private_byte_vault",
-        "protected_configuration_kernel",
-    }
-    assert {
-        provider_id
-        for provider_id, status in verification.items()
-        if status == "UNVERIFIED"
-    } == {"authority_kernel"}
+    assert {item.verification_status for item in plan.provider_verification} == {"PASS"}
 
 
 def test_missing_required_interface_relation_blocks_lowering():
@@ -102,7 +86,7 @@ def test_lost_psycopg_projection_blocks_lowering_before_execution():
     )
 
 
-def test_required_skip_normalizes_to_unverified():
+def test_required_skip_normalizes_to_unverified_and_blocks_verified_profile():
     box, profile = definitions()
     changed = deepcopy(profile)
     changed["providers"]["authority_kernel"]["verification"]["status"] = "SKIP"
@@ -115,6 +99,11 @@ def test_required_skip_normalizes_to_unverified():
 
 def test_verification_gate_passes_only_when_every_required_provider_passes():
     box, profile = definitions()
+    broken = deepcopy(profile)
+    broken["providers"]["authority_kernel"]["verification"]["status"] = "UNVERIFIED"
+    plan = compile_host_lowering(box, broken)
+    assert plan.verification_gate == "block"
+
     verified = deepcopy(profile)
     for provider in verified["providers"].values():
         provider["verification"]["status"] = "PASS"
