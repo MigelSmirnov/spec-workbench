@@ -74,7 +74,7 @@ def test_local_checkout_adapter_invokes_pinned_web_validator_as_disposable_bound
     assert "invoice_validation.py" in text
     assert "subprocess.run" in text
     assert "git_blob_sha" in text
-    assert "git", "-C"
+    assert '["git", "-C", str(root)' in text
     assert "build_delivery_from_checkout" in text
 
 
