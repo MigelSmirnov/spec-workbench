@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 """Typed boundary models and safe status helpers for the first source-attach runtime case."""
-from __future__ import annotations
 
 from datetime import datetime, timezone
 from typing import Any, Mapping, Optional
