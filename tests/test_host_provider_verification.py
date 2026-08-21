@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 
 import yaml
@@ -15,6 +16,12 @@ def load(path: Path):
     value = yaml.safe_load(path.read_text(encoding="utf-8"))
     assert isinstance(value, dict)
     return value
+
+
+def git_blob_sha(path: Path) -> str:
+    payload = path.read_bytes()
+    header = f"blob {len(payload)}\0".encode()
+    return hashlib.sha1(header + payload).hexdigest()
 
 
 def test_every_candidate_provider_has_exactly_one_verification_packet():
@@ -50,6 +57,23 @@ def test_authority_packet_uses_the_declared_authority_probe_vocabulary():
     packet_probes = {item["id"] for item in packets["authority_kernel"]["probes"]}
 
     assert packet_probes == contract_probes
+
+
+def test_postgres_provider_and_probe_runner_match_reviewed_fingerprints():
+    packet = load(PACKETS)["provider_packets"]["postgres_record_kernel"]
+
+    implementation = packet["implementation"]
+    probe_runner = packet["probe_runner"]
+
+    implementation_path = ROOT / implementation["path"]
+    probe_path = ROOT / probe_runner["path"]
+
+    assert git_blob_sha(implementation_path) == implementation["blob_sha"]
+    assert git_blob_sha(probe_path) == probe_runner["blob_sha"]
+    assert probe_runner["dsn_environment"] == "SPEC_WORKBENCH_TEST_POSTGRES_DSN"
+    assert probe_runner["no_dsn_status"] == "UNVERIFIED"
+    assert probe_runner["successful_exit"] == 0
+    assert probe_runner["blocking_exit"] == 2
 
 
 def test_candidate_packets_and_profile_remain_unverified_without_executed_evidence():
