@@ -89,7 +89,14 @@ jobs:
               item["provider_id"]: item["verification_status"]
               for item in plan["provider_verification"]
           }
-          assert verification["postgres_record_kernel"] == "PASS"
+          assert {
+              provider_id
+              for provider_id, status in verification.items()
+              if status == "PASS"
+          } == {
+              "postgres_record_kernel",
+              "local_private_byte_vault",
+          }
           assert {
               provider_id
               for provider_id, status in verification.items()
@@ -97,7 +104,6 @@ jobs:
           } == {
               "authority_kernel",
               "typed_schema_kernel",
-              "local_private_byte_vault",
               "protected_configuration_kernel",
           }
           PY
@@ -130,6 +136,26 @@ jobs:
           } == {"UNVERIFIED"}
           PY
 
+      - name: Execute byte vault provider probe
+        run: |
+          python tools/local_private_byte_vault_probe.py > local-private-byte-vault-probe.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          report = json.loads(Path("local-private-byte-vault-probe.json").read_text())
+          assert report["status"] == "pass"
+          assert {item["status"] for item in report["results"]} == {"PASS"}
+          assert {item["probe_id"] for item in report["results"]} == {
+              "VAULT-PROBE-001",
+              "VAULT-PROBE-002",
+              "VAULT-PROBE-003",
+              "VAULT-PROBE-004",
+              "VAULT-PROBE-005",
+              "VAULT-PROBE-006",
+          }
+          PY
+
       - name: Check patch integrity
         run: git diff --check HEAD^ HEAD
 
@@ -141,4 +167,5 @@ jobs:
             cabinet-boundary-audit.json
             generic-host-plan.json
             postgres-record-kernel-probe.json
+            local-private-byte-vault-probe.json
           if-no-files-found: error
