@@ -7,10 +7,9 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 READINESS = ROOT / "experiments" / "cabinet-vault" / "cabinet_web_real_data_canary_readiness_v1.yaml"
-HANDOFF = ROOT / "experiments" / "cabinet-vault" / "NEXT_SESSION_HANDOFF.md"
-LOCAL_HANDOFF = ROOT / "experiments" / "cabinet-vault" / "LOCAL_AGENT_REAL_DATA_CANARY_HANDOFF.md"
-PREFLIGHT_EVIDENCE = ROOT / "experiments" / "cabinet-vault" / "REAL_DATA_CANARY_PREFLIGHT_EVIDENCE_2026-08-21.md"
-HUMAN_AUDIT = ROOT / "experiments" / "cabinet-vault" / "CABINET_WEB_COMPATIBILITY_AUDIT.md"
+F260001_TASK = ROOT / "experiments" / "cabinet-vault" / "LOCAL_AGENT_F260001_REAL_CANARY_TASK.md"
+BRIDGE_TASK = ROOT / "experiments" / "cabinet-vault" / "LOCAL_AGENT_AUTHORIZED_CAPABILITY_BRIDGE_TASK.md"
+CONNECTION_EVIDENCE = ROOT / "experiments" / "cabinet-vault" / "F260001_REAL_CANARY_CONNECTION_PREFLIGHT_EVIDENCE_2026-08-21.md"
 
 
 def load():
@@ -19,105 +18,81 @@ def load():
     return value
 
 
-def test_interop_runtime_is_ready_but_real_canary_is_blocked_only_by_missing_real_candidate():
+def test_real_candidate_is_ready_but_authorized_local_connection_is_the_only_current_block():
     readiness = load()
-    assert readiness["readiness_id"] == "cabinet_web_real_data_canary.v3"
-    assert readiness["status"] == "blocked_missing_real_candidate"
-    assert readiness["interop_prerequisites"] == {
-        "cabinet_web_source_identity_contract": "PASS",
-        "cabinet_web_sync_contract_design": "PASS",
-        "cabinet_web_sync_acceptance_runtime": "PASS",
-        "cabinet_web_same_invoice_e2e_runtime": "PASS",
-        "cabinet_web_media_lowering_runtime": "PASS",
-        "cabinet_web_no_expected_hash_runtime": "PASS",
-        "cabinet_web_interop_gate": "pass",
-        "evidence": [
-            "experiments/cabinet-vault/cabinet_web_interop_audit_v0.yaml",
-            "experiments/cabinet-vault/CABINET_WEB_SYNC_RUNTIME_EVIDENCE.md",
-            "experiments/cabinet-vault/CABINET_WEB_ATTACH_CANARY_RUNTIME_EVIDENCE.md",
-        ],
+    assert readiness["readiness_id"] == "cabinet_web_real_data_canary.v6"
+    assert readiness["status"] == "blocked_authorized_backend_connection_unavailable"
+    assert readiness["real_candidate"]["readiness"] == "PASS"
+    assert readiness["blocking_condition"] == {
+        "id": "CW-LOCAL-CONNECTION-001",
+        "class": "AUTHORIZED_CAPABILITY_TRANSPORT_UNAVAILABLE",
+        "statement": readiness["blocking_condition"]["statement"],
+        "owner": "local_box_host_wiring",
+        "severity": "BLOCK",
     }
-    assert readiness["blocking_condition"]["id"] == "REAL-CANARY-DATA-001"
-    assert readiness["blocking_condition"]["class"] == "MISSING_REAL_INPUT"
 
 
-def test_reviewed_cabinet_web_main_has_no_invoice_card_candidate():
+def test_f260001_is_pinned_to_merged_cabinet_web_main_revision():
     readiness = load()
     source = readiness["source_repository"]
-    inventory = readiness["inventory"]
+    candidate = readiness["real_candidate"]
 
-    assert source == {
-        "repository": "MigelSmirnov/Cabinet_web",
-        "ref": "main",
-        "commit_sha": "d4419e3b948d49bd85a99a0941a350a73494cd27",
-        "head_verification": "identical_to_reviewed_commit",
-    }
-    assert inventory["observed_card_directories"] == [
-        "client-uliana-kolpacheva-20260815",
-        "project-uliana-floor-20260815",
-        "provider-andrey-bam-20260801",
-        "provider-santo-grua-20260815",
-    ]
-    assert inventory["invoice_card_directories"] == []
-    assert inventory["confirmed_invoice_candidates"] == []
-    assert inventory["exact_invoice_source_byte_candidates"] == []
+    assert source["repository"] == "MigelSmirnov/Cabinet_web"
+    assert source["ref"] == "main"
+    assert source["current_head_commit_sha"] == "d3fac8e5d2b85c12904cba24060717b84e2757c2"
+    assert source["normalization_pull_request"] == 17
+    assert source["contract_fingerprints_changed"] is False
+
+    assert candidate["invoice_id"] == "invoice-f260001"
+    assert candidate["invoice_card_path"] == "data/cards/invoice-f260001/card.json"
+    assert candidate["status"] == "confirmed"
+    assert candidate["source_id"] == "source-f260001"
+    assert candidate["source_kind"] == "pdf"
+    assert candidate["card_content_hash"] == "sha256:e52e9d1fe3ff273b1510fd45d516daf576df4404320f75db4dfabc51c8f8a0cf"
+    assert candidate["source_git_commit_sha"] == "386134cbb28e3689fec8ffb49815db9416ebe9a8"
+    assert candidate["real_pdf_local_sha256"] == "sha256:b1ad4b4f15ddcba8c91f0f2d17f8a45ab58fd4febcd1064360aed758f14dec66"
+    assert candidate["validation"] == {"status": "PASS", "errors": 0, "warnings": 0}
 
 
-def test_local_agent_preflight_passed_fail_closed_without_backend_effects():
+def test_latest_local_preflight_stopped_before_every_backend_effect():
     preflight = load()["latest_local_preflight"]
-    assert preflight["result"] == "PASS_FAIL_CLOSED_NO_ELIGIBLE_INVOICE"
-    assert preflight["cabinet_web_commit"] == "d4419e3b948d49bd85a99a0941a350a73494cd27"
-    assert preflight["spec_workbench_commit"] == "89b81a2488c809dd93556e97ec6d11508ffdbd66"
-    assert preflight["tracked_invoice_count"] == 0
-    assert preflight["confirmed_invoice_count"] == 0
-    assert preflight["revision_receipt_outcome"] == "not_run_no_eligible_invoice"
+    assert preflight["result"] == "PASS_FAIL_CLOSED_AUTHORIZED_CONNECTION_UNAVAILABLE"
+    assert preflight["delivery_created"] is False
     assert preflight["backend_invocation_performed"] is False
     assert preflight["postgres_effect_performed"] is False
     assert preflight["source_attachment_performed"] is False
-    assert preflight["audit_acceptance_present"] is False
-    assert preflight["audit_attachment_present"] is False
-    assert preflight["unrelated_dirty_worktree_file"] == {
-        "path": "tests/test_invoice_validation.py",
-        "touched_by_canary": False,
-        "affected_data_cards": False,
-    }
-    assert preflight["evidence"] == "experiments/cabinet-vault/REAL_DATA_CANARY_PREFLIGHT_EVIDENCE_2026-08-21.md"
-    assert PREFLIGHT_EVIDENCE.is_file()
+    assert preflight["parser_validation_performed"] is False
+    assert preflight["acceptance_audit_present"] is False
+    assert preflight["attachment_audit_present"] is False
+    assert preflight["card_unchanged"] is True
+    assert CONNECTION_EVIDENCE.is_file()
 
 
-def test_test_dirty_or_branch_only_data_cannot_be_relabelled_as_real_data_canary():
-    forbidden = set(load()["forbidden_substitutes"])
-    assert forbidden == {
-        "tests_fixture_as_real_user_data",
-        "synthetic_Card_as_real_user_data",
-        "unconfirmed_draft_as_canary_target",
-        "uncommitted_Card_as_sync_revision",
-        "source_bytes_without_exact_Card_source_identity",
-        "branch_only_invoice_not_accepted_into_Cabinet_web_main",
-        "bypass_reviewed_Cabinet_web_validator",
-    }
+def test_connection_repair_preserves_both_executor_authority_boundaries():
+    repair = load()["required_connection_repair"]
+    assert "preserve_SYNCHRONIZATION_BOUNDARY_for_invoice.archive.accept_revision" in repair["authority"]
+    assert "preserve_LOCAL_AGENT_BOUNDARY_for_invoice.source.attach" in repair["authority"]
+    assert "grant_resource_scope_exactly_invoice:invoice-f260001_for_the_canary" in repair["authority"]
+    assert "use_verified_PostgresRecordKernel" in repair["providers"]
+    assert "use_verified_LocalPrivateByteVault" in repair["providers"]
+    assert "use_ProtectedConfigurationKernel_or_equivalent_host_owned_secret_resolution" in repair["providers"]
 
 
-def test_local_agent_handoff_requires_capability_path_not_direct_database_mutation():
-    text = LOCAL_HANDOFF.read_text(encoding="utf-8")
+def test_no_direct_database_preflight_read_is_required_for_first_delivery():
+    readiness = load()
+    rule = readiness["base_revision_rule"]
+    assert "base_backend_content_hash may be null" in rule
+    assert "reconciliation_required" in rule
+    assert "perform no overwrite" in rule
+
+
+def test_bridge_task_is_narrow_and_forbids_authority_bypass():
+    text = BRIDGE_TASK.read_text(encoding="utf-8")
     assert "invoice.archive.accept_revision" in text
-    assert "cabinet-backend-sync-receipt-v1" in text
     assert "invoice.source.attach" in text
-    assert "Do not bypass the capability by writing PostgreSQL records directly" in text
-    assert "real-canary-" in text
-    assert "source.source_id" in text
-
-
-def test_human_handoff_and_compatibility_audit_no_longer_claim_old_interop_blocks():
-    handoff = HANDOFF.read_text(encoding="utf-8")
-    audit = HUMAN_AUDIT.read_text(encoding="utf-8")
-
-    assert "cabinet_web_interop_gate           PASS" in handoff
-    assert "ALLOWED_NOT_EXECUTED" in handoff
-    assert "blocked_missing_real_candidate" not in handoff  # prose should stay human-readable
-    assert "Cabinet_web interoperability         PASS" in audit
-    assert "ALLOWED, NOT EXECUTED" in audit
-    assert "CW-SOURCE-ID-001 — PASS" in audit
-    assert "CW-SYNC-001 — PASS" in audit
-    assert "CW-MEDIA-001 — PASS" in audit
-    assert "CW-HASH-001 — PASS" in audit
+    assert "local_tool" in text
+    assert "Do not route the real canary through `cabinet_host.py` or `cabinet_graph_host.py`" in text
+    assert "The bridge must not call protected executor internals that bypass `AuthorityKernel.invoke()`" in text
+    assert "invoice:invoice-f260001" in text
+    assert "Do not add arbitrary SQL" in text
+    assert F260001_TASK.is_file()
