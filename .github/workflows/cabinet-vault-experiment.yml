@@ -40,7 +40,8 @@ jobs:
             tests/test_protected_configuration_kernel.py \
             tests/test_authority_kernel.py \
             tests/test_capability_execution_readiness.py \
-            tests/test_bounded_content_validation_kernel.py
+            tests/test_bounded_content_validation_kernel.py \
+            tests/test_invoice_source_attach_runtime.py
 
       - name: Enforce declared box language
         run: python tools/box_language_audit.py
@@ -85,22 +86,34 @@ jobs:
           assert plan["verification_gate"] == "pass"
           assert plan["gaps"] == []
           assert set(plan["runtime_dependencies"]) == {"pydantic", "psycopg"}
-          assert {
-              item["verification_status"]
-              for item in plan["provider_verification"]
-          } == {"PASS"}
+          assert {item["verification_status"] for item in plan["provider_verification"]} == {"PASS"}
           assert len(plan["provider_verification"]) == 5
           PY
 
-      - name: Prove source attach waits for selected content validator evidence
-        shell: bash
+      - name: Compile source attach capability readiness
         run: |
-          set +e
           python tools/capability_execution_readiness.py \
             experiments/cabinet-vault/cabinet_backend_box_v0.yaml \
             experiments/cabinet-vault/generic_host_profile_candidate_v0.yaml \
             experiments/cabinet-vault/invoice_source_attach_execution_contract_v0.yaml \
             --json > invoice-source-attach-readiness.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          report = json.loads(Path("invoice-source-attach-readiness.json").read_text())
+          assert report["status"] == "ready"
+          assert report["host_verification_gate"] == "pass"
+          assert report["capability_readiness_gate"] == "pass"
+          assert report["blocking_gaps"] == []
+          PY
+
+      - name: Prove source attach runtime stays unverified without protected runtime config
+        shell: bash
+        run: |
+          set +e
+          env -u SPEC_WORKBENCH_TEST_POSTGRES_DSN -u SPEC_WORKBENCH_ATTACH_VAULT_ROOT \
+            python tools/invoice_source_attach_runtime_probe.py > invoice-source-attach-runtime-probe.json
           code=$?
           set -e
           test "$code" = "2"
@@ -108,14 +121,10 @@ jobs:
           import json
           from pathlib import Path
 
-          report = json.loads(Path("invoice-source-attach-readiness.json").read_text())
-          assert report["status"] == "blocked"
-          assert report["host_verification_gate"] == "pass"
-          assert report["capability_readiness_gate"] == "block"
-          gaps = report["blocking_gaps"]
-          assert len(gaps) == 1
-          assert gaps[0]["code"] == "PROVIDER_UNVERIFIED"
-          assert gaps[0]["subject"] == "verified_content_signature"
+          report = json.loads(Path("invoice-source-attach-runtime-probe.json").read_text())
+          assert report["status"] == "block"
+          assert len(report["results"]) == 7
+          assert {item["status"] for item in report["results"]} == {"UNVERIFIED"}
           PY
 
       - name: Prove PostgreSQL runtime probe still fails closed without DSN
@@ -214,6 +223,7 @@ jobs:
             cabinet-boundary-audit.json
             generic-host-plan.json
             invoice-source-attach-readiness.json
+            invoice-source-attach-runtime-probe.json
             postgres-record-kernel-probe.json
             local-private-byte-vault-probe.json
             typed-schema-kernel-probe.json
