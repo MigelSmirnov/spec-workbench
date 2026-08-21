@@ -7,16 +7,33 @@ from typed_schema_kernel_probe import run_probe
 
 
 def models():
-    from pydantic import BaseModel, ConfigDict
+    try:
+        from pydantic import BaseModel, ConfigDict
 
-    class InputModel(BaseModel):
-        model_config = ConfigDict(extra="forbid")
-        name: str
-        count: int
+        class InputModel(BaseModel):
+            model_config = ConfigDict(extra="forbid")
+            name: str
+            count: int
 
-    class OutputModel(BaseModel):
-        model_config = ConfigDict(extra="forbid")
-        accepted: bool
+        class OutputModel(BaseModel):
+            model_config = ConfigDict(extra="forbid")
+            accepted: bool
+
+    except ImportError:
+        from pydantic import BaseModel
+
+        class InputModel(BaseModel):
+            name: str
+            count: int
+
+            class Config:
+                extra = "forbid"
+
+        class OutputModel(BaseModel):
+            accepted: bool
+
+            class Config:
+                extra = "forbid"
 
     return InputModel, OutputModel
 
