@@ -1,0 +1,154 @@
+runtime_lowering_version: cabinet_invoice_source_attach_runtime.v0
+status: implementation_pending
+capability_id: invoice.source.attach
+execution_case: attach_expected_missing_source
+
+purpose: >-
+  Declare the first executable lowering for invoice.source.attach after capability
+  readiness reaches PASS. This file defines only disposable runtime record shape,
+  ordering, and provider composition needed to realize already-accepted Cabinet
+  semantics. It does not create new source identities, search invoices, or edit
+  immutable Invoice Card payloads.
+
+source_execution_contract:
+  path: experiments/cabinet-vault/invoice_source_attach_execution_contract_v0.yaml
+  blob_sha: ca61cc5d085701ee0038a7d9c1b8fde00450ea86
+  required_readiness: pass
+
+provider_bindings:
+  authority: authority_kernel
+  typed_boundary: typed_schema_kernel
+  record_store: postgres_record_kernel
+  byte_vault: local_private_byte_vault
+  protected_configuration: protected_configuration_kernel
+  content_validation: bounded_content_validation_kernel
+
+runtime_record_lowering:
+  invoice_source_state:
+    namespace: cabinet.invoice_source_state
+    resource_id: invoice_id
+    required_fields:
+      - invoice_id
+      - accepted_archive_target
+      - expected_sources
+      - source_states
+    expected_source_shape:
+      expected_hash: str_or_null
+      media_type: str
+      required: bool
+    source_state_shape:
+      status: missing_or_available_or_failed
+      content_hash: str_or_null
+      size_bytes: int_or_null
+      media_type: str_or_null
+      filename: str_or_null
+      attached_by_principal_id: str_or_null
+      interaction_id: str_or_null
+  publication_journal:
+    namespace: cabinet.source_publication
+    resource_id: invoice_id_plus_source_id
+    required_fields:
+      - publication_id
+      - invoice_id
+      - source_id
+      - content_hash
+      - size_bytes
+      - staging_reference
+      - final_reference
+      - state
+    states:
+      - metadata_committed
+      - published
+      - failed
+
+lock_order:
+  - cabinet.invoice_source_state:invoice_id
+  - cabinet.source_publication:invoice_id_plus_source_id
+  rule: >-
+    The exact invoice state lock is acquired before the exact publication/source
+    lock on every mutation path so equivalent and conflicting retries serialize
+    deterministically.
+
+runtime_rules:
+  ATTACH-RUNTIME-001:
+    statement: typed_input_and_exact_authority_are_established_before_source_byte_or_metadata_effects
+  ATTACH-RUNTIME-002:
+    statement: content_is_size_and_parser_validated_then_staged_reopened_and_hash_verified_before_metadata_commit
+  ATTACH-RUNTIME-003:
+    statement: any_failure_before_metadata_commit_removes_only_the_current_uncommitted_staging_candidate
+  ATTACH-RUNTIME-004:
+    statement: publication_journal_and_pending_source_transition_commit_atomically_before_final_byte_publication
+  ATTACH-RUNTIME-005:
+    statement: source_state_becomes_available_only_after_atomic_final_publication_and_reopen_hash_size_verification
+  ATTACH-RUNTIME-006:
+    statement: equivalent_retry_converges_on_existing_verified_replica_and_conflicting_hash_for_exact_source_is_rejected
+  ATTACH-RUNTIME-007:
+    statement: metadata_committed_publication_can_be_recovered_idempotently_before_reporting_source_available
+  ATTACH-RUNTIME-008:
+    statement: successful_or_refused_protected_effect_produces_durable_append_only_audit_without_raw_storage_or_credentials
+  ATTACH-RUNTIME-009:
+    statement: caller_output_contains_only_declared_safe_result_source_identity_content_hash_and_source_status
+
+transition_order:
+  fresh_attachment:
+    - validate_typed_input
+    - authenticate_and_authorize_exact_invoice_effect
+    - load_accepted_invoice_and_expected_source_under_exact_scope
+    - validate_bounded_content_and_expected_hash
+    - stage_and_reopen_verify_bytes
+    - begin_metadata_transaction
+    - lock_exact_invoice_state
+    - lock_exact_source_publication
+    - recheck_expected_source_and_idempotency_or_conflict
+    - persist_metadata_committed_publication_and_pending_source_state
+    - persist_effect_audit
+    - commit_metadata_transaction
+    - atomically_publish_bytes
+    - reopen_verify_final_bytes
+    - begin_settlement_transaction
+    - lock_exact_invoice_state
+    - lock_exact_source_publication
+    - mark_publication_published_and_source_available
+    - commit_settlement_transaction
+    - return_safe_source_status
+  equivalent_retry:
+    - authenticate_and_authorize_exact_invoice_effect
+    - lock_and_load_exact_source_state
+    - verify_existing_published_bytes
+    - return_existing_logical_result_without_duplicate_replica
+  recover_metadata_committed:
+    - authenticate_and_authorize_exact_invoice_effect
+    - lock_and_load_exact_pending_publication
+    - recover_or_verify_final_bytes
+    - settle_publication_and_source_available
+    - return_safe_source_status
+
+forbidden_runtime_behavior:
+  - invent_source_id
+  - use_invoice_number_as_mutation_key
+  - trust_filename_or_declared_media_type_without_parser_validation
+  - mark_source_available_before_final_byte_verification
+  - overwrite_conflicting_expected_source_content
+  - return_storage_reference
+  - return_staging_reference
+  - return_final_reference
+  - return_database_identity
+  - return_credentials
+  - mutate_immutable_invoice_card
+
+verification_obligations:
+  - ATTACH-PROBE-001 exact authority and explicit invoice target required before effects
+  - ATTACH-PROBE-002 expected source/hash binding and bounded content validation happen before staging/commit
+  - ATTACH-PROBE-003 successful attach publishes bytes and only then reports source available
+  - ATTACH-PROBE-004 equivalent replay is idempotent and creates no duplicate logical source/publication
+  - ATTACH-PROBE-005 conflicting bytes for one expected source cannot replace accepted evidence
+  - ATTACH-PROBE-006 failure after metadata commit can recover to one verified published result
+  - ATTACH-PROBE-007 output and durable audit disclose no raw storage references or reusable credentials
+
+change_policy:
+  source_execution_contract_fingerprint_drift: block
+  hidden_runtime_transition: block
+  undeclared_provider_relation: block
+  runtime_rule_without_probe: block
+  source_identity_invention: block
+  capability_execution_without_readiness_pass: block
