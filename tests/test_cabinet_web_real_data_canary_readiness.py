@@ -9,6 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 READINESS = ROOT / "experiments" / "cabinet-vault" / "cabinet_web_real_data_canary_readiness_v1.yaml"
 HANDOFF = ROOT / "experiments" / "cabinet-vault" / "NEXT_SESSION_HANDOFF.md"
 LOCAL_HANDOFF = ROOT / "experiments" / "cabinet-vault" / "LOCAL_AGENT_REAL_DATA_CANARY_HANDOFF.md"
+PREFLIGHT_EVIDENCE = ROOT / "experiments" / "cabinet-vault" / "REAL_DATA_CANARY_PREFLIGHT_EVIDENCE_2026-08-21.md"
 HUMAN_AUDIT = ROOT / "experiments" / "cabinet-vault" / "CABINET_WEB_COMPATIBILITY_AUDIT.md"
 
 
@@ -20,7 +21,7 @@ def load():
 
 def test_interop_runtime_is_ready_but_real_canary_is_blocked_only_by_missing_real_candidate():
     readiness = load()
-    assert readiness["readiness_id"] == "cabinet_web_real_data_canary.v2"
+    assert readiness["readiness_id"] == "cabinet_web_real_data_canary.v3"
     assert readiness["status"] == "blocked_missing_real_candidate"
     assert readiness["interop_prerequisites"] == {
         "cabinet_web_source_identity_contract": "PASS",
@@ -60,6 +61,28 @@ def test_reviewed_cabinet_web_main_has_no_invoice_card_candidate():
     assert inventory["invoice_card_directories"] == []
     assert inventory["confirmed_invoice_candidates"] == []
     assert inventory["exact_invoice_source_byte_candidates"] == []
+
+
+def test_local_agent_preflight_passed_fail_closed_without_backend_effects():
+    preflight = load()["latest_local_preflight"]
+    assert preflight["result"] == "PASS_FAIL_CLOSED_NO_ELIGIBLE_INVOICE"
+    assert preflight["cabinet_web_commit"] == "d4419e3b948d49bd85a99a0941a350a73494cd27"
+    assert preflight["spec_workbench_commit"] == "89b81a2488c809dd93556e97ec6d11508ffdbd66"
+    assert preflight["tracked_invoice_count"] == 0
+    assert preflight["confirmed_invoice_count"] == 0
+    assert preflight["revision_receipt_outcome"] == "not_run_no_eligible_invoice"
+    assert preflight["backend_invocation_performed"] is False
+    assert preflight["postgres_effect_performed"] is False
+    assert preflight["source_attachment_performed"] is False
+    assert preflight["audit_acceptance_present"] is False
+    assert preflight["audit_attachment_present"] is False
+    assert preflight["unrelated_dirty_worktree_file"] == {
+        "path": "tests/test_invoice_validation.py",
+        "touched_by_canary": False,
+        "affected_data_cards": False,
+    }
+    assert preflight["evidence"] == "experiments/cabinet-vault/REAL_DATA_CANARY_PREFLIGHT_EVIDENCE_2026-08-21.md"
+    assert PREFLIGHT_EVIDENCE.is_file()
 
 
 def test_test_dirty_or_branch_only_data_cannot_be_relabelled_as_real_data_canary():
