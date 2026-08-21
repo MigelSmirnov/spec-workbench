@@ -19,6 +19,7 @@ from protected_configuration_kernel import ProtectedConfigurationNotReady
 
 ROOT = Path(__file__).resolve().parents[1]
 BRIDGE = ROOT / "tools" / "local_capability_bridge.py"
+REAL_CANARY = ROOT / "tools" / "f260001_real_canary_via_bridge.py"
 
 
 def test_bridge_fails_closed_without_protected_configuration():
@@ -76,3 +77,15 @@ def test_bridge_runtime_probe_fails_closed_without_provider_configuration():
     assert report.status == "block"
     assert len(report.results) == 11
     assert {item.status for item in report.results} == {"UNVERIFIED"}
+
+
+def test_real_canary_runner_uses_bridge_and_has_no_direct_provider_writes():
+    text = REAL_CANARY.read_text(encoding="utf-8")
+    assert "build_delivery_from_checkout" in text
+    assert ".accept_revision(" in text
+    assert ".attach_source(" in text
+    assert "transaction()" not in text
+    assert "put_record(" not in text
+    assert "stage(" not in text
+    assert "publish(" not in text
+    assert "cursor(" not in text
