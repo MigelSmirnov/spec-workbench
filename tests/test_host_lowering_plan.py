@@ -44,7 +44,14 @@ def test_candidate_archive_host_plan_resolves_relations_and_dependency_projectio
     assert {item.provider_id for item in plan.provider_verification} == set(profile["providers"])
 
     verification = {item.provider_id: item.verification_status for item in plan.provider_verification}
-    assert verification["postgres_record_kernel"] == "PASS"
+    assert {
+        provider_id
+        for provider_id, status in verification.items()
+        if status == "PASS"
+    } == {
+        "postgres_record_kernel",
+        "local_private_byte_vault",
+    }
     assert {
         provider_id
         for provider_id, status in verification.items()
@@ -52,7 +59,6 @@ def test_candidate_archive_host_plan_resolves_relations_and_dependency_projectio
     } == {
         "authority_kernel",
         "typed_schema_kernel",
-        "local_private_byte_vault",
         "protected_configuration_kernel",
     }
 
