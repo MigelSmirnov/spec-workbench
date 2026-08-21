@@ -19,6 +19,7 @@ from bounded_media_identification import (
 
 ROOT = Path(__file__).resolve().parents[1]
 CONTRACT = ROOT / "experiments" / "cabinet-vault" / "cabinet_web_source_media_lowering_v1.yaml"
+EVIDENCE = ROOT / "experiments" / "cabinet-vault" / "CABINET_WEB_ATTACH_CANARY_RUNTIME_EVIDENCE.md"
 ACCEPTED = frozenset({"image/jpeg", "image/png", "application/pdf"})
 
 
@@ -55,7 +56,6 @@ def pdf_bytes() -> bytes:
 
 def test_identification_uses_parser_evidence_without_filename_kind_or_mime_input():
     kernel = validator()
-
     assert identify_exact_media_type(image_bytes("JPEG"), validator=kernel).media_type == "image/jpeg"
     assert identify_exact_media_type(image_bytes("PNG"), validator=kernel).media_type == "image/png"
     assert identify_exact_media_type(pdf_bytes(), validator=kernel).media_type == "application/pdf"
@@ -86,7 +86,6 @@ def test_identification_rejects_ambiguous_multiple_parser_successes(monkeypatch)
 
 def test_contract_forbids_web_metadata_from_becoming_media_authority():
     contract = load_contract()
-
     assert contract["lowering"]["caller_values_do_not_select_parser"] is True
     assert set(contract["source_context"]["non_authoritative_for_exact_media_identity"]) == {
         "source.kind",
@@ -109,7 +108,6 @@ def test_contract_uses_only_existing_verified_parser_provider():
     contract = load_contract()
     parser = contract["lowering"]["verified_parser_provider"]
     implementation = contract["lowering"]["implementation"]
-
     assert parser == {
         "path": "tools/bounded_content_validation_kernel.py",
         "blob_sha": "4d236d1332935577d81c78b332e5082fb1e6ae91",
@@ -118,15 +116,21 @@ def test_contract_uses_only_existing_verified_parser_provider():
     assert implementation["blob_sha"] == "19d2c6c66d90984fae59b0658fbb30320a95bea2"
 
 
-def test_media_design_is_resolved_but_current_attach_binding_remains_explicitly_blocked():
+def test_media_design_and_end_to_end_binding_are_verified_without_rewriting_old_runtime():
     contract = load_contract()
-    gap = contract["current_runtime_gap"]
+    resolution = contract["runtime_binding_resolution"]
     effect = contract["interop_effect"]
+
+    assert contract["status"] == "verified_by_runtime_canary"
+    assert resolution["status"] == "PASS"
+    assert resolution["existing_verified_runtime_unmodified"] is True
+    assert resolution["runtime_evidence"]["workflow_run_id"] == 32507028221
+    assert resolution["runtime_evidence"]["result"] == "PASS"
+    assert EVIDENCE.is_file()
 
     assert effect["finding"] == "CW-MEDIA-001"
     assert effect["exact_identification_design"] == "RESOLVED"
-    assert effect["end_to_end_attach_binding"] == "BLOCK"
-    assert effect["real_Cabinet_web_canary_allowed"] is False
-    assert gap["status"] == "BLOCK"
-    assert gap["existing_verified_runtime_must_not_be_relabelled"] is True
-    assert "ContentReference.media_type to be null" in gap["statement"]
+    assert effect["exact_identification_focused_tests"] == "PASS"
+    assert effect["end_to_end_attach_binding"] == "PASS"
+    assert effect["real_Cabinet_web_data_canary_allowed"] is True
+    assert effect["real_Cabinet_web_data_canary_executed"] is False
