@@ -124,21 +124,21 @@ def test_transport_is_not_semantic_owner_and_remaining_canary_blocks_stay_visibl
     assert "resolve_revision_conflict_by_last_write_wins" in transport["adapters_must_not"]
 
     gate = contract["interop_gate_effect"]
+    assert gate["resolves"] == ["CW-SOURCE-ID-001"]
     assert gate["closes_design_gap"] == "CW-SYNC-001"
     assert set(gate["does_not_close"]) == {
-        "CW-SOURCE-ID-001_until_upstream_PR_is_in_main",
         "CW-MEDIA-001",
         "CW-HASH-001_runtime_evidence",
     }
     assert gate["real_Cabinet_web_canary_allowed"] is False
 
 
-def test_upstream_source_identity_pr_is_pinned_until_main_accepts_it():
+def test_upstream_source_identity_is_pinned_to_accepted_main_commit():
     contract = load()
     prerequisite = contract["upstream_prerequisite"]
 
     assert prerequisite["repository"] == "MigelSmirnov/Cabinet_web"
-    assert prerequisite["branch"] == "agent/source-id-contract-repair"
-    assert prerequisite["pull_request"] == 16
-    assert prerequisite["head_sha"] == "4a8a375dcb82ddb0f24e62c1a11eb6ae9e05e573"
-    assert prerequisite["main_must_contain_decision_before_real_canary"] is True
+    assert prerequisite["ref"] == "main"
+    assert prerequisite["accepted_via_pull_request"] == 16
+    assert prerequisite["accepted_commit_sha"] == "d4419e3b948d49bd85a99a0941a350a73494cd27"
+    assert prerequisite["main_contains_decision"] is True
