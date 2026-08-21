@@ -1,0 +1,112 @@
+contract_id: cabinet_web_source_media_lowering.v1
+status: candidate_verified_by_focused_tests
+purpose: >-
+  Derive one exact local-box media type from source bytes without treating
+  Cabinet_web source.kind, filename, extension or caller-declared MIME as proof.
+  The result is disposable integration lowering, not a new Cabinet_web fact.
+
+source_context:
+  authority: Cabinet_web
+  available_facts:
+    - source.source_id
+    - source.kind
+    - source.file_ref
+    - source.file_status
+    - source.note
+  non_authoritative_for_exact_media_identity:
+    - source.kind
+    - source.file_ref
+    - filename
+    - extension
+    - caller_declared_mime
+
+input:
+  required:
+    - source_id
+    - content_bytes
+  forbidden_as_required_proof:
+    - filename
+    - source_kind
+    - extension
+    - caller_media_type
+
+accepted_parser_relations:
+  source: experiments/cabinet-vault/cabinet_backend_box_v0.yaml#policies.source_security.accepted_media_types
+  values:
+    - image/jpeg
+    - image/png
+    - application/pdf
+
+lowering:
+  operation: identify_exact_media_type
+  implementation:
+    path: tools/bounded_media_identification.py
+    blob_sha: 19d2c6c66d90984fae59b0658fbb30320a95bea2
+  verified_parser_provider:
+    path: tools/bounded_content_validation_kernel.py
+    blob_sha: 4d236d1332935577d81c78b332e5082fb1e6ae91
+  algorithm:
+    - enumerate_only_configured_accepted_media_types
+    - run_existing_bounded_validator_for_each_candidate
+    - collect_parser_validated_successes
+    - zero_successes_reject
+    - more_than_one_success_reject_as_ambiguous
+    - exactly_one_success_returns_that_parser_evidence
+  caller_values_do_not_select_parser: true
+
+output:
+  evidence:
+    media_type:
+      semantic: source.bytes.parser_validated_media_type
+      authority: local_box_validation_evidence
+    content_hash:
+      semantic: source.bytes.sha256
+      authority: local_box_validation_evidence
+    size_bytes:
+      semantic: source.bytes.size
+      authority: local_box_validation_evidence
+    parser:
+      semantic: source.bytes.validation_parser
+      authority: local_box_validation_evidence
+  Card_mutation: forbidden
+
+composition_target:
+  capability: invoice.source.attach
+  relation: >-
+    The derived evidence.media_type may populate LocalSourceFile.media_type for a
+    later attach invocation. The attach runtime must still revalidate the bytes;
+    identification evidence does not bypass capability validation or authority.
+  source_identity: >-
+    expected_source_id remains the Cabinet_web source.source_id. Media detection
+    never creates or replaces source identity.
+
+current_runtime_gap:
+  status: BLOCK
+  statement: >-
+    The current verified invoice.source.attach runtime requires durable
+    expected_sources[source_id].media_type to equal LocalSourceFile.media_type.
+    Cabinet_web cannot truthfully predeclare exact JPEG versus PNG from source.kind.
+    The box schema already permits ContentReference.media_type to be null, so the
+    runtime equality is an overconstraint of the current lowering.
+  required_repair: >-
+    Define and execute a new attach runtime case in which durable expected media
+    type is absent, parser-validated media identity is supplied by this lowering,
+    the runtime revalidates the bytes, and the exact media type becomes local
+    source evidence without rewriting the confirmed Card.
+  existing_verified_runtime_must_not_be_relabelled: true
+
+interop_effect:
+  finding: CW-MEDIA-001
+  exact_identification_design: RESOLVED
+  exact_identification_focused_test_target: PASS_REQUIRED
+  end_to_end_attach_binding: BLOCK
+  real_Cabinet_web_canary_allowed: false
+
+forbidden_fallbacks:
+  - map_photo_to_JPEG
+  - map_scan_to_PDF
+  - trust_filename_extension
+  - trust_caller_MIME
+  - magic_prefix_only_as_complete_validation
+  - choose_first_parser_when_multiple_succeed
+  - write_detected_media_type_into_confirmed_Card
