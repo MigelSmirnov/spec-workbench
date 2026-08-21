@@ -24,6 +24,7 @@ declared rules and must not choose missing product meaning.
 ```text
 GENERATED_BACKEND_BOUNDARY_AUDIT.md
 GENERIC_HOST_LOWERING_RESULT.md
+AUTHORITY_KERNEL_RUNTIME_EVIDENCE.md
 POSTGRES_RECORD_KERNEL_RUNTIME_EVIDENCE.md
 LOCAL_PRIVATE_BYTE_VAULT_RUNTIME_EVIDENCE.md
 PROTECTED_CONFIGURATION_KERNEL_RUNTIME_EVIDENCE.md
@@ -33,30 +34,40 @@ PLAN_ACTUAL_MONETARY_DERIVABILITY_RESULT.md
 
 ## Executed experiment evidence
 
-Real Termux execution on 2026-08-21 established:
+Real Termux execution on 2026-08-21 established the focused baseline:
 
 ```text
 focused experiment suite: 114 passed in 2.25s
 box language audit: pass, 15 rules, exit 0
 generated-backend boundary audit: classified, gate block, exit 2
-candidate host structural plan: compiled, gaps [], gate block, exit 2
+initial candidate host structural plan: compiled, gaps [], gate block, exit 2
 git diff --check: pass
 ```
 
-Later provider execution established four PASS providers:
+Provider execution then closed all five required generic providers:
 
 ```text
+authority_kernel                PASS
+typed_schema_kernel             PASS
 postgres_record_kernel          PASS
 local_private_byte_vault        PASS
 protected_configuration_kernel  PASS
-typed_schema_kernel             PASS
-authority_kernel                UNVERIFIED
 ```
 
-The complete host remains blocked until `authority_kernel` also produces
-fingerprint-bound executed evidence.
+The expected current host plan is now:
 
-## Verified providers
+```text
+status: compiled
+gaps: []
+verification_gate: pass
+runtime_dependencies: [pydantic, psycopg]
+exit: 0
+```
+
+The old generated-backend audit remains intentionally blocked. Do not confuse
+verified generic host providers with repair of the classical generated backend.
+
+## Provider evidence
 
 ### postgres_record_kernel
 
@@ -65,9 +76,9 @@ RECORD-PROBE-001..005 PASS
 exit 0
 ```
 
-The first real runtime attempt exposed an embedded-NUL advisory-lock bug. The
-provider was repaired to use deterministic PostgreSQL-text-safe composite lock
-identity before promotion.
+Real PostgreSQL execution proved dependency presence, transaction rollback,
+exact-resource locking, no partial state, and append-only audit. The first run
+found and closed an embedded-NUL advisory-lock defect.
 
 ### local_private_byte_vault
 
@@ -76,10 +87,11 @@ VAULT-PROBE-001..006 PASS
 exit 0
 ```
 
-The first Termux run exposed missing `os.link`. Publication was repaired to
-per-content `flock` + conflict check + same-filesystem atomic rename + fsync +
-reopen/hash/size verification. The generic vault does not absorb Cabinet
-`source_id` conflict semantics.
+Real Termux filesystem execution proved opaque references, stage/reopen/hash
+verification, content-addressed conflict behavior, restart recovery, readiness
+blocking on unrecoverable committed publication, and symlink/non-regular-file
+failure. The first run found unavailable `os.link`; publication was repaired to
+per-content `flock` + same-filesystem atomic rename.
 
 ### protected_configuration_kernel
 
@@ -88,9 +100,9 @@ CONFIG-PROBE-001..003 PASS
 exit 0
 ```
 
-Missing required secret configuration blocks ready state; protected values do
+Missing required protected configuration blocks ready state; protected values do
 not enter caller/audit output; symbolic references select host-owned inputs
-without exposing the source key or secret as business data.
+without becoming business data.
 
 ### typed_schema_kernel
 
@@ -100,52 +112,26 @@ status: pass
 exit 0
 ```
 
-The selected Termux runtime initially lacked `pydantic`; Pydantic v2 installation
-attempted a `pydantic-core` build and failed. The provider intentionally supports
-the Pydantic v1 validation API as a lowering/runtime choice. A compatible runtime
-was selected and the fingerprint-bound probe then passed. No Pydantic major
-version becomes Cabinet product semantics.
+Invalid input is rejected before effects, undeclared caller fields are rejected,
+and invalid output is rejected before disclosure. Pydantic major version remains
+a lowering/runtime choice rather than Cabinet semantics.
 
-## authority_kernel — candidate ready, evidence pending
-
-Artifacts:
+### authority_kernel
 
 ```text
-tools/authority_kernel.py
-tools/authority_kernel_probe.py
-tests/test_authority_kernel.py
-experiments/cabinet-vault/cabinet_authority_contract_v0.yaml
+AUTH-PROBE-001..008 PASS
+status: pass
+exit 0
 ```
 
-The implementation is fingerprint-bound in
-`generic_host_provider_verification_v0.yaml` but remains `UNVERIFIED` until the
-selected runtime executes all eight probes:
+The selected runtime proved caller-supplied authority cannot authorize a protected
+invocation, revocation removes future authority, exact resource scope is required,
+local-agent and synchronization credential classes are not interchangeable,
+undeclared effects/disclosures are denied, actor provenance is host-bound, and
+audit evidence contains no reusable credential material.
 
-```text
-AUTH-PROBE-001  caller-supplied authorization_decision cannot authorize
-AUTH-PROBE-002  revoked principal/credential loses future authority
-AUTH-PROBE-003  exact capability + exact resource scope required
-AUTH-PROBE-004  synchronization credential rejected at local-agent boundary
-AUTH-PROBE-005  local-agent credential rejected as synchronization authority
-AUTH-PROBE-006  undeclared effect/disclosure denied
-AUTH-PROBE-007  protected mutation actor bound from authenticated principal
-AUTH-PROBE-008  audit evidence contains no reusable credential material
-```
-
-The candidate uses generic principal, credential, exact grant, capability policy,
-actor binding and sanitized audit records. This is an executable candidate
-representation only; it does **not** claim `AUTH-OQ-001` or `AUTH-OQ-002` are
-closed and contains no Cabinet role names.
-
-## Authority open questions remain explicit
-
-```text
-AUTH-OQ-001  smallest generic grant representation across independent boxes
-AUTH-OQ-002  generic audit-event vocabulary vs Cabinet-specific event meaning
-```
-
-Do not close these merely because the candidate provider can execute the current
-archive/source authority obligations.
+The candidate representation remains generic host machinery. `AUTH-OQ-001` and
+`AUTH-OQ-002` remain explicit open questions and are not closed by provider PASS.
 
 ## PlanActual remains reopened
 
@@ -159,16 +145,20 @@ Do not choose these meanings in compiler/adapter code.
 
 ## Immediate next work
 
-1. Execute the authority unit/guard set and `tools/authority_kernel_probe.py` in
-   the selected Termux runtime.
-2. If and only if `AUTH-PROBE-001..008` all PASS with exit 0, record evidence and
-   promote `authority_kernel`.
-3. Re-run `host_lowering_plan.py`; with five required providers PASS its
-   verification gate should become `pass` rather than `block`.
-4. Then compile and execute one real `invoice.source.attach` capability using the
-   verified generic authority/schema/record/vault/config providers, without
-   reintroducing Cabinet service/repository/router ownership.
-5. Keep PlanActual monetary mapping blocked until PA-MONEY-001..003 are explicit
+1. Re-run the updated provider/host guards and `host_lowering_plan.py` in Termux.
+   The host plan should now return `verification_gate: pass` and exit 0.
+2. Before executing product behavior, create a machine-addressable execution
+   contract for `invoice.source.attach` from the existing box
+   `deterministic_lowering`; do not hide composition rules in Python glue.
+3. Execute one real source attachment through the verified authority, schema,
+   record, byte-vault, configuration and audit providers.
+4. Prove exact invoice targeting, expected-source/hash binding, byte staging and
+   verification, one metadata transaction, atomic final publication, final-byte
+   verification, idempotent replay, conflict rejection, and no disclosure of raw
+   storage references.
+5. Do not reintroduce Cabinet service/repository/router ownership merely to wire
+   the providers together.
+6. Keep PlanActual monetary mapping blocked until PA-MONEY-001..003 are explicit
    accepted Cabinet product decisions.
 
 ## Stop conditions
@@ -179,7 +169,8 @@ Stop and report a semantic/architectural gap instead of adding code when:
 - a host/compiler decision has no declared machine rule;
 - field-name/type guessing would choose domain meaning;
 - principal/scope/disclosure/effect meaning is missing;
-- a provider would become PASS without executed evidence;
+- capability composition would introduce behavior absent from the durable box
+  contract;
 - unresolved PlanActual monetary meaning would have to be chosen by code.
 
 ## Success criterion
