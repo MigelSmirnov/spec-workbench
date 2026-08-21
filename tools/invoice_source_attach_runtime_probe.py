@@ -172,19 +172,21 @@ def _setup_runtime(environment: dict[str, str]) -> ProbeRuntime:
     )
     config.require_ready()
     schema = f"spec_workbench_attach_{uuid.uuid4().hex[:12]}"
-    vault_parent = Path(environment[VAULT_ENV]).expanduser().resolve()
-    if not vault_parent.is_absolute():
-        raise RuntimeError("configured vault parent must resolve to an absolute path")
-    vault_parent.mkdir(parents=True, exist_ok=True)
-    vault_root = vault_parent / f"runtime-{uuid.uuid4().hex[:12]}"
+    runtime_suffix = f"runtime-{uuid.uuid4().hex[:12]}"
 
     records = config.use_for_host_provider(
         "database.primary", lambda dsn: PostgresRecordKernel(dsn, schema=schema)
     )
     records.initialize()
-    vault = config.use_for_host_provider(
-        "source_vault.root", lambda _root: LocalPrivateByteVault(vault_root)
-    )
+
+    def make_vault(root: str) -> LocalPrivateByteVault:
+        parent = Path(root).expanduser().resolve()
+        if not parent.is_absolute():
+            raise RuntimeError("configured vault parent must resolve to an absolute path")
+        parent.mkdir(parents=True, exist_ok=True)
+        return LocalPrivateByteVault(parent / runtime_suffix)
+
+    vault = config.use_for_host_provider("source_vault.root", make_vault)
     return ProbeRuntime(
         records=records,
         vault=vault,
@@ -194,7 +196,7 @@ def _setup_runtime(environment: dict[str, str]) -> ProbeRuntime:
             accepted_media_types=ACCEPTED_MEDIA,
         ),
         schema=schema,
-        vault_root=vault_root,
+        vault_root=vault.root,
     )
 
 
@@ -346,9 +348,7 @@ def _probe_success_visibility(runtime: ProbeRuntime) -> ProbeResult:
             return _fail("ATTACH-PROBE-003", "source became visible with incorrect state")
         if publication.payload["state"] != "published":
             return _fail("ATTACH-PROBE-003", "source was available before publication journal reached published")
-        if not runtime.vault.verify(
-            publication.payload["final_reference"], digest, len(content)
-        ):
+        if not runtime.vault.verify(publication.payload["final_reference"], digest, len(content)):
             return _fail("ATTACH-PROBE-003", "published final bytes did not verify")
         if result.items[0].result != "attached" or result.source_status.complete is not True:
             return _fail("ATTACH-PROBE-003", "safe result did not report completed attachment")
@@ -473,8 +473,7 @@ def _probe_recovery(runtime: ProbeRuntime) -> ProbeResult:
         media_type="image/png",
         expected_hash=digest,
     )
-    fault_vault = _FailOncePublishVault(runtime.vault)
-    executor = _executor(runtime, invoice_id, vault=fault_vault)
+    executor = _executor(runtime, invoice_id, vault=_FailOncePublishVault(runtime.vault))
     try:
         try:
             executor.execute(
