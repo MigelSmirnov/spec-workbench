@@ -1,12 +1,22 @@
-# Generic host lowering — first structural result
+# Generic host lowering — current result
 
 ## Status
 
-The Cabinet vault experiment now has a first machine-addressable generic host
-lowering plan for the real archive/source box slice.
+The Cabinet vault experiment has a machine-addressable generic host lowering plan
+for the real archive/source box slice.
 
-This result is **structural and UNVERIFIED**. It does not claim that a generic
-host implementation is runnable or behaviorally verified.
+Current structural state:
+
+```text
+status: compiled
+gaps: []
+verification_gate: block
+runtime_dependencies:
+  - pydantic
+  - psycopg
+```
+
+The gate remains blocked because only one of five required providers is verified.
 
 ## Inputs
 
@@ -24,38 +34,11 @@ Planner and guards:
 tools/host_lowering_plan.py
 tests/test_host_lowering_plan.py
 tests/test_host_provider_verification.py
-tests/test_cabinet_authority_contract.py
-tests/test_cabinet_authority_manifest.py
 ```
 
-## Why this exists
+## Declared lowering rules
 
-The failed classical Cabinet generation exposed generic lowering failures:
-
-```text
-missing interface -> concrete implementation relation
-lost psycopg runtime projection
-required verification skipped while the route appeared complete
-```
-
-Those failures are not Cabinet business semantics. They belong to reusable host
-lowering rules and verification gates.
-
-The planner therefore answers only:
-
-1. does every declared box host requirement resolve to exactly one selected
-   provider relation?;
-2. is the runtime projection closed over every dependency declared by those
-   selected providers?;
-3. has every required provider verification actually produced `PASS` evidence?
-
-It does not choose product fields, domain meanings, authority scope, effects, or
-disclosure policy. Those are already declared by the box contract or remain a
-semantic gap.
-
-## Declared planner rules
-
-The planner exports exactly:
+The planner implements exactly:
 
 ```text
 GHL-REL-001
@@ -64,160 +47,144 @@ GHL-VERIFY-001
 GHL-VERIFY-002
 ```
 
-`generic_host_lowering_contract_v0.yaml` binds those rule IDs to the exact
-reviewed `tools/host_lowering_plan.py` blob and names their conformance tests.
+The lowering contract binds those rule IDs to the reviewed planner source
+fingerprint and conformance cases.
 
-`GHL-SEM-001` is deliberately not declared as implemented by this planner. The
-planner has no field-mapping or product-semantic choice API. A future execution
-compiler must bind that semantic guard explicitly before it can introduce any
-fallback behavior.
+`GHL-SEM-001` remains deliberately outside this structural planner. The planner
+has no API for choosing missing product semantics, authority meaning, disclosure,
+or effect meaning.
 
-## Candidate profile
-
-`generic_host_profile_candidate_v0.yaml` supplies one candidate provider for each
-host requirement of `cabinet_backend_box_v0.yaml`.
-
-Provider groups are:
+## Provider state
 
 ```text
-authority_kernel
-typed_schema_kernel
-postgres_record_kernel
-local_private_byte_vault
-protected_configuration_kernel
+postgres_record_kernel          PASS
+authority_kernel                UNVERIFIED
+typed_schema_kernel             UNVERIFIED
+local_private_byte_vault        UNVERIFIED
+protected_configuration_kernel  UNVERIFIED
 ```
 
-The profile contains no product-specific dependency.
+A verified provider does not make the complete host verified.
 
-The projected third-party runtime dependencies are:
+## PostgreSQL record kernel — PASS
+
+Concrete generic provider:
 
 ```text
-pydantic
-psycopg
+tools/postgres_record_kernel.py
 ```
 
-The explicit `psycopg` projection is intentional evidence against the failure
-observed in the classical generated backend.
-
-## Structural result
-
-Every candidate provider currently declares:
+Runtime probe:
 
 ```text
-required: true
-status: UNVERIFIED
+tools/postgres_record_kernel_probe.py
 ```
 
-Therefore the expected plan is:
+Executed evidence:
 
 ```text
-status: compiled
-verification_gate: block
-gaps: []
-runtime_dependencies:
-  - pydantic
-  - psycopg
+experiments/cabinet-vault/POSTGRES_RECORD_KERNEL_RUNTIME_EVIDENCE.md
 ```
 
-`compiled` here means only that declared interface relations and dependency
-projection are structurally closed.
+The provider and probe runner are fingerprint-bound by
+`generic_host_provider_verification_v0.yaml`.
 
-It does **not** mean executable or verified. The CLI exits non-zero while any
-required provider verification is not `PASS`.
+### First runtime execution
 
-## Fail-closed conformance cases
+The first real PostgreSQL run exposed a provider defect: the composite advisory
+lock key contained a NUL separator, and PostgreSQL text fields reject NUL bytes.
 
-The test suite requires:
+This was not treated as an environment failure or bypassed probe. The lock
+identity was repaired to a deterministic PostgreSQL-text-safe encoding and a
+regression guard was added.
 
-- a missing provider relation to produce `IMPLEMENTATION_RELATION_MISSING`;
-- two providers for one required interface to produce
-  `AMBIGUOUS_IMPLEMENTATION_RELATION`;
-- removing `psycopg` from runtime projection to produce
-  `RUNTIME_DEPENDENCY_NOT_PROJECTED`;
-- required `SKIP` verification to normalize to `UNVERIFIED`;
-- the verification gate to pass only when every selected required provider is
-  `PASS`;
-- the planner implementation rule set and source fingerprint to match the
-  declared lowering contract exactly.
+### Successful rerun
 
-## Authority split
+A real PostgreSQL runtime then produced:
 
-The candidate `authority_kernel` does not define Cabinet business roles or
-credential-storage mechanics.
+```text
+RECORD-PROBE-001 PASS  psycopg available
+RECORD-PROBE-002 PASS  commit + rollback atomicity
+RECORD-PROBE-003 PASS  exact-resource locking
+RECORD-PROBE-004 PASS  no partial state after failure
+RECORD-PROBE-005 PASS  append-only audit persistence
+overall status: pass
+exit: 0
+```
 
-`cabinet_authority_contract_v0.yaml` preserves durable semantics for principal
-separation, exact capability/resource scope, host-bound actor provenance,
-explicit effect/disclosure authority, revocation meaning, and audit meaning.
+Focused structural guards after the lock repair also passed:
 
-PostgreSQL, Argon2id, session/verifier/throttling storage, Linux administration,
-and transport choice remain host mechanisms/lowering.
+```text
+12 passed in 0.64s
+```
 
-The archive box manifest is guarded so an agent cannot supply its own authority
-evidence and every capability explicitly declares grant, scope, effect,
-disclosure, and audit requirements.
+Therefore `postgres_record_kernel` is promoted to `PASS` for the reviewed
+implementation/probe fingerprints.
 
-## Provider verification packets
+## What PostgreSQL PASS proves
 
-`generic_host_provider_verification_v0.yaml` now defines the minimum proof
-obligations for all five candidate providers.
+It closes the first generic lowering failure class exposed by the old generated
+backend:
 
-### authority_kernel
+```text
+selected PostgreSQL provider relation exists
++ psycopg dependency is explicitly projected
++ dependency imports in the selected runtime
++ transaction rollback is real
++ resource locking is real
++ failed transaction does not leak partial metadata/audit state
++ audit rows are append-only at the database boundary
+```
 
-Covers authentication, bounded grants, exact resource scope, effect policy, and
-disclosure policy. Its probes are the `AUTH-PROBE-001..008` vocabulary declared
-by `cabinet_authority_contract_v0.yaml`.
+It does not prove any other provider.
 
-### typed_schema_kernel
+## Remaining provider obligations
 
-Must prove invalid input rejection before effects, rejection of undeclared fields
-for closed boundary schemas, and output validation before disclosure/settlement.
-Its packet explicitly carries the `pydantic` runtime dependency.
+### authority_kernel — UNVERIFIED
 
-### postgres_record_kernel
+Must prove authentication, bounded grants, exact resource scope, effect policy,
+disclosure policy, host-bound actor provenance, revocation, and secret-free audit
+semantics under `AUTH-PROBE-001..008`.
 
-Must prove the `psycopg` dependency is present in the selected runtime plus
-transaction atomicity/rollback, exact-resource locking, absence of partial state,
-and append-only audit persistence.
+### typed_schema_kernel — UNVERIFIED
 
-### local_private_byte_vault
+Must prove input validation before effects, closed-schema extra-field rejection,
+and output validation before disclosure/settlement. Runtime dependency:
+`pydantic`.
 
-Must prove host-owned opaque paths, stage/reopen/hash verification, conflicting
+### local_private_byte_vault — UNVERIFIED
+
+Must prove opaque host-owned paths, stage/reopen/hash verification, conflicting
 content exclusion, atomic publication/recovery, readiness blocking on unresolved
-recovery, and path/symlink/device escape rejection.
+recovery, and symlink/device/non-regular-file escape rejection.
 
-### protected_configuration_kernel
+### protected_configuration_kernel — UNVERIFIED
 
-Must prove required secret configuration fails closed when absent and protected
-values cannot enter caller-visible business data or audit evidence.
+Must prove required secret absence blocks readiness and protected values cannot
+enter caller-visible business data or audit evidence.
 
-Every packet probe is currently `UNVERIFIED`.
+## Next implementation boundary
 
-The packet guards require:
+The next concrete provider should be:
 
 ```text
-one packet per candidate provider
-packet requirements == provider satisfies requirements
-packet runtime dependencies == provider runtime dependencies
-PASS probe -> executed=true + non-empty recorded evidence
-provider PASS -> every packet probe PASS
+local_private_byte_vault
 ```
 
-Therefore no provider may be promoted to `PASS` merely by editing the candidate
-profile.
+Reason: together with the verified `postgres_record_kernel`, it provides the two
+stateful mechanisms needed for the first real Cabinet source-custody path.
 
-## Current blocking boundary
+After the byte-vault packet passes, the experiment can attempt one real
+`invoice.source.attach` lowering using:
 
-The declarative architecture work has now reached the point where further
-promotion requires **real provider implementations and executed runtime evidence**.
+```text
+verified record/transaction/locking provider
++ verified byte-vault provider
++ still-explicit authority/schema/configuration gates
+```
 
-Without that evidence, implementing a capability execution runtime and calling it
-verified would repeat the exact failure mode exposed by the classical generation.
+Do not call that capability verified while authority, schema, or configuration
+providers remain `UNVERIFIED`.
 
-The next runtime work must begin with one concrete provider implementation and run
-its packet probes. A useful first provider is the PostgreSQL record kernel because
-it directly exercises the previously lost `psycopg` projection plus transaction
-and locking obligations. The byte-vault provider is the next natural pair for the
-real `invoice.source.attach` capability.
-
-A later capability execution compiler must remain separate from this structural
+The later capability execution compiler must remain separate from the structural
 planner and must not invent missing Cabinet semantics while lowering a capability.
