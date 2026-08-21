@@ -1,0 +1,229 @@
+contract_id: cabinet_web_local_box_sync.v1
+status: experimental
+purpose: >-
+  Define the transport-independent synchronization relation by which autonomous
+  Cabinet_web delivers one exact confirmed Invoice Card revision to the local
+  Cabinet box and receives an idempotent acceptance receipt without giving either
+  side ownership of the other side's internal runtime or storage model.
+
+participants:
+  producer:
+    id: Cabinet_web
+    authority:
+      - Invoice_Card_facts
+      - Invoice_Card_contract_version
+      - source_identity_inside_owning_Card
+      - Git_history_and_source_commit_identity
+  consumer:
+    id: cabinet_backend_local_box
+    authority:
+      - durable_local_replica
+      - local_source_bytes
+      - local_effect_authority
+      - local_operational_audit
+      - local_processing_and_integration_evidence
+
+forbidden_ownership_transfer:
+  - backend_rewrites_confirmed_Card_facts
+  - Cabinet_web_imports_backend_database_or_runtime_model
+  - backend_generates_or_replaces_Cabinet_web_source_id
+  - delivery_order_implies_revision_order
+  - filename_or_source_kind_proves_binary_media_type
+  - locally_calculated_binary_hash_is_written_back_into_confirmed_Card
+
+upstream_prerequisite:
+  repository: MigelSmirnov/Cabinet_web
+  branch: agent/source-id-contract-repair
+  pull_request: 16
+  head_sha: 4a8a375dcb82ddb0f24e62c1a11eb6ae9e05e573
+  required_decision: >-
+    source.source_id is stable identity owned by the Invoice Card and
+    invoice-source payment evidence references that identity.
+  main_must_contain_decision_before_real_canary: true
+
+delivery:
+  name: CabinetWebInvoiceRevisionDelivery
+  fields:
+    contract_version:
+      type: literal
+      value: cabinet-web-sync-v1
+    delivery_id:
+      type: string
+      semantic: synchronization.delivery.identity
+      constraints:
+        - non_empty
+        - immutable_for_retry
+    emitted_at:
+      type: timezone_aware_datetime
+      semantic: synchronization.delivery.emitted_at
+    producer_repository:
+      type: literal
+      value: MigelSmirnov/Cabinet_web
+    invoice_id:
+      type: string
+      semantic: invoice.identity
+      constraints:
+        - prefix_invoice_dash
+    card_contract_version:
+      type: literal
+      value: 1
+    card_status:
+      type: literal
+      value: confirmed
+    card_content_hash:
+      type: string
+      semantic: invoice.card_revision.content_hash
+      constraints:
+        - pattern_sha256_colon_64_lower_hex
+    source_git_commit_sha:
+      type: string
+      semantic: invoice.card_revision.git_commit
+      constraints:
+        - lower_hex_40_or_64
+    card_repository_path:
+      type: string
+      semantic: invoice.card_revision.repository_path
+      constraints:
+        - equals_data_cards_invoice_id_card_json
+    base_backend_content_hash:
+      type: nullable_string
+      semantic: synchronization.consumer_expected_current_revision
+      constraints:
+        - null_or_pattern_sha256_colon_64_lower_hex
+    card_document:
+      type: external_schema_value
+      schema_owner: Cabinet_web
+      schema_ref: schemas/invoice-card-v1.schema.json
+      semantic: invoice.card_revision.document
+      constraints:
+        - exact_document_no_projection
+        - id_equals_invoice_id
+        - card_version_equals_card_contract_version
+        - status_equals_card_status
+        - canonical_hash_equals_card_content_hash
+
+canonical_revision_hash:
+  algorithm: sha256
+  serialization: >-
+    UTF-8 JSON with ensure_ascii=false, sort_keys=true and separators=(comma,colon),
+    exactly matching Cabinet_web tools.invoice_service.canonical_json/content_hash.
+  output_format: sha256:<64 lowercase hex>
+  rule: >-
+    The local box validates the exact received Card document against the accepted
+    Cabinet_web Invoice Card V1 contract and recomputes this hash before any
+    replica becomes visible.
+
+source_expectation_relation:
+  source_set_owner: Cabinet_web_Card
+  derivation: >-
+    The expected source set is derived only from the accepted card_document. For
+    Invoice Card V1 the current set contains the single source object identified
+    by source.source_id. The delivery does not invent a second source identity.
+  current_invoice_v1_projection:
+    fields:
+      - source.source_id
+      - source.kind
+      - source.file_ref
+      - source.file_status
+      - source.note
+  byte_attachment_semantics:
+    card_acceptance_implies_source_bytes_attached: false
+    source_bytes_are_separate_local_box_effect: true
+    exact_media_type_must_be_parser_validated: true
+    expected_binary_sha256_may_be_absent_from_Card: true
+    locally_calculated_sha256_is_backend_evidence_only_when_upstream_hash_absent: true
+
+acceptance:
+  operation: accept_cabinet_web_invoice_revision
+  transport_independent: true
+  atomic_visibility: true
+  preconditions:
+    - delivery_contract_is_exactly_supported
+    - card_document_validates_as_Invoice_Card_V1
+    - card_status_is_confirmed
+    - invoice_id_matches_card_document_id
+    - recomputed_card_content_hash_matches_delivery
+    - source_git_commit_sha_is_present
+    - source_identity_contract_is_present
+  reconciliation:
+    revision_identity:
+      - invoice_id
+      - card_content_hash
+    retry_identity: delivery_id
+    rules:
+      - when_same_delivery_id_and_same_revision_then_return_already_accepted
+      - when_same_delivery_id_and_different_revision_then_delivery_identity_conflict
+      - when_no_backend_current_revision_then_base_backend_content_hash_must_be_null
+      - when_backend_current_revision_exists_then_base_backend_content_hash_must_equal_it
+      - when_base_backend_content_hash_mismatches_then_reconciliation_required_without_overwrite
+      - accepted_new_revision_never_deletes_previous_immutable_replica
+      - receipt_delivery_order_does_not_establish_Git_history_order
+
+receipt:
+  name: CabinetBackendInvoiceRevisionReceipt
+  fields:
+    contract_version:
+      type: literal
+      value: cabinet-backend-sync-receipt-v1
+    delivery_id:
+      type: string
+      semantic: synchronization.delivery.identity
+    invoice_id:
+      type: string
+      semantic: invoice.identity
+    card_content_hash:
+      type: string
+      semantic: invoice.card_revision.content_hash
+    source_git_commit_sha:
+      type: string
+      semantic: invoice.card_revision.git_commit
+    outcome:
+      type: enum
+      values:
+        - accepted
+        - already_accepted
+        - rejected_contract
+        - rejected_card
+        - delivery_identity_conflict
+        - reconciliation_required
+    accepted_at:
+      type: nullable_timezone_aware_datetime
+    backend_current_content_hash:
+      type: nullable_string
+      semantic: synchronization.consumer_current_revision
+    error_code:
+      type: nullable_string
+  disclosure:
+    allowed:
+      - exact_acceptance_outcome
+      - accepted_revision_identity
+      - consumer_current_revision_hash_for_reconciliation
+      - bounded_error_code
+    forbidden:
+      - database_primary_keys
+      - filesystem_paths
+      - vault_object_paths
+      - credentials
+      - raw_audit_storage
+
+transport_policy:
+  semantic_contract_must_not_depend_on:
+    - HTTP
+    - MCP
+    - local_IPC
+    - filesystem_drop
+    - agent_transport
+  adapters_must_be_thin: true
+  adapters_must_not:
+    - construct_or_rewrite_Card_facts
+    - choose_source_identity
+    - infer_media_type_from_kind_or_filename
+    - resolve_revision_conflict_by_last_write_wins
+
+interop_gate_effect:
+  closes_design_gap: CW-SYNC-001
+  does_not_close:
+    - CW-SOURCE-ID-001_until_upstream_PR_is_in_main
+    - CW-MEDIA-001
+    - CW-HASH-001_runtime_evidence
+  real_Cabinet_web_canary_allowed: false
