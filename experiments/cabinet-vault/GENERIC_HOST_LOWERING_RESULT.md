@@ -165,19 +165,50 @@ Therefore `host_lowering_plan.py` should now return `verification_gate: pass` an
 exit `0` for `cabinet_backend_box_v0.yaml` +
 `generic_host_profile_candidate_v0.yaml`.
 
-## Next boundary
+## Capability-level readiness is separate
 
-The next step is not another classical backend repair and not another generic
-provider. It is the first protected capability execution.
-
-Start with:
+The first protected capability now has a machine-addressable execution contract:
 
 ```text
-invoice.source.attach
+experiments/cabinet-vault/invoice_source_attach_execution_contract_v0.yaml
 ```
 
-Before implementation, bind its declared `deterministic_lowering` to a
-machine-addressable execution contract so composition cannot invent hidden rules.
-Then execute a real attachment through the verified authority, schema, record,
-byte-vault, configuration and audit providers without reintroducing Cabinet
-service/repository/router ownership.
+Readiness compiler and guards:
+
+```text
+tools/capability_execution_readiness.py
+tests/test_capability_execution_readiness.py
+```
+
+This compiler checks the exact `invoice.source.attach` capability surface,
+deterministic lowering steps, preconditions, provider verification, audit and
+disclosure bindings before executable composition is allowed.
+
+Expected current result:
+
+```text
+host_verification_gate: pass
+capability_readiness_gate: block
+blocking gap:
+  LOWERING_GAP verified_content_signature
+```
+
+The gap is deliberate and concrete. The product specification already requires a
+closed accepted media set, content-signature verification, bounded parsing and
+malformed-document rejection. What is missing is a selected generic bounded
+content-validation implementation relation and its runtime projection.
+
+The execution contract explicitly forbids closing that gap with filename,
+extension, caller-declared media type, a magic prefix alone, an unbounded parser,
+or a hidden product-specific adapter.
+
+## Next boundary
+
+Select and verify the smallest generic bounded content-validation lowering for the
+accepted JPEG/PNG/PDF source policy. Declare its implementation relation and
+runtime dependencies before code, then re-run capability readiness.
+
+Only when the capability readiness gate passes should the first real
+`attach_expected_missing_source` execution be implemented through the verified
+authority, schema, record, byte-vault, configuration and audit providers. Do not
+reintroduce Cabinet service/repository/router ownership merely to compose them.
