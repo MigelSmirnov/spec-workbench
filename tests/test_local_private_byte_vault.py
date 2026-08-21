@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import os
 from pathlib import Path
 
 import pytest
@@ -47,6 +48,22 @@ def test_stage_rejects_wrong_hash_or_size_before_publication(tmp_path):
 
     with pytest.raises(ByteVaultError, match="hash"):
         vault.stage(content, digest(b"different"), len(content))
+
+
+def test_publish_does_not_depend_on_os_link(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        os,
+        "link",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("os.link must not be used")),
+        raising=False,
+    )
+    vault = LocalPrivateByteVault(tmp_path / "vault")
+    content = b"portable-publication"
+    staged = vault.stage(content, digest(content), len(content))
+
+    final_reference = vault.publish(staged.staging_reference, digest(content), len(content))
+
+    assert vault.verify(final_reference, digest(content), len(content))
 
 
 def test_remove_staging_cannot_remove_final_reference(tmp_path):
