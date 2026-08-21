@@ -11,6 +11,7 @@ CONTRACT = ROOT / "experiments" / "cabinet-vault" / "cabinet_web_source_attach_c
 ADAPTER = ROOT / "tools" / "cabinet_web_source_attach_adapter.py"
 OLD_RUNTIME = ROOT / "tools" / "invoice_source_attach_runtime.py"
 PROBE = ROOT / "tools" / "cabinet_web_source_attach_canary_probe.py"
+EVIDENCE = ROOT / "experiments" / "cabinet-vault" / "CABINET_WEB_ATTACH_CANARY_RUNTIME_EVIDENCE.md"
 
 
 def load():
@@ -25,15 +26,44 @@ def git_blob_sha(path: Path) -> str:
     return hashlib.sha1(header + payload).hexdigest()
 
 
-def test_canary_starts_blocked_until_real_runtime_execution_passes():
+def test_canary_is_verified_by_exact_github_runtime_evidence():
     contract = load()
-    assert contract["status"] == "execution_required"
-    assert contract["interop_gate_before_execution"] == {
-        "CW-MEDIA-001": "BLOCK",
-        "CW-HASH-001": "BLOCK",
-        "real_Cabinet_web_canary_allowed": False,
+    verification = contract["verification"]
+
+    assert contract["status"] == "verified_execution_case"
+    assert verification["status"] == "PASS"
+    assert verification["workflow"] == {
+        "name": "Cabinet Web attach canary",
+        "run_id": 32507028221,
+        "run_number": 2,
+        "head_branch": "agent/cabinet-web-attach-canary",
+        "head_sha": "ca542b9b3dd60112f8cdd20c532f8a6f02c17d64",
+        "conclusion": "success",
     }
-    assert "Do not mark either finding PASS" in contract["after_successful_execution_rule"]
+    assert verification["artifact"] == {
+        "artifact_id": 9455627318,
+        "name": "cabinet-web-source-attach-canary",
+        "digest": "sha256:1f7bcc1cabd2e8d4f58cb8310b915fc47944385d6f53d20d27e81a726b11c33e",
+    }
+    assert set(verification["probes"].values()) == {"PASS"}
+    assert set(verification["probes"]) == {
+        "WEB-ATTACH-001",
+        "WEB-ATTACH-002",
+        "WEB-ATTACH-003",
+        "WEB-ATTACH-004",
+    }
+    assert EVIDENCE.is_file()
+
+
+def test_verified_canary_opens_interop_but_does_not_claim_real_user_data_execution():
+    gate = load()["interop_gate_after_execution"]
+    assert gate == {
+        "CW-MEDIA-001": "PASS",
+        "CW-HASH-001": "PASS",
+        "cabinet_web_interop_gate": "pass",
+        "real_Cabinet_web_data_canary": "allowed_not_executed",
+        "real_user_data_canary_executed": False,
+    }
 
 
 def test_canary_preserves_old_verified_attach_runtime_blob():
@@ -41,7 +71,8 @@ def test_canary_preserves_old_verified_attach_runtime_blob():
     binding = contract["implementation"]["existing_verified_attach_runtime"]
     assert binding["path"] == "tools/invoice_source_attach_runtime.py"
     assert binding["must_remain_unmodified_by_this_canary"] is True
-    assert git_blob_sha(OLD_RUNTIME) == "4517dd23f68a81a065823941d686fec4026be433"
+    assert binding["blob_sha"] == "4517dd23f68a81a065823941d686fec4026be433"
+    assert git_blob_sha(OLD_RUNTIME) == binding["blob_sha"]
 
 
 def test_adapter_is_disposable_lowering_not_new_card_authority():
@@ -57,8 +88,7 @@ def test_adapter_is_disposable_lowering_not_new_card_authority():
 
 
 def test_canary_uses_content_reference_only_after_bytes_are_observed():
-    contract = load()
-    rules = set(contract["lowering_rules"])
+    rules = set(load()["lowering_rules"])
     assert "derived_ContentReference_is_created_after_observing_bytes" in rules
     assert "durable_expected_source_hash_remains_null_when_Card_has_no_hash" in rules
     assert "durable_expected_source_media_type_remains_null_when_Card_has_no_exact_media" in rules
