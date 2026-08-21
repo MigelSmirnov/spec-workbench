@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from dataclasses import dataclass
+import json
 from typing import Any, Iterator
 
 
@@ -26,6 +27,11 @@ def _jsonb(value: dict[str, Any]):
     except ImportError as exc:  # pragma: no cover - environment dependent
         raise PostgresRecordKernelError("psycopg JSONB support is required") from exc
     return Jsonb(value)
+
+
+def _resource_lock_identity(namespace: str, resource_id: str) -> str:
+    """Encode a composite resource identity as PostgreSQL-safe deterministic text."""
+    return json.dumps([namespace, resource_id], ensure_ascii=True, separators=(",", ":"))
 
 
 @dataclass(frozen=True)
@@ -53,7 +59,7 @@ class RecordTransaction:
     def lock_resource(self, namespace: str, resource_id: str) -> None:
         if not namespace or not resource_id:
             raise PostgresRecordKernelError("namespace and resource_id must be non-empty")
-        lock_key = f"{namespace}\x00{resource_id}"
+        lock_key = _resource_lock_identity(namespace, resource_id)
         with self.connection.cursor() as cursor:
             cursor.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))", (lock_key,))
         self._locked.add((namespace, resource_id))
