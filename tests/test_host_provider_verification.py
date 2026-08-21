@@ -27,14 +27,12 @@ def git_blob_sha(path: Path) -> str:
 def test_every_candidate_provider_has_exactly_one_verification_packet():
     profile = load(PROFILE)
     packets = load(PACKETS)["provider_packets"]
-
     assert set(packets) == set(profile["providers"])
 
 
 def test_each_packet_covers_exactly_the_requirements_declared_by_its_provider():
     profile = load(PROFILE)
     packets = load(PACKETS)["provider_packets"]
-
     for provider_id, provider in profile["providers"].items():
         assert set(packets[provider_id]["covers_requirements"]) == set(provider["satisfies"])
 
@@ -42,26 +40,20 @@ def test_each_packet_covers_exactly_the_requirements_declared_by_its_provider():
 def test_packet_runtime_dependencies_do_not_hide_profile_dependencies():
     profile = load(PROFILE)
     packets = load(PACKETS)["provider_packets"]
-
     for provider_id, provider in profile["providers"].items():
-        declared = set(provider["runtime_dependencies"])
-        packet_dependencies = set(packets[provider_id].get("runtime_dependencies", []))
-        assert packet_dependencies == declared
+        assert set(packets[provider_id].get("runtime_dependencies", [])) == set(provider["runtime_dependencies"])
 
 
 def test_authority_packet_uses_the_declared_authority_probe_vocabulary():
     authority = load(AUTHORITY)
     packets = load(PACKETS)["provider_packets"]
-
-    contract_probes = {item["id"] for item in authority["verification_obligations"]}
-    packet_probes = {item["id"] for item in packets["authority_kernel"]["probes"]}
-
-    assert packet_probes == contract_probes
+    assert {item["id"] for item in authority["verification_obligations"]} == {
+        item["id"] for item in packets["authority_kernel"]["probes"]
+    }
 
 
 def test_concrete_provider_and_probe_runner_match_reviewed_fingerprints():
     packets = load(PACKETS)["provider_packets"]
-
     for provider_id in (
         "typed_schema_kernel",
         "postgres_record_kernel",
@@ -71,7 +63,6 @@ def test_concrete_provider_and_probe_runner_match_reviewed_fingerprints():
         packet = packets[provider_id]
         implementation = packet["implementation"]
         probe_runner = packet["probe_runner"]
-
         assert git_blob_sha(ROOT / implementation["path"]) == implementation["blob_sha"]
         assert git_blob_sha(ROOT / probe_runner["path"]) == probe_runner["blob_sha"]
         assert probe_runner["successful_exit"] == 0
@@ -93,6 +84,7 @@ def test_provider_verification_states_are_evidence_backed():
     } == {
         "postgres_record_kernel",
         "local_private_byte_vault",
+        "protected_configuration_kernel",
     }
     assert {
         provider_id
@@ -101,7 +93,6 @@ def test_provider_verification_states_are_evidence_backed():
     } == {
         "authority_kernel",
         "typed_schema_kernel",
-        "protected_configuration_kernel",
     }
 
     for provider_id, provider in profile["providers"].items():
@@ -116,7 +107,6 @@ def test_provider_verification_states_are_evidence_backed():
 
 def test_pass_probe_requires_recorded_executed_evidence():
     packets = load(PACKETS)["provider_packets"]
-
     for packet in packets.values():
         for probe in packet["probes"]:
             if probe["status"] != "PASS":
@@ -130,7 +120,6 @@ def test_pass_probe_requires_recorded_executed_evidence():
 def test_provider_pass_requires_all_packet_probes_pass():
     profile = load(PROFILE)
     packets = load(PACKETS)["provider_packets"]
-
     for provider_id, provider in profile["providers"].items():
         if provider["verification"]["status"] != "PASS":
             continue
