@@ -19,55 +19,82 @@ def test_audit_is_pinned_to_reviewed_cabinet_web_main_state():
     audit = load()
     source = audit["source_repository"]
 
+    assert audit["audit_version"] == "cabinet_web_backend_interop.v1"
     assert source["repository"] == "MigelSmirnov/Cabinet_web"
     assert source["ref"] == "main"
-    assert source["commit_sha"] == "63f1752dc09be93156c6e7bf45f3c80e6c7f8387"
+    assert source["commit_sha"] == "d4419e3b948d49bd85a99a0941a350a73494cd27"
     assert source["reviewed_on"] == "2026-08-21"
+    assert source["accepted_source_identity_via_pull_request"] == 16
     assert source["artifacts"] == {
         "architecture/README.md": "388a7e22e852616c57da438d5a7ee4a5b7f4a6bc",
         "architecture/app-architecture.yaml": "0a205c6fdec5b19001647ecea0981330cec1119e",
-        "docs/01-storage/INVOICE_CARD_FORMAT.md": "fd0d5ea53d39798a8a8d1c8768fda2d106fd994c",
+        "docs/00-product-discovery/DOMAIN_MODEL.md": "cd6747fca920f589cdbc340f39381739eac83f51",
+        "docs/01-storage/INVOICE_CARD_FORMAT.md": "56c4a42bf51fac025410d5f6a232b99e4a2835d7",
+        "docs/01-storage/STORAGE_MODEL.md": "62965e9e69d525dfdb69fb738c55b522f8f97f17",
         "docs/02-tools/INVOICE_WORKFLOW.md": "2292211ec763f3fa3e31b178307b28eebf6cd6dc",
         "docs/02-tools/INVOICE_TOOLS_MODEL.md": "789708a756206faf26d0260611eb8f73fb327003",
-        "schemas/invoice-card-v1.schema.json": "670d493cd32430f420678dea9489a2fec7cf9124",
-        "tools/invoice_validation.py": "1a29a9ea9623222e4246eb23d7477e9f25f3637e",
-        "tools/invoice_evidence_service.py": "b0a3951244550e5d20b4b84225a6e62b836db459",
-        "tests/fixtures/invoices/obramat-cash/card.json": "089cc56fa2133bdee3cb89710a393b99d01100ef",
-        "tests/test_invoice_evidence_service.py": "3101f1d64d41cc60db54854de7b2ce3d990268c9",
+        "schemas/invoice-card-v1.schema.json": "25042abe5d0387671d836f4e39601b1e5d63be2e",
+        "tools/invoice_service.py": "c7649351f4c5e833d7a49fd4738f47042b27e417",
+        "tools/invoice_draft_service.py": "e8cfb81d1a15dd31a57e008aaafcc65d0395f209",
+        "tools/invoice_validation.py": "f2337466024fe64cda27f9170d42f9c1673466b5",
+        "tools/invoice_evidence_service.py": "2670fa3fe7e37f6f90064a45b336b8e0374b661b",
+        "tests/fixtures/invoices/obramat-cash/card.json": "2a084aad5a285b306f0b0be07f188c686b4e4d5c",
+        "tests/test_invoice_draft_service.py": "3a1842a161ae6259475fc392ab850396c2281590",
+        "tests/test_invoice_evidence_service.py": "9854611880d2dde44fa2d6db67fc2062127f2980",
+        "tests/test_invoice_validation.py": "6550d5dfe91b6b72e23a1b7db4d4b80f51356406",
     }
 
 
-def test_real_cabinet_web_canary_is_blocked_by_exact_known_findings():
+def test_source_identity_and_sync_design_are_closed_while_real_canary_stays_blocked():
     audit = load()
     gate = audit["gate"]
     findings = {item["id"]: item for item in audit["findings"]}
 
     assert gate["isolated_box_runtime_evidence"] == "PASS"
+    assert gate["cabinet_web_source_identity_contract"] == "PASS"
+    assert gate["cabinet_web_sync_contract_design"] == "PASS"
     assert gate["cabinet_web_interop_gate"] == "block"
     assert gate["real_cabinet_web_canary"] == "forbidden_until_blockers_closed"
-    assert gate["blocking_findings"] == [
-        "CW-SOURCE-ID-001",
-        "CW-SYNC-001",
-        "CW-MEDIA-001",
-        "CW-HASH-001",
-    ]
+    assert gate["blocking_findings"] == ["CW-MEDIA-001", "CW-HASH-001"]
+
+    assert findings["CW-SOURCE-ID-001"]["severity"] == "PASS"
+    assert findings["CW-SYNC-001"]["severity"] == "PASS"
     assert {
         finding_id
         for finding_id, finding in findings.items()
         if finding["severity"] == "BLOCK"
-    } == set(gate["blocking_findings"])
+    } == {"CW-MEDIA-001", "CW-HASH-001"}
 
 
-def test_source_identity_drift_belongs_to_upstream_card_contract_not_backend_adapter():
+def test_source_identity_is_owned_by_upstream_card_contract_not_backend_adapter():
     audit = load()
     finding = next(item for item in audit["findings"] if item["id"] == "CW-SOURCE-ID-001")
 
-    assert finding["class"] == "UPSTREAM_CONTRACT_DRIFT"
+    assert finding["class"] == "UPSTREAM_CONTRACT_ALIGNED"
     assert finding["owner"] == "Cabinet_web/card-contracts"
-    forbidden = set(finding["forbidden_resolution"])
-    assert "generate_source_id_inside_backend_adapter" in forbidden
-    assert "infer_source_identity_from_filename" in forbidden
-    assert "infer_source_identity_from_payment_source_ref_without_contract" in forbidden
+    assert set(finding["forbidden_regression"]) == {
+        "generate_source_id_inside_backend_adapter",
+        "infer_source_identity_from_filename",
+        "replace_source_identity_when_storage_metadata_changes",
+    }
+
+
+def test_sync_contract_preserves_revision_and_authority_rules():
+    audit = load()
+    finding = next(item for item in audit["findings"] if item["id"] == "CW-SYNC-001")
+
+    assert finding["class"] == "INTEGRATION_CONTRACT_DEFINED"
+    assert finding["severity"] == "PASS"
+    assert finding["contract"]["machine"] == "experiments/cabinet-vault/cabinet_web_sync_contract_v1.yaml"
+    assert {
+        "Cabinet_web_remains_authority_for_confirmed_Card_facts",
+        "backend_accepts_exact_revision_without_rewriting_it",
+        "same_delivery_same_revision_is_idempotent",
+        "same_delivery_different_revision_is_conflict",
+        "stale_base_requires_reconciliation_without_overwrite",
+        "arrival_order_does_not_define_Git_revision_order",
+        "Card_acceptance_does_not_claim_source_bytes_are_attached",
+    } == set(finding["preserved_rules"])
 
 
 def test_lifecycle_and_authority_split_are_already_aligned():
@@ -80,7 +107,7 @@ def test_lifecycle_and_authority_split_are_already_aligned():
     assert findings["CW-AUTHORITY-001"]["severity"] == "PASS"
 
 
-def test_media_mapping_cannot_use_kind_or_filename_as_signature_proof():
+def test_media_mapping_cannot_use_kind_filename_or_caller_mime_as_signature_proof():
     audit = load()
     finding = next(item for item in audit["findings"] if item["id"] == "CW-MEDIA-001")
 
@@ -99,4 +126,5 @@ def test_external_fingerprint_refresh_is_required_before_interop_claim_changes()
     assert policy["Cabinet_web_source_contract_change_requires_connector_review"] is True
     assert policy["source_repository_fingerprint_drift"] == "block_and_refresh_audit"
     assert policy["backend_adapter_may_not_resolve_upstream_contract_drift"] is True
+    assert policy["synchronization_transport_may_not_own_business_semantics"] is True
     assert policy["real_Cabinet_web_data_may_not_enter_box_until_interop_gate_passes"] is True
