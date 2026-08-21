@@ -84,6 +84,17 @@ status: pass
 attach_runtime_exit=0
 ```
 
+## Post-promotion guard verification
+
+After recording the PASS runtime evidence and quoting the YAML evidence date as a stable string scalar, the final targeted machine-state guards were rerun in Termux:
+
+```text
+21 passed in 1.02s
+git diff --check: pass
+```
+
+No implementation or runtime-probe fingerprint changed during this final evidence-metadata repair, so the successful end-to-end runtime probe did not need to be repeated.
+
 ## What this proves
 
 For the fingerprint-bound single-file execution case, the selected Termux runtime proved the declared cross-provider ordering and invariants:
