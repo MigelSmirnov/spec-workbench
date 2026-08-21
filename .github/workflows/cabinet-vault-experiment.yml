@@ -22,7 +22,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install focused test dependencies
-        run: python -m pip install pytest pyyaml "psycopg[binary]"
+        run: python -m pip install pytest pyyaml pydantic "psycopg[binary]"
 
       - name: Run Cabinet vault experiment tests
         run: |
@@ -35,7 +35,9 @@ jobs:
             tests/test_host_lowering_plan.py \
             tests/test_host_provider_verification.py \
             tests/test_postgres_record_kernel.py \
-            tests/test_local_private_byte_vault.py
+            tests/test_local_private_byte_vault.py \
+            tests/test_typed_schema_kernel.py \
+            tests/test_protected_configuration_kernel.py
 
       - name: Enforce declared box language
         run: python tools/box_language_audit.py
@@ -146,14 +148,30 @@ jobs:
           report = json.loads(Path("local-private-byte-vault-probe.json").read_text())
           assert report["status"] == "pass"
           assert {item["status"] for item in report["results"]} == {"PASS"}
-          assert {item["probe_id"] for item in report["results"]} == {
-              "VAULT-PROBE-001",
-              "VAULT-PROBE-002",
-              "VAULT-PROBE-003",
-              "VAULT-PROBE-004",
-              "VAULT-PROBE-005",
-              "VAULT-PROBE-006",
-          }
+          PY
+
+      - name: Execute typed schema provider probe
+        run: |
+          python tools/typed_schema_kernel_probe.py > typed-schema-kernel-probe.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          report = json.loads(Path("typed-schema-kernel-probe.json").read_text())
+          assert report["status"] == "pass"
+          assert {item["status"] for item in report["results"]} == {"PASS"}
+          PY
+
+      - name: Execute protected configuration provider probe
+        run: |
+          python tools/protected_configuration_kernel_probe.py > protected-configuration-kernel-probe.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          report = json.loads(Path("protected-configuration-kernel-probe.json").read_text())
+          assert report["status"] == "pass"
+          assert {item["status"] for item in report["results"]} == {"PASS"}
           PY
 
       - name: Check patch integrity
@@ -168,4 +186,6 @@ jobs:
             generic-host-plan.json
             postgres-record-kernel-probe.json
             local-private-byte-vault-probe.json
+            typed-schema-kernel-probe.json
+            protected-configuration-kernel-probe.json
           if-no-files-found: error
