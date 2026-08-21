@@ -26,6 +26,8 @@ GENERATED_BACKEND_BOUNDARY_AUDIT.md
 GENERIC_HOST_LOWERING_RESULT.md
 POSTGRES_RECORD_KERNEL_RUNTIME_EVIDENCE.md
 LOCAL_PRIVATE_BYTE_VAULT_RUNTIME_EVIDENCE.md
+PROTECTED_CONFIGURATION_KERNEL_RUNTIME_EVIDENCE.md
+TYPED_SCHEMA_KERNEL_RUNTIME_EVIDENCE.md
 PLAN_ACTUAL_MONETARY_DERIVABILITY_RESULT.md
 ```
 
@@ -41,155 +43,111 @@ candidate host structural plan: compiled, gaps [], gate block, exit 2
 git diff --check: pass
 ```
 
-The generated-backend and host-plan non-zero exits are expected fail-closed
-verification behavior, not failures of classification/structure.
-
-## Current generic provider state
+Later provider execution established four PASS providers:
 
 ```text
 postgres_record_kernel          PASS
 local_private_byte_vault        PASS
-typed_schema_kernel             UNVERIFIED
-protected_configuration_kernel  UNVERIFIED
+protected_configuration_kernel  PASS
+typed_schema_kernel             PASS
 authority_kernel                UNVERIFIED
 ```
 
-The complete host remains blocked until all required providers are PASS.
+The complete host remains blocked until `authority_kernel` also produces
+fingerprint-bound executed evidence.
 
-## postgres_record_kernel — verified
+## Verified providers
 
-Artifacts:
-
-```text
-tools/postgres_record_kernel.py
-tools/postgres_record_kernel_probe.py
-experiments/cabinet-vault/POSTGRES_RECORD_KERNEL_RUNTIME_EVIDENCE.md
-```
-
-The first real runtime attempt found an embedded-NUL advisory-lock bug. The lock
-identity was repaired to deterministic PostgreSQL-text-safe composite identity.
-The rerun produced:
+### postgres_record_kernel
 
 ```text
-RECORD-PROBE-001 PASS
-RECORD-PROBE-002 PASS
-RECORD-PROBE-003 PASS
-RECORD-PROBE-004 PASS
-RECORD-PROBE-005 PASS
+RECORD-PROBE-001..005 PASS
 exit 0
 ```
 
-This proves the selected runtime has `psycopg`, atomic commit/rollback,
-exact-resource serialization, no partial state after rollback, and append-only
-audit persistence.
+The first real runtime attempt exposed an embedded-NUL advisory-lock bug. The
+provider was repaired to use deterministic PostgreSQL-text-safe composite lock
+identity before promotion.
 
-## local_private_byte_vault — verified
-
-Artifacts:
+### local_private_byte_vault
 
 ```text
-tools/local_private_byte_vault.py
-tools/local_private_byte_vault_probe.py
-experiments/cabinet-vault/LOCAL_PRIVATE_BYTE_VAULT_RUNTIME_EVIDENCE.md
-```
-
-The first Termux filesystem run found that the selected Python runtime lacks
-`os.link`. Publication was repaired to a portable generic mechanism:
-
-```text
-per-content flock
-+ exact existing-final verification
-+ conflict rejection
-+ same-filesystem atomic staging -> final rename
-+ fsync
-+ reopen/hash/size verification
-```
-
-The rerun produced:
-
-```text
-VAULT-PROBE-001 PASS
-VAULT-PROBE-002 PASS
-VAULT-PROBE-003 PASS
-VAULT-PROBE-004 PASS
-VAULT-PROBE-005 PASS
-VAULT-PROBE-006 PASS
+VAULT-PROBE-001..006 PASS
 exit 0
 ```
 
-The vault owns opaque references, staging verification, content-addressed
-publication and committed-publication recovery. Cabinet `source_id` conflict
-meaning remains at the capability/record layer under exact resource locking.
+The first Termux run exposed missing `os.link`. Publication was repaired to
+per-content `flock` + conflict check + same-filesystem atomic rename + fsync +
+reopen/hash/size verification. The generic vault does not absorb Cabinet
+`source_id` conflict semantics.
 
-## typed_schema_kernel — implementation ready, evidence pending
+### protected_configuration_kernel
+
+```text
+CONFIG-PROBE-001..003 PASS
+exit 0
+```
+
+Missing required secret configuration blocks ready state; protected values do
+not enter caller/audit output; symbolic references select host-owned inputs
+without exposing the source key or secret as business data.
+
+### typed_schema_kernel
+
+```text
+SCHEMA-PROBE-001..003 PASS
+status: pass
+exit 0
+```
+
+The selected Termux runtime initially lacked `pydantic`; Pydantic v2 installation
+attempted a `pydantic-core` build and failed. The provider intentionally supports
+the Pydantic v1 validation API as a lowering/runtime choice. A compatible runtime
+was selected and the fingerprint-bound probe then passed. No Pydantic major
+version becomes Cabinet product semantics.
+
+## authority_kernel — candidate ready, evidence pending
 
 Artifacts:
 
 ```text
-tools/typed_schema_kernel.py
-tools/typed_schema_kernel_probe.py
-tests/test_typed_schema_kernel.py
-```
-
-The provider is fingerprint-bound but remains `UNVERIFIED` until execution.
-Required probes:
-
-```text
-SCHEMA-PROBE-001  invalid typed input rejected before operation/effect
-SCHEMA-PROBE-002  undeclared fields rejected at closed caller boundary
-SCHEMA-PROBE-003  invalid provider output rejected before disclosure
-```
-
-The branch workflow now installs `pydantic` explicitly because it is a declared
-runtime projection dependency.
-
-## protected_configuration_kernel — implementation ready, evidence pending
-
-Artifacts:
-
-```text
-tools/protected_configuration_kernel.py
-tools/protected_configuration_kernel_probe.py
-tests/test_protected_configuration_kernel.py
-```
-
-The provider is fingerprint-bound but remains `UNVERIFIED` until execution.
-Required probes:
-
-```text
-CONFIG-PROBE-001  missing required protected configuration blocks ready state
-CONFIG-PROBE-002  protected material cannot appear in caller/audit output
-CONFIG-PROBE-003  symbolic reference selects exact host provider input without
-                  exposing source key or secret as business data
-```
-
-## Authority split
-
-Durable authority meaning is declared in:
-
-```text
+tools/authority_kernel.py
+tools/authority_kernel_probe.py
+tests/test_authority_kernel.py
 experiments/cabinet-vault/cabinet_authority_contract_v0.yaml
 ```
 
-It preserves principal/credential boundary separation, exact capability and
-resource scope, host-bound actor provenance, effect authority, default-deny
-disclosure, revocation meaning and append-only audit meaning.
+The implementation is fingerprint-bound in
+`generic_host_provider_verification_v0.yaml` but remains `UNVERIFIED` until the
+selected runtime executes all eight probes:
 
-Mechanisms such as PostgreSQL credential storage, Argon2id, session/throttle
-storage, Linux administration and HTTP/MCP/IPC remain generic lowering choices.
+```text
+AUTH-PROBE-001  caller-supplied authorization_decision cannot authorize
+AUTH-PROBE-002  revoked principal/credential loses future authority
+AUTH-PROBE-003  exact capability + exact resource scope required
+AUTH-PROBE-004  synchronization credential rejected at local-agent boundary
+AUTH-PROBE-005  local-agent credential rejected as synchronization authority
+AUTH-PROBE-006  undeclared effect/disclosure denied
+AUTH-PROBE-007  protected mutation actor bound from authenticated principal
+AUTH-PROBE-008  audit evidence contains no reusable credential material
+```
 
-Open questions remain explicit:
+The candidate uses generic principal, credential, exact grant, capability policy,
+actor binding and sanitized audit records. This is an executable candidate
+representation only; it does **not** claim `AUTH-OQ-001` or `AUTH-OQ-002` are
+closed and contains no Cabinet role names.
+
+## Authority open questions remain explicit
 
 ```text
 AUTH-OQ-001  smallest generic grant representation across independent boxes
 AUTH-OQ-002  generic audit-event vocabulary vs Cabinet-specific event meaning
 ```
 
-Do not import Cabinet role names into the generic authority kernel to close them.
+Do not close these merely because the candidate provider can execute the current
+archive/source authority obligations.
 
 ## PlanActual remains reopened
-
-Do not choose monetary meaning in compiler/adapter code.
 
 ```text
 PA-MONEY-001  authoritative planned item amount + exact basis
@@ -197,16 +155,19 @@ PA-MONEY-002  actual comparison: Invoice Card net_amount or gross_amount
 PA-MONEY-003  direct comparability or explicit accepted conversion evidence
 ```
 
+Do not choose these meanings in compiler/adapter code.
+
 ## Immediate next work
 
-1. Execute `typed_schema_kernel_probe.py` and
-   `protected_configuration_kernel_probe.py` in the selected Termux runtime.
-2. Record evidence and promote only probes/providers that actually PASS.
-3. Implement and verify `authority_kernel` against `AUTH-PROBE-001..008` without
-   leaking Cabinet role names into the generic host.
-4. Only after all five required providers PASS, compile and execute one real
-   `invoice.source.attach` capability without reintroducing service/repository/
-   router ownership.
+1. Execute the authority unit/guard set and `tools/authority_kernel_probe.py` in
+   the selected Termux runtime.
+2. If and only if `AUTH-PROBE-001..008` all PASS with exit 0, record evidence and
+   promote `authority_kernel`.
+3. Re-run `host_lowering_plan.py`; with five required providers PASS its
+   verification gate should become `pass` rather than `block`.
+4. Then compile and execute one real `invoice.source.attach` capability using the
+   verified generic authority/schema/record/vault/config providers, without
+   reintroducing Cabinet service/repository/router ownership.
 5. Keep PlanActual monetary mapping blocked until PA-MONEY-001..003 are explicit
    accepted Cabinet product decisions.
 
