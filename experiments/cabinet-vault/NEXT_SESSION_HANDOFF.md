@@ -1,63 +1,46 @@
 # Cabinet Vault — next session handoff
 
-## Current direction
+## Direction
 
-The experiment is not trying to regenerate the classical Cabinet Backend
-application more accurately.
+The experiment tests Cabinet as a locally running self-described data/authority
+box compiled into a generic host, not as a permanently product-specific backend
+application.
 
-The target remains:
+Target shape:
 
 ```text
 Cabinet durable semantic contract
         ↓
 compiled box capabilities / policies / schemas
         ↓
-generic local host and declared generic lowerings
+generic host + verified generic providers
         ↓
 agent-side composition with independent external boxes/connectors
 ```
 
-Intended deployment shape:
-
-```text
-generic host
-+ compiled self-described Cabinet box
-+ local durable data/storage
-```
-
-Cross-product work is composed outside Cabinet. Cabinet should not permanently
-own Registry, PresuPro, Holded, VPS, HTTP, or product-specific transport clients
-merely because a workflow crosses those systems.
-
 Core rules:
 
 > Keep meaning durable. Treat everything provably derivable from that meaning as
-> a cheap disposable compilation artifact.
+> disposable compilation output.
 
-> Deterministic implementation may implement declared rules. It must not silently
-> extend the language or choose missing product meaning.
+> Deterministic compiler/host code may implement declared rules only. It must not
+> silently extend the language or choose missing product meaning.
 
 ## Read first
 
 ```text
 GENERATED_BACKEND_BOUNDARY_AUDIT.md
 GENERIC_HOST_LOWERING_RESULT.md
+POSTGRES_RECORD_KERNEL_RUNTIME_EVIDENCE.md
 PLAN_ACTUAL_MONETARY_DERIVABILITY_RESULT.md
 ```
 
-The old generated classical backend was not repaired.
+The old generated classical backend remains diagnostic evidence. Do not repair
+its external integration stubs by hand.
 
-## Generated-backend boundary audit
+## Boundary audit
 
-Implemented:
-
-```text
-tools/cabinet_boundary_audit.py
-experiments/cabinet-vault/generated_backend_failure_evidence_v0.yaml
-tests/test_cabinet_boundary_audit.py
-```
-
-Dispositions:
+The failed generated backend is classified into three dispositions:
 
 ```text
 BOUNDARY_LEAK
@@ -74,331 +57,197 @@ DOMAIN_SEMANTIC_GAP
   -> keep and close in Cabinet semantic specification
 ```
 
-Representative evidence includes the missing interface implementation relation,
-lost `psycopg` projection, skipped required verification, external-boundary stub
-concentration, authority construction mismatches, and unresolved
-PlanActual/RetentionRelease behavior.
-
-Classification success is not backend verification.
-
-## Verification rule
+Required verification remains fail closed:
 
 ```text
-PASS       required evidence executed and passed
-FAIL       required evidence executed and failed
-UNVERIFIED required evidence was not obtained
-SKIP       evidence was not executed
+PASS       executed and passed
+FAIL       executed and failed
+UNVERIFIED required evidence not obtained
+SKIP       not executed; never equivalent to PASS
 ```
 
-For required evidence:
+## Executed experiment evidence
+
+A real Termux run on 2026-08-21 executed the focused experiment suite:
 
 ```text
-missing -> UNVERIFIED
-SKIP    -> UNVERIFIED
+114 passed in 2.25s
 ```
 
-The real failed generated-backend evidence intentionally keeps a blocking gate.
+Box language audit:
 
-## Authority semantic split
+```text
+pass
+15 rules
+exit 0
+```
 
-Artifacts:
+Generated-backend boundary audit:
+
+```text
+status: classified
+verification_gate: block
+exit: 2
+```
+
+Candidate host plan before provider promotion:
+
+```text
+status: compiled
+gaps: []
+verification_gate: block
+runtime_dependencies: [psycopg, pydantic]
+exit: 2
+```
+
+`git diff --check` passed.
+
+## Generic host provider state
+
+Current candidate profile:
+
+```text
+postgres_record_kernel          PASS
+authority_kernel                UNVERIFIED
+typed_schema_kernel             UNVERIFIED
+local_private_byte_vault        UNVERIFIED
+protected_configuration_kernel  UNVERIFIED
+```
+
+The complete host remains blocked because every required provider must be PASS.
+
+## PostgreSQL record kernel — verified
+
+Implementation:
+
+```text
+tools/postgres_record_kernel.py
+```
+
+Probe runner:
+
+```text
+tools/postgres_record_kernel_probe.py
+```
+
+Machine packet:
+
+```text
+experiments/cabinet-vault/generic_host_provider_verification_v0.yaml
+```
+
+Executed evidence:
+
+```text
+experiments/cabinet-vault/POSTGRES_RECORD_KERNEL_RUNTIME_EVIDENCE.md
+```
+
+The first real runtime attempt found a provider bug: an embedded NUL in the
+composite advisory-lock key was invalid PostgreSQL text. The provider was fixed
+to use deterministic text-safe composite identity and a regression guard was
+added.
+
+After the fix:
+
+```text
+12 passed in 0.64s
+
+RECORD-PROBE-001 PASS  psycopg imports
+RECORD-PROBE-002 PASS  commit/rollback atomicity
+RECORD-PROBE-003 PASS  exact-resource locking
+RECORD-PROBE-004 PASS  no partial state after failure
+RECORD-PROBE-005 PASS  append-only audit persistence
+record_probe_exit=0
+```
+
+This is sufficient to promote only `postgres_record_kernel` to PASS for the
+fingerprint-bound implementation and probe runner.
+
+## Authority split
+
+Durable Cabinet authority semantics remain in:
 
 ```text
 experiments/cabinet-vault/cabinet_authority_contract_v0.yaml
-tests/test_cabinet_authority_contract.py
-tests/test_cabinet_authority_manifest.py
 ```
 
-Durable authority semantics now include:
+They include principal separation, credential-class non-interchangeability,
+exact capability/resource scope, host-bound actor provenance, effect authority,
+default-deny disclosure, revocation meaning, and append-only audit meaning.
+
+PostgreSQL, Argon2id, verifier/session/throttle storage, Linux administration,
+and transport choices remain generic mechanisms/lowering rather than Cabinet
+semantic identity.
+
+Open authority questions remain:
 
 ```text
-principal identity and trust-boundary separation
-credential-class non-interchangeability and revocation meaning
-exact capability authorization
-exact resource scope authorization
-host-bound actor/delegation provenance
-explicit effect authority
-default-deny disclosure authority
-append-only audit meaning
-```
-
-The following remain generic host mechanisms/lowering rather than Cabinet
-semantic identity:
-
-```text
-PostgresAccessControlBackend
-PostgreSQL
-Argon2id
-verifier/throttle/session storage
-Linux administration command shape
-HTTP / MCP / IPC transport choice
-```
-
-Open authority questions remain explicit:
-
-```text
-AUTH-OQ-001
-  smallest generic grant representation across independent boxes
-
-AUTH-OQ-002
-  split between generic audit-event vocabulary and Cabinet capability-specific
-  event meaning
+AUTH-OQ-001  smallest generic grant representation across boxes
+AUTH-OQ-002  generic audit vocabulary vs Cabinet-specific event meaning
 ```
 
 Do not solve them by importing Cabinet role names into the generic host kernel.
 
-## Generic host lowering — structural planner
+## PlanActual remains reopened
 
-Artifacts:
-
-```text
-experiments/cabinet-vault/generic_host_lowering_contract_v0.yaml
-experiments/cabinet-vault/generic_host_profile_candidate_v0.yaml
-tools/host_lowering_plan.py
-tests/test_generic_host_lowering_contract.py
-tests/test_host_lowering_plan.py
-```
-
-Planner rules:
-
-```text
-GHL-REL-001
-GHL-PROJ-001
-GHL-VERIFY-001
-GHL-VERIFY-002
-```
-
-The lowering contract pins the reviewed planner source blob and names
-conformance tests. `GHL-SEM-001` is deliberately not implemented by this
-structural planner; it has no product-semantic mapping API.
-
-The candidate profile resolves every host requirement of
-`cabinet_backend_box_v0.yaml` to one provider and projects:
-
-```text
-pydantic
-psycopg
-```
-
-Expected state:
-
-```text
-status = compiled
-gaps = []
-verification_gate = block
-```
-
-All candidate providers remain `UNVERIFIED`.
-
-## Provider verification packets
-
-Artifacts:
-
-```text
-experiments/cabinet-vault/generic_host_provider_verification_v0.yaml
-tests/test_host_provider_verification.py
-```
-
-Packets now exist for:
-
-```text
-authority_kernel
-typed_schema_kernel
-postgres_record_kernel
-local_private_byte_vault
-protected_configuration_kernel
-```
-
-Each packet covers exactly the requirements its profile provider claims and
-carries the same runtime dependency declaration.
-
-Important proof obligations include:
-
-```text
-authority_kernel
-  AUTH-PROBE-001..008
-
-typed_schema_kernel
-  invalid input before effect
-  closed-schema extra-field rejection
-  invalid output before disclosure/settlement
-  dependency: pydantic
-
-postgres_record_kernel
-  dependency: psycopg
-  atomic commit/rollback
-  exact-resource locking
-  no partial metadata state
-  append-only audit persistence
-
-local_private_byte_vault
-  opaque host-owned paths
-  stage/reopen/hash verification
-  conflict exclusion
-  atomic publication/recovery
-  readiness block on unresolved recovery
-  symlink/device/non-regular escape rejection
-
-protected_configuration_kernel
-  required secret absence blocks readiness
-  secrets never enter caller-visible data/audit
-  configuration references do not become business data
-```
-
-Every probe is currently:
-
-```text
-UNVERIFIED
-```
-
-Guards require:
-
-```text
-PASS probe -> executed=true + recorded evidence
-provider PASS -> every required packet probe PASS
-```
-
-Do not promote profile status manually.
-
-## Current runtime boundary
-
-Declarative architecture has reached the point where the next advancement requires
-**a concrete provider implementation and executed runtime evidence**.
-
-Do not build capability execution and call it verified while providers are only
-candidate/UNVERIFIED. That would repeat the failure mode this experiment is meant
-to remove.
-
-The best first concrete provider is `postgres_record_kernel` because it directly
-exercises the previously lost `psycopg` projection plus transaction and locking
-obligations. `local_private_byte_vault` is the natural second provider for the
-real `invoice.source.attach` capability.
-
-## Executed evidence status
-
-Historical evidence from 2026-08-20 remains:
-
-```text
-experiment suite: 53 passed
-built-in adversarial mutation/audit: 3 passed
-box language CLI audit: pass, 15 rules, 0 findings
-```
-
-Those results predate the newest boundary, authority, host-lowering, provider
-packet, and PlanActual changes.
-
-Branch workflow:
-
-```text
-.github/workflows/cabinet-vault-experiment.yml
-```
-
-It is configured to run the focused box/Cabinet/PlanActual/authority/host tests,
-box-language audit, boundary audit, and candidate host plan. It asserts that the
-old generated backend and the candidate host plan remain fail-closed.
-
-This connector session has not obtained a completed push-triggered Actions run
-result. Therefore the newest changes are **not recorded as PASS yet**. Workflow
-configuration is not execution evidence.
-
-## PlanActual status
-
-Read:
-
-```text
-examples/cabinet-backend/01_models_plan_actual_monetary_gap.md
-examples/cabinet-backend/02_rules_plan_actual_semantic_gap.md
-examples/cabinet-backend/03_open_questions.md   # OQ-008
-PLAN_ACTUAL_MONETARY_DERIVABILITY_RESULT.md
-```
-
-The former aliases:
+The previous aliases:
 
 ```text
 EstimateItemSnapshot.total
 InvoiceLine.total
 ```
 
-are no longer accepted as closed monetary semantics. PresuPro has no proved
-single canonical per-item total for this purpose; Invoice Card V1 has no
-`InvoiceLine.total` and exposes distinct `net_amount` and `gross_amount` bases.
+are not accepted as closed monetary semantics.
 
-State 2 monetary semantics are:
+Open decisions:
 
 ```text
-REOPENED
+PA-MONEY-001  authoritative planned item amount + exact basis
+PA-MONEY-002  actual comparison meaning: net_amount or gross_amount
+PA-MONEY-003  direct comparability or explicit conversion evidence
 ```
 
-Quantity semantics remain accepted.
-
-Open business decisions:
-
-```text
-PA-MONEY-001
-  authoritative planned item amount + exact monetary/tax basis
-
-PA-MONEY-002
-  actual Invoice Card V1 comparison meaning: net_amount or gross_amount
-
-PA-MONEY-003
-  direct comparability or explicit accepted conversion evidence
-```
-
-No answer has been invented. Derivability remains intentionally unresolved until
-explicit source/target meaning is accepted.
+Do not hide these choices in an adapter, compiler heuristic, or generated code.
 
 ## Immediate next work
 
-Do not return to generated classical backend repairs.
-
 Proceed in this order:
 
-1. **Implement one concrete generic provider, starting with
-   `postgres_record_kernel`.**
-   It must be generic host code, not a Cabinet repository/UoW/service class.
+1. **Implement `local_private_byte_vault` as a generic provider.**
+   It must own opaque storage/staging references and must not expose raw paths to
+   Cabinet callers.
 
-2. **Execute its verification packet.**
-   At minimum prove `psycopg` availability in the selected runtime, atomic
-   commit/rollback, exact-resource locking, no partial state after failure, and
-   append-only audit persistence. Record real evidence before changing provider
-   status.
+2. **Execute VAULT-PROBE-001..006.**
+   Prove stage/reopen/hash verification, exact conflict behavior, publication
+   atomicity/recovery, readiness blocking after unresolved recovery, and
+   symlink/device/non-regular-file escape rejection.
 
-3. **Implement and verify `local_private_byte_vault`.**
-   This provides the second half needed for a real `invoice.source.attach` host
-   path.
+3. **Then implement/verify the smallest typed schema and protected configuration
+   providers needed by the archive/source slice.**
 
-4. **Only after required providers pass**, compile and execute one real
-   archive/source capability from `cabinet_backend_box_v0.yaml` without
-   reintroducing service/repository/router ownership.
+4. **Verify authority_kernel before calling a protected capability verified.**
 
-5. Resolve AUTH-OQ-001/AUTH-OQ-002 only as needed for generic provider contracts,
-   without leaking Cabinet role names into the host kernel.
+5. **Only after all required providers pass**, execute one real
+   `invoice.source.attach` capability from `cabinet_backend_box_v0.yaml` without
+   reintroducing Cabinet service/repository/router ownership.
 
-6. Resolve PA-MONEY-001..003 only through an explicit Cabinet product decision;
-   after acceptance require the unchanged derivability compiler to close both
-   monetary mappings before implementing full monetary PlanActual.
-
-7. Later define the minimum prepare/execute/observe/settle protocol for external
-   effects using Holded as the adversarial case and classify local/VPS topology.
+6. Resolve PA-MONEY-001..003 only through an explicit Cabinet product decision.
 
 ## Stop conditions
 
 Stop and report a semantic/architectural gap instead of adding code when:
 
 - a generated stub requires a product-specific external client inside Cabinet;
-- a deterministic compiler/host decision has no declared machine rule;
-- a mapping requires choosing meaning from field names or types alone;
-- principal, credential, scope, disclosure, audit, or effect meaning is absent;
-- required verification cannot run or has not produced evidence;
-- provider status would become `PASS` without executed provider evidence;
-- fixing generated code would merely encode a decision absent from the durable
-  specification;
-- PA-MONEY-001..003 are unresolved and code would have to choose monetary meaning.
+- a deterministic host/compiler decision has no declared machine rule;
+- a mapping requires field-name/type guessing;
+- principal/scope/disclosure/effect meaning is absent;
+- provider status would become PASS without executed evidence;
+- PlanActual code would have to choose unresolved monetary meaning.
 
 ## Success criterion
 
-The experiment succeeds when Cabinet's durable definition becomes substantially
-smaller than the classical application specification while preserving all real
-Cabinet data, authority, policy, invariants, effects, and provenance, and when
-all remaining application/lowering structure is either generically declared and
-proved or disposable derivation rather than hidden product architecture.
+Cabinet's durable definition should become substantially smaller than the
+classical application specification while preserving real data, authority,
+policy, invariants, effects, and provenance. Remaining runtime structure should
+be generic declared-and-proved host machinery or disposable derived composition,
+not hidden product architecture.
