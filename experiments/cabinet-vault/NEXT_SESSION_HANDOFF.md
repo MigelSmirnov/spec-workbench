@@ -2,13 +2,12 @@
 
 ## Direction
 
-Cabinet is being tested as a self-described local data/authority box compiled into
-a generic host, not as a permanently product-specific backend application.
+Cabinet is being tested as a self-described local data/authority box compiled into a generic host, not as a permanently product-specific backend application.
 
 ```text
 Cabinet durable semantic contract
         ↓
-compiled box capabilities / policies / schemas
+compiled capability/policy/schema meaning
         ↓
 verified generic host providers
         ↓
@@ -17,13 +16,23 @@ verified capability-specific lowerings
 agent-side composition
 ```
 
-Deterministic host/runtime code may implement declared rules only. It must not
-choose missing product meaning or hide a missing lowering behind glue code.
+Deterministic host/runtime code may implement declared rules only. It must not choose missing product meaning or hide a missing lowering behind glue code.
+
+## Experiment milestone reached
+
+Real Termux execution on 2026-08-21 now proves all of the following layers:
+
+```text
+generic host structural lowering       PASS
+all five required generic providers    PASS
+bounded content-validation lowering    PASS
+invoice.source.attach readiness        PASS
+attach_expected_missing_source runtime PASS
+```
+
+The old generated classical backend remains intentionally blocked by the boundary audit. This milestone does not repair or verify that application architecture.
 
 ## Verified generic host
-
-Real Termux execution on 2026-08-21 produced PASS evidence for all five required
-host providers:
 
 ```text
 authority_kernel                PASS
@@ -43,40 +52,40 @@ runtime_dependencies: [pydantic, psycopg]
 exit: 0
 ```
 
-The old generated-backend boundary audit remains intentionally blocked; verified
-generic host providers are not a repair of the classical generated backend.
+Provider evidence files:
+
+```text
+AUTHORITY_KERNEL_RUNTIME_EVIDENCE.md
+TYPED_SCHEMA_KERNEL_RUNTIME_EVIDENCE.md
+POSTGRES_RECORD_KERNEL_RUNTIME_EVIDENCE.md
+LOCAL_PRIVATE_BYTE_VAULT_RUNTIME_EVIDENCE.md
+PROTECTED_CONFIGURATION_KERNEL_RUNTIME_EVIDENCE.md
+```
 
 ## Capability readiness — invoice.source.attach
 
-Machine contract:
+Execution contract:
 
 ```text
 experiments/cabinet-vault/invoice_source_attach_execution_contract_v0.yaml
 ```
 
-Readiness compiler:
-
-```text
-tools/capability_execution_readiness.py
-```
-
-The former `verified_content_signature` lowering gap is now closed by the selected
-generic execution provider:
+The former `verified_content_signature` gap is closed by:
 
 ```text
 bounded_content_validation_kernel
 runtime dependencies: Pillow, pypdf
+CONTENT-PROBE-001..005 PASS
+exit 0
 ```
 
-Real Termux evidence:
+Expected readiness:
 
 ```text
-CONTENT-PROBE-001 PASS
-CONTENT-PROBE-002 PASS
-CONTENT-PROBE-003 PASS
-CONTENT-PROBE-004 PASS
-CONTENT-PROBE-005 PASS
-status: pass
+status: ready
+host_verification_gate: pass
+capability_readiness_gate: pass
+blocking_gaps: []
 exit: 0
 ```
 
@@ -86,22 +95,7 @@ Evidence:
 experiments/cabinet-vault/BOUNDED_CONTENT_VALIDATION_RUNTIME_EVIDENCE.md
 ```
 
-Therefore expected capability readiness is now:
-
-```text
-host_verification_gate: pass
-capability_readiness_gate: pass
-status: ready
-blocking_gaps: []
-exit: 0
-```
-
-The content validator does not trust filename, extension or caller media type
-alone. JPEG/PNG use Pillow structural verification/full decode with decompression
-bomb protection; PDF uses strict pypdf structural parsing. Parser libraries remain
-lowering choices, not Cabinet product identity.
-
-## First real runtime case — implementation ready, evidence pending
+## First protected capability execution — verified narrow case
 
 Runtime lowering:
 
@@ -109,7 +103,7 @@ Runtime lowering:
 experiments/cabinet-vault/invoice_source_attach_runtime_lowering_v0.yaml
 ```
 
-Implementation:
+Runtime implementation:
 
 ```text
 tools/invoice_source_attach_models.py
@@ -117,77 +111,57 @@ tools/invoice_source_attach_runtime.py
 tools/invoice_source_attach_runtime_probe.py
 ```
 
-The first executed case is intentionally narrow:
+Executed case:
 
 ```text
 attach_expected_missing_source
 exactly one file
 explicit invoice_id
-explicit expected_source_id
+explicit existing expected_source_id
 already-accepted invoice
 already-declared expected source
 ```
 
-It does not invent a source identity, search by invoice number, or implement
-multi-file batch orchestration.
-
-Declared runtime order:
+Real Termux result after the Pydantic-v1 model repair:
 
 ```text
-typed input
-→ exact authority / exact invoice scope
-→ expected source + hash binding
-→ bounded content validation
-→ byte staging + reopen/hash verification
-→ exact invoice lock + exact source/publication lock
-→ atomic metadata_committed journal + pending source provenance + durable audit
-→ commit PostgreSQL metadata
-→ atomic final byte publication
-→ final reopen/hash verification
-→ settlement transaction: publication=published + source=available
-→ safe typed result
+21 passed in 0.93s
+ATTACH-PROBE-001 PASS
+ATTACH-PROBE-002 PASS
+ATTACH-PROBE-003 PASS
+ATTACH-PROBE-004 PASS
+ATTACH-PROBE-005 PASS
+ATTACH-PROBE-006 PASS
+ATTACH-PROBE-007 PASS
+status: pass
+attach_runtime_exit=0
 ```
 
-A crash after metadata commit intentionally leaves `metadata_committed` plus the
-staging/final references as host-owned recovery state. Startup recovery must
-finish publication before the source can become available.
-
-Runtime verification obligations:
+Evidence:
 
 ```text
-ATTACH-PROBE-001 exact target/authority before effects
-ATTACH-PROBE-002 source/hash/content validation before staging/commit
-ATTACH-PROBE-003 success becomes available only after published final bytes verify
-ATTACH-PROBE-004 equivalent replay is idempotent
-ATTACH-PROBE-005 conflicting bytes cannot replace accepted evidence
-ATTACH-PROBE-006 post-metadata interruption recovers to one published result
-ATTACH-PROBE-007 output/audit disclose no storage refs, config keys or credentials
+experiments/cabinet-vault/INVOICE_SOURCE_ATTACH_RUNTIME_EVIDENCE.md
 ```
 
-Current runtime status:
+The runtime proves, for this exact case:
 
 ```text
-implementation_ready_unverified
+typed input before effects
+exact authenticated capability + exact invoice scope
+expected source/hash binding
+bounded content validation
+private byte staging + reopen/hash/size verification
+exact PostgreSQL invoice/source locking
+atomic metadata_committed journal + pending provenance + durable audit
+atomic final byte publication
+final byte verification before available state
+idempotent equivalent replay
+conflicting bytes rejected without replacing accepted evidence
+crash-after-metadata recovery to one verified published source
+safe output + append-only audit with no raw storage/config/credential disclosure
 ```
 
-Do not mark this runtime PASS until `tools/invoice_source_attach_runtime_probe.py`
-executes all seven probes with exit 0 against a real PostgreSQL runtime and real
-filesystem vault.
-
-## Runtime configuration for the probe
-
-Both values are protected host configuration and are consumed through
-`protected_configuration_kernel`:
-
-```text
-SPEC_WORKBENCH_TEST_POSTGRES_DSN
-SPEC_WORKBENCH_ATTACH_VAULT_ROOT
-```
-
-The probe creates its own temporary PostgreSQL schema and a unique child vault
-under the configured root, then removes both after execution.
-
-## Important defects already found and repaired in this experiment
+## Runtime defects found and repaired before PASS
 
 ```text
 postgres_record_kernel
@@ -198,24 +172,52 @@ local_private_byte_vault
   os.link unavailable in Termux Python
   -> per-content flock + conflict check + atomic rename
 
-content-validation lowering
-  initially absent
-  -> explicit Pillow/pypdf relation + runtime projection + executed probes
+invoice.source.attach typed runtime
+  Pydantic v1 unresolved nested ForwardRef under postponed annotations
+  -> real nested model types + regression guard
 ```
 
-These failures are evidence for keeping runtime mechanisms cheap, replaceable and
-verification-gated rather than embedding them into Cabinet semantics.
+These are useful experiment evidence: runtime mechanisms were replaceable without changing Cabinet product semantics.
 
-## Authority open questions remain explicit
+## Verified-scope boundary
+
+The runtime PASS does **not** prove the entire declared batch capability surface.
+
+Still outside executed evidence:
+
+```text
+multi_file_batch_orchestration
+source_identity_generation_when_expected_source_id_is_absent
+invoice_number_search_or_disambiguation
+attachment_to_nonaccepted_invoice
+transport exposure (HTTP/MCP/IPC)
+```
+
+Do not expand the `verified_scope` in `invoice_source_attach_runtime_lowering_v0.yaml` without new executed evidence.
+
+## Architectural result so far
+
+The experiment has now demonstrated one non-trivial protected Cabinet mutation without reintroducing permanent Cabinet service/repository/router ownership:
+
+```text
+Cabinet meaning
++ generic verified authority/schema/record/vault/config providers
++ capability-specific disposable lowering
+= real protected data mutation with recovery/audit evidence
+```
+
+That is the core hypothesis the branch was intended to test.
+
+## Open semantic work remains separate
+
+Authority research questions remain explicit:
 
 ```text
 AUTH-OQ-001  smallest generic grant representation across independent boxes
 AUTH-OQ-002  generic audit-event vocabulary vs Cabinet-specific event meaning
 ```
 
-Current authority PASS does not close these globally.
-
-## PlanActual remains reopened
+PlanActual remains reopened:
 
 ```text
 PA-MONEY-001  authoritative planned item amount + exact basis
@@ -223,29 +225,13 @@ PA-MONEY-002  actual comparison: net_amount or gross_amount
 PA-MONEY-003  direct comparability or explicit conversion evidence
 ```
 
-Do not choose those meanings in runtime/compiler code.
+Do not close any of these merely because the source-attach runtime passed.
 
-## Immediate next work
+## Immediate next decision
 
-1. Pull the branch in Termux and run the focused runtime guards.
-2. Confirm `capability_execution_readiness.py` returns `ready/pass/exit 0`.
-3. Start the dedicated PostgreSQL probe cluster if it is stopped.
-4. Set `SPEC_WORKBENCH_TEST_POSTGRES_DSN` and an explicit absolute
-   `SPEC_WORKBENCH_ATTACH_VAULT_ROOT`.
-5. Run `tools/invoice_source_attach_runtime_probe.py`.
-6. If all `ATTACH-PROBE-001..007` PASS with exit 0, record evidence and promote
-   only this single-source runtime case.
-7. Only after that decide whether to generalize to multi-file batch execution or
-   another Cabinet capability.
+The next step is a scope decision, not an automatic coding task:
 
-## Stop conditions
+1. **Stop the experiment here as a successful proof of the box + generic-host architecture**, and extract the reusable language/tooling changes; or
+2. **Extend executed evidence deliberately** to multi-file `invoice.source.attach` orchestration or a second Cabinet capability.
 
-Stop and report a gap instead of adding code when:
-
-- source identity would need to be invented;
-- invoice number would be used as a mutation key;
-- content validation would rely on filename/MIME/prefix guessing;
-- source would become available before final byte verification;
-- a hidden runtime transition would be required;
-- protected storage/config/credentials would enter caller output or audit;
-- unresolved PlanActual monetary meaning would be chosen by code.
+If extending, preserve the same rules: declare machine bindings first, keep missing semantics explicit, fingerprint implementations, execute real evidence, and never broaden PASS beyond the exact executed scope.
