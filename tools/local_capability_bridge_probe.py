@@ -8,6 +8,7 @@ import os
 import shutil
 import uuid
 from dataclasses import asdict, dataclass
+from datetime import datetime, timezone
 from io import BytesIO
 from pathlib import Path
 
@@ -22,12 +23,12 @@ from authority_kernel import (
     PrincipalRecord,
     credential_digest,
 )
-from cabinet_web_checkout_sync_adapter import build_delivery_from_checkout
 from cabinet_web_revision_accept_runtime import (
     CAPABILITY as ACCEPT_CAPABILITY,
     DISCLOSURES as ACCEPT_DISCLOSURES,
     EFFECTS as ACCEPT_EFFECTS,
     CabinetWebRevisionAcceptExecutor,
+    canonical_content_hash,
 )
 from invoice_source_attach_runtime import InvoiceSourceAttachExecutionError
 from local_capability_bridge import (
@@ -74,6 +75,81 @@ def _pdf_bytes() -> bytes:
     writer.add_blank_page(width=72, height=72)
     writer.write(output)
     return output.getvalue()
+
+
+def _test_card() -> dict:
+    return {
+        "card_type": "invoice",
+        "card_version": 1,
+        "id": TARGET_INVOICE_ID,
+        "status": "confirmed",
+        "invoice_number": "BRIDGE-PROBE-ONLY",
+        "issue_date": "2026-08-21",
+        "service_date": None,
+        "due_date": None,
+        "currency": "EUR",
+        "supplier": {"name": "Bridge Probe Supplier", "tax_id": None, "address": None},
+        "buyer": {"name": None, "tax_id": None, "address": None},
+        "object": {"card_id": None, "label": "Bridge probe object"},
+        "lines": [
+            {
+                "line_id": "line-probe",
+                "kind": "material",
+                "description_original": "Bridge probe item",
+                "description_normalized": None,
+                "supplier_sku": None,
+                "matched_material_id": None,
+                "quantity": "1",
+                "unit": "unit",
+                "unit_price_net": "1.00",
+                "discount_percent": "0",
+                "discount_amount": "0.00",
+                "net_amount": "1.00",
+                "tax_rate": "21",
+                "tax_amount": "0.21",
+                "gross_amount": "1.21",
+            }
+        ],
+        "totals": {
+            "net": "1.00",
+            "discount": "0.00",
+            "tax": "0.21",
+            "gross": "1.21",
+            "withholding": "0.00",
+            "payable": "1.21",
+        },
+        "payment": {"status": "unknown", "transactions": []},
+        "source": {
+            "source_id": TARGET_SOURCE_ID,
+            "kind": "pdf",
+            "file_ref": None,
+            "file_status": "not_stored",
+            "note": "synthetic isolated bridge probe; never real canary input",
+        },
+        "provenance": {
+            "created_at": "2026-08-21T18:00:00+02:00",
+            "confirmed_at": "2026-08-21T18:01:00+02:00",
+            "created_by": "bridge-probe",
+        },
+    }
+
+
+def _test_delivery() -> dict:
+    card = _test_card()
+    return {
+        "contract_version": "cabinet-web-sync-v1",
+        "delivery_id": f"bridge-probe-{uuid.uuid4().hex}",
+        "emitted_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "producer_repository": "MigelSmirnov/Cabinet_web",
+        "invoice_id": TARGET_INVOICE_ID,
+        "card_contract_version": 1,
+        "card_status": "confirmed",
+        "card_content_hash": canonical_content_hash(card),
+        "source_git_commit_sha": "b" * 40,
+        "card_repository_path": f"data/cards/{TARGET_INVOICE_ID}/card.json",
+        "base_backend_content_hash": None,
+        "card_document": card,
+    }
 
 
 def _bridge_environment(dsn: str, vault_root: Path, checkout_root: str, schema: str) -> dict[str, str]:
@@ -127,14 +203,12 @@ def run_probe(environment=None) -> ProbeReport:
             raise RuntimeError("readiness was false or disclosed protected configuration")
         results.append(_pass("BRIDGE-002", "readiness is bounded and contains no protected values or source keys"))
 
-        delivery = build_delivery_from_checkout(
-            cabinet_web_root=checkout_root,
-            invoice_id=TARGET_INVOICE_ID,
-            delivery_id=f"bridge-probe-{uuid.uuid4().hex}",
-            base_backend_content_hash=None,
-        )
-
         assert bridge._accept_executor is not None
+        # The production bridge retains its pinned disposable checkout validator.
+        # This isolated provider probe replaces only that external validation
+        # callback; validator fingerprint/interop behavior is covered separately.
+        bridge._accept_executor.card_validator = lambda _card: ()
+        delivery = _test_delivery()
         try:
             bridge._accept_executor.execute(
                 delivery,
