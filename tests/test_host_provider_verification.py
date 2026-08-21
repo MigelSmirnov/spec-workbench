@@ -59,21 +59,22 @@ def test_authority_packet_uses_the_declared_authority_probe_vocabulary():
     assert packet_probes == contract_probes
 
 
-def test_postgres_provider_and_probe_runner_match_reviewed_fingerprints():
-    packet = load(PACKETS)["provider_packets"]["postgres_record_kernel"]
+def test_concrete_provider_and_probe_runner_match_reviewed_fingerprints():
+    packets = load(PACKETS)["provider_packets"]
 
-    implementation = packet["implementation"]
-    probe_runner = packet["probe_runner"]
+    for provider_id in ("postgres_record_kernel", "local_private_byte_vault"):
+        packet = packets[provider_id]
+        implementation = packet["implementation"]
+        probe_runner = packet["probe_runner"]
 
-    implementation_path = ROOT / implementation["path"]
-    probe_path = ROOT / probe_runner["path"]
+        assert git_blob_sha(ROOT / implementation["path"]) == implementation["blob_sha"]
+        assert git_blob_sha(ROOT / probe_runner["path"]) == probe_runner["blob_sha"]
+        assert probe_runner["successful_exit"] == 0
+        assert probe_runner["blocking_exit"] == 2
 
-    assert git_blob_sha(implementation_path) == implementation["blob_sha"]
-    assert git_blob_sha(probe_path) == probe_runner["blob_sha"]
-    assert probe_runner["dsn_environment"] == "SPEC_WORKBENCH_TEST_POSTGRES_DSN"
-    assert probe_runner["no_dsn_status"] == "UNVERIFIED"
-    assert probe_runner["successful_exit"] == 0
-    assert probe_runner["blocking_exit"] == 2
+    postgres_probe = packets["postgres_record_kernel"]["probe_runner"]
+    assert postgres_probe["dsn_environment"] == "SPEC_WORKBENCH_TEST_POSTGRES_DSN"
+    assert postgres_probe["no_dsn_status"] == "UNVERIFIED"
 
 
 def test_provider_verification_states_are_evidence_backed():
