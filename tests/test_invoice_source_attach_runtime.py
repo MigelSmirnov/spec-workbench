@@ -14,6 +14,7 @@ from typed_schema_kernel import TypedSchemaKernel
 ROOT = Path(__file__).resolve().parents[1]
 LOWERING = ROOT / "experiments" / "cabinet-vault" / "invoice_source_attach_runtime_lowering_v0.yaml"
 EXECUTION_CONTRACT = ROOT / "experiments" / "cabinet-vault" / "invoice_source_attach_execution_contract_v0.yaml"
+EVIDENCE = ROOT / "experiments" / "cabinet-vault" / "INVOICE_SOURCE_ATTACH_RUNTIME_EVIDENCE.md"
 MODELS = ROOT / "tools" / "invoice_source_attach_models.py"
 RUNTIME = ROOT / "tools" / "invoice_source_attach_runtime.py"
 PROBE = ROOT / "tools" / "invoice_source_attach_runtime_probe.py"
@@ -49,24 +50,48 @@ def test_runtime_lowering_is_bound_to_ready_execution_contract_and_exact_impleme
     assert bindings["probe_runner"]["blocking_exit"] == 2
 
 
-def test_runtime_rules_have_exact_probe_obligations_and_remain_unverified_before_execution():
+def test_runtime_rules_and_probe_obligations_are_evidence_backed_pass():
     lowering = load(LOWERING)
 
     assert set(lowering["runtime_rules"]) == {
         f"ATTACH-RUNTIME-{index:03d}" for index in range(1, 10)
     }
-    assert lowering["verification"]["status"] == "UNVERIFIED"
-    assert lowering["verification"]["probes"] == [
+    verification = lowering["verification"]
+    assert lowering["status"] == "verified_execution_case"
+    assert verification["status"] == "PASS"
+    assert verification["runtime_evidence"] == {
+        "record": "experiments/cabinet-vault/INVOICE_SOURCE_ATTACH_RUNTIME_EVIDENCE.md",
+        "executed_on": "2026-08-21",
+        "result": "PASS",
+        "exit_code": 0,
+    }
+    assert EVIDENCE.is_file()
+    probes = verification["probes"]
+    assert [item["id"] for item in probes] == [
         f"ATTACH-PROBE-{index:03d}" for index in range(1, 8)
     ]
+    assert {item["status"] for item in probes} == {"PASS"}
+    assert {item["executed"] for item in probes} == {True}
+    assert all(item["proves"] for item in probes)
     assert len(lowering["verification_obligations"]) == 7
 
 
-def test_first_execution_case_is_explicitly_single_file_and_cannot_invent_source_identity():
+def test_verified_scope_is_explicitly_narrower_than_full_capability_surface():
     lowering = load(LOWERING)
+    scope = lowering["verified_scope"]
 
     assert lowering["execution_case"] == "attach_expected_missing_source"
     assert lowering["execution_case_constraints"]["file_count"] == "exactly_one"
+    assert "single_file_expected_missing_source_attachment" in scope["proves"]
+    assert "explicit_invoice_id_target" in scope["proves"]
+    assert "existing_expected_source_id_only" in scope["proves"]
+    assert {
+        "multi_file_batch_orchestration",
+        "source_identity_generation",
+        "invoice_number_search_or_disambiguation",
+        "attachment_to_nonaccepted_invoice",
+        "transport_exposure",
+    }.issubset(set(scope["does_not_prove"]))
     assert "invent_source_id" in lowering["forbidden_runtime_behavior"]
     assert "use_invoice_number_as_mutation_key" in lowering["forbidden_runtime_behavior"]
     assert "mutate_immutable_invoice_card" in lowering["forbidden_runtime_behavior"]
@@ -145,7 +170,7 @@ def test_nested_runtime_models_validate_without_forward_ref_resolution_errors():
     assert output.source_status.complete is True
 
 
-def test_runtime_probe_without_protected_configuration_fails_closed_as_unverified():
+def test_runtime_probe_without_protected_configuration_still_fails_closed_as_unverified():
     report = run_probe({})
 
     assert report.status == "block"
