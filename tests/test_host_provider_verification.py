@@ -81,7 +81,14 @@ def test_provider_verification_states_are_evidence_backed():
     profile = load(PROFILE)
     packets = load(PACKETS)["provider_packets"]
 
-    assert profile["providers"]["postgres_record_kernel"]["verification"]["status"] == "PASS"
+    assert {
+        provider_id
+        for provider_id, provider in profile["providers"].items()
+        if provider["verification"]["status"] == "PASS"
+    } == {
+        "postgres_record_kernel",
+        "local_private_byte_vault",
+    }
     assert {
         provider_id
         for provider_id, provider in profile["providers"].items()
@@ -89,7 +96,6 @@ def test_provider_verification_states_are_evidence_backed():
     } == {
         "authority_kernel",
         "typed_schema_kernel",
-        "local_private_byte_vault",
         "protected_configuration_kernel",
     }
 
