@@ -55,6 +55,7 @@ def test_authority_packet_uses_the_declared_authority_probe_vocabulary():
 def test_concrete_provider_and_probe_runner_match_reviewed_fingerprints():
     packets = load(PACKETS)["provider_packets"]
     for provider_id in (
+        "authority_kernel",
         "typed_schema_kernel",
         "postgres_record_kernel",
         "local_private_byte_vault",
@@ -82,6 +83,7 @@ def test_provider_verification_states_are_evidence_backed():
         for provider_id, provider in profile["providers"].items()
         if provider["verification"]["status"] == "PASS"
     } == {
+        "typed_schema_kernel",
         "postgres_record_kernel",
         "local_private_byte_vault",
         "protected_configuration_kernel",
@@ -90,10 +92,7 @@ def test_provider_verification_states_are_evidence_backed():
         provider_id
         for provider_id, provider in profile["providers"].items()
         if provider["verification"]["status"] == "UNVERIFIED"
-    } == {
-        "authority_kernel",
-        "typed_schema_kernel",
-    }
+    } == {"authority_kernel"}
 
     for provider_id, provider in profile["providers"].items():
         probes = packets[provider_id]["probes"]
@@ -127,3 +126,10 @@ def test_provider_pass_requires_all_packet_probes_pass():
         evidence = provider["verification"].get("evidence")
         assert isinstance(evidence, list) and evidence
         assert all((ROOT / item).is_file() for item in evidence)
+
+
+def test_authority_candidate_does_not_claim_open_questions_closed():
+    authority_packet = load(PACKETS)["provider_packets"]["authority_kernel"]
+    note = authority_packet["representation_note"]
+    assert "AUTH-OQ-001" in note
+    assert "AUTH-OQ-002" in note
