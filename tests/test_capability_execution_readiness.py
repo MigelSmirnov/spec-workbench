@@ -37,7 +37,7 @@ def definitions():
     return load(BOX_PATH), load(PROFILE_PATH), load(CONTRACT_PATH)
 
 
-def test_verified_host_is_not_mistaken_for_capability_readiness():
+def test_verified_host_and_execution_provider_make_capability_ready():
     box, profile, contract = definitions()
     report = compile_readiness(
         box,
@@ -46,12 +46,10 @@ def test_verified_host_is_not_mistaken_for_capability_readiness():
         box_blob_sha=git_blob_sha(BOX_PATH),
     )
 
-    assert report.status == "blocked"
+    assert report.status == "ready"
     assert report.host_verification_gate == "pass"
-    assert report.capability_readiness_gate == "block"
-    assert [(gap.code, gap.subject) for gap in report.blocking_gaps] == [
-        ("PROVIDER_UNVERIFIED", "verified_content_signature")
-    ]
+    assert report.capability_readiness_gate == "pass"
+    assert report.blocking_gaps == ()
 
 
 def test_contract_copies_the_exact_declared_capability_surface_and_steps():
@@ -85,6 +83,12 @@ def test_source_readiness_and_content_provider_fingerprints_are_bound():
     assert set(contract["machine_rules"]) == set(IMPLEMENTED_CAPABILITY_EXECUTION_RULES)
     assert provider["implementation"]["blob_sha"] == git_blob_sha(CONTENT_PROVIDER_PATH)
     assert provider["probe_runner"]["blob_sha"] == git_blob_sha(CONTENT_PROBE_PATH)
+    assert provider["verification"]["status"] == "PASS"
+    evidence = provider["verification"]["evidence"]
+    assert evidence == [
+        "experiments/cabinet-vault/BOUNDED_CONTENT_VALIDATION_RUNTIME_EVIDENCE.md"
+    ]
+    assert all((ROOT / item).is_file() for item in evidence)
 
 
 def test_manifest_fingerprint_drift_blocks_execution_readiness():
@@ -157,23 +161,25 @@ def test_execution_provider_dependency_projection_is_fail_closed():
     )
 
 
-def test_readiness_can_pass_only_after_execution_provider_is_verified():
+def test_execution_provider_verification_regression_blocks_readiness():
     box, profile, contract = definitions()
-    verified = deepcopy(contract)
-    verified["execution_providers"]["bounded_content_validation_kernel"]["verification"][
+    unverified = deepcopy(contract)
+    unverified["execution_providers"]["bounded_content_validation_kernel"]["verification"][
         "status"
-    ] = "PASS"
+    ] = "UNVERIFIED"
 
     report = compile_readiness(
         box,
         profile,
-        verified,
+        unverified,
         box_blob_sha=git_blob_sha(BOX_PATH),
     )
 
     assert report.host_verification_gate == "pass"
-    assert report.capability_readiness_gate == "pass"
-    assert report.blocking_gaps == ()
+    assert report.capability_readiness_gate == "block"
+    assert [(gap.code, gap.subject) for gap in report.blocking_gaps] == [
+        ("PROVIDER_UNVERIFIED", "verified_content_signature")
+    ]
 
 
 def test_semantic_guard_is_explicitly_bound_without_signature_shortcuts():
@@ -188,5 +194,5 @@ def test_semantic_guard_is_explicitly_bound_without_signature_shortcuts():
     assert "magic_prefix_only_as_complete_document_validation" in signature_binding[
         "forbidden_fallbacks"
     ]
-    assert provider["verification"] == {"required": True, "status": "UNVERIFIED"}
+    assert provider["verification"]["status"] == "PASS"
     assert set(provider["runtime_dependencies"]) == {"Pillow", "pypdf"}
