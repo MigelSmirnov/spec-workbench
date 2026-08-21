@@ -5,22 +5,22 @@
 Cabinet is being tested as a self-described local data/authority box compiled into a generic host, not as a permanently product-specific backend application.
 
 ```text
-Cabinet durable semantic contract
-        ↓
-compiled capability/policy/schema meaning
+Cabinet_web working Card facts
+        ↓ accepted synchronization contract
+Cabinet durable local box meaning
         ↓
 verified generic host providers
         ↓
 verified capability-specific lowerings
         ↓
-agent-side composition
+local durable archive / effects / audit
 ```
 
 Deterministic host/runtime code may implement declared rules only. It must not choose missing product meaning or hide a missing lowering behind glue code.
 
-## Experiment milestone reached
+## Isolated box milestone reached
 
-Real Termux execution on 2026-08-21 now proves all of the following layers:
+Real Termux execution on 2026-08-21 proves:
 
 ```text
 generic host structural lowering       PASS
@@ -28,114 +28,24 @@ all five required generic providers    PASS
 bounded content-validation lowering    PASS
 invoice.source.attach readiness        PASS
 attach_expected_missing_source runtime PASS
+post-promotion focused guards          21 passed in 1.02s
+git diff --check                       PASS
 ```
 
-The old generated classical backend remains intentionally blocked by the boundary audit. This milestone does not repair or verify that application architecture.
-
-## Verified generic host
+Verified generic providers:
 
 ```text
-authority_kernel                PASS
-typed_schema_kernel             PASS
-postgres_record_kernel          PASS
-local_private_byte_vault        PASS
-protected_configuration_kernel  PASS
+authority_kernel
+ typed_schema_kernel
+postgres_record_kernel
+local_private_byte_vault
+protected_configuration_kernel
 ```
 
-Expected host plan:
-
-```text
-status: compiled
-gaps: []
-verification_gate: pass
-runtime_dependencies: [pydantic, psycopg]
-exit: 0
-```
-
-Provider evidence files:
-
-```text
-AUTHORITY_KERNEL_RUNTIME_EVIDENCE.md
-TYPED_SCHEMA_KERNEL_RUNTIME_EVIDENCE.md
-POSTGRES_RECORD_KERNEL_RUNTIME_EVIDENCE.md
-LOCAL_PRIVATE_BYTE_VAULT_RUNTIME_EVIDENCE.md
-PROTECTED_CONFIGURATION_KERNEL_RUNTIME_EVIDENCE.md
-```
-
-## Capability readiness — invoice.source.attach
-
-Execution contract:
-
-```text
-experiments/cabinet-vault/invoice_source_attach_execution_contract_v0.yaml
-```
-
-The former `verified_content_signature` gap is closed by:
-
-```text
-bounded_content_validation_kernel
-runtime dependencies: Pillow, pypdf
-CONTENT-PROBE-001..005 PASS
-exit 0
-```
-
-Expected readiness:
-
-```text
-status: ready
-host_verification_gate: pass
-capability_readiness_gate: pass
-blocking_gaps: []
-exit: 0
-```
-
-Evidence:
-
-```text
-experiments/cabinet-vault/BOUNDED_CONTENT_VALIDATION_RUNTIME_EVIDENCE.md
-```
-
-## First protected capability execution — verified narrow case
-
-Runtime lowering:
-
-```text
-experiments/cabinet-vault/invoice_source_attach_runtime_lowering_v0.yaml
-```
-
-Runtime implementation:
-
-```text
-tools/invoice_source_attach_models.py
-tools/invoice_source_attach_runtime.py
-tools/invoice_source_attach_runtime_probe.py
-```
-
-Executed case:
-
-```text
-attach_expected_missing_source
-exactly one file
-explicit invoice_id
-explicit existing expected_source_id
-already-accepted invoice
-already-declared expected source
-```
-
-Real Termux result after the Pydantic-v1 model repair:
-
-```text
-21 passed in 0.93s
-ATTACH-PROBE-001 PASS
-ATTACH-PROBE-002 PASS
-ATTACH-PROBE-003 PASS
-ATTACH-PROBE-004 PASS
-ATTACH-PROBE-005 PASS
-ATTACH-PROBE-006 PASS
-ATTACH-PROBE-007 PASS
-status: pass
-attach_runtime_exit=0
-```
+The real protected attach case proved exact authority, expected-source binding,
+bounded content validation, PostgreSQL locking/transactions, private byte staging,
+atomic publication, replay, conflict rejection, crash recovery and append-only
+audit without raw storage/config/credential disclosure.
 
 Evidence:
 
@@ -143,95 +53,149 @@ Evidence:
 experiments/cabinet-vault/INVOICE_SOURCE_ATTACH_RUNTIME_EVIDENCE.md
 ```
 
-The runtime proves, for this exact case:
+Its verified scope remains deliberately narrow:
 
 ```text
-typed input before effects
-exact authenticated capability + exact invoice scope
-expected source/hash binding
-bounded content validation
-private byte staging + reopen/hash/size verification
-exact PostgreSQL invoice/source locking
-atomic metadata_committed journal + pending provenance + durable audit
-atomic final byte publication
-final byte verification before available state
-idempotent equivalent replay
-conflicting bytes rejected without replacing accepted evidence
-crash-after-metadata recovery to one verified published source
-safe output + append-only audit with no raw storage/config/credential disclosure
+exactly one file
+explicit invoice_id
+explicit existing expected_source_id
+already-accepted invoice
+already-declared expected source
 ```
 
-## Runtime defects found and repaired before PASS
+It does not prove multi-file orchestration, source-ID generation, invoice-number
+search, non-accepted invoice attachment or transport exposure.
+
+## Cabinet_web is now the integration target
+
+Reviewed repository:
 
 ```text
-postgres_record_kernel
-  embedded NUL advisory-lock identity
-  -> deterministic PostgreSQL-text-safe identity
-
-local_private_byte_vault
-  os.link unavailable in Termux Python
-  -> per-content flock + conflict check + atomic rename
-
-invoice.source.attach typed runtime
-  Pydantic v1 unresolved nested ForwardRef under postponed annotations
-  -> real nested model types + regression guard
+MigelSmirnov/Cabinet_web
+main @ 63f1752dc09be93156c6e7bf45f3c80e6c7f8387
 ```
 
-These are useful experiment evidence: runtime mechanisms were replaceable without changing Cabinet product semantics.
-
-## Verified-scope boundary
-
-The runtime PASS does **not** prove the entire declared batch capability surface.
-
-Still outside executed evidence:
+Machine audit:
 
 ```text
-multi_file_batch_orchestration
-source_identity_generation_when_expected_source_id_is_absent
-invoice_number_search_or_disambiguation
-attachment_to_nonaccepted_invoice
-transport exposure (HTTP/MCP/IPC)
+experiments/cabinet-vault/cabinet_web_interop_audit_v0.yaml
 ```
 
-Do not expand the `verified_scope` in `invoice_source_attach_runtime_lowering_v0.yaml` without new executed evidence.
-
-## Architectural result so far
-
-The experiment has now demonstrated one non-trivial protected Cabinet mutation without reintroducing permanent Cabinet service/repository/router ownership:
+Human-readable audit:
 
 ```text
-Cabinet meaning
-+ generic verified authority/schema/record/vault/config providers
-+ capability-specific disposable lowering
-= real protected data mutation with recovery/audit evidence
+experiments/cabinet-vault/CABINET_WEB_COMPATIBILITY_AUDIT.md
 ```
 
-That is the core hypothesis the branch was intended to test.
+Guard:
 
-## Open semantic work remains separate
+```text
+tests/test_cabinet_web_interop_contract.py
+```
 
-Authority research questions remain explicit:
+Current result:
+
+```text
+isolated_box_runtime_evidence: PASS
+cabinet_web_interop_gate: block
+real_cabinet_web_canary: forbidden_until_blockers_closed
+```
+
+## Responsibility boundary already aligns
+
+`Cabinet_web` explicitly owns Invoice Card facts, deterministic Invoice operations
+and GitHub Card history. It explicitly does not own the future local archive,
+database or integration orchestration assigned to Cabinet_backend.
+
+The local box therefore owns local durable replicas, source bytes, effect
+authority, publication recovery and operational audit. It must not rewrite
+confirmed Card facts or force Cabinet_web domain modules to depend on backend
+runtime/database structures.
+
+The existing `Cabinet_web.invoice_attach_source` and the verified local
+`invoice.source.attach` are not the same lifecycle operation:
+
+```text
+Cabinet_web.invoice_attach_source
+  draft Card source-metadata mutation
+
+local box invoice.source.attach
+  durable source-byte attachment to accepted confirmed Card revision
+```
+
+Synchronization should connect them rather than collapsing them into one method.
+
+## Blocking interop findings
+
+### CW-SOURCE-ID-001 — upstream Card-contract drift
+
+`docs/01-storage/INVOICE_CARD_FORMAT.md` shows `source.source_id = source-001` and
+payment evidence references that identity. But the executable V1 schema,
+deterministic validator, source mutation service, fixture and tests define the
+source object without `source_id`; additional source fields are rejected.
+
+The backend must not generate or infer this identity. The earliest owner is
+`Cabinet_web/card-contracts`.
+
+### CW-SYNC-001 — accepted synchronization relation missing
+
+Cabinet_web architecture lists remote synchronization as an extension point after
+an accepted integration decision. The workflow describes local synchronization,
+but no machine contract yet defines:
+
+```text
+exact confirmed Card revision
+canonical content hash
+source Git commit identity
+expected source set
+idempotency identity
+local acceptance receipt
+revision/retry reconciliation
+```
+
+### CW-MEDIA-001 — exact media lowering missing
+
+Cabinet_web source facts use `photo | pdf | message | scan | other`. The verified
+local content validator consumes exact `image/jpeg | image/png | application/pdf`.
+`photo` cannot be silently lowered to JPEG, and filename extension is not proof.
+
+### CW-HASH-001 — no-expected-hash interop evidence missing
+
+Invoice Card V1 currently carries no expected binary SHA-256. Backend semantics
+allow a locally calculated hash to become storage evidence without rewriting the
+confirmed Card, but this exact Cabinet_web no-expected-hash path still requires
+explicit synchronization binding and executed evidence.
+
+## Immediate next decision
+
+The next decision belongs to the Cabinet_web Card-contract owner, not to backend
+adapter code:
+
+```text
+Is source_id a stable identity of the Invoice Card source in Cabinet_web V1?
+```
+
+There is already strong evidence for `yes` in the accepted storage document and
+payment `source_ref`, but the executable contract currently contradicts that
+document. Do not silently choose or implement the answer in the backend.
+
+After that decision is explicit:
+
+1. repair the earliest Cabinet_web Card contract consistently (schema → validator
+   → fixtures → evidence tool/tests) if required;
+2. define the versioned Cabinet_web → local-box synchronization package and receipt;
+3. close exact media-type lowering without filename/kind guessing;
+4. execute the no-expected-hash source attachment path;
+5. only then run a real Cabinet_web invoice canary through the box.
+
+## Other open semantic work remains separate
 
 ```text
 AUTH-OQ-001  smallest generic grant representation across independent boxes
 AUTH-OQ-002  generic audit-event vocabulary vs Cabinet-specific event meaning
-```
-
-PlanActual remains reopened:
-
-```text
 PA-MONEY-001  authoritative planned item amount + exact basis
 PA-MONEY-002  actual comparison: net_amount or gross_amount
 PA-MONEY-003  direct comparability or explicit conversion evidence
 ```
 
-Do not close any of these merely because the source-attach runtime passed.
-
-## Immediate next decision
-
-The next step is a scope decision, not an automatic coding task:
-
-1. **Stop the experiment here as a successful proof of the box + generic-host architecture**, and extract the reusable language/tooling changes; or
-2. **Extend executed evidence deliberately** to multi-file `invoice.source.attach` orchestration or a second Cabinet capability.
-
-If extending, preserve the same rules: declare machine bindings first, keep missing semantics explicit, fingerprint implementations, execute real evidence, and never broaden PASS beyond the exact executed scope.
+Do not close these through integration glue.
