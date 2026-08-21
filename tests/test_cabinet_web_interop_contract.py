@@ -7,7 +7,8 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 AUDIT = ROOT / "experiments" / "cabinet-vault" / "cabinet_web_interop_audit_v0.yaml"
-EVIDENCE = ROOT / "experiments" / "cabinet-vault" / "CABINET_WEB_ATTACH_CANARY_RUNTIME_EVIDENCE.md"
+ATTACH_EVIDENCE = ROOT / "experiments" / "cabinet-vault" / "CABINET_WEB_ATTACH_CANARY_RUNTIME_EVIDENCE.md"
+SYNC_EVIDENCE = ROOT / "experiments" / "cabinet-vault" / "CABINET_WEB_SYNC_RUNTIME_EVIDENCE.md"
 
 
 def load():
@@ -20,7 +21,7 @@ def test_audit_is_pinned_to_reviewed_cabinet_web_main_state():
     audit = load()
     source = audit["source_repository"]
 
-    assert audit["audit_version"] == "cabinet_web_backend_interop.v2"
+    assert audit["audit_version"] == "cabinet_web_backend_interop.v3"
     assert audit["status"] == "ready_for_real_data_canary"
     assert source["repository"] == "MigelSmirnov/Cabinet_web"
     assert source["ref"] == "main"
@@ -55,6 +56,8 @@ def test_all_known_interop_findings_are_closed_but_real_data_canary_is_not_yet_e
     assert gate["isolated_box_runtime_evidence"] == "PASS"
     assert gate["cabinet_web_source_identity_contract"] == "PASS"
     assert gate["cabinet_web_sync_contract_design"] == "PASS"
+    assert gate["cabinet_web_sync_acceptance_runtime"] == "PASS"
+    assert gate["cabinet_web_same_invoice_e2e_runtime"] == "PASS"
     assert gate["cabinet_web_media_lowering_runtime"] == "PASS"
     assert gate["cabinet_web_no_expected_hash_runtime"] == "PASS"
     assert gate["cabinet_web_interop_gate"] == "pass"
@@ -75,26 +78,38 @@ def test_source_identity_is_owned_by_upstream_card_contract_not_backend_adapter(
     }
 
 
-def test_sync_contract_preserves_revision_and_authority_rules():
-    finding = next(item for item in load()["findings"] if item["id"] == "CW-SYNC-001")
-    assert finding["class"] == "INTEGRATION_CONTRACT_DEFINED"
+def test_sync_runtime_preserves_revision_and_authority_rules():
+    audit = load()
+    finding = next(item for item in audit["findings"] if item["id"] == "CW-SYNC-001")
+    executed = audit["executed_sync_evidence"]
+
+    assert finding["class"] == "INTEGRATION_RUNTIME_VERIFIED"
     assert finding["severity"] == "PASS"
     assert finding["contract"]["machine"] == "experiments/cabinet-vault/cabinet_web_sync_contract_v1.yaml"
+    assert finding["contract"]["box_extension"] == "experiments/cabinet-vault/cabinet_web_sync_box_extension_v1.yaml"
+    assert finding["runtime_evidence"] == "experiments/cabinet-vault/CABINET_WEB_SYNC_RUNTIME_EVIDENCE.md"
     assert {
         "Cabinet_web_remains_authority_for_confirmed_Card_facts",
         "backend_accepts_exact_revision_without_rewriting_it",
         "same_delivery_same_revision_is_idempotent",
         "same_delivery_different_revision_is_conflict",
         "stale_base_requires_reconciliation_without_overwrite",
-        "arrival_order_does_not_define_Git_revision_order",
+        "accepted_new_revision_never_deletes_previous_immutable_revision",
         "Card_acceptance_does_not_claim_source_bytes_are_attached",
+        "classical_InvoiceTransferManifest_ingest_remains_deferred",
     } == set(finding["preserved_rules"])
+    assert executed["workflow"]["run_id"] == 32514048863
+    assert executed["workflow"]["conclusion"] == "success"
+    assert executed["artifact"]["artifact_id"] == 9458097099
+    assert executed["artifact"]["digest"] == "sha256:4f09fd9fc9eef2d12df7211eb46661eb152874c01c37533a940220c797c955e7"
+    assert set(executed["probes"].values()) == {"PASS"}
+    assert SYNC_EVIDENCE.is_file()
 
 
 def test_media_and_no_expected_hash_findings_are_pinned_to_executed_evidence():
     audit = load()
     findings = {item["id"]: item for item in audit["findings"]}
-    executed = audit["executed_interop_evidence"]
+    executed = audit["executed_attach_evidence"]
 
     assert findings["CW-MEDIA-001"]["class"] == "PARSER_BACKED_LOWERING_VERIFIED"
     assert findings["CW-MEDIA-001"]["severity"] == "PASS"
@@ -105,7 +120,7 @@ def test_media_and_no_expected_hash_findings_are_pinned_to_executed_evidence():
     assert executed["artifact"]["artifact_id"] == 9455627318
     assert executed["artifact"]["digest"] == "sha256:1f7bcc1cabd2e8d4f58cb8310b915fc47944385d6f53d20d27e81a726b11c33e"
     assert set(executed["probes"].values()) == {"PASS"}
-    assert EVIDENCE.is_file()
+    assert ATTACH_EVIDENCE.is_file()
 
 
 def test_lifecycle_and_authority_split_remain_aligned():
