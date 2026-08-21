@@ -32,7 +32,7 @@ local_private_byte_vault
 protected_configuration_kernel
 ```
 
-The protected `invoice.source.attach` runtime already proves exact authority, expected-source binding, bounded validation, PostgreSQL locking/transactions, private byte staging, atomic publication, replay, conflict rejection, crash recovery and append-only audit.
+The protected `invoice.source.attach` runtime proves exact authority, expected-source binding, bounded validation, PostgreSQL locking/transactions, private byte staging, atomic publication, replay, conflict rejection, crash recovery and append-only audit.
 
 Evidence:
 
@@ -52,16 +52,22 @@ main @ d4419e3b948d49bd85a99a0941a350a73494cd27
 PR #16 accepted
 ```
 
-Invoice Card V1 now owns stable `source.source_id`. The identity survives storage-metadata changes and `invoice_source` payment evidence references it.
+Invoice Card V1 owns stable `source.source_id`. The identity survives storage-metadata changes and `invoice_source` payment evidence references it.
 
 Backend code may reference this identity but may not mint or replace it.
 
-## Cabinet_web synchronization contract — PASS
+## Cabinet_web synchronization contract and acceptance runtime — PASS
 
 Machine contract:
 
 ```text
 experiments/cabinet-vault/cabinet_web_sync_contract_v1.yaml
+```
+
+Executable box extension:
+
+```text
+experiments/cabinet-vault/cabinet_web_sync_box_extension_v1.yaml
 ```
 
 The v1 synchronization unit is one exact confirmed Invoice Card revision.
@@ -72,13 +78,53 @@ provenance        = source_git_commit_sha + repository path
 retry identity    = delivery_id
 ```
 
-A stale backend base requires reconciliation rather than last-write-wins. Arrival order is not Git ancestry. Receipt metadata is separate from immutable Card facts.
+The box now exposes:
 
-Card acceptance and source-byte attachment remain separate lifecycle operations.
+```text
+invoice.archive.accept_revision
+```
+
+The acceptance runtime verifies the exact canonical Card hash, consumes a reviewed Cabinet_web validation result, enforces delivery idempotency and base-revision reconciliation, stores every accepted Card revision immutably, updates current source expectations without inventing MIME/hash facts, and returns `cabinet-backend-sync-receipt-v1`.
+
+It does **not** re-enable the deferred classical `InvoiceTransferManifest` VPS transport ingest.
+
+Runtime evidence:
+
+```text
+experiments/cabinet-vault/CABINET_WEB_SYNC_RUNTIME_EVIDENCE.md
+```
+
+Verified GitHub execution:
+
+```text
+workflow: Cabinet Web attach canary
+run_id: 32514048863
+run_number: 13
+head_sha: 4bd7b20d48983465757474ee6c950abebeac0b5c
+conclusion: success
+artifact_id: 9458097099
+artifact_digest: sha256:4f09fd9fc9eef2d12df7211eb46661eb152874c01c37533a940220c797c955e7
+```
+
+Probes:
+
+```text
+SYNC-RUNTIME-001 PASS  immutable revision + source expectation
+SYNC-RUNTIME-002 PASS  delivery idempotency + identity conflict
+SYNC-RUNTIME-003 PASS  base-revision reconciliation + history retention
+SYNC-RUNTIME-004 PASS  canonical hash/validator rejection fail closed
+WEB-E2E-001      PASS  same invoice: accept revision -> receipt -> attach bytes
+```
+
+The local checkout adapter:
+
+```text
+tools/cabinet_web_checkout_sync_adapter.py
+```
+
+pins the reviewed Cabinet_web validator/schema/hash fingerprints, requires a clean tracked Card on `main`, invokes Cabinet_web's own deterministic validator as a disposable subprocess boundary, and builds the exact sync-v1 delivery. The local box itself does not import Cabinet_web runtime modules.
 
 ## Cabinet_web media and no-expected-hash path — PASS
-
-The previous blockers are closed by executed GitHub runtime evidence.
 
 Exact binary media type is derived from bytes by bounded parser evidence, not from:
 
@@ -126,8 +172,6 @@ WEB-ATTACH-003 PASS  crash recovery
 WEB-ATTACH-004 PASS  malformed content rejected before publication
 ```
 
-The disposable Cabinet_web adapter performs parser-backed media/hash derivation and then calls the existing authority-enforced attach runtime, which revalidates the bytes before effects.
-
 ## Interoperability gate — PASS
 
 Machine audit:
@@ -142,13 +186,15 @@ Current state:
 isolated_box_runtime_evidence      PASS
 source_identity_contract           PASS
 sync_contract_design               PASS
+sync_acceptance_runtime            PASS
+same_invoice_e2e_runtime           PASS
 media_lowering_runtime             PASS
 no_expected_hash_runtime           PASS
 cabinet_web_interop_gate           PASS
 real Cabinet_web user-data canary  ALLOWED_NOT_EXECUTED
 ```
 
-Do not confuse the executed contract/runtime canary with real user-data execution.
+Do not confuse the executed contract/runtime canaries with real user-data execution.
 
 ## Current real-data readiness — BLOCKED BY INPUT AVAILABILITY
 
@@ -169,21 +215,29 @@ provider-santo-grua-20260815
 
 There is currently no Invoice Card directory, hence no exact confirmed Invoice Card revision that can be honestly bound to real source bytes for a user-data canary.
 
-Do not use a test fixture, synthetic Card, draft, or unaccepted branch-only invoice and call it a real-data canary.
+Do not use a test fixture, synthetic Card, draft, dirty working-tree Card, or unaccepted branch-only invoice and call it a real-data canary.
 
-## Next action
+## Local agent task
 
-When a real invoice becomes available in the Cabinet_web workflow:
+The local agent can now execute the first real canary without implementing new synchronization mechanics.
 
-1. refresh Cabinet_web `main` fingerprint;
-2. select one confirmed Invoice Card and exact source bytes;
-3. pin `invoice_id`, Card canonical content hash, source Git commit SHA and `source_id`;
-4. deliver the exact Card revision through `cabinet-web-sync-v1`;
-5. record the backend acceptance receipt;
-6. attach source bytes through the verified Cabinet_web source adapter;
-7. record parser media type and local SHA-256 evidence;
-8. prove the confirmed Card document/content hash is unchanged;
-9. only then mark the real user-data canary executed.
+Exact handoff:
+
+```text
+experiments/cabinet-vault/LOCAL_AGENT_REAL_DATA_CANARY_HANDOFF.md
+```
+
+The agent should update both repositories, obtain one real confirmed Invoice Card through the normal Cabinet_web workflow, ensure the exact Card is committed to `main`, retain the real source bytes, build the delivery through `cabinet_web_checkout_sync_adapter.py`, call `invoice.archive.accept_revision`, retain the receipt, then call the verified source-attachment path for the same invoice/source identity.
+
+## Next transition
+
+Once an eligible real invoice/source pair exists:
+
+1. refresh Cabinet_web `main` inventory and fingerprint;
+2. run the local-agent handoff exactly;
+3. record the safe receipt/source evidence;
+4. prove the confirmed Card document/content hash remained unchanged;
+5. mark the real user-data canary executed only after all checks pass.
 
 The interoperability architecture should not be redesigned merely because the current repository has no eligible invoice candidate.
 
