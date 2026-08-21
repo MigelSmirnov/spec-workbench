@@ -1,18 +1,20 @@
-audit_version: cabinet_web_backend_interop.v3
-status: ready_for_real_data_canary
+audit_version: cabinet_web_backend_interop.v4
+status: real_data_canary_verified
 
 purpose: >-
-  Determine whether the verified Cabinet local box can consume the currently
-  accepted and executable Cabinet_web Invoice Card and source workflows without
-  inventing missing product identity, validation meaning, or synchronization
-  behavior in an adapter.
+  Determine whether the verified Cabinet local box can consume the accepted and
+  executable Cabinet_web Invoice Card and source workflows without transferring
+  Card authority, and record the first real user-data execution evidence.
 
 source_repository:
   repository: MigelSmirnov/Cabinet_web
   ref: main
-  commit_sha: d4419e3b948d49bd85a99a0941a350a73494cd27
+  current_main_commit_sha: d3fac8e5d2b85c12904cba24060717b84e2757c2
+  reviewed_contract_commit_sha: d4419e3b948d49bd85a99a0941a350a73494cd27
   reviewed_on: "2026-08-21"
   accepted_source_identity_via_pull_request: 16
+  normalized_real_invoice_via_pull_request: 17
+  contract_fingerprints_changed_since_review: false
   artifacts:
     architecture/README.md: 388a7e22e852616c57da438d5a7ee4a5b7f4a6bc
     architecture/app-architecture.yaml: 0a205c6fdec5b19001647ecea0981330cec1119e
@@ -26,10 +28,6 @@ source_repository:
     tools/invoice_draft_service.py: e8cfb81d1a15dd31a57e008aaafcc65d0395f209
     tools/invoice_validation.py: f2337466024fe64cda27f9170d42f9c1673466b5
     tools/invoice_evidence_service.py: 2670fa3fe7e37f6f90064a45b336b8e0374b661b
-    tests/fixtures/invoices/obramat-cash/card.json: 2a084aad5a285b306f0b0be07f188c686b4e4d5c
-    tests/test_invoice_draft_service.py: 3a1842a161ae6259475fc392ab850396c2281590
-    tests/test_invoice_evidence_service.py: 9854611880d2dde44fa2d6db67fc2062127f2980
-    tests/test_invoice_validation.py: 6550d5dfe91b6b72e23a1b7db4d4b80f51356406
 
 observed_boundary:
   cabinet_web_owns:
@@ -85,22 +83,61 @@ executed_sync_evidence:
     SYNC-RUNTIME-004: PASS
     WEB-E2E-001: PASS
 
+executed_bridge_evidence:
+  implementation_commit: bc872b605c3e4b3774749cdf1711eeeb35399eaf
+  entrypoint: tools/local_capability_bridge.py
+  canary_runner: tools/f260001_real_canary_via_bridge.py
+  transport: local_cli_stdio
+  workflow:
+    name: Cabinet Web attach canary
+    run_id: 32529515458
+    head_sha: bc872b605c3e4b3774749cdf1711eeeb35399eaf
+    conclusion: success
+  artifact:
+    artifact_id: 9463368772
+    digest: sha256:6f81d77d2e5747d19608bf438f9551f333cc309f0feebbc95d30d95f064dfdb2
+  protected_boundaries:
+    revision_acceptance:
+      credential_class: synchronization
+      capability: invoice.archive.accept_revision
+      resource_scope: invoice:invoice-f260001
+    source_attachment:
+      credential_class: local_agent
+      capability: invoice.source.attach
+      resource_scope: invoice:invoice-f260001
+  startup_recovery_before_ready: true
+
+executed_real_data_evidence:
+  record: experiments/cabinet-vault/F260001_REAL_DATA_CANARY_PASS_EVIDENCE_2026-08-21.md
+  execution_class: private_local_real_user_data_canary
+  cabinet_web_commit: d3fac8e5d2b85c12904cba24060717b84e2757c2
+  spec_workbench_commit: bc872b605c3e4b3774749cdf1711eeeb35399eaf
+  invoice_id: invoice-f260001
+  card_content_hash: sha256:e52e9d1fe3ff273b1510fd45d516daf576df4404320f75db4dfabc51c8f8a0cf
+  source_git_commit_sha: 386134cbb28e3689fec8ffb49815db9416ebe9a8
+  source_id: source-f260001
+  delivery_id: real-f260001-cf5972ac55c546dda6db5df0dd937931
+  revision_receipt_outcome: accepted
+  backend_current_content_hash: sha256:e52e9d1fe3ff273b1510fd45d516daf576df4404320f75db4dfabc51c8f8a0cf
+  source_attachment_result: attached
+  parser_validated_media_type: application/pdf
+  local_calculated_source_sha256: sha256:b1ad4b4f15ddcba8c91f0f2d17f8a45ab58fd4febcd1064360aed758f14dec66
+  card_unchanged: true
+  acceptance_audit_present: true
+  attachment_audit_present: true
+  note: >-
+    The real PDF remained local. GitHub Actions verifies the bridge/runtime but is
+    not claimed as the carrier of the private real source bytes.
+
 findings:
   - id: CW-SOURCE-ID-001
     class: UPSTREAM_CONTRACT_ALIGNED
     severity: PASS
     owner: Cabinet_web/card-contracts
     statement: >-
-      Cabinet_web main defines source.source_id as stable identity within the owning
-      Invoice Card. Invoice Card V1 requires it, invoice-source payment evidence
-      references it, draft preparation assigns or preserves it, and source metadata
-      updates cannot replace it.
-    accepted_evidence:
-      - Cabinet_web PR 16 merged as d4419e3b948d49bd85a99a0941a350a73494cd27
-      - domain and storage documents state stable source identity independent of byte availability
-      - executable schema requires source_id
-      - deterministic validator binds invoice_source evidence.source_ref to source_id
-      - draft and evidence services preserve identity and reject contradictory replacement
+      Cabinet_web defines source.source_id as stable identity within the owning
+      Invoice Card. The real normalized F260001 Card uses invoice-f260001 separately
+      from source-f260001.
     forbidden_regression:
       - generate_source_id_inside_backend_adapter
       - infer_source_identity_from_filename
@@ -111,16 +148,8 @@ findings:
     severity: PASS
     owner: Cabinet_web_to_local_box_integration
     statement: >-
-      The transport-independent v1 synchronization contract is executable as
-      invoice.archive.accept_revision. Runtime evidence proves canonical Card-hash
-      verification, reviewed Cabinet_web validation, delivery idempotency,
-      base-revision reconciliation, immutable revision retention, bounded receipts
-      and compatibility with the same invoice state later used by source attachment.
-    contract:
-      machine: experiments/cabinet-vault/cabinet_web_sync_contract_v1.yaml
-      human: experiments/cabinet-vault/CABINET_WEB_SYNC_V1.md
-      box_extension: experiments/cabinet-vault/cabinet_web_sync_box_extension_v1.yaml
-    runtime_evidence: experiments/cabinet-vault/CABINET_WEB_SYNC_RUNTIME_EVIDENCE.md
+      cabinet-web-sync-v1 is executable through invoice.archive.accept_revision and
+      the real F260001 revision was accepted with the exact canonical Web hash.
     preserved_rules:
       - Cabinet_web_remains_authority_for_confirmed_Card_facts
       - backend_accepts_exact_revision_without_rewriting_it
@@ -136,53 +165,43 @@ findings:
     severity: PASS
     owner: Cabinet_web_to_local_box_integration
     statement: >-
-      Exact source-byte media identity is derived only from bounded parser evidence.
-      Cabinet_web source.kind, filename, extension and caller MIME do not choose the
-      parser. Runtime evidence proves the no-predeclared-MIME path while leaving the
-      confirmed Card unchanged.
-    contract: experiments/cabinet-vault/cabinet_web_source_media_lowering_v1.yaml
-    runtime_evidence: experiments/cabinet-vault/CABINET_WEB_ATTACH_CANARY_RUNTIME_EVIDENCE.md
-    forbidden_regression:
-      - map_photo_to_JPEG_unconditionally
-      - trust_filename_extension
-      - trust_caller_MIME_without_parser_validation
-      - write_detected_media_type_into_confirmed_Card
+      Exact source media identity is parser-derived. The real F260001 PDF was
+      validated as application/pdf without making caller MIME or filename authority.
 
   - id: CW-HASH-001
     class: NO_EXPECTED_HASH_RUNTIME_VERIFIED
     severity: PASS
     owner: Cabinet_web_to_local_box_integration
     statement: >-
-      Cabinet_web Invoice Card V1 may omit an expected binary SHA-256. Runtime
-      evidence proves that the local box calculates the source-byte SHA-256, stores
-      it as local custody evidence, preserves null durable upstream hash expectation,
-      preserves the confirmed Card document/content hash, handles idempotent replay,
-      rejects conflicting bytes and recovers after interrupted publication.
-    runtime_evidence: experiments/cabinet-vault/CABINET_WEB_ATTACH_CANARY_RUNTIME_EVIDENCE.md
-    forbidden_regression:
-      - write_calculated_hash_into_confirmed_Card
-      - convert_local_hash_into_fabricated_upstream_expectation
-      - allow_conflicting_bytes_to_replace_source_identity
+      The local box calculated the real F260001 PDF SHA-256 as local custody evidence
+      while the confirmed Web Card remained unchanged and did not acquire a fabricated
+      upstream binary hash.
 
   - id: CW-LIFECYCLE-001
     class: ALIGNED_SPLIT
     severity: PASS
     owner: shared_boundary
     statement: >-
-      Cabinet_web invoice_attach_source is a draft Card metadata mutation. The local
-      box invoice.source.attach is a durable local byte attachment for an accepted
-      confirmed Card revision. Synchronization connects them without collapsing the
-      lifecycle operations.
+      Card revision acceptance and local source-byte attachment remained separate
+      operations during the real canary.
 
   - id: CW-AUTHORITY-001
     class: ALIGNED
     severity: PASS
     owner: shared_boundary
     statement: >-
-      Cabinet_web/GitHub remains authority for Invoice Card facts and revision
-      history, while the local box owns archive authority, source bytes, effects,
-      recovery and audit. The backend preserves exact confirmed Card revisions and
-      does not import its database model into Cabinet_web.
+      The trusted bridge preserved synchronization vs local-agent credential classes,
+      exact invoice scope, host-owned grants and protected configuration while the
+      two autonomous applications retained their respective authority.
+
+  - id: CW-REAL-DATA-001
+    class: REAL_USER_DATA_INTEROP_VERIFIED
+    severity: PASS
+    owner: shared_boundary
+    statement: >-
+      The first real Cabinet_web user-data canary completed: exact confirmed F260001
+      revision accepted, real PDF attached to source-f260001, parser/hash evidence
+      recorded locally, Card unchanged, and acceptance/attachment audit present.
 
 gate:
   isolated_box_runtime_evidence: PASS
@@ -192,10 +211,17 @@ gate:
   cabinet_web_same_invoice_e2e_runtime: PASS
   cabinet_web_media_lowering_runtime: PASS
   cabinet_web_no_expected_hash_runtime: PASS
+  trusted_local_capability_bridge: PASS
   cabinet_web_interop_gate: pass
-  real_cabinet_web_data_canary: allowed_not_executed
-  real_user_data_canary_executed: false
+  real_cabinet_web_data_canary: PASS
+  real_user_data_canary_executed: true
   blocking_findings: []
+
+full_suite_note:
+  reported_passed: 605
+  reported_failed: 6
+  classification: pre_existing_unrelated_state5_state6_assembly_count_assertions
+  canary_gate_effect: none
 
 change_policy:
   Cabinet_web_source_contract_change_requires_connector_review: true
@@ -204,3 +230,4 @@ change_policy:
   synchronization_transport_may_not_own_business_semantics: true
   detected_media_and_local_hash_may_not_become_Cabinet_web_facts_without_new_Card_revision: true
   real_Cabinet_web_data_may_enter_box_only_when_interop_gate_passes: true
+  trusted_bridge_may_not_expand_scope_or_capability_surface_without_review: true
