@@ -20,6 +20,14 @@ def _psycopg():
     return psycopg, sql
 
 
+def _jsonb(value: dict[str, Any]):
+    try:
+        from psycopg.types.json import Jsonb  # type: ignore
+    except ImportError as exc:  # pragma: no cover - environment dependent
+        raise PostgresRecordKernelError("psycopg JSONB support is required") from exc
+    return Jsonb(value)
+
+
 @dataclass(frozen=True)
 class StoredRecord:
     namespace: str
@@ -100,7 +108,7 @@ class RecordTransaction:
                     "ON CONFLICT(namespace, resource_id) DO UPDATE SET "
                     "version = EXCLUDED.version, payload = EXCLUDED.payload, updated_at = now()"
                 ).format(sql.Identifier(self.schema)),
-                (namespace, resource_id, next_version, payload),
+                (namespace, resource_id, next_version, _jsonb(payload)),
             )
         return StoredRecord(namespace, resource_id, next_version, dict(payload))
 
@@ -122,7 +130,7 @@ class RecordTransaction:
                     "INSERT INTO {}.audit_events(event_id, event_type, subject, payload) "
                     "VALUES (%s, %s, %s, %s)"
                 ).format(sql.Identifier(self.schema)),
-                (event_id, event_type, subject, payload),
+                (event_id, event_type, subject, _jsonb(payload)),
             )
 
 
