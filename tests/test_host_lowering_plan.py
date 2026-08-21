@@ -42,7 +42,19 @@ def test_candidate_archive_host_plan_resolves_relations_and_dependency_projectio
     assert set(plan.runtime_dependencies) == {"pydantic", "psycopg"}
     assert {item.requirement for item in plan.relations} == set(box["host_requirements"])
     assert {item.provider_id for item in plan.provider_verification} == set(profile["providers"])
-    assert {item.verification_status for item in plan.provider_verification} == {"UNVERIFIED"}
+
+    verification = {item.provider_id: item.verification_status for item in plan.provider_verification}
+    assert verification["postgres_record_kernel"] == "PASS"
+    assert {
+        provider_id
+        for provider_id, status in verification.items()
+        if status == "UNVERIFIED"
+    } == {
+        "authority_kernel",
+        "typed_schema_kernel",
+        "local_private_byte_vault",
+        "protected_configuration_kernel",
+    }
 
 
 def test_missing_required_interface_relation_blocks_lowering():
