@@ -1,37 +1,42 @@
-# Generic host lowering — current result
+# Generic host lowering — verified provider result
 
 ## Status
 
-The Cabinet archive/source box has a machine-addressable generic host lowering
-plan with all structural relations and runtime dependency projection closed.
+The Cabinet archive/source box now has a machine-addressable generic host lowering
+plan with structural relations, runtime dependency projection, and every required
+provider verification closed by executed evidence.
 
-Current state:
+Expected current plan:
 
 ```text
 status: compiled
 gaps: []
-verification_gate: block
+verification_gate: pass
 runtime_dependencies:
   - pydantic
   - psycopg
 ```
 
-The gate is blocked by exactly one required provider: `authority_kernel`.
+This is the first point in the experiment where the generic-host verification
+gate is expected to pass. It does **not** make the old generated classical backend
+verified; `cabinet_boundary_audit.py` intentionally continues to classify that
+failed backend with a blocking verification gate.
 
 ## Provider state
 
 ```text
+authority_kernel                PASS
 typed_schema_kernel             PASS
 postgres_record_kernel          PASS
 local_private_byte_vault        PASS
 protected_configuration_kernel  PASS
-authority_kernel                UNVERIFIED
 ```
 
-A provider is promoted only from fingerprint-bound executed evidence. The host
-verification gate passes only when all five required providers are PASS.
+Every provider is fingerprint-bound to its reviewed implementation and probe
+runner in `generic_host_provider_verification_v0.yaml`. Promotion requires
+executed probe evidence; editing the profile alone is insufficient.
 
-## Verified provider evidence
+## Executed evidence
 
 ### postgres_record_kernel
 
@@ -40,10 +45,10 @@ RECORD-PROBE-001..005 PASS
 exit 0
 ```
 
-Real PostgreSQL execution proved `psycopg` availability, commit/rollback,
+Real PostgreSQL execution proved `psycopg` availability, atomic commit/rollback,
 exact-resource locking, no partial state after rollback, and append-only audit.
-The first run exposed an embedded-NUL advisory-lock bug; it was repaired before
-promotion.
+The first run exposed an embedded-NUL advisory-lock defect; the implementation was
+repaired before promotion.
 
 Evidence:
 
@@ -79,8 +84,8 @@ exit 0
 
 The selected runtime proved missing required protected configuration blocks ready
 state, protected values cannot escape through caller/audit output, and symbolic
-references select exact host-owned provider inputs without turning secret/source
-mechanism into business data.
+references select exact host-owned provider inputs without turning mechanism
+values into business data.
 
 Evidence:
 
@@ -98,8 +103,8 @@ exit 0
 
 The selected Termux runtime proved invalid input rejection before effects,
 closed-boundary extra-field rejection, and invalid output rejection before typed
-disclosure. The provider supports compatible Pydantic validation APIs without
-making a Pydantic major version part of Cabinet semantics.
+disclosure. The provider does not make a Pydantic major version part of Cabinet
+semantics.
 
 Evidence:
 
@@ -107,32 +112,29 @@ Evidence:
 experiments/cabinet-vault/TYPED_SCHEMA_KERNEL_RUNTIME_EVIDENCE.md
 ```
 
-## Final provider boundary: authority_kernel
-
-Candidate implementation and probe are now fingerprint-bound:
+### authority_kernel
 
 ```text
-tools/authority_kernel.py
-tools/authority_kernel_probe.py
-tests/test_authority_kernel.py
+AUTH-PROBE-001..008 PASS
+status: pass
+exit 0
 ```
 
-Required executed obligations remain:
+The selected Termux runtime proved caller-supplied authority cannot authorize a
+protected invocation, revocation removes future authority, exact resource scope
+is required, local-agent and synchronization credential classes are not
+interchangeable, undeclared effects/disclosures are denied, actor provenance is
+host-bound, and audit evidence contains no reusable credential material.
+
+Evidence:
 
 ```text
-AUTH-PROBE-001  caller-supplied authorization decision cannot authorize
-AUTH-PROBE-002  revoked principal/credential loses future authority
-AUTH-PROBE-003  exact capability + exact resource scope required
-AUTH-PROBE-004  synchronization credential rejected at local-agent boundary
-AUTH-PROBE-005  local-agent credential rejected as synchronization authority
-AUTH-PROBE-006  undeclared effect/disclosure denied
-AUTH-PROBE-007  actor bound from authenticated principal
-AUTH-PROBE-008  audit evidence contains no reusable credential material
+experiments/cabinet-vault/AUTHORITY_KERNEL_RUNTIME_EVIDENCE.md
 ```
 
-The candidate grant/policy/audit representation is generic host machinery. It
-does not claim the open research questions `AUTH-OQ-001` or `AUTH-OQ-002` are
-closed and contains no Cabinet role vocabulary.
+The candidate grant/policy/audit representation remains generic host machinery.
+This result does **not** declare `AUTH-OQ-001` or `AUTH-OQ-002` globally resolved
+and introduces no Cabinet role vocabulary.
 
 ## Lowering rules
 
@@ -145,16 +147,37 @@ GHL-VERIFY-001
 GHL-VERIFY-002
 ```
 
-`GHL-SEM-001` remains outside the structural planner. No host/compiler step may
-choose missing product semantics, authority meaning, effect meaning, disclosure
-meaning, or PlanActual monetary meaning.
+`GHL-SEM-001` remains outside the structural planner. Provider verification does
+not authorize a compiler to choose missing product semantics, effect meaning,
+disclosure meaning, or PlanActual monetary meaning.
+
+## What is now closed
+
+For the selected candidate host profile, the experiment has evidence that:
+
+```text
+all declared host requirements resolve to one provider
+all selected runtime dependencies are projected
+all five required providers have executed PASS evidence
+```
+
+Therefore `host_lowering_plan.py` should now return `verification_gate: pass` and
+exit `0` for `cabinet_backend_box_v0.yaml` +
+`generic_host_profile_candidate_v0.yaml`.
 
 ## Next boundary
 
-Execute `AUTH-PROBE-001..008` in the selected runtime. If all eight PASS with
-exit 0, promote `authority_kernel` and re-run the host lowering plan. At that
-point the expected verification gate becomes `pass`.
+The next step is not another classical backend repair and not another generic
+provider. It is the first protected capability execution.
 
-Only then compile and execute one real `invoice.source.attach` capability through
-the verified generic providers, without reintroducing Cabinet service/repository/
-router ownership.
+Start with:
+
+```text
+invoice.source.attach
+```
+
+Before implementation, bind its declared `deterministic_lowering` to a
+machine-addressable execution contract so composition cannot invent hidden rules.
+Then execute a real attachment through the verified authority, schema, record,
+byte-vault, configuration and audit providers without reintroducing Cabinet
+service/repository/router ownership.
