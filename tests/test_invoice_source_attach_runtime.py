@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import hashlib
+from datetime import datetime, timezone
 from pathlib import Path
 
 import yaml
 
+from invoice_source_attach_models import models
 from invoice_source_attach_runtime_probe import run_probe
+from typed_schema_kernel import TypedSchemaKernel
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -81,6 +84,65 @@ def test_runtime_composition_does_not_reintroduce_classical_service_repository_r
         "Repository",
     )
     assert all(item not in text for item in forbidden)
+
+
+def test_nested_runtime_models_validate_without_forward_ref_resolution_errors():
+    InputModel, OutputModel = models()
+    kernel = TypedSchemaKernel()
+
+    validated = kernel.validate_input(
+        InputModel,
+        {
+            "invoice_id": "invoice-1",
+            "files": (
+                {
+                    "filename": "source.png",
+                    "media_type": "image/png",
+                    "content": b"bytes",
+                    "expected_source_id": "source-1",
+                    "expected_content_hash": "a" * 64,
+                },
+            ),
+            "expected_sources": (
+                {
+                    "content_kind": "source",
+                    "content_id": "source-1",
+                    "content_hash": "a" * 64,
+                    "size_bytes": 5,
+                    "media_type": "image/png",
+                },
+            ),
+        },
+    )
+    assert validated.invoice_id == "invoice-1"
+    assert validated.files[0].expected_source_id == "source-1"
+
+    output = kernel.validate_output(
+        OutputModel,
+        {
+            "invoice_id": "invoice-1",
+            "items": (
+                {
+                    "filename": "source.png",
+                    "source_id": "source-1",
+                    "content_hash": "a" * 64,
+                    "result": "attached",
+                    "safe_error_code": None,
+                },
+            ),
+            "source_status": {
+                "invoice_id": "invoice-1",
+                "available_source_ids": ("source-1",),
+                "missing_source_ids": (),
+                "failed_source_ids": (),
+                "completeness": "complete",
+                "active_loss_decision_ids": (),
+                "complete": True,
+                "observed_at": datetime.now(timezone.utc),
+            },
+        },
+    )
+    assert output.source_status.complete is True
 
 
 def test_runtime_probe_without_protected_configuration_fails_closed_as_unverified():
