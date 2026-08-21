@@ -1,8 +1,22 @@
 # F260001 real Cabinet_web → local box canary evidence — 2026-08-21
 
+## Evidence scope correction
+
+**Functional execution: PASS. Assurance closure: PARTIAL.**
+
+This record proves that the exact real F260001 Card was accepted, the real PDF was attached, the Card remained unchanged, and durable acceptance/attachment audit rows existed. It does **not** by itself prove every authority/transport property of the exact private run.
+
+The property-by-property review is authoritative for assurance claims:
+
+```text
+experiments/cabinet-vault/F260001_REAL_RUN_ASSURANCE_REVIEW_2026-08-21.md
+```
+
+In particular, the real runner invoked the bridge in-process rather than through the declared CLI/stdio boundary, accessed private bridge fields for read-only verification, and the source bytes were read/parser-identified before `AuthorityKernel.invoke()`. `InvoiceRefSet` was not part of this execution path.
+
 ## Result
 
-PASS — the first real Cabinet_web user-data canary completed through the trusted local capability bridge.
+PASS — the first real Cabinet_web user-data **functional** canary completed through the trusted local capability bridge implementation.
 
 This evidence distinguishes the private local real-data execution from GitHub Actions. GitHub Actions verifies the bridge/runtime composition; the real original PDF remained local and was not uploaded as CI evidence.
 
@@ -25,10 +39,11 @@ The confirmed Web Card remained unchanged during the complete canary.
 spec-workbench implementation commit: bc872b605c3e4b3774749cdf1711eeeb35399eaf
 entrypoint: tools/local_capability_bridge.py
 real canary runner: tools/f260001_real_canary_via_bridge.py
-transport: local_cli_stdio
+declared bridge transport: local_cli_stdio
+real runner invocation: in_process_bridge_methods
 ```
 
-Protected capability boundaries:
+Protected capability configuration in the pinned implementation:
 
 ```text
 invoice.archive.accept_revision
@@ -85,6 +100,8 @@ existing cabinet_web_* tests: 42/42 PASS
 combined focused suite: 49/49 PASS
 ```
 
+BRIDGE-001..011 include negative exact-scope and credential-class checks. Those are CI assurance evidence for the pinned implementation, not observations of negative cases in the private real-data execution.
+
 ## Real local execution
 
 Safe report returned by the local canary:
@@ -102,15 +119,17 @@ acceptance audit present: true
 attachment audit present: true
 ```
 
-Therefore the real execution proves:
+The real execution directly proves:
 
 1. the exact confirmed Cabinet_web Card revision was accepted without mutation;
 2. the accepted backend current hash equals the exact Web canonical hash;
 3. the real original PDF was parser-identified as `application/pdf`;
 4. the local box calculated and retained the binary SHA-256 as local evidence;
 5. the source became attached under the exact Card-owned `source-f260001` identity;
-6. acceptance and attachment produced audit evidence;
+6. durable acceptance and attachment audit rows existed for the invoice;
 7. the confirmed Web Card was unchanged after all local effects.
+
+It does **not** directly prove that the CLI/stdio isolation was exercised, that the agent process could not access bridge internals, that PDF parsing occurred only after authorization, that the host independently owned credentials relative to the runner, or that `InvoiceRefSet` remained opaque in this path.
 
 ## Full-suite note
 
@@ -127,11 +146,11 @@ The six failures were reported as pre-existing stale count assertions in State 5
 
 ```text
 Cabinet_web canonical real input: PASS
-trusted local bridge: PASS
-revision acceptance: PASS
-real PDF source attachment: PASS
+functional revision acceptance: PASS
+functional real PDF source attachment: PASS
 Card immutability: PASS
-audit evidence: PASS
-real user-data canary executed: true
-real user-data canary result: PASS
+durable effect-audit existence: PASS
+pinned bridge CI assurance: PASS
+real-run assurance closure: PARTIAL
+all guarantees proven by exact real run: false
 ```
