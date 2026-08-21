@@ -109,6 +109,29 @@ def _git_output(root: Path, *args: str) -> str:
     return completed.stdout.strip()
 
 
+def _require_committed_main_card(root: Path, relative_path: Path) -> str:
+    repository_root = Path(_git_output(root, "rev-parse", "--show-toplevel")).resolve()
+    if repository_root != root:
+        raise CabinetWebCheckoutContractError("cabinet_web_root must be the Git repository root")
+    branch = _git_output(root, "branch", "--show-current")
+    if branch != "main":
+        raise CabinetWebCheckoutContractError(
+            f"real-data canary requires Cabinet_web main checkout; observed {branch or 'detached HEAD'}"
+        )
+    tracked = _git_output(root, "ls-files", "--error-unmatch", relative_path.as_posix())
+    if tracked != relative_path.as_posix():
+        raise CabinetWebCheckoutContractError("Invoice Card is not tracked at the expected repository path")
+    status = _git_output(root, "status", "--porcelain", "--", relative_path.as_posix())
+    if status:
+        raise CabinetWebCheckoutContractError(
+            "Invoice Card has uncommitted changes; commit the exact confirmed revision before synchronization"
+        )
+    commit_sha = _git_output(root, "log", "-1", "--format=%H", "--", relative_path.as_posix())
+    if not commit_sha:
+        raise CabinetWebCheckoutContractError("Invoice Card is not committed in Cabinet_web history")
+    return commit_sha
+
+
 def build_delivery_from_checkout(
     *,
     cabinet_web_root: str | Path,
@@ -123,6 +146,8 @@ def build_delivery_from_checkout(
     card_path = root / relative_path
     if not card_path.is_file():
         raise CabinetWebCheckoutContractError(f"Invoice Card not found: {relative_path}")
+
+    commit_sha = _require_committed_main_card(root, relative_path)
     try:
         card = json.loads(card_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
@@ -141,13 +166,6 @@ def build_delivery_from_checkout(
             "Invoice Card fails reviewed Cabinet_web validator: "
             + ", ".join(str(item.get("code", "unknown")) for item in errors)
         )
-
-    commit_sha = _git_output(root, "log", "-1", "--format=%H", "--", relative_path.as_posix())
-    if not commit_sha:
-        raise CabinetWebCheckoutContractError("Invoice Card is not committed in Cabinet_web history")
-    tracked = _git_output(root, "ls-files", "--error-unmatch", relative_path.as_posix())
-    if tracked != relative_path.as_posix():
-        raise CabinetWebCheckoutContractError("Invoice Card is not tracked at the expected repository path")
 
     timestamp = emitted_at or datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     return {
