@@ -1,4 +1,4 @@
-audit_version: cabinet_web_backend_interop.v0
+audit_version: cabinet_web_backend_interop.v1
 status: blocked
 
 purpose: >-
@@ -10,25 +10,33 @@ purpose: >-
 source_repository:
   repository: MigelSmirnov/Cabinet_web
   ref: main
-  commit_sha: 63f1752dc09be93156c6e7bf45f3c80e6c7f8387
+  commit_sha: d4419e3b948d49bd85a99a0941a350a73494cd27
   reviewed_on: "2026-08-21"
+  accepted_source_identity_via_pull_request: 16
   artifacts:
     architecture/README.md: 388a7e22e852616c57da438d5a7ee4a5b7f4a6bc
     architecture/app-architecture.yaml: 0a205c6fdec5b19001647ecea0981330cec1119e
-    docs/01-storage/INVOICE_CARD_FORMAT.md: fd0d5ea53d39798a8a8d1c8768fda2d106fd994c
+    docs/00-product-discovery/DOMAIN_MODEL.md: cd6747fca920f589cdbc340f39381739eac83f51
+    docs/01-storage/INVOICE_CARD_FORMAT.md: 56c4a42bf51fac025410d5f6a232b99e4a2835d7
+    docs/01-storage/STORAGE_MODEL.md: 62965e9e69d525dfdb69fb738c55b522f8f97f17
     docs/02-tools/INVOICE_WORKFLOW.md: 2292211ec763f3fa3e31b178307b28eebf6cd6dc
     docs/02-tools/INVOICE_TOOLS_MODEL.md: 789708a756206faf26d0260611eb8f73fb327003
-    schemas/invoice-card-v1.schema.json: 670d493cd32430f420678dea9489a2fec7cf9124
-    tools/invoice_validation.py: 1a29a9ea9623222e4246eb23d7477e9f25f3637e
-    tools/invoice_evidence_service.py: b0a3951244550e5d20b4b84225a6e62b836db459
-    tests/fixtures/invoices/obramat-cash/card.json: 089cc56fa2133bdee3cb89710a393b99d01100ef
-    tests/test_invoice_evidence_service.py: 3101f1d64d41cc60db54854de7b2ce3d990268c9
+    schemas/invoice-card-v1.schema.json: 25042abe5d0387671d836f4e39601b1e5d63be2e
+    tools/invoice_service.py: c7649351f4c5e833d7a49fd4738f47042b27e417
+    tools/invoice_draft_service.py: e8cfb81d1a15dd31a57e008aaafcc65d0395f209
+    tools/invoice_validation.py: f2337466024fe64cda27f9170d42f9c1673466b5
+    tools/invoice_evidence_service.py: 2670fa3fe7e37f6f90064a45b336b8e0374b661b
+    tests/fixtures/invoices/obramat-cash/card.json: 2a084aad5a285b306f0b0be07f188c686b4e4d5c
+    tests/test_invoice_draft_service.py: 3a1842a161ae6259475fc392ab850396c2281590
+    tests/test_invoice_evidence_service.py: 9854611880d2dde44fa2d6db67fc2062127f2980
+    tests/test_invoice_validation.py: 6550d5dfe91b6b72e23a1b7db4d4b80f51356406
 
 observed_boundary:
   cabinet_web_owns:
     - Invoice_Card_facts_and_versioned_contract
     - deterministic_invoice_validation_and_lifecycle
     - GitHub_repository_Card_history
+    - source_identity_inside_owning_Card
     - draft_source_metadata_mutation
   local_box_owns:
     - durable_local_archive_replica
@@ -41,45 +49,46 @@ observed_boundary:
 
 findings:
   - id: CW-SOURCE-ID-001
-    class: UPSTREAM_CONTRACT_DRIFT
-    severity: BLOCK
+    class: UPSTREAM_CONTRACT_ALIGNED
+    severity: PASS
     owner: Cabinet_web/card-contracts
     statement: >-
-      The accepted Invoice Card format example contains source.source_id and
-      payment evidence source_ref points to that identity, while the executable
-      Invoice Card V1 schema, deterministic validator, source mutation service,
-      fixture, and evidence-service tests define source without source_id and
-      reject additional fields.
-    evidence:
-      - docs/01-storage/INVOICE_CARD_FORMAT.md example source.source_id=source-001
-      - docs/01-storage/INVOICE_CARD_FORMAT.md payment evidence source_ref=source-001
-      - schemas/invoice-card-v1.schema.json source additionalProperties=false and no source_id
-      - tools/invoice_validation.py SOURCE_FIELDS excludes source_id
-      - tests/fixtures/invoices/obramat-cash/card.json has source_ref=source-001 but no source.source_id
-    resolution_required: >-
-      Make one explicit accepted Cabinet_web source-identity decision at the Card
-      contract owner, then propagate it through schema, validator, fixtures, and
-      tool contracts before backend interop may depend on that identity.
-    forbidden_resolution:
+      Cabinet_web main now defines source.source_id as stable identity within the
+      owning Invoice Card. Invoice Card V1 requires it, the deterministic validator
+      enforces its shape, invoice-source payment evidence must reference it, draft
+      preparation assigns or preserves it, and source metadata updates cannot
+      replace it.
+    accepted_evidence:
+      - Cabinet_web PR 16 merged as d4419e3b948d49bd85a99a0941a350a73494cd27
+      - domain and storage documents state stable source identity independent of byte availability
+      - executable schema requires source_id
+      - deterministic validator binds invoice_source evidence.source_ref to source_id
+      - draft and evidence services preserve identity and reject contradictory replacement
+    forbidden_regression:
       - generate_source_id_inside_backend_adapter
       - infer_source_identity_from_filename
-      - infer_source_identity_from_payment_source_ref_without_contract
+      - replace_source_identity_when_storage_metadata_changes
 
   - id: CW-SYNC-001
-    class: INTEGRATION_RELATION_MISSING
-    severity: BLOCK
+    class: INTEGRATION_CONTRACT_DEFINED
+    severity: PASS
     owner: Cabinet_web_to_local_box_integration
     statement: >-
-      Cabinet_web declares a remote synchronization adapter only after an accepted
-      integration decision. The workflow describes local synchronization, but no
-      machine contract currently defines the confirmed Card revision package,
-      source expectations, idempotency identity, acknowledgement, or reconciliation
-      between GitHub Card facts and the local box.
-    resolution_required:
-      - define_versioned_Web_to_box_sync_package
-      - bind_exact_Card_revision_content_hash_and_source_commit_sha
-      - define_idempotent_acceptance_and_receipt
-      - preserve_GitHub_Card_as_fact_source_without_backend_rewrite
+      A transport-independent v1 synchronization contract now defines one exact
+      confirmed Card revision delivery, canonical content-hash verification, Git
+      provenance, retry identity, base-revision reconciliation, immutable local
+      acceptance semantics and a bounded receipt without transferring ownership.
+    contract:
+      machine: experiments/cabinet-vault/cabinet_web_sync_contract_v1.yaml
+      human: experiments/cabinet-vault/CABINET_WEB_SYNC_V1.md
+    preserved_rules:
+      - Cabinet_web_remains_authority_for_confirmed_Card_facts
+      - backend_accepts_exact_revision_without_rewriting_it
+      - same_delivery_same_revision_is_idempotent
+      - same_delivery_different_revision_is_conflict
+      - stale_base_requires_reconciliation_without_overwrite
+      - arrival_order_does_not_define_Git_revision_order
+      - Card_acceptance_does_not_claim_source_bytes_are_attached
 
   - id: CW-MEDIA-001
     class: LOWERING_GAP
@@ -89,11 +98,11 @@ findings:
       Cabinet_web source.kind distinguishes photo/pdf/message/scan/other but does
       not provide exact MIME identity. The verified box content validator requires
       bounded parsing of one accepted exact media type and may not treat filename,
-      extension, or source.kind as sufficient proof of JPEG versus PNG versus PDF.
+      extension, source.kind, or caller MIME as sufficient proof of JPEG versus PNG
+      versus PDF.
     resolution_required: >-
-      Define a synchronization/input relation that supplies or safely derives the
-      exact accepted content type using bounded parser evidence without trusting a
-      filename or kind-only mapping.
+      Define and execute a bounded parser-backed content-type relation for source
+      bytes that produces the exact accepted media type independently of source.kind.
     forbidden_resolution:
       - map_photo_to_JPEG_unconditionally
       - trust_filename_extension
@@ -105,14 +114,14 @@ findings:
     owner: Cabinet_web_to_local_box_integration
     statement: >-
       Cabinet_web Invoice Card V1 source facts do not carry an expected binary
-      SHA-256. Cabinet backend semantics permit a locally calculated hash to become
-      storage evidence when the Card has no expected hash, but the verified real
-      attach execution case has not yet been promoted as Cabinet_web interop
-      evidence for the no-expected-hash path.
+      SHA-256. The sync v1 contract explicitly permits that absence and keeps a
+      locally calculated hash as backend evidence only, but the real no-expected-
+      hash attachment path still lacks executed Cabinet_web interop evidence.
     resolution_required:
-      - bind_no_expected_hash_semantics_in_sync_contract
-      - execute_real_no_expected_hash_source_attachment_evidence
-      - do_not_rewrite_confirmed_Card_with_local_hash
+      - execute_no_expected_hash_source_attachment_against_accepted_sync_revision
+      - prove_local_calculated_hash_becomes_backend_storage_evidence
+      - prove_confirmed_Card_document_and_card_content_hash_remain_unchanged
+      - prove_replay_conflict_and_recovery_hold
 
   - id: CW-LIFECYCLE-001
     class: ALIGNED_SPLIT
@@ -121,8 +130,8 @@ findings:
     statement: >-
       Cabinet_web invoice_attach_source is a draft Card metadata mutation. The
       local box invoice.source.attach is a durable local byte attachment for an
-      accepted confirmed Card revision. These are distinct operations and should
-      be connected by synchronization rather than mapped one-to-one.
+      accepted confirmed Card revision. These are distinct operations and are
+      connected by synchronization rather than mapped one-to-one.
 
   - id: CW-AUTHORITY-001
     class: ALIGNED
@@ -131,16 +140,16 @@ findings:
     statement: >-
       Cabinet_web/GitHub remains the authority for Invoice Card facts and revision
       history, while the local box owns local archive authority, source bytes,
-      effects, recovery, and audit. The backend must preserve the exact confirmed
-      Card revision and may not import its database model into Cabinet_web.
+      effects, recovery, and audit. The backend preserves the exact confirmed Card
+      revision and does not import its database model into Cabinet_web.
 
 gate:
   isolated_box_runtime_evidence: PASS
+  cabinet_web_source_identity_contract: PASS
+  cabinet_web_sync_contract_design: PASS
   cabinet_web_interop_gate: block
   real_cabinet_web_canary: forbidden_until_blockers_closed
   blocking_findings:
-    - CW-SOURCE-ID-001
-    - CW-SYNC-001
     - CW-MEDIA-001
     - CW-HASH-001
 
@@ -148,4 +157,5 @@ change_policy:
   Cabinet_web_source_contract_change_requires_connector_review: true
   source_repository_fingerprint_drift: block_and_refresh_audit
   backend_adapter_may_not_resolve_upstream_contract_drift: true
+  synchronization_transport_may_not_own_business_semantics: true
   real_Cabinet_web_data_may_not_enter_box_until_interop_gate_passes: true
