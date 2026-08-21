@@ -37,7 +37,8 @@ jobs:
             tests/test_postgres_record_kernel.py \
             tests/test_local_private_byte_vault.py \
             tests/test_typed_schema_kernel.py \
-            tests/test_protected_configuration_kernel.py
+            tests/test_protected_configuration_kernel.py \
+            tests/test_authority_kernel.py
 
       - name: Enforce declared box language
         run: python tools/box_language_audit.py
@@ -96,6 +97,7 @@ jobs:
               for provider_id, status in verification.items()
               if status == "PASS"
           } == {
+              "typed_schema_kernel",
               "postgres_record_kernel",
               "local_private_byte_vault",
               "protected_configuration_kernel",
@@ -104,10 +106,7 @@ jobs:
               provider_id
               for provider_id, status in verification.items()
               if status == "UNVERIFIED"
-          } == {
-              "authority_kernel",
-              "typed_schema_kernel",
-          }
+          } == {"authority_kernel"}
           PY
 
       - name: Prove PostgreSQL provider cannot pass without runtime DSN
@@ -144,7 +143,6 @@ jobs:
           python - <<'PY'
           import json
           from pathlib import Path
-
           report = json.loads(Path("local-private-byte-vault-probe.json").read_text())
           assert report["status"] == "pass"
           assert {item["status"] for item in report["results"]} == {"PASS"}
@@ -156,7 +154,6 @@ jobs:
           python - <<'PY'
           import json
           from pathlib import Path
-
           report = json.loads(Path("typed-schema-kernel-probe.json").read_text())
           assert report["status"] == "pass"
           assert {item["status"] for item in report["results"]} == {"PASS"}
@@ -168,10 +165,21 @@ jobs:
           python - <<'PY'
           import json
           from pathlib import Path
-
           report = json.loads(Path("protected-configuration-kernel-probe.json").read_text())
           assert report["status"] == "pass"
           assert {item["status"] for item in report["results"]} == {"PASS"}
+          PY
+
+      - name: Execute authority candidate probe without promoting profile
+        run: |
+          python tools/authority_kernel_probe.py > authority-kernel-probe.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          report = json.loads(Path("authority-kernel-probe.json").read_text())
+          assert report["status"] == "pass"
+          assert {item["status"] for item in report["results"]} == {"PASS"}
+          assert len(report["results"]) == 8
           PY
 
       - name: Check patch integrity
@@ -188,4 +196,5 @@ jobs:
             local-private-byte-vault-probe.json
             typed-schema-kernel-probe.json
             protected-configuration-kernel-probe.json
+            authority-kernel-probe.json
           if-no-files-found: error
