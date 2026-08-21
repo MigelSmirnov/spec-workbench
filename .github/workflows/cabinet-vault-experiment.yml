@@ -38,7 +38,8 @@ jobs:
             tests/test_local_private_byte_vault.py \
             tests/test_typed_schema_kernel.py \
             tests/test_protected_configuration_kernel.py \
-            tests/test_authority_kernel.py
+            tests/test_authority_kernel.py \
+            tests/test_capability_execution_readiness.py
 
       - name: Enforce declared box language
         run: python tools/box_language_audit.py
@@ -88,6 +89,32 @@ jobs:
               for item in plan["provider_verification"]
           } == {"PASS"}
           assert len(plan["provider_verification"]) == 5
+          PY
+
+      - name: Prove source attach remains blocked by explicit capability lowering gap
+        shell: bash
+        run: |
+          set +e
+          python tools/capability_execution_readiness.py \
+            experiments/cabinet-vault/cabinet_backend_box_v0.yaml \
+            experiments/cabinet-vault/generic_host_profile_candidate_v0.yaml \
+            experiments/cabinet-vault/invoice_source_attach_execution_contract_v0.yaml \
+            --json > invoice-source-attach-readiness.json
+          code=$?
+          set -e
+          test "$code" = "2"
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          report = json.loads(Path("invoice-source-attach-readiness.json").read_text())
+          assert report["status"] == "blocked"
+          assert report["host_verification_gate"] == "pass"
+          assert report["capability_readiness_gate"] == "block"
+          gaps = report["blocking_gaps"]
+          assert len(gaps) == 1
+          assert gaps[0]["code"] == "LOWERING_GAP"
+          assert gaps[0]["subject"] == "verified_content_signature"
           PY
 
       - name: Prove PostgreSQL runtime probe still fails closed without DSN
@@ -173,6 +200,7 @@ jobs:
           path: |
             cabinet-boundary-audit.json
             generic-host-plan.json
+            invoice-source-attach-readiness.json
             postgres-record-kernel-probe.json
             local-private-byte-vault-probe.json
             typed-schema-kernel-probe.json
