@@ -49,6 +49,7 @@ def test_candidate_archive_host_plan_resolves_relations_and_dependency_projectio
         for provider_id, status in verification.items()
         if status == "PASS"
     } == {
+        "typed_schema_kernel",
         "postgres_record_kernel",
         "local_private_byte_vault",
         "protected_configuration_kernel",
@@ -57,10 +58,7 @@ def test_candidate_archive_host_plan_resolves_relations_and_dependency_projectio
         provider_id
         for provider_id, status in verification.items()
         if status == "UNVERIFIED"
-    } == {
-        "authority_kernel",
-        "typed_schema_kernel",
-    }
+    } == {"authority_kernel"}
 
 
 def test_missing_required_interface_relation_blocks_lowering():
