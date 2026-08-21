@@ -2,7 +2,12 @@ from __future__ import annotations
 
 import pytest
 
-from postgres_record_kernel import PostgresRecordKernel, PostgresRecordKernelError, RecordTransaction
+from postgres_record_kernel import (
+    PostgresRecordKernel,
+    PostgresRecordKernelError,
+    RecordTransaction,
+    _resource_lock_identity,
+)
 from postgres_record_kernel_probe import run_probe
 
 
@@ -16,6 +21,15 @@ def test_record_mutation_requires_exact_resource_lock_before_database_access():
 
     with pytest.raises(PostgresRecordKernelError, match="exact resource lock"):
         tx.put_record("namespace", "resource", {"value": 1})
+
+
+def test_resource_lock_identity_is_postgresql_text_safe_and_composite_unambiguous():
+    key = _resource_lock_identity("namespace\x00with-control", "resource\x00with-control")
+
+    assert "\x00" not in key
+    assert "\\u0000" in key
+    assert _resource_lock_identity("ab", "c") != _resource_lock_identity("a", "bc")
+    assert _resource_lock_identity("a:b", "c") != _resource_lock_identity("a", "b:c")
 
 
 def test_runtime_probe_without_dsn_fails_closed_instead_of_skipping_to_pass():
