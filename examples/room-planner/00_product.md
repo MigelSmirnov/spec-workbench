@@ -94,11 +94,20 @@ Room Planner's authoritative editable drawing is two-dimensional and organized p
 
 Walls, rooms, openings, dimensions, boundaries, and their plan relationships are defined in real-world plan coordinates. The drawing is supplemented by construction-relevant vertical parameters such as heights, elevations/levels, thicknesses, and opening heights where those facts are required for renovation planning.
 
-These vertical parameters exist to let Room Planner derive construction-relevant geometry and room specifications from the 2D plan, including floor and ceiling areas, room perimeters, wall lengths, wall-face areas, net surface areas after openings, and physical volumes where applicable.
+These vertical parameters exist to let Room Planner derive construction-relevant geometry and room specifications from the 2D plan, including floor and ceiling areas, room perimeters, wall lengths, wall-face areas, net surface areas after openings, clear heights, and physical volumes where applicable.
+
+Room Planner must support spatially varying floor and ceiling geometry rather than assuming one floor elevation and one room height for an entire room. Survey and planning may use a two-dimensional measurement grid over the plan. At relevant grid locations the product must be able to retain two independent vertical facts:
+
+- floor elevation relative to a stable project datum/zero;
+- local floor-to-ceiling clear height.
+
+From those facts the corresponding ceiling elevation relative to the same datum can be derived. This allows a floor and ceiling to slope together while clear height remains constant, or allows floor and ceiling geometry to vary independently where the measured condition requires it.
+
+The project datum is a measurement reference, not a claim that the physical building is level. Exact datum management, grid density, interpolation, incomplete-grid behavior, and surface reconstruction are deferred to later design states.
 
 The initial product does not require arbitrary free-form 3D solid or mesh modeling. A future 3D representation is allowed, but it must be a derived visualization of the authoritative 2D plan and its vertical parameters rather than an independent source of spatial truth.
 
-The exact coordinate, elevation, surface, and derived-geometry models are deferred to State 1.
+The exact coordinate, elevation, grid, surface, and derived-geometry models are deferred to State 1.
 
 ## Platform integration boundary
 
@@ -153,7 +162,7 @@ The Existing Plan answers only:
 
 > What is physically present and measured on the renovation object?
 
-It may contain measured spatial facts such as walls, rooms, doors, windows, openings, dimensions, and other observed conditions that are accepted into Room Planner scope.
+It may contain measured spatial facts such as walls, rooms, doors, windows, openings, dimensions, floor/ceiling elevations, clear heights, and other observed conditions that are accepted into Room Planner scope.
 
 Construction intent MUST NOT leak into the Existing Plan.
 
@@ -173,7 +182,9 @@ Demolition is a distinct renovation meaning and a distinct kind of downstream wo
 
 The Demolition Plan may refer to existing elements or existing finishes that are to be removed, but it MUST NOT create new construction.
 
-Examples include removing an existing wall, removing a door or window, opening or enlarging an existing opening, removing an existing finish, removing an existing ceiling system or covering, or other demolition actions introduced later within Room Planner scope.
+Examples include removing an existing wall, removing a door or window, opening or enlarging an existing opening, removing an existing finish, removing floor layers, removing an existing ceiling system or covering, or other demolition actions introduced later within Room Planner scope.
+
+Where demolition changes a measured floor or ceiling build-up, Room Planner may derive the resulting post-demolition surface/elevation map for review and subsequent Construction planning. That derived result does not turn Demolition into a second Existing source of truth.
 
 ### Construction Plan
 
@@ -183,6 +194,8 @@ The Construction Plan answers only:
 
 This is where new wall systems, new/changed openings, drywall systems, plaster, putty, paint, ceiling preparation/finishes, and floor leveling/fill belong.
 
+Construction may define a target floor/ceiling surface or elevation map where the intended work changes those surfaces. The user must be able to inspect the resulting clear heights and physical quantity consequences without Room Planner deciding whether a particular furniture, kitchen, or other downstream design will fit; that design judgment remains with the user or the relevant downstream planner.
+
 A construction element appearing here means work is intended. It must never be confused with an observed Existing condition.
 
 ## Revision semantics are separate from renovation-stage semantics
@@ -191,41 +204,41 @@ Versioning is mandatory.
 
 `Existing`, `Demolition`, and `Construction` describe the construction meaning of data.
 
-A revision describes that the relevant plan/document result changed over time.
+A published revision describes an identifiable result that was intentionally published at a point in time. Ordinary edits and draft saves do not create published revisions.
 
 These are separate axes and must not be conflated.
 
 Published historical plans and quantity outputs must remain identifiable and must not silently change when a later plan revision or later Construction Catalog revision exists.
 
-The exact revision model, branching policy, locking, and rollback behavior are deferred to later states.
+The exact revision identifiers, statuses, branching representation, locking, and rollback mechanics are deferred to later states.
 
 ## Existing corrections and dependent-plan propagation
 
 Existing represents the best-known reconstruction of the renovation object's pre-renovation physical condition rather than merely the measurements that happened to be available at one moment.
 
-A published Existing revision is an immutable historical record, but later discovery of a measurement error, hidden condition, or more accurate observation may justify a corrected Existing result. Such a correction creates a new identifiable Existing revision; it MUST NOT rewrite an earlier published Existing revision in place.
+A published Existing revision is an immutable historical record, but later discovery of a measurement error, hidden condition, or more accurate observation may justify a corrected Existing working state. Such a correction is made in draft and MUST NOT rewrite an earlier published Existing revision in place. If the corrected result is later published, publication creates a new identifiable Existing revision.
 
 An observation made after renovation work has begun may correct Existing only when it reveals a fact that was already true before the project work, such as a previously hidden substrate, level, dimension, or construction condition. A physical state change caused by demolition or construction work is not retroactively written into Existing merely because it was observed later.
 
-Demolition and Construction intent created against an earlier Existing basis must not silently change meaning when a corrected Existing revision appears. Existing dependent revisions remain historically associated with the basis against which they were created until the user explicitly accepts a propagated result.
+Demolition and Construction intent created against an earlier Existing basis must not silently change meaning when a corrected Existing working state appears. Published dependent revisions remain historically associated with the Existing basis against which they were created.
 
-When an Existing correction affects dependent renovation intent, Room Planner must support carrying the relevant Demolition and Construction intent forward onto the corrected Existing basis as new dependent revisions.
+When an Existing correction affects dependent renovation intent, Room Planner must support carrying the relevant Demolition and Construction intent forward onto the corrected Existing basis as dependent working drafts rather than resetting those plans to empty state.
 
 The product may automatically propagate relationships, geometry, and intent that remain unambiguous after the correction, but automatic propagation is not silent acceptance. Room Planner must expose that dependent plans are affected and must surface unresolved or conflicting consequences for review rather than fabricate a plausible migration.
 
-The user must explicitly confirm the Existing correction with awareness that dependent plans are affected, and must separately accept the propagated Demolition and Construction result before those new dependent revisions become the accepted working basis. Publishing those revisions remains a separate product action.
+The user must explicitly confirm the Existing correction with awareness that dependent plans are affected, and must separately accept the propagated Demolition and Construction working result before treating that propagated state as the current working basis. None of these draft actions by itself creates a published revision.
 
-Earlier Existing, Demolition, Construction, and published quantity revisions remain preserved so historical provenance can still be reproduced.
+Publication remains a separate product action. If the corrected and propagated working state is published, the newly published result receives new identifiable revision(s), while earlier Existing, Demolition, Construction, and published quantity revisions remain preserved so historical provenance can still be reproduced.
 
-The exact dependency representation, migration algorithm, conflict model, statuses, and confirmation user interface are deferred to later design states.
+The exact dependency representation, propagation algorithm, conflict model, statuses, and confirmation user interface are deferred to later design states.
 
 ## One active Construction proposal in the initial product
 
 The initial Room Planner product supports one active Construction proposal for a Registry object rather than parallel alternative A/B/C design variants.
 
-Alternative design exploration is represented through the ordinary revision history of the plan. The product does not require a separate variant/branch concept in its first scope.
+Alternative design exploration may occur freely in the working draft. Historical published alternatives are represented through ordinary revision history; the product does not require a separate variant/branch concept in its first scope.
 
-This decision keeps publication, quantity calculation, downstream consumption, and provenance centered on one current Construction intent plus identifiable historical revisions.
+This decision keeps publication, quantity calculation, downstream consumption, and provenance centered on one current Construction intent plus identifiable historical published revisions.
 
 A future product requirement may introduce explicit parallel alternatives, but later architecture must not assume that capability exists today.
 
@@ -237,9 +250,15 @@ Working drafts that have never been published may be discarded as part of normal
 
 Once a result has been published, normal product behavior must preserve that historical revision. A published revision may later cease to be current, be superseded, or be archived, but it must not be silently hard-deleted or rewritten in place.
 
-Returning to an earlier design means restoring/copying that historical state into a new current revision rather than rewinding history as though intervening revisions never existed.
+Creating a later version must not reset or discard previous accepted work. The working state used for continued planning inherits the current accepted content by default, including unchanged geometry, demolition intent, construction intent, finishes, measurements, and other applicable planning data. The user changes only what actually needs to change.
 
-This supports practical comparison workflows without introducing parallel design variants. For example, a user may publish one revision based on drywall construction, publish a later revision based on plaster, then restore the earlier drywall state as a new revision if the client chooses it.
+Publishing a later version creates a complete immutable snapshot of the current publishable working result. Content that was not edited remains part of that new snapshot through inheritance; publication is not equivalent to starting a new empty project.
+
+After publication, the application must continue from the published state rather than clearing the user's work. Further edits create later working state that may eventually be published as another revision.
+
+Returning to an earlier design means restoring/copying that historical state into a new working draft rather than rewinding history as though intervening revisions never existed. If that restored draft is later published, it becomes a new later revision while the intervening history remains intact.
+
+This supports practical comparison workflows without introducing parallel design variants. For example, a user may publish one revision based on drywall construction, publish a later revision based on plaster, then restore the earlier drywall state into the current draft and publish it as a new later revision if the client chooses it.
 
 The exact statuses, retention policy, administrative recovery mechanisms, and authorization rules are deferred to later design states.
 
@@ -252,17 +271,19 @@ Current in-scope capabilities include:
 - room perimeters and derived floor/ceiling surfaces required for room specification;
 - wall height and thickness as construction-relevant facts;
 - room, wall, opening, floor, and ceiling height/elevation parameters required by owned calculations;
+- spatially varying floor/ceiling survey and planning maps based on a 2D measurement grid;
 - doors and windows as real wall openings rather than decorative SVG overlays;
 - construction-oriented dimensions;
 - accurate placement in real-world units;
-- demolition intent for relevant existing walls/openings/finishes/ceiling systems;
+- demolition intent for relevant existing walls/openings/finishes/floor layers/ceiling systems;
 - new/changed wall and opening construction;
 - drywall/gypsum-board partition systems and their physical quantity calculations;
 - plaster with selected/defined thickness and resulting physical quantity calculations;
 - putty quantities derived from applicable surface area;
 - paint and other supported surface-finish quantities derived from applicable surface area and required system parameters;
 - ceiling preparation and finish intent and its physical quantity calculations;
-- floor leveling/fill quantities derived from room geometry and required thickness/leveling inputs;
+- floor leveling/fill quantities derived from measured/derived and target floor surfaces;
+- interactive preview of geometric and physical-quantity consequences before publication;
 - publication of versioned plan and quantity outputs.
 
 ## Wall surfaces
@@ -320,11 +341,23 @@ Room Planner owns the geometric physical quantities for supported ceiling work, 
 
 The exact ceiling domain model, supported ceiling systems, treatment taxonomy, and calculation rules are deferred to later design states.
 
-## Floor responsibility
+## Floor and vertical-surface-map responsibility
 
-Room Planner owns floor leveling/fill as part of preparing room geometry for renovation.
+Room Planner owns the measured and planned geometry needed to describe floor preparation and its relationship to the ceiling.
 
-It may calculate required physical volume/quantity from room area and relevant thickness/leveling inputs.
+The product must support a measurement-grid view in which relevant plan locations can carry floor elevation relative to the project datum together with local floor-to-ceiling height. The corresponding ceiling elevation is derived from those two facts.
+
+These maps must remain semantically distinct across renovation stages:
+
+- Existing describes the measured pre-renovation floor/ceiling landscape;
+- Demolition describes removal intent and may derive the resulting post-demolition substrate/surface landscape;
+- Construction describes the target prepared floor/ceiling landscape after Room Planner-owned work.
+
+A single generic `floor_level` meaning is therefore insufficient at the product level. Later domain design must preserve the distinction between measured Existing elevation, demolition-result geometry, and Construction target geometry.
+
+Room Planner owns floor leveling/fill as part of preparing room geometry for renovation. Physical quantity calculations may depend on the spatial difference between the post-demolition/preparation surface and the Construction target surface rather than assuming one uniform thickness for the whole room.
+
+The user must be able to experiment with proposed surface changes before committing them. For example, the user may temporarily raise a selected area or an entire target floor surface by 10 mm and inspect the resulting changes in leveling/fill thickness, physical material volume, and clear heights. Such a preview is an editing/analysis capability; it does not itself create a published revision or publish anything to the platform.
 
 Final floor covering is explicitly outside this product boundary.
 
@@ -338,7 +371,9 @@ A separate Tile/Floor Covering Planner is expected to own concerns such as:
 - finish-specific wastage;
 - finish-material quantities.
 
-How floor survey/level measurements enter Room Planner remains an open product question.
+Room Planner publishes the prepared spatial geometry and physical quantities it owns; the final design decision about whether a resulting height or level is acceptable remains with the renovation professional or a relevant downstream planner.
+
+The exact survey acquisition method, grid spacing, surface interpolation, editing operations, and calculation algorithms are deferred to later design states.
 
 ## Doors and windows
 
@@ -494,6 +529,7 @@ Current explicit exclusions include:
 - real-time multi-user collaborative editing in the initial product;
 - client-cabinet behavior;
 - arbitrary free-form 3D solid/mesh modeling as an authoritative editing model;
+- automated domain decisions about whether furniture, kitchens, equipment, or other downstream designs fit within the available spatial envelope;
 - general-purpose CAD features that are not required for renovation planning.
 
 ## Precision constraint
@@ -525,6 +561,8 @@ record Construction Plan
         ↓
 inspect derived Proposed / To-Be view
         ↓
+preview / adjust planning consequences
+        ↓
 calculate physical quantities
         ↓
 review
@@ -537,28 +575,33 @@ downstream platform consumers
 More explicitly:
 
 1. The user opens Room Planner and selects an existing renovation object supplied by Registry.
-2. The user creates or continues the Existing Plan and records the measured current condition.
+2. The user creates or continues the Existing Plan and records the measured current condition, including relevant floor elevations and local floor-to-ceiling heights.
 3. The Existing Plan remains independent from later demolition and construction work so the original observed state is not overwritten.
-4. The user records Demolition work separately against the Existing condition.
-5. The user records Construction work separately, including new/changed geometry and the construction/finish systems owned by Room Planner.
+4. The user records Demolition work separately against the Existing condition and may inspect resulting post-demolition geometry where removal changes floor or ceiling surfaces.
+5. The user records Construction work separately, including new/changed geometry, target prepared surfaces, and the construction/finish systems owned by Room Planner.
 6. The user may inspect a Proposed / To-Be result derived from Existing, Demolition, and Construction without turning that derived view into a mixed source of truth.
-7. Room Planner calculates physical quantities for the scope it owns using the relevant geometry, construction intent, and applicable Construction Catalog data.
-8. The user reviews the resulting plan and quantities.
-9. When a result is ready for use outside the user's working session, the user publishes an identifiable version for downstream platform consumers.
+7. The user may preview changes to target geometry and immediately inspect resulting thicknesses, physical quantities, and clear heights before accepting those edits into the working state.
+8. Room Planner calculates physical quantities for the scope it owns using the relevant geometry, construction intent, and applicable Construction Catalog data.
+9. The user reviews the resulting plan and quantities.
+10. When a result is ready for use outside the user's working session, the user explicitly publishes an identifiable version for downstream platform consumers.
 
 The workflow does not need to complete in one session. The product must support saving incomplete work and continuing it later.
 
-## Save and publish are different product actions
+## Save, preview, and publish are different product actions
 
-Saving working state and publishing a result have different meanings.
+Saving working state, previewing consequences, and publishing a result have different meanings.
 
-**Save / draft** means the user is preserving incomplete or ongoing work for later continuation. Saved working state is not automatically a platform promise that downstream applications should consume it.
+**Preview / what-if** means the user is exploring a geometric or planning change and its derived consequences, such as changing a target floor elevation and observing new fill thicknesses, material volumes, and clear heights. Preview does not create a published revision and does not expose a result to downstream platform consumers.
 
-**Publish** means the user intentionally exposes a specific identifiable result version for use by other platform applications.
+**Save / draft** means the user is preserving incomplete or ongoing working state for later continuation. Saved working state may include accepted edits and may continue from previously published content, but it is not automatically a platform promise that downstream applications should consume it. Repeated draft saves do not create published revisions.
 
-A later edit must not silently mutate the meaning of an already published result; it leads to later working state and eventually another published version.
+**Publish / send** means the user intentionally creates and exposes a specific identifiable immutable result version for use by other platform applications. Publication must require an explicit two-step confirmation so that an ordinary edit, preview, or save cannot accidentally create a platform-visible version.
 
-The exact persistence model, draft state model, approval policy, and revision numbering mechanics are deferred.
+Publishing snapshots the complete current publishable working result, including inherited unchanged content and the user's changes. It does not reset the project or discard the working state. After successful publication, continued work begins from that published content.
+
+A later edit must not silently mutate the meaning of an already published result; it produces later working state and eventually another published version only if the user explicitly publishes again.
+
+The exact persistence model, transient-preview implementation, confirmation UI wording, and revision numbering mechanics are deferred.
 
 ## Existing Plan may be published independently
 
@@ -588,23 +631,29 @@ A user can select an existing renovation object and work on its Room Planner con
 
 The user can create or edit an accurate Existing Plan without mixing it with future construction intent.
 
+The user can record and inspect spatially varying floor elevations and floor-to-ceiling heights over a measurement grid rather than reducing a room to one floor level and one height.
+
 The user can preserve unfinished work without publishing it to downstream applications.
 
 The user can publish an accepted Existing result before the complete renovation proposal is finished.
 
-The user can separately describe Demolition work against the existing condition.
+The user can separately describe Demolition work against the existing condition and inspect relevant resulting surface geometry.
 
-The user can separately describe Construction work and finishes, including Room Planner-owned ceiling treatments.
+The user can separately describe Construction work and finishes, including Room Planner-owned ceiling treatments and target prepared floor/ceiling geometry.
 
 The user can inspect a resulting Proposed/To-Be view derived from the isolated plan meanings.
 
 The user can derive room-relevant geometry and specifications from the authoritative 2D plan plus vertical parameters.
 
+The user can preview a proposed geometric change and see its effects on thicknesses, quantities, and clear heights without thereby publishing a new version.
+
 The user can obtain reproducible physical quantities for the scope owned by Room Planner.
 
-The plan and quantity results can be saved, revised, published, and consumed by other platform applications.
+The user can continue from previous accepted work without a new version resetting unchanged planning data.
 
-Changes to a published result must create a new identifiable revision rather than silently replacing the provenance of downstream work.
+The plan and quantity results can be saved as working drafts, revised, explicitly published, and consumed by other platform applications.
+
+Changes to a published result must create a new identifiable revision only through a later explicit publication rather than silently replacing the provenance of downstream work.
 
 ## Unresolved product questions deferred to later states
 
@@ -613,7 +662,8 @@ The following questions remain intentionally unresolved because they do not bloc
 - Which wall/opening editing operations are mandatory for the first usable release?
 - What is the exact lifecycle for creating, accepting, freezing, and correcting the Existing baseline?
 - What detailed rules and user interaction distinguish a late discovery about the pre-renovation condition from a state change caused by performed demolition or construction work?
-- How are floor level/survey measurements acquired or imported?
+- How are floor/ceiling grid measurements acquired or imported?
+- What grid density, interpolation, and surface-reconstruction rules are required for survey and planning?
 - Which ceiling systems and preparation/finish treatment families are required in the first usable release?
 - Which construction systems/material families are required in the initial Construction Catalog?
 - Does Room Planner expose editable construction-system templates, catalog-selected fixed systems, or both?
