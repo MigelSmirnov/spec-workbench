@@ -295,6 +295,7 @@ Deep boundary module. It hides authenticated transport, retries, reconciliation,
 
 ```text
 refresh_registry_context
+record_card_assignment_observation
 build_registry_catalogue
 get_work_object
 validate_card_assignment

@@ -96,6 +96,8 @@ refresh_registry_context: [VALIDATION_ERROR] Raise RegistryContextUnavailableErr
 validate_card_assignment: [RULE_REFERENCE] Validation may change review evidence but must never rewrite the immutable Card assignment; use = rules.registry_context.registry_status_rewrites_immutable_card.
 validate_card_assignment: [BEHAVIOR] Produce explicit assignment-validation evidence against the exact Card revision and current Registry context, preserving unresolved or review-required status when observable evidence does not validate the earlier choice.
 validate_card_assignment: [VALIDATION_ERROR] Raise RegistryContextUnavailableError when the current Registry context required to perform the validation cannot be resolved safely.
+record_card_assignment_observation: [ORCHESTRATION] MUST delegate to RegistryContextService.record_card_assignment_observation on the supplied registry and return its result.
+record_card_assignment_observation: [PROVENANCE] MUST be the only write path for CardObjectAssignmentObservation: the observation is produced at capture or acceptance time from the Card object block and the catalogue provenance of that capture, never derived inside validation.
 get_assignment_validation: [BEHAVIOR] Return the current recorded validation evidence for the exact assignment identity without guessing a result from current Registry state.
 get_assignment_validation: [VALIDATION_ERROR] Raise AssignmentValidationNotFoundError when no accepted validation evidence exists for the exact requested Card revision context.
 get_work_object: [BEHAVIOR] Return the current WorkObject for the exact Registry project identity with Registry-derived and Cabinet-owned context remaining distinguishable.
@@ -113,6 +115,7 @@ calculate_plan_actual: [RULE_REFERENCE] Consume only confirmed matching decision
 calculate_plan_actual: [RULE_REFERENCE] Treat source invoice, Registry, and estimate records as immutable inputs; use = rules.plan_actual.source_records_are_immutable.
 calculate_plan_actual: [BEHAVIOR] Produce a reproducible analysis pinned to the exact supplied evidence identities and retain explicit unmatched facts and non-blocking warnings instead of silently coercing incomparable inputs.
 calculate_plan_actual: [VALIDATION_ERROR] Raise PlanActualPreconditionError when required pinned evidence, assignment context, match references, or unit comparability preconditions are not satisfied.
+calculate_plan_actual: [RULE_REFERENCE] The assignment-context precondition holds when the ObjectAssignmentValidation obtained through RegistryContextService.get_assignment_validation for the exact pinned revision has project_id equal to the request project_id and result equal to = rules.registry_context.active_exact_match_result; any other result is a PlanActualPreconditionError.
 
 # holded_publication
 

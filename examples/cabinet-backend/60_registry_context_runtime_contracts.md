@@ -5,6 +5,8 @@
 - RegistryContextService.__init__(self, repository: RegistryContextRepository, archive: DurableArchiveService) -> None
 - RegistryContextService.refresh_registry_context(self, projects: tuple[RegistryProjectObservation, ...]) -> RegistryRefreshResult
 - RegistryContextService.validate_card_assignment(self, invoice_id: str, content_hash: str) -> ObjectAssignmentValidation
+- RegistryContextService.record_card_assignment_observation(self, observation: CardObjectAssignmentObservation) -> CardObjectAssignmentObservation
+- record_card_assignment_observation(registry: RegistryContextService, observation: CardObjectAssignmentObservation) -> CardObjectAssignmentObservation
 - RegistryContextService.get_assignment_validation(self, invoice_id: str, content_hash: str) -> ObjectAssignmentValidation
 - RegistryContextService.get_work_object(self, project_id: str) -> WorkObject
 
