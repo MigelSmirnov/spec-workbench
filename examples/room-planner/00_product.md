@@ -1,6 +1,6 @@
 # Room Planner — State 0: Product Boundary
 
-> Status: working draft.
+> Status: closure audit candidate.
 >
 > This document records product-level decisions only. Concrete modules, Python contracts, HTTP endpoints, persistence schemas, algorithms, and detailed domain models are intentionally deferred.
 
@@ -13,6 +13,35 @@ Its responsibility is broader than drawing walls but narrower than estimating a 
 The editor must support practical construction work with millimeter-oriented spatial accuracy rather than act as a general-purpose CAD replacement.
 
 Room Planner does **not** calculate prices or labor costs. Those belong to PresuPro.
+
+## Primary actor
+
+The primary Room Planner actor in the initial product is a renovation professional who records measured conditions, prepares demolition and construction intent, reviews physical quantities, and publishes accepted planning results.
+
+A client may influence design decisions and choose between historical revisions presented by the renovation professional, but the initial Room Planner scope does not require a client to be a direct editing actor.
+
+Client-cabinet behavior remains outside the Room Planner product boundary.
+
+## Primary inputs
+
+Room Planner receives or records the following product-level inputs:
+
+- Registry object identity and available object context;
+- measured existing spatial geometry and observed conditions;
+- demolition intent against the existing condition;
+- construction intent for new/changed geometry and Room Planner-owned construction/finish systems;
+- thickness, level, finish, and other user-supplied planning parameters required by the owned calculations;
+- versioned Construction Catalog technical data required for deterministic quantity calculations.
+
+The exact DTOs, acquisition workflows, import formats, validation structures, and editor interaction details are deferred.
+
+## Persistent product state
+
+Room Planner must preserve unfinished working state so work can continue across sessions.
+
+It must also preserve identifiable historical published revisions of planning results and quantity outputs so downstream provenance remains reproducible.
+
+The exact storage model, draft persistence representation, revision tables, and retention implementation are deferred.
 
 ## Platform object identity
 
@@ -297,13 +326,14 @@ Room Planner does not calculate:
 - labor prices;
 - project cost;
 - commercial discounts;
-- supplier pricing.
+- supplier pricing;
+- purchasable package counts or commercial whole-package rounding.
 
-Those concerns belong to PresuPro.
+Those commercial concerns belong to PresuPro.
+
+Room Planner publishes physical quantities in their appropriate engineering units. When downstream estimating or procurement needs conversion from a physical quantity to purchasable packages, PresuPro owns that conversion and whole-package rounding. Construction Catalog may supply technical/package facts required by that calculation, but it does not own the commercial rounding decision.
 
 Demolition and Construction must remain distinguishable in quantity outputs because they represent different kinds of downstream work.
-
-Whether packaging conversion and commercial rounding (for example kg to whole bags) belongs to Room Planner, Construction Catalog, or PresuPro remains unresolved.
 
 ## Construction Catalog dependency
 
@@ -364,11 +394,27 @@ Its quantities must preserve the distinction between demolition scope and constr
 
 PresuPro is the estimating application.
 
-Room Planner provides physical quantities for its owned renovation scope. PresuPro owns pricing, labor/work calculation, and estimate composition.
+Room Planner provides physical quantities for its owned renovation scope. PresuPro owns pricing, labor/work calculation, estimate composition, and conversion of physical quantities into purchasable package counts when that commercial step is required.
 
 PresuPro should consume published Room Planner artifacts through the shared platform boundary rather than through a private Room Planner-to-PresuPro API.
 
 PresuPro should not be required to reverse-engineer Room Planner geometry in order to reproduce drywall, plaster, putty, paint, floor-fill, or demolition quantity logic owned by Room Planner.
+
+## Drawing/export ownership
+
+Production drawing and document export are not owned by the initial Room Planner product boundary.
+
+Room Planner publishes domain planning data. A downstream renderer/exporter may consume a published Room Planner revision and create derived artifacts such as DXF, PDF, SVG, or a versioned `drawing_set` while preserving provenance to the source Room Planner revision.
+
+The future CAD direction is recorded separately in [FUTURE_CAD_EXPORT.md](FUTURE_CAD_EXPORT.md). Exact rendering/export contracts remain deferred.
+
+## Collaboration scope
+
+The initial Room Planner product does not require real-time multi-user collaborative editing of the same working plan.
+
+The product may later introduce collaboration, presence, concurrent editing, or explicit locking if a real workflow requires them. Their absence from the initial scope must not be replaced with speculative collaboration abstractions in State 1.
+
+Authentication, authorization, and ordinary access control are separate concerns and remain to be defined at the appropriate later state.
 
 ## Relationship to downstream planners
 
@@ -392,9 +438,12 @@ Current explicit exclusions include:
 - creation of Registry objects;
 - pricing and estimating;
 - labor/work pricing or work-item composition;
+- purchasable package conversion and commercial whole-package rounding;
 - tile/floor-covering layout and finish-specific calculations;
 - electrical engineering rules;
 - plumbing engineering rules;
+- production DXF/PDF/SVG drawing generation;
+- real-time multi-user collaborative editing in the initial product;
 - client-cabinet behavior;
 - general-purpose CAD features that are not required for renovation planning.
 
@@ -472,6 +521,18 @@ This allows downstream consumers that only need the measured/as-built spatial co
 
 Whether Demolition and Construction are also independently published artifacts or published through a later `room_plan` container contract remains deferred to later design states.
 
+## Important failure outcomes
+
+At State 0, the product must make the following important failures observable rather than silently fabricating or publishing a plausible-looking result:
+
+- If the selected Registry object is unavailable or cannot be resolved, Room Planner cannot create or substitute another platform object identity and must not proceed as if the object were valid.
+- If geometry or required planning inputs are incomplete or invalid for a requested calculation, Room Planner must not present the resulting quantities as valid completed takeoff data.
+- If required Construction Catalog data or the required catalog revision cannot be resolved, Room Planner must not invent technical constants or silently calculate with unrelated defaults.
+- If publication fails, the working result remains unpublished/draft from the platform perspective; the product must not report a successful publication.
+- If a historical revision has already been published, later editing or recovery failures must not silently mutate that published historical result.
+
+The exact validation rules, error models, retry behavior, HTTP status codes, and user-interface messages are deferred to later design states.
+
 ## Observable user outcomes discovered so far
 
 A user can select an existing renovation object and work on its Room Planner container.
@@ -494,7 +555,9 @@ The plan and quantity results can be saved, revised, published, and consumed by 
 
 Changes to a published result must create a new identifiable revision rather than silently replacing the provenance of downstream work.
 
-## Unresolved product questions
+## Unresolved product questions deferred to later states
+
+The following questions remain intentionally unresolved because they do not block the State 0 product boundary and belong to later design work:
 
 - Which wall/opening editing operations are mandatory for the first usable release?
 - What is the exact lifecycle for creating, correcting, and freezing the Existing baseline?
@@ -502,10 +565,7 @@ Changes to a published result must create a new identifiable revision rather tha
 - How are floor level/survey measurements acquired or imported?
 - Which construction systems/material families are required in the initial Construction Catalog?
 - Does Room Planner expose editable construction-system templates, catalog-selected fixed systems, or both?
-- Who owns packaging conversion and whole-package rounding?
-- Does Room Planner itself own drawing/PDF/SVG export, or does a separate renderer/exporter create those artifacts?
 - What parts of Room Planner results may be exposed directly to the client cabinet?
-- What collaboration, locking, revision, and approval behavior is required?
 - At the platform contract level, should Existing, Demolition, and Construction be published as one `room_plan` container artifact, as separate related artifacts, or both?
 
 ## Cross-document rule
