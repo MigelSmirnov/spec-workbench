@@ -523,6 +523,38 @@ Policy module. It exists because evidence release has independent safety invaria
 
 ---
 
+## `retention_release_persistence`
+
+### Owns
+
+- `PostgresRetentionReleaseRepository`: the PostgreSQL storage shape for
+  release evaluations and decisions;
+- one transaction and one exact working-set lock per service operation;
+- immutable append of evaluation and decision rows with uniqueness on the
+  exact project and working-set target.
+
+### Hides
+
+- psycopg connection handling;
+- table, column, and index names;
+- row/model codecs for nested evaluation evidence.
+
+### Must not own
+
+- release eligibility, equivalence, or conflict decisions;
+- idempotent reuse of an existing decision;
+- physical VPS deletion;
+- environment reads.
+
+### Depth assessment
+
+Deterministic persistence module. It implements the `RetentionReleaseRepository`
+Protocol from `models` as plain reads and appends; `retention_release` decides
+whether a stored decision may be reused. See
+`30_modules_persistence_boundary.md`.
+
+---
+
 # 2. Boundary adapters are not policy modules
 
 The following are expected adapters or deployment surfaces, not primary owners of Cabinet rules:
@@ -601,6 +633,10 @@ holded_publication
 retention_release
     -> durable_archive durable-acceptance evidence
     -> synchronization/replica status read capability
+
+<x>_persistence
+    -> domain_models Protocol and persisted models only
+    -> no service, rule, or policy import
 ```
 
 This is not final import wiring. State 4 flows must prove each cross-module need before State 5 freezes public APIs.

@@ -262,7 +262,7 @@
     "RetentionReleaseRepository.lock_working_set": "(self, project_id: str, working_set_id: str) -> None",
     "RetentionReleaseRepository.save_evaluation": "(self, evaluation: VpsReleaseEvaluation) -> None",
     "RetentionReleaseRepository.load_decision": "(self, project_id: str, working_set_id: str) -> VpsReleaseDecision | None",
-    "RetentionReleaseRepository.reserve_decision": "(self, decision: VpsReleaseDecision) -> VpsReleaseDecision",
+    "RetentionReleaseRepository.insert_decision": "(self, decision: VpsReleaseDecision) -> None",
     "PostgresRetentionReleaseRepository.__init__": "(self, database_url: str) -> None",
     "PostgresRetentionReleaseRepository.begin": "(self) -> None",
     "PostgresRetentionReleaseRepository.commit": "(self) -> None",
@@ -270,7 +270,7 @@
     "PostgresRetentionReleaseRepository.lock_working_set": "(self, project_id: str, working_set_id: str) -> None",
     "PostgresRetentionReleaseRepository.save_evaluation": "(self, evaluation: VpsReleaseEvaluation) -> None",
     "PostgresRetentionReleaseRepository.load_decision": "(self, project_id: str, working_set_id: str) -> VpsReleaseDecision | None",
-    "PostgresRetentionReleaseRepository.reserve_decision": "(self, decision: VpsReleaseDecision) -> VpsReleaseDecision"
+    "PostgresRetentionReleaseRepository.insert_decision": "(self, decision: VpsReleaseDecision) -> None"
   },
   "notes": [
     "authorize_operation: [SECURITY_BOUNDARY] MUST evaluate authorization only for the exact operation supplied by the caller and return the decision without performing the protected business operation.",
@@ -640,7 +640,7 @@
     "get_working_set_membership: [DEPENDENCY_BOUNDARY] MUST delegate exact read-only membership through the supplied SynchronizationService.",
     "RetentionReleaseService.__init__: [DEPENDENCY_BOUNDARY] Retain the exact repository, archive, and synchronization services; never construct or discover alternates.",
     "RetentionReleaseService.evaluate_vps_release: [ORCHESTRATION] Resolve exact membership and require synchronization and durable proof for every member before persisting an allowed evaluation.",
-    "RetentionReleaseService.request_manual_vps_release: [ORCHESTRATION] Lock the exact target, reload membership and all proof, reject any change or gap, and reserve one idempotent authorization.",
+    "RetentionReleaseService.request_manual_vps_release: [ORCHESTRATION] Lock the exact target, reload membership and all proof, reject any change or gap, then load the stored decision for the exact target: return it when it binds the same target, evaluation membership, evidence identities, and result; raise VpsReleaseBlockedError when a different decision exists; otherwise insert exactly one new decision.",
     "RetentionReleaseService.get_retention_status: [BEHAVIOR] Return the exact decision or None and never claim that physical deletion completed.",
     "RetentionReleaseRepository.begin: [DEPENDENCY_BOUNDARY] Open one PostgreSQL transaction for the exact release lifecycle and reject nested begin.",
     "RetentionReleaseRepository.commit: [BEHAVIOR] Commit one valid evidence transition and expose no partial state.",
@@ -648,7 +648,7 @@
     "RetentionReleaseRepository.lock_working_set: [BEHAVIOR] Serialize evaluation and decision changes for the exact project and working-set identity.",
     "RetentionReleaseRepository.save_evaluation: [PROVENANCE] Append immutable complete-coverage or blocked evaluation evidence.",
     "RetentionReleaseRepository.load_decision: [BEHAVIOR] Return the exact persisted decision or None without inferring physical release.",
-    "RetentionReleaseRepository.reserve_decision: [BEHAVIOR] Reuse only an equivalent still-valid authorization and reject stale, broadened, or conflicting decisions.",
+    "RetentionReleaseRepository.insert_decision: [PROVENANCE] Append one immutable decision row for the exact project and working-set target inside the active locked transaction; a second decision for the same target fails on uniqueness and never replaces or updates the stored decision.",
     "PostgresRetentionReleaseRepository.__init__: [SECURITY_BOUNDARY] Validate the supplied PostgreSQL connection, protect the URL, and read no environment variables.",
     "HttpxHoldedHttpClient.create_purchase: [FORBIDDEN_ACTION] Issue exactly one POST per invocation with mutation retries and replaying redirects disabled.",
     "HttpxHoldedHttpClient.list_purchases: [BEHAVIOR] Perform the one read-only bounded Holded v1 list request defined by = rules.holded_transport_backend and return typed summaries in stable document-id order.",
@@ -706,7 +706,7 @@
     "PostgresRetentionReleaseRepository.lock_working_set: [BEHAVIOR] Serialize evaluation and decision changes for the exact project and working-set identity.",
     "PostgresRetentionReleaseRepository.save_evaluation: [PROVENANCE] Append immutable complete-coverage or blocked evaluation evidence.",
     "PostgresRetentionReleaseRepository.load_decision: [BEHAVIOR] Return the exact persisted decision or None without inferring physical release.",
-    "PostgresRetentionReleaseRepository.reserve_decision: [BEHAVIOR] Reuse only an equivalent still-valid authorization and reject stale, broadened, or conflicting decisions.",
+    "PostgresRetentionReleaseRepository.insert_decision: [PROVENANCE] Append one immutable decision row for the exact project and working-set target inside the active locked transaction; a second decision for the same target fails on uniqueness and never replaces or updates the stored decision.",
     "evaluate_vps_release: [DEPENDENCY_BOUNDARY] Delegate complete-coverage evaluation through the exact supplied RetentionReleaseService.",
     "request_manual_vps_release: [DEPENDENCY_BOUNDARY] Delegate re-check and authorization through the exact supplied RetentionReleaseService.",
     "get_retention_status: [DEPENDENCY_BOUNDARY] MUST delegate exact decision reads through the supplied RetentionReleaseService.",
@@ -2809,11 +2809,13 @@
       "holded_transport": [
         "HttpxHoldedHttpClient"
       ],
+      "retention_release_persistence": [
+        "PostgresRetentionReleaseRepository"
+      ],
       "retention_release": [
         "evaluate_vps_release",
         "request_manual_vps_release",
         "get_retention_status",
-        "PostgresRetentionReleaseRepository",
         "RetentionReleaseService",
         "VpsReleaseBlockedError"
       ],
@@ -3043,8 +3045,10 @@
           "HoldedPublicationService"
         ],
         "retention_release": [
-          "PostgresRetentionReleaseRepository",
           "RetentionReleaseService"
+        ],
+        "retention_release_persistence": [
+          "PostgresRetentionReleaseRepository"
         ]
       },
       "durable_archive": {
@@ -3092,6 +3096,13 @@
       "access_control": {
         "models": [
           "AccessControlBackend"
+        ]
+      },
+      "retention_release_persistence": {
+        "models": [
+          "VpsReleaseEvaluation",
+          "VpsReleaseDecision",
+          "RetentionReleaseRepository"
         ]
       }
     }
@@ -3251,11 +3262,13 @@
     "holded_transport": [
       "HttpxHoldedHttpClient"
     ],
+    "retention_release_persistence": [
+      "PostgresRetentionReleaseRepository"
+    ],
     "retention_release": [
       "evaluate_vps_release",
       "request_manual_vps_release",
       "get_retention_status",
-      "PostgresRetentionReleaseRepository",
       "RetentionReleaseService",
       "VpsReleaseBlockedError"
     ],
@@ -3296,6 +3309,7 @@
     "synchronization",
     "plan_actual",
     "holded_publication",
+    "retention_release_persistence",
     "retention_release",
     "api_irregular",
     "api",
@@ -3427,7 +3441,7 @@
     "RetentionReleaseRepository.lock_working_set",
     "RetentionReleaseRepository.save_evaluation",
     "RetentionReleaseRepository.load_decision",
-    "RetentionReleaseRepository.reserve_decision",
+    "RetentionReleaseRepository.insert_decision",
     "PostgresRetentionReleaseRepository.__init__"
   ],
   "module_paths": {
@@ -3440,6 +3454,7 @@
     "synchronization": "cabinet_backend/synchronization",
     "plan_actual": "cabinet_backend/plan_actual",
     "holded_publication": "cabinet_backend/holded_publication",
+    "retention_release_persistence": "cabinet_backend/retention_release_persistence",
     "retention_release": "cabinet_backend/retention_release",
     "api_irregular": "cabinet_backend/api_irregular",
     "api": "cabinet_backend/api",

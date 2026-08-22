@@ -202,7 +202,7 @@ PostgresRetentionReleaseRepository.rollback: [FALLBACK] Roll back idempotently a
 PostgresRetentionReleaseRepository.lock_working_set: [BEHAVIOR] Serialize evaluation and decision changes for the exact project and working-set identity.
 PostgresRetentionReleaseRepository.save_evaluation: [PROVENANCE] Append immutable complete-coverage or blocked evaluation evidence.
 PostgresRetentionReleaseRepository.load_decision: [BEHAVIOR] Return the exact persisted decision or None without inferring physical release.
-PostgresRetentionReleaseRepository.reserve_decision: [BEHAVIOR] Reuse only an equivalent still-valid authorization and reject stale, broadened, or conflicting decisions.
+PostgresRetentionReleaseRepository.insert_decision: [PROVENANCE] Append one immutable decision row for the exact project and working-set target inside the active locked transaction; a second decision for the same target fails on uniqueness and never replaces or updates the stored decision.
 
 PostgresArchiveUnitOfWork.__init__: [SECURITY_BOUNDARY] MUST treat database_url as secret configuration and MUST NOT log it or include it in safe errors.
 PostgresArchiveUnitOfWork.lock_invoice: [BEHAVIOR] MUST acquire PostgreSQL serialization for the exact invoice before mutable acceptance or source state is read.

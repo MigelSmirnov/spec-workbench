@@ -8,12 +8,17 @@
   durable proof for every member, persist evaluation evidence, and allow only
   exhaustive positive coverage.
 - request [ORCHESTRATION]: lock the exact target, reload current membership and all
-  proof, reject any stale/change/gap, and reserve one idempotent authorization.
+  proof, reject any stale/change/gap, then load the stored decision for the exact
+  target: return it when it binds the same target, evaluation membership, evidence
+  identities, and result; raise VpsReleaseBlockedError when a different decision
+  exists; otherwise insert exactly one new decision.
 - status [BEHAVIOR]: return exact decision or None and never claim physical deletion.
 - Repository transaction/lock methods [DEPENDENCY_BOUNDARY]: use one PostgreSQL
   transaction and serialize the exact working-set lifecycle.
 - Repository evidence methods [PROVENANCE]: append immutable evaluations and
-  decisions, reuse only an equivalent decision, and reject conflicts.
+  decisions as plain rows; a second decision for the same target is a uniqueness
+  failure. Equivalence reuse and conflict rejection live in the service
+  (`30_modules_persistence_boundary.md`).
 - PostgreSQL constructor [SECURITY_BOUNDARY]: validate connectivity, protect the
   database URL, and read no environment variables.
 - Bootstrap [ORCHESTRATION]: reuse database, archive, and synchronization to

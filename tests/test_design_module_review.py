@@ -14,8 +14,8 @@ def test_lists_final_assembled_modules() -> None:
     assert report["modules"] == [
         "models", "access_control", "durable_archive", "registry_context",
         "holded_transport", "holded_gateway", "synchronization", "plan_actual",
-        "holded_publication", "retention_release", "api_irregular", "api",
-        "bootstrap",
+        "holded_publication", "retention_release_persistence", "retention_release",
+        "api_irregular", "api", "bootstrap",
     ]
 
 def test_durable_archive_slice_connects_business_and_lowered_spec() -> None:
