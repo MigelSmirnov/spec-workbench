@@ -168,6 +168,20 @@ This decision keeps publication, quantity calculation, downstream consumption, a
 
 A future product requirement may introduce explicit parallel alternatives, but later architecture must not assume that capability exists today.
 
+## Non-destructive revision behavior
+
+Room Planner must avoid ordinary user actions that irreversibly destroy published planning history or invalidate downstream provenance.
+
+Working drafts that have never been published may be discarded as part of normal editing workflow.
+
+Once a result has been published, normal product behavior must preserve that historical revision. A published revision may later cease to be current, be superseded, or be archived, but it must not be silently hard-deleted or rewritten in place.
+
+Returning to an earlier design means restoring/copying that historical state into a new current revision rather than rewinding history as though intervening revisions never existed.
+
+This supports practical comparison workflows without introducing parallel design variants. For example, a user may publish one revision based on drywall construction, publish a later revision based on plaster, then restore the earlier drywall state as a new revision if the client chooses it.
+
+The exact statuses, retention policy, administrative recovery mechanisms, and authorization rules are deferred to later design states.
+
 ## Primary planning scope
 
 Current in-scope capabilities include:
