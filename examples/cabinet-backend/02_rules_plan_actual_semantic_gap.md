@@ -25,10 +25,13 @@ it flips this status to ACCEPTED, rejecting it withdraws the pinned rule.
   `rules.plan_actual.actual_amount_basis = "gross"`. `net_amount` is never
   selected for plan/actual.
 - `PA-MONEY-003` — planned and actual are directly comparable iff the item's
-  `monetary_basis` equals `"gross"` and its currency equals the card currency;
-  otherwise `calculate_plan_actual` raises `PlanActualPreconditionError` unless
-  an exact accepted basis/currency assumption is pinned for that match. No
-  implicit net/gross, tax, or currency conversion exists.
+  `monetary_basis` equals `"gross"`; otherwise `calculate_plan_actual` raises
+  `PlanActualPreconditionError` unless an exact accepted basis assumption is
+  pinned for that match. No implicit net/gross or tax conversion exists.
+  Currency is not a comparability dimension: Cabinet operates in a single
+  currency, EUR (owner decision, 2026-08-22); a non-EUR estimate item or card
+  is invalid input, not a conversion case, and
+  `implicit_currency_conversion_allowed` stays `false`.
 
 
 The earlier version of this decision treated `EstimateItemSnapshot.total` and
