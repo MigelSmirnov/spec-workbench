@@ -71,6 +71,15 @@ Fields:
 
 ## Runtime boundaries
 
-The generated gateway requires a narrow HTTP mechanism port, a narrow technical-attempt repository, and a cohesive gateway service.
+The generated gateway requires two explicit runtime interfaces:
+
+- `HoldedHttpClient`, a narrow create/list/GET HTTP mechanism port;
+- `HoldedAttemptRepository`, a narrow technical-attempt PostgreSQL port.
+
+Both are local implementation obligations of `module:holded_gateway`.
+`HttpxHoldedHttpClient` implements `HoldedHttpClient`, and
+`PostgresHoldedAttemptRepository` implements `HoldedAttemptRepository`.
+Neither port is an ordinary concrete base class or an externally supplied
+deployment extension.
 
 Generic response dictionaries, unbounded JSON, generic repositories, and reusable credentials in domain models are forbidden.

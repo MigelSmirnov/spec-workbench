@@ -27,4 +27,16 @@ Module functions remain façades with an explicit `PlanActualService` first para
 - `PlanActualRepository.list_active_matches(self, project_id: str, estimate_snapshot_id: str) -> tuple[InvoiceLineEstimateMatch, ...]`
 
 - `PostgresPlanActualRepository.__init__(self, database_url: str) -> None`
+- `PostgresPlanActualRepository.begin(self) -> None`
+- `PostgresPlanActualRepository.commit(self) -> None`
+- `PostgresPlanActualRepository.rollback(self) -> None`
+- `PostgresPlanActualRepository.lock_estimate(self, presupro_estimate_id: str) -> None`
+- `PostgresPlanActualRepository.lock_invoice_line(self, invoice_id: str, content_hash: str, invoice_line_id: str) -> None`
+- `PostgresPlanActualRepository.load_snapshot(self, snapshot_id: str) -> EstimateSnapshot | None`
+- `PostgresPlanActualRepository.load_snapshot_by_content(self, presupro_estimate_id: str, content_hash: str) -> EstimateSnapshot | None`
+- `PostgresPlanActualRepository.save_snapshot(self, snapshot: EstimateSnapshot) -> None`
+- `PostgresPlanActualRepository.save_proposals(self, proposals: tuple[InvoiceLineMatchProposal, ...]) -> None`
+- `PostgresPlanActualRepository.load_match_decisions(self, match_ids: tuple[str, ...]) -> tuple[InvoiceLineEstimateMatch, ...]`
+- `PostgresPlanActualRepository.save_match_decision(self, decision: InvoiceLineEstimateMatch) -> None`
+- `PostgresPlanActualRepository.list_active_matches(self, project_id: str, estimate_snapshot_id: str) -> tuple[InvoiceLineEstimateMatch, ...]`
 - `create_app(access_control: AccessControlBackend, archive: DurableArchiveService, registry: RegistryContextService, holded_gateway: HoldedGatewayService, synchronization: SynchronizationService, plan_actual: PlanActualService) -> FastAPI`

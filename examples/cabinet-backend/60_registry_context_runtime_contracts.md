@@ -26,5 +26,13 @@ Generic query dictionaries and untyped save methods are forbidden.
 ## Concrete adapter
 
 PostgresRegistryContextRepository.__init__(self, database_url: str) -> None
+PostgresRegistryContextRepository.begin(self) -> None
+PostgresRegistryContextRepository.commit(self) -> None
+PostgresRegistryContextRepository.rollback(self) -> None
+PostgresRegistryContextRepository.lock_catalogue(self) -> None
+PostgresRegistryContextRepository.merge_work_objects(self, work_objects: tuple[WorkObject, ...]) -> None
+PostgresRegistryContextRepository.load_work_object(self, project_id: str) -> WorkObject | None
+PostgresRegistryContextRepository.save_assignment_validation(self, validation: ObjectAssignmentValidation) -> None
+PostgresRegistryContextRepository.load_assignment_validation(self, invoice_id: str, content_hash: str) -> ObjectAssignmentValidation | None
 
 The constructor validates connectivity but does not read environment variables or own Registry business policy.

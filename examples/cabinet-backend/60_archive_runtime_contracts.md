@@ -44,7 +44,27 @@ Storage references are opaque store-created values and are never accepted from H
 ## Concrete construction
 
 - PostgresArchiveUnitOfWork.__init__(self, database_url: str) -> None
+- PostgresArchiveUnitOfWork.begin(self) -> None
+- PostgresArchiveUnitOfWork.commit(self) -> None
+- PostgresArchiveUnitOfWork.rollback(self) -> None
+- PostgresArchiveUnitOfWork.lock_invoice(self, invoice_id: str) -> None
+- PostgresArchiveUnitOfWork.load_card_revision(self, invoice_id: str, content_hash: str | None = None) -> StoredInvoiceCardRevision | None
+- PostgresArchiveUnitOfWork.load_source_replicas(self, invoice_id: str) -> tuple[SourceBinaryReplica, ...]
+- PostgresArchiveUnitOfWork.load_pending_publications(self) -> tuple[ArchiveBytePublication, ...]
+- PostgresArchiveUnitOfWork.save_publication(self, publication: ArchiveBytePublication) -> None
+- PostgresArchiveUnitOfWork.mark_publication_published(self, publication_id: str, updated_at: datetime) -> ArchiveBytePublication
+- PostgresArchiveUnitOfWork.mark_publication_failed(self, publication_id: str, failure_code: str, updated_at: datetime) -> ArchiveBytePublication
+- PostgresArchiveUnitOfWork.load_transfer_receipt(self, invoice_id: str, content_hash: str | None = None) -> InvoiceTransferReceipt | None
+- PostgresArchiveUnitOfWork.load_source_binaries(self, invoice_id: str) -> tuple[SourceBinary, ...]
+- PostgresArchiveUnitOfWork.save_transfer_acceptance(self, manifest: InvoiceTransferManifest, card_revision: StoredInvoiceCardRevision, source_replicas: tuple[SourceBinaryReplica, ...], receipt: InvoiceTransferReceipt) -> None
+- PostgresArchiveUnitOfWork.save_source_attachment(self, source: SourceBinary, replica: SourceBinaryReplica, publication: ArchiveBytePublication) -> None
+- PostgresArchiveUnitOfWork.save_incomplete_source_acceptance(self, decision: IncompleteSourceAcceptance) -> None
+- PostgresArchiveUnitOfWork.save_source_loss_decision(self, decision: SourceLossDecision) -> None
 - LocalFilesystemSourceByteStore.__init__(self, root_path: str) -> None
+- LocalFilesystemSourceByteStore.stage(self, publication_id: str, content: bytes, expected_hash: str, expected_size: int) -> str
+- LocalFilesystemSourceByteStore.verify(self, storage_reference: str, expected_hash: str, expected_size: int) -> bool
+- LocalFilesystemSourceByteStore.publish(self, staging_reference: str, final_reference: str, expected_hash: str, expected_size: int) -> None
+- LocalFilesystemSourceByteStore.remove_staging(self, staging_reference: str) -> None
 
 Constructors validate mechanism prerequisites but do not read environment variables.
 

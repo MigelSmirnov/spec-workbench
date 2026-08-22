@@ -32,10 +32,10 @@ def _make_unresolved(project: Path, function: str = "attach_local_source") -> No
 def test_cabinet_state6_contracts_are_closed_and_ready() -> None:
     report = design_stage6_contracts.coverage(CABINET)
     assert report["summary"] == {
-        "planned_functions": 50,
-        "public_functions": 26,
-        "internal_functions": 24,
-        "resolved": 50,
+        "planned_functions": 154,
+        "public_functions": 35,
+        "internal_functions": 119,
+        "resolved": 154,
         "unresolved": 0,
         "errors": 0,
         "plan_closed": True,
@@ -55,7 +55,7 @@ def test_next_function_is_complete_after_state6_handoff() -> None:
 def test_public_operation_mapping_is_complete() -> None:
     report = design_stage6_contracts.coverage(CABINET)
     public_ops = {row["public_operation"] for row in report["functions"] if row["visibility"] == "public"}
-    assert len(public_ops) == 26
+    assert len(public_ops) == 35
     assert None not in public_ops
     assert not any(item["code"] == "missing_public_function" for item in report["findings"])
 
@@ -72,6 +72,7 @@ def test_every_external_operation_has_one_canonical_handler_contract() -> None:
 
 def test_internal_functions_require_explicit_plan_entries(tmp_path: Path) -> None:
     project = _project(tmp_path)
+    baseline = design_stage6_contracts.coverage(project)["summary"]
     plan_path = project / PLAN
     plan = json.loads(plan_path.read_text(encoding="utf-8"))
     plan["functions"].append({
@@ -82,8 +83,8 @@ def test_internal_functions_require_explicit_plan_entries(tmp_path: Path) -> Non
     })
     plan_path.write_text(json.dumps(plan), encoding="utf-8")
     report = design_stage6_contracts.coverage(project)
-    assert report["summary"]["planned_functions"] == 51
-    assert report["summary"]["internal_functions"] == 25
+    assert report["summary"]["planned_functions"] == baseline["planned_functions"] + 1
+    assert report["summary"]["internal_functions"] == baseline["internal_functions"] + 1
     assert "_persist_manifest_atomically" in report["unresolved_functions"]
     assert report["summary"]["handoff_ready"] is False
 
@@ -103,7 +104,7 @@ def test_missing_router_handler_mapping_is_fail_closed(tmp_path: Path) -> None:
 def test_ready_handoff_contains_operation_and_handler_contracts() -> None:
     handoff = design_stage6_contracts.handoff(CABINET)
     assert handoff["ready"] is True
-    assert handoff["summary"]["resolved"] == 50
+    assert handoff["summary"]["resolved"] == 154
     domain = handoff["contracts"]["attach_local_source"]
     handler = handoff["contracts"]["attach_local_source_handler"]
     assert domain["public_operation"] == FIRST_EXTERNAL

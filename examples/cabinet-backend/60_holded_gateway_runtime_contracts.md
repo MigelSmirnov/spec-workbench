@@ -32,7 +32,20 @@ Generic query dictionaries and untyped save methods are forbidden.
 ## Concrete adapters
 
 - PostgresHoldedAttemptRepository.__init__(self, database_url: str) -> None
+- PostgresHoldedAttemptRepository.begin(self) -> None
+- PostgresHoldedAttemptRepository.commit(self) -> None
+- PostgresHoldedAttemptRepository.rollback(self) -> None
+- PostgresHoldedAttemptRepository.lock_attempt(self, publication_attempt_id: str) -> None
+- PostgresHoldedAttemptRepository.load_attempt(self, publication_attempt_id: str) -> HoldedPublicationAttempt | None
+- PostgresHoldedAttemptRepository.load_attempt_by_marker(self, attempt_marker: str) -> HoldedPublicationAttempt | None
+- PostgresHoldedAttemptRepository.reserve_attempt(self, attempt: HoldedPublicationAttempt) -> HoldedPublicationAttempt
+- PostgresHoldedAttemptRepository.mark_request_issued(self, publication_attempt_id: str, issued_at: datetime) -> HoldedPublicationAttempt
+- PostgresHoldedAttemptRepository.append_attempt_outcome(self, attempt: HoldedPublicationAttempt) -> None
+- PostgresHoldedAttemptRepository.append_lookup_evidence(self, attempt_marker: str, evidence: HoldedPurchaseLookupEvidence) -> None
 - HttpxHoldedHttpClient.__init__(self, base_url: str, api_key: str, timeout_seconds: int, max_response_bytes: int, max_recovery_pages: int) -> None
+- HttpxHoldedHttpClient.create_purchase(self, payload: HoldedPurchaseAttemptPayload) -> HoldedTransportResponse
+- HttpxHoldedHttpClient.list_purchases(self, page: int) -> HoldedPurchaseListPage
+- HttpxHoldedHttpClient.get_purchase(self, document_id: str) -> HoldedTransportResponse
 
 Constructors validate inputs but do not read environment variables.
 

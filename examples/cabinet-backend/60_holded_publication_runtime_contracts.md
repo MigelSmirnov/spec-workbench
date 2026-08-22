@@ -17,5 +17,14 @@ Module functions remain façades with an explicit service first parameter.
 - `HoldedPublicationRepository.reserve_publication(self, publication: HoldedPublication) -> HoldedPublication`
 - `HoldedPublicationRepository.save_transition(self, publication: HoldedPublication) -> None`
 - `PostgresHoldedPublicationRepository.__init__(self, database_url: str) -> None`
+- `PostgresHoldedPublicationRepository.begin(self) -> None`
+- `PostgresHoldedPublicationRepository.commit(self) -> None`
+- `PostgresHoldedPublicationRepository.rollback(self) -> None`
+- `PostgresHoldedPublicationRepository.lock_publication(self, publication_id: str) -> None`
+- `PostgresHoldedPublicationRepository.lock_invoice_revision(self, invoice_id: str, content_hash: str) -> None`
+- `PostgresHoldedPublicationRepository.load_publication(self, publication_id: str) -> HoldedPublication | None`
+- `PostgresHoldedPublicationRepository.load_by_invoice_revision(self, invoice_id: str, content_hash: str) -> HoldedPublication | None`
+- `PostgresHoldedPublicationRepository.reserve_publication(self, publication: HoldedPublication) -> HoldedPublication`
+- `PostgresHoldedPublicationRepository.save_transition(self, publication: HoldedPublication) -> None`
 
 - `create_app(access_control: AccessControlBackend, archive: DurableArchiveService, registry: RegistryContextService, holded_gateway: HoldedGatewayService, synchronization: SynchronizationService, plan_actual: PlanActualService, holded_publication: HoldedPublicationService) -> FastAPI`

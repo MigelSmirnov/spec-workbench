@@ -16,5 +16,12 @@
 - `RetentionReleaseRepository.load_decision(self, project_id: str, working_set_id: str) -> VpsReleaseDecision | None`
 - `RetentionReleaseRepository.reserve_decision(self, decision: VpsReleaseDecision) -> VpsReleaseDecision`
 - `PostgresRetentionReleaseRepository.__init__(self, database_url: str) -> None`
+- `PostgresRetentionReleaseRepository.begin(self) -> None`
+- `PostgresRetentionReleaseRepository.commit(self) -> None`
+- `PostgresRetentionReleaseRepository.rollback(self) -> None`
+- `PostgresRetentionReleaseRepository.lock_working_set(self, project_id: str, working_set_id: str) -> None`
+- `PostgresRetentionReleaseRepository.save_evaluation(self, evaluation: VpsReleaseEvaluation) -> None`
+- `PostgresRetentionReleaseRepository.load_decision(self, project_id: str, working_set_id: str) -> VpsReleaseDecision | None`
+- `PostgresRetentionReleaseRepository.reserve_decision(self, decision: VpsReleaseDecision) -> VpsReleaseDecision`
 
 - `create_app(access_control: AccessControlBackend, archive: DurableArchiveService, registry: RegistryContextService, holded_gateway: HoldedGatewayService, synchronization: SynchronizationService, plan_actual: PlanActualService, holded_publication: HoldedPublicationService, retention_release: RetentionReleaseService) -> FastAPI`

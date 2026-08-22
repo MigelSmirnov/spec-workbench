@@ -39,7 +39,23 @@ Generic dictionaries and untyped save/query methods are forbidden.
 ## Concrete adapters and composition
 
 - `PostgresSynchronizationRepository.__init__(self, database_url: str) -> None`
+- `PostgresSynchronizationRepository.begin(self) -> None`
+- `PostgresSynchronizationRepository.commit(self) -> None`
+- `PostgresSynchronizationRepository.rollback(self) -> None`
+- `PostgresSynchronizationRepository.lock_synchronization(self, synchronization_id: str) -> None`
+- `PostgresSynchronizationRepository.reserve_synchronization(self, synchronization: InvoiceSynchronization) -> InvoiceSynchronization`
+- `PostgresSynchronizationRepository.mark_transfer_issued(self, synchronization_id: str, issued_at: datetime) -> InvoiceSynchronization`
+- `PostgresSynchronizationRepository.save_synchronization_outcome(self, outcome: SynchronizationOutcome) -> None`
+- `PostgresSynchronizationRepository.load_sync_status(self, invoice_id: str, node_id: str) -> SynchronizationStatusObservation | None`
+- `PostgresSynchronizationRepository.load_synchronization(self, synchronization_id: str) -> InvoiceSynchronization | None`
+- `PostgresSynchronizationRepository.reserve_catalogue_publication(self, publication: RegistryCataloguePublication) -> RegistryCataloguePublication`
+- `PostgresSynchronizationRepository.save_catalogue_acknowledgement(self, acknowledgement: VpsCatalogueAcknowledgement) -> None`
+- `PostgresSynchronizationRepository.append_connection_observation(self, observation: VpsConnectionObservation) -> None`
 - `HttpxVpsSynchronizationTransport.__init__(self, base_url: str, node_credential: str, timeout_seconds: int, max_response_bytes: int) -> None`
+- `HttpxVpsSynchronizationTransport.transfer_invoice(self, selection: SynchronizationWorkSelection, node: CabinetNodeIdentity) -> VpsInvoiceTransferPackage`
+- `HttpxVpsSynchronizationTransport.reconcile_transfer(self, synchronization_id: str) -> VpsTransferReconciliationEvidence`
+- `HttpxVpsSynchronizationTransport.publish_catalogue(self, delivery: RegistryCatalogueDelivery) -> VpsCatalogueAcknowledgement`
+- `HttpxVpsSynchronizationTransport.observe_connection(self) -> VpsConnectionObservation`
 - `create_app(access_control: AccessControlBackend, archive: DurableArchiveService, registry: RegistryContextService, holded_gateway: HoldedGatewayService, synchronization: SynchronizationService) -> FastAPI`
 
 Constructors validate inputs but never read environment variables.

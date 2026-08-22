@@ -135,3 +135,103 @@ request_holded_publication_handler: [DEPENDENCY_BOUNDARY] MUST obtain the exact 
 reconcile_holded_publication_handler: [DEPENDENCY_BOUNDARY] MUST obtain the exact HoldedPublicationService bound to request.app.state.holded_publication and pass it to reconcile_holded_publication.
 evaluate_vps_release_handler: [DEPENDENCY_BOUNDARY] MUST obtain the exact RetentionReleaseService bound to request.app.state.retention_release and pass it to evaluate_vps_release.
 request_manual_vps_release_handler: [DEPENDENCY_BOUNDARY] MUST obtain the exact RetentionReleaseService bound to request.app.state.retention_release and pass it to request_manual_vps_release.
+
+## Concrete adapter implementations
+PostgresHoldedAttemptRepository.__init__: [SECURITY_BOUNDARY] Bind to the supplied PostgreSQL URL, validate connectivity, treat the URL as secret, and never read environment variables or log credentials.
+HttpxHoldedHttpClient.__init__: [VALIDATION_ERROR] Require an absolute HTTPS base URL without embedded credentials or fragment, a non-empty API key, and positive finite timeout, response-size, and page bounds.
+HttpxHoldedHttpClient.__init__: [SECURITY_BOUNDARY] Keep the API key only in the outbound authorization header, enable TLS verification, and never log or return reusable credential material.
+PostgresSynchronizationRepository.__init__: [SECURITY_BOUNDARY] Bind to the supplied PostgreSQL URL, validate connectivity, treat the URL as secret, and never read environment variables.
+HttpxVpsSynchronizationTransport.__init__: [VALIDATION_ERROR] Require HTTPS without embedded credentials or fragment, a non-empty dedicated node credential, and positive finite bounds.
+HttpxVpsSynchronizationTransport.__init__: [SECURITY_BOUNDARY] Verify TLS and never log or return credentials, authorization headers, or unbounded response bodies.
+PostgresPlanActualRepository.__init__: [SECURITY_BOUNDARY] Validate the supplied PostgreSQL connection, treat the URL as secret, and read no environment variables.
+PostgresHoldedPublicationRepository.__init__: [SECURITY_BOUNDARY] Validate the supplied PostgreSQL connection, treat the URL as secret, and read no environment variables.
+PostgresRetentionReleaseRepository.__init__: [SECURITY_BOUNDARY] Validate the supplied PostgreSQL connection, protect the URL, and read no environment variables.
+HttpxHoldedHttpClient.create_purchase: [FORBIDDEN_ACTION] Issue exactly one POST per invocation with mutation retries and replaying redirects disabled.
+HttpxHoldedHttpClient.list_purchases: [BEHAVIOR] Perform one read-only bounded page request and return typed summaries in stable document-id order.
+HttpxHoldedHttpClient.get_purchase: [BEHAVIOR] Perform one read-only request for the exact document identifier and return bounded external evidence.
+PostgresHoldedAttemptRepository.begin: [DEPENDENCY_BOUNDARY] Begin one PostgreSQL transaction on the repository connection used for the exact gateway state transition.
+PostgresHoldedAttemptRepository.commit: [BEHAVIOR] Commit only a valid typed attempt transition and expose no partial state.
+PostgresHoldedAttemptRepository.rollback: [BEHAVIOR] Roll back the current gateway transaction without deleting prior immutable technical evidence.
+PostgresHoldedAttemptRepository.lock_attempt: [BEHAVIOR] Acquire the PostgreSQL uniqueness or row lock for the exact publication attempt before deciding whether POST may be issued.
+PostgresHoldedAttemptRepository.load_attempt: [BEHAVIOR] Return the exact persisted technical attempt or None without fabricating a default.
+PostgresHoldedAttemptRepository.reserve_attempt: [BEHAVIOR] Reuse an existing reservation only when attempt identity, payload hash, and marker are exactly equivalent; reject conflicts.
+PostgresHoldedAttemptRepository.mark_request_issued: [BEHAVIOR] Persist the single-create authority transition before network mutation and reject repeated or skipped issuance.
+PostgresHoldedAttemptRepository.append_attempt_outcome: [BEHAVIOR] Append immutable secret-free technical outcome evidence and reject stale or conflicting transitions.
+PostgresHoldedAttemptRepository.append_lookup_evidence: [BEHAVIOR] Resolve the exact durable attempt by its unique marker and append immutable read-only recovery evidence without settling Cabinet publication.
+PostgresHoldedAttemptRepository.load_attempt_by_marker: [BEHAVIOR] Return the exact attempt for one unique marker or None; reject duplicate persisted markers and never infer an attempt from payload similarity.
+PostgresSynchronizationRepository.begin: [DEPENDENCY_BOUNDARY] Open one PostgreSQL transaction for the exact synchronization transition and reject nested begin.
+PostgresSynchronizationRepository.commit: [BEHAVIOR] Commit the active typed transition exactly once and expose no partial state.
+PostgresSynchronizationRepository.rollback: [FALLBACK] Roll back idempotently, release resources, and preserve the original synchronization failure.
+PostgresSynchronizationRepository.lock_synchronization: [BEHAVIOR] Acquire the exact PostgreSQL row or uniqueness lock before deciding whether transport may be issued.
+PostgresSynchronizationRepository.reserve_synchronization: [BEHAVIOR] Reuse only an exactly equivalent identity, idempotency-key, and manifest-hash binding; reject conflicts before transport.
+PostgresSynchronizationRepository.mark_transfer_issued: [BEHAVIOR] Persist issuance before network mutation and reject repeated or skipped issuance.
+PostgresSynchronizationRepository.save_synchronization_outcome: [PROVENANCE] Persist typed conclusive or unknown evidence without deleting prior observations.
+PostgresSynchronizationRepository.load_sync_status: [BEHAVIOR] Return the exact committed observation or None and never synthesize a synchronized default.
+PostgresSynchronizationRepository.load_synchronization: [BEHAVIOR] Return the exact persisted attempt or None without inferring identity from invoice similarity.
+PostgresSynchronizationRepository.reserve_catalogue_publication: [BEHAVIOR] Reuse only an exact catalogue, endpoint, and idempotency binding and reject conflicts before publication.
+PostgresSynchronizationRepository.save_catalogue_acknowledgement: [PROVENANCE] Append the exact typed acknowledgement and reject stale or conflicting publication transitions.
+PostgresSynchronizationRepository.append_connection_observation: [PROVENANCE] Append secret-free typed connection evidence without changing transfer or archive state.
+HttpxVpsSynchronizationTransport.transfer_invoice: [FORBIDDEN_ACTION] Issue at most one service-authorized outbound transfer with transport retries and replaying redirects disabled.
+HttpxVpsSynchronizationTransport.reconcile_transfer: [BEHAVIOR] Perform one bounded read-only lookup for the exact persisted synchronization identity.
+HttpxVpsSynchronizationTransport.publish_catalogue: [FORBIDDEN_ACTION] Issue at most one service-authorized publication for the exact delivery with replaying redirects and mutation retries disabled.
+HttpxVpsSynchronizationTransport.observe_connection: [BEHAVIOR] Perform one bounded read-only authenticated observation and preserve unavailable or incompatible evidence explicitly.
+PostgresPlanActualRepository.begin: [DEPENDENCY_BOUNDARY] Open one PostgreSQL transaction for the exact plan/actual transition and reject nested begin.
+PostgresPlanActualRepository.commit: [BEHAVIOR] Commit the active typed transition once and expose no partial state.
+PostgresPlanActualRepository.rollback: [FALLBACK] Roll back idempotently, release resources, and preserve the original failure.
+PostgresPlanActualRepository.lock_estimate: [BEHAVIOR] Serialize immutable snapshot acceptance for the exact PresuPro identity.
+PostgresPlanActualRepository.lock_invoice_line: [BEHAVIOR] Serialize match decisions for the exact immutable invoice line before active state is read.
+PostgresPlanActualRepository.load_snapshot: [BEHAVIOR] Return the exact immutable snapshot or None and never substitute the latest snapshot.
+PostgresPlanActualRepository.load_snapshot_by_content: [BEHAVIOR] Return only the exact PresuPro identity and canonical-content match or None.
+PostgresPlanActualRepository.save_snapshot: [PROVENANCE] Append one immutable snapshot and reject conflicting identity or content bindings.
+PostgresPlanActualRepository.save_proposals: [PROVENANCE] Append stable non-authoritative proposal evidence without creating confirmed matches.
+PostgresPlanActualRepository.load_match_decisions: [DETERMINISM_OR_ORDERING] Return every exact requested decision in match-id order and fail when a pinned identity is absent.
+PostgresPlanActualRepository.save_match_decision: [PROVENANCE] Append confirmed, rejected, or invalidated decision history and reject conflicting active confirmation.
+PostgresPlanActualRepository.list_active_matches: [DETERMINISM_OR_ORDERING] Return only active confirmed matches for the exact project and snapshot in stable match-id order.
+PostgresHoldedPublicationRepository.begin: [DEPENDENCY_BOUNDARY] Open one PostgreSQL transaction for the exact publication transition and reject nested begin.
+PostgresHoldedPublicationRepository.commit: [BEHAVIOR] Commit one valid lifecycle transition and expose no partial state.
+PostgresHoldedPublicationRepository.rollback: [FALLBACK] Roll back idempotently and preserve the original publication failure.
+PostgresHoldedPublicationRepository.lock_publication: [BEHAVIOR] Serialize the exact logical publication before its state is read.
+PostgresHoldedPublicationRepository.lock_invoice_revision: [BEHAVIOR] Serialize duplicate-prevention decisions for the exact immutable revision.
+PostgresHoldedPublicationRepository.load_publication: [BEHAVIOR] Return exact persisted state or None and never infer it from gateway evidence.
+PostgresHoldedPublicationRepository.load_by_invoice_revision: [BEHAVIOR] Return only the publication bound to the exact invoice revision or None.
+PostgresHoldedPublicationRepository.reserve_publication: [BEHAVIOR] Reuse only an equivalent logical publication and reject conflicting active state before gateway mutation.
+PostgresHoldedPublicationRepository.save_transition: [PROVENANCE] Append valid verified or unresolved lifecycle evidence and reject stale, skipped, or conflicting transitions.
+PostgresRetentionReleaseRepository.begin: [DEPENDENCY_BOUNDARY] Open one PostgreSQL transaction for the exact release lifecycle and reject nested begin.
+PostgresRetentionReleaseRepository.commit: [BEHAVIOR] Commit one valid evidence transition and expose no partial state.
+PostgresRetentionReleaseRepository.rollback: [FALLBACK] Roll back idempotently and preserve the original release failure.
+PostgresRetentionReleaseRepository.lock_working_set: [BEHAVIOR] Serialize evaluation and decision changes for the exact project and working-set identity.
+PostgresRetentionReleaseRepository.save_evaluation: [PROVENANCE] Append immutable complete-coverage or blocked evaluation evidence.
+PostgresRetentionReleaseRepository.load_decision: [BEHAVIOR] Return the exact persisted decision or None without inferring physical release.
+PostgresRetentionReleaseRepository.reserve_decision: [BEHAVIOR] Reuse only an equivalent still-valid authorization and reject stale, broadened, or conflicting decisions.
+
+PostgresArchiveUnitOfWork.__init__: [SECURITY_BOUNDARY] MUST treat database_url as secret configuration and MUST NOT log it or include it in safe errors.
+PostgresArchiveUnitOfWork.lock_invoice: [BEHAVIOR] MUST acquire PostgreSQL serialization for the exact invoice before mutable acceptance or source state is read.
+PostgresArchiveUnitOfWork.save_publication: [BEHAVIOR] MUST persist the publication journal in the same transaction as its associated archive mutation and reject skipped, stale, or conflicting publication-state transitions.
+LocalFilesystemSourceByteStore.__init__: [VALIDATION_ERROR] MUST require an absolute private root whose staging and final directories support same-filesystem atomic rename.
+LocalFilesystemSourceByteStore.stage: [PATH_OR_ARTIFACT_POLICY] MUST create a private candidate beneath the configured staging root, flush it, reopen it, and verify exact hash and size before returning an opaque reference.
+LocalFilesystemSourceByteStore.verify: [SECURITY_BOUNDARY] MUST resolve only store-created opaque references beneath the configured root and reject traversal, symlink escape, devices, and non-regular files.
+LocalFilesystemSourceByteStore.publish: [PATH_OR_ARTIFACT_POLICY] MUST use same-filesystem atomic rename to a content-addressed final reference; an existing final file may be reused only after exact verification and different bytes MUST NOT be overwritten.
+LocalFilesystemSourceByteStore.remove_staging: [FORBIDDEN_ACTION] MUST remove only the exact staging candidate and MUST NOT remove final or previously published content.
+PostgresArchiveUnitOfWork.begin: [BEHAVIOR] MUST open exactly one PostgreSQL transaction for the current service operation and reject nested begin.
+PostgresArchiveUnitOfWork.commit: [BEHAVIOR] MUST commit the current transaction exactly once and release its connection; commit without an active transaction is an error.
+PostgresArchiveUnitOfWork.rollback: [FALLBACK] MUST rollback the current transaction idempotently and release its connection without hiding the original archive failure.
+PostgresArchiveUnitOfWork.load_card_revision: [BEHAVIOR] MUST return only the exact accepted immutable revision selected by invoice_id and optional content_hash.
+PostgresArchiveUnitOfWork.load_source_replicas: [BEHAVIOR] MUST return replicas for the exact invoice in stable source_id and stored_at order.
+PostgresArchiveUnitOfWork.load_pending_publications: [BEHAVIOR] MUST return only staged or metadata_committed publication records in stable created_at and publication_id order.
+PostgresArchiveUnitOfWork.mark_publication_published: [BEHAVIOR] MUST permit only metadata_committed to published after final-byte verification and MUST reject stale or skipped transitions.
+PostgresArchiveUnitOfWork.mark_publication_failed: [BEHAVIOR] MUST preserve failure evidence and reject transition from published to failed.
+PostgresArchiveUnitOfWork.load_transfer_receipt: [BEHAVIOR] MUST return only the exact durable receipt for invoice_id and optional content_hash.
+PostgresArchiveUnitOfWork.load_source_binaries: [BEHAVIOR] MUST return all source identities for the exact invoice in stable source_id order.
+PostgresArchiveUnitOfWork.save_transfer_acceptance: [BEHAVIOR] MUST persist manifest, immutable card revision, replicas, and receipt as one transaction and MUST NOT expose partial acceptance.
+PostgresArchiveUnitOfWork.save_source_attachment: [BEHAVIOR] MUST persist source identity, replica metadata, and ArchiveBytePublication in the active invoice-locked transaction.
+PostgresArchiveUnitOfWork.save_incomplete_source_acceptance: [PROVENANCE] MUST append the exact immutable acceptance evidence and MUST NOT replace prior decisions.
+PostgresArchiveUnitOfWork.save_source_loss_decision: [PROVENANCE] MUST append the exact immutable loss evidence and MUST NOT delete source or acceptance history.
+PostgresRegistryContextRepository.__init__: [SECURITY_BOUNDARY] MUST treat database_url as secret configuration, validate connectivity, and MUST NOT log the URL.
+PostgresRegistryContextRepository.begin: [DEPENDENCY_BOUNDARY] MUST use one PostgreSQL connection and transaction per service operation and reject nested begin.
+PostgresRegistryContextRepository.commit: [BEHAVIOR] MUST commit the active transaction exactly once and release its connection.
+PostgresRegistryContextRepository.rollback: [FALLBACK] MUST rollback idempotently and release its connection without hiding the original error.
+PostgresRegistryContextRepository.lock_catalogue: [BEHAVIOR] MUST acquire PostgreSQL serialization for one complete Registry catalogue replacement.
+PostgresRegistryContextRepository.load_work_object: [BEHAVIOR] MUST return the exact committed WorkObject or None.
+PostgresRegistryContextRepository.save_assignment_validation: [PROVENANCE] MUST append immutable validation evidence and MUST NOT replace a different decision.
+PostgresRegistryContextRepository.load_assignment_validation: [BEHAVIOR] MUST return the exact persisted validation or None.
+PostgresRegistryContextRepository.merge_work_objects: [BEHAVIOR] MUST atomically merge the typed projection by stable project_id, preserve Cabinet-owned fields and absent existing objects, and MUST NOT expose mixed catalogue observations.
