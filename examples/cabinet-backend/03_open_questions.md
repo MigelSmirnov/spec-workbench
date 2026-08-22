@@ -176,6 +176,10 @@ accepted.
 
 ### Required product decisions
 
+A resolution transcribed from the accepted semantic oracle is proposed in
+`02_rules_plan_actual_semantic_gap.md` ("Proposed monetary decisions",
+2026-08-22) and awaits the owner's acceptance.
+
 `PA-MONEY-001` must identify the authoritative planned item amount and its exact
 monetary/tax basis.
 

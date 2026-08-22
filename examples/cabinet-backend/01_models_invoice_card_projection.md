@@ -237,10 +237,10 @@ The complete Version 1 card as the typed projection of `StoredInvoiceCardRevisio
 
 The basis is a fact of the data, not a global constant. `EstimateItemSnapshot` (M29) gains `currency`
 and `monetary_basis` (`net` or `gross`) as observed from PresuPro; `PresuProEstimateObservation` gains
-`currency` and the typed `items` it was parsed into. Plan/actual takes `InvoiceCardLine.net_amount` for
-a `net` item and `gross_amount` for a `gross` item; any other pairing is a basis mismatch unless an
-accepted assumption is pinned. The rule address `actual_amount_source = confirmed_matched_invoice_line.total`
-reads as "the line amount of the item's basis".
+`currency` and the typed `items` it was parsed into. Plan/actual takes `InvoiceCardLine.gross_amount` for every
+line (`rules.plan_actual.actual_amount_basis = "gross"`, PA-MONEY-002); an item observed in `net` basis or
+another currency is a basis mismatch unless an accepted assumption is pinned (PA-MONEY-003). The rule address
+`actual_amount_source = InvoiceCardLine.gross_amount` names the field explicitly.
 
 ## Card → Registry project
 

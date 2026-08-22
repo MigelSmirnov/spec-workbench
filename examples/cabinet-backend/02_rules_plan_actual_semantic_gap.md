@@ -2,7 +2,34 @@
 
 ## Status
 
-**REOPENED — quantity semantics remain accepted; monetary semantics are unresolved.**
+**REOPENED — quantity semantics remain accepted; monetary semantics await the
+owner's acceptance of the proposed resolution below (2026-08-22).**
+
+The semantic runtime tests handed to the Factory (Stage 8.2 / FA006) fix the
+monetary meaning unambiguously: every Invoice Card line contributes its
+tax-inclusive amount, an Estimate Item is directly comparable only when it is
+observed in the same `gross` basis and currency, and any other pairing fails
+closed unless an accepted assumption is pinned. The answers below are
+transcribed from that oracle and pinned in `rules.plan_actual` so the oracle
+can be executed; the decision itself stays with the Cabinet owner — accepting
+it flips this status to ACCEPTED, rejecting it withdraws the pinned rule.
+
+### Proposed monetary decisions (transcribed from the oracle, not yet accepted)
+
+- `PA-MONEY-001` — planned item amount is `EstimateItemSnapshot.total` in the
+  basis PresuPro reported for that item (`EstimateItemSnapshot.monetary_basis`,
+  `net` or `gross`) and `EstimateItemSnapshot.currency`. No other PresuPro
+  representation is consumed.
+- `PA-MONEY-002` — actual line amount is `InvoiceCardLine.gross_amount`
+  (tax-inclusive) for every line, matched or unmatched; the basis is pinned as
+  `rules.plan_actual.actual_amount_basis = "gross"`. `net_amount` is never
+  selected for plan/actual.
+- `PA-MONEY-003` — planned and actual are directly comparable iff the item's
+  `monetary_basis` equals `"gross"` and its currency equals the card currency;
+  otherwise `calculate_plan_actual` raises `PlanActualPreconditionError` unless
+  an exact accepted basis/currency assumption is pinned for that match. No
+  implicit net/gross, tax, or currency conversion exists.
+
 
 The earlier version of this decision treated `EstimateItemSnapshot.total` and
 `InvoiceLine.total` as accepted monetary source facts. Later factual probes proved
