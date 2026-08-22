@@ -248,3 +248,10 @@ reads as "the line amount of the item's basis".
 (`load_assignment_observation`, `insert_assignment_observation`). `validate_card_assignment` reads the
 project from the stored observation; `canonical_card.object` is capture evidence only. Who produces the
 observation at capture time remains an open item in `30_modules_persistence_boundary.md`.
+
+## M12 / observation refinement — Registry contract version
+
+`RegistryProjectObservation` carries `source_contract_version`: the Registry contract version under
+which the compact catalogue was read. `RegistryProjectSnapshot.source_contract_version` is copied from
+it; `snapshot_id` is `project_id` + ":" + `registry_updated_at` (ISO-8601); `captured_at` is the refresh
+observation time. Found by the semantic oracle: the service had no declared way to build a snapshot.
