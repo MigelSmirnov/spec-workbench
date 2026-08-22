@@ -417,7 +417,7 @@ def test_v3_lock_has_no_table_and_needs_scope_and_keys() -> None:
     payload = _v3_backend()
     lock = payload["repositories"][0]["methods"][1]
     lock["table"] = "invoices"
-    lock["keys"] = []
+    lock["keys"] = [""]
     codes = {item.code for item in validate(payload)}
     assert "invalid_lock_keys" in codes
     assert any("method" in code for code in codes - {"invalid_lock_keys"})

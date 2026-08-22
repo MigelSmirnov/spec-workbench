@@ -288,8 +288,8 @@ def _validate_method(
         if not _text(row.get("scope")):
             findings.append(Finding("error", "invalid_lock_scope", "lock scope must be a non-empty string", repository, location + ".scope"))
         keys = row.get("keys")
-        if not (isinstance(keys, list) and keys and all(_text(item) for item in keys)):
-            findings.append(Finding("error", "invalid_lock_keys", "lock keys must be a non-empty list of argument names", repository, location + ".keys"))
+        if not (isinstance(keys, list) and all(_text(item) for item in keys)):
+            findings.append(Finding("error", "invalid_lock_keys", "lock keys must be a list of argument names (empty = whole scope)", repository, location + ".keys"))
         return findings, method
     fields = {**QUERY_FIELDS, **(TABLE_QUERY_FIELDS_V3_EXTRA if version >= 3 else {})}
     if query not in fields:
