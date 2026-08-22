@@ -514,6 +514,8 @@ PresuPro client
 
 They may validate transport shape, authenticate through `access_control`, call one or more accepted application capabilities, and translate results. They must not duplicate authorization, archive acceptance, matching, publication, retention, or synchronization policy.
 
+`api` owns only the functions emitted by `http_router_backend/v1`. Transport helpers that the deterministic table calls but does not emit are physically owned by `api_irregular`; this includes multipart lowering and the local-principal resolver. Those helpers delegate credential verification and authorization decisions to `access_control` and do not own security policy.
+
 A tool name is not a module boundary. Compatible VPS/local tools may map to different capability availability while sharing the same Cabinet semantic operation.
 
 ---

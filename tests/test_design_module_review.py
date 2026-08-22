@@ -48,6 +48,15 @@ def test_transport_module_without_state3_owner_still_slices() -> None:
     assert packet["accepted_evidence"]["responsibility"] is None
     assert packet["lowered_specification"]["routes"]
 
+def test_router_non_emitted_resolver_is_owned_by_irregular_companion() -> None:
+    api = build_slice(CABINET, "api")["lowered_specification"]
+    irregular = build_slice(CABINET, "api_irregular")["lowered_specification"]
+    assert "resolve_local_principal" not in api["contracts"]
+    assert "resolve_local_principal" in irregular["contracts"]
+    assert api["dependencies"]["api_irregular"] == [
+        "attach_local_source_handler", "resolve_local_principal",
+    ]
+
 def test_dependency_contracts_and_concrete_adapters_expand_import_context() -> None:
     packet = build_slice(CABINET, "holded_publication")
     lowered = packet["lowered_specification"]
