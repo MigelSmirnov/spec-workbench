@@ -70,8 +70,12 @@ IR is authored in `70_persistence_closure.json` and projected verbatim into
 
 ## Open items
 - `LocalFilesystemSourceByteStore` now lives in `source_byte_store` under
-  `rules.source_byte_store_backend` (§6.5); `HttpxVpsSynchronizationTransport`
-  stays in `synchronization` until a VPS transport backend exists;
+  `rules.source_byte_store_backend` (§6.5); `VpsSynchronizationTransport` is
+  `disposition: external`: the VPS exposes no synchronization HTTP API yet (static
+  JSON behind nginx plus an MCP tunnel), so there is no wire contract to close.
+  `create_local_app` receives the implementation from the composition boundary.
+  Building the VPS sync API, running the experiment, and adding a
+  `vps_transport_backend` is a separate project;
 - `RegistryProjectSnapshot` is referenced by `WorkObject.registry_snapshot_id`
   but is not a persisted model; the Registry-derived projection has no durable
   home yet. This is a State 1/2 gap, not a persistence-boundary decision;

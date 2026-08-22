@@ -315,3 +315,16 @@ locked and upserted on every outcome); the verifier is never compared outside
 revocation is an update that never deletes history. Result:
 `PASS_INTERNAL_VARIATION` for `access_control`, `PASS` for the two
 deterministic modules.
+
+## `VpsSynchronizationTransport` — external
+
+Inspection of the VPS (`cabinet-dev`, 2026-08-22) found static JSON behind
+nginx Basic Auth and an MCP tunnel; no synchronization HTTP API, no node
+credential, no receipts or acknowledgements. A transport emitter without a
+verified wire contract would be a guess, so `HttpxVpsSynchronizationTransport`
+is removed and the port is `disposition: external`:
+`create_local_app(vps_transport: VpsSynchronizationTransport)` receives the
+implementation and fails closed on None. Factory canonical validation of the
+assembled specification now reports no issues. Building the VPS sync API and
+its experiment is a separate project; the transport then returns as a
+deterministic backend like Holded.

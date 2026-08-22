@@ -53,11 +53,6 @@ Generic dictionaries and untyped save/query methods are forbidden.
 - `PostgresSynchronizationRepository.load_catalogue_publication_by_idempotency(self, catalogue_id: str, target_node_id: str, idempotency_key: str) -> RegistryCataloguePublication | None`
 - `PostgresSynchronizationRepository.update_catalogue_publication(self, publication: RegistryCataloguePublication) -> None`
 - `PostgresSynchronizationRepository.insert_connection_observation(self, observation: VpsConnectionObservation) -> None`
-- `HttpxVpsSynchronizationTransport.__init__(self, base_url: str, node_credential: str, timeout_seconds: int, max_response_bytes: int) -> None`
-- `HttpxVpsSynchronizationTransport.transfer_invoice(self, selection: SynchronizationWorkSelection, node: CabinetNodeIdentity) -> VpsInvoiceTransferPackage`
-- `HttpxVpsSynchronizationTransport.reconcile_transfer(self, synchronization_id: str) -> VpsTransferReconciliationEvidence`
-- `HttpxVpsSynchronizationTransport.publish_catalogue(self, delivery: RegistryCatalogueDelivery) -> VpsCatalogueAcknowledgement`
-- `HttpxVpsSynchronizationTransport.observe_connection(self) -> VpsConnectionObservation`
 - `create_app(access_control: AccessControlBackend, archive: DurableArchiveService, registry: RegistryContextService, holded_gateway: HoldedGatewayService, synchronization: SynchronizationService) -> FastAPI`
 
 Constructors validate inputs but never read environment variables.
@@ -70,3 +65,9 @@ transition validity belong to `SynchronizationService`. `load_sync_status` was l
 
 `load_sync_status` was replaced by `list_synchronizations_for_invoice`; `get_sync_status`
 composes the observation from the latest attempt (`30_modules_persistence_boundary.md`).
+
+`HttpxVpsSynchronizationTransport` was removed: `VpsSynchronizationTransport` is `disposition: external`. The VPS
+(`cabinet-dev`) exposes no synchronization API yet — only static JSON and an MCP tunnel — so no wire
+contract can be closed. `create_local_app(vps_transport: VpsSynchronizationTransport) -> FastAPI` receives the implementation from the
+composition boundary; it returns to the Factory as a deterministic transport backend once the VPS
+sync API exists and is evidenced (`30_modules_persistence_boundary.md`, open items).

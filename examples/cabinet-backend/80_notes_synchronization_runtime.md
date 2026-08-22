@@ -54,3 +54,8 @@
   construct repository, transport, and service, and bind them before FastAPI.
 - create_local_app [VALIDATION_ERROR]: fail closed; no disabled, anonymous,
   in-memory, or service-locator fallback is permitted.
+
+## Transport disposition (later, authoritative)
+
+The HTTPS transport above is not generated: `VpsSynchronizationTransport` is external until the VPS
+synchronization API exists. Bootstrap accepts the implementation as a parameter and never constructs one.

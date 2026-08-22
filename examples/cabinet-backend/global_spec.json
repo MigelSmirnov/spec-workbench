@@ -75,7 +75,7 @@
     "PostgresAccessControlRepository.load_throttle_state": "(self, abuse_context_hash: str) -> AuthenticationThrottleState | None",
     "PostgresAccessControlRepository.upsert_throttle_state": "(self, state: AuthenticationThrottleState) -> None",
     "PostgresAccessControlRepository.insert_audit_record": "(self, record: SecurityAuditRecord) -> None",
-    "create_local_app": "() -> FastAPI",
+    "create_local_app": "(vps_transport: VpsSynchronizationTransport) -> FastAPI",
     "enroll_local_agent": "(display_name: str, capabilities: tuple[str, ...]) -> IssuedServiceCredential",
     "rotate_local_agent_credential": "(principal_id: str) -> IssuedServiceCredential",
     "revoke_local_agent": "(principal_id: str) -> None",
@@ -247,11 +247,6 @@
     "PostgresSynchronizationRepository.load_catalogue_publication_by_idempotency": "(self, catalogue_id: str, target_node_id: str, idempotency_key: str) -> RegistryCataloguePublication | None",
     "PostgresSynchronizationRepository.update_catalogue_publication": "(self, publication: RegistryCataloguePublication) -> None",
     "PostgresSynchronizationRepository.insert_connection_observation": "(self, observation: VpsConnectionObservation) -> None",
-    "HttpxVpsSynchronizationTransport.__init__": "(self, base_url: str, node_credential: str, timeout_seconds: int, max_response_bytes: int) -> None",
-    "HttpxVpsSynchronizationTransport.transfer_invoice": "(self, selection: SynchronizationWorkSelection, node: CabinetNodeIdentity) -> VpsInvoiceTransferPackage",
-    "HttpxVpsSynchronizationTransport.reconcile_transfer": "(self, synchronization_id: str) -> VpsTransferReconciliationEvidence",
-    "HttpxVpsSynchronizationTransport.publish_catalogue": "(self, delivery: RegistryCatalogueDelivery) -> VpsCatalogueAcknowledgement",
-    "HttpxVpsSynchronizationTransport.observe_connection": "(self) -> VpsConnectionObservation",
     "PlanActualService.__init__": "(self, repository: PlanActualRepository, archive: DurableArchiveService, registry: RegistryContextService) -> None",
     "PlanActualService.refresh_estimate_snapshot": "(self, observation: PresuProEstimateObservation) -> EstimateSnapshot",
     "PlanActualService.propose_invoice_line_matches": "(self, invoice_id: str, content_hash: str, estimate_snapshot_id: str) -> tuple[InvoiceLineMatchProposal, ...]",
@@ -704,16 +699,14 @@
     "VpsSynchronizationTransport.reconcile_transfer: [BEHAVIOR] Perform one bounded read-only lookup for the exact persisted synchronization identity.",
     "VpsSynchronizationTransport.publish_catalogue: [FORBIDDEN_ACTION] Issue at most one service-authorized publication for the exact delivery with replaying redirects and mutation retries disabled.",
     "VpsSynchronizationTransport.observe_connection: [BEHAVIOR] Perform one bounded read-only authenticated observation and preserve unavailable or incompatible evidence explicitly.",
-    "HttpxVpsSynchronizationTransport.__init__: [VALIDATION_ERROR] Require HTTPS without embedded credentials or fragment, a non-empty dedicated node credential, and positive finite bounds.",
-    "HttpxVpsSynchronizationTransport.__init__: [SECURITY_BOUNDARY] Verify TLS and never log or return credentials, authorization headers, or unbounded response bodies.",
     "synchronize_invoice_work: [DEPENDENCY_BOUNDARY] Delegate through the exact supplied SynchronizationService; no ad-hoc client, repository, archive, or environment read is permitted.",
     "get_sync_status: [DEPENDENCY_BOUNDARY] Delegate through the exact supplied SynchronizationService and never fabricate status.",
     "reconcile_transfer_outcome: [DEPENDENCY_BOUNDARY] MUST delegate read-only reconciliation through the exact supplied SynchronizationService.",
     "publish_registry_catalogue: [DEPENDENCY_BOUNDARY] MUST delegate exact catalogue delivery through the supplied SynchronizationService.",
     "observe_vps_connection: [DEPENDENCY_BOUNDARY] MUST delegate observation through the supplied SynchronizationService.",
-    "create_local_app: [CONFIG_REFERENCE] Read VPS URL and node credential only from the environment variables named by = config.synchronization_runtime.base_url_env and = config.synchronization_runtime.node_credential_env.",
-    "create_local_app: [ORCHESTRATION] Reuse the Cabinet database URL and exact archive, construct PostgresSynchronizationRepository, HttpxVpsSynchronizationTransport, and SynchronizationService, then supply the service to create_app.",
-    "create_local_app: [VALIDATION_ERROR] Fail startup on missing or invalid synchronization configuration or adapter construction; no anonymous or in-memory fallback is permitted.",
+    "create_local_app: [DEPENDENCY_BOUNDARY] Accept the VpsSynchronizationTransport implementation from the caller at the composition boundary; MUST NOT construct, import, or discover a transport, read VPS URL or node credential environment variables, or substitute a disabled, anonymous, or in-memory transport.",
+    "create_local_app: [ORCHESTRATION] Reuse the Cabinet database URL and exact archive, construct PostgresSynchronizationRepository and SynchronizationService with the supplied transport, then supply the service to create_app.",
+    "create_local_app: [VALIDATION_ERROR] Fail startup when the supplied transport is None or synchronization repository or service construction fails; no fallback is permitted.",
     "create_app: [DEPENDENCY_BOUNDARY] Bind the exact supplied SynchronizationService into application state without exposing its credential.",
     "PlanActualService.__init__: [DEPENDENCY_BOUNDARY] Retain the exact supplied repository, archive, and Registry services; never construct adapters or discover alternate runtimes.",
     "PlanActualService.refresh_estimate_snapshot: [ORCHESTRATION] Lock stable PresuPro identity, reuse exact canonical content, or append one immutable snapshot atomically.",
@@ -810,10 +803,6 @@
     "PostgresSynchronizationRepository.load_catalogue_publication_by_idempotency: [BEHAVIOR] Return the exact publication bound to catalogue_id, target_node_id, and idempotency_key or None; more than one persisted row is a storage failure.",
     "PostgresSynchronizationRepository.update_catalogue_publication: [PROVENANCE] Write status, completed_at, acknowledged_at, and safe_error_code for the exact existing publication_id inside the active transaction; fail when the row is absent and never insert or change catalogue_id, source_node_id, target_node_id, idempotency_key, or requested_at.",
     "PostgresSynchronizationRepository.insert_connection_observation: [PROVENANCE] Append one immutable secret-free connection observation row keyed by observed_at inside the active transaction; never update, delete, or change transfer or archive state.",
-    "HttpxVpsSynchronizationTransport.transfer_invoice: [FORBIDDEN_ACTION] Issue at most one service-authorized outbound transfer with transport retries and replaying redirects disabled.",
-    "HttpxVpsSynchronizationTransport.reconcile_transfer: [BEHAVIOR] Perform one bounded read-only lookup for the exact persisted synchronization identity.",
-    "HttpxVpsSynchronizationTransport.publish_catalogue: [FORBIDDEN_ACTION] Issue at most one service-authorized publication for the exact delivery with replaying redirects and mutation retries disabled.",
-    "HttpxVpsSynchronizationTransport.observe_connection: [BEHAVIOR] Perform one bounded read-only authenticated observation and preserve unavailable or incompatible evidence explicitly.",
     "PostgresPlanActualRepository.begin: [DEPENDENCY_BOUNDARY] Open one PostgreSQL transaction for the exact plan/actual transition and reject nested begin.",
     "PostgresPlanActualRepository.commit: [BEHAVIOR] Commit the active typed transition once and expose no partial state.",
     "PostgresPlanActualRepository.rollback: [FALLBACK] Roll back idempotently, release resources, and preserve the original failure.",
@@ -1864,10 +1853,7 @@
       ]
     },
     "VpsSynchronizationTransport": {
-      "disposition": "local",
-      "implementations": [
-        "HttpxVpsSynchronizationTransport"
-      ]
+      "disposition": "external"
     }
   },
   "rules": {
@@ -6690,7 +6676,6 @@
         "publish_registry_catalogue",
         "observe_vps_connection",
         "get_working_set_membership",
-        "HttpxVpsSynchronizationTransport",
         "SynchronizationService"
       ],
       "durable_archive_persistence": [
@@ -6984,7 +6969,6 @@
           "HttpxHoldedHttpClient"
         ],
         "synchronization": [
-          "HttpxVpsSynchronizationTransport",
           "SynchronizationService"
         ],
         "plan_actual": [
@@ -7290,7 +7274,6 @@
       "publish_registry_catalogue",
       "observe_vps_connection",
       "get_working_set_membership",
-      "HttpxVpsSynchronizationTransport",
       "SynchronizationService"
     ],
     "durable_archive_persistence": [
@@ -7509,7 +7492,6 @@
     "SynchronizationRepository.update_catalogue_publication",
     "SynchronizationRepository.insert_connection_observation",
     "PostgresSynchronizationRepository.__init__",
-    "HttpxVpsSynchronizationTransport.__init__",
     "PlanActualService.__init__",
     "PlanActualService.refresh_estimate_snapshot",
     "PlanActualService.propose_invoice_line_matches",
