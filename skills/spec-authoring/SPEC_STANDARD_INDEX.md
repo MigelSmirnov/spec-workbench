@@ -92,19 +92,25 @@ predicate или method shape не замкнуты, diagnostic emitter возв
 
 ## Если persistence собирается детерминированно
 
-Нормативная схема: [раздел 6.2](SPEC_STANDARD.md#62-persistence_backendv2).
+Нормативная схема: [раздел 6.2](SPEC_STANDARD.md#62-persistence_backendv2)
+и [раздел 6.3](SPEC_STANDARD.md#63-persistence_backendv3) для v3.
 Порядок authoring фиксирует [AUTHORING_SEQUENCE.md](AUTHORING_SEQUENCE.md).
 
-- `persistence_backend/v2` сейчас SQLite-only: `engine=sqlite`, emitter
-  `sqlite_sync_v2`. PostgreSQL-модули не переводятся в этот IR автоматически.
+- `persistence_backend/v2` — SQLite-only: `engine=sqlite`, emitter
+  `sqlite_sync_v2`. `persistence_backend/v3` добавляет `engine=postgres` с
+  emitter `postgres_sync_v1`, владение транзакцией (`transaction: owned`),
+  вид метода `lock` и bind-ы `argument_set`/`optional_argument`. Форма
+  таблиц и запросов не меняется.
 - Полный backend IR contract-dependent: его нельзя помещать в pre-contract
   `60_data_closure.json`.
 - После готового State 6 создай `70_persistence_closure.json`; его `backend_ir`
   должен замкнуться через `tools/design_persistence_authoring.py`.
 - Repository class, `schema_function` и backend-owned methods обязаны
   резолвиться в один canonical State 6 module.
-- `begin`, `commit`, `rollback`, `close` принадлежат внешнему Unit of Work и не
-  являются deterministic persistence methods.
+- В v2 `begin`, `commit`, `rollback`, `close` принадлежат внешнему Unit of
+  Work. В v3 репозиторий с `transaction: owned` объявляет
+  `begin`/`commit`/`rollback` в contracts, но не в `methods`: их lowering
+  фиксирован версией.
 - Один persistence module владеет одной repository class; partial class
   emission и companion ownership для методов запрещены.
 - Финальный `rules.persistence_backend` должен точно совпадать с закрытым
