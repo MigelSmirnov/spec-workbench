@@ -13,12 +13,12 @@ CABINET = ROOT / "examples" / "cabinet-backend"
 def test_cabinet_data_closure_is_structurally_valid() -> None:
     report = design_stage6_data.lint(CABINET)
     assert report["summary"]["errors"] == 0
-    assert report["summary"]["placements"] == 59
-    assert report["summary"]["structured_values"] == 59
-    assert report["summary"]["persistence_models"] == 33
+    assert report["summary"]["placements"] == 60
+    assert report["summary"]["structured_values"] == 60
+    assert report["summary"]["persistence_models"] == 34
     assert report["summary"]["persistence_classes"] == {
         "derived": 0,
-        "issued": 15,
+        "issued": 16,
         "master": 18,
         "mirrored": 0,
     }

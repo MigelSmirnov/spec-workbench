@@ -24,15 +24,16 @@
 
 - Transaction methods [DEPENDENCY_BOUNDARY]: use one transaction and exact row
   or uniqueness lock for each lifecycle transition.
-- Reservation methods [BEHAVIOR]: reuse only exactly equivalent identity/hash
-  bindings and reject every conflict before network mutation.
+- Insert/update/lookup methods [PROVENANCE]: plain append of attempt and
+  publication rows, plain update of their lifecycle fields, exact lookups by
+  idempotency binding. Reuse, issuance authority, and transition validity are
+  decided by the service from the reloaded locked row
+  (`30_modules_persistence_boundary.md`).
 - Transaction methods [FALLBACK]: commit one valid typed transition or rollback
   idempotently while preserving the original failure.
 - Read and observation methods [PROVENANCE]: return exact persisted evidence or
   absence and append immutable catalogue/connection observations without
   fabricating defaults.
-- Evidence methods [BEHAVIOR]: reject skipped, stale, or conflicting lifecycle
-  transitions and retain unknown outcomes for reconciliation.
 - Constructor [SECURITY_BOUNDARY]: treat the database URL as secret.
 
 ## HTTPS transport

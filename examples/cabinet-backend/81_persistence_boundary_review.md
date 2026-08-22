@@ -138,3 +138,36 @@ Deterministic review: `models` 87/89, `holded_gateway` 5/14,
 impossible without an issuance record; `update_attempt` cannot change the
 identity or hash fields; evidence rows cannot be deleted. Result:
 `PASS_INTERNAL_VARIATION` for `holded_gateway`, `PASS` for the others.
+
+## `synchronization`
+
+- `synchronization_persistence` owns `PostgresSynchronizationRepository`;
+  `HttpxVpsSynchronizationTransport` stays in `synchronization` until its
+  own transport backend exists.
+- `reserve_synchronization` → `insert_synchronization` plus
+  `load_synchronization_by_idempotency`; `mark_transfer_issued` and
+  `save_synchronization_outcome` → one field update `update_synchronization`
+  (`status`, `started_at`, `finished_at`, `safe_error_code`);
+  `reserve_catalogue_publication` → `insert_catalogue_publication` plus
+  `load_catalogue_publication_by_idempotency`; `save_catalogue_acknowledgement`
+  → `update_catalogue_publication`; `append_connection_observation` →
+  `insert_connection_observation`.
+- State 1 repair: `VpsConnectionObservation` is appended durably and is now
+  classified as persisted `issued` evidence keyed by `observed_at`.
+- `SynchronizationService.synchronize_invoice_work` and
+  `publish_registry_catalogue` now state reuse equivalence, the issuance
+  re-read before transport, and the outcome/acknowledgement update from the
+  reloaded locked row. `SynchronizationOutcome` and
+  `VpsCatalogueAcknowledgement` remain service/transport values; their
+  persisted parts are the rows above.
+- Unchanged and recorded as open: `load_sync_status` (composite observation)
+  and the missing storage behind `get_working_set_membership` — no persisted
+  model carries `working_set_id`, and the fresh working set is an open
+  product question.
+
+Deterministic review: `models` 88/90, `synchronization` 18/32,
+`synchronization_persistence` 14/14, `retention_release` 7/24, `bootstrap`
+4/24 — zero blocks, zero prompts. Adversarial review: a second transfer is
+impossible without an issuance record; updates cannot change identity or
+binding fields; evidence rows cannot be deleted. Result:
+`PASS_INTERNAL_VARIATION` for `synchronization`, `PASS` for the others.

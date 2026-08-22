@@ -45,7 +45,7 @@ injects it into the service exactly as before.
 | `holded_publication` | `holded_publication_persistence` | `reserve_publication` → `insert_publication`, `save_transition` → `update_publication`; equivalence and transition validity in `HoldedPublicationService` | done |
 | `registry_context` | `registry_context_persistence` | `merge_work_objects` → `list_work_objects` + keyed `upsert_work_objects`; merge derived in `refresh_registry_context` | done |
 | `holded_gateway` | `holded_gateway_persistence` | `reserve_attempt` → `insert_attempt`; `mark_request_issued` + `append_attempt_outcome` → `update_attempt`; `append_lookup_evidence` → `insert_lookup_evidence`; `HoldedPurchaseLookupEvidence` classified as persisted `issued` evidence | done |
-| `synchronization` | `synchronization_persistence` | `reserve_synchronization`, `mark_transfer_issued`, `reserve_catalogue_publication`, `save_catalogue_acknowledgement` | pending |
+| `synchronization` | `synchronization_persistence` | `reserve_synchronization` → `insert_synchronization` + `load_synchronization_by_idempotency`; `mark_transfer_issued` + `save_synchronization_outcome` → `update_synchronization`; `reserve_catalogue_publication` → `insert_catalogue_publication` + `load_catalogue_publication_by_idempotency`; `save_catalogue_acknowledgement` → `update_catalogue_publication`; `VpsConnectionObservation` classified as persisted `issued` evidence | done (see open items) |
 | `plan_actual` | `plan_actual_persistence` | `load_match_decisions` pinned-absence failure, `save_match_decision` active-conflict | pending |
 | `durable_archive` | `durable_archive_persistence` | `save_publication`, `mark_publication_published`, `mark_publication_failed`; multi-model writes become aggregates | pending |
 
@@ -61,7 +61,12 @@ backend, not by this repair.
 - `engine: postgres` in `rules.persistence_backend`;
 - `RegistryProjectSnapshot` is referenced by `WorkObject.registry_snapshot_id`
   but is not a persisted model; the Registry-derived projection has no durable
-  home yet. This is a State 1/2 gap, not a persistence-boundary decision.
+  home yet. This is a State 1/2 gap, not a persistence-boundary decision;
+- `SynchronizationRepository.load_sync_status` returns the composite
+  `SynchronizationStatusObservation` and `SynchronizationService.get_working_set_membership`
+  has no storage method at all: no persisted model carries `working_set_id`, and
+  the fresh working set is an open product question (`open_questions.md`, VPS
+  working-set questions). Both stay irregular until that decision is taken.
 
 These are tooling and standard-version decisions and do not change the
 ownership recorded here.

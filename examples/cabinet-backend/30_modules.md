@@ -652,6 +652,41 @@ Protocol from `models` as plain reads, appends, and one field update;
 
 ---
 
+## `synchronization_persistence`
+
+### Owns
+
+- `PostgresSynchronizationRepository`: the PostgreSQL storage shape for
+  synchronization attempts, catalogue publications, and connection
+  observations;
+- one transaction and the exact synchronization lock per lifecycle
+  transition;
+- plain appends, plain field updates, and exact reads by id or idempotency
+  binding.
+
+### Hides
+
+- psycopg connection handling;
+- table, column, and index names;
+- row/model codecs.
+
+### Must not own
+
+- reservation equivalence, issuance authority, or outcome classification;
+- catalogue content, endpoints binding, or acknowledgement interpretation;
+- VPS transport;
+- environment reads.
+
+### Depth assessment
+
+Deterministic persistence module. It implements the `SynchronizationRepository`
+Protocol from `models` as plain reads, appends, and field updates;
+`synchronization` decides reuse, issuance, and transitions. `load_sync_status`
+stays on the port until the working-set/replica storage decision is taken
+(`30_modules_persistence_boundary.md`, open items).
+
+---
+
 # 2. Boundary adapters are not policy modules
 
 The following are expected adapters or deployment surfaces, not primary owners of Cabinet rules:

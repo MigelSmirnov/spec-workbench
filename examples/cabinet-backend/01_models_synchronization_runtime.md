@@ -42,6 +42,12 @@ Immutable read-only observation containing availability, authentication result,
 remote contract version, observation time, and optional safe error code. It
 contains no credential or reusable authorization material.
 
+Persistence classification: observations are appended durably by the
+synchronization service and therefore are persisted evidence:
+`persistence.VpsConnectionObservation.class = "issued"`, one immutable row per
+observation identified by `observed_at`; never updated or deleted
+(`30_modules_persistence_boundary.md`).
+
 ## Runtime interfaces
 
 `VpsSynchronizationTransport` is the narrow authenticated HTTPS mechanism port.

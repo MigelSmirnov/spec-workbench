@@ -25,14 +25,15 @@ first parameter.
 - `SynchronizationRepository.commit(self) -> None`
 - `SynchronizationRepository.rollback(self) -> None`
 - `SynchronizationRepository.lock_synchronization(self, synchronization_id: str) -> None`
-- `SynchronizationRepository.reserve_synchronization(self, synchronization: InvoiceSynchronization) -> InvoiceSynchronization`
-- `SynchronizationRepository.mark_transfer_issued(self, synchronization_id: str, issued_at: datetime) -> InvoiceSynchronization`
-- `SynchronizationRepository.save_synchronization_outcome(self, outcome: SynchronizationOutcome) -> None`
+- `SynchronizationRepository.insert_synchronization(self, synchronization: InvoiceSynchronization) -> None`
+- `SynchronizationRepository.update_synchronization(self, synchronization: InvoiceSynchronization) -> None`
 - `SynchronizationRepository.load_sync_status(self, invoice_id: str, node_id: str) -> SynchronizationStatusObservation | None`
 - `SynchronizationRepository.load_synchronization(self, synchronization_id: str) -> InvoiceSynchronization | None`
-- `SynchronizationRepository.reserve_catalogue_publication(self, publication: RegistryCataloguePublication) -> RegistryCataloguePublication`
-- `SynchronizationRepository.save_catalogue_acknowledgement(self, acknowledgement: VpsCatalogueAcknowledgement) -> None`
-- `SynchronizationRepository.append_connection_observation(self, observation: VpsConnectionObservation) -> None`
+- `SynchronizationRepository.load_synchronization_by_idempotency(self, invoice_id: str, target_node_id: str, idempotency_key: str) -> InvoiceSynchronization | None`
+- `SynchronizationRepository.insert_catalogue_publication(self, publication: RegistryCataloguePublication) -> None`
+- `SynchronizationRepository.load_catalogue_publication_by_idempotency(self, catalogue_id: str, target_node_id: str, idempotency_key: str) -> RegistryCataloguePublication | None`
+- `SynchronizationRepository.update_catalogue_publication(self, publication: RegistryCataloguePublication) -> None`
+- `SynchronizationRepository.insert_connection_observation(self, observation: VpsConnectionObservation) -> None`
 
 Generic dictionaries and untyped save/query methods are forbidden.
 
@@ -43,14 +44,15 @@ Generic dictionaries and untyped save/query methods are forbidden.
 - `PostgresSynchronizationRepository.commit(self) -> None`
 - `PostgresSynchronizationRepository.rollback(self) -> None`
 - `PostgresSynchronizationRepository.lock_synchronization(self, synchronization_id: str) -> None`
-- `PostgresSynchronizationRepository.reserve_synchronization(self, synchronization: InvoiceSynchronization) -> InvoiceSynchronization`
-- `PostgresSynchronizationRepository.mark_transfer_issued(self, synchronization_id: str, issued_at: datetime) -> InvoiceSynchronization`
-- `PostgresSynchronizationRepository.save_synchronization_outcome(self, outcome: SynchronizationOutcome) -> None`
+- `PostgresSynchronizationRepository.insert_synchronization(self, synchronization: InvoiceSynchronization) -> None`
+- `PostgresSynchronizationRepository.update_synchronization(self, synchronization: InvoiceSynchronization) -> None`
 - `PostgresSynchronizationRepository.load_sync_status(self, invoice_id: str, node_id: str) -> SynchronizationStatusObservation | None`
 - `PostgresSynchronizationRepository.load_synchronization(self, synchronization_id: str) -> InvoiceSynchronization | None`
-- `PostgresSynchronizationRepository.reserve_catalogue_publication(self, publication: RegistryCataloguePublication) -> RegistryCataloguePublication`
-- `PostgresSynchronizationRepository.save_catalogue_acknowledgement(self, acknowledgement: VpsCatalogueAcknowledgement) -> None`
-- `PostgresSynchronizationRepository.append_connection_observation(self, observation: VpsConnectionObservation) -> None`
+- `PostgresSynchronizationRepository.load_synchronization_by_idempotency(self, invoice_id: str, target_node_id: str, idempotency_key: str) -> InvoiceSynchronization | None`
+- `PostgresSynchronizationRepository.insert_catalogue_publication(self, publication: RegistryCataloguePublication) -> None`
+- `PostgresSynchronizationRepository.load_catalogue_publication_by_idempotency(self, catalogue_id: str, target_node_id: str, idempotency_key: str) -> RegistryCataloguePublication | None`
+- `PostgresSynchronizationRepository.update_catalogue_publication(self, publication: RegistryCataloguePublication) -> None`
+- `PostgresSynchronizationRepository.insert_connection_observation(self, observation: VpsConnectionObservation) -> None`
 - `HttpxVpsSynchronizationTransport.__init__(self, base_url: str, node_credential: str, timeout_seconds: int, max_response_bytes: int) -> None`
 - `HttpxVpsSynchronizationTransport.transfer_invoice(self, selection: SynchronizationWorkSelection, node: CabinetNodeIdentity) -> VpsInvoiceTransferPackage`
 - `HttpxVpsSynchronizationTransport.reconcile_transfer(self, synchronization_id: str) -> VpsTransferReconciliationEvidence`
@@ -59,3 +61,9 @@ Generic dictionaries and untyped save/query methods are forbidden.
 - `create_app(access_control: AccessControlBackend, archive: DurableArchiveService, registry: RegistryContextService, holded_gateway: HoldedGatewayService, synchronization: SynchronizationService) -> FastAPI`
 
 Constructors validate inputs but never read environment variables.
+
+`PostgresSynchronizationRepository` is owned by `synchronization_persistence`. Guarded
+reservation, issuance, outcome, and acknowledgement methods were replaced by plain
+inserts, field updates, and idempotency lookups; reuse, issuance authority, and
+transition validity belong to `SynchronizationService`. `load_sync_status` is unchanged
+pending the working-set/replica storage decision (`30_modules_persistence_boundary.md`).
