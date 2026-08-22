@@ -664,6 +664,7 @@
     "RegistryContextService: [ORCHESTRATION] RegistryContextRepository owns its transaction: every port method, reads included, runs only between begin() and commit() and raises without an active transaction; each public operation that touches the port opens it with begin() first, commits on success, rolls back on any failure, and never calls another public operation of this module that opens one (nested begin is rejected).",
     "RegistryContextService.__init__: [DEPENDENCY_BOUNDARY] MUST retain the exact supplied RegistryContextRepository; adapter construction, environment reads, nullable dependencies, and module-global fallbacks are forbidden.",
     "RegistryContextService.refresh_registry_context: [ORCHESTRATION] MUST, under the catalogue lock, list every stored WorkObject and derive the complete typed merge by stable project_id: create objects for newly observed projects, refresh the Registry-derived binding and last_seen_at of observed ones, keep first_seen_at and Cabinet-owned fields of existing ones, and mark objects absent from the observation as unresolved instead of deleting them; then upsert the merged tuple in one transaction, rollback on failure, and return only the committed observation result.",
+    "RegistryContextService.refresh_registry_context: [FIELD_ASSIGNMENT] WorkObject.registry_status is the status of the RegistryProjectObservation that last mentioned the project (active or archived) and is rewritten on every refresh that mentions it; attention_status stays Cabinet-owned and is never derived from Registry status.",
     "RegistryContextService.refresh_registry_context: [FIELD_ASSIGNMENT] RegistryRefreshResult.projects are RegistryProjectSnapshot values built from each observation, never the observations themselves: snapshot_id is project_id, a colon, and registry_updated_at in ISO-8601; project_id, display_name, address, status, and registry_updated_at are copied; captured_at is the refresh observed_at; source_contract_version is the observation's source_contract_version. Each new or refreshed WorkObject.registry_snapshot_id is that snapshot_id.",
     "RegistryContextService.validate_card_assignment: [BEHAVIOR] MUST apply accepted assignment rules to exact invoice and WorkObject evidence and persist one immutable validation outcome.",
     "RegistryContextService.get_assignment_validation: [VALIDATION_ERROR] MUST raise AssignmentValidationNotFoundError when the exact persisted validation is absent and MUST NOT fabricate a default.",
@@ -681,17 +682,19 @@
     "get_assignment_validation_handler: [DEPENDENCY_BOUNDARY] MUST obtain the exact RegistryContextService bound to request.app.state.registry and pass it to get_assignment_validation.",
     "create_app: [ORCHESTRATION] MUST bind the exact supplied RegistryContextService to the declared registry application-state attribute before route registration.",
     "create_local_app: [ORCHESTRATION] MUST construct PostgresRegistryContextRepository from the declared Cabinet PostgreSQL URL, construct RegistryContextService, and pass it to create_app; an in-memory fallback is forbidden.",
-    "RegistryContextRepository.upsert_work_objects: [BEHAVIOR] MUST insert each supplied WorkObject by stable project_id or, when the row exists, update only registry_snapshot_id, last_seen_at, and attention_status from the supplied object inside the active locked transaction; MUST NOT delete rows or change first_seen_at.",
-    "PostgresRegistryContextRepository.upsert_work_objects: [BEHAVIOR] MUST insert each supplied WorkObject by stable project_id or, when the row exists, update only registry_snapshot_id, last_seen_at, and attention_status from the supplied object inside the active locked transaction; MUST NOT delete rows or change first_seen_at.",
+    "RegistryContextRepository.upsert_work_objects: [BEHAVIOR] MUST insert each supplied WorkObject by stable project_id or, when the row exists, update only registry_snapshot_id, registry_status, last_seen_at, and attention_status from the supplied object inside the active locked transaction; MUST NOT delete rows or change first_seen_at.",
+    "PostgresRegistryContextRepository.upsert_work_objects: [BEHAVIOR] MUST insert each supplied WorkObject by stable project_id or, when the row exists, update only registry_snapshot_id, registry_status, last_seen_at, and attention_status from the supplied object inside the active locked transaction; MUST NOT delete rows or change first_seen_at.",
     "RegistryContextService.__init__: [DEPENDENCY_BOUNDARY] MUST retain the exact supplied RegistryContextRepository and DurableArchiveService; adapter construction, direct archive persistence, environment reads, nullable dependencies, and module-global fallbacks are forbidden.",
     "RegistryContextService.validate_card_assignment: [DEPENDENCY_BOUNDARY] MUST resolve the exact accepted immutable Card revision through the supplied DurableArchiveService before applying Registry assignment policy; invoice_id and content_hash alone are not evidence.",
     "RegistryContextService.validate_card_assignment: [FIELD_PROJECTION] The Registry project of a card is the project_id of the stored CardObjectAssignmentObservation for the exact revision; canonical_card.object (card_id, label) is capture evidence only and is never mapped to a project inside this module. An absent observation or an observation without project_id is missing_requires_review evidence, not an error.",
+    "RegistryContextService.validate_card_assignment: [FIELD_PROJECTION] Current Registry context is the WorkObject loaded by the observation project_id: registry_status active is the exact current active match (result = rules.registry_context.active_exact_match_result), registry_status archived is archived_requires_review, and a missing WorkObject is missing_requires_review; attention_status takes no part in the result.",
     "RegistryContextService.record_card_assignment_observation: [ORCHESTRATION] MUST begin one transaction, load the observation stored for observation.card_revision (invoice_id, content_hash), return the stored one unchanged when it exists, otherwise insert the supplied observation through insert_assignment_observation, commit, and return it; rollback on any failure.",
     "RegistryContextService.record_card_assignment_observation: [VALIDATION_ERROR] MUST raise RegistryContextUnavailableError when observation.decision_context is not one of online_current, offline_cached, label_only, unassigned, or when project_id is set while decision_context is unassigned.",
     "create_local_app: [ORCHESTRATION] MUST construct RegistryContextService with the exact PostgresRegistryContextRepository and the already constructed DurableArchiveService, preserving one archive boundary.",
     "HoldedGatewayService: [ORCHESTRATION] HoldedAttemptRepository owns its transaction: every port method, reads included, runs only between begin() and commit() and raises without an active transaction; each public operation that touches the port opens it with begin() first, commits on success, rolls back on any failure, and never calls another public operation of this module that opens one (nested begin is rejected).",
     "HoldedGatewayService.__init__: [DEPENDENCY_BOUNDARY] Retain the exact supplied repository and HTTP client; reject missing dependencies and never construct adapters, read environment variables, or use module-global fallbacks.",
     "HoldedGatewayService.create_holded_purchase: [ORCHESTRATION] Under the exact attempt lock, load the stored attempt: reuse it when publication identity, invoice revision hash, canonical payload hash, and marker are exactly equivalent, reject a conflicting one, otherwise insert the reservation; commit before network mutation, then re-read the locked attempt, require that no issuance is recorded, update it as issued with request_started_at, and commit before the sole permitted POST.",
+    "HoldedGatewayService.create_holded_purchase: [FIELD_ASSIGNMENT] The reservation row is inserted with request_started_at None, request_finished_at None, and outcome reserved; request_started_at is set only by the issued update that precedes the POST.",
     "HoldedGatewayService.create_holded_purchase: [BEHAVIOR] Never issue POST when the attempt already records issued, ambiguous, or terminal evidence; equivalent re-entry returns existing evidence without mutation.",
     "HoldedGatewayService.create_holded_purchase: [FALLBACK] Classify timeout, connection loss, response loss, or interruption after issuance as ambiguous secret-free evidence and never retry POST.",
     "HoldedGatewayService.create_holded_purchase: [PROVENANCE] Record the technical outcome by updating the exact locked attempt from its reloaded issued state with request_finished_at, outcome, document_id, and safe_error_code; a stale or conflicting transition writes nothing and never deletes prior evidence.",
@@ -1151,6 +1154,7 @@
       "fields": {
         "project_id": "str",
         "registry_snapshot_id": "str | None",
+        "registry_status": "str",
         "first_seen_at": "datetime",
         "last_seen_at": "datetime",
         "attention_status": "str"
@@ -1275,7 +1279,7 @@
         "invoice_revision_hash": "str",
         "canonical_holded_payload_hash": "str",
         "attempt_marker": "str",
-        "request_started_at": "datetime",
+        "request_started_at": "datetime | None",
         "request_finished_at": "datetime | None",
         "outcome": "str",
         "document_id": "str | None",
@@ -2356,6 +2360,14 @@
               "element_model": null
             },
             {
+              "column": "registry_status",
+              "field": "registry_status",
+              "storage": "text",
+              "nullable": false,
+              "check": null,
+              "element_model": null
+            },
+            {
               "column": "first_seen_at",
               "field": "first_seen_at",
               "storage": "datetime",
@@ -2534,7 +2546,7 @@
               "column": "request_started_at",
               "field": "request_started_at",
               "storage": "datetime",
-              "nullable": false,
+              "nullable": true,
               "check": null,
               "element_model": null
             },
@@ -4490,6 +4502,7 @@
               "select": [
                 "project_id",
                 "registry_snapshot_id",
+                "registry_status",
                 "first_seen_at",
                 "last_seen_at",
                 "attention_status"
@@ -4515,6 +4528,7 @@
               "select": [
                 "project_id",
                 "registry_snapshot_id",
+                "registry_status",
                 "first_seen_at",
                 "last_seen_at",
                 "attention_status"
@@ -4576,6 +4590,7 @@
               "columns": [
                 "project_id",
                 "registry_snapshot_id",
+                "registry_status",
                 "first_seen_at",
                 "last_seen_at",
                 "attention_status"
@@ -4585,6 +4600,7 @@
               ],
               "updates": [
                 "registry_snapshot_id",
+                "registry_status",
                 "last_seen_at",
                 "attention_status"
               ]

@@ -770,6 +770,7 @@ Candidate fields:
 - current Registry snapshot reference;
 - first seen time;
 - last seen time;
+- last observed Registry status — `active` or `archived` (Registry-owned, rewritten on refresh);
 - Cabinet attention status — `active`, `historical`, or `needs_attention`.
 
 Cabinet owns relationships, invoices, notes, matches, and history linked to the
