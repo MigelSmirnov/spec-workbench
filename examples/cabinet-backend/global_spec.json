@@ -403,6 +403,7 @@
     "get_sync_status: [BEHAVIOR] Preserve unknown, unavailable, stale, or insufficient observations explicitly instead of fabricating a default synchronized state.",
     "accept_transfer_manifest: [BEHAVIOR] Accept a manifest only as one durable archive transition over the exact immutable card revision and supplied source replicas: under the invoice lock load the stored receipt and card revision for the exact manifest hash and content hash, return the existing acceptance when equivalent, reject a conflicting one, and otherwise insert manifest, card revision, replicas, and receipt, link the predecessor revision as superseded, and upsert the invoice card head in the one open transaction committed once; repeated equivalent acceptance must not create a second logical acceptance.",
     "accept_transfer_manifest: [VALIDATION_ERROR] Represent unsupported, integrity-invalid, conflicting, duplicate-review, incomplete, or quarantine-required evidence as the corresponding classified acceptance outcome instead of partially exposing an accepted manifest set.",
+    "accept_transfer_manifest: [VALIDATION_ERROR] A delivered card revision is integrity-invalid when its revision reference (invoice_id, card_version, content_hash) is not listed in manifest.card_revisions or its invoice_id differs from manifest.invoice_id; the receipt result is then \"rejected\" with a safe error code, nothing is inserted, and no card head is created or advanced.",
     "accept_transfer_manifest: [PROVENANCE] Preserve acceptance evidence that identifies the exact manifest, card revision, and source evidence used for the decision.",
     "verify_durable_acceptance: [BEHAVIOR] Derive the answer only from authoritative local archive evidence for the requested invoice and optional content hash.",
     "verify_durable_acceptance: [ORCHESTRATION] Read every receipt of the invoice and select the one whose accepted_card_hashes contains the requested content hash (or the head's current hash when none is requested); absence of such a receipt is a not-accepted outcome, never an error.",
@@ -692,6 +693,7 @@
     "HoldedAttemptRepository.load_attempt_by_marker: [BEHAVIOR] Return the exact attempt for one unique marker or None; reject duplicate persisted markers and never infer an attempt from payload similarity.",
     "SynchronizationService.__init__: [DEPENDENCY_BOUNDARY] Retain the exact supplied repository, transport, and archive; never construct or discover alternates.",
     "SynchronizationService.synchronize_invoice_work: [ORCHESTRATION] Under the exact synchronization lock, load the attempt bound to invoice, target node, and idempotency key: reuse it when source node and manifest hash are also exactly equivalent, reject a conflicting one, otherwise insert the reservation; commit, then re-read the locked attempt, require that no issuance is recorded, update it as issued, and commit before transport; afterwards update the same locked attempt from its issued state with the conclusive or unknown status, finished_at, and safe_error_code, and send an exact delivered package through archive acceptance and verification.",
+    "SynchronizationService.synchronize_invoice_work: [BEHAVIOR] Equivalent re-entry for a synchronization that already finished returns the existing evidence: the stored attempt, the archive receipt found through list_transfer_receipts by the attempt's manifest_hash, and a fresh verify_durable_acceptance for the accepted content hash; it issues no transport call and creates no second acceptance.",
     "SynchronizationService.synchronize_invoice_work: [FALLBACK] Classify timeout, connection loss, or response loss after issuance as unknown_outcome and never repeat the logical transfer automatically.",
     "SynchronizationService.get_sync_status: [BEHAVIOR] Compose the observation from the latest persisted synchronization attempt for the exact invoice and node: absent attempts yield an absent status, unknown outcomes stay unknown, and the replica field stays None until replica storage is decided; never synthesize a synchronized default.",
     "SynchronizationService.reconcile_transfer_outcome: [FORBIDDEN_ACTION] Use only read-only remote reconciliation for a persisted unknown attempt and never issue another transfer.",
@@ -7303,7 +7305,8 @@
       },
       "registry_context": {
         "durable_archive": [
-          "DurableArchiveService"
+          "DurableArchiveService",
+          "get_archived_invoice"
         ],
         "models": [
           "RegistryProjectObservation",
