@@ -700,6 +700,8 @@
     "HoldedGatewayService.create_holded_purchase: [BEHAVIOR] Never issue POST when the attempt already records issued, ambiguous, or terminal evidence; equivalent re-entry returns existing evidence without mutation.",
     "HoldedGatewayService.create_holded_purchase: [FALLBACK] Classify timeout, connection loss, response loss, or interruption after issuance as ambiguous secret-free evidence and never retry POST.",
     "HoldedGatewayService.create_holded_purchase: [PROVENANCE] Record the technical outcome by updating the exact locked attempt from its reloaded issued state with request_finished_at, outcome, document_id, and safe_error_code; a stale or conflicting transition writes nothing and never deletes prior evidence.",
+    "HoldedGatewayService.create_holded_purchase: [RULE_REFERENCE] A 2xx HoldedTransportResponse is a clear create: document_id is the string value of the JSON body field named by = rules.holded_transport_backend.responses.create_document_id_field and outcome is created; a non-2xx response is rejected with safe_error_code = the status code as text and document_id None; a 2xx body that is not a JSON object with that field is malformed_response; an exception raised by HoldedHttpClient.create_purchase after issuance is ambiguous.",
+    "HoldedGatewayService.create_holded_purchase: [FIELD_ASSIGNMENT] outcome is one HoldedAttemptOutcome: reserved before issuance, issued while the POST is in flight, then exactly one of created, rejected, malformed_response, ambiguous.",
     "HoldedGatewayService.lookup_holded_purchase: [ORCHESTRATION] Resolve the exact durable attempt by its unique marker, use GET for a supplied document identifier or one bounded Holded v1 list response for the exact marker, and insert one typed observation evidence row without remote mutation or settling Cabinet publication.",
     "HoldedGatewayService.lookup_holded_purchase: [BEHAVIOR] Preserve zero, one, and multiple exact matches, malformed responses, unknown documents, and transport failures distinctly; return the typed observed document for one candidate but never perform A51 comparison or interpret raw status.",
     "HoldedGatewayService.lookup_holded_purchase: [FIELD_ASSIGNMENT] outcome is one HoldedLookupOutcome: one_match with document for exactly one exact-marker candidate, zero_match, multiple_matches, unknown_document for a GET of an absent document, malformed_response, transport_failure; match_count is the number of exact-marker candidates observed.",
@@ -733,7 +735,7 @@
     "SynchronizationService.synchronize_invoice_work: [BEHAVIOR] Equivalent re-entry for a synchronization that already finished returns the existing evidence: the stored attempt, the archive receipt found through durable_archive.get_transfer_receipt by the attempt's manifest_hash, and a fresh verify_durable_acceptance for the accepted content hash; it issues no transport call and creates no second acceptance.",
     "SynchronizationService.synchronize_invoice_work: [FIELD_PROJECTION] The content_hash argument of every verify_durable_acceptance call is the Card revision identity (VpsInvoiceTransferPackage.card_revision.reference.content_hash on the transfer path, the accepted hash of the found receipt on re-entry); InvoiceSynchronization.manifest_hash and InvoiceTransferManifest.manifest_hash identify the manifest and are never passed as a content hash.",
     "SynchronizationService.synchronize_invoice_work: [FIELD_ASSIGNMENT] The local attempt identity is the reserved InvoiceSynchronization (synchronization_id = f\"{invoice_id}:{target_node_id}:{idempotency_key}\", idempotency_key = selection.manifest_id, manifest_hash None until the package is delivered and then package.manifest.manifest_hash, written by the final update); every later lock, reload, and final update addresses that reservation. VpsInvoiceTransferPackage.synchronization is transport-side evidence whose status and safe_error_code are copied onto the reservation; its synchronization_id is never used as a storage key.",
-    "SynchronizationService.synchronize_invoice_work: [FALLBACK] Classify timeout, connection loss, or response loss after issuance as unknown_outcome and never repeat the logical transfer automatically.",
+    "SynchronizationService.synchronize_invoice_work: [FALLBACK] Any exception raised by transport.transfer_invoice (timeout, connection loss, or response loss after issuance) is caught and classified as unknown_outcome: the reserved attempt is updated with status unknown_outcome and finished_at inside a new transaction, no archive acceptance is attempted, and the logical transfer is never repeated automatically.",
     "SynchronizationService.get_sync_status: [BEHAVIOR] Compose the observation from the latest persisted synchronization attempt for the exact invoice and node: absent attempts yield an absent status, unknown outcomes stay unknown, and the replica field stays None until replica storage is decided; never synthesize a synchronized default.",
     "SynchronizationService.reconcile_transfer_outcome: [FORBIDDEN_ACTION] Use only read-only remote reconciliation for a persisted unknown attempt and never issue another transfer.",
     "SynchronizationService.publish_registry_catalogue: [ORCHESTRATION] Bind catalogue id, ordered content hash, endpoints, and idempotency key, then load the publication bound to catalogue, target node, and idempotency key: reuse it when the binding is exactly equivalent, reject a conflict, otherwise insert it; after delivery update the exact publication from its reloaded current status with the acknowledgement status, acknowledged_at, completed_at, and safe_error_code; a stale or conflicting transition writes nothing.",
@@ -754,6 +756,7 @@
     "create_synchronization_schema: [CONFIG_REFERENCE] MUST idempotently create only the tables named by = config.persistence.synchronization_table_name and = config.persistence.catalogue_publication_table_name and = config.persistence.connection_observation_table_name on a connection it opens from database_url and closes; MUST NOT read environment variables or log the URL.",
     "PostgresSynchronizationRepository.__init__: [SECURITY_BOUNDARY] Bind to the supplied PostgreSQL URL, validate connectivity, treat the URL as secret, and never read environment variables.",
     "VpsSynchronizationTransport.transfer_invoice: [FORBIDDEN_ACTION] Issue at most one service-authorized outbound transfer with transport retries and replaying redirects disabled.",
+    "VpsSynchronizationTransport.transfer_invoice: [FALLBACK] MUST raise (TimeoutError, ConnectionError, or OSError) for a timeout, connection loss, or response loss after issuance instead of returning a package; a returned VpsInvoiceTransferPackage is always a delivered, parsed package.",
     "VpsSynchronizationTransport.reconcile_transfer: [BEHAVIOR] Perform one bounded read-only lookup for the exact persisted synchronization identity.",
     "VpsSynchronizationTransport.publish_catalogue: [FORBIDDEN_ACTION] Issue at most one service-authorized publication for the exact delivery with replaying redirects and mutation retries disabled.",
     "VpsSynchronizationTransport.observe_connection: [BEHAVIOR] Perform one bounded read-only authenticated observation and preserve unavailable or incompatible evidence explicitly.",
@@ -1275,6 +1278,17 @@
         "safe_outcome_code": "str | None"
       }
     },
+    "HoldedAttemptOutcome": {
+      "kind": "enum",
+      "values": [
+        "reserved",
+        "issued",
+        "created",
+        "rejected",
+        "malformed_response",
+        "ambiguous"
+      ]
+    },
     "HoldedPublicationAttempt": {
       "identity": "entity",
       "fields": {
@@ -1286,7 +1300,7 @@
         "attempt_marker": "str",
         "request_started_at": "datetime | None",
         "request_finished_at": "datetime | None",
-        "outcome": "str",
+        "outcome": "HoldedAttemptOutcome",
         "document_id": "str | None",
         "safe_error_code": "str | None"
       }
@@ -2588,10 +2602,10 @@
             {
               "column": "outcome",
               "field": "outcome",
-              "storage": "text",
+              "storage": "enum",
               "nullable": false,
               "check": null,
-              "element_model": null
+              "element_model": "HoldedAttemptOutcome"
             },
             {
               "column": "document_id",
@@ -7004,6 +7018,7 @@
         "EstimateItemSnapshot",
         "EstimateSnapshot",
         "HoldedPublication",
+        "HoldedAttemptOutcome",
         "HoldedPublicationAttempt",
         "LocalServicePrincipal",
         "LocalServiceCredential",
@@ -7287,7 +7302,8 @@
           "InvoiceCardObjectBlock",
           "InvoiceCardTotals",
           "HoldedLookupOutcome",
-          "SourceStatus"
+          "SourceStatus",
+          "HoldedAttemptOutcome"
         ]
       },
       "retention_release": {
@@ -7500,7 +7516,8 @@
           "HoldedRemotePurchaseDocument",
           "HoldedAttemptRepository",
           "HoldedHttpClient",
-          "HoldedLookupOutcome"
+          "HoldedLookupOutcome",
+          "HoldedAttemptOutcome"
         ]
       },
       "holded_transport": {
@@ -7565,7 +7582,8 @@
           "HoldedPublicationAttempt",
           "HoldedPurchaseLookupEvidence",
           "HoldedAttemptRepository",
-          "HoldedRemotePurchaseDocument"
+          "HoldedRemotePurchaseDocument",
+          "HoldedAttemptOutcome"
         ]
       },
       "synchronization_persistence": {
@@ -7651,6 +7669,7 @@
       "EstimateItemSnapshot",
       "EstimateSnapshot",
       "HoldedPublication",
+      "HoldedAttemptOutcome",
       "HoldedPublicationAttempt",
       "LocalServicePrincipal",
       "LocalServiceCredential",

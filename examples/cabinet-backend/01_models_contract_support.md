@@ -407,6 +407,18 @@ enum (no runtime identity).
 
 ---
 
+## Model M90 — HoldedAttemptOutcome
+
+Closed technical lifecycle of one Holded create attempt (`kind: enum`):
+`reserved`, `issued`, `created`, `rejected`, `malformed_response`, `ambiguous`.
+A publication verdict is never stored here.
+
+### Identity
+
+enum (no runtime identity).
+
+---
+
 ## Model M50 — HoldedPurchaseLookupEvidence
 
 Immutable technical result of bounded read-only Holded recovery lookup.
