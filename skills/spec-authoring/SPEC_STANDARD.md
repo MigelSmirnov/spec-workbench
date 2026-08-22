@@ -370,13 +370,19 @@ authorizer, gateway). Интерфейс не вводит нового синт
 
 - каждый `kind: interface`, используемый в type position параметра другого
   контракта, обязан иметь ровно одну запись;
-- `disposition` принадлежит закрытому реестру `local|external`;
-- `local` содержит непустой уникальный список `implementations`; каждый символ
-  является объявленным concrete-классом в `module_functions` и имеет contract
-  для каждого метода interface с той же канонической сигнатурой;
+- `disposition` принадлежит закрытому реестру `local|policy|external`;
+- `local` и `policy` содержат непустой уникальный список `implementations`;
+  каждый символ является объявленным concrete-классом в `module_functions` и
+  имеет contract для каждого метода interface с той же канонической
+  сигнатурой;
 - модуль-владелец каждой `local` concrete-реализации выбирается
   зарегистрированным deterministic backend IR; fallback в LLM-генерацию
   запрещён, потому что сигнатуры и prose не замыкают исполняемую границу;
+- `policy` — локальная реализация порта без исполняемой границы: каждый
+  аргумент её `__init__` имеет тип объявленного interface, объявленной
+  модели или скаляра (`str|int|bool|Decimal`), и сама она не владеет
+  соединениями, файлами или сетью. Такой класс генерируется как обычный
+  behavioral module; исполняемые границы остаются за его портами;
 - `external` не содержит local implementations и явно оставляет создание
   реализации внешнему composition/deployment boundary;
 - имя, общий суффикс, соседство в модуле и prose note не доказывают отношение
@@ -880,6 +886,57 @@ staging-кандидат пишется эксклюзивно, сбрасыва
 лежат на разных файловых системах. Любое неизвестное поле или другое
 значение `layout` останавливает генерацию fail-closed; fallback к LLM
 запрещён.
+
+---
+
+### 6.6 `credential_security_backend/v2`
+
+`rules.credential_security_backend` версии 2 — закрытый IR механизма
+сервисных credential-ов: выпуск случайного секрета, его envelope для
+предъявления и проверка верификатора с deployment pepper. Версия 1 —
+донормативная (`python_credential_security_v1`, парольный профиль без pepper)
+и не описывается этим текстом; версия 2 поддерживает только emitter
+`python_credential_security_v2`.
+
+Форма закрыта:
+
+```json
+{
+  "kind": "credential_security_backend",
+  "schema_version": 2,
+  "backend": {"emitter": "python_credential_security_v2"},
+  "wiring": {"module": "<module>", "models_module": "<package>.models"},
+  "secret": {
+    "entropy_codec": "urlsafe_base64_unpadded",
+    "envelope_separator": ".",
+    "selector_codec": "token_text"
+  },
+  "secret_hash": {
+    "algorithm": "argon2id",
+    "profile": "RFC_9106_LOW_MEMORY",
+    "pepper": "hmac_sha256"
+  }
+}
+```
+
+Модуль `wiring.module` владеет ровно тремя функциями с фиксированными
+контрактами:
+
+```text
+issue_service_credential(credential_id: str, entropy_bytes: int, pepper: str) -> IssuedCredentialSecret
+parse_service_token(token: str) -> PresentedCredentialSecret
+verify_service_secret(secret: str, secret_hash: str, pepper: str) -> bool
+```
+
+`IssuedCredentialSecret(credential_id, token, secret_hash)` и
+`PresentedCredentialSecret(credential_id, secret)` — value-модели в `models`.
+Семантика фиксирована версией: секрет — `entropy_bytes` случайных байт в
+`entropy_codec`; token — `<credential_id><separator><secret>`, где
+`credential_id` — непустой токен `[A-Za-z0-9._-]`; верификатор —
+Argon2id (`profile`) над `HMAC-SHA256(pepper, secret)`; проверка —
+постоянного времени, `False` на любой ошибке формата; пустой pepper —
+`ValueError` при выпуске и проверке. Секрет и pepper никогда не входят в
+текст исключений.
 
 ---
 

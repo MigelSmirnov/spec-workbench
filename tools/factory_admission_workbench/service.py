@@ -352,7 +352,7 @@ def _implementation_obligations_check(source: Path) -> AdmissionCheck:
             continue
         disposition = row.get("disposition")
         implementations = row.get("implementations", [])
-        if disposition not in {"local", "external"}:
+        if disposition not in {"local", "policy", "external"}:
             findings.append({
                 "code": "invalid_implementation_disposition",
                 "interface": interface,
