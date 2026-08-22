@@ -47,7 +47,9 @@ Concrete HTTP paths, DTOs, and transport details are still deferred until their 
 
 ## Design states
 
-1. [00 — Product boundary](00_product.md)
+1. **State 0 — Product boundary**
+   - [00 — Core product boundary](00_product.md)
+   - [00 — Stage artifacts and demolition quantities](00_stage_artifacts.md)
 2. 10 — Domain models
 3. 20 — Rules and invariants
 4. 30 — Module responsibilities
@@ -56,5 +58,7 @@ Concrete HTTP paths, DTOs, and transport details are still deferred until their 
 7. 60 — Contracts
 8. 70 — Notes
 9. Assembly
+
+State 0 is stabilized across both `00_*.md` documents. `context_pack.py` will carry both into later design states automatically.
 
 Later state documents must carry the Platform Router dependency forward even when they do not introduce a new shared interaction.
