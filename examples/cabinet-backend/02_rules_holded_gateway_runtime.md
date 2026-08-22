@@ -4,8 +4,10 @@
 
 The first implementation uses one Backend-owned HTTPS client and the shared Cabinet PostgreSQL deployment for durable technical attempt evidence.
 
-- The Holded API key is read only by bootstrap from `CABINET_HOLDED_API_KEY` and supplied directly to the concrete HTTP client.
-- The base URL is read from `CABINET_HOLDED_BASE_URL`; startup requires an absolute HTTPS URL and rejects embedded credentials, fragments, and non-HTTPS schemes.
+- The dedicated Holded Invoicing v1 key is read only by bootstrap from
+  `HOLDED_V1_API_KEY` and supplied directly to the concrete HTTP client.
+- The verified origin, credential header, purchase paths and codecs are closed
+  by `rules.holded_transport_backend`; they are not deployment guesses.
 - Request timeout, response byte limit, and recovery page bound are positive finite configuration values.
 - The HTTP client never retries POST. Transport-library mutation retries and redirects that can replay POST are disabled.
 - Before create, the repository durably reserves the exact attempt identity, payload hash, and marker. An equivalent reservation is reused; a conflict is rejected before mutation.

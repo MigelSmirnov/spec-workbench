@@ -374,6 +374,9 @@ authorizer, gateway). Интерфейс не вводит нового синт
 - `local` содержит непустой уникальный список `implementations`; каждый символ
   является объявленным concrete-классом в `module_functions` и имеет contract
   для каждого метода interface с той же канонической сигнатурой;
+- модуль-владелец каждой `local` concrete-реализации выбирается
+  зарегистрированным deterministic backend IR; fallback в LLM-генерацию
+  запрещён, потому что сигнатуры и prose не замыкают исполняемую границу;
 - `external` не содержит local implementations и явно оставляет создание
   реализации внешнему composition/deployment boundary;
 - имя, общий суффикс, соседство в модуле и prose note не доказывают отношение
@@ -661,6 +664,27 @@ boundary.
 constraint или storage representation требует новой поддерживаемой версии.
 
 ---
+
+### 6.3 `holded_transport_backend/v1`
+
+`rules.holded_transport_backend` — нормативный закрытый IR для конкретного
+HTTP-клиента Holded Invoicing V1 purchase documents. Версия 1 поддерживает
+только emitter `python_httpx_holded_purchase_v1`: один POST create, один GET
+полного списка для recovery и один GET точного документа. Пагинационный,
+повторный или repair-цикл в transport lowering отсутствует.
+
+IR обязан фиксировать `wiring`, точные HTTP method/path, имя credential header,
+TLS/redirect/retry policy, отображение полей payload/item и отображение полей
+трёх response shapes. Runtime credential берётся из `config`; секретное
+значение не входит в IR. Origin и wire contract берутся из принятого
+экспериментального evidence, а не угадываются по SDK, V2 API или prose.
+
+Closure считается пригодным для deterministic emission только когда
+`70_holded_transport_closure.json` имеет статус `closed`, а его `backend_ir`
+дословно равен `rules.holded_transport_backend` в assembled spec. Любое
+неизвестное поле, другое значение protocol/payload/response registry или
+неполное покрытие concrete contracts останавливает генерацию fail-closed;
+fallback к LLM запрещён.
 
 ## 7. imports
 
@@ -1562,7 +1586,8 @@ deterministic persistence backend. LLM-module не получает это ут�
 
 13a. **Реализации портов приземлены?** Каждый interface-typed dependency имеет
      `implementation_obligations`; у `local` concrete contracts полностью и
-     сигнатурно покрывают port, а `external` не маскирует локальную заглушку.
+     сигнатурно покрывают port, а модуль-владелец имеет зарегистрированный
+     deterministic backend; `external` не маскирует локальную заглушку.
 
 14. **Инварианты приземлены?** Каждый State 2 invariant имеет одного
 владельца и первичное представление в `rules`, classified note или

@@ -5,6 +5,7 @@ from typing import Any
 
 from notes_workbench import service as notes_service
 from persistence_workbench.slice import module_slice as persistence_module_slice
+from holded_transport_workbench import module_slice as holded_transport_module_slice
 
 from module_review_workbench.model import MODULES_SCHEMA, REVIEW_SCHEMA, SLICE_SCHEMA, ModuleReviewError
 from module_review_workbench.sources import (
@@ -72,7 +73,16 @@ def build_slice(project: Path, module: str) -> dict[str, Any]:
         scope for scope in persistence_backend["deterministic_method_scopes"]
         if scope in contracts
     }
-    deterministic_callables = sorted(router_deterministic | persistence_deterministic)
+    holded_transport_backend = holded_transport_module_slice(project, module_name)
+    holded_deterministic = {
+        scope for scope in (
+            holded_transport_backend["deterministic_method_scopes"]
+            if holded_transport_backend is not None else []
+        ) if scope in contracts
+    }
+    deterministic_callables = sorted(
+        router_deterministic | persistence_deterministic | holded_deterministic
+    )
 
     lowered_specification = {
         "owned_symbols": owned,
@@ -91,6 +101,8 @@ def build_slice(project: Path, module: str) -> dict[str, Any]:
     # exact persistence IR becomes required lowering evidence for that module.
     if persistence_backend["enabled"] and persistence_backend["repository"] is not None:
         lowered_specification["persistence_backend"] = persistence_backend
+    if holded_transport_backend is not None:
+        lowered_specification["holded_transport_backend"] = holded_transport_backend
 
     return {
         "schema_version": SLICE_SCHEMA,

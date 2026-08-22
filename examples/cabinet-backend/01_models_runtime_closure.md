@@ -34,12 +34,12 @@ Equal typed summary facts are interchangeable observations.
 
 ## Model M66 — HoldedPurchaseListPage
 
-Fields: `items: tuple[HoldedRemotePurchaseSummary, ...]`, `next_page: int | None`,
+Fields: `items: tuple[HoldedRemotePurchaseSummary, ...]`,
 `observed_at: datetime`.
 ### Identity
 value
 ### Identity evidence
-Equal ordered page contents, continuation, and observation time are interchangeable.
+Equal ordered list contents and observation time are interchangeable.
 
 ## Model M67 — HoldedRemotePurchaseItem
 
@@ -53,7 +53,7 @@ Equal typed line observations are interchangeable.
 ## Model M68 — HoldedRemotePurchaseDocument
 
 Fields: `document_id: str`, `supplier_code: str | None`, `supplier_name: str`,
-`supplier_invoice_number: str`, `document_date: str`, `currency: str`,
+`supplier_invoice_number: str`, `document_date: int`, `currency: str`,
 `description: str | None`, `items: tuple[HoldedRemotePurchaseItem, ...]`,
 `gross_total: Decimal`, `raw_status: int | None`, `observed_at: datetime`.
 ### Identity

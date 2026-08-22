@@ -13,6 +13,10 @@ from notes_workbench.note_standard import (
     SUSPICIOUS_CLASS_PAIRS,
 )
 from persistence_workbench import authoring as persistence_authoring
+from holded_transport_workbench import (
+    deterministic_method_scopes as holded_deterministic_method_scopes,
+    structured_addresses as holded_structured_addresses,
+)
 
 NOTE_RE = re.compile(r"^(?P<scope>[A-Za-z_][A-Za-z0-9_.]*):\s*\[(?P<class>[A-Z_]+)\]\s*(?P<text>.+?)\s*$")
 ADDRESS_RE = re.compile(r"=\s*(?P<address>(?:config|models|rules)(?:\.[A-Za-z_][A-Za-z0-9_]*)+)")
@@ -58,7 +62,7 @@ def _load_structured_addresses(project: Path) -> set[str]:
             address = placement.get("address")
             if isinstance(address, str) and address:
                 result.add(address)
-    return result
+    return result | holded_structured_addresses(project)
 
 
 def _load_router_deterministic_scopes(project: Path) -> set[str]:
@@ -101,7 +105,11 @@ def _load_deterministic_callable_scopes(project: Path) -> set[str]:
     a closed table-emitted persistence repository. Irregular handlers and
     irregular repositories remain LLM-owned and deliberately require notes.
     """
-    return _load_router_deterministic_scopes(project) | _load_persistence_deterministic_scopes(project)
+    return (
+        _load_router_deterministic_scopes(project)
+        | _load_persistence_deterministic_scopes(project)
+        | holded_deterministic_method_scopes(project)
+    )
 
 
 def _address_resolves(address: str, known: set[str]) -> bool:

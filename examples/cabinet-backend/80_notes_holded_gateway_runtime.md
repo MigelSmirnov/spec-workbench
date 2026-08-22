@@ -7,9 +7,9 @@
 - create_holded_purchase [BEHAVIOR]: never issue POST when the attempt already records issued, ambiguous, or terminal evidence; equivalent re-entry returns the existing evidence without mutation.
 - create_holded_purchase [FALLBACK]: classify timeout, connection loss, response loss, or interruption after issuance as ambiguous and append secret-free evidence; never retry POST.
 - create_holded_purchase [SECURITY_BOUNDARY]: hash and compare canonical payload evidence without persisting credentials or authorization headers.
-- lookup_holded_purchase [ORCHESTRATION]: use GET for a supplied document id or bounded list pages for an exact marker, then return typed observation evidence without mutation.
+- lookup_holded_purchase [ORCHESTRATION]: use GET for a supplied document id or one bounded Holded v1 list response for an exact marker, then return typed observation evidence without mutation.
 - lookup_holded_purchase [BEHAVIOR]: preserve zero, one, and multiple exact matches, malformed responses, unknown documents, and transport failures distinctly; do not perform A51 business settlement or interpret raw status.
-- lookup_holded_purchase [DETERMINISM_OR_ORDERING]: process pages and candidates in stable remote-page then document-id order and stop at the configured finite bound.
+- lookup_holded_purchase [DETERMINISM_OR_ORDERING]: process candidates in stable document-id order; one invocation performs at most one list request, while later explicit reconciliation may repeat the read without authorizing POST.
 
 ## PostgreSQL repository
 
@@ -20,14 +20,14 @@
 
 ## HTTP client
 
-- Constructor [VALIDATION_ERROR]: require HTTPS, no embedded credentials or fragment, non-empty API key, and positive finite timeout/size/page bounds.
+- Constructor [VALIDATION_ERROR]: require the verified Holded v1 HTTPS origin, non-empty API key, and positive finite timeout/response-size bounds.
 - create_purchase [FORBIDDEN_ACTION]: issue exactly one POST per invocation with transport retries and replaying redirects disabled.
-- list_purchases [BEHAVIOR]: perform one read-only bounded page request and return only typed summaries required for exact-marker filtering.
+- list_purchases [BEHAVIOR]: perform one read-only bounded `GET /api/invoicing/v1/documents/purchase`, decode the array, and return typed summaries in stable document-id order.
 - get_purchase [BEHAVIOR]: perform one read-only exact-document request.
-- All operations [SECURITY_BOUNDARY]: keep the API key only in the outbound authorization header, redact headers and query secrets, enforce TLS verification, bound bytes before JSON parsing, and return secret-free safe evidence.
+- All operations [SECURITY_BOUNDARY]: keep `HOLDED_V1_API_KEY` only in the outbound `key` header, redact headers, enforce TLS verification, bound bytes before JSON parsing, disable redirects/retries, and return secret-free safe evidence according to `rules.holded_transport_backend`.
 
 ## Bootstrap
 
-- create_local_app [CONFIG_REFERENCE]: read the API key and base URL only from the environment variables named by `config.holded_runtime.credential_env` and `config.holded_runtime.base_url_env`.
+- create_local_app [CONFIG_REFERENCE]: read the V1 API key only from the environment variable named by `config.holded_runtime.credential_env`; the verified origin belongs to `rules.holded_transport_backend.protocol.origin`.
 - create_local_app [ORCHESTRATION]: reuse the Cabinet database URL, construct the repository, HTTP client, and service, and bind the service before exposing FastAPI.
 - create_local_app [VALIDATION_ERROR]: fail closed on missing/invalid Holded configuration or adapter construction; no disabled, anonymous, or in-memory fallback is permitted.

@@ -9,12 +9,15 @@ Depends on:
 - `HoldedHttpClient`, a narrow create/list/GET transport port;
 - `HoldedAttemptRepository`, a narrow PostgreSQL technical-evidence port.
 
-Concrete local implementations:
+Concrete local implementations are separated by mechanism:
 
-- `HttpxHoldedHttpClient`;
-- `PostgresHoldedAttemptRepository`.
+- `module:holded_transport` owns deterministic `HttpxHoldedHttpClient`;
+- `module:holded_gateway` owns `PostgresHoldedAttemptRepository` and the
+  cohesive gateway orchestration.
 
-The gateway owns exact Holded request paths, bounded response parsing, secret redaction, single-create enforcement, transport classification, and immutable technical attempt/lookup evidence.
+The transport owns exact Holded v1 request paths, wire codecs, bounded response
+parsing and secret redaction. The gateway owns single-create enforcement,
+transport classification, and immutable technical attempt/lookup evidence.
 
 It must not own Cabinet publication eligibility, choose an Invoice Card revision, perform A51 business settlement, read environment variables, or silently retry a mutation.
 

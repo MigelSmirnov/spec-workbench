@@ -130,7 +130,7 @@
     "HoldedGatewayService.create_holded_purchase": "(self, payload: HoldedPurchaseAttemptPayload, publication_attempt_id: str) -> HoldedPublicationAttempt",
     "HoldedGatewayService.lookup_holded_purchase": "(self, attempt_marker: str, document_id: str | None = None) -> HoldedPurchaseLookupEvidence",
     "HoldedHttpClient.create_purchase": "(self, payload: HoldedPurchaseAttemptPayload) -> HoldedTransportResponse",
-    "HoldedHttpClient.list_purchases": "(self, page: int) -> HoldedPurchaseListPage",
+    "HoldedHttpClient.list_purchases": "(self) -> HoldedPurchaseListPage",
     "HoldedHttpClient.get_purchase": "(self, document_id: str) -> HoldedTransportResponse",
     "HoldedAttemptRepository.begin": "(self) -> None",
     "HoldedAttemptRepository.commit": "(self) -> None",
@@ -152,9 +152,9 @@
     "PostgresHoldedAttemptRepository.mark_request_issued": "(self, publication_attempt_id: str, issued_at: datetime) -> HoldedPublicationAttempt",
     "PostgresHoldedAttemptRepository.append_attempt_outcome": "(self, attempt: HoldedPublicationAttempt) -> None",
     "PostgresHoldedAttemptRepository.append_lookup_evidence": "(self, attempt_marker: str, evidence: HoldedPurchaseLookupEvidence) -> None",
-    "HttpxHoldedHttpClient.__init__": "(self, base_url: str, api_key: str, timeout_seconds: int, max_response_bytes: int, max_recovery_pages: int) -> None",
+    "HttpxHoldedHttpClient.__init__": "(self, base_url: str, api_key: str, timeout_seconds: int, max_response_bytes: int) -> None",
     "HttpxHoldedHttpClient.create_purchase": "(self, payload: HoldedPurchaseAttemptPayload) -> HoldedTransportResponse",
-    "HttpxHoldedHttpClient.list_purchases": "(self, page: int) -> HoldedPurchaseListPage",
+    "HttpxHoldedHttpClient.list_purchases": "(self) -> HoldedPurchaseListPage",
     "HttpxHoldedHttpClient.get_purchase": "(self, document_id: str) -> HoldedTransportResponse",
     "HoldedAttemptRepository.load_attempt_by_marker": "(self, attempt_marker: str) -> HoldedPublicationAttempt | None",
     "SynchronizationService.__init__": "(self, repository: SynchronizationRepository, transport: VpsSynchronizationTransport, archive: DurableArchiveService) -> None",
@@ -528,10 +528,10 @@
     "HoldedGatewayService.create_holded_purchase: [ORCHESTRATION] Under the exact attempt lock, reuse an equivalent durable reservation or reject a conflict, commit reservation before network mutation, and durably mark request issuance before the sole permitted POST.",
     "HoldedGatewayService.create_holded_purchase: [BEHAVIOR] Never issue POST when the attempt already records issued, ambiguous, or terminal evidence; equivalent re-entry returns existing evidence without mutation.",
     "HoldedGatewayService.create_holded_purchase: [FALLBACK] Classify timeout, connection loss, response loss, or interruption after issuance as ambiguous secret-free evidence and never retry POST.",
-    "HoldedGatewayService.lookup_holded_purchase: [ORCHESTRATION] Use GET for a supplied document identifier or bounded list pages for an exact marker and append typed observation evidence without remote mutation.",
+    "HoldedGatewayService.lookup_holded_purchase: [ORCHESTRATION] Use GET for a supplied document identifier or one bounded Holded v1 list response for an exact marker and append typed observation evidence without remote mutation.",
     "HoldedGatewayService.lookup_holded_purchase: [BEHAVIOR] Preserve zero, one, and multiple exact matches, malformed responses, unknown documents, and transport failures distinctly; return the typed observed document for one candidate but never perform A51 comparison or interpret raw status.",
     "HoldedHttpClient.create_purchase: [FORBIDDEN_ACTION] Issue exactly one POST per invocation with mutation retries and replaying redirects disabled.",
-    "HoldedHttpClient.list_purchases: [BEHAVIOR] Perform one read-only bounded page request and return typed summaries in stable document-id order.",
+    "HoldedHttpClient.list_purchases: [BEHAVIOR] Perform one read-only bounded Holded v1 list request and return typed summaries in stable document-id order according to = rules.holded_transport_backend.",
     "HoldedHttpClient.get_purchase: [BEHAVIOR] Perform one read-only request for the exact document identifier and return bounded external evidence.",
     "HoldedAttemptRepository.begin: [DEPENDENCY_BOUNDARY] Begin one PostgreSQL transaction on the repository connection used for the exact gateway state transition.",
     "HoldedAttemptRepository.commit: [BEHAVIOR] Commit only a valid typed attempt transition and expose no partial state.",
@@ -543,14 +543,14 @@
     "HoldedAttemptRepository.append_attempt_outcome: [BEHAVIOR] Append immutable secret-free technical outcome evidence and reject stale or conflicting transitions.",
     "HoldedAttemptRepository.append_lookup_evidence: [BEHAVIOR] Resolve the exact durable attempt by its unique marker and append immutable read-only recovery evidence without settling Cabinet publication.",
     "PostgresHoldedAttemptRepository.__init__: [SECURITY_BOUNDARY] Bind to the supplied PostgreSQL URL, validate connectivity, treat the URL as secret, and never read environment variables or log credentials.",
-    "HttpxHoldedHttpClient.__init__: [VALIDATION_ERROR] Require an absolute HTTPS base URL without embedded credentials or fragment, a non-empty API key, and positive finite timeout, response-size, and page bounds.",
-    "HttpxHoldedHttpClient.__init__: [SECURITY_BOUNDARY] Keep the API key only in the outbound authorization header, enable TLS verification, and never log or return reusable credential material.",
+    "HttpxHoldedHttpClient.__init__: [VALIDATION_ERROR] Require the verified Holded v1 HTTPS origin, a non-empty API key, and positive finite timeout and response-size bounds according to = rules.holded_transport_backend.",
+    "HttpxHoldedHttpClient.__init__: [SECURITY_BOUNDARY] Keep the credential only in the outbound key header defined by = rules.holded_transport_backend, enable TLS verification, and never log or return reusable credential material.",
     "create_holded_purchase: [DEPENDENCY_BOUNDARY] Delegate through the exact supplied HoldedGatewayService; no ad-hoc client, repository, environment read, or fallback is permitted.",
     "lookup_holded_purchase: [DEPENDENCY_BOUNDARY] Delegate read-only recovery through the exact supplied HoldedGatewayService and never issue a mutation.",
     "request_holded_publication: [DEPENDENCY_BOUNDARY] MUST use the supplied HoldedGatewayService for the sole create and all Holded reads; direct HTTP and credentials are forbidden.",
     "reconcile_holded_publication: [DEPENDENCY_BOUNDARY] MUST use the supplied HoldedGatewayService for bounded read-only recovery; it cannot construct a client or repeat POST.",
     "create_app: [DEPENDENCY_BOUNDARY] Bind the supplied HoldedGatewayService into application state for Holded publication handlers without exposing credentials.",
-    "create_local_app: [CONFIG_REFERENCE] Read the Holded API key and base URL only from the environment variables named by = config.holded_runtime.credential_env and = config.holded_runtime.base_url_env.",
+    "create_local_app: [CONFIG_REFERENCE] Read the Holded v1 API key only from the environment variable named by = config.holded_runtime.credential_env; use the verified origin at = rules.holded_transport_backend.protocol.origin.",
     "create_local_app: [ORCHESTRATION] Reuse the Cabinet database URL, construct PostgresHoldedAttemptRepository, HttpxHoldedHttpClient, and HoldedGatewayService, then supply the service to create_app before exposing FastAPI.",
     "create_local_app: [VALIDATION_ERROR] Fail startup on missing or invalid Holded configuration or adapter construction; never substitute a disabled, anonymous, or in-memory gateway.",
     "HoldedAttemptRepository.load_attempt_by_marker: [BEHAVIOR] Return the exact attempt for one unique marker or None; reject duplicate persisted markers and never infer an attempt from payload similarity.",
@@ -651,7 +651,7 @@
     "RetentionReleaseRepository.reserve_decision: [BEHAVIOR] Reuse only an equivalent still-valid authorization and reject stale, broadened, or conflicting decisions.",
     "PostgresRetentionReleaseRepository.__init__: [SECURITY_BOUNDARY] Validate the supplied PostgreSQL connection, protect the URL, and read no environment variables.",
     "HttpxHoldedHttpClient.create_purchase: [FORBIDDEN_ACTION] Issue exactly one POST per invocation with mutation retries and replaying redirects disabled.",
-    "HttpxHoldedHttpClient.list_purchases: [BEHAVIOR] Perform one read-only bounded page request and return typed summaries in stable document-id order.",
+    "HttpxHoldedHttpClient.list_purchases: [BEHAVIOR] Perform the one read-only bounded Holded v1 list request defined by = rules.holded_transport_backend and return typed summaries in stable document-id order.",
     "HttpxHoldedHttpClient.get_purchase: [BEHAVIOR] Perform one read-only request for the exact document identifier and return bounded external evidence.",
     "PostgresHoldedAttemptRepository.begin: [DEPENDENCY_BOUNDARY] Begin one PostgreSQL transaction on the repository connection used for the exact gateway state transition.",
     "PostgresHoldedAttemptRepository.commit: [BEHAVIOR] Commit only a valid typed attempt transition and expose no partial state.",
@@ -729,11 +729,9 @@
       "byte_store_root_env": "CABINET_SOURCE_STORE_ROOT"
     },
     "holded_runtime": {
-      "credential_env": "CABINET_HOLDED_API_KEY",
-      "base_url_env": "CABINET_HOLDED_BASE_URL",
+      "credential_env": "HOLDED_V1_API_KEY",
       "request_timeout_seconds": 30,
-      "max_response_bytes": 1048576,
-      "max_recovery_pages": 10
+      "max_response_bytes": 1048576
     },
     "synchronization_runtime": {
       "base_url_env": "CABINET_VPS_BASE_URL",
@@ -1276,7 +1274,7 @@
         "contact_code": "str",
         "contact_name": "str",
         "desc": "str",
-        "date": "str",
+        "date": "int",
         "approve_doc": "bool",
         "items": "tuple[HoldedPurchasePayloadItem, ...]",
         "invoice_num": "str",
@@ -1584,7 +1582,6 @@
       "identity": "value",
       "fields": {
         "items": "tuple[HoldedRemotePurchaseSummary, ...]",
-        "next_page": "int | None = None",
         "observed_at": "datetime"
       }
     },
@@ -1605,7 +1602,7 @@
         "supplier_code": "str | None = None",
         "supplier_name": "str",
         "supplier_invoice_number": "str",
-        "document_date": "str",
+        "document_date": "int",
         "currency": "str",
         "description": "str | None = None",
         "items": "tuple[HoldedRemotePurchaseItem, ...]",
@@ -1736,6 +1733,47 @@
       "implicit_unit_conversion_allowed": false,
       "implicit_currency_conversion_allowed": false,
       "implicit_tax_basis_conversion_allowed": false
+    },
+    "holded_transport_backend": {
+      "kind": "holded_transport_backend",
+      "schema_version": 1,
+      "backend": {"emitter": "python_httpx_holded_purchase_v1"},
+      "wiring": {
+        "module": "holded_transport",
+        "concrete_class": "HttpxHoldedHttpClient",
+        "interface": "HoldedHttpClient",
+        "models_module": "cabinet_backend.models"
+      },
+      "protocol": {
+        "origin": "https://api.holded.com",
+        "credential_header": "key",
+        "accept": "application/json",
+        "content_type": "application/json",
+        "document_type": "purchase",
+        "create": {"method": "POST", "path": "/api/invoicing/v1/documents/purchase"},
+        "list": {"method": "GET", "path": "/api/invoicing/v1/documents/purchase"},
+        "get": {"method": "GET", "path_template": "/api/invoicing/v1/documents/purchase/{document_id}"},
+        "follow_redirects": false,
+        "transport_retries": 0,
+        "tls_verify": true
+      },
+      "payload": {
+        "fields": [["apply_contact_defaults", "applyContactDefaults"], ["contact_code", "contactCode"], ["contact_name", "contactName"], ["desc", "desc"], ["date", "date"], ["approve_doc", "approveDoc"], ["items", "items"], ["invoice_num", "invoiceNum"], ["currency", "currency"]],
+        "item_fields": [["name", "name"], ["desc", "desc"], ["units", "units"], ["subtotal", "subtotal"], ["discount", "discount"], ["tax", "tax"], ["sku", "sku"]],
+        "decimal_encoding": "json_number",
+        "subtotal_semantics": "net_unit_amount_before_tax"
+      },
+      "responses": {
+        "create_document_id_field": "id",
+        "list_root": "array",
+        "list_document_id_field": "id",
+        "list_description_field": "desc",
+        "list_status_field": "status",
+        "get_lines_field": "products",
+        "get_supplier_name_field": "contactName",
+        "get_supplier_invoice_number_field": "docNumber",
+        "get_gross_total_field": "total"
+      }
     },
     "http_router_backend": {
       "auth_policies": {
@@ -2613,7 +2651,8 @@
     "third_party": [
       "from fastapi import FastAPI, Request",
       "from argon2 import PasswordHasher",
-      "import psycopg"
+      "import psycopg",
+      "import httpx"
     ],
     "internal": {
       "models": [
@@ -2764,9 +2803,11 @@
       "holded_gateway": [
         "create_holded_purchase",
         "lookup_holded_purchase",
-        "HttpxHoldedHttpClient",
         "PostgresHoldedAttemptRepository",
         "HoldedGatewayService"
+      ],
+      "holded_transport": [
+        "HttpxHoldedHttpClient"
       ],
       "retention_release": [
         "evaluate_vps_release",
@@ -2982,9 +3023,11 @@
           "RegistryContextService"
         ],
         "holded_gateway": [
-          "HttpxHoldedHttpClient",
           "PostgresHoldedAttemptRepository",
           "HoldedGatewayService"
+        ],
+        "holded_transport": [
+          "HttpxHoldedHttpClient"
         ],
         "synchronization": [
           "PostgresSynchronizationRepository",
@@ -3035,6 +3078,15 @@
           "HoldedRemotePurchaseDocument",
           "HoldedAttemptRepository",
           "HoldedHttpClient"
+        ]
+      },
+      "holded_transport": {
+        "models": [
+          "HoldedHttpClient",
+          "HoldedPurchaseAttemptPayload",
+          "HoldedPurchaseListPage",
+          "HoldedRemotePurchaseSummary",
+          "HoldedTransportResponse"
         ]
       },
       "access_control": {
@@ -3193,9 +3245,11 @@
     "holded_gateway": [
       "create_holded_purchase",
       "lookup_holded_purchase",
-      "HttpxHoldedHttpClient",
       "PostgresHoldedAttemptRepository",
       "HoldedGatewayService"
+    ],
+    "holded_transport": [
+      "HttpxHoldedHttpClient"
     ],
     "retention_release": [
       "evaluate_vps_release",
@@ -3237,6 +3291,7 @@
     "access_control",
     "durable_archive",
     "registry_context",
+    "holded_transport",
     "holded_gateway",
     "synchronization",
     "plan_actual",
@@ -3380,6 +3435,7 @@
     "access_control": "cabinet_backend/access_control",
     "durable_archive": "cabinet_backend/durable_archive",
     "registry_context": "cabinet_backend/registry_context",
+    "holded_transport": "cabinet_backend/holded_transport",
     "holded_gateway": "cabinet_backend/holded_gateway",
     "synchronization": "cabinet_backend/synchronization",
     "plan_actual": "cabinet_backend/plan_actual",

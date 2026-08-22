@@ -43,7 +43,7 @@ Typed immutable GET evidence required for A51 comparison:
 - `supplier_code: str | None`;
 - `supplier_name: str`;
 - `supplier_invoice_number: str`;
-- `document_date: str`;
+- `document_date: int` (the exact Holded v1 timestamp);
 - `currency: str`;
 - `description: str | None`;
 - `items: tuple[HoldedRemotePurchaseItem, ...]`;
@@ -66,7 +66,6 @@ Fields:
 Fields:
 
 - `items: tuple[HoldedRemotePurchaseSummary, ...]`;
-- `next_page: int | None`;
 - `observed_at: datetime`.
 
 ## Runtime boundaries
@@ -76,9 +75,11 @@ The generated gateway requires two explicit runtime interfaces:
 - `HoldedHttpClient`, a narrow create/list/GET HTTP mechanism port;
 - `HoldedAttemptRepository`, a narrow technical-attempt PostgreSQL port.
 
-Both are local implementation obligations of `module:holded_gateway`.
-`HttpxHoldedHttpClient` implements `HoldedHttpClient`, and
-`PostgresHoldedAttemptRepository` implements `HoldedAttemptRepository`.
+Both are local implementation obligations. `module:holded_transport` owns the
+deterministically emitted `HttpxHoldedHttpClient` implementation of
+`HoldedHttpClient`; `module:holded_gateway` owns
+`PostgresHoldedAttemptRepository` as the implementation of
+`HoldedAttemptRepository`.
 Neither port is an ordinary concrete base class or an externally supplied
 deployment extension.
 

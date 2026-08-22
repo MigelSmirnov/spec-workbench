@@ -13,7 +13,7 @@ def test_lists_final_assembled_modules() -> None:
     assert report["schema_version"] == "spec_workbench_module_review_modules.v1"
     assert report["modules"] == [
         "models", "access_control", "durable_archive", "registry_context",
-        "holded_gateway", "synchronization", "plan_actual",
+        "holded_transport", "holded_gateway", "synchronization", "plan_actual",
         "holded_publication", "retention_release", "api_irregular", "api",
         "bootstrap",
     ]

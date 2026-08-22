@@ -138,8 +138,8 @@ request_manual_vps_release_handler: [DEPENDENCY_BOUNDARY] MUST obtain the exact 
 
 ## Concrete adapter implementations
 PostgresHoldedAttemptRepository.__init__: [SECURITY_BOUNDARY] Bind to the supplied PostgreSQL URL, validate connectivity, treat the URL as secret, and never read environment variables or log credentials.
-HttpxHoldedHttpClient.__init__: [VALIDATION_ERROR] Require an absolute HTTPS base URL without embedded credentials or fragment, a non-empty API key, and positive finite timeout, response-size, and page bounds.
-HttpxHoldedHttpClient.__init__: [SECURITY_BOUNDARY] Keep the API key only in the outbound authorization header, enable TLS verification, and never log or return reusable credential material.
+HttpxHoldedHttpClient.__init__: [VALIDATION_ERROR] Require the verified Holded v1 HTTPS origin, a non-empty API key, and positive finite timeout and response-size bounds according to = rules.holded_transport_backend.
+HttpxHoldedHttpClient.__init__: [SECURITY_BOUNDARY] Keep the credential only in the outbound `key` header defined by = rules.holded_transport_backend, enable TLS verification, and never log or return reusable credential material.
 PostgresSynchronizationRepository.__init__: [SECURITY_BOUNDARY] Bind to the supplied PostgreSQL URL, validate connectivity, treat the URL as secret, and never read environment variables.
 HttpxVpsSynchronizationTransport.__init__: [VALIDATION_ERROR] Require HTTPS without embedded credentials or fragment, a non-empty dedicated node credential, and positive finite bounds.
 HttpxVpsSynchronizationTransport.__init__: [SECURITY_BOUNDARY] Verify TLS and never log or return credentials, authorization headers, or unbounded response bodies.
@@ -147,7 +147,7 @@ PostgresPlanActualRepository.__init__: [SECURITY_BOUNDARY] Validate the supplied
 PostgresHoldedPublicationRepository.__init__: [SECURITY_BOUNDARY] Validate the supplied PostgreSQL connection, treat the URL as secret, and read no environment variables.
 PostgresRetentionReleaseRepository.__init__: [SECURITY_BOUNDARY] Validate the supplied PostgreSQL connection, protect the URL, and read no environment variables.
 HttpxHoldedHttpClient.create_purchase: [FORBIDDEN_ACTION] Issue exactly one POST per invocation with mutation retries and replaying redirects disabled.
-HttpxHoldedHttpClient.list_purchases: [BEHAVIOR] Perform one read-only bounded page request and return typed summaries in stable document-id order.
+HttpxHoldedHttpClient.list_purchases: [BEHAVIOR] Perform the one read-only bounded Holded v1 list request defined by = rules.holded_transport_backend and return typed summaries in stable document-id order.
 HttpxHoldedHttpClient.get_purchase: [BEHAVIOR] Perform one read-only request for the exact document identifier and return bounded external evidence.
 PostgresHoldedAttemptRepository.begin: [DEPENDENCY_BOUNDARY] Begin one PostgreSQL transaction on the repository connection used for the exact gateway state transition.
 PostgresHoldedAttemptRepository.commit: [BEHAVIOR] Commit only a valid typed attempt transition and expose no partial state.

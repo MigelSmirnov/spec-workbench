@@ -399,12 +399,41 @@ Deep business-control module. It owns whether Cabinet is allowed to publish and 
 
 ---
 
+## `holded_transport`
+
+### Owns
+
+- the verified Holded Invoicing v1 purchase origin and paths;
+- the `key` credential-header codec;
+- purchase payload and response field mappings;
+- bounded HTTP execution with TLS verification and no redirect/retry replay.
+
+### Hides
+
+- httpx construction;
+- JSON serialization and bounded response reads;
+- Holded wire field names.
+
+### Must not own
+
+- Cabinet publication eligibility or settlement;
+- attempt persistence or single-create authority;
+- environment reads;
+- Holded update, attachment, approval, payment, deletion, or refund operations.
+
+### Depth assessment
+
+Deterministic infrastructure deep module. Its entire implementation is emitted
+from `rules.holded_transport_backend`; it exposes only
+`HttpxHoldedHttpClient` to bootstrap.
+
+---
+
 ## `holded_gateway`
 
 ### Owns
 
-- Holded authentication credentials and their secret storage boundary;
-- exact Holded transport requests and responses;
+- Holded credential containment through the supplied HTTP port;
 - technical retry policy permitted by the accepted Holded rules;
 - immutable technical attempt evidence/receipts;
 - technical lookup/recovery operations needed by `holded_publication` after an unknown outcome;
@@ -419,11 +448,8 @@ Deep business-control module. It owns whether Cabinet is allowed to publish and 
 
 ### Hides
 
-- HTTP client configuration;
-- credential loading;
-- serialization;
-- retry implementation;
-- Holded-specific error translation.
+- concrete HTTP client and wire configuration, owned by `holded_transport`;
+- credential loading, owned by bootstrap;
 
 ### Must not own
 
@@ -532,7 +558,8 @@ A tool name is not a module boundary. Compatible VPS/local tools may map to diff
 | Registry snapshots, offline catalogue semantics, WorkObject context, assignment validation | `registry_context` |
 | PresuPro snapshots, match decisions, plan-versus-actual | `plan_actual` |
 | Cabinet Holded eligibility/publication lifecycle | `holded_publication` |
-| Holded credentials/HTTP/retries/technical receipts | `holded_gateway` |
+| Holded v1 HTTP wire contract and credential-header containment | `holded_transport` |
+| Holded single-create authority and technical receipts | `holded_gateway` |
 | VPS working-copy release and retention eligibility | `retention_release` |
 | dependency vulnerability/update policy | deployment/release process, not a runtime Cabinet module |
 | runtime interpreted-input invariant | each owning boundary/module; adapters cannot turn input into executable structure |

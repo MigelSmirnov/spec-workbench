@@ -11,7 +11,7 @@ Existing module functions remain façades with an explicit `HoldedGatewayService
 ## HTTP port
 
 - HoldedHttpClient.create_purchase(self, payload: HoldedPurchaseAttemptPayload) -> HoldedTransportResponse
-- HoldedHttpClient.list_purchases(self, page: int) -> HoldedPurchaseListPage
+- HoldedHttpClient.list_purchases(self) -> HoldedPurchaseListPage
 - HoldedHttpClient.get_purchase(self, document_id: str) -> HoldedTransportResponse
 
 ## Attempt repository port
@@ -42,12 +42,14 @@ Generic query dictionaries and untyped save methods are forbidden.
 - PostgresHoldedAttemptRepository.mark_request_issued(self, publication_attempt_id: str, issued_at: datetime) -> HoldedPublicationAttempt
 - PostgresHoldedAttemptRepository.append_attempt_outcome(self, attempt: HoldedPublicationAttempt) -> None
 - PostgresHoldedAttemptRepository.append_lookup_evidence(self, attempt_marker: str, evidence: HoldedPurchaseLookupEvidence) -> None
-- HttpxHoldedHttpClient.__init__(self, base_url: str, api_key: str, timeout_seconds: int, max_response_bytes: int, max_recovery_pages: int) -> None
+- HttpxHoldedHttpClient.__init__(self, base_url: str, api_key: str, timeout_seconds: int, max_response_bytes: int) -> None
 - HttpxHoldedHttpClient.create_purchase(self, payload: HoldedPurchaseAttemptPayload) -> HoldedTransportResponse
-- HttpxHoldedHttpClient.list_purchases(self, page: int) -> HoldedPurchaseListPage
+- HttpxHoldedHttpClient.list_purchases(self) -> HoldedPurchaseListPage
 - HttpxHoldedHttpClient.get_purchase(self, document_id: str) -> HoldedTransportResponse
 
-Constructors validate inputs but do not read environment variables.
+The HTTP adapter is owned by `module:holded_transport`; all other contracts in
+this file remain owned by `module:holded_gateway`. Constructors validate inputs
+but do not read environment variables.
 
 ## Composition
 

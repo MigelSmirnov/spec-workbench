@@ -357,7 +357,7 @@ Fields:
 - `contact_code: str`;
 - `contact_name: str`;
 - `desc: str`;
-- `date: str`;
+- `date: int` (Holded v1 Unix timestamp);
 - `approve_doc: bool`;
 - `items: tuple[HoldedPurchasePayloadItem, ...]`;
 - `invoice_num: str`;
