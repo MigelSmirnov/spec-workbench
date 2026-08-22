@@ -40,7 +40,9 @@ Both dependencies are required. There is no nullable, default, in-memory, or mod
 - ArchiveUnitOfWork.load_invoice_card(self, invoice_id: str) -> StoredInvoiceCard | None
 - ArchiveUnitOfWork.upsert_invoice_card(self, card: StoredInvoiceCard) -> None
 - ArchiveUnitOfWork.insert_incomplete_source_acceptance(self, decision: IncompleteSourceAcceptance) -> None
+- ArchiveUnitOfWork.list_incomplete_source_acceptances(self, invoice_id: str) -> tuple[IncompleteSourceAcceptance, ...]
 - ArchiveUnitOfWork.insert_source_loss_decision(self, decision: SourceLossDecision) -> None
+- ArchiveUnitOfWork.list_source_loss_decisions(self, invoice_id: str) -> tuple[SourceLossDecision, ...]
 
 The accepted archive transitions additionally require typed load_transfer_receipt, load_source_binaries, save_transfer_acceptance, save_source_attachment, save_incomplete_source_acceptance, and save_source_loss_decision methods using their exact existing domain models. Generic save(object), query(dict), or policy-bearing repository methods are forbidden.
 
@@ -78,7 +80,9 @@ Storage references are opaque store-created values and are never accepted from H
 - PostgresArchiveUnitOfWork.load_invoice_card(self, invoice_id: str) -> StoredInvoiceCard | None
 - PostgresArchiveUnitOfWork.upsert_invoice_card(self, card: StoredInvoiceCard) -> None
 - PostgresArchiveUnitOfWork.insert_incomplete_source_acceptance(self, decision: IncompleteSourceAcceptance) -> None
+- PostgresArchiveUnitOfWork.list_incomplete_source_acceptances(self, invoice_id: str) -> tuple[IncompleteSourceAcceptance, ...]
 - PostgresArchiveUnitOfWork.insert_source_loss_decision(self, decision: SourceLossDecision) -> None
+- PostgresArchiveUnitOfWork.list_source_loss_decisions(self, invoice_id: str) -> tuple[SourceLossDecision, ...]
 - LocalFilesystemSourceByteStore.__init__(self, root_path: str) -> None
 - LocalFilesystemSourceByteStore.final_reference_for(self, expected_hash: str) -> str
 - LocalFilesystemSourceByteStore.stage(self, publication_id: str, content: bytes, expected_hash: str, expected_size: int) -> str

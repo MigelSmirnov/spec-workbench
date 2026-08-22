@@ -151,9 +151,13 @@
     "PostgresArchiveUnitOfWork.load_invoice_card": "(self, invoice_id: str) -> StoredInvoiceCard | None",
     "PostgresArchiveUnitOfWork.upsert_invoice_card": "(self, card: StoredInvoiceCard) -> None",
     "ArchiveUnitOfWork.insert_incomplete_source_acceptance": "(self, decision: IncompleteSourceAcceptance) -> None",
+    "ArchiveUnitOfWork.list_incomplete_source_acceptances": "(self, invoice_id: str) -> tuple[IncompleteSourceAcceptance, ...]",
     "PostgresArchiveUnitOfWork.insert_incomplete_source_acceptance": "(self, decision: IncompleteSourceAcceptance) -> None",
+    "PostgresArchiveUnitOfWork.list_incomplete_source_acceptances": "(self, invoice_id: str) -> tuple[IncompleteSourceAcceptance, ...]",
     "ArchiveUnitOfWork.insert_source_loss_decision": "(self, decision: SourceLossDecision) -> None",
+    "ArchiveUnitOfWork.list_source_loss_decisions": "(self, invoice_id: str) -> tuple[SourceLossDecision, ...]",
     "PostgresArchiveUnitOfWork.insert_source_loss_decision": "(self, decision: SourceLossDecision) -> None",
+    "PostgresArchiveUnitOfWork.list_source_loss_decisions": "(self, invoice_id: str) -> tuple[SourceLossDecision, ...]",
     "RegistryContextRepository.begin": "(self) -> None",
     "PostgresRegistryContextRepository.begin": "(self) -> None",
     "RegistryContextRepository.commit": "(self) -> None",
@@ -549,6 +553,7 @@
     "attach_local_source: [DEPENDENCY_BOUNDARY] MUST use only the supplied DurableArchiveService for metadata transaction and byte custody; callers and handlers MUST NOT coordinate those mechanisms.",
     "get_source_status: [DEPENDENCY_BOUNDARY] MUST read accepted source and publication evidence only through the supplied DurableArchiveService.",
     "get_source_status: [FIELD_PROJECTION] The required source set of an invoice is the union of InvoiceTransferManifest.source_references (content_id is the source_id) over its accepted manifests together with every SourceBinary attached locally; available are the required ids with a verified SourceBinaryReplica; canonical_card.source is one capture-evidence block (kind, file_ref, file_status, note) and never yields a source identity.",
+    "get_source_status: [ORCHESTRATION] SourceStatus is one module-private derivation from rows read through ArchiveUnitOfWork inside the caller's open transaction: load_source_binaries (required ids), list_source_replicas (verified ids are available), list_incomplete_source_acceptances and list_source_loss_decisions (active_loss_decision_ids, completeness); get_source_status opens its own transaction only around that derivation, while accept_incomplete_source_evidence, record_source_loss, attach_local_source, and verify_durable_acceptance compute it inside their own transaction after their writes and never call get_source_status (nested begin is rejected).",
     "accept_transfer_manifest: [FIELD_PROJECTION] Required sources of the delivered revision are manifest.source_references (content_id as source_id, content_hash as expected hash); completeness compares them with the verified replicas in the package and in the archive; canonical_card.source carries no source identity.",
     "get_archived_invoice: [DEPENDENCY_BOUNDARY] MUST read accepted immutable revisions only through the supplied DurableArchiveService.",
     "accept_incomplete_source_evidence: [DEPENDENCY_BOUNDARY] MUST persist the decision only through the supplied DurableArchiveService under the invoice lock.",
@@ -572,7 +577,9 @@
     "PostgresArchiveUnitOfWork.load_invoice_card: [BEHAVIOR] MUST return the exact StoredInvoiceCard head selected by invoice_id or None and MUST NOT synthesize a card.",
     "PostgresArchiveUnitOfWork.upsert_invoice_card: [PROVENANCE] MUST insert the StoredInvoiceCard head by invoice_id or, when it exists, update only card_version, current_content_hash, current_status, last_received_at, durable_at, and archive_status inside the active invoice-locked transaction; MUST NOT change first_received_at or delete the row.",
     "PostgresArchiveUnitOfWork.insert_incomplete_source_acceptance: [PROVENANCE] MUST append the exact immutable acceptance evidence and MUST NOT replace prior decisions.",
+    "PostgresArchiveUnitOfWork.list_incomplete_source_acceptances: [DETERMINISM_OR_ORDERING] MUST return every acceptance whose card_revision.invoice_id is the exact invoice in stable decided_at and acceptance_id order inside the active transaction.",
     "PostgresArchiveUnitOfWork.insert_source_loss_decision: [PROVENANCE] MUST append the exact immutable loss evidence and MUST NOT delete source or acceptance history.",
+    "PostgresArchiveUnitOfWork.list_source_loss_decisions: [DETERMINISM_OR_ORDERING] MUST return every loss decision for the exact invoice in stable decided_at and decision_id order inside the active transaction.",
     "synchronize_invoice_work: [DEPENDENCY_BOUNDARY] MUST call archive acceptance and verification through the exact supplied DurableArchiveService and MUST NOT construct or discover another archive runtime.",
     "calculate_plan_actual: [DEPENDENCY_BOUNDARY] MUST load pinned accepted invoice revisions through the exact supplied DurableArchiveService and MUST NOT read archive persistence directly.",
     "request_holded_publication: [DEPENDENCY_BOUNDARY] MUST resolve the exact accepted immutable invoice revision through the supplied DurableArchiveService before publication eligibility or gateway mutation.",
@@ -611,7 +618,9 @@
     "ArchiveUnitOfWork.load_invoice_card: [BEHAVIOR] MUST return the exact StoredInvoiceCard head selected by invoice_id or None and MUST NOT synthesize a card.",
     "ArchiveUnitOfWork.upsert_invoice_card: [PROVENANCE] MUST insert the StoredInvoiceCard head by invoice_id or, when it exists, update only card_version, current_content_hash, current_status, last_received_at, durable_at, and archive_status inside the active invoice-locked transaction; MUST NOT change first_received_at or delete the row.",
     "ArchiveUnitOfWork.insert_incomplete_source_acceptance: [PROVENANCE] MUST append the exact immutable acceptance evidence and MUST NOT replace prior decisions.",
+    "ArchiveUnitOfWork.list_incomplete_source_acceptances: [DETERMINISM_OR_ORDERING] MUST return every acceptance whose card_revision.invoice_id is the exact invoice in stable decided_at and acceptance_id order; an invoice without acceptances yields an empty result.",
     "ArchiveUnitOfWork.insert_source_loss_decision: [PROVENANCE] MUST append the exact immutable loss evidence and MUST NOT delete source or acceptance history.",
+    "ArchiveUnitOfWork.list_source_loss_decisions: [DETERMINISM_OR_ORDERING] MUST return every loss decision for the exact invoice in stable decided_at and decision_id order; an invoice without decisions yields an empty result.",
     "SourceByteStore.final_reference_for: [PATH_OR_ARTIFACT_POLICY] MUST return the opaque content-addressed final reference for a lowercase hex sha256 digest without touching the filesystem; the layout of that reference is owned by the store and is never composed by callers.",
     "SourceByteStore.stage: [PATH_OR_ARTIFACT_POLICY] MUST create a private candidate, flush it, reopen it, and verify exact expected hash and size before returning an opaque reference.",
     "SourceByteStore.stage: [VALIDATION_ERROR] Raise ValueError when publication_id is not a token of [A-Za-z0-9._-], when content length differs from expected_size, or when the sha256 of content differs from expected_hash; the caller treats that as a file-local rejection.",
@@ -5640,6 +5649,39 @@
               ]
             },
             {
+              "method": "list_incomplete_source_acceptances",
+              "query": "list_by",
+              "table": "incomplete_source_acceptances",
+              "filter": [
+                {
+                  "column": "card_revision",
+                  "path": [
+                    "invoice_id"
+                  ],
+                  "bind": "argument",
+                  "argument": "invoice_id"
+                }
+              ],
+              "select": [
+                "acceptance_id",
+                "card_revision",
+                "missing_source_references",
+                "actor",
+                "reason",
+                "decided_at"
+              ],
+              "order_by": [
+                {
+                  "column": "decided_at",
+                  "direction": "asc"
+                },
+                {
+                  "column": "acceptance_id",
+                  "direction": "asc"
+                }
+              ]
+            },
+            {
               "method": "insert_source_loss_decision",
               "query": "insert",
               "table": "source_loss_decisions",
@@ -5650,6 +5692,36 @@
                 "actor",
                 "explanation",
                 "decided_at"
+              ]
+            },
+            {
+              "method": "list_source_loss_decisions",
+              "query": "list_by",
+              "table": "source_loss_decisions",
+              "filter": [
+                {
+                  "column": "invoice_id",
+                  "bind": "argument",
+                  "argument": "invoice_id"
+                }
+              ],
+              "select": [
+                "decision_id",
+                "invoice_id",
+                "source_references",
+                "actor",
+                "explanation",
+                "decided_at"
+              ],
+              "order_by": [
+                {
+                  "column": "decided_at",
+                  "direction": "asc"
+                },
+                {
+                  "column": "decision_id",
+                  "direction": "asc"
+                }
               ]
             }
           ]
