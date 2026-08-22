@@ -138,4 +138,4 @@ def test_router_semantic_slice_contains_both_canonical_contracts() -> None:
         "(archive: DurableArchiveService, invoice_id: str, files:"
     )
     assert payload["canonical_handler_contract"]["router_operation"] == FIRST_EXTERNAL
-    assert payload["canonical_handler_contract"]["signature"] == "(request: Request, invoice_id: str) -> SourceAttachmentBatchResult"
+    assert payload["canonical_handler_contract"]["signature"] == "(request: Request, invoice_id: str, files: list[UploadFile]) -> SourceAttachmentBatchResult"
