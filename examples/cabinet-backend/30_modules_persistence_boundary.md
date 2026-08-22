@@ -42,7 +42,7 @@ injects it into the service exactly as before.
 | Runtime module | Persistence module | Policy moved to service | Status |
 |---|---|---|---|
 | `retention_release` | `retention_release_persistence` | `reserve_decision` → `insert_decision` + equivalence check in `request_manual_vps_release` | done |
-| `holded_publication` | `holded_publication_persistence` | `reserve_publication`, `save_transition` | pending |
+| `holded_publication` | `holded_publication_persistence` | `reserve_publication` → `insert_publication`, `save_transition` → `update_publication`; equivalence and transition validity in `HoldedPublicationService` | done |
 | `registry_context` | `registry_context_persistence` | `merge_work_objects` | pending |
 | `holded_gateway` | `holded_gateway_persistence` | `reserve_attempt`, `mark_request_issued`, `append_attempt_outcome`, `append_lookup_evidence` | pending |
 | `synchronization` | `synchronization_persistence` | `reserve_synchronization`, `mark_transfer_issued`, `reserve_catalogue_publication`, `save_catalogue_acknowledgement` | pending |

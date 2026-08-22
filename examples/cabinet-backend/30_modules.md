@@ -555,6 +555,39 @@ whether a stored decision may be reused. See
 
 ---
 
+## `holded_publication_persistence`
+
+### Owns
+
+- `PostgresHoldedPublicationRepository`: the PostgreSQL storage shape for
+  logical Holded publications;
+- one transaction and the exact publication and invoice-revision locks per
+  service operation;
+- plain append of a new logical publication and plain update of its
+  lifecycle fields.
+
+### Hides
+
+- psycopg connection handling;
+- table, column, and index names;
+- row/model codecs for the card revision reference.
+
+### Must not own
+
+- publication eligibility, equivalence reuse, or duplicate rejection;
+- lifecycle transition validity;
+- gateway calls or Holded evidence interpretation;
+- environment reads.
+
+### Depth assessment
+
+Deterministic persistence module. It implements the `HoldedPublicationRepository`
+Protocol from `models` as plain reads, one append, and one field update;
+`holded_publication` decides which transitions are valid. See
+`30_modules_persistence_boundary.md`.
+
+---
+
 # 2. Boundary adapters are not policy modules
 
 The following are expected adapters or deployment surfaces, not primary owners of Cabinet rules:

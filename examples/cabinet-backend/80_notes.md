@@ -194,8 +194,8 @@ PostgresHoldedPublicationRepository.lock_publication: [BEHAVIOR] Serialize the e
 PostgresHoldedPublicationRepository.lock_invoice_revision: [BEHAVIOR] Serialize duplicate-prevention decisions for the exact immutable revision.
 PostgresHoldedPublicationRepository.load_publication: [BEHAVIOR] Return exact persisted state or None and never infer it from gateway evidence.
 PostgresHoldedPublicationRepository.load_by_invoice_revision: [BEHAVIOR] Return only the publication bound to the exact invoice revision or None.
-PostgresHoldedPublicationRepository.reserve_publication: [BEHAVIOR] Reuse only an equivalent logical publication and reject conflicting active state before gateway mutation.
-PostgresHoldedPublicationRepository.save_transition: [PROVENANCE] Append valid verified or unresolved lifecycle evidence and reject stale, skipped, or conflicting transitions.
+PostgresHoldedPublicationRepository.insert_publication: [PROVENANCE] Append one new logical publication row for the exact publication_id and immutable card revision inside the active locked transaction; a second row for the same publication_id or the same card revision and idempotency key fails on uniqueness and never replaces an existing publication.
+PostgresHoldedPublicationRepository.update_publication: [PROVENANCE] Write status, external_document_id, completed_at, and safe_outcome_code for the exact existing publication_id inside the active locked transaction; fail when the row is absent and never insert or change card_revision, idempotency_key, or created_at.
 PostgresRetentionReleaseRepository.begin: [DEPENDENCY_BOUNDARY] Open one PostgreSQL transaction for the exact release lifecycle and reject nested begin.
 PostgresRetentionReleaseRepository.commit: [BEHAVIOR] Commit one valid evidence transition and expose no partial state.
 PostgresRetentionReleaseRepository.rollback: [FALLBACK] Roll back idempotently and preserve the original release failure.

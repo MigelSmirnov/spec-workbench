@@ -239,8 +239,8 @@
     "HoldedPublicationRepository.lock_invoice_revision": "(self, invoice_id: str, content_hash: str) -> None",
     "HoldedPublicationRepository.load_publication": "(self, publication_id: str) -> HoldedPublication | None",
     "HoldedPublicationRepository.load_by_invoice_revision": "(self, invoice_id: str, content_hash: str) -> HoldedPublication | None",
-    "HoldedPublicationRepository.reserve_publication": "(self, publication: HoldedPublication) -> HoldedPublication",
-    "HoldedPublicationRepository.save_transition": "(self, publication: HoldedPublication) -> None",
+    "HoldedPublicationRepository.insert_publication": "(self, publication: HoldedPublication) -> None",
+    "HoldedPublicationRepository.update_publication": "(self, publication: HoldedPublication) -> None",
     "PostgresHoldedPublicationRepository.__init__": "(self, database_url: str) -> None",
     "PostgresHoldedPublicationRepository.begin": "(self) -> None",
     "PostgresHoldedPublicationRepository.commit": "(self) -> None",
@@ -249,8 +249,8 @@
     "PostgresHoldedPublicationRepository.lock_invoice_revision": "(self, invoice_id: str, content_hash: str) -> None",
     "PostgresHoldedPublicationRepository.load_publication": "(self, publication_id: str) -> HoldedPublication | None",
     "PostgresHoldedPublicationRepository.load_by_invoice_revision": "(self, invoice_id: str, content_hash: str) -> HoldedPublication | None",
-    "PostgresHoldedPublicationRepository.reserve_publication": "(self, publication: HoldedPublication) -> HoldedPublication",
-    "PostgresHoldedPublicationRepository.save_transition": "(self, publication: HoldedPublication) -> None",
+    "PostgresHoldedPublicationRepository.insert_publication": "(self, publication: HoldedPublication) -> None",
+    "PostgresHoldedPublicationRepository.update_publication": "(self, publication: HoldedPublication) -> None",
     "SynchronizationService.get_working_set_membership": "(self, project_id: str, working_set_id: str) -> VpsWorkingSetMembership",
     "RetentionReleaseService.__init__": "(self, repository: RetentionReleaseRepository, archive: DurableArchiveService, synchronization: SynchronizationService) -> None",
     "RetentionReleaseService.evaluate_vps_release": "(self, project_id: str, working_set_id: str | None, authorization: AuthorizationDecision) -> VpsReleaseEvaluation",
@@ -617,8 +617,10 @@
     "create_local_app: [VALIDATION_ERROR] Fail startup when plan/actual repository or service construction fails; no in-memory or nullable fallback is permitted.",
     "create_app: [DEPENDENCY_BOUNDARY] Bind the exact supplied PlanActualService into application state before route registration.",
     "HoldedPublicationService.__init__: [DEPENDENCY_BOUNDARY] Retain the exact repository, archive, and gateway; never construct adapters or discover alternate services.",
-    "HoldedPublicationService.request_holded_publication: [ORCHESTRATION] Lock the exact revision, resolve archive truth, reuse an equivalent publication or commit one logical publication before the sole gateway create.",
+    "HoldedPublicationService.request_holded_publication: [ORCHESTRATION] Lock the exact revision, resolve archive truth, then load the publication bound to the exact revision: reuse it when it binds the same card revision and idempotency key, raise HoldedPublicationIneligibleError when a different active publication exists, and otherwise insert one logical publication — all before the sole gateway create.",
+    "HoldedPublicationService.request_holded_publication: [BEHAVIOR] Persist every lifecycle transition by updating the exact locked publication only from its reloaded current status along an accepted transition; a stale, skipped, or conflicting transition raises HoldedReconciliationRequiredError and writes nothing.",
     "HoldedPublicationService.reconcile_holded_publication: [FORBIDDEN_ACTION] Reload exact logical state and use read-only gateway recovery; never repeat create or change the bound revision.",
+    "HoldedPublicationService.reconcile_holded_publication: [BEHAVIOR] Settle or keep unresolved only by updating the exact locked publication from its reloaded current status along an accepted transition; a stale, skipped, or conflicting transition raises HoldedReconciliationRequiredError and writes nothing.",
     "HoldedPublicationService.get_holded_publication_status: [VALIDATION_ERROR] Return exact committed state or raise HoldedPublicationNotFoundError; never fabricate pending or success.",
     "HoldedPublicationRepository.begin: [DEPENDENCY_BOUNDARY] Open one PostgreSQL transaction for the exact publication transition and reject nested begin.",
     "HoldedPublicationRepository.commit: [BEHAVIOR] Commit one valid lifecycle transition and expose no partial state.",
@@ -627,8 +629,8 @@
     "HoldedPublicationRepository.lock_invoice_revision: [BEHAVIOR] Serialize duplicate-prevention decisions for the exact immutable revision.",
     "HoldedPublicationRepository.load_publication: [BEHAVIOR] Return exact persisted state or None and never infer it from gateway evidence.",
     "HoldedPublicationRepository.load_by_invoice_revision: [BEHAVIOR] Return only the publication bound to the exact invoice revision or None.",
-    "HoldedPublicationRepository.reserve_publication: [BEHAVIOR] Reuse only an equivalent logical publication and reject conflicting active state before gateway mutation.",
-    "HoldedPublicationRepository.save_transition: [PROVENANCE] Append valid verified or unresolved lifecycle evidence and reject stale, skipped, or conflicting transitions.",
+    "HoldedPublicationRepository.insert_publication: [PROVENANCE] Append one new logical publication row for the exact publication_id and immutable card revision inside the active locked transaction; a second row for the same publication_id or the same card revision and idempotency key fails on uniqueness and never replaces an existing publication.",
+    "HoldedPublicationRepository.update_publication: [PROVENANCE] Write status, external_document_id, completed_at, and safe_outcome_code for the exact existing publication_id inside the active locked transaction; fail when the row is absent and never insert or change card_revision, idempotency_key, or created_at.",
     "PostgresHoldedPublicationRepository.__init__: [SECURITY_BOUNDARY] Validate the supplied PostgreSQL connection, treat the URL as secret, and read no environment variables.",
     "request_holded_publication: [DEPENDENCY_BOUNDARY] Delegate through the exact supplied HoldedPublicationService and never access archive, gateway, or persistence directly.",
     "reconcile_holded_publication: [DEPENDENCY_BOUNDARY] Delegate through the exact supplied HoldedPublicationService; direct recovery or repeated create is forbidden.",
@@ -698,8 +700,8 @@
     "PostgresHoldedPublicationRepository.lock_invoice_revision: [BEHAVIOR] Serialize duplicate-prevention decisions for the exact immutable revision.",
     "PostgresHoldedPublicationRepository.load_publication: [BEHAVIOR] Return exact persisted state or None and never infer it from gateway evidence.",
     "PostgresHoldedPublicationRepository.load_by_invoice_revision: [BEHAVIOR] Return only the publication bound to the exact invoice revision or None.",
-    "PostgresHoldedPublicationRepository.reserve_publication: [BEHAVIOR] Reuse only an equivalent logical publication and reject conflicting active state before gateway mutation.",
-    "PostgresHoldedPublicationRepository.save_transition: [PROVENANCE] Append valid verified or unresolved lifecycle evidence and reject stale, skipped, or conflicting transitions.",
+    "PostgresHoldedPublicationRepository.insert_publication: [PROVENANCE] Append one new logical publication row for the exact publication_id and immutable card revision inside the active locked transaction; a second row for the same publication_id or the same card revision and idempotency key fails on uniqueness and never replaces an existing publication.",
+    "PostgresHoldedPublicationRepository.update_publication: [PROVENANCE] Write status, external_document_id, completed_at, and safe_outcome_code for the exact existing publication_id inside the active locked transaction; fail when the row is absent and never insert or change card_revision, idempotency_key, or created_at.",
     "PostgresRetentionReleaseRepository.begin: [DEPENDENCY_BOUNDARY] Open one PostgreSQL transaction for the exact release lifecycle and reject nested begin.",
     "PostgresRetentionReleaseRepository.commit: [BEHAVIOR] Commit one valid evidence transition and expose no partial state.",
     "PostgresRetentionReleaseRepository.rollback: [FALLBACK] Roll back idempotently and preserve the original release failure.",
@@ -2790,11 +2792,13 @@
         "EstimateObservationRejectedError",
         "PlanActualPreconditionError"
       ],
+      "holded_publication_persistence": [
+        "PostgresHoldedPublicationRepository"
+      ],
       "holded_publication": [
         "request_holded_publication",
         "reconcile_holded_publication",
         "get_holded_publication_status",
-        "PostgresHoldedPublicationRepository",
         "HoldedPublicationService",
         "HoldedPublicationIneligibleError",
         "HoldedPublicationNotFoundError",
@@ -3041,7 +3045,6 @@
           "PlanActualService"
         ],
         "holded_publication": [
-          "PostgresHoldedPublicationRepository",
           "HoldedPublicationService"
         ],
         "retention_release": [
@@ -3049,6 +3052,9 @@
         ],
         "retention_release_persistence": [
           "PostgresRetentionReleaseRepository"
+        ],
+        "holded_publication_persistence": [
+          "PostgresHoldedPublicationRepository"
         ]
       },
       "durable_archive": {
@@ -3103,6 +3109,12 @@
           "VpsReleaseEvaluation",
           "VpsReleaseDecision",
           "RetentionReleaseRepository"
+        ]
+      },
+      "holded_publication_persistence": {
+        "models": [
+          "HoldedPublication",
+          "HoldedPublicationRepository"
         ]
       }
     }
@@ -3243,11 +3255,13 @@
       "EstimateObservationRejectedError",
       "PlanActualPreconditionError"
     ],
+    "holded_publication_persistence": [
+      "PostgresHoldedPublicationRepository"
+    ],
     "holded_publication": [
       "request_holded_publication",
       "reconcile_holded_publication",
       "get_holded_publication_status",
-      "PostgresHoldedPublicationRepository",
       "HoldedPublicationService",
       "HoldedPublicationIneligibleError",
       "HoldedPublicationNotFoundError",
@@ -3308,6 +3322,7 @@
     "holded_gateway",
     "synchronization",
     "plan_actual",
+    "holded_publication_persistence",
     "holded_publication",
     "retention_release_persistence",
     "retention_release",
@@ -3427,8 +3442,8 @@
     "HoldedPublicationRepository.lock_invoice_revision",
     "HoldedPublicationRepository.load_publication",
     "HoldedPublicationRepository.load_by_invoice_revision",
-    "HoldedPublicationRepository.reserve_publication",
-    "HoldedPublicationRepository.save_transition",
+    "HoldedPublicationRepository.insert_publication",
+    "HoldedPublicationRepository.update_publication",
     "PostgresHoldedPublicationRepository.__init__",
     "SynchronizationService.get_working_set_membership",
     "RetentionReleaseService.__init__",
@@ -3453,6 +3468,7 @@
     "holded_gateway": "cabinet_backend/holded_gateway",
     "synchronization": "cabinet_backend/synchronization",
     "plan_actual": "cabinet_backend/plan_actual",
+    "holded_publication_persistence": "cabinet_backend/holded_publication_persistence",
     "holded_publication": "cabinet_backend/holded_publication",
     "retention_release_persistence": "cabinet_backend/retention_release_persistence",
     "retention_release": "cabinet_backend/retention_release",

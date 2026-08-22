@@ -14,8 +14,8 @@ Module functions remain façades with an explicit service first parameter.
 - `HoldedPublicationRepository.lock_invoice_revision(self, invoice_id: str, content_hash: str) -> None`
 - `HoldedPublicationRepository.load_publication(self, publication_id: str) -> HoldedPublication | None`
 - `HoldedPublicationRepository.load_by_invoice_revision(self, invoice_id: str, content_hash: str) -> HoldedPublication | None`
-- `HoldedPublicationRepository.reserve_publication(self, publication: HoldedPublication) -> HoldedPublication`
-- `HoldedPublicationRepository.save_transition(self, publication: HoldedPublication) -> None`
+- `HoldedPublicationRepository.insert_publication(self, publication: HoldedPublication) -> None`
+- `HoldedPublicationRepository.update_publication(self, publication: HoldedPublication) -> None`
 - `PostgresHoldedPublicationRepository.__init__(self, database_url: str) -> None`
 - `PostgresHoldedPublicationRepository.begin(self) -> None`
 - `PostgresHoldedPublicationRepository.commit(self) -> None`
@@ -24,7 +24,12 @@ Module functions remain façades with an explicit service first parameter.
 - `PostgresHoldedPublicationRepository.lock_invoice_revision(self, invoice_id: str, content_hash: str) -> None`
 - `PostgresHoldedPublicationRepository.load_publication(self, publication_id: str) -> HoldedPublication | None`
 - `PostgresHoldedPublicationRepository.load_by_invoice_revision(self, invoice_id: str, content_hash: str) -> HoldedPublication | None`
-- `PostgresHoldedPublicationRepository.reserve_publication(self, publication: HoldedPublication) -> HoldedPublication`
-- `PostgresHoldedPublicationRepository.save_transition(self, publication: HoldedPublication) -> None`
+- `PostgresHoldedPublicationRepository.insert_publication(self, publication: HoldedPublication) -> None`
+- `PostgresHoldedPublicationRepository.update_publication(self, publication: HoldedPublication) -> None`
 
 - `create_app(access_control: AccessControlBackend, archive: DurableArchiveService, registry: RegistryContextService, holded_gateway: HoldedGatewayService, synchronization: SynchronizationService, plan_actual: PlanActualService, holded_publication: HoldedPublicationService) -> FastAPI`
+
+`PostgresHoldedPublicationRepository` is owned by `holded_publication_persistence`.
+`reserve_publication` and `save_transition` were replaced by the plain `insert_publication`
+and `update_publication`; equivalence reuse and lifecycle-transition validity belong to
+`HoldedPublicationService` (`30_modules_persistence_boundary.md`).
