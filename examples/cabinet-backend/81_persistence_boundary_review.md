@@ -339,3 +339,19 @@ fact of each estimate item (`currency`, `monetary_basis`) and of the line
 `observation_id` and storage, and `validate_card_assignment` reads the
 project from it. Deterministic review: zero blocks and zero prompts on every
 changed slice; both persistence modules emit with the new json_model columns.
+
+## Semantic-oracle findings are data, not notes (class record)
+
+The first runs of the Stage 7.1 oracles against generated code produced
+172 gate findings and 25 failing scenarios. Every one that was repaired in
+the specification was repaired as **data**: invented model fields (the
+generator saw no field list), values of the wrong model type in a
+constructor, attributes read from a nested reference, the opaque
+`canonical_card`, the missing monetary basis on estimate items, the missing
+storage of `CardObjectAssignmentObservation`, the missing Registry contract
+version on an observation, and the byte-store token form (now normalised by
+the store rather than prescribed to the caller). Notes were added only where
+two modules disagreed about the meaning of an exception crossing their
+boundary (`attach_local_source` and `SourceByteStore.stage`). A recurring
+generation defect is therefore first read as a missing declaration; a note
+is the answer only when the missing fact is a decision, not a structure.
