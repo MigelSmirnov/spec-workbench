@@ -449,7 +449,8 @@ def validate(payload: Any) -> list[Finding]:
             )
             findings.extend(method_findings)
             if method is not None:
-                method_names.append(method)
+                # uniqueness is per repository: two repositories may both own an insert_*
+                method_names.append(f"{repository}.{method}")
 
     for name, count in sorted(Counter(repository_names).items()):
         if count > 1:
