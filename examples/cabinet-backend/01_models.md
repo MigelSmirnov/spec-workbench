@@ -483,7 +483,7 @@ Candidate fields:
 - size bytes;
 - original filename optional;
 - first received time;
-- `byte_status` — `available`, `missing`, `quarantined`, `corrupt`, or `deleted`.
+- `byte_status: SourceByteStatus` — closed enum M89: `available`, `missing`, `quarantined`, `corrupt`, or `deleted`.
 
 The Card remains authoritative for accepted source metadata. `SourceBinary`
 records byte handling and verification.
@@ -962,7 +962,7 @@ Candidate fields:
 - `synchronization_id`;
 - invoice ID;
 - source and target node IDs;
-- manifest hash;
+- manifest hash — absent until the package is delivered (the selection names only the manifest id);
 - `status` — `pending`, `transferring`, `unknown_outcome`, `delivered`,
   `failed`, or `cancelled`;
 - idempotency key;

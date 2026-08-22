@@ -485,6 +485,7 @@
     "attach_local_source: [BEHAVIOR] After classifiable per-file outcomes are applied, return one SourceAttachmentBatchResult containing every submitted file's attached, already_attached, or rejected outcome plus source_status recomputed from accepted archive truth.",
     "attach_local_source: [VALIDATION_ERROR] Raise InvoiceNotFoundError when the exact accepted invoice target cannot be resolved. Raise SourceAttachmentRejectedError only when a request-level source-attachment condition prevents trustworthy independent per-file classification; do not use it for an ordinary file-local rejection that can be represented as SourceAttachmentItemResult(result=\"rejected\").",
     "attach_local_source: [FIELD_ASSIGNMENT] MUST assign the source identity of a local file as file.expected_source_id when supplied, otherwise f\"local:{sha256 hex of file.content}\"; a SourceBinary already stored for the same invoice_id and content_hash is the same source: the item result is attached with that stored source_id, no second identity row is inserted, and a replica row is added only when this node has none for it.",
+    "attach_local_source: [FIELD_ASSIGNMENT] A SourceBinary written for verified bytes has byte_status available (SourceByteStatus); missing names an identity whose bytes are absent, quarantined a replica that failed verification after storage, corrupt a stored replica whose hash no longer matches, deleted a loss decision.",
     "attach_local_source: [PROVENANCE] Preserve previously accepted provenance when equivalent bytes are reattached; repeated attempts may add attempt evidence but must not silently replace the provenance of already accepted source evidence.",
     "validate_card_assignment: [RULE_REFERENCE] An exact current active project match with no material conflict must use the accepted positive result from = rules.registry_context.active_exact_match_result.",
     "validate_card_assignment: [RULE_REFERENCE] An archived current project must remain review-required according to = rules.registry_context.archived_requires_review.",
@@ -731,7 +732,7 @@
     "SynchronizationService.synchronize_invoice_work: [ORCHESTRATION] Under the exact synchronization lock, load the attempt bound to invoice, target node, and idempotency key: reuse it when source node and manifest hash are also exactly equivalent, reject a conflicting one, otherwise insert the reservation; commit, then re-read the locked attempt, require that no issuance is recorded, update it as issued, and commit before transport; afterwards update the same locked attempt from its issued state with the conclusive or unknown status, finished_at, and safe_error_code, and send an exact delivered package through archive acceptance and verification.",
     "SynchronizationService.synchronize_invoice_work: [BEHAVIOR] Equivalent re-entry for a synchronization that already finished returns the existing evidence: the stored attempt, the archive receipt found through durable_archive.get_transfer_receipt by the attempt's manifest_hash, and a fresh verify_durable_acceptance for the accepted content hash; it issues no transport call and creates no second acceptance.",
     "SynchronizationService.synchronize_invoice_work: [FIELD_PROJECTION] The content_hash argument of every verify_durable_acceptance call is the Card revision identity (VpsInvoiceTransferPackage.card_revision.reference.content_hash on the transfer path, the accepted hash of the found receipt on re-entry); InvoiceSynchronization.manifest_hash and InvoiceTransferManifest.manifest_hash identify the manifest and are never passed as a content hash.",
-    "SynchronizationService.synchronize_invoice_work: [FIELD_ASSIGNMENT] The local attempt identity is the reserved InvoiceSynchronization (synchronization_id = f\"{invoice_id}:{target_node_id}:{idempotency_key}\", idempotency_key = selection.manifest_id); every later lock, reload, and final update addresses that reservation. VpsInvoiceTransferPackage.synchronization is transport-side evidence whose status and safe_error_code are copied onto the reservation; its synchronization_id is never used as a storage key.",
+    "SynchronizationService.synchronize_invoice_work: [FIELD_ASSIGNMENT] The local attempt identity is the reserved InvoiceSynchronization (synchronization_id = f\"{invoice_id}:{target_node_id}:{idempotency_key}\", idempotency_key = selection.manifest_id, manifest_hash None until the package is delivered and then package.manifest.manifest_hash, written by the final update); every later lock, reload, and final update addresses that reservation. VpsInvoiceTransferPackage.synchronization is transport-side evidence whose status and safe_error_code are copied onto the reservation; its synchronization_id is never used as a storage key.",
     "SynchronizationService.synchronize_invoice_work: [FALLBACK] Classify timeout, connection loss, or response loss after issuance as unknown_outcome and never repeat the logical transfer automatically.",
     "SynchronizationService.get_sync_status: [BEHAVIOR] Compose the observation from the latest persisted synchronization attempt for the exact invoice and node: absent attempts yield an absent status, unknown outcomes stay unknown, and the replica field stays None until replica storage is decided; never synthesize a synchronized default.",
     "SynchronizationService.reconcile_transfer_outcome: [FORBIDDEN_ACTION] Use only read-only remote reconciliation for a persisted unknown attempt and never issue another transfer.",
@@ -799,6 +800,7 @@
     "HoldedPublicationService: [ORCHESTRATION] HoldedPublicationRepository owns its transaction: every port method, reads included, runs only between begin() and commit() and raises without an active transaction; each public operation that touches the port opens it with begin() first, commits on success, rolls back on any failure, and never calls another public operation of this module that opens one (nested begin is rejected).",
     "HoldedPublicationService.__init__: [DEPENDENCY_BOUNDARY] Retain the exact repository, archive, and gateway; never construct adapters or discover alternate services.",
     "HoldedPublicationService.request_holded_publication: [ORCHESTRATION] Lock the exact revision, resolve archive truth, then load the publication bound to the exact revision: reuse it when it binds the same card revision and idempotency key, raise HoldedPublicationIneligibleError when a different active publication exists, and otherwise insert one logical publication — all before the sole gateway create.",
+    "HoldedPublicationService.request_holded_publication: [VALIDATION_ERROR] The required-source precondition is SourceStatus.complete of durable_archive.get_source_status for the invoice, read after the revision is resolved and before any publication row is inserted; canonical_card.source (file_ref, file_status) is capture evidence and takes no part in eligibility. Raise HoldedPublicationIneligibleError(\\\"required_source_missing\\\") only when complete is false.",
     "HoldedPublicationService.request_holded_publication: [FIELD_ASSIGNMENT] The reservation passed to create_holded_purchase is a HoldedPublicationAttempt with publication_attempt_id = f\"{publication_id}:{attempt_marker}\", publication_id, invoice_id, invoice_revision_hash = content_hash, canonical_holded_payload_hash = sha256 of the payload's model_dump_json(), attempt_marker = f\"cabinet-publication:{publication_id}\" (the stable non-financial marker, also carried verbatim in payload.desc), outcome reserved, and request_started_at, request_finished_at, document_id, safe_error_code None.",
     "HoldedPublicationService.request_holded_publication: [BEHAVIOR] Persist every lifecycle transition by updating the exact locked publication only from its reloaded current status along an accepted transition; a stale, skipped, or conflicting transition raises HoldedReconciliationRequiredError and writes nothing.",
     "HoldedPublicationService.reconcile_holded_publication: [FORBIDDEN_ACTION] Reload exact logical state and use read-only gateway recovery; never repeat create or change the bound revision.",
@@ -1195,7 +1197,7 @@
         "invoice_id": "str",
         "source_node_id": "str",
         "target_node_id": "str",
-        "manifest_hash": "str",
+        "manifest_hash": "str | None",
         "status": "str",
         "idempotency_key": "str",
         "started_at": "datetime",
@@ -1753,6 +1755,16 @@
         "resolution_reference": "str | None"
       }
     },
+    "SourceByteStatus": {
+      "kind": "enum",
+      "values": [
+        "available",
+        "missing",
+        "quarantined",
+        "corrupt",
+        "deleted"
+      ]
+    },
     "SourceBinary": {
       "identity": "entity",
       "fields": {
@@ -1764,7 +1776,7 @@
         "size_bytes": "int",
         "original_filename": "str | None",
         "first_received_at": "datetime",
-        "byte_status": "str"
+        "byte_status": "SourceByteStatus"
       }
     },
     "RegistryCataloguePublication": {
@@ -2718,7 +2730,7 @@
               "column": "manifest_hash",
               "field": "manifest_hash",
               "storage": "text",
-              "nullable": false,
+              "nullable": true,
               "check": null,
               "element_model": null
             },
@@ -3453,10 +3465,10 @@
             {
               "column": "byte_status",
               "field": "byte_status",
-              "storage": "text",
+              "storage": "enum",
               "nullable": false,
               "check": null,
-              "element_model": null
+              "element_model": "SourceByteStatus"
             }
           ],
           "primary_key": [
@@ -7023,6 +7035,7 @@
         "StoredInvoiceCard",
         "InvoiceCardValidationRecord",
         "DuplicateCandidateReview",
+        "SourceByteStatus",
         "SourceBinary",
         "RegistryCataloguePublication",
         "RegistryCatalogueReplica",
@@ -7252,7 +7265,8 @@
       "holded_publication": {
         "durable_archive": [
           "DurableArchiveService",
-          "get_archived_invoice"
+          "get_archived_invoice",
+          "get_source_status"
         ],
         "holded_gateway": [
           "HoldedGatewayService",
@@ -7448,7 +7462,9 @@
         "models": [
           "ArchiveBytePublication",
           "ArchiveUnitOfWork",
-          "SourceByteStore"
+          "SourceByteStore",
+          "SourceBinary",
+          "SourceByteStatus"
         ]
       },
       "registry_context": {
@@ -7590,7 +7606,8 @@
           "InvoiceCardLine",
           "InvoiceCardParty",
           "InvoiceCardObjectBlock",
-          "InvoiceCardTotals"
+          "InvoiceCardTotals",
+          "SourceByteStatus"
         ]
       },
       "source_byte_store": {
@@ -7664,6 +7681,7 @@
       "StoredInvoiceCard",
       "InvoiceCardValidationRecord",
       "DuplicateCandidateReview",
+      "SourceByteStatus",
       "SourceBinary",
       "RegistryCataloguePublication",
       "RegistryCatalogueReplica",

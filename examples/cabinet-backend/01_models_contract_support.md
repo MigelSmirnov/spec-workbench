@@ -395,6 +395,18 @@ enum (no runtime identity; a closed list — adding a value is a code change).
 
 ---
 
+## Model M89 — SourceByteStatus
+
+Closed vocabulary of the byte state of one stored source identity (`kind: enum`):
+`available`, `missing`, `quarantined`, `corrupt`, `deleted`. Adding a value is a
+code change, so it is a taxonomy, not a rule.
+
+### Identity
+
+enum (no runtime identity).
+
+---
+
 ## Model M50 — HoldedPurchaseLookupEvidence
 
 Immutable technical result of bounded read-only Holded recovery lookup.
