@@ -88,6 +88,18 @@ Published Room Planner results should represent a coherent object-level revision
 
 The exact internal level model, level identity, per-level editing/revision mechanics, and Registry projection are deferred to later design states.
 
+## Plan-centric spatial model
+
+Room Planner's authoritative editable drawing is two-dimensional and organized per spatial level/floor.
+
+Walls, rooms, openings, dimensions, boundaries, and their plan relationships are defined in real-world plan coordinates. The drawing is supplemented by construction-relevant vertical parameters such as heights, elevations/levels, thicknesses, and opening heights where those facts are required for renovation planning.
+
+These vertical parameters exist to let Room Planner derive construction-relevant geometry and room specifications from the 2D plan, including floor and ceiling areas, room perimeters, wall lengths, wall-face areas, net surface areas after openings, and physical volumes where applicable.
+
+The initial product does not require arbitrary free-form 3D solid or mesh modeling. A future 3D representation is allowed, but it must be a derived visualization of the authoritative 2D plan and its vertical parameters rather than an independent source of spatial truth.
+
+The exact coordinate, elevation, surface, and derived-geometry models are deferred to State 1.
+
 ## Platform integration boundary
 
 Room Planner participates in the shared platform through the living [Platform Router](../../PLATFORM_ROUTER.md) contract.
@@ -161,7 +173,7 @@ Demolition is a distinct renovation meaning and a distinct kind of downstream wo
 
 The Demolition Plan may refer to existing elements or existing finishes that are to be removed, but it MUST NOT create new construction.
 
-Examples include removing an existing wall, removing a door or window, opening or enlarging an existing opening, removing an existing finish, or other demolition actions introduced later within Room Planner scope.
+Examples include removing an existing wall, removing a door or window, opening or enlarging an existing opening, removing an existing finish, removing an existing ceiling system or covering, or other demolition actions introduced later within Room Planner scope.
 
 ### Construction Plan
 
@@ -169,7 +181,7 @@ The Construction Plan answers only:
 
 > What must be built, added, changed, prepared, or finished as part of the renovation?
 
-This is where new wall systems, new/changed openings, drywall systems, plaster, putty, paint, and floor leveling/fill belong.
+This is where new wall systems, new/changed openings, drywall systems, plaster, putty, paint, ceiling preparation/finishes, and floor leveling/fill belong.
 
 A construction element appearing here means work is intended. It must never be confused with an observed Existing condition.
 
@@ -237,16 +249,19 @@ Current in-scope capabilities include:
 
 - walls and connected wall geometry;
 - rooms derived from spatial boundaries;
+- room perimeters and derived floor/ceiling surfaces required for room specification;
 - wall height and thickness as construction-relevant facts;
+- room, wall, opening, floor, and ceiling height/elevation parameters required by owned calculations;
 - doors and windows as real wall openings rather than decorative SVG overlays;
 - construction-oriented dimensions;
 - accurate placement in real-world units;
-- demolition intent for relevant existing walls/openings/finishes;
+- demolition intent for relevant existing walls/openings/finishes/ceiling systems;
 - new/changed wall and opening construction;
 - drywall/gypsum-board partition systems and their physical quantity calculations;
 - plaster with selected/defined thickness and resulting physical quantity calculations;
 - putty quantities derived from applicable surface area;
-- paint quantities derived from applicable surface area and required system parameters;
+- paint and other supported surface-finish quantities derived from applicable surface area and required system parameters;
+- ceiling preparation and finish intent and its physical quantity calculations;
 - floor leveling/fill quantities derived from room geometry and required thickness/leveling inputs;
 - publication of versioned plan and quantity outputs.
 
@@ -293,6 +308,18 @@ The user supplies or selects construction intent such as plaster thickness or a 
 
 Project finishes belong to the Construction Plan; existing observed finishes and demolition of existing finishes are separate meanings.
 
+## Ceiling responsibility
+
+Ceilings are inside the Room Planner product boundary because they are construction-relevant room surfaces derived from or associated with the room's spatial geometry and are required for a useful room specification.
+
+Room Planner must be able to record the existing ceiling condition, represent demolition intent for an existing ceiling system or finish where applicable, and represent construction/preparation/finish intent for the retained or proposed ceiling surface.
+
+For example, an existing suspended ceiling may be marked for demolition, while a retained exposed Catalan ceiling may remain part of Existing and receive Construction intent for cleaning/preparation and lacquer or another supported finish system.
+
+Room Planner owns the geometric physical quantities for supported ceiling work, such as applicable ceiling surface area and quantities derived from that area plus Construction Catalog technical parameters. Pricing, labor costing, and commercial work-item composition remain PresuPro responsibilities.
+
+The exact ceiling domain model, supported ceiling systems, treatment taxonomy, and calculation rules are deferred to later design states.
+
 ## Floor responsibility
 
 Room Planner owns floor leveling/fill as part of preparing room geometry for renovation.
@@ -335,6 +362,7 @@ Room Planner calculates **physical quantities and volumes only** for the constru
 Examples include:
 
 - m² of board or finish surface;
+- m² of ceiling surface or supported ceiling treatment;
 - linear meters of profiles;
 - pieces of fasteners or structural components;
 - kg of mortar/compound where the technical catalog defines consumption by mass;
@@ -418,7 +446,7 @@ Room Planner provides physical quantities for its owned renovation scope. PresuP
 
 PresuPro should consume published Room Planner artifacts through the shared platform boundary rather than through a private Room Planner-to-PresuPro API.
 
-PresuPro should not be required to reverse-engineer Room Planner geometry in order to reproduce drywall, plaster, putty, paint, floor-fill, or demolition quantity logic owned by Room Planner.
+PresuPro should not be required to reverse-engineer Room Planner geometry in order to reproduce drywall, plaster, putty, paint, ceiling-treatment, floor-fill, or demolition quantity logic owned by Room Planner.
 
 ## Drawing/export ownership
 
@@ -465,6 +493,7 @@ Current explicit exclusions include:
 - production DXF/PDF/SVG drawing generation;
 - real-time multi-user collaborative editing in the initial product;
 - client-cabinet behavior;
+- arbitrary free-form 3D solid/mesh modeling as an authoritative editing model;
 - general-purpose CAD features that are not required for renovation planning.
 
 ## Precision constraint
@@ -565,9 +594,11 @@ The user can publish an accepted Existing result before the complete renovation 
 
 The user can separately describe Demolition work against the existing condition.
 
-The user can separately describe Construction work and finishes.
+The user can separately describe Construction work and finishes, including Room Planner-owned ceiling treatments.
 
 The user can inspect a resulting Proposed/To-Be view derived from the isolated plan meanings.
+
+The user can derive room-relevant geometry and specifications from the authoritative 2D plan plus vertical parameters.
 
 The user can obtain reproducible physical quantities for the scope owned by Room Planner.
 
@@ -583,6 +614,7 @@ The following questions remain intentionally unresolved because they do not bloc
 - What is the exact lifecycle for creating, accepting, freezing, and correcting the Existing baseline?
 - What detailed rules and user interaction distinguish a late discovery about the pre-renovation condition from a state change caused by performed demolition or construction work?
 - How are floor level/survey measurements acquired or imported?
+- Which ceiling systems and preparation/finish treatment families are required in the first usable release?
 - Which construction systems/material families are required in the initial Construction Catalog?
 - Does Room Planner expose editable construction-system templates, catalog-selected fixed systems, or both?
 - What parts of Room Planner results may be exposed directly to the client cabinet?
