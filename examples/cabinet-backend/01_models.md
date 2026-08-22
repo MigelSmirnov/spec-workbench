@@ -335,7 +335,8 @@ Candidate fields:
 - `revision_id` — the flat storage identity of the record (State 6 persistence
   repair: a persisted entity needs a scalar key; the revision reference stays
   the domain identity and is unique by `invoice_id` + `content_hash`);
-- exact Card revision reference;
+- `reference` — the exact Card revision reference (`InvoiceCardRevisionReference`; named
+  `reference`, not `revision`, so that a stored revision and its reference never read alike);
 - complete canonical Card payload;
 - `received_at`;
 - `received_from_node_id`;

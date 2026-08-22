@@ -564,7 +564,7 @@
     "get_source_status: [DEPENDENCY_BOUNDARY] MUST read accepted source and publication evidence only through the supplied DurableArchiveService.",
     "get_source_status: [FIELD_PROJECTION] The required source set of an invoice is the union of InvoiceTransferManifest.source_references (content_id is the source_id) over its accepted manifests together with every SourceBinary attached locally; available are the required ids with a verified SourceBinaryReplica; canonical_card.source is one capture-evidence block (kind, file_ref, file_status, note) and never yields a source identity.",
     "get_source_status: [ORCHESTRATION] Open one transaction, lock nothing, call derive_source_status, commit, and return its result; the derivation itself lives in derive_source_status.",
-    "derive_source_status: [BEHAVIOR] MUST derive SourceStatus from rows read through ArchiveUnitOfWork in the transaction the caller already opened: load_source_binaries gives the required source ids, list_source_replicas the verified available ids, list_incomplete_source_acceptances and list_source_loss_decisions the active_loss_decision_ids and completeness; missing = required minus available; raise InvoiceNotFoundError when load_invoice_card returns None; MUST NOT call begin(), commit(), rollback(), or another public operation of this module — every caller (get_source_status, accept_incomplete_source_evidence, record_source_loss, attach_local_source, verify_durable_acceptance) holds the open transaction and calls derive_source_status after its own writes.",
+    "derive_source_status: [BEHAVIOR] MUST derive SourceStatus from rows read through ArchiveUnitOfWork in the transaction the caller already opened: load_source_binaries gives the required source ids, list_source_replicas the verified available ids, list_incomplete_source_acceptances the active_acceptance_ids (acceptances whose card_revision is the current head revision), list_source_loss_decisions the active_loss_decision_ids, and completeness from those together; missing = required minus available; raise InvoiceNotFoundError when load_invoice_card returns None; MUST NOT call begin(), commit(), rollback(), or another public operation of this module — every caller (get_source_status, accept_incomplete_source_evidence, record_source_loss, attach_local_source, verify_durable_acceptance) holds the open transaction and calls derive_source_status after its own writes.",
     "accept_transfer_manifest: [FIELD_PROJECTION] Required sources of the delivered revision are manifest.source_references (content_id as source_id, content_hash as expected hash); completeness compares them with the verified replicas in the package and in the archive; canonical_card.source carries no source identity.",
     "accept_transfer_manifest: [ORCHESTRATION] MUST perform the idempotency lookup inside its own transaction through ArchiveUnitOfWork.list_transfer_receipts (a receipt with the same manifest_hash yields already_accepted) and MUST NOT call get_transfer_receipt, get_source_status, or verify_durable_acceptance, which open transactions of their own; completeness is computed with derive_source_status.",
     "get_archived_invoice: [DEPENDENCY_BOUNDARY] MUST read accepted immutable revisions only through the supplied DurableArchiveService.",
@@ -728,7 +728,7 @@
     "SynchronizationService.__init__: [DEPENDENCY_BOUNDARY] Retain the exact supplied repository, transport, and archive; never construct or discover alternates.",
     "SynchronizationService.synchronize_invoice_work: [ORCHESTRATION] Under the exact synchronization lock, load the attempt bound to invoice, target node, and idempotency key: reuse it when source node and manifest hash are also exactly equivalent, reject a conflicting one, otherwise insert the reservation; commit, then re-read the locked attempt, require that no issuance is recorded, update it as issued, and commit before transport; afterwards update the same locked attempt from its issued state with the conclusive or unknown status, finished_at, and safe_error_code, and send an exact delivered package through archive acceptance and verification.",
     "SynchronizationService.synchronize_invoice_work: [BEHAVIOR] Equivalent re-entry for a synchronization that already finished returns the existing evidence: the stored attempt, the archive receipt found through durable_archive.get_transfer_receipt by the attempt's manifest_hash, and a fresh verify_durable_acceptance for the accepted content hash; it issues no transport call and creates no second acceptance.",
-    "SynchronizationService.synchronize_invoice_work: [FIELD_PROJECTION] The content_hash argument of every verify_durable_acceptance call is the Card revision identity (VpsInvoiceTransferPackage.card_revision.revision.content_hash on the transfer path, the accepted hash of the found receipt on re-entry); InvoiceSynchronization.manifest_hash and InvoiceTransferManifest.manifest_hash identify the manifest and are never passed as a content hash.",
+    "SynchronizationService.synchronize_invoice_work: [FIELD_PROJECTION] The content_hash argument of every verify_durable_acceptance call is the Card revision identity (VpsInvoiceTransferPackage.card_revision.reference.content_hash on the transfer path, the accepted hash of the found receipt on re-entry); InvoiceSynchronization.manifest_hash and InvoiceTransferManifest.manifest_hash identify the manifest and are never passed as a content hash.",
     "SynchronizationService.synchronize_invoice_work: [FIELD_ASSIGNMENT] The local attempt identity is the reserved InvoiceSynchronization (synchronization_id = f\"{invoice_id}:{target_node_id}:{idempotency_key}\", idempotency_key = selection.manifest_id); every later lock, reload, and final update addresses that reservation. VpsInvoiceTransferPackage.synchronization is transport-side evidence whose status and safe_error_code are copied onto the reservation; its synchronization_id is never used as a storage key.",
     "SynchronizationService.synchronize_invoice_work: [FALLBACK] Classify timeout, connection loss, or response loss after issuance as unknown_outcome and never repeat the logical transfer automatically.",
     "SynchronizationService.get_sync_status: [BEHAVIOR] Compose the observation from the latest persisted synchronization attempt for the exact invoice and node: absent attempts yield an absent status, unknown outcomes stay unknown, and the replica field stays None until replica storage is decided; never synthesize a synchronized default.",
@@ -1112,7 +1112,7 @@
       "identity": "entity",
       "fields": {
         "revision_id": "str",
-        "revision": "InvoiceCardRevisionReference",
+        "reference": "InvoiceCardRevisionReference",
         "canonical_card": "InvoiceCardV1",
         "received_at": "datetime",
         "received_from_node_id": "str",
@@ -1541,6 +1541,7 @@
         "failed_source_ids": "tuple[str, ...]",
         "completeness": "str",
         "active_loss_decision_ids": "tuple[str, ...]",
+        "active_acceptance_ids": "tuple[str, ...]",
         "complete": "bool",
         "observed_at": "datetime"
       }
@@ -3281,8 +3282,8 @@
               "element_model": null
             },
             {
-              "column": "revision",
-              "field": "revision",
+              "column": "reference",
+              "field": "reference",
               "storage": "json_model",
               "nullable": false,
               "check": null,
@@ -3351,13 +3352,13 @@
           "unique": [
             [
               {
-                "column": "revision",
+                "column": "reference",
                 "path": [
                   "invoice_id"
                 ]
               },
               {
-                "column": "revision",
+                "column": "reference",
                 "path": [
                   "content_hash"
                 ]
@@ -5298,7 +5299,7 @@
               "table": "invoice_card_revisions",
               "filter": [
                 {
-                  "column": "revision",
+                  "column": "reference",
                   "path": [
                     "invoice_id"
                   ],
@@ -5306,7 +5307,7 @@
                   "argument": "invoice_id"
                 },
                 {
-                  "column": "revision",
+                  "column": "reference",
                   "path": [
                     "content_hash"
                   ],
@@ -5316,7 +5317,7 @@
               ],
               "select": [
                 "revision_id",
-                "revision",
+                "reference",
                 "canonical_card",
                 "received_at",
                 "received_from_node_id",
@@ -5539,7 +5540,7 @@
               "table": "invoice_card_revisions",
               "columns": [
                 "revision_id",
-                "revision",
+                "reference",
                 "canonical_card",
                 "received_at",
                 "received_from_node_id",
@@ -5555,7 +5556,7 @@
               "table": "invoice_card_revisions",
               "filter": [
                 {
-                  "column": "revision",
+                  "column": "reference",
                   "path": [
                     "invoice_id"
                   ],
@@ -5563,7 +5564,7 @@
                   "argument": "invoice_id"
                 },
                 {
-                  "column": "revision",
+                  "column": "reference",
                   "path": [
                     "content_hash"
                   ],
