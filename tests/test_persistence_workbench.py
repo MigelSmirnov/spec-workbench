@@ -435,3 +435,23 @@ def test_v3_nested_storage_forms_are_version_keyed() -> None:
     del payload["repositories"][0]["transaction"]
     payload["repositories"][0]["methods"].pop()
     assert any(item.code == "invalid_column_storage" or "storage" in item.message for item in validate(payload))
+
+
+def test_v3_unique_paths_and_extra_kinds_are_version_keyed() -> None:
+    payload = _v3_backend()
+    payload["tables"][0]["columns"].append({
+        "column": "card_revision", "field": "card_revision", "storage": "json_model",
+        "nullable": False, "check": None, "element_model": "InvoiceCardRevisionReference",
+    })
+    payload["tables"][0]["unique"] = [[{"column": "card_revision", "path": ["invoice_id"]}, "invoice_id"]]
+    payload["repositories"][0]["methods"] += [
+        {"method": "all_invoices", "query": "list_all", "table": "invoices", "select": ["invoice_id"],
+         "order_by": [{"column": "invoice_id", "direction": "asc"}]},
+        {"method": "upsert_invoices", "query": "upsert_many", "table": "invoices",
+         "columns": ["invoice_id", "card_revision"], "conflict": ["invoice_id"], "updates": ["card_revision"]},
+    ]
+    assert validate(payload) == []
+    payload["schema_version"] = 2
+    payload["backend"] = {"engine": "sqlite", "emitter": "sqlite_sync_v2"}
+    codes = {item.code for item in validate(payload)}
+    assert "unsupported_query" in codes

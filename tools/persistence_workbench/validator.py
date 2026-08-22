@@ -49,6 +49,10 @@ STORAGE_REPRESENTATIONS = frozenset({
 })
 # v3 (§6.3): one nested record model, and a model-less JSON value.
 STORAGE_REPRESENTATIONS_V3 = STORAGE_REPRESENTATIONS | {"json_model", "json_value"}
+TABLE_QUERY_FIELDS_V3_EXTRA: dict[str, frozenset[str]] = {
+    "upsert_many": frozenset({"table", "columns", "conflict", "updates"}),
+    "list_all": frozenset({"table", "select", "order_by"}),
+}
 TABLE_QUERY_FIELDS: dict[str, frozenset[str]] = {
     "insert": frozenset({"table", "columns"}),
     "insert_many": frozenset({"table", "columns"}),
@@ -177,11 +181,26 @@ def _validate_table(row: Any, index: int, version: int = 2) -> tuple[list[Findin
         findings.append(Finding("error", "invalid_unique", "unique must be a list of non-empty column-name lists", location=location + ".unique"))
     else:
         for unique_index, item in enumerate(unique):
-            names, errors = _string_list(item, location=f"{location}.unique[{unique_index}]")
+            group_location = f"{location}.unique[{unique_index}]"
+            if version >= 3 and isinstance(item, list) and any(isinstance(member, dict) for member in item):
+                # v3: {column, path} addresses a key inside a json_model column
+                for member_index, member in enumerate(item):
+                    member_location = f"{group_location}[{member_index}]"
+                    if isinstance(member, dict):
+                        findings.extend(_shape(member, frozenset({"column", "path"}), location=member_location, code_prefix="unique_path"))
+                        if member.get("column") not in declared:
+                            findings.append(Finding("error", "unknown_unique_column", f"unknown column {member.get('column')!r}", location=member_location))
+                        path = member.get("path")
+                        if not (isinstance(path, list) and path and all(_text(step) for step in path)):
+                            findings.append(Finding("error", "invalid_unique_path", "path must be a non-empty list of field names", location=member_location))
+                    elif not _text(member) or member not in declared:
+                        findings.append(Finding("error", "unknown_unique_column", f"unknown column {member!r}", location=member_location))
+                continue
+            names, errors = _string_list(item, location=group_location)
             findings.extend(errors)
             for name in names:
                 if name not in declared:
-                    findings.append(Finding("error", "unknown_unique_column", f"unknown column {name!r}", location=f"{location}.unique[{unique_index}]"))
+                    findings.append(Finding("error", "unknown_unique_column", f"unknown column {name!r}", location=group_location))
 
     return findings, table, declared
 
@@ -272,20 +291,21 @@ def _validate_method(
         if not (isinstance(keys, list) and keys and all(_text(item) for item in keys)):
             findings.append(Finding("error", "invalid_lock_keys", "lock keys must be a non-empty list of argument names", repository, location + ".keys"))
         return findings, method
-    if query not in QUERY_FIELDS:
+    fields = {**QUERY_FIELDS, **(TABLE_QUERY_FIELDS_V3_EXTRA if version >= 3 else {})}
+    if query not in fields:
         findings.append(Finding("error", "unsupported_query", f"unsupported persistence query: {query!r}", repository, location + ".query"))
         return findings, method
 
-    expected = frozenset({"method", "query"}) | QUERY_FIELDS[query]
+    expected = frozenset({"method", "query"}) | fields[query]
     findings.extend(_shape(row, expected, location=location, code_prefix="method", repository=repository))
-    if query in TABLE_QUERY_FIELDS:
+    if query in TABLE_QUERY_FIELDS or query in TABLE_QUERY_FIELDS_V3_EXTRA:
         table = row.get("table")
         if not _text(table):
             findings.append(Finding("error", "invalid_method_table", "table must be a non-empty string", repository, location + ".table"))
         elif table not in table_names:
             findings.append(Finding("error", "unknown_method_table", f"unknown table {table!r}", repository, location + ".table"))
         columns = row.get("columns")
-        if query in {"insert", "insert_many", "upsert"}:
+        if query in {"insert", "insert_many", "upsert", "upsert_many"}:
             names, errors = _string_list(columns, location=location + ".columns")
             findings.extend(Finding(item.severity, item.code, item.message, repository, item.location) for item in errors)
             if _text(table) and table in table_columns:

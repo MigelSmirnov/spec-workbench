@@ -86,14 +86,21 @@ def validate_projection(spec: dict[str, Any], payload: dict[str, Any]) -> list[F
 
         table_name_ref = row.get("table_name_ref")
         if _text(table_name_ref):
-            if not table_name_ref.startswith("config."):
+            # The Factory gate (tools/persistence_ir.py) reads table_name_ref as an
+            # identifier under config.persistence; a full config.* address is also
+            # accepted so older authoring stays valid. Both must resolve.
+            address = (
+                table_name_ref if table_name_ref.startswith("config.")
+                else f"config.persistence.{table_name_ref}"
+            )
+            if "." in table_name_ref and not table_name_ref.startswith("config."):
                 findings.append(Finding(
                     "error", "invalid_table_name_ref_namespace",
-                    "table_name_ref must address config.*",
+                    "table_name_ref must be a config.persistence identifier or a config.* address",
                     location=location + ".table_name_ref",
                 ))
             else:
-                exists, value = _lookup(spec, table_name_ref)
+                exists, value = _lookup(spec, address)
                 if not exists:
                     findings.append(Finding(
                         "error", "unresolved_table_name_ref",
