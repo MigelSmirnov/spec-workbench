@@ -17,6 +17,28 @@ structurally valid but leave important engineering decisions unresolved.
 - `BEHAVIORAL_NOTES.md` explains how to design effective notes without
   changing the factory specification language.
 
+## Repository entry point
+
+Before manually searching `examples/` or guessing which branch contains an
+active case, inspect the repository with:
+
+```bash
+python tools/workbench.py
+```
+
+The default `status` command summarizes the current checkout and surfaces cases
+that exist only on other known Git refs. Use:
+
+```bash
+python tools/workbench.py list
+```
+
+for the full case catalog. Both commands support `--json`.
+
+This entry point is discovery/navigation only. It does not replace the ordered
+design-state methodology or the requirement to read the relevant case context
+before changing architecture.
+
 ## Read first
 
 Before changing the methodology, read:

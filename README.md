@@ -4,6 +4,34 @@
 
 Unlike the factory, which generates code from an existing specification, Spec Workbench helps design the specification itself.
 
+## Start here
+
+Use the repository entry point before looking for a case manually:
+
+```bash
+python tools/workbench.py
+```
+
+With no arguments it runs `status`: it shows the current checkout, its case
+studies and cases that exist only on other known local/remote Git refs.
+
+List all discovered case-study snapshots explicitly with:
+
+```bash
+python tools/workbench.py list
+```
+
+Both commands support `--json` for agents and other tooling:
+
+```bash
+python tools/workbench.py status --json
+python tools/workbench.py list --json
+```
+
+`list` deliberately inspects known Git refs, not only the checked-out
+`examples/` directory. This makes active case studies discoverable even when
+their working branch has not yet been merged to `main`.
+
 ## Goal
 
 Create specifications that:
