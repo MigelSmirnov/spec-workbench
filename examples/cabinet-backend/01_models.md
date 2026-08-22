@@ -1542,7 +1542,7 @@ Candidate fields:
 - `publication_id`;
 - exact Card revision reference;
 - idempotency key;
-- `status` — `pending`, `succeeded`, `failed`, `ambiguous`, or `cancelled`;
+- `status: HoldedPublicationStatus` — closed enum M91: `pending`, `verified`, `failed`, `payload_mismatch`, `outcome_unknown`, `duplicate_conflict`, `reconciliation_required`, `cancelled`;
 - external document ID optional;
 - created and completed times;
 - safe outcome details.

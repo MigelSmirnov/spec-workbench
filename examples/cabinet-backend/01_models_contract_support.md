@@ -419,6 +419,19 @@ enum (no runtime identity).
 
 ---
 
+## Model M91 — HoldedPublicationStatus
+
+Closed lifecycle of one logical Holded publication (`kind: enum`): `pending`,
+`verified`, `failed`, `payload_mismatch`, `outcome_unknown`, `duplicate_conflict`,
+`reconciliation_required`, `cancelled`. Only `verified` is logical success and it
+always carries `external_document_id`.
+
+### Identity
+
+enum (no runtime identity).
+
+---
+
 ## Model M50 — HoldedPurchaseLookupEvidence
 
 Immutable technical result of bounded read-only Holded recovery lookup.

@@ -128,7 +128,7 @@ request_holded_publication: [BEHAVIOR] Bind the logical publication to the exact
 request_holded_publication: [VALIDATION_ERROR] Raise HoldedPublicationIneligibleError when the exact revision fails accepted eligibility, duplicate-prevention, authorization, or required-source preconditions; never manufacture a successful logical publication for an ineligible request.
 reconcile_holded_publication: [RULE_REFERENCE] A recovered remote candidate may settle the publication only after full verification; use = rules.holded_publication.recovered_candidate_requires_full_verification.
 reconcile_holded_publication: [BEHAVIOR] Reconcile an ambiguous logical attempt using read-only remote evidence and return a settled publication only when the evidence identifies exactly one fully verified matching remote purchase.
-reconcile_holded_publication: [VALIDATION_ERROR] Raise HoldedReconciliationRequiredError when zero matches, multiple matches, payload mismatch, lookup failure, or inconsistent attempt evidence leaves the logical publication unresolved or conflicting.
+reconcile_holded_publication: [RETURN_SHAPE] MUST return the publication in its settled state: verified for one exact candidate that passes complete A51 verification, outcome_unknown for zero matches or lookup failure, duplicate_conflict for multiple exact matches, payload_mismatch for one candidate that fails verification, reconciliation_required for inconsistent attempt evidence; an unresolved result is returned, never raised. HoldedReconciliationRequiredError is raised only for a stale or conflicting status transition.
 get_holded_publication_status: [DEPENDENCY_BOUNDARY] MUST delegate exact status reads through the supplied HoldedPublicationService.
 
 # holded_gateway

@@ -451,7 +451,7 @@
     "request_holded_publication: [VALIDATION_ERROR] Raise HoldedPublicationIneligibleError when the exact revision fails accepted eligibility, duplicate-prevention, authorization, or required-source preconditions; never manufacture a successful logical publication for an ineligible request.",
     "reconcile_holded_publication: [RULE_REFERENCE] A recovered remote candidate may settle the publication only after full verification; use = rules.holded_publication.recovered_candidate_requires_full_verification.",
     "reconcile_holded_publication: [BEHAVIOR] Reconcile an ambiguous logical attempt using read-only remote evidence and return a settled publication only when the evidence identifies exactly one fully verified matching remote purchase.",
-    "reconcile_holded_publication: [VALIDATION_ERROR] Raise HoldedReconciliationRequiredError when zero matches, multiple matches, payload mismatch, lookup failure, or inconsistent attempt evidence leaves the logical publication unresolved or conflicting.",
+    "reconcile_holded_publication: [RETURN_SHAPE] MUST return the publication in its settled state: verified for one exact candidate that passes complete A51 verification, outcome_unknown for zero matches or lookup failure, duplicate_conflict for multiple exact matches, payload_mismatch for one candidate that fails verification, reconciliation_required for inconsistent attempt evidence; an unresolved result is returned, never raised. HoldedReconciliationRequiredError is raised only for a stale or conflicting status transition.",
     "create_holded_purchase: [ORCHESTRATION] MUST perform the one technical remote create for the supplied already-authorized payload and the supplied reservation (a HoldedPublicationAttempt built by the caller with outcome reserved, whose publication_attempt_id, publication_id, invoice_id, invoice_revision_hash, canonical_holded_payload_hash, and attempt_marker are the stable attempt identity), then persist immutable technical outcome evidence.",
     "create_holded_purchase: [SECURITY_BOUNDARY] Keep Holded credentials inside the gateway boundary and redact reusable secret material from logs, returned business objects, and ordinary attempt evidence.",
     "create_holded_purchase: [BEHAVIOR] Preserve credential failure, remote rejection, timeout, malformed response, or ambiguous network outcome as explicit immutable technical attempt evidence rather than retrying the mutation or claiming remote failure/success without proof.",
@@ -512,7 +512,7 @@
     "request_holded_publication: [ORCHESTRATION] Persist the logical publication attempt and exact immutable Invoice Card revision binding before the one permitted create mutation; a technical create response never by itself settles Cabinet publication success.",
     "request_holded_publication: [ORCHESTRATION] When create_holded_purchase returns a clear canonical documentId, obtain read-only evidence for that exact Holded document through the existing Holded gateway read operation and perform complete A51 business verification before returning a successful logical publication.",
     "request_holded_publication: [BEHAVIOR] Complete A51 verification must preserve and compare supplier identity/name, supplier invoice number, date, currency, line count and order, line names, quantities, tax rates, and final gross total within accepted currency precision; Holded intermediate rounding differences may be preserved without failure only under the accepted A51 rules.",
-    "request_holded_publication: [BEHAVIOR] A clear create followed by GET/read failure or business-field mismatch is non-success/reconciliation-required and must never authorize another automatic POST or rewrite Invoice Card facts.",
+    "request_holded_publication: [RETURN_SHAPE] A clear create followed by GET/read failure returns the publication in reconciliation_required, a business-field mismatch returns it in payload_mismatch, an ambiguous create returns it in outcome_unknown, a rejected create returns it in failed, and a verified read-back returns it in verified with external_document_id; none of these raise, none authorize another automatic POST, and none rewrite Invoice Card facts.",
     "request_holded_publication: [BEHAVIOR] Store Holded numeric status as raw external evidence only; do not infer draft, approved, paid, posted, cancelled, or other accounting meaning.",
     "reconcile_holded_publication: [ORCHESTRATION] After an ambiguous create outcome, perform only read-only marker recovery; zero matches remain outcome-unknown, multiple exact matches remain duplicate conflict, and one exact marker candidate must be GET-read and completely A51-verified before settlement.",
     "reconcile_holded_publication: [BEHAVIOR] An exact attempt-marker match is correlation evidence only and must never settle a publication without complete business verification against the stored exact attempt and Invoice Card revision.",
@@ -1265,13 +1265,26 @@
         "canonical_content": "str"
       }
     },
+    "HoldedPublicationStatus": {
+      "kind": "enum",
+      "values": [
+        "pending",
+        "verified",
+        "failed",
+        "payload_mismatch",
+        "outcome_unknown",
+        "duplicate_conflict",
+        "reconciliation_required",
+        "cancelled"
+      ]
+    },
     "HoldedPublication": {
       "identity": "entity",
       "fields": {
         "publication_id": "str",
         "card_revision": "InvoiceCardRevisionReference",
         "idempotency_key": "str",
-        "status": "str",
+        "status": "HoldedPublicationStatus",
         "external_document_id": "str | None",
         "created_at": "datetime",
         "completed_at": "datetime | None",
@@ -2320,10 +2333,10 @@
             {
               "column": "status",
               "field": "status",
-              "storage": "text",
+              "storage": "enum",
               "nullable": false,
               "check": null,
-              "element_model": null
+              "element_model": "HoldedPublicationStatus"
             },
             {
               "column": "external_document_id",
@@ -7018,6 +7031,7 @@
         "InvoiceWorkingReplica",
         "EstimateItemSnapshot",
         "EstimateSnapshot",
+        "HoldedPublicationStatus",
         "HoldedPublication",
         "HoldedAttemptOutcome",
         "HoldedPublicationAttempt",
@@ -7304,7 +7318,8 @@
           "InvoiceCardTotals",
           "HoldedLookupOutcome",
           "SourceStatus",
-          "HoldedAttemptOutcome"
+          "HoldedAttemptOutcome",
+          "HoldedPublicationStatus"
         ]
       },
       "retention_release": {
@@ -7407,7 +7422,8 @@
           "SourceLossDecision",
           "AuthorizationDecision",
           "SourceAttachmentBatchResult",
-          "AccessControlBackend"
+          "AccessControlBackend",
+          "HoldedPublicationStatus"
         ],
         "holded_gateway": [
           "HoldedGatewayService"
@@ -7564,7 +7580,8 @@
         "models": [
           "HoldedPublication",
           "HoldedPublicationRepository",
-          "InvoiceCardRevisionReference"
+          "InvoiceCardRevisionReference",
+          "HoldedPublicationStatus"
         ]
       },
       "registry_context_persistence": {
@@ -7669,6 +7686,7 @@
       "InvoiceWorkingReplica",
       "EstimateItemSnapshot",
       "EstimateSnapshot",
+      "HoldedPublicationStatus",
       "HoldedPublication",
       "HoldedAttemptOutcome",
       "HoldedPublicationAttempt",
