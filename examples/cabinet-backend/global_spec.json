@@ -70,6 +70,7 @@
     "ArchiveUnitOfWork.insert_publication": "(self, publication: ArchiveBytePublication) -> None",
     "ArchiveUnitOfWork.update_publication_state": "(self, publication: ArchiveBytePublication) -> None",
     "ArchiveUnitOfWork.load_publication": "(self, publication_id: str) -> ArchiveBytePublication | None",
+    "SourceByteStore.final_reference_for": "(self, expected_hash: str) -> str",
     "SourceByteStore.stage": "(self, publication_id: str, content: bytes, expected_hash: str, expected_size: int) -> str",
     "SourceByteStore.verify": "(self, storage_reference: str, expected_hash: str, expected_size: int) -> bool",
     "SourceByteStore.publish": "(self, staging_reference: str, final_reference: str, expected_hash: str, expected_size: int) -> None",
@@ -89,6 +90,7 @@
     "PostgresArchiveUnitOfWork.insert_publication": "(self, publication: ArchiveBytePublication) -> None",
     "PostgresArchiveUnitOfWork.update_publication_state": "(self, publication: ArchiveBytePublication) -> None",
     "PostgresArchiveUnitOfWork.load_publication": "(self, publication_id: str) -> ArchiveBytePublication | None",
+    "LocalFilesystemSourceByteStore.final_reference_for": "(self, expected_hash: str) -> str",
     "LocalFilesystemSourceByteStore.stage": "(self, publication_id: str, content: bytes, expected_hash: str, expected_size: int) -> str",
     "LocalFilesystemSourceByteStore.verify": "(self, storage_reference: str, expected_hash: str, expected_size: int) -> bool",
     "LocalFilesystemSourceByteStore.publish": "(self, staging_reference: str, final_reference: str, expected_hash: str, expected_size: int) -> None",
@@ -439,6 +441,7 @@
     "attach_local_source: [CONFIG_REFERENCE] Reject each source file whose byte length exceeds = config.source_upload.max_file_size_bytes before content parsing or persistence; the configured deployment value is not module-owned state.",
     "attach_local_source: [BEHAVIOR] Commit each accepted source identity, verified replica, provenance, and recomputed SourceStatus as one atomic transition; concurrent identical requests have one logical result, conflicting bytes for one source identity cannot both commit, and no check-then-insert path may expose duplicate identity, partial success, or prematurely cleared missing-source state.",
     "attach_local_source: [ORCHESTRATION] For each accepted file, under the invoice lock insert the source identity, its replica, and a staged ArchiveBytePublication, then advance that publication only from its reloaded state along = rules.archive_byte_publication.recovery_states (staged → metadata_committed → published, or → failed; never published → failed) through update_publication_state; a stale or skipped transition writes nothing.",
+    "attach_local_source: [DEPENDENCY_BOUNDARY] MUST obtain the final storage reference of an ArchiveBytePublication only from SourceByteStore.final_reference_for(content_hash); callers never compose store paths.",
     "accept_incomplete_source_evidence: [SECURITY_BOUNDARY] Require authorization for the exact incomplete-source acceptance operation; possession of an invoice or decision identifier is not authority.",
     "accept_incomplete_source_evidence: [BEHAVIOR] Record immutable auditable evidence for the exact Card revision and exact missing source references, then return awaiting_source status without claiming absent bytes are stored.",
     "accept_incomplete_source_evidence: [VALIDATION_ERROR] Raise InvoiceNotFoundError for an unknown exact accepted revision and SourceAttachmentRejectedError for empty, stale, mismatched, already-complete, or conflicting acceptance evidence before changing normal archive visibility.",
@@ -456,6 +459,7 @@
     "PostgresArchiveUnitOfWork.lock_invoice: [BEHAVIOR] MUST acquire PostgreSQL serialization for the exact invoice before mutable acceptance or source state is read.",
     "PostgresArchiveUnitOfWork.insert_publication: [PROVENANCE] MUST append one new ArchiveBytePublication row for the exact publication_id inside the active invoice-locked transaction; a second row for the same publication_id fails on uniqueness and the row is never replaced.",
     "LocalFilesystemSourceByteStore.__init__: [VALIDATION_ERROR] MUST require an absolute private root whose staging and final directories support same-filesystem atomic rename.",
+    "LocalFilesystemSourceByteStore.final_reference_for: [PATH_OR_ARTIFACT_POLICY] MUST return the opaque content-addressed final reference for a lowercase hex sha256 digest without touching the filesystem; the layout of that reference is owned by the store and is never composed by callers.",
     "LocalFilesystemSourceByteStore.stage: [PATH_OR_ARTIFACT_POLICY] MUST create a private candidate beneath the configured staging root, flush it, reopen it, and verify exact hash and size before returning an opaque reference.",
     "LocalFilesystemSourceByteStore.verify: [SECURITY_BOUNDARY] MUST resolve only store-created opaque references beneath the configured root and reject traversal, symlink escape, devices, and non-regular files.",
     "LocalFilesystemSourceByteStore.publish: [PATH_OR_ARTIFACT_POLICY] MUST use same-filesystem atomic rename to a content-addressed final reference; an existing final file may be reused only after exact verification and different bytes MUST NOT be overwritten.",
@@ -528,6 +532,7 @@
     "ArchiveUnitOfWork.upsert_invoice_card: [PROVENANCE] MUST insert the StoredInvoiceCard head by invoice_id or, when it exists, update only card_version, current_content_hash, current_status, last_received_at, durable_at, and archive_status inside the active invoice-locked transaction; MUST NOT change first_received_at or delete the row.",
     "ArchiveUnitOfWork.insert_incomplete_source_acceptance: [PROVENANCE] MUST append the exact immutable acceptance evidence and MUST NOT replace prior decisions.",
     "ArchiveUnitOfWork.insert_source_loss_decision: [PROVENANCE] MUST append the exact immutable loss evidence and MUST NOT delete source or acceptance history.",
+    "SourceByteStore.final_reference_for: [PATH_OR_ARTIFACT_POLICY] MUST return the opaque content-addressed final reference for a lowercase hex sha256 digest without touching the filesystem; the layout of that reference is owned by the store and is never composed by callers.",
     "SourceByteStore.stage: [PATH_OR_ARTIFACT_POLICY] MUST create a private candidate, flush it, reopen it, and verify exact expected hash and size before returning an opaque reference.",
     "SourceByteStore.verify: [SECURITY_BOUNDARY] MUST resolve only store-created opaque references under its configured root and reject traversal, symlink escape, devices, and non-regular files.",
     "SourceByteStore.publish: [PATH_OR_ARTIFACT_POLICY] MUST atomically publish verified staged bytes to the content-addressed final reference, reuse equivalent existing content only after verification, and never overwrite different bytes.",
@@ -1800,6 +1805,26 @@
       "archived_requires_review": true,
       "missing_requires_review": true,
       "archived_means_completed": false
+    },
+    "source_byte_store_backend": {
+      "kind": "source_byte_store_backend",
+      "schema_version": 1,
+      "backend": {
+        "emitter": "python_filesystem_source_byte_store_v1"
+      },
+      "wiring": {
+        "module": "source_byte_store",
+        "concrete_class": "LocalFilesystemSourceByteStore",
+        "interface": "SourceByteStore",
+        "models_module": "cabinet_backend.models"
+      },
+      "layout": {
+        "staging_directory": "staging",
+        "final_directory": "final",
+        "hash_algorithm": "sha256",
+        "final_path_scheme": "sha256_content_addressed",
+        "publication_primitive": "same_filesystem_atomic_rename"
+      }
     },
     "persistence_backend": {
       "kind": "persistence_backend",
@@ -6035,6 +6060,9 @@
         "create_durable_archive_schema",
         "PostgresArchiveUnitOfWork"
       ],
+      "source_byte_store": [
+        "LocalFilesystemSourceByteStore"
+      ],
       "durable_archive": [
         "accept_transfer_manifest",
         "verify_durable_acceptance",
@@ -6045,7 +6073,6 @@
         "SourceAttachmentRejectedError",
         "accept_incomplete_source_evidence",
         "record_source_loss",
-        "LocalFilesystemSourceByteStore",
         "DurableArchiveService"
       ],
       "registry_context_persistence": [
@@ -6308,7 +6335,6 @@
           "AccessControlBackend"
         ],
         "durable_archive": [
-          "LocalFilesystemSourceByteStore",
           "DurableArchiveService"
         ],
         "registry_context": [
@@ -6353,6 +6379,9 @@
         ],
         "durable_archive_persistence": [
           "PostgresArchiveUnitOfWork"
+        ],
+        "source_byte_store": [
+          "LocalFilesystemSourceByteStore"
         ]
       },
       "durable_archive": {
@@ -6472,6 +6501,11 @@
           "ContentReference",
           "InvoiceCardRevisionReference"
         ]
+      },
+      "source_byte_store": {
+        "models": [
+          "SourceByteStore"
+        ]
       }
     }
   },
@@ -6583,6 +6617,9 @@
       "create_durable_archive_schema",
       "PostgresArchiveUnitOfWork"
     ],
+    "source_byte_store": [
+      "LocalFilesystemSourceByteStore"
+    ],
     "durable_archive": [
       "accept_transfer_manifest",
       "verify_durable_acceptance",
@@ -6593,7 +6630,6 @@
       "SourceAttachmentRejectedError",
       "accept_incomplete_source_evidence",
       "record_source_loss",
-      "LocalFilesystemSourceByteStore",
       "DurableArchiveService"
     ],
     "registry_context_persistence": [
@@ -6690,6 +6726,7 @@
     "models",
     "access_control",
     "durable_archive_persistence",
+    "source_byte_store",
     "durable_archive",
     "registry_context_persistence",
     "registry_context",
@@ -6838,12 +6875,14 @@
     "RetentionReleaseRepository.save_evaluation",
     "RetentionReleaseRepository.load_decision",
     "RetentionReleaseRepository.insert_decision",
-    "PostgresRetentionReleaseRepository.__init__"
+    "PostgresRetentionReleaseRepository.__init__",
+    "SourceByteStore.final_reference_for"
   ],
   "module_paths": {
     "models": "cabinet_backend/models",
     "access_control": "cabinet_backend/access_control",
     "durable_archive_persistence": "cabinet_backend/durable_archive_persistence",
+    "source_byte_store": "cabinet_backend/source_byte_store",
     "durable_archive": "cabinet_backend/durable_archive",
     "registry_context_persistence": "cabinet_backend/registry_context_persistence",
     "registry_context": "cabinet_backend/registry_context",

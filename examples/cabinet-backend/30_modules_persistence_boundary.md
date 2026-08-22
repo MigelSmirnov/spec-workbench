@@ -65,8 +65,8 @@ IR is authored in `70_persistence_closure.json` and projected verbatim into
 `rules.persistence_backend`.
 
 ## Open items
-- `LocalFilesystemSourceByteStore` stays in `durable_archive` until it is bound
-  to the existing `binary_storage_backend`; `HttpxVpsSynchronizationTransport`
+- `LocalFilesystemSourceByteStore` now lives in `source_byte_store` under
+  `rules.source_byte_store_backend` (§6.5); `HttpxVpsSynchronizationTransport`
   stays in `synchronization` until a VPS transport backend exists;
 - `RegistryProjectSnapshot` is referenced by `WorkObject.registry_snapshot_id`
   but is not a persisted model; the Registry-derived projection has no durable

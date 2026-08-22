@@ -46,6 +46,7 @@ The accepted archive transitions additionally require typed load_transfer_receip
 
 ## Byte-store port
 
+- SourceByteStore.final_reference_for(self, expected_hash: str) -> str
 - SourceByteStore.stage(self, publication_id: str, content: bytes, expected_hash: str, expected_size: int) -> str
 - SourceByteStore.verify(self, storage_reference: str, expected_hash: str, expected_size: int) -> bool
 - SourceByteStore.publish(self, staging_reference: str, final_reference: str, expected_hash: str, expected_size: int) -> None
@@ -79,6 +80,7 @@ Storage references are opaque store-created values and are never accepted from H
 - PostgresArchiveUnitOfWork.insert_incomplete_source_acceptance(self, decision: IncompleteSourceAcceptance) -> None
 - PostgresArchiveUnitOfWork.insert_source_loss_decision(self, decision: SourceLossDecision) -> None
 - LocalFilesystemSourceByteStore.__init__(self, root_path: str) -> None
+- LocalFilesystemSourceByteStore.final_reference_for(self, expected_hash: str) -> str
 - LocalFilesystemSourceByteStore.stage(self, publication_id: str, content: bytes, expected_hash: str, expected_size: int) -> str
 - LocalFilesystemSourceByteStore.verify(self, storage_reference: str, expected_hash: str, expected_size: int) -> bool
 - LocalFilesystemSourceByteStore.publish(self, staging_reference: str, final_reference: str, expected_hash: str, expected_size: int) -> None
@@ -104,3 +106,7 @@ states from `rules.archive_byte_publication`, selects a receipt by accepted hash
 the current revision through the card head (`30_modules_persistence_boundary.md`).
 `load_source_replicas(invoice_id)` became `list_source_replicas(source_ids)`: a replica row carries no
 invoice id, so the service lists the invoice's sources first.
+
+`LocalFilesystemSourceByteStore` is owned by `source_byte_store` and emitted from
+`rules.source_byte_store_backend` (SPEC_STANDARD §6.5). `final_reference_for` gives callers
+the content-addressed reference so the store's layout is never composed outside it.

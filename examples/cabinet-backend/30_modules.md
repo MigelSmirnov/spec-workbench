@@ -753,6 +753,36 @@ Protocol from `models` as plain reads, appends, and field updates;
 
 ---
 
+## `source_byte_store`
+
+### Owns
+
+- `LocalFilesystemSourceByteStore`: the local two-phase byte store — exclusive
+  staging writes verified by reopen, content-addressed final references,
+  same-filesystem atomic rename;
+- the opaque reference scheme beneath the configured root.
+
+### Hides
+
+- directory layout, file modes, fsync discipline;
+- reference validation against traversal, symlink escape, and non-regular
+  files.
+
+### Must not own
+
+- publication lifecycle state (`rules.archive_byte_publication` transitions
+  belong to `durable_archive`);
+- archive metadata or PostgreSQL;
+- environment reads.
+
+### Depth assessment
+
+Deterministic infrastructure deep module. Its entire implementation is emitted
+from `rules.source_byte_store_backend` (SPEC_STANDARD §6.5); it exposes only
+`LocalFilesystemSourceByteStore` to bootstrap.
+
+---
+
 # 2. Boundary adapters are not policy modules
 
 The following are expected adapters or deployment surfaces, not primary owners of Cabinet rules:

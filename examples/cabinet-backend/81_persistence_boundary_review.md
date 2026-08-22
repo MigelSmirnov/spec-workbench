@@ -277,3 +277,16 @@ transaction-scoped over `(scope, keys)`, so a lock before the first insert
 of a key is honoured; `update_*` rows never touch identity or binding
 columns; `upsert_*` rows never touch `first_received_at`/`first_seen_at`;
 no method deletes. Result: `PASS` for all seven persistence modules.
+
+## `source_byte_store` — deterministic backend
+
+`LocalFilesystemSourceByteStore` moved out of `durable_archive` into
+`source_byte_store` and is emitted from `rules.source_byte_store_backend`
+(SPEC_STANDARD §6.5), whose `layout` restates decision A70: staging written
+exclusively and verified by reopen, final reference
+`final/<hash[:2]>/<hash>`, same-filesystem rename, existing final reused only
+after exact verification and never overwritten, only staging ever removed.
+`SourceByteStore.final_reference_for(expected_hash)` was added so the store
+owns its layout and `attach_local_source` never composes paths. The Factory
+emitter is exercised against a real filesystem, including traversal,
+tampered-final, and idempotent staging removal cases. Result: `PASS`.

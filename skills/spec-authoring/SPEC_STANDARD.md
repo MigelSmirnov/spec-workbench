@@ -831,6 +831,58 @@ Closure считается пригодным для deterministic emission то
 неполное покрытие concrete contracts останавливает генерацию fail-closed;
 fallback к LLM запрещён.
 
+---
+
+### 6.5 `source_byte_store_backend/v1`
+
+`rules.source_byte_store_backend` — нормативный закрытый IR локального
+файлового хранилища байтов источников с двухфазной публикацией
+(staging → content-addressed final). Версия 1 поддерживает только emitter
+`python_filesystem_source_byte_store_v1`; значения `layout` берутся из
+принятого решения об атомарности публикации (`rules.archive_byte_publication`),
+а не угадываются.
+
+Форма закрыта:
+
+```json
+{
+  "kind": "source_byte_store_backend",
+  "schema_version": 1,
+  "backend": {"emitter": "python_filesystem_source_byte_store_v1"},
+  "wiring": {
+    "module": "<module>",
+    "concrete_class": "<Class>",
+    "interface": "SourceByteStore",
+    "models_module": "<package>.models"
+  },
+  "layout": {
+    "staging_directory": "staging",
+    "final_directory": "final",
+    "hash_algorithm": "sha256",
+    "final_path_scheme": "sha256_content_addressed",
+    "publication_primitive": "same_filesystem_atomic_rename"
+  }
+}
+```
+
+Модуль `wiring.module` владеет ровно одним классом `wiring.concrete_class`,
+реализующим Protocol `SourceByteStore` из `models` с контрактами
+`__init__(self, root_path: str)`, `final_reference_for(self, expected_hash:
+str) -> str`, `stage(...) -> str`, `verify(...) -> bool`, `publish(...) ->
+None`, `remove_staging(...) -> None`. Семантика зафиксирована версией:
+ссылки — относительные POSIX-пути под корнем, созданные только самим стором;
+staging-кандидат пишется эксклюзивно, сбрасывается на диск, перечитывается
+и сверяется по хешу и размеру; финальная ссылка —
+`<final_directory>/<hash[:2]>/<hash>`; публикация — `rename` в пределах
+одной файловой системы, существующий финал переиспользуется только после
+точной сверки и никогда не перезаписывается; удаляется только staging.
+Конструктор отвергает относительный корень и корень, где staging и final
+лежат на разных файловых системах. Любое неизвестное поле или другое
+значение `layout` останавливает генерацию fail-closed; fallback к LLM
+запрещён.
+
+---
+
 ## 7. imports
 
 ```json
