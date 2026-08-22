@@ -687,6 +687,39 @@ stays on the port until the working-set/replica storage decision is taken
 
 ---
 
+## `plan_actual_persistence`
+
+### Owns
+
+- `PostgresPlanActualRepository`: the PostgreSQL storage shape for estimate
+  snapshots, match proposals, and match decisions;
+- one transaction and the exact estimate and invoice-line locks per service
+  operation;
+- plain appends, one status update, exact and set reads in stable order.
+
+### Hides
+
+- psycopg connection handling;
+- table, column, and index names;
+- row/model codecs for snapshot items and revision references.
+
+### Must not own
+
+- snapshot reuse by canonical content, proposal scoring, or match policy;
+- the "at most one active confirmed match" invariant or pinned-identity
+  completeness;
+- plan/actual formulas;
+- environment reads.
+
+### Depth assessment
+
+Deterministic persistence module. It implements the `PlanActualRepository`
+Protocol from `models` as plain reads, appends, and one field update;
+`plan_actual` decides reuse, conflicts, and completeness. See
+`30_modules_persistence_boundary.md`.
+
+---
+
 # 2. Boundary adapters are not policy modules
 
 The following are expected adapters or deployment surfaces, not primary owners of Cabinet rules:

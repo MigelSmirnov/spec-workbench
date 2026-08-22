@@ -215,7 +215,9 @@
     "PlanActualRepository.save_snapshot": "(self, snapshot: EstimateSnapshot) -> None",
     "PlanActualRepository.save_proposals": "(self, proposals: tuple[InvoiceLineMatchProposal, ...]) -> None",
     "PlanActualRepository.load_match_decisions": "(self, match_ids: tuple[str, ...]) -> tuple[InvoiceLineEstimateMatch, ...]",
-    "PlanActualRepository.save_match_decision": "(self, decision: InvoiceLineEstimateMatch) -> None",
+    "PlanActualRepository.insert_match_decision": "(self, decision: InvoiceLineEstimateMatch) -> None",
+    "PlanActualRepository.update_match_status": "(self, decision: InvoiceLineEstimateMatch) -> None",
+    "PlanActualRepository.list_matches_for_line": "(self, invoice_id: str, content_hash: str, invoice_line_id: str) -> tuple[InvoiceLineEstimateMatch, ...]",
     "PlanActualRepository.list_active_matches": "(self, project_id: str, estimate_snapshot_id: str) -> tuple[InvoiceLineEstimateMatch, ...]",
     "PostgresPlanActualRepository.__init__": "(self, database_url: str) -> None",
     "PostgresPlanActualRepository.begin": "(self) -> None",
@@ -228,7 +230,9 @@
     "PostgresPlanActualRepository.save_snapshot": "(self, snapshot: EstimateSnapshot) -> None",
     "PostgresPlanActualRepository.save_proposals": "(self, proposals: tuple[InvoiceLineMatchProposal, ...]) -> None",
     "PostgresPlanActualRepository.load_match_decisions": "(self, match_ids: tuple[str, ...]) -> tuple[InvoiceLineEstimateMatch, ...]",
-    "PostgresPlanActualRepository.save_match_decision": "(self, decision: InvoiceLineEstimateMatch) -> None",
+    "PostgresPlanActualRepository.insert_match_decision": "(self, decision: InvoiceLineEstimateMatch) -> None",
+    "PostgresPlanActualRepository.update_match_status": "(self, decision: InvoiceLineEstimateMatch) -> None",
+    "PostgresPlanActualRepository.list_matches_for_line": "(self, invoice_id: str, content_hash: str, invoice_line_id: str) -> tuple[InvoiceLineEstimateMatch, ...]",
     "PostgresPlanActualRepository.list_active_matches": "(self, project_id: str, estimate_snapshot_id: str) -> tuple[InvoiceLineEstimateMatch, ...]",
     "HoldedPublicationService.__init__": "(self, repository: HoldedPublicationRepository, archive: DurableArchiveService, gateway: HoldedGatewayService) -> None",
     "HoldedPublicationService.request_holded_publication": "(self, invoice_id: str, content_hash: str, authorization: AuthorizationDecision) -> HoldedPublication",
@@ -597,9 +601,9 @@
     "PlanActualService.__init__: [DEPENDENCY_BOUNDARY] Retain the exact supplied repository, archive, and Registry services; never construct adapters or discover alternate runtimes.",
     "PlanActualService.refresh_estimate_snapshot: [ORCHESTRATION] Lock stable PresuPro identity, reuse exact canonical content, or append one immutable snapshot atomically.",
     "PlanActualService.propose_invoice_line_matches: [BEHAVIOR] Resolve exact archived and estimate evidence, return stable ordered non-authoritative proposals, and perform no confirmation transition.",
-    "PlanActualService.record_match_decision: [BEHAVIOR] Lock the exact invoice line, preserve decision history, and enforce at most one active confirmed match before commit.",
+    "PlanActualService.record_match_decision: [BEHAVIOR] Lock the exact invoice line, list its stored decisions, raise PlanActualPreconditionError for a confirmation when another active confirmed match exists for that line, insert a new decision or update only the status fields of the exact existing match_id for an invalidation, and never delete history.",
     "PlanActualService.get_unmatched_items: [DETERMINISM_OR_ORDERING] Compute unmatched invoice-line and estimate-item identities from exact pinned evidence and active confirmed decisions in stable ID order.",
-    "PlanActualService.calculate_plan_actual: [ORCHESTRATION] Resolve every pinned snapshot, match, invoice, and project input through the supplied boundaries before applying accepted deterministic formulas.",
+    "PlanActualService.calculate_plan_actual: [ORCHESTRATION] Resolve every pinned snapshot, match, invoice, and project input through the supplied boundaries, raise PlanActualPreconditionError when any pinned match_id is absent from the loaded decisions, and only then apply accepted deterministic formulas.",
     "PlanActualRepository.begin: [DEPENDENCY_BOUNDARY] Open one PostgreSQL transaction for the exact plan/actual transition and reject nested begin.",
     "PlanActualRepository.commit: [BEHAVIOR] Commit the active typed transition once and expose no partial state.",
     "PlanActualRepository.rollback: [FALLBACK] Roll back idempotently, release resources, and preserve the original failure.",
@@ -609,8 +613,10 @@
     "PlanActualRepository.load_snapshot_by_content: [BEHAVIOR] Return only the exact PresuPro identity and canonical-content match or None.",
     "PlanActualRepository.save_snapshot: [PROVENANCE] Append one immutable snapshot and reject conflicting identity or content bindings.",
     "PlanActualRepository.save_proposals: [PROVENANCE] Append stable non-authoritative proposal evidence without creating confirmed matches.",
-    "PlanActualRepository.load_match_decisions: [DETERMINISM_OR_ORDERING] Return every exact requested decision in match-id order and fail when a pinned identity is absent.",
-    "PlanActualRepository.save_match_decision: [PROVENANCE] Append confirmed, rejected, or invalidated decision history and reject conflicting active confirmation.",
+    "PlanActualRepository.load_match_decisions: [DETERMINISM_OR_ORDERING] Return every stored decision whose match_id is in the requested set, in stable match-id order, and omit absent identities without failing; pinned-identity completeness is checked by the service.",
+    "PlanActualRepository.insert_match_decision: [PROVENANCE] Append one new decision row for the exact match_id inside the active locked transaction; a second row for the same match_id fails on uniqueness and never replaces existing history.",
+    "PlanActualRepository.update_match_status: [PROVENANCE] Write status, decided_at, actor, explanation, and invalidation_reason for the exact existing match_id inside the active locked transaction; fail when the row is absent and never insert or change invoice_revision, invoice_line_id, estimate_snapshot_id, or estimate_item_id.",
+    "PlanActualRepository.list_matches_for_line: [DETERMINISM_OR_ORDERING] Return every stored decision bound to the exact invoice revision and invoice_line_id in stable match-id order, including rejected and invalidated history, and never filter by policy.",
     "PlanActualRepository.list_active_matches: [DETERMINISM_OR_ORDERING] Return only active confirmed matches for the exact project and snapshot in stable match-id order.",
     "PostgresPlanActualRepository.__init__: [SECURITY_BOUNDARY] Validate the supplied PostgreSQL connection, treat the URL as secret, and read no environment variables.",
     "refresh_estimate_snapshot: [DEPENDENCY_BOUNDARY] Delegate through the exact supplied PlanActualService and never access persistence directly.",
@@ -697,8 +703,10 @@
     "PostgresPlanActualRepository.load_snapshot_by_content: [BEHAVIOR] Return only the exact PresuPro identity and canonical-content match or None.",
     "PostgresPlanActualRepository.save_snapshot: [PROVENANCE] Append one immutable snapshot and reject conflicting identity or content bindings.",
     "PostgresPlanActualRepository.save_proposals: [PROVENANCE] Append stable non-authoritative proposal evidence without creating confirmed matches.",
-    "PostgresPlanActualRepository.load_match_decisions: [DETERMINISM_OR_ORDERING] Return every exact requested decision in match-id order and fail when a pinned identity is absent.",
-    "PostgresPlanActualRepository.save_match_decision: [PROVENANCE] Append confirmed, rejected, or invalidated decision history and reject conflicting active confirmation.",
+    "PostgresPlanActualRepository.load_match_decisions: [DETERMINISM_OR_ORDERING] Return every stored decision whose match_id is in the requested set, in stable match-id order, and omit absent identities without failing; pinned-identity completeness is checked by the service.",
+    "PostgresPlanActualRepository.insert_match_decision: [PROVENANCE] Append one new decision row for the exact match_id inside the active locked transaction; a second row for the same match_id fails on uniqueness and never replaces existing history.",
+    "PostgresPlanActualRepository.update_match_status: [PROVENANCE] Write status, decided_at, actor, explanation, and invalidation_reason for the exact existing match_id inside the active locked transaction; fail when the row is absent and never insert or change invoice_revision, invoice_line_id, estimate_snapshot_id, or estimate_item_id.",
+    "PostgresPlanActualRepository.list_matches_for_line: [DETERMINISM_OR_ORDERING] Return every stored decision bound to the exact invoice revision and invoice_line_id in stable match-id order, including rejected and invalidated history, and never filter by policy.",
     "PostgresPlanActualRepository.list_active_matches: [DETERMINISM_OR_ORDERING] Return only active confirmed matches for the exact project and snapshot in stable match-id order.",
     "PostgresHoldedPublicationRepository.begin: [DEPENDENCY_BOUNDARY] Open one PostgreSQL transaction for the exact publication transition and reject nested begin.",
     "PostgresHoldedPublicationRepository.commit: [BEHAVIOR] Commit one valid lifecycle transition and expose no partial state.",
@@ -2798,13 +2806,15 @@
         "AssignmentValidationNotFoundError",
         "RegistryContextService"
       ],
+      "plan_actual_persistence": [
+        "PostgresPlanActualRepository"
+      ],
       "plan_actual": [
         "refresh_estimate_snapshot",
         "calculate_plan_actual",
         "propose_invoice_line_matches",
         "record_match_decision",
         "get_unmatched_items",
-        "PostgresPlanActualRepository",
         "PlanActualService",
         "EstimateObservationRejectedError",
         "PlanActualPreconditionError"
@@ -3057,7 +3067,6 @@
           "SynchronizationService"
         ],
         "plan_actual": [
-          "PostgresPlanActualRepository",
           "PlanActualService"
         ],
         "holded_publication": [
@@ -3080,6 +3089,9 @@
         ],
         "synchronization_persistence": [
           "PostgresSynchronizationRepository"
+        ],
+        "plan_actual_persistence": [
+          "PostgresPlanActualRepository"
         ]
       },
       "durable_archive": {
@@ -3163,6 +3175,14 @@
           "RegistryCataloguePublication",
           "VpsConnectionObservation",
           "SynchronizationRepository"
+        ]
+      },
+      "plan_actual_persistence": {
+        "models": [
+          "EstimateSnapshot",
+          "InvoiceLineMatchProposal",
+          "InvoiceLineEstimateMatch",
+          "PlanActualRepository"
         ]
       }
     }
@@ -3296,13 +3316,15 @@
       "AssignmentValidationNotFoundError",
       "RegistryContextService"
     ],
+    "plan_actual_persistence": [
+      "PostgresPlanActualRepository"
+    ],
     "plan_actual": [
       "refresh_estimate_snapshot",
       "calculate_plan_actual",
       "propose_invoice_line_matches",
       "record_match_decision",
       "get_unmatched_items",
-      "PostgresPlanActualRepository",
       "PlanActualService",
       "EstimateObservationRejectedError",
       "PlanActualPreconditionError"
@@ -3378,6 +3400,7 @@
     "holded_gateway",
     "synchronization_persistence",
     "synchronization",
+    "plan_actual_persistence",
     "plan_actual",
     "holded_publication_persistence",
     "holded_publication",
@@ -3486,7 +3509,9 @@
     "PlanActualRepository.save_snapshot",
     "PlanActualRepository.save_proposals",
     "PlanActualRepository.load_match_decisions",
-    "PlanActualRepository.save_match_decision",
+    "PlanActualRepository.insert_match_decision",
+    "PlanActualRepository.update_match_status",
+    "PlanActualRepository.list_matches_for_line",
     "PlanActualRepository.list_active_matches",
     "PostgresPlanActualRepository.__init__",
     "HoldedPublicationService.__init__",
@@ -3528,6 +3553,7 @@
     "holded_gateway": "cabinet_backend/holded_gateway",
     "synchronization_persistence": "cabinet_backend/synchronization_persistence",
     "synchronization": "cabinet_backend/synchronization",
+    "plan_actual_persistence": "cabinet_backend/plan_actual_persistence",
     "plan_actual": "cabinet_backend/plan_actual",
     "holded_publication_persistence": "cabinet_backend/holded_publication_persistence",
     "holded_publication": "cabinet_backend/holded_publication",

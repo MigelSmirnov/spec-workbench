@@ -15,7 +15,7 @@ def test_lists_final_assembled_modules() -> None:
         "models", "access_control", "durable_archive", "registry_context_persistence",
         "registry_context",
         "holded_transport", "holded_gateway_persistence", "holded_gateway", "synchronization_persistence",
-        "synchronization", "plan_actual",
+        "synchronization", "plan_actual_persistence", "plan_actual",
         "holded_publication_persistence", "holded_publication",
         "retention_release_persistence", "retention_release",
         "api_irregular", "api", "bootstrap",

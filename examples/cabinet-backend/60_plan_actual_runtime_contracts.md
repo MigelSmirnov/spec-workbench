@@ -23,7 +23,9 @@ Module functions remain façades with an explicit `PlanActualService` first para
 - `PlanActualRepository.save_snapshot(self, snapshot: EstimateSnapshot) -> None`
 - `PlanActualRepository.save_proposals(self, proposals: tuple[InvoiceLineMatchProposal, ...]) -> None`
 - `PlanActualRepository.load_match_decisions(self, match_ids: tuple[str, ...]) -> tuple[InvoiceLineEstimateMatch, ...]`
-- `PlanActualRepository.save_match_decision(self, decision: InvoiceLineEstimateMatch) -> None`
+- `PlanActualRepository.insert_match_decision(self, decision: InvoiceLineEstimateMatch) -> None`
+- `PlanActualRepository.update_match_status(self, decision: InvoiceLineEstimateMatch) -> None`
+- `PlanActualRepository.list_matches_for_line(self, invoice_id: str, content_hash: str, invoice_line_id: str) -> tuple[InvoiceLineEstimateMatch, ...]`
 - `PlanActualRepository.list_active_matches(self, project_id: str, estimate_snapshot_id: str) -> tuple[InvoiceLineEstimateMatch, ...]`
 
 - `PostgresPlanActualRepository.__init__(self, database_url: str) -> None`
@@ -37,6 +39,14 @@ Module functions remain façades with an explicit `PlanActualService` first para
 - `PostgresPlanActualRepository.save_snapshot(self, snapshot: EstimateSnapshot) -> None`
 - `PostgresPlanActualRepository.save_proposals(self, proposals: tuple[InvoiceLineMatchProposal, ...]) -> None`
 - `PostgresPlanActualRepository.load_match_decisions(self, match_ids: tuple[str, ...]) -> tuple[InvoiceLineEstimateMatch, ...]`
-- `PostgresPlanActualRepository.save_match_decision(self, decision: InvoiceLineEstimateMatch) -> None`
+- `PostgresPlanActualRepository.insert_match_decision(self, decision: InvoiceLineEstimateMatch) -> None`
+- `PostgresPlanActualRepository.update_match_status(self, decision: InvoiceLineEstimateMatch) -> None`
+- `PostgresPlanActualRepository.list_matches_for_line(self, invoice_id: str, content_hash: str, invoice_line_id: str) -> tuple[InvoiceLineEstimateMatch, ...]`
 - `PostgresPlanActualRepository.list_active_matches(self, project_id: str, estimate_snapshot_id: str) -> tuple[InvoiceLineEstimateMatch, ...]`
 - `create_app(access_control: AccessControlBackend, archive: DurableArchiveService, registry: RegistryContextService, holded_gateway: HoldedGatewayService, synchronization: SynchronizationService, plan_actual: PlanActualService) -> FastAPI`
+
+`PostgresPlanActualRepository` is owned by `plan_actual_persistence`. `save_match_decision`
+was replaced by `insert_match_decision`, `update_match_status`, and `list_matches_for_line`;
+`load_match_decisions` no longer fails on absent identities. The single-active-confirmation
+invariant and pinned-identity completeness belong to `PlanActualService`
+(`30_modules_persistence_boundary.md`).

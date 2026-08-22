@@ -46,7 +46,7 @@ injects it into the service exactly as before.
 | `registry_context` | `registry_context_persistence` | `merge_work_objects` → `list_work_objects` + keyed `upsert_work_objects`; merge derived in `refresh_registry_context` | done |
 | `holded_gateway` | `holded_gateway_persistence` | `reserve_attempt` → `insert_attempt`; `mark_request_issued` + `append_attempt_outcome` → `update_attempt`; `append_lookup_evidence` → `insert_lookup_evidence`; `HoldedPurchaseLookupEvidence` classified as persisted `issued` evidence | done |
 | `synchronization` | `synchronization_persistence` | `reserve_synchronization` → `insert_synchronization` + `load_synchronization_by_idempotency`; `mark_transfer_issued` + `save_synchronization_outcome` → `update_synchronization`; `reserve_catalogue_publication` → `insert_catalogue_publication` + `load_catalogue_publication_by_idempotency`; `save_catalogue_acknowledgement` → `update_catalogue_publication`; `VpsConnectionObservation` classified as persisted `issued` evidence | done (see open items) |
-| `plan_actual` | `plan_actual_persistence` | `load_match_decisions` pinned-absence failure, `save_match_decision` active-conflict | pending |
+| `plan_actual` | `plan_actual_persistence` | `load_match_decisions` returns what exists (completeness in `calculate_plan_actual`); `save_match_decision` → `insert_match_decision` + `update_match_status` + `list_matches_for_line` (single active confirmation in `record_match_decision`) | done |
 | `durable_archive` | `durable_archive_persistence` | `save_publication`, `mark_publication_published`, `mark_publication_failed`; multi-model writes become aggregates | pending |
 
 `PostgresAccessControlBackend` is not a repository: it owns credential

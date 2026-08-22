@@ -19,8 +19,10 @@
   transaction per transition, commit once, and rollback idempotently.
 - Repository reads [BEHAVIOR]: return exact persisted evidence or absence and never
   fabricate current snapshots, matches, or unmatched state.
-- Repository writes [PROVENANCE]: append immutable snapshots/proposals/history and
-  reject skipped, stale, or conflicting match transitions.
+- Repository writes [PROVENANCE]: append immutable snapshots/proposals/decisions
+  and update status fields of an existing match; the single-active-confirmation
+  invariant and pinned completeness are checked by the service
+  (`30_modules_persistence_boundary.md`).
 - PostgresPlanActualRepository constructor [SECURITY_BOUNDARY]: validate the
   supplied database connection, treat the URL as secret, and read no environment.
 - Bootstrap create_local_app [ORCHESTRATION]: reuse the Cabinet database and exact

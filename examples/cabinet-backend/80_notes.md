@@ -184,8 +184,10 @@ PostgresPlanActualRepository.load_snapshot: [BEHAVIOR] Return the exact immutabl
 PostgresPlanActualRepository.load_snapshot_by_content: [BEHAVIOR] Return only the exact PresuPro identity and canonical-content match or None.
 PostgresPlanActualRepository.save_snapshot: [PROVENANCE] Append one immutable snapshot and reject conflicting identity or content bindings.
 PostgresPlanActualRepository.save_proposals: [PROVENANCE] Append stable non-authoritative proposal evidence without creating confirmed matches.
-PostgresPlanActualRepository.load_match_decisions: [DETERMINISM_OR_ORDERING] Return every exact requested decision in match-id order and fail when a pinned identity is absent.
-PostgresPlanActualRepository.save_match_decision: [PROVENANCE] Append confirmed, rejected, or invalidated decision history and reject conflicting active confirmation.
+PostgresPlanActualRepository.load_match_decisions: [DETERMINISM_OR_ORDERING] Return every stored decision whose match_id is in the requested set, in stable match-id order, and omit absent identities without failing; pinned-identity completeness is checked by the service.
+PostgresPlanActualRepository.insert_match_decision: [PROVENANCE] Append one new decision row for the exact match_id inside the active locked transaction; a second row for the same match_id fails on uniqueness and never replaces existing history.
+PostgresPlanActualRepository.update_match_status: [PROVENANCE] Write status, decided_at, actor, explanation, and invalidation_reason for the exact existing match_id inside the active locked transaction; fail when the row is absent and never insert or change invoice_revision, invoice_line_id, estimate_snapshot_id, or estimate_item_id.
+PostgresPlanActualRepository.list_matches_for_line: [DETERMINISM_OR_ORDERING] Return every stored decision bound to the exact invoice revision and invoice_line_id in stable match-id order, including rejected and invalidated history, and never filter by policy.
 PostgresPlanActualRepository.list_active_matches: [DETERMINISM_OR_ORDERING] Return only active confirmed matches for the exact project and snapshot in stable match-id order.
 PostgresHoldedPublicationRepository.begin: [DEPENDENCY_BOUNDARY] Open one PostgreSQL transaction for the exact publication transition and reject nested begin.
 PostgresHoldedPublicationRepository.commit: [BEHAVIOR] Commit one valid lifecycle transition and expose no partial state.

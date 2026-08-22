@@ -171,3 +171,22 @@ Deterministic review: `models` 88/90, `synchronization` 18/32,
 impossible without an issuance record; updates cannot change identity or
 binding fields; evidence rows cannot be deleted. Result:
 `PASS_INTERNAL_VARIATION` for `synchronization`, `PASS` for the others.
+
+## `plan_actual`
+
+- `plan_actual_persistence` owns `PostgresPlanActualRepository`.
+- `load_match_decisions` becomes a plain set read in stable match-id order;
+  `calculate_plan_actual` raises `PlanActualPreconditionError` when a pinned
+  `match_id` is absent.
+- `save_match_decision` becomes `insert_match_decision` (uniqueness on
+  `match_id`), `update_match_status` (status fields of an existing match, for
+  invalidation), and `list_matches_for_line`; `record_match_decision` lists
+  the line's decisions under the line lock and rejects a second active
+  confirmation with `PlanActualPreconditionError`.
+
+Deterministic review: `models` 90/92, `plan_actual` 11/33,
+`plan_actual_persistence` 15/15, `bootstrap` 4/24 — zero blocks, zero
+prompts. Adversarial review: history cannot be deleted or replaced; the
+invariant cannot be skipped because the service must list before writing;
+absent pinned identities cannot silently shrink an analysis. Result:
+`PASS_INTERNAL_VARIATION` for `plan_actual`, `PASS` for the others.
