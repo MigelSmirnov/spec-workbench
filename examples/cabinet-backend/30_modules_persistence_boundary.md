@@ -47,7 +47,7 @@ injects it into the service exactly as before.
 | `holded_gateway` | `holded_gateway_persistence` | `reserve_attempt` → `insert_attempt`; `mark_request_issued` + `append_attempt_outcome` → `update_attempt`; `append_lookup_evidence` → `insert_lookup_evidence`; `HoldedPurchaseLookupEvidence` classified as persisted `issued` evidence | done |
 | `synchronization` | `synchronization_persistence` | `reserve_synchronization` → `insert_synchronization` + `load_synchronization_by_idempotency`; `mark_transfer_issued` + `save_synchronization_outcome` → `update_synchronization`; `reserve_catalogue_publication` → `insert_catalogue_publication` + `load_catalogue_publication_by_idempotency`; `save_catalogue_acknowledgement` → `update_catalogue_publication`; `VpsConnectionObservation` classified as persisted `issued` evidence | done (see open items) |
 | `plan_actual` | `plan_actual_persistence` | `load_match_decisions` returns what exists (completeness in `calculate_plan_actual`); `save_match_decision` → `insert_match_decision` + `update_match_status` + `list_matches_for_line` (single active confirmation in `record_match_decision`) | done |
-| `durable_archive` | `durable_archive_persistence` | `save_publication`, `mark_publication_published`, `mark_publication_failed`; multi-model writes become aggregates | pending |
+| `durable_archive` | `durable_archive_persistence` | `save_publication` → `insert_publication`; `mark_publication_*` → `update_publication_state` + `load_publication` (transitions in `attach_local_source` / `recover_pending_publications`); `save_transfer_acceptance` / `save_source_attachment` → per-model appends in the one open transaction; `StoredInvoiceCard` head gets `load_invoice_card` / `upsert_invoice_card`; revision succession gets `update_card_revision_succession` | done |
 
 `PostgresAccessControlBackend` is not a repository: it owns credential
 hashing, throttling, and atomic audit. It is handled by a credential-security
@@ -59,6 +59,9 @@ backend, not by this repair.
 - `schema_function` ownership for a repository constructed from
   `database_url` rather than an open connection;
 - `engine: postgres` in `rules.persistence_backend`;
+- `LocalFilesystemSourceByteStore` stays in `durable_archive` until it is bound
+  to the existing `binary_storage_backend`; `HttpxVpsSynchronizationTransport`
+  stays in `synchronization` until a VPS transport backend exists;
 - `RegistryProjectSnapshot` is referenced by `WorkObject.registry_snapshot_id`
   but is not a persisted model; the Registry-derived projection has no durable
   home yet. This is a State 1/2 gap, not a persistence-boundary decision;

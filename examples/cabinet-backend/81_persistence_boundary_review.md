@@ -190,3 +190,33 @@ prompts. Adversarial review: history cannot be deleted or replaced; the
 invariant cannot be skipped because the service must list before writing;
 absent pinned identities cannot silently shrink an analysis. Result:
 `PASS_INTERNAL_VARIATION` for `plan_actual`, `PASS` for the others.
+
+## `durable_archive`
+
+- `durable_archive_persistence` owns `PostgresArchiveUnitOfWork`;
+  `LocalFilesystemSourceByteStore` stays in `durable_archive` until it is
+  bound to `binary_storage_backend`.
+- `save_publication` → `insert_publication`; `mark_publication_published`
+  and `mark_publication_failed` → `update_publication_state` plus
+  `load_publication`; the `rules.archive_byte_publication` state machine is
+  now stated on `attach_local_source` and `recover_pending_publications`
+  (advance only from the reloaded state; never published → failed).
+- `save_transfer_acceptance` → `insert_transfer_manifest`,
+  `insert_card_revision`, `insert_source_replicas`, `insert_transfer_receipt`
+  composed by `accept_transfer_manifest` in the one open transaction;
+  `save_source_attachment` → `insert_source_binary` (uniqueness on
+  `source_id` and on `invoice_id` + `content_hash`), `insert_source_replicas`,
+  `insert_publication`.
+- Storage gap closed: the `StoredInvoiceCard` head had no reader or writer
+  and revision succession had no writer; `load_invoice_card`,
+  `upsert_invoice_card`, and `update_card_revision_succession` are added and
+  `accept_transfer_manifest` states when they are used.
+
+Deterministic review: `models` 96/98, `durable_archive` 14/44,
+`durable_archive_persistence` 23/23, `api` 14/22, `api_irregular` 2/5,
+`bootstrap` 4/24 — zero blocks, zero prompts. Adversarial review: no
+publication can reach `published` without a `metadata_committed` row and a
+verified final byte; partial acceptance cannot be exposed because every
+append is inside the invoice-locked transaction committed once; conflicting
+bytes for one source identity cannot both commit. Result:
+`PASS_INTERNAL_VARIATION` for `durable_archive`, `PASS` for the others.

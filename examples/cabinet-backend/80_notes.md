@@ -208,7 +208,7 @@ PostgresRetentionReleaseRepository.insert_decision: [PROVENANCE] Append one immu
 
 PostgresArchiveUnitOfWork.__init__: [SECURITY_BOUNDARY] MUST treat database_url as secret configuration and MUST NOT log it or include it in safe errors.
 PostgresArchiveUnitOfWork.lock_invoice: [BEHAVIOR] MUST acquire PostgreSQL serialization for the exact invoice before mutable acceptance or source state is read.
-PostgresArchiveUnitOfWork.save_publication: [BEHAVIOR] MUST persist the publication journal in the same transaction as its associated archive mutation and reject skipped, stale, or conflicting publication-state transitions.
+PostgresArchiveUnitOfWork.insert_publication: [PROVENANCE] MUST append one new ArchiveBytePublication row for the exact publication_id inside the active invoice-locked transaction; a second row for the same publication_id fails on uniqueness and the row is never replaced.
 LocalFilesystemSourceByteStore.__init__: [VALIDATION_ERROR] MUST require an absolute private root whose staging and final directories support same-filesystem atomic rename.
 LocalFilesystemSourceByteStore.stage: [PATH_OR_ARTIFACT_POLICY] MUST create a private candidate beneath the configured staging root, flush it, reopen it, and verify exact hash and size before returning an opaque reference.
 LocalFilesystemSourceByteStore.verify: [SECURITY_BOUNDARY] MUST resolve only store-created opaque references beneath the configured root and reject traversal, symlink escape, devices, and non-regular files.
@@ -220,14 +220,20 @@ PostgresArchiveUnitOfWork.rollback: [FALLBACK] MUST rollback the current transac
 PostgresArchiveUnitOfWork.load_card_revision: [BEHAVIOR] MUST return only the exact accepted immutable revision selected by invoice_id and optional content_hash.
 PostgresArchiveUnitOfWork.load_source_replicas: [BEHAVIOR] MUST return replicas for the exact invoice in stable source_id and stored_at order.
 PostgresArchiveUnitOfWork.load_pending_publications: [BEHAVIOR] MUST return only staged or metadata_committed publication records in stable created_at and publication_id order.
-PostgresArchiveUnitOfWork.mark_publication_published: [BEHAVIOR] MUST permit only metadata_committed to published after final-byte verification and MUST reject stale or skipped transitions.
-PostgresArchiveUnitOfWork.mark_publication_failed: [BEHAVIOR] MUST preserve failure evidence and reject transition from published to failed.
+PostgresArchiveUnitOfWork.update_publication_state: [PROVENANCE] MUST write state, updated_at, and failure_code for the exact existing publication_id inside the active transaction; MUST fail when the row is absent and MUST NOT insert or change source_id, invoice_id, content_hash, size_bytes, staging_reference, final_reference, or created_at.
+PostgresArchiveUnitOfWork.load_publication: [BEHAVIOR] MUST return the exact ArchiveBytePublication selected by publication_id or None and MUST NOT synthesize a state.
 PostgresArchiveUnitOfWork.load_transfer_receipt: [BEHAVIOR] MUST return only the exact durable receipt for invoice_id and optional content_hash.
 PostgresArchiveUnitOfWork.load_source_binaries: [BEHAVIOR] MUST return all source identities for the exact invoice in stable source_id order.
-PostgresArchiveUnitOfWork.save_transfer_acceptance: [BEHAVIOR] MUST persist manifest, immutable card revision, replicas, and receipt as one transaction and MUST NOT expose partial acceptance.
-PostgresArchiveUnitOfWork.save_source_attachment: [BEHAVIOR] MUST persist source identity, replica metadata, and ArchiveBytePublication in the active invoice-locked transaction.
-PostgresArchiveUnitOfWork.save_incomplete_source_acceptance: [PROVENANCE] MUST append the exact immutable acceptance evidence and MUST NOT replace prior decisions.
-PostgresArchiveUnitOfWork.save_source_loss_decision: [PROVENANCE] MUST append the exact immutable loss evidence and MUST NOT delete source or acceptance history.
+PostgresArchiveUnitOfWork.insert_transfer_manifest: [PROVENANCE] MUST append one immutable manifest row for the exact manifest_id inside the active invoice-locked transaction; duplicates fail on uniqueness.
+PostgresArchiveUnitOfWork.insert_card_revision: [PROVENANCE] MUST append one immutable card revision row for the exact invoice_id and content_hash inside the active invoice-locked transaction; duplicates fail on uniqueness and the canonical_card is never rewritten.
+PostgresArchiveUnitOfWork.update_card_revision_succession: [PROVENANCE] MUST write superseded_by_content_hash for the exact existing invoice_id and content_hash inside the active transaction; MUST fail when the row is absent and MUST NOT change any other field.
+PostgresArchiveUnitOfWork.insert_source_replicas: [PROVENANCE] MUST append every supplied replica row keyed by source_id and node_id inside the active invoice-locked transaction; duplicates fail on uniqueness and no row is replaced.
+PostgresArchiveUnitOfWork.insert_transfer_receipt: [PROVENANCE] MUST append one immutable receipt row for the exact synchronization_id inside the active invoice-locked transaction; duplicates fail on uniqueness.
+PostgresArchiveUnitOfWork.insert_source_binary: [PROVENANCE] MUST append one source identity row for the exact source_id inside the active invoice-locked transaction; a second row for the same source_id or the same invoice_id and content_hash fails on uniqueness so that conflicting bytes for one identity cannot both commit.
+PostgresArchiveUnitOfWork.load_invoice_card: [BEHAVIOR] MUST return the exact StoredInvoiceCard head selected by invoice_id or None and MUST NOT synthesize a card.
+PostgresArchiveUnitOfWork.upsert_invoice_card: [PROVENANCE] MUST insert the StoredInvoiceCard head by invoice_id or, when it exists, update only card_version, current_content_hash, current_status, last_received_at, durable_at, and archive_status inside the active invoice-locked transaction; MUST NOT change first_received_at or delete the row.
+PostgresArchiveUnitOfWork.insert_incomplete_source_acceptance: [PROVENANCE] MUST append the exact immutable acceptance evidence and MUST NOT replace prior decisions.
+PostgresArchiveUnitOfWork.insert_source_loss_decision: [PROVENANCE] MUST append the exact immutable loss evidence and MUST NOT delete source or acceptance history.
 PostgresRegistryContextRepository.__init__: [SECURITY_BOUNDARY] MUST treat database_url as secret configuration, validate connectivity, and MUST NOT log the URL.
 PostgresRegistryContextRepository.begin: [DEPENDENCY_BOUNDARY] MUST use one PostgreSQL connection and transaction per service operation and reject nested begin.
 PostgresRegistryContextRepository.commit: [BEHAVIOR] MUST commit the active transaction exactly once and release its connection.

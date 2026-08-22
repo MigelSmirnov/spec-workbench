@@ -720,6 +720,39 @@ Protocol from `models` as plain reads, appends, and one field update;
 
 ---
 
+## `durable_archive_persistence`
+
+### Owns
+
+- `PostgresArchiveUnitOfWork`: the PostgreSQL storage shape for the
+  invoice card head, immutable card revisions, source identities and
+  replicas, transfer manifests and receipts, byte-publication journal rows,
+  and acceptance/loss decisions;
+- one metadata transaction and the exact invoice lock per archive operation;
+- plain appends, keyed upserts/field updates, and exact or ordered reads.
+
+### Hides
+
+- psycopg connection handling;
+- table, column, and index names;
+- row/model codecs for canonical cards, references, and hash tuples.
+
+### Must not own
+
+- acceptance equivalence, quarantine, or incomplete-source policy;
+- `rules.archive_byte_publication` state transitions;
+- byte custody (`SourceByteStore`);
+- environment reads.
+
+### Depth assessment
+
+Deterministic persistence module. It implements the `ArchiveUnitOfWork`
+Protocol from `models` as plain reads, appends, and field updates;
+`durable_archive` composes them into accepted transitions. See
+`30_modules_persistence_boundary.md`.
+
+---
+
 # 2. Boundary adapters are not policy modules
 
 The following are expected adapters or deployment surfaces, not primary owners of Cabinet rules:
