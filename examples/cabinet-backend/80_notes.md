@@ -131,7 +131,7 @@ get_holded_publication_status: [DEPENDENCY_BOUNDARY] MUST delegate exact status 
 
 # holded_gateway
 
-create_holded_purchase: [ORCHESTRATION] MUST perform the one technical remote create for the supplied already-authorized payload and stable publication-attempt identity, then persist immutable technical outcome evidence.
+create_holded_purchase: [ORCHESTRATION] MUST perform the one technical remote create for the supplied already-authorized payload and the supplied reservation (a HoldedPublicationAttempt built by the caller with outcome reserved, whose publication_attempt_id, publication_id, invoice_id, invoice_revision_hash, canonical_holded_payload_hash, and attempt_marker are the stable attempt identity), then persist immutable technical outcome evidence.
 create_holded_purchase: [SECURITY_BOUNDARY] Keep Holded credentials inside the gateway boundary and redact reusable secret material from logs, returned business objects, and ordinary attempt evidence.
 create_holded_purchase: [BEHAVIOR] Preserve credential failure, remote rejection, timeout, malformed response, or ambiguous network outcome as explicit immutable technical attempt evidence rather than retrying the mutation or claiming remote failure/success without proof.
 lookup_holded_purchase: [BEHAVIOR] MUST perform read-only recovery lookup using the supplied stable attempt marker and optional document identifier and return observed technical match evidence without mutating Holded.
