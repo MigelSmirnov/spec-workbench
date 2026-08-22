@@ -231,7 +231,8 @@ PostgresRegistryContextRepository.begin: [DEPENDENCY_BOUNDARY] MUST use one Post
 PostgresRegistryContextRepository.commit: [BEHAVIOR] MUST commit the active transaction exactly once and release its connection.
 PostgresRegistryContextRepository.rollback: [FALLBACK] MUST rollback idempotently and release its connection without hiding the original error.
 PostgresRegistryContextRepository.lock_catalogue: [BEHAVIOR] MUST acquire PostgreSQL serialization for one complete Registry catalogue replacement.
+PostgresRegistryContextRepository.list_work_objects: [BEHAVIOR] MUST return every committed WorkObject in stable project_id order inside the active transaction and MUST NOT filter, synthesize, or reorder by observation.
 PostgresRegistryContextRepository.load_work_object: [BEHAVIOR] MUST return the exact committed WorkObject or None.
 PostgresRegistryContextRepository.save_assignment_validation: [PROVENANCE] MUST append immutable validation evidence and MUST NOT replace a different decision.
 PostgresRegistryContextRepository.load_assignment_validation: [BEHAVIOR] MUST return the exact persisted validation or None.
-PostgresRegistryContextRepository.merge_work_objects: [BEHAVIOR] MUST atomically merge the typed projection by stable project_id, preserve Cabinet-owned fields and absent existing objects, and MUST NOT expose mixed catalogue observations.
+PostgresRegistryContextRepository.upsert_work_objects: [BEHAVIOR] MUST insert each supplied WorkObject by stable project_id or, when the row exists, update only registry_snapshot_id, last_seen_at, and attention_status from the supplied object inside the active locked transaction; MUST NOT delete rows or change first_seen_at.

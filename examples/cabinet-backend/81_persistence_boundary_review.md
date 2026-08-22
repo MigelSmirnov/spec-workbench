@@ -88,3 +88,27 @@ operation, rule, or model changed. Result: `PASS_INTERNAL_VARIATION` for
 
 Slice hashes of modules whose notes follow the inserted service notes were
 refreshed: their packets changed only in note index numbers, not in content.
+
+## `registry_context`
+
+- `registry_context_persistence` owns `PostgresRegistryContextRepository`.
+- `merge_work_objects(work_objects)` is replaced by `list_work_objects() ->
+  tuple[WorkObject, ...]` (stable `project_id` order) and the keyed
+  `upsert_work_objects(work_objects)`: insert by `project_id` or update only
+  `registry_snapshot_id`, `last_seen_at`, and `attention_status`; never delete
+  a row or change `first_seen_at`.
+- `RegistryContextService.refresh_registry_context` now states the merge
+  itself: list, derive new / refreshed / unresolved objects by stable
+  `project_id`, keep Cabinet-owned fields, upsert in one transaction.
+
+Deterministic review: `models` 88/90, `registry_context` 9/30,
+`registry_context_persistence` 10/10, `bootstrap` 4/24 — zero blocks, zero
+prompts. Adversarial review: the upsert cannot delete or reset
+`first_seen_at`; the service cannot treat absence as deletion; rules 5–11 of
+the WorkObject decision are preserved. Result: `PASS_INTERNAL_VARIATION` for
+`registry_context`, `PASS` for the others.
+
+Open item recorded in `30_modules_persistence_boundary.md`:
+`RegistryProjectSnapshot` is not a persisted model although
+`WorkObject.registry_snapshot_id` references it. Pre-existing; not resolved
+here.

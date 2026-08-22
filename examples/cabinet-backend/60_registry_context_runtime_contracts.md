@@ -16,7 +16,8 @@ The existing module functions remain façade operations with an explicit Registr
 - RegistryContextRepository.commit(self) -> None
 - RegistryContextRepository.rollback(self) -> None
 - RegistryContextRepository.lock_catalogue(self) -> None
-- RegistryContextRepository.merge_work_objects(self, work_objects: tuple[WorkObject, ...]) -> None
+- RegistryContextRepository.list_work_objects(self) -> tuple[WorkObject, ...]
+- RegistryContextRepository.upsert_work_objects(self, work_objects: tuple[WorkObject, ...]) -> None
 - RegistryContextRepository.load_work_object(self, project_id: str) -> WorkObject | None
 - RegistryContextRepository.save_assignment_validation(self, validation: ObjectAssignmentValidation) -> None
 - RegistryContextRepository.load_assignment_validation(self, invoice_id: str, content_hash: str) -> ObjectAssignmentValidation | None
@@ -30,9 +31,15 @@ PostgresRegistryContextRepository.begin(self) -> None
 PostgresRegistryContextRepository.commit(self) -> None
 PostgresRegistryContextRepository.rollback(self) -> None
 PostgresRegistryContextRepository.lock_catalogue(self) -> None
-PostgresRegistryContextRepository.merge_work_objects(self, work_objects: tuple[WorkObject, ...]) -> None
+PostgresRegistryContextRepository.list_work_objects(self) -> tuple[WorkObject, ...]
+PostgresRegistryContextRepository.upsert_work_objects(self, work_objects: tuple[WorkObject, ...]) -> None
 PostgresRegistryContextRepository.load_work_object(self, project_id: str) -> WorkObject | None
 PostgresRegistryContextRepository.save_assignment_validation(self, validation: ObjectAssignmentValidation) -> None
 PostgresRegistryContextRepository.load_assignment_validation(self, invoice_id: str, content_hash: str) -> ObjectAssignmentValidation | None
 
 The constructor validates connectivity but does not read environment variables or own Registry business policy.
+
+`PostgresRegistryContextRepository` is owned by `registry_context_persistence`.
+`merge_work_objects` was replaced by `list_work_objects` plus the keyed `upsert_work_objects`;
+the merge itself is derived by `RegistryContextService.refresh_registry_context`
+(`30_modules_persistence_boundary.md`).

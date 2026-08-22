@@ -43,7 +43,7 @@ injects it into the service exactly as before.
 |---|---|---|---|
 | `retention_release` | `retention_release_persistence` | `reserve_decision` → `insert_decision` + equivalence check in `request_manual_vps_release` | done |
 | `holded_publication` | `holded_publication_persistence` | `reserve_publication` → `insert_publication`, `save_transition` → `update_publication`; equivalence and transition validity in `HoldedPublicationService` | done |
-| `registry_context` | `registry_context_persistence` | `merge_work_objects` | pending |
+| `registry_context` | `registry_context_persistence` | `merge_work_objects` → `list_work_objects` + keyed `upsert_work_objects`; merge derived in `refresh_registry_context` | done |
 | `holded_gateway` | `holded_gateway_persistence` | `reserve_attempt`, `mark_request_issued`, `append_attempt_outcome`, `append_lookup_evidence` | pending |
 | `synchronization` | `synchronization_persistence` | `reserve_synchronization`, `mark_transfer_issued`, `reserve_catalogue_publication`, `save_catalogue_acknowledgement` | pending |
 | `plan_actual` | `plan_actual_persistence` | `load_match_decisions` pinned-absence failure, `save_match_decision` active-conflict | pending |
@@ -58,7 +58,10 @@ backend, not by this repair.
 - lowering of repository-owned `begin`/`commit`/`rollback` and `lock_*`;
 - `schema_function` ownership for a repository constructed from
   `database_url` rather than an open connection;
-- `engine: postgres` in `rules.persistence_backend`.
+- `engine: postgres` in `rules.persistence_backend`;
+- `RegistryProjectSnapshot` is referenced by `WorkObject.registry_snapshot_id`
+  but is not a persisted model; the Registry-derived projection has no durable
+  home yet. This is a State 1/2 gap, not a persistence-boundary decision.
 
 These are tooling and standard-version decisions and do not change the
 ownership recorded here.

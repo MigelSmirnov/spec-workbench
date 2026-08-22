@@ -588,6 +588,38 @@ Protocol from `models` as plain reads, one append, and one field update;
 
 ---
 
+## `registry_context_persistence`
+
+### Owns
+
+- `PostgresRegistryContextRepository`: the PostgreSQL storage shape for
+  WorkObjects and assignment-validation evidence;
+- one transaction and the catalogue lock per service operation;
+- listing of all WorkObjects, keyed upsert of WorkObjects, append and exact
+  lookup of validations.
+
+### Hides
+
+- psycopg connection handling;
+- table, column, and index names;
+- row/model codecs for card revision references and warning codes.
+
+### Must not own
+
+- the Registry merge itself: which objects are new, refreshed, or unresolved;
+- Registry status meaning, assignment eligibility, freshness, or validation
+  outcomes;
+- environment reads.
+
+### Depth assessment
+
+Deterministic persistence module. It implements the `RegistryContextRepository`
+Protocol from `models` as plain reads, one keyed upsert, and one append;
+`registry_context` derives the merged catalogue. See
+`30_modules_persistence_boundary.md`.
+
+---
+
 # 2. Boundary adapters are not policy modules
 
 The following are expected adapters or deployment surfaces, not primary owners of Cabinet rules:

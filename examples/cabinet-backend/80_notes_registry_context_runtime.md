@@ -2,7 +2,7 @@
 
 RegistryContextService requires the exact supplied repository and has no nullable, module-global, in-memory, or service-locator fallback.
 
-A Registry refresh holds the catalogue lock, derives the typed WorkObject merge according to accepted Registry rules, merges it in one PostgreSQL transaction, and returns a result describing that committed observation. Failure rolls back and preserves the previous committed catalogue.
+A Registry refresh holds the catalogue lock, lists the stored WorkObjects, derives the typed WorkObject merge according to accepted Registry rules, upserts it in one PostgreSQL transaction, and returns a result describing that committed observation. Failure rolls back and preserves the previous committed catalogue.
 
 Assignment validation reads the exact accepted invoice revision and current WorkObject evidence through declared dependencies, persists one immutable ObjectAssignmentValidation result, and never fabricates a positive outcome for unavailable or ambiguous context.
 
