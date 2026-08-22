@@ -135,12 +135,24 @@ def validate_projection(spec: dict[str, Any], payload: dict[str, Any]) -> list[F
                     location=column_location + ".field",
                 ))
             element_model = column.get("element_model")
-            if _text(element_model) and _model_fields(models, element_model) is None:
-                findings.append(Finding(
-                    "error", "unknown_element_model",
-                    f"element_model {element_model!r} must resolve to a runtime model with fields",
-                    location=column_location + ".element_model",
-                ))
+            storage = column.get("storage")
+            if _text(element_model):
+                declaration = models.get(element_model) if isinstance(models, dict) else None
+                is_enum = isinstance(declaration, dict) and declaration.get("kind") == "enum"
+                if storage == "enum":
+                    # SPEC_STANDARD §6.3: enum storage names a declared enum, never a runtime model
+                    if not is_enum:
+                        findings.append(Finding(
+                            "error", "unknown_element_model",
+                            f"element_model {element_model!r} must resolve to a declared enum for enum storage",
+                            location=column_location + ".element_model",
+                        ))
+                elif _model_fields(models, element_model) is None:
+                    findings.append(Finding(
+                        "error", "unknown_element_model",
+                        f"element_model {element_model!r} must resolve to a runtime model with fields",
+                        location=column_location + ".element_model",
+                    ))
 
     aggregates = payload.get("aggregates") if isinstance(payload.get("aggregates"), list) else []
     for index, row in enumerate(aggregates):

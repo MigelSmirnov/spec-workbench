@@ -484,6 +484,7 @@
     "attach_local_source: [FIELD_ASSIGNMENT] Derive publication_id and the staging publication token only from characters in [A-Za-z0-9._-] (for example invoice id, source id, and content hash joined by \"-\" after replacing any other character with \"_\"); the byte store rejects any other token.",
     "attach_local_source: [BEHAVIOR] After classifiable per-file outcomes are applied, return one SourceAttachmentBatchResult containing every submitted file's attached, already_attached, or rejected outcome plus source_status recomputed from accepted archive truth.",
     "attach_local_source: [VALIDATION_ERROR] Raise InvoiceNotFoundError when the exact accepted invoice target cannot be resolved. Raise SourceAttachmentRejectedError only when a request-level source-attachment condition prevents trustworthy independent per-file classification; do not use it for an ordinary file-local rejection that can be represented as SourceAttachmentItemResult(result=\"rejected\").",
+    "attach_local_source: [FIELD_ASSIGNMENT] MUST assign the source identity of a local file as file.expected_source_id when supplied, otherwise f\"local:{sha256 hex of file.content}\"; a SourceBinary already stored for the same invoice_id and content_hash is the same source: the item result is attached with that stored source_id, no second identity row is inserted, and a replica row is added only when this node has none for it.",
     "attach_local_source: [PROVENANCE] Preserve previously accepted provenance when equivalent bytes are reattached; repeated attempts may add attempt evidence but must not silently replace the provenance of already accepted source evidence.",
     "validate_card_assignment: [RULE_REFERENCE] An exact current active project match with no material conflict must use the accepted positive result from = rules.registry_context.active_exact_match_result.",
     "validate_card_assignment: [RULE_REFERENCE] An archived current project must remain review-required according to = rules.registry_context.archived_requires_review.",
@@ -700,6 +701,7 @@
     "HoldedGatewayService.create_holded_purchase: [PROVENANCE] Record the technical outcome by updating the exact locked attempt from its reloaded issued state with request_finished_at, outcome, document_id, and safe_error_code; a stale or conflicting transition writes nothing and never deletes prior evidence.",
     "HoldedGatewayService.lookup_holded_purchase: [ORCHESTRATION] Resolve the exact durable attempt by its unique marker, use GET for a supplied document identifier or one bounded Holded v1 list response for the exact marker, and insert one typed observation evidence row without remote mutation or settling Cabinet publication.",
     "HoldedGatewayService.lookup_holded_purchase: [BEHAVIOR] Preserve zero, one, and multiple exact matches, malformed responses, unknown documents, and transport failures distinctly; return the typed observed document for one candidate but never perform A51 comparison or interpret raw status.",
+    "HoldedGatewayService.lookup_holded_purchase: [FIELD_ASSIGNMENT] outcome is one HoldedLookupOutcome: one_match with document for exactly one exact-marker candidate, zero_match, multiple_matches, unknown_document for a GET of an absent document, malformed_response, transport_failure; match_count is the number of exact-marker candidates observed.",
     "HoldedHttpClient.create_purchase: [FORBIDDEN_ACTION] Issue exactly one POST per invocation with mutation retries and replaying redirects disabled.",
     "HoldedHttpClient.list_purchases: [BEHAVIOR] Perform one read-only bounded Holded v1 list request and return typed summaries in stable document-id order according to = rules.holded_transport_backend.",
     "HoldedHttpClient.get_purchase: [BEHAVIOR] Perform one read-only request for the exact document identifier and return bounded external evidence.",
@@ -1614,6 +1616,17 @@
         "currency": "str"
       }
     },
+    "HoldedLookupOutcome": {
+      "kind": "enum",
+      "values": [
+        "zero_match",
+        "one_match",
+        "multiple_matches",
+        "unknown_document",
+        "malformed_response",
+        "transport_failure"
+      ]
+    },
     "HoldedPurchaseLookupEvidence": {
       "identity": "value",
       "fields": {
@@ -1621,7 +1634,7 @@
         "match_count": "int",
         "document_id": "str | None = None",
         "raw_status": "int | None = None",
-        "outcome": "str",
+        "outcome": "HoldedLookupOutcome",
         "observed_at": "datetime",
         "document": "HoldedRemotePurchaseDocument | None = None"
       }
@@ -2635,10 +2648,10 @@
             {
               "column": "outcome",
               "field": "outcome",
-              "storage": "text",
+              "storage": "enum",
               "nullable": false,
               "check": null,
-              "element_model": null
+              "element_model": "HoldedLookupOutcome"
             },
             {
               "column": "observed_at",
@@ -7000,6 +7013,7 @@
         "PresuProEstimateObservation",
         "HoldedPurchasePayloadItem",
         "HoldedPurchaseAttemptPayload",
+        "HoldedLookupOutcome",
         "HoldedPurchaseLookupEvidence",
         "VpsReleaseEvaluation",
         "VpsReleaseDecision",
@@ -7257,7 +7271,8 @@
           "InvoiceCardLine",
           "InvoiceCardParty",
           "InvoiceCardObjectBlock",
-          "InvoiceCardTotals"
+          "InvoiceCardTotals",
+          "HoldedLookupOutcome"
         ]
       },
       "retention_release": {
@@ -7467,7 +7482,8 @@
           "HoldedRemotePurchaseItem",
           "HoldedRemotePurchaseDocument",
           "HoldedAttemptRepository",
-          "HoldedHttpClient"
+          "HoldedHttpClient",
+          "HoldedLookupOutcome"
         ]
       },
       "holded_transport": {
@@ -7638,6 +7654,7 @@
       "PresuProEstimateObservation",
       "HoldedPurchasePayloadItem",
       "HoldedPurchaseAttemptPayload",
+      "HoldedLookupOutcome",
       "HoldedPurchaseLookupEvidence",
       "VpsReleaseEvaluation",
       "VpsReleaseDecision",

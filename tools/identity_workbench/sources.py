@@ -49,7 +49,7 @@ def load_closure(project: Path) -> tuple[dict[str, SourceIdentity], list[Finding
         if not isinstance(models, dict):
             raise IdentityWorkbenchError(f"{path}: models must be an object.")
         for name, model in models.items():
-            if not isinstance(model, dict) or model.get("kind") == "interface":
+            if not isinstance(model, dict) or model.get("kind"):
                 continue
             identity = model.get("identity")
             if identity not in {"value", "entity"}:
@@ -69,7 +69,7 @@ def load_assembled(project: Path) -> tuple[dict[str, SourceIdentity], list[Findi
     records: dict[str, SourceIdentity] = {}
     findings: list[Finding] = []
     for name, model in models.items():
-        if not isinstance(model, dict) or model.get("kind") == "interface":
+        if not isinstance(model, dict) or model.get("kind"):
             continue
         identity = model.get("identity")
         if identity not in {"value", "entity"}:

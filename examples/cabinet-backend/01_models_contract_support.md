@@ -375,6 +375,26 @@ Substitution: equal complete create payloads are interchangeable for the same te
 
 ---
 
+## Model M88 — HoldedLookupOutcome
+
+Closed technical vocabulary of one bounded read-only Holded recovery lookup
+(`kind: enum`). It names what the gateway observed, never a publication verdict.
+
+Values:
+
+- `zero_match` — no document carries the exact attempt marker;
+- `one_match` — exactly one exact-marker candidate, returned as the typed document;
+- `multiple_matches` — more than one exact-marker candidate;
+- `unknown_document` — a GET for the supplied document id found no document;
+- `malformed_response` — the response could not be parsed into the typed shape;
+- `transport_failure` — timeout, connection loss, or non-2xx transport outcome.
+
+### Identity
+
+enum (no runtime identity; a closed list — adding a value is a code change).
+
+---
+
 ## Model M50 — HoldedPurchaseLookupEvidence
 
 Immutable technical result of bounded read-only Holded recovery lookup.
@@ -386,8 +406,10 @@ Fields:
 - `document_id: str | None`;
 - `raw_status: int | None`;
 - `business_verified: bool`;
-- `outcome: str` — accepted values are `verified_match`, `payload_mismatch`,
-  `outcome_unknown`, or `duplicate_conflict`;
+- `outcome: HoldedLookupOutcome` — closed enum `zero_match`, `one_match`, `multiple_matches`,
+  `unknown_document`, `malformed_response`, `transport_failure` (technical lookup evidence only;
+  `verified_match`, `payload_mismatch`, `outcome_unknown`, `duplicate_conflict` are publication verdicts
+  owned by `module:holded_publication`);
 - `observed_at: datetime`.
 
 It contains technical evidence only; `module:holded_publication` owns the logical
