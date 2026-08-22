@@ -158,6 +158,16 @@ Published historical plans and quantity outputs must remain identifiable and mus
 
 The exact revision model, branching policy, locking, and rollback behavior are deferred to later states.
 
+## One active Construction proposal in the initial product
+
+The initial Room Planner product supports one active Construction proposal for a Registry object rather than parallel alternative A/B/C design variants.
+
+Alternative design exploration is represented through the ordinary revision history of the plan. The product does not require a separate variant/branch concept in its first scope.
+
+This decision keeps publication, quantity calculation, downstream consumption, and provenance centered on one current Construction intent plus identifiable historical revisions.
+
+A future product requirement may introduce explicit parallel alternatives, but later architecture must not assume that capability exists today.
+
 ## Primary planning scope
 
 Current in-scope capabilities include:
@@ -475,7 +485,6 @@ Changes to a published result must create a new identifiable revision rather tha
 - Which wall/opening editing operations are mandatory for the first usable release?
 - What is the exact lifecycle for creating, correcting, and freezing the Existing baseline?
 - Can a frozen Existing baseline be corrected, and if so how is that correction distinguished from renovation intent?
-- Does the first release support only one active Construction proposal or multiple alternative design variants?
 - How are floor level/survey measurements acquired or imported?
 - Which construction systems/material families are required in the initial Construction Catalog?
 - Does Room Planner expose editable construction-system templates, catalog-selected fixed systems, or both?
