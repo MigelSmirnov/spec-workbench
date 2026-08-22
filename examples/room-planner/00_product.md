@@ -124,7 +124,7 @@ These are separate axes and must not be conflated.
 
 Published historical plans and quantity outputs must remain identifiable and must not silently change when a later plan revision or later Construction Catalog revision exists.
 
-The exact revision model, draft/publication workflow, branching policy, locking, and rollback behavior are deferred to later states.
+The exact revision model, branching policy, locking, and rollback behavior are deferred to later states.
 
 ## Primary planning scope
 
@@ -356,11 +356,75 @@ The current AI Code Factory generates Python backend code only. This is a platfo
 
 The browser editor and generated Python backend must therefore meet through explicit contracts rather than assuming that the Factory generates the frontend editor.
 
+## Primary user workflow
+
+The primary product workflow is currently:
+
+```text
+select Registry object
+        ↓
+create / continue Existing Plan
+        ↓
+record Demolition Plan
+        ↓
+record Construction Plan
+        ↓
+inspect derived Proposed / To-Be view
+        ↓
+calculate physical quantities
+        ↓
+review
+        ↓
+publish an identifiable version
+        ↓
+downstream platform consumers
+```
+
+More explicitly:
+
+1. The user opens Room Planner and selects an existing renovation object supplied by Registry.
+2. The user creates or continues the Existing Plan and records the measured current condition.
+3. The Existing Plan remains independent from later demolition and construction work so the original observed state is not overwritten.
+4. The user records Demolition work separately against the Existing condition.
+5. The user records Construction work separately, including new/changed geometry and the construction/finish systems owned by Room Planner.
+6. The user may inspect a Proposed / To-Be result derived from Existing, Demolition, and Construction without turning that derived view into a mixed source of truth.
+7. Room Planner calculates physical quantities for the scope it owns using the relevant geometry, construction intent, and applicable Construction Catalog data.
+8. The user reviews the resulting plan and quantities.
+9. When a result is ready for use outside the user's working session, the user publishes an identifiable version for downstream platform consumers.
+
+The workflow does not need to complete in one session. The product must support saving incomplete work and continuing it later.
+
+## Save and publish are different product actions
+
+Saving working state and publishing a result have different meanings.
+
+**Save / draft** means the user is preserving incomplete or ongoing work for later continuation. Saved working state is not automatically a platform promise that downstream applications should consume it.
+
+**Publish** means the user intentionally exposes a specific identifiable result version for use by other platform applications.
+
+A later edit must not silently mutate the meaning of an already published result; it leads to later working state and eventually another published version.
+
+The exact persistence model, draft state model, approval policy, and revision numbering mechanics are deferred.
+
+## Existing Plan may be published independently
+
+The Existing Plan has useful platform meaning before Demolition and Construction are complete.
+
+Room Planner must therefore allow an accepted Existing result to be publishable independently from later renovation-stage work.
+
+This allows downstream consumers that only need the measured/as-built spatial condition to begin work without waiting for the complete renovation proposal.
+
+Whether Demolition and Construction are also independently published artifacts or published through a later `room_plan` container contract remains deferred to later design states.
+
 ## Observable user outcomes discovered so far
 
 A user can select an existing renovation object and work on its Room Planner container.
 
 The user can create or edit an accurate Existing Plan without mixing it with future construction intent.
+
+The user can preserve unfinished work without publishing it to downstream applications.
+
+The user can publish an accepted Existing result before the complete renovation proposal is finished.
 
 The user can separately describe Demolition work against the existing condition.
 
