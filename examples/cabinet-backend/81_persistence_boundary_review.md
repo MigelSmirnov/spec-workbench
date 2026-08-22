@@ -112,3 +112,29 @@ Open item recorded in `30_modules_persistence_boundary.md`:
 `RegistryProjectSnapshot` is not a persisted model although
 `WorkObject.registry_snapshot_id` references it. Pre-existing; not resolved
 here.
+
+## `holded_gateway`
+
+- `holded_gateway_persistence` owns `PostgresHoldedAttemptRepository`.
+- `reserve_attempt` becomes the plain append `insert_attempt` (uniqueness on
+  `publication_attempt_id` and `attempt_marker`); `mark_request_issued` and
+  `append_attempt_outcome` collapse into one field update `update_attempt`
+  of `request_started_at`, `request_finished_at`, `outcome`, `document_id`,
+  `safe_error_code`; `append_lookup_evidence` becomes the plain append
+  `insert_lookup_evidence`.
+- State 1 repair: `HoldedPurchaseLookupEvidence` was appended durably but not
+  classified as persisted; it is now `issued` evidence keyed by
+  `attempt_marker` and `observed_at` (`01_models_holded_gateway_runtime.md`,
+  `60_data_closure*.json`).
+- `HoldedGatewayService.create_holded_purchase` now states reservation
+  equivalence (publication identity, revision hash, payload hash, marker),
+  the issuance re-read before the sole POST, and the outcome update from the
+  reloaded issued state; `lookup_holded_purchase` resolves the attempt by
+  unique marker itself.
+
+Deterministic review: `models` 87/89, `holded_gateway` 5/14,
+`holded_gateway_persistence` 10/10, `holded_publication` 7/28, `bootstrap`
+4/24 — zero blocks, zero prompts. Adversarial review: a second POST is still
+impossible without an issuance record; `update_attempt` cannot change the
+identity or hash fields; evidence rows cannot be deleted. Result:
+`PASS_INTERNAL_VARIATION` for `holded_gateway`, `PASS` for the others.

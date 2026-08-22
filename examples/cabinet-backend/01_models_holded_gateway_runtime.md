@@ -10,6 +10,15 @@ The earlier support shape is refined so the gateway does not decide A51 business
 
 `module:holded_publication` compares the typed observed document with the exact immutable Card revision and owns verified success, payload mismatch, and logical reconciliation.
 
+## Persistence classification — HoldedPurchaseLookupEvidence
+
+Lookup evidence is appended durably by the gateway (`append_lookup_evidence`
+in State 6) and therefore is persisted evidence, not a transient value:
+`persistence.HoldedPurchaseLookupEvidence.class = "issued"`. One row per
+observation, identified by `attempt_marker` and `observed_at`; rows are never
+updated or deleted. The earlier omission left the evidence with no durable
+home (`30_modules_persistence_boundary.md`).
+
 ## Accepted boundary models
 
 ### HoldedTransportResponse

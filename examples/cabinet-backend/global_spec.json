@@ -139,10 +139,9 @@
     "HoldedAttemptRepository.rollback": "(self) -> None",
     "HoldedAttemptRepository.lock_attempt": "(self, publication_attempt_id: str) -> None",
     "HoldedAttemptRepository.load_attempt": "(self, publication_attempt_id: str) -> HoldedPublicationAttempt | None",
-    "HoldedAttemptRepository.reserve_attempt": "(self, attempt: HoldedPublicationAttempt) -> HoldedPublicationAttempt",
-    "HoldedAttemptRepository.mark_request_issued": "(self, publication_attempt_id: str, issued_at: datetime) -> HoldedPublicationAttempt",
-    "HoldedAttemptRepository.append_attempt_outcome": "(self, attempt: HoldedPublicationAttempt) -> None",
-    "HoldedAttemptRepository.append_lookup_evidence": "(self, attempt_marker: str, evidence: HoldedPurchaseLookupEvidence) -> None",
+    "HoldedAttemptRepository.insert_attempt": "(self, attempt: HoldedPublicationAttempt) -> None",
+    "HoldedAttemptRepository.update_attempt": "(self, attempt: HoldedPublicationAttempt) -> None",
+    "HoldedAttemptRepository.insert_lookup_evidence": "(self, evidence: HoldedPurchaseLookupEvidence) -> None",
     "PostgresHoldedAttemptRepository.__init__": "(self, database_url: str) -> None",
     "PostgresHoldedAttemptRepository.begin": "(self) -> None",
     "PostgresHoldedAttemptRepository.commit": "(self) -> None",
@@ -150,10 +149,9 @@
     "PostgresHoldedAttemptRepository.lock_attempt": "(self, publication_attempt_id: str) -> None",
     "PostgresHoldedAttemptRepository.load_attempt": "(self, publication_attempt_id: str) -> HoldedPublicationAttempt | None",
     "PostgresHoldedAttemptRepository.load_attempt_by_marker": "(self, attempt_marker: str) -> HoldedPublicationAttempt | None",
-    "PostgresHoldedAttemptRepository.reserve_attempt": "(self, attempt: HoldedPublicationAttempt) -> HoldedPublicationAttempt",
-    "PostgresHoldedAttemptRepository.mark_request_issued": "(self, publication_attempt_id: str, issued_at: datetime) -> HoldedPublicationAttempt",
-    "PostgresHoldedAttemptRepository.append_attempt_outcome": "(self, attempt: HoldedPublicationAttempt) -> None",
-    "PostgresHoldedAttemptRepository.append_lookup_evidence": "(self, attempt_marker: str, evidence: HoldedPurchaseLookupEvidence) -> None",
+    "PostgresHoldedAttemptRepository.insert_attempt": "(self, attempt: HoldedPublicationAttempt) -> None",
+    "PostgresHoldedAttemptRepository.update_attempt": "(self, attempt: HoldedPublicationAttempt) -> None",
+    "PostgresHoldedAttemptRepository.insert_lookup_evidence": "(self, evidence: HoldedPurchaseLookupEvidence) -> None",
     "HttpxHoldedHttpClient.__init__": "(self, base_url: str, api_key: str, timeout_seconds: int, max_response_bytes: int) -> None",
     "HttpxHoldedHttpClient.create_purchase": "(self, payload: HoldedPurchaseAttemptPayload) -> HoldedTransportResponse",
     "HttpxHoldedHttpClient.list_purchases": "(self) -> HoldedPurchaseListPage",
@@ -529,10 +527,11 @@
     "RegistryContextService.validate_card_assignment: [DEPENDENCY_BOUNDARY] MUST resolve the exact accepted immutable Card revision through the supplied DurableArchiveService before applying Registry assignment policy; invoice_id and content_hash alone are not evidence.",
     "create_local_app: [ORCHESTRATION] MUST construct RegistryContextService with the exact PostgresRegistryContextRepository and the already constructed DurableArchiveService, preserving one archive boundary.",
     "HoldedGatewayService.__init__: [DEPENDENCY_BOUNDARY] Retain the exact supplied repository and HTTP client; reject missing dependencies and never construct adapters, read environment variables, or use module-global fallbacks.",
-    "HoldedGatewayService.create_holded_purchase: [ORCHESTRATION] Under the exact attempt lock, reuse an equivalent durable reservation or reject a conflict, commit reservation before network mutation, and durably mark request issuance before the sole permitted POST.",
+    "HoldedGatewayService.create_holded_purchase: [ORCHESTRATION] Under the exact attempt lock, load the stored attempt: reuse it when publication identity, invoice revision hash, canonical payload hash, and marker are exactly equivalent, reject a conflicting one, otherwise insert the reservation; commit before network mutation, then re-read the locked attempt, require that no issuance is recorded, update it as issued with request_started_at, and commit before the sole permitted POST.",
     "HoldedGatewayService.create_holded_purchase: [BEHAVIOR] Never issue POST when the attempt already records issued, ambiguous, or terminal evidence; equivalent re-entry returns existing evidence without mutation.",
     "HoldedGatewayService.create_holded_purchase: [FALLBACK] Classify timeout, connection loss, response loss, or interruption after issuance as ambiguous secret-free evidence and never retry POST.",
-    "HoldedGatewayService.lookup_holded_purchase: [ORCHESTRATION] Use GET for a supplied document identifier or one bounded Holded v1 list response for an exact marker and append typed observation evidence without remote mutation.",
+    "HoldedGatewayService.create_holded_purchase: [PROVENANCE] Record the technical outcome by updating the exact locked attempt from its reloaded issued state with request_finished_at, outcome, document_id, and safe_error_code; a stale or conflicting transition writes nothing and never deletes prior evidence.",
+    "HoldedGatewayService.lookup_holded_purchase: [ORCHESTRATION] Resolve the exact durable attempt by its unique marker, use GET for a supplied document identifier or one bounded Holded v1 list response for the exact marker, and insert one typed observation evidence row without remote mutation or settling Cabinet publication.",
     "HoldedGatewayService.lookup_holded_purchase: [BEHAVIOR] Preserve zero, one, and multiple exact matches, malformed responses, unknown documents, and transport failures distinctly; return the typed observed document for one candidate but never perform A51 comparison or interpret raw status.",
     "HoldedHttpClient.create_purchase: [FORBIDDEN_ACTION] Issue exactly one POST per invocation with mutation retries and replaying redirects disabled.",
     "HoldedHttpClient.list_purchases: [BEHAVIOR] Perform one read-only bounded Holded v1 list request and return typed summaries in stable document-id order according to = rules.holded_transport_backend.",
@@ -542,10 +541,9 @@
     "HoldedAttemptRepository.rollback: [BEHAVIOR] Roll back the current gateway transaction without deleting prior immutable technical evidence.",
     "HoldedAttemptRepository.lock_attempt: [BEHAVIOR] Acquire the PostgreSQL uniqueness or row lock for the exact publication attempt before deciding whether POST may be issued.",
     "HoldedAttemptRepository.load_attempt: [BEHAVIOR] Return the exact persisted technical attempt or None without fabricating a default.",
-    "HoldedAttemptRepository.reserve_attempt: [BEHAVIOR] Reuse an existing reservation only when attempt identity, payload hash, and marker are exactly equivalent; reject conflicts.",
-    "HoldedAttemptRepository.mark_request_issued: [BEHAVIOR] Persist the single-create authority transition before network mutation and reject repeated or skipped issuance.",
-    "HoldedAttemptRepository.append_attempt_outcome: [BEHAVIOR] Append immutable secret-free technical outcome evidence and reject stale or conflicting transitions.",
-    "HoldedAttemptRepository.append_lookup_evidence: [BEHAVIOR] Resolve the exact durable attempt by its unique marker and append immutable read-only recovery evidence without settling Cabinet publication.",
+    "HoldedAttemptRepository.insert_attempt: [PROVENANCE] Append one new technical attempt row for the exact publication_attempt_id inside the active locked transaction; a second row for the same publication_attempt_id or attempt_marker fails on uniqueness and never replaces an existing attempt.",
+    "HoldedAttemptRepository.update_attempt: [PROVENANCE] Write request_started_at, request_finished_at, outcome, document_id, and safe_error_code for the exact existing publication_attempt_id inside the active locked transaction; fail when the row is absent and never insert or change publication_id, invoice_id, invoice_revision_hash, canonical_holded_payload_hash, or attempt_marker.",
+    "HoldedAttemptRepository.insert_lookup_evidence: [PROVENANCE] Append one immutable secret-free lookup observation row keyed by attempt_marker and observed_at inside the active transaction; never update, delete, or settle any attempt or publication state.",
     "PostgresHoldedAttemptRepository.__init__: [SECURITY_BOUNDARY] Bind to the supplied PostgreSQL URL, validate connectivity, treat the URL as secret, and never read environment variables or log credentials.",
     "HttpxHoldedHttpClient.__init__: [VALIDATION_ERROR] Require the verified Holded v1 HTTPS origin, a non-empty API key, and positive finite timeout and response-size bounds according to = rules.holded_transport_backend.",
     "HttpxHoldedHttpClient.__init__: [SECURITY_BOUNDARY] Keep the credential only in the outbound key header defined by = rules.holded_transport_backend, enable TLS verification, and never log or return reusable credential material.",
@@ -664,10 +662,10 @@
     "PostgresHoldedAttemptRepository.rollback: [BEHAVIOR] Roll back the current gateway transaction without deleting prior immutable technical evidence.",
     "PostgresHoldedAttemptRepository.lock_attempt: [BEHAVIOR] Acquire the PostgreSQL uniqueness or row lock for the exact publication attempt before deciding whether POST may be issued.",
     "PostgresHoldedAttemptRepository.load_attempt: [BEHAVIOR] Return the exact persisted technical attempt or None without fabricating a default.",
-    "PostgresHoldedAttemptRepository.reserve_attempt: [BEHAVIOR] Reuse an existing reservation only when attempt identity, payload hash, and marker are exactly equivalent; reject conflicts.",
-    "PostgresHoldedAttemptRepository.mark_request_issued: [BEHAVIOR] Persist the single-create authority transition before network mutation and reject repeated or skipped issuance.",
+    "PostgresHoldedAttemptRepository.insert_attempt: [PROVENANCE] Append one new technical attempt row for the exact publication_attempt_id inside the active locked transaction; a second row for the same publication_attempt_id or attempt_marker fails on uniqueness and never replaces an existing attempt.",
+    "PostgresHoldedAttemptRepository.update_attempt: [PROVENANCE] Write request_started_at, request_finished_at, outcome, document_id, and safe_error_code for the exact existing publication_attempt_id inside the active locked transaction; fail when the row is absent and never insert or change publication_id, invoice_id, invoice_revision_hash, canonical_holded_payload_hash, or attempt_marker.",
     "PostgresHoldedAttemptRepository.append_attempt_outcome: [BEHAVIOR] Append immutable secret-free technical outcome evidence and reject stale or conflicting transitions.",
-    "PostgresHoldedAttemptRepository.append_lookup_evidence: [BEHAVIOR] Resolve the exact durable attempt by its unique marker and append immutable read-only recovery evidence without settling Cabinet publication.",
+    "PostgresHoldedAttemptRepository.insert_lookup_evidence: [PROVENANCE] Append one immutable secret-free lookup observation row keyed by attempt_marker and observed_at inside the active transaction; never update, delete, or settle any attempt or publication state.",
     "PostgresHoldedAttemptRepository.load_attempt_by_marker: [BEHAVIOR] Return the exact attempt for one unique marker or None; reject duplicate persisted markers and never infer an attempt from payload similarity.",
     "PostgresSynchronizationRepository.begin: [DEPENDENCY_BOUNDARY] Open one PostgreSQL transaction for the exact synchronization transition and reject nested begin.",
     "PostgresSynchronizationRepository.commit: [BEHAVIOR] Commit the active typed transition exactly once and expose no partial state.",
@@ -2625,6 +2623,9 @@
     "HoldedPublicationAttempt": {
       "class": "issued"
     },
+    "HoldedPurchaseLookupEvidence": {
+      "class": "issued"
+    },
     "IncompleteSourceAcceptance": {
       "class": "issued"
     },
@@ -2810,10 +2811,12 @@
         "HoldedPublicationNotFoundError",
         "HoldedReconciliationRequiredError"
       ],
+      "holded_gateway_persistence": [
+        "PostgresHoldedAttemptRepository"
+      ],
       "holded_gateway": [
         "create_holded_purchase",
         "lookup_holded_purchase",
-        "PostgresHoldedAttemptRepository",
         "HoldedGatewayService"
       ],
       "holded_transport": [
@@ -3034,7 +3037,6 @@
           "RegistryContextService"
         ],
         "holded_gateway": [
-          "PostgresHoldedAttemptRepository",
           "HoldedGatewayService"
         ],
         "holded_transport": [
@@ -3063,6 +3065,9 @@
         ],
         "registry_context_persistence": [
           "PostgresRegistryContextRepository"
+        ],
+        "holded_gateway_persistence": [
+          "PostgresHoldedAttemptRepository"
         ]
       },
       "durable_archive": {
@@ -3130,6 +3135,13 @@
           "WorkObject",
           "ObjectAssignmentValidation",
           "RegistryContextRepository"
+        ]
+      },
+      "holded_gateway_persistence": {
+        "models": [
+          "HoldedPublicationAttempt",
+          "HoldedPurchaseLookupEvidence",
+          "HoldedAttemptRepository"
         ]
       }
     }
@@ -3284,10 +3296,12 @@
       "HoldedPublicationNotFoundError",
       "HoldedReconciliationRequiredError"
     ],
+    "holded_gateway_persistence": [
+      "PostgresHoldedAttemptRepository"
+    ],
     "holded_gateway": [
       "create_holded_purchase",
       "lookup_holded_purchase",
-      "PostgresHoldedAttemptRepository",
       "HoldedGatewayService"
     ],
     "holded_transport": [
@@ -3337,6 +3351,7 @@
     "registry_context_persistence",
     "registry_context",
     "holded_transport",
+    "holded_gateway_persistence",
     "holded_gateway",
     "synchronization",
     "plan_actual",
@@ -3484,6 +3499,7 @@
     "registry_context_persistence": "cabinet_backend/registry_context_persistence",
     "registry_context": "cabinet_backend/registry_context",
     "holded_transport": "cabinet_backend/holded_transport",
+    "holded_gateway_persistence": "cabinet_backend/holded_gateway_persistence",
     "holded_gateway": "cabinet_backend/holded_gateway",
     "synchronization": "cabinet_backend/synchronization",
     "plan_actual": "cabinet_backend/plan_actual",

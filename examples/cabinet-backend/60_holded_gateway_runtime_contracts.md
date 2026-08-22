@@ -22,10 +22,9 @@ Existing module functions remain façades with an explicit `HoldedGatewayService
 - HoldedAttemptRepository.lock_attempt(self, publication_attempt_id: str) -> None
 - HoldedAttemptRepository.load_attempt(self, publication_attempt_id: str) -> HoldedPublicationAttempt | None
 - HoldedAttemptRepository.load_attempt_by_marker(self, attempt_marker: str) -> HoldedPublicationAttempt | None
-- HoldedAttemptRepository.reserve_attempt(self, attempt: HoldedPublicationAttempt) -> HoldedPublicationAttempt
-- HoldedAttemptRepository.mark_request_issued(self, publication_attempt_id: str, issued_at: datetime) -> HoldedPublicationAttempt
-- HoldedAttemptRepository.append_attempt_outcome(self, attempt: HoldedPublicationAttempt) -> None
-- HoldedAttemptRepository.append_lookup_evidence(self, attempt_marker: str, evidence: HoldedPurchaseLookupEvidence) -> None
+- HoldedAttemptRepository.insert_attempt(self, attempt: HoldedPublicationAttempt) -> None
+- HoldedAttemptRepository.update_attempt(self, attempt: HoldedPublicationAttempt) -> None
+- HoldedAttemptRepository.insert_lookup_evidence(self, evidence: HoldedPurchaseLookupEvidence) -> None
 
 Generic query dictionaries and untyped save methods are forbidden.
 
@@ -38,10 +37,9 @@ Generic query dictionaries and untyped save methods are forbidden.
 - PostgresHoldedAttemptRepository.lock_attempt(self, publication_attempt_id: str) -> None
 - PostgresHoldedAttemptRepository.load_attempt(self, publication_attempt_id: str) -> HoldedPublicationAttempt | None
 - PostgresHoldedAttemptRepository.load_attempt_by_marker(self, attempt_marker: str) -> HoldedPublicationAttempt | None
-- PostgresHoldedAttemptRepository.reserve_attempt(self, attempt: HoldedPublicationAttempt) -> HoldedPublicationAttempt
-- PostgresHoldedAttemptRepository.mark_request_issued(self, publication_attempt_id: str, issued_at: datetime) -> HoldedPublicationAttempt
-- PostgresHoldedAttemptRepository.append_attempt_outcome(self, attempt: HoldedPublicationAttempt) -> None
-- PostgresHoldedAttemptRepository.append_lookup_evidence(self, attempt_marker: str, evidence: HoldedPurchaseLookupEvidence) -> None
+- PostgresHoldedAttemptRepository.insert_attempt(self, attempt: HoldedPublicationAttempt) -> None
+- PostgresHoldedAttemptRepository.update_attempt(self, attempt: HoldedPublicationAttempt) -> None
+- PostgresHoldedAttemptRepository.insert_lookup_evidence(self, evidence: HoldedPurchaseLookupEvidence) -> None
 - HttpxHoldedHttpClient.__init__(self, base_url: str, api_key: str, timeout_seconds: int, max_response_bytes: int) -> None
 - HttpxHoldedHttpClient.create_purchase(self, payload: HoldedPurchaseAttemptPayload) -> HoldedTransportResponse
 - HttpxHoldedHttpClient.list_purchases(self) -> HoldedPurchaseListPage
@@ -57,3 +55,9 @@ but do not read environment variables.
 - create_app(access_control: AccessControlBackend, archive: DurableArchiveService, registry: RegistryContextService, holded_gateway: HoldedGatewayService) -> FastAPI
 
 The service is bound into application state and supplied explicitly to Holded publication calls.
+
+`PostgresHoldedAttemptRepository` is owned by `holded_gateway_persistence`.
+`reserve_attempt`, `mark_request_issued`, `append_attempt_outcome`, and `append_lookup_evidence`
+were replaced by the plain `insert_attempt`, `update_attempt`, and `insert_lookup_evidence`;
+reservation equivalence, single-create authority, and outcome transitions belong to
+`HoldedGatewayService` (`30_modules_persistence_boundary.md`).

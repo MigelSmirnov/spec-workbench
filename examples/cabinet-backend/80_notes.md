@@ -154,10 +154,9 @@ PostgresHoldedAttemptRepository.commit: [BEHAVIOR] Commit only a valid typed att
 PostgresHoldedAttemptRepository.rollback: [BEHAVIOR] Roll back the current gateway transaction without deleting prior immutable technical evidence.
 PostgresHoldedAttemptRepository.lock_attempt: [BEHAVIOR] Acquire the PostgreSQL uniqueness or row lock for the exact publication attempt before deciding whether POST may be issued.
 PostgresHoldedAttemptRepository.load_attempt: [BEHAVIOR] Return the exact persisted technical attempt or None without fabricating a default.
-PostgresHoldedAttemptRepository.reserve_attempt: [BEHAVIOR] Reuse an existing reservation only when attempt identity, payload hash, and marker are exactly equivalent; reject conflicts.
-PostgresHoldedAttemptRepository.mark_request_issued: [BEHAVIOR] Persist the single-create authority transition before network mutation and reject repeated or skipped issuance.
-PostgresHoldedAttemptRepository.append_attempt_outcome: [BEHAVIOR] Append immutable secret-free technical outcome evidence and reject stale or conflicting transitions.
-PostgresHoldedAttemptRepository.append_lookup_evidence: [BEHAVIOR] Resolve the exact durable attempt by its unique marker and append immutable read-only recovery evidence without settling Cabinet publication.
+PostgresHoldedAttemptRepository.insert_attempt: [PROVENANCE] Append one new technical attempt row for the exact publication_attempt_id inside the active locked transaction; a second row for the same publication_attempt_id or attempt_marker fails on uniqueness and never replaces an existing attempt.
+PostgresHoldedAttemptRepository.update_attempt: [PROVENANCE] Write request_started_at, request_finished_at, outcome, document_id, and safe_error_code for the exact existing publication_attempt_id inside the active locked transaction; fail when the row is absent and never insert or change publication_id, invoice_id, invoice_revision_hash, canonical_holded_payload_hash, or attempt_marker.
+PostgresHoldedAttemptRepository.insert_lookup_evidence: [PROVENANCE] Append one immutable secret-free lookup observation row keyed by attempt_marker and observed_at inside the active transaction; never update, delete, or settle any attempt or publication state.
 PostgresHoldedAttemptRepository.load_attempt_by_marker: [BEHAVIOR] Return the exact attempt for one unique marker or None; reject duplicate persisted markers and never infer an attempt from payload similarity.
 PostgresSynchronizationRepository.begin: [DEPENDENCY_BOUNDARY] Open one PostgreSQL transaction for the exact synchronization transition and reject nested begin.
 PostgresSynchronizationRepository.commit: [BEHAVIOR] Commit the active typed transition exactly once and expose no partial state.

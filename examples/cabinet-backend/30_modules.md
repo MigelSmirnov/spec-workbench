@@ -620,6 +620,38 @@ Protocol from `models` as plain reads, one keyed upsert, and one append;
 
 ---
 
+## `holded_gateway_persistence`
+
+### Owns
+
+- `PostgresHoldedAttemptRepository`: the PostgreSQL storage shape for
+  technical Holded attempts and read-only lookup observations;
+- one transaction and the exact attempt lock per gateway state transition;
+- plain append of an attempt, plain update of its outcome fields, plain
+  append of lookup evidence, exact reads by attempt id and unique marker.
+
+### Hides
+
+- psycopg connection handling;
+- table, column, and index names;
+- row/model codecs for the observed remote document.
+
+### Must not own
+
+- reservation equivalence or conflict decisions;
+- single-create authority: whether POST may be issued;
+- outcome classification or transition validity;
+- environment reads or Holded HTTP.
+
+### Depth assessment
+
+Deterministic persistence module. It implements the `HoldedAttemptRepository`
+Protocol from `models` as plain reads, appends, and one field update;
+`holded_gateway` decides reuse, issuance, and outcome transitions. See
+`30_modules_persistence_boundary.md`.
+
+---
+
 # 2. Boundary adapters are not policy modules
 
 The following are expected adapters or deployment surfaces, not primary owners of Cabinet rules:

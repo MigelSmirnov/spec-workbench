@@ -14,7 +14,7 @@
 ## PostgreSQL repository
 
 - Transaction methods [DEPENDENCY_BOUNDARY]: use one PostgreSQL transaction per state transition and acquire the exact attempt row/uniqueness lock before deciding whether POST may be issued.
-- reserve_attempt [BEHAVIOR]: return an existing reservation only when attempt identity, payload hash, and marker are exactly equivalent; reject conflicts.
+- insert_attempt / update_attempt / insert_lookup_evidence [PROVENANCE]: plain append of an attempt row, plain update of its outcome fields, plain append of an observation row. Reservation equivalence, issuance authority, and transition validity are decided by create_holded_purchase from the reloaded locked attempt (`30_modules_persistence_boundary.md`).
 - Evidence methods [BEHAVIOR]: append immutable technical observations and reject skipped, repeated-mutation, stale, or conflicting lifecycle transitions.
 - Constructor [SECURITY_BOUNDARY]: treat the database URL as secret and never log it.
 
