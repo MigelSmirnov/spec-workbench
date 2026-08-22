@@ -353,7 +353,7 @@ Those commercial concerns belong to PresuPro.
 
 Room Planner publishes physical quantities in their appropriate engineering units. When downstream estimating or procurement needs conversion from a physical quantity to purchasable packages, PresuPro owns that conversion and whole-package rounding. Construction Catalog may supply technical/package facts required by that calculation, but it does not own the commercial rounding decision.
 
-Demolition and Construction must remain distinguishishable in quantity outputs because they represent different kinds of downstream work.
+Demolition and Construction must remain distinguishable in quantity outputs because they represent different kinds of downstream work.
 
 ## Construction Catalog dependency
 
