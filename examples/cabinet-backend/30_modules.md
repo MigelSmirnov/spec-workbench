@@ -40,7 +40,9 @@ The VPS Cabinet and Local Cabinet Backend may expose compatible logical Cabinet 
 
 ### Public surface
 
-Exports model types only.
+Exports model types only: every model, enum and interface of the `models` section
+is in `imports.internal.models` (the deterministic models producer is selected
+only when the export surface covers the whole section).
 
 ### Depth assessment
 
