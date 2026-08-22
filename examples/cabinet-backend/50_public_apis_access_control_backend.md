@@ -143,3 +143,6 @@ deployment secrets, or failed atomic persistence.
 
 Performs the terminal local principal transition without deleting history.
 
+> Persistence-boundary refinement (later, authoritative): `PostgresAccessControlBackend` is realised as
+> `LocalAccessControlService` (policy) over `PostgresAccessControlRepository` (storage) and
+> `credential_security` (mechanism); see `30_modules_persistence_boundary.md`.

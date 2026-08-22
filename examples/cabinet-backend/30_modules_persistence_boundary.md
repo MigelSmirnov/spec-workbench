@@ -49,9 +49,13 @@ injects it into the service exactly as before.
 | `plan_actual` | `plan_actual_persistence` | `load_match_decisions` returns what exists (completeness in `calculate_plan_actual`); `save_match_decision` → `insert_match_decision` + `update_match_status` + `list_matches_for_line` (single active confirmation in `record_match_decision`) | done |
 | `durable_archive` | `durable_archive_persistence` | `save_publication` → `insert_publication`; `mark_publication_*` → `update_publication_state` + `load_publication` (transitions in `attach_local_source` / `recover_pending_publications`); `save_transfer_acceptance` / `save_source_attachment` → per-model appends in the one open transaction; `StoredInvoiceCard` head gets `load_invoice_card` / `upsert_invoice_card`; revision succession gets `update_card_revision_succession` | done |
 
-`PostgresAccessControlBackend` is not a repository: it owns credential
-hashing, throttling, and atomic audit. It is handled by a credential-security
-backend, not by this repair.
+`PostgresAccessControlBackend` was not a repository: it owned credential
+hashing, throttling, and atomic audit. It is split the same way, with one
+more piece: `access_control_persistence` (`PostgresAccessControlRepository`,
+storage), `credential_security` (`credential_security_backend/v2`, the
+mechanism), and `LocalAccessControlService` in `access_control` — a `policy`
+implementation of `AccessControlBackend` that owns no executable boundary and
+is generated as an ordinary behavioral module.
 
 ## Backend version
 

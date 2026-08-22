@@ -290,3 +290,28 @@ after exact verification and never overwritten, only staging ever removed.
 owns its layout and `attach_local_source` never composes paths. The Factory
 emitter is exercised against a real filesystem, including traversal,
 tampered-final, and idempotent staging removal cases. Result: `PASS`.
+
+## `access_control` — policy, storage, mechanism
+
+`PostgresAccessControlBackend` mixed three owners and is split:
+
+- `access_control_persistence` — `PostgresAccessControlRepository`
+  (`persistence_backend/v3`): four tables, principal and abuse-context locks,
+  plain reads, appends, field updates, one keyed upsert of throttle state;
+- `credential_security` — `credential_security_backend/v2`: random secret,
+  `credential_id.secret` token, Argon2id verifier over
+  `HMAC-SHA256(pepper, secret)`, constant-time check;
+- `access_control` — `LocalAccessControlService(repository, credential_pepper)`,
+  the `policy` implementation of `AccessControlBackend` (SPEC_STANDARD §5.1):
+  progressive delay and temporary block from `rules.access_control`, exact
+  capability match against reread state, atomic enrol/rotate/revoke, audit
+  evidence in the same transaction. Its `__init__` takes only a port and a
+  scalar, so it owns no executable boundary and is generated as a behavioral
+  module.
+
+Adversarial review: the service cannot bypass throttling (throttle state is
+locked and upserted on every outcome); the verifier is never compared outside
+`verify_service_secret`; tokens and pepper never reach storage or logs;
+revocation is an update that never deletes history. Result:
+`PASS_INTERNAL_VARIATION` for `access_control`, `PASS` for the two
+deterministic modules.

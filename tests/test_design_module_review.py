@@ -12,7 +12,8 @@ def test_lists_final_assembled_modules() -> None:
     report = list_modules(CABINET)
     assert report["schema_version"] == "spec_workbench_module_review_modules.v1"
     assert report["modules"] == [
-        "models", "access_control", "durable_archive_persistence", "source_byte_store", "durable_archive",
+        "models", "credential_security", "access_control_persistence", "access_control",
+        "durable_archive_persistence", "source_byte_store", "durable_archive",
         "registry_context_persistence",
         "registry_context",
         "holded_transport", "holded_gateway_persistence", "holded_gateway", "synchronization_persistence",
@@ -89,7 +90,7 @@ def test_models_slice_includes_owned_declarations_and_state1_evidence() -> None:
         model["name"] for model in packet["accepted_evidence"]["state1_models"]
     }
     interface_declarations = {
-        "AccessControlBackend", "ArchiveUnitOfWork", "HoldedAttemptRepository",
+        "AccessControlBackend", "AccessControlRepository", "ArchiveUnitOfWork", "HoldedAttemptRepository",
         "HoldedHttpClient", "HoldedPublicationRepository",
         "PlanActualRepository", "RegistryContextRepository",
         "RetentionReleaseRepository", "SourceByteStore",

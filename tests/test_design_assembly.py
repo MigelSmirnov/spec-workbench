@@ -54,7 +54,7 @@ def test_persistence_check_covers_seven_deterministic_repositories() -> None:
     assert report["schema_version"] == "spec_workbench_assembly_check.v1"
     assert report["check"]["schema_version"] == "spec_workbench_persistence_backend_coverage.v1"
     assert report["check"]["ready"] is True
-    assert report["check"]["summary"]["repositories"] == 7
+    assert report["check"]["summary"]["repositories"] == 8
     assert report["check"]["summary"]["errors"] == 0
 
 
@@ -71,7 +71,7 @@ def test_check_inspection_preserves_owner_report() -> None:
     report = inspect_check(CABINET, "notes")
     assert report["schema_version"] == "spec_workbench_assembly_check.v1"
     assert report["check"]["schema_version"] == "spec_workbench_state7_notes_gate.v1"
-    assert report["check"]["summary"]["notes"] == 223
+    assert report["check"]["summary"]["notes"] == 244
     assert report["check"]["ready"] is True
 
 

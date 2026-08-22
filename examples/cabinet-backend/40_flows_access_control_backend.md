@@ -71,3 +71,6 @@ persistence produces an explicit failure with no partial issuance.
 configuration. `access_control` owns invalid capability, duplicate enrollment,
 unknown/revoked target, transaction, and credential-generation failures.
 
+> Persistence-boundary refinement (later, authoritative): `PostgresAccessControlBackend` is realised as
+> `LocalAccessControlService` (policy) over `PostgresAccessControlRepository` (storage) and
+> `credential_security` (mechanism); see `30_modules_persistence_boundary.md`.

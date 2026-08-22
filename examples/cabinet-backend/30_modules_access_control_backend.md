@@ -57,3 +57,21 @@ The application composition root reads the configured environment-variable
 names, constructs `PostgresAccessControlBackend`, and supplies it to
 `create_app`. Missing database or pepper configuration fails startup; it must
 not create an in-memory permissive fallback.
+
+## Persistence-boundary refinement (later, authoritative)
+
+`PostgresAccessControlBackend` is superseded by three owners
+(`30_modules_persistence_boundary.md`):
+
+- `credential_security` — the deterministic credential mechanism
+  (`rules.credential_security_backend/v2`);
+- `access_control_persistence` — `PostgresAccessControlRepository`, the
+  deterministic storage shape (`persistence_backend/v3`);
+- `access_control` — `LocalAccessControlService`, the `policy` implementation
+  of `AccessControlBackend`: throttle thresholds from `rules.access_control`,
+  exact capability evaluation, atomic lifecycle transitions, and audit
+  evidence, composed over the repository port and the mechanism functions.
+
+The internal capabilities listed above remain the service's responsibilities;
+`record_authentication_failure`, `reset_authentication_failures`, and
+`append_security_audit` are realised through the repository's plain rows.

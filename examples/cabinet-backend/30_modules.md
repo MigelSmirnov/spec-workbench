@@ -783,6 +783,51 @@ from `rules.source_byte_store_backend` (SPEC_STANDARD §6.5); it exposes only
 
 ---
 
+## `credential_security`
+
+### Owns
+
+- issuance of a random service secret and its presentable token envelope;
+- the Argon2id verifier of the peppered secret and its constant-time check;
+- token parsing into selector and secret.
+
+### Must not own
+
+- principals, credentials, throttle, or audit storage;
+- authentication or authorization policy;
+- environment reads (the pepper is supplied by the caller).
+
+### Depth assessment
+
+Deterministic infrastructure deep module emitted from
+`rules.credential_security_backend` (SPEC_STANDARD §6.6); exposes three pure
+functions to `access_control`.
+
+---
+
+## `access_control_persistence`
+
+### Owns
+
+- `PostgresAccessControlRepository`: storage shape for principals,
+  credential verifiers, throttle state, and security audit evidence;
+- one transaction and the exact principal / abuse-context locks per
+  operation.
+
+### Must not own
+
+- throttle thresholds, capability evaluation, or lifecycle transitions;
+- cryptography;
+- environment reads.
+
+### Depth assessment
+
+Deterministic persistence module emitted from `persistence_backend/v3`; it
+implements the `AccessControlRepository` Protocol from `models` as plain
+reads, appends, field updates, and one keyed upsert.
+
+---
+
 # 2. Boundary adapters are not policy modules
 
 The following are expected adapters or deployment surfaces, not primary owners of Cabinet rules:

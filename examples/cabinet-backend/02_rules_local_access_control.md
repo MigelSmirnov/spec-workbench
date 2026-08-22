@@ -94,3 +94,6 @@ implementation and can construct its own runtime dependency. It needs only
 deployment-provided PostgreSQL connection and pepper secrets, not custom Python
 code supplied after generation.
 
+> Persistence-boundary refinement (later, authoritative): `PostgresAccessControlBackend` is realised as
+> `LocalAccessControlService` (policy) over `PostgresAccessControlRepository` (storage) and
+> `credential_security` (mechanism); see `30_modules_persistence_boundary.md`.

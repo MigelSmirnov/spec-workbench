@@ -60,3 +60,20 @@ as another `kind: interface`. `module:bootstrap` is the sole consumer of its
 constructor and offline administration methods. Runtime request handling
 continues to depend on the `AccessControlBackend` port.
 
+
+## Persistence-boundary refinement (later, authoritative)
+
+`PostgresAccessControlBackend.*` contracts are replaced by:
+
+- `LocalAccessControlService.__init__(self, repository: AccessControlRepository, credential_pepper: str) -> None`
+  plus `authenticate`, `authorize`, `enroll_local_service`,
+  `rotate_local_service_credential`, `revoke_local_service_principal` with the
+  previous signatures;
+- `AccessControlRepository` / `PostgresAccessControlRepository`: `begin`,
+  `commit`, `rollback`, `lock_principal`, `lock_abuse_context`,
+  `load_principal`, `insert_principal`, `update_principal_status`,
+  `load_credential`, `list_credentials_for_principal`, `insert_credential`,
+  `update_credential`, `load_throttle_state`, `upsert_throttle_state`,
+  `insert_audit_record`; `create_access_control_schema(database_url: str)`;
+- `issue_service_credential`, `parse_service_token`, `verify_service_secret`
+  in `credential_security` (SPEC_STANDARD §6.6).
