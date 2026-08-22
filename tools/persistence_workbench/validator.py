@@ -44,8 +44,11 @@ IRREGULAR_REPOSITORY_FIELDS = frozenset({
     "repository", "module", "schema_function", "emission", "irregular_reason",
 })
 STORAGE_REPRESENTATIONS = frozenset({
-    "text", "integer", "real", "blob", "uuid", "datetime", "decimal", "enum", "json",
+    "text", "integer", "real", "blob", "uuid", "datetime", "date", "boolean",
+    "decimal", "enum", "json",
 })
+# v3 (§6.3): one nested record model, and a model-less JSON value.
+STORAGE_REPRESENTATIONS_V3 = STORAGE_REPRESENTATIONS | {"json_model", "json_value"}
 TABLE_QUERY_FIELDS: dict[str, frozenset[str]] = {
     "insert": frozenset({"table", "columns"}),
     "insert_many": frozenset({"table", "columns"}),
@@ -109,7 +112,7 @@ def _string_list(value: Any, *, location: str, allow_empty: bool = False) -> tup
     return list(value), []
 
 
-def _validate_table(row: Any, index: int) -> tuple[list[Finding], str | None, set[str]]:
+def _validate_table(row: Any, index: int, version: int = 2) -> tuple[list[Finding], str | None, set[str]]:
     location = f"rules.persistence_backend.tables[{index}]"
     findings = _shape(row, TABLE_FIELDS, location=location, code_prefix="table")
     if not isinstance(row, dict):
@@ -144,10 +147,11 @@ def _validate_table(row: Any, index: int) -> tuple[list[Finding], str | None, se
             if not _text(column.get("field")):
                 findings.append(Finding("error", "invalid_column_field", "field must be a non-empty model-field name", location=column_location + ".field"))
             storage = column.get("storage")
-            if storage is not None and storage not in STORAGE_REPRESENTATIONS:
+            forms = STORAGE_REPRESENTATIONS_V3 if version >= 3 else STORAGE_REPRESENTATIONS
+            if storage is not None and storage not in forms:
                 findings.append(Finding(
                     "error", "unsupported_storage_representation",
-                    f"storage must be null or one of {sorted(STORAGE_REPRESENTATIONS)}",
+                    f"storage must be null or one of {sorted(forms)}",
                     location=column_location + ".storage",
                 ))
             if not isinstance(column.get("nullable"), bool):
@@ -347,7 +351,7 @@ def validate(payload: Any) -> list[Finding]:
         findings.append(Finding("error", "invalid_tables", "tables must be a list", location="rules.persistence_backend.tables"))
         tables = []
     for index, row in enumerate(tables):
-        row_findings, table, columns = _validate_table(row, index)
+        row_findings, table, columns = _validate_table(row, index, version)
         findings.extend(row_findings)
         if table is not None:
             table_names.append(table)

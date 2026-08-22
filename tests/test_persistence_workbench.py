@@ -421,3 +421,17 @@ def test_v3_lock_has_no_table_and_needs_scope_and_keys() -> None:
     codes = {item.code for item in validate(payload)}
     assert "invalid_lock_keys" in codes
     assert any("method" in code for code in codes - {"invalid_lock_keys"})
+
+
+def test_v3_nested_storage_forms_are_version_keyed() -> None:
+    payload = _v3_backend()
+    payload["tables"][0]["columns"].append({
+        "column": "actor", "field": "actor", "storage": "json_model",
+        "nullable": False, "check": None, "element_model": "ActorReference",
+    })
+    assert validate(payload) == []
+    payload["schema_version"] = 2
+    payload["backend"] = {"engine": "sqlite", "emitter": "sqlite_sync_v2"}
+    del payload["repositories"][0]["transaction"]
+    payload["repositories"][0]["methods"].pop()
+    assert any(item.code == "invalid_column_storage" or "storage" in item.message for item in validate(payload))
