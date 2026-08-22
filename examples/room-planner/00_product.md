@@ -2,13 +2,13 @@
 
 > Status: working draft.
 >
-> This document records product-level decisions only. Concrete modules, Python contracts, HTTP endpoints, persistence schemas, and implementation algorithms are intentionally deferred.
+> This document records product-level decisions only. Concrete modules, Python contracts, HTTP endpoints, persistence schemas, algorithms, and detailed domain models are intentionally deferred.
 
 ## Product goal
 
 Room Planner is a browser-based renovation planning application centered on the geometry and construction envelope of rooms.
 
-Its responsibility is broader than drawing walls but narrower than estimating a renovation. It must let a user record the existing spatial condition, define renovation changes, describe wall/opening construction and wall-surface finishes, describe floor leveling/fill requirements, and calculate the resulting physical quantities.
+Its responsibility is broader than drawing walls but narrower than estimating a renovation. It must let a user record the existing spatial condition, describe demolition, define new construction and finishes, calculate physical quantities, and publish versioned results for downstream platform applications.
 
 The editor must support practical construction work with millimeter-oriented spatial accuracy rather than act as a general-purpose CAD replacement.
 
@@ -31,58 +31,119 @@ Room Planner must:
 
 Room Planner participates in the shared platform through the living [Platform Router](../../PLATFORM_ROUTER.md) contract.
 
-The Platform Router document is intentionally developed alongside this case study. Integration requirements discovered while designing Room Planner should be added there when they are genuinely shared platform concerns.
-
-Room Planner should not integrate directly with every downstream application.
-
-Instead, it publishes versioned artifacts associated with a Registry object. Downstream applications consume those artifacts through the shared platform boundary.
+Room Planner should not integrate directly with every downstream application. It publishes versioned artifacts associated with a Registry object, and downstream applications consume those artifacts through the shared platform boundary.
 
 The exact adapter module, API operations, DTOs, and transport are deferred to later design states.
 
-## Renovation-state responsibility
+## Room Planner is a container of semantically isolated plans
 
-Room Planner owns both the measured/current spatial state and the intended post-renovation spatial state.
+Room Planner is one application, but it contains several plans with deliberately different meanings.
 
-The product must distinguish at least these meanings:
+The plans share the same spatial context and may be overlaid in one editor, but they MUST NOT become one undifferentiated drawing.
+
+The product currently distinguishes three primary editable planning meanings:
 
 ```text
-AS-IS / BASELINE
-    existing measured condition
-
-RENOVATION INTENT
-    what remains, is removed, is modified, or is added
-
-PROPOSED / TO-BE
-    resulting condition after applying the renovation intent
+ROOM PLANNER
+│
+├── EXISTING PLAN
+│   what physically exists on the object
+│
+├── DEMOLITION PLAN
+│   what must be removed from the existing condition
+│
+└── CONSTRUCTION PLAN
+    what must be created, changed, prepared, or finished
 ```
 
-These meanings are independent from document revisions. A new revision means that the plan changed; demolition/build intent describes the construction meaning of an element.
+A fourth user-visible view may be derived:
 
-The original measured condition should be capable of becoming a frozen baseline so that later design changes do not erase what was originally recorded.
+```text
+PROPOSED / TO-BE
+=
+EXISTING
+- DEMOLITION
++ CONSTRUCTION
+```
 
-The exact representation of baseline, change operations, and proposed geometry is deferred to the model state.
+`PROPOSED` is currently considered a resulting view of the isolated source plans, not an independent place where reality is silently overwritten.
+
+The exact persisted representation is deferred to later states.
+
+## Semantic isolation is mandatory
+
+The boundaries between Existing, Demolition, and Construction are product semantics, not merely visual layers or colors.
+
+### Existing Plan
+
+The Existing Plan answers only:
+
+> What is physically present and measured on the renovation object?
+
+It may contain measured spatial facts such as walls, rooms, doors, windows, openings, dimensions, and other observed conditions that are accepted into Room Planner scope.
+
+Construction intent MUST NOT leak into the Existing Plan.
+
+For example, a future drywall partition, project plaster system, project paint system, or project floor fill must not appear in the Existing Plan merely because it is drawn on the same canvas.
+
+The original measured condition must be capable of becoming a preserved/frozen baseline so that later renovation design does not erase what was originally recorded.
+
+The detailed freeze/correction lifecycle is deferred.
+
+### Demolition Plan
+
+The Demolition Plan answers only:
+
+> What must be removed, opened, stripped, or otherwise demolished from the existing condition?
+
+Demolition is a distinct renovation meaning and a distinct kind of downstream work.
+
+The Demolition Plan may refer to existing elements or existing finishes that are to be removed, but it MUST NOT create new construction.
+
+Examples include removing an existing wall, removing a door or window, opening or enlarging an existing opening, removing an existing finish, or other demolition actions introduced later within Room Planner scope.
+
+### Construction Plan
+
+The Construction Plan answers only:
+
+> What must be built, added, changed, prepared, or finished as part of the renovation?
+
+This is where new wall systems, new/changed openings, drywall systems, plaster, putty, paint, and floor leveling/fill belong.
+
+A construction element appearing here means work is intended. It must never be confused with an observed Existing condition.
+
+## Revision semantics are separate from renovation-stage semantics
+
+Versioning is mandatory.
+
+`Existing`, `Demolition`, and `Construction` describe the construction meaning of data.
+
+A revision describes that the relevant plan/document result changed over time.
+
+These are separate axes and must not be conflated.
+
+Published historical plans and quantity outputs must remain identifiable and must not silently change when a later plan revision or later Construction Catalog revision exists.
+
+The exact revision model, draft/publication workflow, branching policy, locking, and rollback behavior are deferred to later states.
 
 ## Primary planning scope
-
-Room Planner owns the editable geometry and construction information needed to describe the room envelope.
 
 Current in-scope capabilities include:
 
 - walls and connected wall geometry;
 - rooms derived from spatial boundaries;
 - wall height and thickness as construction-relevant facts;
-- existing, retained, demolished, modified, and newly proposed wall conditions;
-- doors;
-- windows;
-- existing, removed, modified, closed, and newly created wall openings where required by the renovation;
+- doors and windows as real wall openings rather than decorative SVG overlays;
 - construction-oriented dimensions;
 - accurate placement in real-world units;
+- demolition intent for relevant existing walls/openings/finishes;
+- new/changed wall and opening construction;
 - drywall/gypsum-board partition systems and their physical quantity calculations;
-- plaster with user-selected/defined thickness and resulting physical quantity calculations;
+- plaster with selected/defined thickness and resulting physical quantity calculations;
 - putty quantities derived from applicable surface area;
 - paint quantities derived from applicable surface area and required system parameters;
 - floor leveling/fill quantities derived from room geometry and required thickness/leveling inputs;
-- publication of the resulting plan and quantity outputs.
+- publication of versioned plan and quantity outputs.
 
 ## Wall surfaces
 
@@ -90,13 +151,13 @@ Wall finishing is inherently side-specific.
 
 A wall may have different treatment on each face because its two sides may belong to different rooms or construction conditions.
 
-Room Planner therefore needs to support the product concept of separately finishable wall faces/surfaces, including correct net surface areas after applicable openings are accounted for.
+Room Planner therefore needs the product concept of separately finishable wall faces/surfaces, including net surface areas after applicable openings are accounted for.
 
 The exact domain model is deferred to State 1.
 
 ## Drywall responsibility
 
-Drywall remains inside Room Planner because it is directly tied to the wall being designed and can be calculated from the same geometry.
+Drywall remains inside Room Planner because it is directly tied to the wall being designed and can be calculated from the same construction geometry.
 
 Room Planner may calculate physical quantities for a selected drywall construction system, such as:
 
@@ -107,9 +168,11 @@ Room Planner may calculate physical quantities for a selected drywall constructi
 - insulation or acoustic fill where the selected system includes it;
 - other measurable physical components required by the selected construction system.
 
-Room Planner owns the calculation from wall geometry plus construction-system rules to physical quantities.
+Room Planner owns the calculation from construction geometry plus construction-system rules to physical quantities.
 
-It does not own material pricing or labor pricing.
+Drywall construction intent belongs in the Construction Plan and MUST NOT leak into the Existing Plan.
+
+Room Planner does not own material pricing or labor pricing.
 
 ## Wall finishes responsibility
 
@@ -123,9 +186,11 @@ The calculation must use the applicable net wall-face area rather than blindly u
 
 The user supplies or selects construction intent such as plaster thickness or a finish system. The application derives quantities from geometry and technical parameters.
 
+Project finishes belong to the Construction Plan; existing observed finishes and demolition of existing finishes are separate meanings.
+
 ## Floor responsibility
 
-Room Planner owns floor leveling/fill as part of preparing the room geometry for renovation.
+Room Planner owns floor leveling/fill as part of preparing room geometry for renovation.
 
 It may calculate required physical volume/quantity from room area and relevant thickness/leveling inputs.
 
@@ -147,9 +212,10 @@ How floor survey/level measurements enter Room Planner remains an open product q
 
 Doors and windows belong to Room Planner because they are spatial wall openings and directly affect:
 
-- wall geometry;
+- existing geometry;
+- demolition intent;
+- construction intent;
 - usable openings;
-- demolition/proposed state;
 - wall-face areas;
 - drywall and finish quantity calculations.
 
@@ -179,7 +245,9 @@ Room Planner does not calculate:
 
 Those concerns belong to PresuPro.
 
-Whether packaging conversion and commercial rounding (for example kg to whole bags) belongs to Room Planner, Construction Catalog, or PresuPro remains unresolved and must not be assumed yet.
+Demolition and Construction must remain distinguishable in quantity outputs because they represent different kinds of downstream work.
+
+Whether packaging conversion and commercial rounding (for example kg to whole bags) belongs to Room Planner, Construction Catalog, or PresuPro remains unresolved.
 
 ## Construction Catalog dependency
 
@@ -190,15 +258,14 @@ Room Planner depends on a shared, versioned platform concept provisionally named
 The Construction Catalog supplies technical facts such as:
 
 - material consumption rates;
-- system layer/component definitions;
+- construction-system component definitions;
+- layer definitions;
 - profile/stud spacing rules;
 - fastener spacing or consumption rules;
 - technical thickness/density parameters where needed;
 - other measurable technical parameters required for deterministic quantity calculations.
 
-The catalog owns the technical parameter values. Room Planner owns the domain calculation that applies those values to room/wall geometry.
-
-For example, the catalog may define a mortar consumption rate in normalized physical units, while Room Planner applies that rate to net surface area and selected thickness.
+The catalog owns the technical parameter values. Room Planner owns the domain calculation that applies those values to Room Planner geometry and construction intent.
 
 The exact catalog schema, API, ownership service, and persistence model are deferred. Shared access requirements are tracked in [PLATFORM_ROUTER.md](../../PLATFORM_ROUTER.md).
 
@@ -206,44 +273,46 @@ The exact catalog schema, API, ownership service, and persistence model are defe
 
 Quantity results must be reproducible.
 
-A published quantity result must eventually retain enough provenance to identify both:
+A published quantity result must eventually retain enough provenance to identify at least:
 
-- the Room Planner plan revision from which it was calculated;
+- the relevant Room Planner plan revision(s) from which it was calculated;
 - the Construction Catalog revision/version whose technical parameters were used.
 
-Changing a catalog value in the future must not silently change the meaning of an already published historical result.
+Changing a plan or catalog value in the future must not silently change the meaning of an already published historical result.
 
 The exact provenance model is deferred to later states.
 
 ## Primary outputs
 
-Two distinct output responsibilities have emerged.
+Two application-level output responsibilities are currently retained as provisional platform artifact families.
 
 ### `room_plan`
 
-`room_plan` is the versioned domain artifact containing the Room Planner spatial/construction intent required by downstream planners and other platform applications.
+`room_plan` is the provisional versioned domain artifact for Room Planner.
 
-Its exact schema is deferred to State 1.
+At State 0 it should be understood as a container/result boundary over the semantically isolated Existing, Demolition, and Construction meanings rather than as one mixed drawing.
+
+Whether later contracts expose these plans as one container artifact, several related artifacts, or both is deliberately deferred.
 
 ### `room_takeoff`
 
-`room_takeoff` is the provisional name for the versioned physical-quantity output derived from a `room_plan` using an identified Construction Catalog revision.
+`room_takeoff` is the provisional versioned physical-quantity output derived from the relevant Room Planner plans using an identified Construction Catalog revision.
 
 It is intended to give PresuPro and other consumers quantities without requiring them to duplicate Room Planner geometry or construction calculations.
 
-A takeoff item should eventually retain enough provenance to identify the source plan and source elements that produced the quantity, but the exact schema is deferred.
+Its quantities must preserve the distinction between demolition scope and construction scope where that distinction affects downstream work.
 
-`room_plan` and `room_takeoff` are outputs of the same application boundary; introducing a second artifact does not imply a second backend service.
+`room_plan` and `room_takeoff` are outputs of the same application boundary; introducing several plan meanings or artifacts does not imply separate backend services.
 
 ## Relationship to PresuPro
 
 PresuPro is the estimating application.
 
-Room Planner provides physical quantities for its owned construction scope. PresuPro owns pricing, labor/work calculation, and estimate composition.
+Room Planner provides physical quantities for its owned renovation scope. PresuPro owns pricing, labor/work calculation, and estimate composition.
 
 PresuPro should consume published Room Planner artifacts through the shared platform boundary rather than through a private Room Planner-to-PresuPro API.
 
-PresuPro should not be required to reverse-engineer Room Planner geometry in order to reproduce drywall, plaster, putty, paint, or floor-fill quantity logic.
+PresuPro should not be required to reverse-engineer Room Planner geometry in order to reproduce drywall, plaster, putty, paint, floor-fill, or demolition quantity logic owned by Room Planner.
 
 ## Relationship to downstream planners
 
@@ -289,29 +358,36 @@ The browser editor and generated Python backend must therefore meet through expl
 
 ## Observable user outcomes discovered so far
 
-A user can select an existing renovation object and work on its room/wall plan.
+A user can select an existing renovation object and work on its Room Planner container.
 
-The user can record or edit an accurate baseline, define which spatial elements remain/remove/change/add, and see the resulting proposed room geometry.
+The user can create or edit an accurate Existing Plan without mixing it with future construction intent.
 
-The user can define wall construction and selected wall/floor preparation systems within Room Planner scope and obtain reproducible physical quantities from them.
+The user can separately describe Demolition work against the existing condition.
+
+The user can separately describe Construction work and finishes.
+
+The user can inspect a resulting Proposed/To-Be view derived from the isolated plan meanings.
+
+The user can obtain reproducible physical quantities for the scope owned by Room Planner.
 
 The plan and quantity results can be saved, revised, published, and consumed by other platform applications.
 
-Changes to a published plan should result in a new identifiable revision rather than silently replacing the provenance of downstream work.
+Changes to a published result must create a new identifiable revision rather than silently replacing the provenance of downstream work.
 
 ## Unresolved product questions
 
 - Which wall/opening editing operations are mandatory for the first usable release?
-- What is the exact lifecycle for creating, correcting, and freezing the as-is baseline?
-- Can a frozen baseline be corrected, and if so how is the correction distinguished from renovation intent?
-- Does the first release support only one active proposed variant, or multiple alternative design variants?
+- What is the exact lifecycle for creating, correcting, and freezing the Existing baseline?
+- Can a frozen Existing baseline be corrected, and if so how is that correction distinguished from renovation intent?
+- Does the first release support only one active Construction proposal or multiple alternative design variants?
 - How are floor level/survey measurements acquired or imported?
 - Which construction systems/material families are required in the initial Construction Catalog?
 - Does Room Planner expose editable construction-system templates, catalog-selected fixed systems, or both?
 - Who owns packaging conversion and whole-package rounding?
 - Does Room Planner itself own drawing/PDF/SVG export, or does a separate renderer/exporter create those artifacts?
-- What parts of a room plan may be exposed directly to the client cabinet?
+- What parts of Room Planner results may be exposed directly to the client cabinet?
 - What collaboration, locking, revision, and approval behavior is required?
+- At the platform contract level, should Existing, Demolition, and Construction be published as one `room_plan` container artifact, as separate related artifacts, or both?
 
 ## Cross-document rule
 
