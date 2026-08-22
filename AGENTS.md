@@ -30,6 +30,40 @@ order before modifying its assembled `global_spec.json`.
 
 Later design-state documents may refine earlier conceptual decisions.
 
+## Case-study context loading
+
+Do not rely on an agent remembering to reopen every cross-document dependency
+manually at each design state.
+
+Before working on a case-study state, build its authoring context with:
+
+```bash
+python tools/context_pack.py \
+  --case examples/<case-name> \
+  --state <current-state>.md
+```
+
+The context pack is mandatory working context for that state. It contains:
+
+- the case `README.md`;
+- the current numbered state and all earlier numbered state documents;
+- local Markdown documents linked from those sources, followed recursively to
+  the configured depth;
+- source boundaries and paths so imported decisions remain attributable.
+
+This makes repository-level contracts linked from a case README, such as a
+shared platform/router contract, visible throughout later states without
+copying their contents into every state document.
+
+Local Markdown links that participate in the pack are authoring dependencies.
+A missing local Markdown target or a link that escapes the repository is an
+error rather than a silently dropped dependency. External URLs and non-Markdown
+links are not imported.
+
+Use `--paths-only` when checking what will be imported and `--output <path>`
+when a materialized pack is useful. Do not commit generated context packs as
+canonical design state; the source documents remain authoritative.
+
 ## Decision hierarchy
 
 ```text

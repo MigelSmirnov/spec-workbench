@@ -2,11 +2,27 @@
 
 Working branch: `agent/room-planner`
 
+## Working context
+
+Before working on any numbered Room Planner design state, build the case context pack:
+
+```bash
+python tools/context_pack.py \
+  --case examples/room-planner \
+  --state <current-state>.md
+```
+
+The pack automatically includes this README, the current and all earlier numbered Room Planner state documents, and recursively linked local Markdown dependencies. This is the normal way to keep shared contracts and earlier decisions visible while progressing through the case without manually reopening every file.
+
+The source documents remain authoritative. Generated context-pack output is working context, not a new design state and should not replace the linked sources.
+
 ## Shared platform contract
 
 Room Planner uses the repository-level [Platform Router](../../PLATFORM_ROUTER.md) as its shared integration boundary.
 
 The Platform Router is a living contract. Shared platform requirements discovered during Room Planner design must be recorded there and then carried through the Room Planner design states as an external adapter dependency.
+
+Because this README is always seeded into the context pack, the Platform Router link is automatically imported into every later Room Planner state context. Later state documents still record their **Platform Router impact** so the effect of each design layer remains explicit and reviewable.
 
 ### Platform Router carry-forward invariant
 
