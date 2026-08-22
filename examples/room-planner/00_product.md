@@ -457,11 +457,15 @@ Two application-level output responsibilities are currently retained as provisio
 
 ### `room_plan`
 
-`room_plan` is the provisional versioned domain artifact for Room Planner.
+`room_plan` is the provisional versioned domain artifact family for Room Planner.
 
-At State 0 it should be understood as a coherent object-level container/result boundary across all included spatial levels and over the semantically isolated Existing, Demolition, and Construction meanings rather than as one mixed drawing or a set of independently assembled floor fragments.
+At State 0 it should be understood as the platform-facing family that carries Room Planner's coherent object-level planning results across included spatial levels while preserving the semantic separation of Existing, Demolition, and Construction.
 
-Whether later contracts expose these plans as one container artifact, several related artifacts, or both is deliberately deferred.
+Existing, Demolition, and Construction have independent publication readiness. An accepted Existing result may be published before Demolition is complete; an accepted Demolition result may be published before Construction is complete; and Construction may be published later as its own historical milestone.
+
+Each later dependent publication must preserve enough provenance to identify the accepted basis against which it was prepared. A published Demolition result must remain associated with the relevant Existing publication. A published Construction result must remain associated with the relevant Existing basis and with the relevant Demolition basis where demolition participates in that proposal.
+
+Whether later contracts expose these stage publications as one container artifact with independently versioned components, several related artifacts, or both is deliberately deferred. The product requirement is independent publication and historical identity, not a predetermined artifact packing scheme.
 
 ### `room_takeoff`
 
@@ -469,7 +473,7 @@ Whether later contracts expose these plans as one container artifact, several re
 
 It is intended to give PresuPro and other consumers quantities without requiring them to duplicate Room Planner geometry or construction calculations.
 
-Its quantities must preserve the distinction between demolition scope and construction scope where that distinction affects downstream work.
+Its quantities must preserve the distinction between demolition scope and construction scope where that distinction affects downstream work, and a published takeoff must retain provenance to the exact accepted/published planning basis used for the calculation.
 
 `room_plan` and `room_takeoff` are outputs of the same application boundary; introducing several plan meanings or artifacts does not imply separate backend services.
 
@@ -514,6 +518,16 @@ A specialized planner may consume Room Planner geometry/surfaces without transfe
 
 Room Planner may later visualize data from those systems as overlays without becoming the owner of their business rules.
 
+## Client-history publication responsibility
+
+Room Planner does not own the client cabinet UI or its presentation rules, but its published planning milestones are part of the platform-visible renovation history.
+
+Published Existing, Demolition, and Construction results must therefore remain individually discoverable through the shared platform boundary so the client cabinet or another authorized history consumer can present the chronological evolution of the renovation object.
+
+A later Construction publication must not erase, absorb, or silently rewrite earlier Existing or Demolition publications. Later corrections and propagated versions appear as later historical publications while previous milestones remain identifiable.
+
+Which exact payload fields are client-visible, whether a rendered derivative is required for presentation, and authorization/redaction rules are platform/client-cabinet concerns deferred beyond this product boundary.
+
 ## Out of scope
 
 Current explicit exclusions include:
@@ -527,7 +541,7 @@ Current explicit exclusions include:
 - plumbing engineering rules;
 - production DXF/PDF/SVG drawing generation;
 - real-time multi-user collaborative editing in the initial product;
-- client-cabinet behavior;
+- client-cabinet behavior and presentation rules;
 - arbitrary free-form 3D solid/mesh modeling as an authoritative editing model;
 - automated domain decisions about whether furniture, kitchens, equipment, or other downstream designs fit within the available spatial envelope;
 - general-purpose CAD features that are not required for renovation planning.
@@ -567,9 +581,9 @@ calculate physical quantities
         ↓
 review
         ↓
-publish an identifiable version
+publish an identifiable stage/result version
         ↓
-downstream platform consumers
+downstream platform consumers / object history
 ```
 
 More explicitly:
@@ -577,13 +591,15 @@ More explicitly:
 1. The user opens Room Planner and selects an existing renovation object supplied by Registry.
 2. The user creates or continues the Existing Plan and records the measured current condition, including relevant floor elevations and local floor-to-ceiling heights.
 3. The Existing Plan remains independent from later demolition and construction work so the original observed state is not overwritten.
-4. The user records Demolition work separately against the Existing condition and may inspect resulting post-demolition geometry where removal changes floor or ceiling surfaces.
-5. The user records Construction work separately, including new/changed geometry, target prepared surfaces, and the construction/finish systems owned by Room Planner.
-6. The user may inspect a Proposed / To-Be result derived from Existing, Demolition, and Construction without turning that derived view into a mixed source of truth.
-7. The user may preview changes to target geometry and immediately inspect resulting thicknesses, physical quantities, and clear heights before accepting those edits into the working state.
-8. Room Planner calculates physical quantities for the scope it owns using the relevant geometry, construction intent, and applicable Construction Catalog data.
-9. The user reviews the resulting plan and quantities.
-10. When a result is ready for use outside the user's working session, the user explicitly publishes an identifiable version for downstream platform consumers.
+4. The user may publish an accepted Existing result before later renovation-stage work is complete.
+5. The user records Demolition work separately against the Existing condition and may inspect resulting post-demolition geometry where removal changes floor or ceiling surfaces.
+6. The user may publish an accepted Demolition result before Construction is complete; that publication remains associated with its Existing basis.
+7. The user records Construction work separately, including new/changed geometry, target prepared surfaces, and the construction/finish systems owned by Room Planner.
+8. The user may inspect a Proposed / To-Be result derived from Existing, Demolition, and Construction without turning that derived view into a mixed source of truth.
+9. The user may preview changes to target geometry and immediately inspect resulting thicknesses, physical quantities, and clear heights before accepting those edits into the working state.
+10. Room Planner calculates physical quantities for the scope it owns using the relevant geometry, construction intent, and applicable Construction Catalog data.
+11. The user reviews the resulting plan and quantities.
+12. When any independently publishable stage/result is ready for use outside the working session, the user explicitly publishes an identifiable version for downstream platform consumers and platform history.
 
 The workflow does not need to complete in one session. The product must support saving incomplete work and continuing it later.
 
@@ -597,21 +613,27 @@ Saving working state, previewing consequences, and publishing a result have diff
 
 **Publish / send** means the user intentionally creates and exposes a specific identifiable immutable result version for use by other platform applications. Publication must require an explicit two-step confirmation so that an ordinary edit, preview, or save cannot accidentally create a platform-visible version.
 
-Publishing snapshots the complete current publishable working result, including inherited unchanged content and the user's changes. It does not reset the project or discard the working state. After successful publication, continued work begins from that published content.
+Publishing snapshots the complete current publishable result for the selected stage/scope, including inherited unchanged content and the user's changes required to interpret that result coherently. It does not reset the project or discard the working state. After successful publication, continued work begins from the published content.
 
 A later edit must not silently mutate the meaning of an already published result; it produces later working state and eventually another published version only if the user explicitly publishes again.
 
-The exact persistence model, transient-preview implementation, confirmation UI wording, and revision numbering mechanics are deferred.
+The exact persistence model, transient-preview implementation, confirmation UI wording, publication-scope representation, and revision numbering mechanics are deferred.
 
-## Existing Plan may be published independently
+## Stage publication readiness is independent
 
-The Existing Plan has useful platform meaning before Demolition and Construction are complete.
+Existing, Demolition, and Construction are not required to become publishable at the same time.
 
-Room Planner must therefore allow an accepted Existing result to be publishable independently from later renovation-stage work.
+Room Planner must allow an accepted Existing result to be published independently because the measured/as-built spatial condition has platform value before demolition or construction design is complete.
 
-This allows downstream consumers that only need the measured/as-built spatial condition to begin work without waiting for the complete renovation proposal.
+Room Planner must also allow an accepted Demolition result to be published independently before Construction is complete. This allows demolition scope to become an identifiable historical/platform result while later design work continues.
 
-Whether Demolition and Construction are also independently published artifacts or published through a later `room_plan` container contract remains deferred to later design states.
+Construction may be published later when that proposal is accepted. Each publication is a separate historical milestone and must remain identifiable after later stages or revisions are published.
+
+Dependent stage publications must retain their basis. Demolition must be traceable to the Existing result against which it was prepared. Construction must be traceable to the relevant Existing basis and, where applicable, the Demolition result with which it is coordinated.
+
+These independently published milestones are expected to be discoverable by authorized platform consumers, including the client cabinet for renovation-object history. Room Planner does not define how the client cabinet renders or explains them.
+
+The exact artifact packaging remains deferred: independent stage publication may later be represented as one `room_plan` family with stage-aware revisions/components, as several related artifacts, or as both. The product semantics above must survive whichever contract representation is chosen.
 
 ## Important failure outcomes
 
@@ -620,6 +642,7 @@ At State 0, the product must make the following important failures observable ra
 - If the selected Registry object is unavailable or cannot be resolved, Room Planner cannot create or substitute another platform object identity and must not proceed as if the object were valid.
 - If geometry or required planning inputs are incomplete or invalid for a requested calculation, Room Planner must not present the resulting quantities as valid completed takeoff data.
 - If required Construction Catalog data or the required catalog revision cannot be resolved, Room Planner must not invent technical constants or silently calculate with unrelated defaults.
+- If a dependent stage cannot identify or validate the Existing/Demolition basis it was prepared against, Room Planner must not publish that dependent result as though its provenance were coherent.
 - If publication fails, the working result remains unpublished/draft from the platform perspective; the product must not report a successful publication.
 - If a historical revision has already been published, later editing or recovery failures must not silently mutate that published historical result.
 
@@ -635,7 +658,7 @@ The user can record and inspect spatially varying floor elevations and floor-to-
 
 The user can preserve unfinished work without publishing it to downstream applications.
 
-The user can publish an accepted Existing result before the complete renovation proposal is finished.
+The user can independently publish accepted Existing, Demolition, and Construction milestones as they become ready rather than waiting for the entire renovation proposal to be complete.
 
 The user can separately describe Demolition work against the existing condition and inspect relevant resulting surface geometry.
 
@@ -650,6 +673,8 @@ The user can preview a proposed geometric change and see its effects on thicknes
 The user can obtain reproducible physical quantities for the scope owned by Room Planner.
 
 The user can continue from previous accepted work without a new version resetting unchanged planning data.
+
+Published stage milestones remain individually identifiable for downstream consumers and platform/client history after later stages or revisions are published.
 
 The plan and quantity results can be saved as working drafts, revised, explicitly published, and consumed by other platform applications.
 
@@ -667,8 +692,8 @@ The following questions remain intentionally unresolved because they do not bloc
 - Which ceiling systems and preparation/finish treatment families are required in the first usable release?
 - Which construction systems/material families are required in the initial Construction Catalog?
 - Does Room Planner expose editable construction-system templates, catalog-selected fixed systems, or both?
-- What parts of Room Planner results may be exposed directly to the client cabinet?
-- At the platform contract level, should Existing, Demolition, and Construction be published as one `room_plan` container artifact, as separate related artifacts, or both?
+- Which Room Planner payload fields/stage details are directly client-visible versus exposed through derived/redacted client-facing artifacts?
+- At the platform contract level, how should independently publishable Existing, Demolition, and Construction milestones be represented: one stage-aware `room_plan` artifact family, several related artifacts, or both?
 
 ## Cross-document rule
 
