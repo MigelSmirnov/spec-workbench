@@ -17,6 +17,9 @@ The VPS Cabinet and Local Cabinet Backend may expose compatible logical Cabinet 
 ### Owns
 
 - shared State 1 domain/value-model definitions used across Backend responsibilities;
+- deterministic declarations of every `kind: interface` Protocol used by
+  runtime modules; this is physical type ownership only, while the consuming
+  domain module retains policy and implementation responsibility;
 - immutable references and evidence shapes;
 - enum-like lifecycle vocabularies accepted in States 1–2.
 
@@ -32,6 +35,8 @@ The VPS Cabinet and Local Cabinet Backend may expose compatible logical Cabinet 
 - Registry or PresuPro refresh policy;
 - Holded publication policy;
 - persistence or transport lowering.
+- repository, transport, authorization, or unit-of-work implementation behind
+  an interface declared in this module.
 
 ### Public surface
 

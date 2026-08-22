@@ -60,11 +60,13 @@ def test_dependency_contracts_and_concrete_adapters_expand_import_context() -> N
     assert {
         "HoldedPublicationAttempt", "HoldedPurchaseAttemptPayload",
         "HoldedPurchaseLookupEvidence", "StoredInvoiceCardRevision",
+        "HoldedPublicationRepository",
     } <= set(lowered["models"])
     assert lowered["dependencies"]["models"] == [
         "HoldedPublication", "AuthorizationDecision",
         "HoldedPublicationAttempt", "HoldedPurchaseAttemptPayload",
         "HoldedPurchaseLookupEvidence", "StoredInvoiceCardRevision",
+        "HoldedPublicationRepository",
     ]
 
 def test_models_slice_includes_owned_declarations_and_state1_evidence() -> None:
@@ -73,8 +75,15 @@ def test_models_slice_includes_owned_declarations_and_state1_evidence() -> None:
     state1_models = {
         model["name"] for model in packet["accepted_evidence"]["state1_models"]
     }
+    interface_declarations = {
+        "AccessControlBackend", "ArchiveUnitOfWork", "HoldedAttemptRepository",
+        "HoldedHttpClient", "HoldedPublicationRepository",
+        "PlanActualRepository", "RegistryContextRepository",
+        "RetentionReleaseRepository", "SourceByteStore",
+        "SynchronizationRepository", "VpsSynchronizationTransport",
+    }
     assert state1_models <= lowered_models
-    assert lowered_models == state1_models
+    assert lowered_models == state1_models | interface_declarations
     assert {
         "VpsReleaseDecision", "ArchiveBytePublication",
         "HoldedRemotePurchaseDocument", "VpsInvoiceTransferPackage",
