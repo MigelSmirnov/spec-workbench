@@ -22,7 +22,7 @@ The existing module functions remain façade operations with an explicit Registr
 - RegistryContextRepository.upsert_work_objects(self, work_objects: tuple[WorkObject, ...]) -> None
 - RegistryContextRepository.load_work_object(self, project_id: str) -> WorkObject | None
 - RegistryContextRepository.save_assignment_validation(self, validation: ObjectAssignmentValidation) -> None
-- RegistryContextRepository.load_assignment_validation(self, invoice_id: str, content_hash: str) -> ObjectAssignmentValidation | None
+- RegistryContextRepository.list_assignment_validations(self, invoice_id: str, content_hash: str) -> tuple[ObjectAssignmentValidation, ...]
 
 Generic query dictionaries and untyped save methods are forbidden.
 
@@ -37,7 +37,7 @@ PostgresRegistryContextRepository.list_work_objects(self) -> tuple[WorkObject, .
 PostgresRegistryContextRepository.upsert_work_objects(self, work_objects: tuple[WorkObject, ...]) -> None
 PostgresRegistryContextRepository.load_work_object(self, project_id: str) -> WorkObject | None
 PostgresRegistryContextRepository.save_assignment_validation(self, validation: ObjectAssignmentValidation) -> None
-PostgresRegistryContextRepository.load_assignment_validation(self, invoice_id: str, content_hash: str) -> ObjectAssignmentValidation | None
+PostgresRegistryContextRepository.list_assignment_validations(self, invoice_id: str, content_hash: str) -> tuple[ObjectAssignmentValidation, ...]
 
 The constructor validates connectivity but does not read environment variables or own Registry business policy.
 
