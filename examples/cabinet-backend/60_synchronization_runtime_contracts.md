@@ -27,7 +27,7 @@ first parameter.
 - `SynchronizationRepository.lock_synchronization(self, synchronization_id: str) -> None`
 - `SynchronizationRepository.insert_synchronization(self, synchronization: InvoiceSynchronization) -> None`
 - `SynchronizationRepository.update_synchronization(self, synchronization: InvoiceSynchronization) -> None`
-- `SynchronizationRepository.load_sync_status(self, invoice_id: str, node_id: str) -> SynchronizationStatusObservation | None`
+- `SynchronizationRepository.list_synchronizations_for_invoice(self, invoice_id: str, target_node_id: str) -> tuple[InvoiceSynchronization, ...]`
 - `SynchronizationRepository.load_synchronization(self, synchronization_id: str) -> InvoiceSynchronization | None`
 - `SynchronizationRepository.load_synchronization_by_idempotency(self, invoice_id: str, target_node_id: str, idempotency_key: str) -> InvoiceSynchronization | None`
 - `SynchronizationRepository.insert_catalogue_publication(self, publication: RegistryCataloguePublication) -> None`
@@ -46,7 +46,7 @@ Generic dictionaries and untyped save/query methods are forbidden.
 - `PostgresSynchronizationRepository.lock_synchronization(self, synchronization_id: str) -> None`
 - `PostgresSynchronizationRepository.insert_synchronization(self, synchronization: InvoiceSynchronization) -> None`
 - `PostgresSynchronizationRepository.update_synchronization(self, synchronization: InvoiceSynchronization) -> None`
-- `PostgresSynchronizationRepository.load_sync_status(self, invoice_id: str, node_id: str) -> SynchronizationStatusObservation | None`
+- `PostgresSynchronizationRepository.list_synchronizations_for_invoice(self, invoice_id: str, target_node_id: str) -> tuple[InvoiceSynchronization, ...]`
 - `PostgresSynchronizationRepository.load_synchronization(self, synchronization_id: str) -> InvoiceSynchronization | None`
 - `PostgresSynchronizationRepository.load_synchronization_by_idempotency(self, invoice_id: str, target_node_id: str, idempotency_key: str) -> InvoiceSynchronization | None`
 - `PostgresSynchronizationRepository.insert_catalogue_publication(self, publication: RegistryCataloguePublication) -> None`
@@ -65,5 +65,8 @@ Constructors validate inputs but never read environment variables.
 `PostgresSynchronizationRepository` is owned by `synchronization_persistence`. Guarded
 reservation, issuance, outcome, and acknowledgement methods were replaced by plain
 inserts, field updates, and idempotency lookups; reuse, issuance authority, and
-transition validity belong to `SynchronizationService`. `load_sync_status` is unchanged
-pending the working-set/replica storage decision (`30_modules_persistence_boundary.md`).
+transition validity belong to `SynchronizationService`. `load_sync_status` was later replaced
+(see below).
+
+`load_sync_status` was replaced by `list_synchronizations_for_invoice`; `get_sync_status`
+composes the observation from the latest attempt (`30_modules_persistence_boundary.md`).

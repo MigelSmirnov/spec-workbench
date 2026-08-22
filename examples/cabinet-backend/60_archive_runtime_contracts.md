@@ -23,13 +23,13 @@ Both dependencies are required. There is no nullable, default, in-memory, or mod
 - ArchiveUnitOfWork.commit(self) -> None
 - ArchiveUnitOfWork.rollback(self) -> None
 - ArchiveUnitOfWork.lock_invoice(self, invoice_id: str) -> None
-- ArchiveUnitOfWork.load_card_revision(self, invoice_id: str, content_hash: str | None = None) -> StoredInvoiceCardRevision | None
-- ArchiveUnitOfWork.load_source_replicas(self, invoice_id: str) -> tuple[SourceBinaryReplica, ...]
-- ArchiveUnitOfWork.load_pending_publications(self) -> tuple[ArchiveBytePublication, ...]
+- ArchiveUnitOfWork.load_card_revision(self, invoice_id: str, content_hash: str) -> StoredInvoiceCardRevision | None
+- ArchiveUnitOfWork.list_source_replicas(self, source_ids: tuple[str, ...]) -> tuple[SourceBinaryReplica, ...]
+- ArchiveUnitOfWork.list_publications_in_states(self, states: tuple[str, ...]) -> tuple[ArchiveBytePublication, ...]
 - ArchiveUnitOfWork.insert_publication(self, publication: ArchiveBytePublication) -> None
 - ArchiveUnitOfWork.update_publication_state(self, publication: ArchiveBytePublication) -> None
 - ArchiveUnitOfWork.load_publication(self, publication_id: str) -> ArchiveBytePublication | None
-- ArchiveUnitOfWork.load_transfer_receipt(self, invoice_id: str, content_hash: str | None = None) -> InvoiceTransferReceipt | None
+- ArchiveUnitOfWork.list_transfer_receipts(self, invoice_id: str) -> tuple[InvoiceTransferReceipt, ...]
 - ArchiveUnitOfWork.load_source_binaries(self, invoice_id: str) -> tuple[SourceBinary, ...]
 - ArchiveUnitOfWork.insert_transfer_manifest(self, manifest: InvoiceTransferManifest) -> None
 - ArchiveUnitOfWork.insert_card_revision(self, card_revision: StoredInvoiceCardRevision) -> None
@@ -60,13 +60,13 @@ Storage references are opaque store-created values and are never accepted from H
 - PostgresArchiveUnitOfWork.commit(self) -> None
 - PostgresArchiveUnitOfWork.rollback(self) -> None
 - PostgresArchiveUnitOfWork.lock_invoice(self, invoice_id: str) -> None
-- PostgresArchiveUnitOfWork.load_card_revision(self, invoice_id: str, content_hash: str | None = None) -> StoredInvoiceCardRevision | None
-- PostgresArchiveUnitOfWork.load_source_replicas(self, invoice_id: str) -> tuple[SourceBinaryReplica, ...]
-- PostgresArchiveUnitOfWork.load_pending_publications(self) -> tuple[ArchiveBytePublication, ...]
+- PostgresArchiveUnitOfWork.load_card_revision(self, invoice_id: str, content_hash: str) -> StoredInvoiceCardRevision | None
+- PostgresArchiveUnitOfWork.list_source_replicas(self, source_ids: tuple[str, ...]) -> tuple[SourceBinaryReplica, ...]
+- PostgresArchiveUnitOfWork.list_publications_in_states(self, states: tuple[str, ...]) -> tuple[ArchiveBytePublication, ...]
 - PostgresArchiveUnitOfWork.insert_publication(self, publication: ArchiveBytePublication) -> None
 - PostgresArchiveUnitOfWork.update_publication_state(self, publication: ArchiveBytePublication) -> None
 - PostgresArchiveUnitOfWork.load_publication(self, publication_id: str) -> ArchiveBytePublication | None
-- PostgresArchiveUnitOfWork.load_transfer_receipt(self, invoice_id: str, content_hash: str | None = None) -> InvoiceTransferReceipt | None
+- PostgresArchiveUnitOfWork.list_transfer_receipts(self, invoice_id: str) -> tuple[InvoiceTransferReceipt, ...]
 - PostgresArchiveUnitOfWork.load_source_binaries(self, invoice_id: str) -> tuple[SourceBinary, ...]
 - PostgresArchiveUnitOfWork.insert_transfer_manifest(self, manifest: InvoiceTransferManifest) -> None
 - PostgresArchiveUnitOfWork.insert_card_revision(self, card_revision: StoredInvoiceCardRevision) -> None
@@ -97,3 +97,10 @@ and exact reads (`insert_publication`, `update_publication_state`, `load_publica
 `insert_source_replicas`, `insert_transfer_receipt`, `insert_source_binary`,
 `load_invoice_card`, `upsert_invoice_card`). `rules.archive_byte_publication` transitions and
 acceptance equivalence belong to `durable_archive` (`30_modules_persistence_boundary.md`).
+
+`load_pending_publications`, `load_transfer_receipt`, and the optional `content_hash` of
+`load_card_revision` were replaced for `persistence_backend/v3`: the caller names the pending
+states from `rules.archive_byte_publication`, selects a receipt by accepted hash, and resolves
+the current revision through the card head (`30_modules_persistence_boundary.md`).
+`load_source_replicas(invoice_id)` became `list_source_replicas(source_ids)`: a replica row carries no
+invoice id, so the service lists the invoice's sources first.

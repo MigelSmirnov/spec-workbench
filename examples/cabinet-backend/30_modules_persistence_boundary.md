@@ -53,20 +53,27 @@ injects it into the service exactly as before.
 hashing, throttling, and atomic audit. It is handled by a credential-security
 backend, not by this repair.
 
-## Open items for the backend version
+## Backend version
 
-- lowering of repository-owned `begin`/`commit`/`rollback` and `lock_*`;
-- `schema_function` ownership for a repository constructed from
-  `database_url` rather than an open connection;
-- `engine: postgres` in `rules.persistence_backend`;
+`persistence_backend/v3` (SPEC_STANDARD §6.3) closes the three tooling items
+this repair left open: `engine: postgres` with emitter `postgres_sync_v1`,
+`transaction: owned` with `begin`/`commit`/`rollback` fixed by the version,
+the `lock` method kind, plus `json_model`/`json_value` storage and the
+`argument_set`/`optional_argument` binds. Each `<x>_persistence` module owns
+`create_<x>_schema(database_url: str) -> None` as its schema function. The
+IR is authored in `70_persistence_closure.json` and projected verbatim into
+`rules.persistence_backend`.
+
+## Open items
 - `LocalFilesystemSourceByteStore` stays in `durable_archive` until it is bound
   to the existing `binary_storage_backend`; `HttpxVpsSynchronizationTransport`
   stays in `synchronization` until a VPS transport backend exists;
 - `RegistryProjectSnapshot` is referenced by `WorkObject.registry_snapshot_id`
   but is not a persisted model; the Registry-derived projection has no durable
   home yet. This is a State 1/2 gap, not a persistence-boundary decision;
-- `SynchronizationRepository.load_sync_status` returns the composite
-  `SynchronizationStatusObservation` and `SynchronizationService.get_working_set_membership`
+- `SynchronizationService.get_sync_status` composes its observation from
+  `list_synchronizations_for_invoice`; the `replica` field stays None because
+  no writer of `InvoiceWorkingReplica` exists, and `SynchronizationService.get_working_set_membership`
   has no storage method at all: no persisted model carries `working_set_id`, and
   the fresh working set is an open product question (`open_questions.md`, VPS
   working-set questions). Both stay irregular until that decision is taken.

@@ -328,6 +328,9 @@ Immutable storage record for one exact canonical Card JSON payload.
 
 Candidate fields:
 
+- `revision_id` — the flat storage identity of the record (State 6 persistence
+  repair: a persisted entity needs a scalar key; the revision reference stays
+  the domain identity and is unique by `invoice_id` + `content_hash`);
 - exact Card revision reference;
 - complete canonical Card payload;
 - `received_at`;

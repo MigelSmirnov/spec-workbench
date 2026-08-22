@@ -220,3 +220,60 @@ verified final byte; partial acceptance cannot be exposed because every
 append is inside the invoice-locked transaction committed once; conflicting
 bytes for one source identity cannot both commit. Result:
 `PASS_INTERNAL_VARIATION` for `durable_archive`, `PASS` for the others.
+
+## `retention_release_persistence` — deterministic backend
+
+First module lowered through `persistence_backend/v3`: tables
+`vps_release_evaluations` (key `project_id, working_set_id, evaluated_at`)
+and `vps_release_decisions` (key `decision_id`, unique
+`project_id, working_set_id`); rows `lock_working_set` (lock),
+`save_evaluation` (insert), `load_decision` (get_unique, error on multiple),
+`insert_decision` (insert); nested `actor`/`evaluation` stored as
+`json_model`, evidence tuples as `json`. `create_retention_release_schema`
+is the owned-transaction schema function. Factory canonical validation no
+longer reports the module; the Factory emitter produces the module from this
+spec without an LLM pass.
+
+## Deterministic backend for all seven persistence modules
+
+`70_persistence_closure.json` (status `closed`) carries the complete
+`persistence_backend/v3` IR and `rules.persistence_backend` equals it: 22
+tables, 7 owned-transaction repositories, 62 method rows. Every
+`<x>_persistence` module is emitted by the Factory's `postgres_sync_v1`
+without an LLM pass; Factory canonical validation reports only the three
+ports outside persistence (`PostgresAccessControlBackend`,
+`LocalFilesystemSourceByteStore`, `HttpxVpsSynchronizationTransport`).
+
+Contract adjustments made while closing the IR (each is a storage-shape
+consequence, not a policy change):
+
+- `ArchiveUnitOfWork.load_pending_publications()` →
+  `list_publications_in_states(states)`; the pending set comes from
+  `rules.archive_byte_publication` in `recover_pending_publications`;
+- `ArchiveUnitOfWork.load_transfer_receipt(invoice_id, hash | None)` →
+  `list_transfer_receipts(invoice_id)`; selection by accepted hash in
+  `verify_durable_acceptance`;
+- `ArchiveUnitOfWork.load_card_revision` takes an exact `content_hash`; the
+  current revision is resolved through the `StoredInvoiceCard` head;
+- `ArchiveUnitOfWork.load_source_replicas(invoice_id)` →
+  `list_source_replicas(source_ids)`: a replica row carries no invoice id;
+- `SynchronizationRepository.load_sync_status` →
+  `list_synchronizations_for_invoice`; `get_sync_status` composes;
+- `PlanActualRepository.list_active_matches(project_id, snapshot)` →
+  `list_matches_for_snapshot(snapshot, status)`: a match row carries no
+  project id, and the active status is policy;
+- State 1: `StoredInvoiceCardRevision.revision_id` — a persisted entity
+  needs a scalar key; the revision reference stays the domain identity and is
+  unique by `invoice_id` + `content_hash` (json-path unique index).
+
+Keys inside nested references (`card_revision`, `invoice_revision`,
+`revision`) are addressed with v3 `path` terms; nested values are stored as
+`json_model`, evidence tuples as `json`, scalar tuples and canonical cards as
+`json_value`.
+
+Adversarial review of the emitted modules: every method runs only on the
+active owned transaction and raises without one; locks are advisory
+transaction-scoped over `(scope, keys)`, so a lock before the first insert
+of a key is honoured; `update_*` rows never touch identity or binding
+columns; `upsert_*` rows never touch `first_received_at`/`first_seen_at`;
+no method deletes. Result: `PASS` for all seven persistence modules.

@@ -25,7 +25,9 @@ def test_cabinet_assembly_is_ready_after_v2_language_migration() -> None:
         "checks": 8,
         "ready_checks": 8,
         "errors": 0,
-        "warnings": 0,
+        # codec_registry_unavailable: the Workbench does not embed the emitter's
+        # domain/storage registry, so codec completeness stays an advisory warning.
+        "warnings": 1,
     }
     assert [check["name"] for check in report["checks"]] == [
         "language", "identity", "data", "contracts", "external_contracts",
@@ -47,12 +49,12 @@ def test_language_check_inspection_preserves_ready_owner_report() -> None:
     assert report["check"]["errors"] == 0
 
 
-def test_persistence_check_preserves_optional_llm_path() -> None:
+def test_persistence_check_covers_seven_deterministic_repositories() -> None:
     report = inspect_check(CABINET, "persistence")
     assert report["schema_version"] == "spec_workbench_assembly_check.v1"
     assert report["check"]["schema_version"] == "spec_workbench_persistence_backend_coverage.v1"
     assert report["check"]["ready"] is True
-    assert report["check"]["summary"]["repositories"] == 0
+    assert report["check"]["summary"]["repositories"] == 7
     assert report["check"]["summary"]["errors"] == 0
 
 
@@ -69,7 +71,7 @@ def test_check_inspection_preserves_owner_report() -> None:
     report = inspect_check(CABINET, "notes")
     assert report["schema_version"] == "spec_workbench_assembly_check.v1"
     assert report["check"]["schema_version"] == "spec_workbench_state7_notes_gate.v1"
-    assert report["check"]["summary"]["notes"] == 215
+    assert report["check"]["summary"]["notes"] == 222
     assert report["check"]["ready"] is True
 
 

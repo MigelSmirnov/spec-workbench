@@ -30,3 +30,6 @@
 `reserve_decision` was replaced by the plain append `insert_decision`; equivalence
 reuse and conflict rejection belong to `RetentionReleaseService.request_manual_vps_release`
 (`30_modules_persistence_boundary.md`).
+
+`retention_release_persistence` additionally owns `create_retention_release_schema(database_url: str) -> None`,
+the v3 schema function of its `persistence_backend` row (`70_persistence_closure.json`).

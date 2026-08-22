@@ -26,7 +26,7 @@ Module functions remain façades with an explicit `PlanActualService` first para
 - `PlanActualRepository.insert_match_decision(self, decision: InvoiceLineEstimateMatch) -> None`
 - `PlanActualRepository.update_match_status(self, decision: InvoiceLineEstimateMatch) -> None`
 - `PlanActualRepository.list_matches_for_line(self, invoice_id: str, content_hash: str, invoice_line_id: str) -> tuple[InvoiceLineEstimateMatch, ...]`
-- `PlanActualRepository.list_active_matches(self, project_id: str, estimate_snapshot_id: str) -> tuple[InvoiceLineEstimateMatch, ...]`
+- `PlanActualRepository.list_matches_for_snapshot(self, estimate_snapshot_id: str, status: str) -> tuple[InvoiceLineEstimateMatch, ...]`
 
 - `PostgresPlanActualRepository.__init__(self, database_url: str) -> None`
 - `PostgresPlanActualRepository.begin(self) -> None`
@@ -42,7 +42,7 @@ Module functions remain façades with an explicit `PlanActualService` first para
 - `PostgresPlanActualRepository.insert_match_decision(self, decision: InvoiceLineEstimateMatch) -> None`
 - `PostgresPlanActualRepository.update_match_status(self, decision: InvoiceLineEstimateMatch) -> None`
 - `PostgresPlanActualRepository.list_matches_for_line(self, invoice_id: str, content_hash: str, invoice_line_id: str) -> tuple[InvoiceLineEstimateMatch, ...]`
-- `PostgresPlanActualRepository.list_active_matches(self, project_id: str, estimate_snapshot_id: str) -> tuple[InvoiceLineEstimateMatch, ...]`
+- `PostgresPlanActualRepository.list_matches_for_snapshot(self, estimate_snapshot_id: str, status: str) -> tuple[InvoiceLineEstimateMatch, ...]`
 - `create_app(access_control: AccessControlBackend, archive: DurableArchiveService, registry: RegistryContextService, holded_gateway: HoldedGatewayService, synchronization: SynchronizationService, plan_actual: PlanActualService) -> FastAPI`
 
 `PostgresPlanActualRepository` is owned by `plan_actual_persistence`. `save_match_decision`
@@ -50,3 +50,6 @@ was replaced by `insert_match_decision`, `update_match_status`, and `list_matche
 `load_match_decisions` no longer fails on absent identities. The single-active-confirmation
 invariant and pinned-identity completeness belong to `PlanActualService`
 (`30_modules_persistence_boundary.md`).
+
+`list_active_matches` was replaced by `list_matches_for_snapshot(estimate_snapshot_id, status)`;
+the active status and the project restriction belong to `PlanActualService`.
