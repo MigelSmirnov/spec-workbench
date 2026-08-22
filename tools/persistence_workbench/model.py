@@ -12,6 +12,15 @@ CATALOG_STATUSES = frozenset({"open", "closed"})
 SUPPORTED_SCHEMA_VERSION = 2
 SUPPORTED_ENGINE = "sqlite"
 SUPPORTED_EMITTER = "sqlite_sync_v2"
+# SPEC_STANDARD §6.3: v3 is a superset of v2 keyed on schema_version. The
+# (engine, emitter) pairs are closed per version; v2 never receives the v3 pair.
+SUPPORTED_SCHEMA_VERSIONS = frozenset({2, 3})
+SUPPORTED_BACKENDS: dict[int, tuple[tuple[str, str], ...]] = {
+    2: ((SUPPORTED_ENGINE, SUPPORTED_EMITTER),),
+    3: ((SUPPORTED_ENGINE, SUPPORTED_EMITTER), ("postgres", "postgres_sync_v1")),
+}
+TRANSACTION_MODES = frozenset({"external", "owned"})
+OWNED_TRANSACTION_METHODS = frozenset({"begin", "commit", "rollback"})
 
 
 class PersistenceBackendError(ValueError):

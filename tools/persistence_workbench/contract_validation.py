@@ -134,7 +134,8 @@ def validate_authoring_contracts(project: Path, payload: dict[str, Any]) -> list
             if leaf in TRANSACTION_METHODS:
                 findings.append(Finding(
                     "error", "backend_owns_transaction_method",
-                    f"persistence_backend/v2 does not own repository transaction method {leaf!r}",
+                    f"repository transaction method {leaf!r} takes no method row: in v2 it belongs "
+                    f"to the external Unit of Work, in v3 its lowering is fixed by transaction: owned",
                     repository_name, method_location,
                 ))
             contract_name, ownership_error = _method_contract(repository, method)
@@ -240,7 +241,8 @@ def validate_contracts(spec: dict[str, Any], payload: dict[str, Any]) -> list[Fi
             if leaf in TRANSACTION_METHODS:
                 findings.append(Finding(
                     "error", "backend_owns_transaction_method",
-                    f"persistence_backend/v2 does not own repository transaction method {leaf!r}",
+                    f"repository transaction method {leaf!r} takes no method row: in v2 it belongs "
+                    f"to the external Unit of Work, in v3 its lowering is fixed by transaction: owned",
                     repository_name, method_location,
                 ))
             contract_name, ownership_error = _method_contract(repository, method)

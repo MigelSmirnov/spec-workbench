@@ -372,3 +372,52 @@ def test_transaction_methods_are_not_deterministic_backend_owned(tmp_path: Path)
     report = coverage(project)
     assert report["ready"] is False
     assert any(item["code"] == "backend_owns_transaction_method" for item in report["findings"])
+
+
+# --- persistence_backend/v3 (SPEC_STANDARD §6.3) ---------------------------
+
+
+def _v3_backend() -> dict:
+    payload = _table_backend()
+    payload["schema_version"] = 3
+    payload["backend"] = {"engine": "postgres", "emitter": "postgres_sync_v1"}
+    payload["repositories"][0]["transaction"] = "owned"
+    payload["repositories"][0]["methods"].append(
+        {"method": "lock_invoice", "query": "lock", "scope": "invoice", "keys": ["invoice_id"]},
+    )
+    return payload
+
+
+def test_v3_postgres_owned_transaction_with_lock_is_valid() -> None:
+    assert validate(_v3_backend()) == []
+
+
+def test_v3_keeps_sqlite_pair() -> None:
+    payload = _v3_backend()
+    payload["backend"] = {"engine": "sqlite", "emitter": "sqlite_sync_v2"}
+    assert validate(payload) == []
+
+
+def test_v2_rejects_postgres_pair_transaction_cell_and_lock() -> None:
+    payload = _v3_backend()
+    payload["schema_version"] = 2
+    codes = {item.code for item in validate(payload)}
+    assert "unsupported_persistence_engine" in codes
+    assert "unsupported_query" in codes
+    assert "unknown_repository_field" in codes
+
+
+def test_v3_requires_transaction_cell() -> None:
+    payload = _v3_backend()
+    del payload["repositories"][0]["transaction"]
+    assert any(item.code == "invalid_repository_transaction" for item in validate(payload))
+
+
+def test_v3_lock_has_no_table_and_needs_scope_and_keys() -> None:
+    payload = _v3_backend()
+    lock = payload["repositories"][0]["methods"][1]
+    lock["table"] = "invoices"
+    lock["keys"] = []
+    codes = {item.code for item in validate(payload)}
+    assert "invalid_lock_keys" in codes
+    assert any("method" in code for code in codes - {"invalid_lock_keys"})

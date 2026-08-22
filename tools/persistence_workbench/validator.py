@@ -5,9 +5,9 @@ from typing import Any
 
 from persistence_workbench.model import (
     Finding,
-    SUPPORTED_EMITTER,
-    SUPPORTED_ENGINE,
-    SUPPORTED_SCHEMA_VERSION,
+    SUPPORTED_BACKENDS,
+    SUPPORTED_SCHEMA_VERSIONS,
+    TRANSACTION_MODES,
 )
 
 
@@ -64,6 +64,8 @@ AGGREGATE_QUERY_FIELDS: dict[str, frozenset[str]] = {
     "replace_aggregate": frozenset({"aggregate"}),
 }
 QUERY_FIELDS = {**TABLE_QUERY_FIELDS, **AGGREGATE_QUERY_FIELDS}
+# v3 only: a transaction-scoped lock over (scope, keys); no table, no filter.
+LOCK_QUERY_FIELDS: dict[str, frozenset[str]] = {"lock": frozenset({"scope", "keys"})}
 
 
 def _text(value: Any) -> bool:
@@ -248,6 +250,7 @@ def _validate_method(
     table_names: set[str],
     aggregate_names: set[str],
     table_columns: dict[str, set[str]],
+    version: int = 2,
 ) -> tuple[list[Finding], str | None]:
     if not isinstance(row, dict):
         return [Finding("error", "invalid_method", "repository method must be an object", repository, location)], None
@@ -257,6 +260,14 @@ def _validate_method(
     if not _text(method):
         findings.append(Finding("error", "invalid_method_id", "method must be a non-empty string", repository, location + ".method"))
         method = None
+    if version >= 3 and query in LOCK_QUERY_FIELDS:
+        findings.extend(_shape(row, frozenset({"method", "query"}) | LOCK_QUERY_FIELDS[query], location=location, code_prefix="method", repository=repository))
+        if not _text(row.get("scope")):
+            findings.append(Finding("error", "invalid_lock_scope", "lock scope must be a non-empty string", repository, location + ".scope"))
+        keys = row.get("keys")
+        if not (isinstance(keys, list) and keys and all(_text(item) for item in keys)):
+            findings.append(Finding("error", "invalid_lock_keys", "lock keys must be a non-empty list of argument names", repository, location + ".keys"))
+        return findings, method
     if query not in QUERY_FIELDS:
         findings.append(Finding("error", "unsupported_query", f"unsupported persistence query: {query!r}", repository, location + ".query"))
         return findings, method
@@ -300,20 +311,27 @@ def validate(payload: Any) -> list[Finding]:
     findings = _shape(payload, ROOT_FIELDS, location="rules.persistence_backend", code_prefix="persistence_backend")
     if payload.get("kind") != "persistence_backend":
         findings.append(Finding("error", "invalid_backend_kind", "kind must be 'persistence_backend'", location="rules.persistence_backend.kind"))
-    if payload.get("schema_version") != SUPPORTED_SCHEMA_VERSION:
+    version = payload.get("schema_version")
+    if version not in SUPPORTED_SCHEMA_VERSIONS:
         findings.append(Finding(
             "error", "unsupported_persistence_schema",
-            f"schema_version must be {SUPPORTED_SCHEMA_VERSION}",
+            f"schema_version must be one of {sorted(SUPPORTED_SCHEMA_VERSIONS)}",
             location="rules.persistence_backend.schema_version",
         ))
+        version = 2
 
     backend = payload.get("backend")
     findings.extend(_shape(backend, BACKEND_FIELDS, location="rules.persistence_backend.backend", code_prefix="backend"))
     if isinstance(backend, dict):
-        if backend.get("engine") != SUPPORTED_ENGINE:
-            findings.append(Finding("error", "unsupported_persistence_engine", f"engine must be {SUPPORTED_ENGINE!r}", location="rules.persistence_backend.backend.engine"))
-        if backend.get("emitter") != SUPPORTED_EMITTER:
-            findings.append(Finding("error", "unsupported_persistence_emitter", f"emitter must be {SUPPORTED_EMITTER!r}", location="rules.persistence_backend.backend.emitter"))
+        pairs = SUPPORTED_BACKENDS[version]
+        pair = (backend.get("engine"), backend.get("emitter"))
+        if pair not in pairs:
+            allowed = ", ".join(f"{engine}/{emitter}" for engine, emitter in pairs)
+            findings.append(Finding(
+                "error", "unsupported_persistence_engine",
+                f"persistence_backend/v{version} accepts backend pairs {allowed}; got {pair[0]!r}/{pair[1]!r}",
+                location="rules.persistence_backend.backend",
+            ))
 
     conventions = payload.get("conventions")
     findings.extend(_shape(conventions, CONVENTION_FIELDS, location="rules.persistence_backend.conventions", code_prefix="convention"))
@@ -369,10 +387,14 @@ def validate(payload: Any) -> list[Finding]:
         repository = row.get("repository") if _text(row.get("repository")) else None
         emission = row.get("emission")
         expected = TABLE_REPOSITORY_FIELDS if emission == "table" else IRREGULAR_REPOSITORY_FIELDS if emission == "irregular" else None
+        if expected is not None and version >= 3:
+            expected = expected | {"transaction"}
         if expected is None:
             findings.append(Finding("error", "invalid_repository_emission", "emission must be 'table' or 'irregular'", repository, location + ".emission"))
         else:
             findings.extend(_shape(row, expected, location=location, code_prefix="repository", repository=repository))
+        if version >= 3 and row.get("transaction") not in TRANSACTION_MODES:
+            findings.append(Finding("error", "invalid_repository_transaction", f"transaction must be one of {sorted(TRANSACTION_MODES)}", repository, location + ".transaction"))
         for field in ("repository", "module", "schema_function"):
             if not _text(row.get(field)):
                 findings.append(Finding("error", f"invalid_repository_{field}", f"{field} must be a non-empty string", repository, location + f".{field}"))
@@ -399,6 +421,7 @@ def validate(payload: Any) -> list[Finding]:
                 table_names=table_name_set,
                 aggregate_names=aggregate_name_set,
                 table_columns=table_columns,
+                version=version,
             )
             findings.extend(method_findings)
             if method is not None:
