@@ -27,6 +27,38 @@ Room Planner must:
 - associate all persisted and published Room Planner results with the Registry `object_id`;
 - never create a parallel independent object identity.
 
+## Object-level planning container and spatial levels
+
+One Registry object maps to one Room Planner planning container.
+
+A Registry object may represent a renovation object with one or multiple spatial levels/floors. Room Planner must be able to plan all relevant levels inside that same object-level container rather than creating parallel Registry objects merely to represent floors.
+
+Each level participates in the same semantic separation established by Room Planner:
+
+```text
+Registry object
+│
+└── Room Planner container
+    │
+    ├── Level 0
+    │   ├── Existing
+    │   ├── Demolition
+    │   └── Construction
+    │
+    ├── Level 1
+    │   ├── Existing
+    │   ├── Demolition
+    │   └── Construction
+    │
+    └── ...
+```
+
+If Registry cannot currently express the level/floor facts required to describe a multi-level renovation object, that is a Registry/platform-contract gap to resolve; Room Planner must not compensate by inventing independent object identities.
+
+Published Room Planner results should represent a coherent object-level revision across the included levels. Downstream consumers should not be required to reconstruct one renovation object by assembling independently published floor fragments.
+
+The exact internal level model, level identity, per-level editing/revision mechanics, and Registry projection are deferred to later design states.
+
 ## Platform integration boundary
 
 Room Planner participates in the shared platform through the living [Platform Router](../../PLATFORM_ROUTER.md) contract.
@@ -290,7 +322,7 @@ Two application-level output responsibilities are currently retained as provisio
 
 `room_plan` is the provisional versioned domain artifact for Room Planner.
 
-At State 0 it should be understood as a container/result boundary over the semantically isolated Existing, Demolition, and Construction meanings rather than as one mixed drawing.
+At State 0 it should be understood as a coherent object-level container/result boundary across all included spatial levels and over the semantically isolated Existing, Demolition, and Construction meanings rather than as one mixed drawing or a set of independently assembled floor fragments.
 
 Whether later contracts expose these plans as one container artifact, several related artifacts, or both is deliberately deferred.
 
