@@ -169,11 +169,12 @@ Equal status and transactions are the same payment evidence.
 
 ## Model M86 — InvoiceCardSourceBlock
 
-The source reference block of the card.
+The capture-evidence block of the card (Cabinet_web `invoice-card-v1.schema.json`, `$defs.source`).
+It names no source identity: the sources of an invoice are `InvoiceTransferManifest.source_references`
+and locally attached `SourceBinary` rows.
 
 Fields:
 
-- `source_id: str`;
 - `kind: str`;
 - `file_ref: str | None`;
 - `file_status: str`;
@@ -185,7 +186,7 @@ value
 
 ### Identity evidence
 
-Equal source id and status are the same source evidence.
+Equal kind, file reference and status are the same capture evidence.
 
 ---
 
