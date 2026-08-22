@@ -187,6 +187,26 @@ Published historical plans and quantity outputs must remain identifiable and mus
 
 The exact revision model, branching policy, locking, and rollback behavior are deferred to later states.
 
+## Existing corrections and dependent-plan propagation
+
+Existing represents the best-known reconstruction of the renovation object's pre-renovation physical condition rather than merely the measurements that happened to be available at one moment.
+
+A published Existing revision is an immutable historical record, but later discovery of a measurement error, hidden condition, or more accurate observation may justify a corrected Existing result. Such a correction creates a new identifiable Existing revision; it MUST NOT rewrite an earlier published Existing revision in place.
+
+An observation made after renovation work has begun may correct Existing only when it reveals a fact that was already true before the project work, such as a previously hidden substrate, level, dimension, or construction condition. A physical state change caused by demolition or construction work is not retroactively written into Existing merely because it was observed later.
+
+Demolition and Construction intent created against an earlier Existing basis must not silently change meaning when a corrected Existing revision appears. Existing dependent revisions remain historically associated with the basis against which they were created until the user explicitly accepts a propagated result.
+
+When an Existing correction affects dependent renovation intent, Room Planner must support carrying the relevant Demolition and Construction intent forward onto the corrected Existing basis as new dependent revisions.
+
+The product may automatically propagate relationships, geometry, and intent that remain unambiguous after the correction, but automatic propagation is not silent acceptance. Room Planner must expose that dependent plans are affected and must surface unresolved or conflicting consequences for review rather than fabricate a plausible migration.
+
+The user must explicitly confirm the Existing correction with awareness that dependent plans are affected, and must separately accept the propagated Demolition and Construction result before those new dependent revisions become the accepted working basis. Publishing those revisions remains a separate product action.
+
+Earlier Existing, Demolition, Construction, and published quantity revisions remain preserved so historical provenance can still be reproduced.
+
+The exact dependency representation, migration algorithm, conflict model, statuses, and confirmation user interface are deferred to later design states.
+
 ## One active Construction proposal in the initial product
 
 The initial Room Planner product supports one active Construction proposal for a Registry object rather than parallel alternative A/B/C design variants.
@@ -333,7 +353,7 @@ Those commercial concerns belong to PresuPro.
 
 Room Planner publishes physical quantities in their appropriate engineering units. When downstream estimating or procurement needs conversion from a physical quantity to purchasable packages, PresuPro owns that conversion and whole-package rounding. Construction Catalog may supply technical/package facts required by that calculation, but it does not own the commercial rounding decision.
 
-Demolition and Construction must remain distinguishable in quantity outputs because they represent different kinds of downstream work.
+Demolition and Construction must remain distinguishishable in quantity outputs because they represent different kinds of downstream work.
 
 ## Construction Catalog dependency
 
@@ -560,8 +580,8 @@ Changes to a published result must create a new identifiable revision rather tha
 The following questions remain intentionally unresolved because they do not block the State 0 product boundary and belong to later design work:
 
 - Which wall/opening editing operations are mandatory for the first usable release?
-- What is the exact lifecycle for creating, correcting, and freezing the Existing baseline?
-- Can a frozen Existing baseline be corrected, and if so how is that correction distinguished from renovation intent?
+- What is the exact lifecycle for creating, accepting, freezing, and correcting the Existing baseline?
+- What detailed rules and user interaction distinguish a late discovery about the pre-renovation condition from a state change caused by performed demolition or construction work?
 - How are floor level/survey measurements acquired or imported?
 - Which construction systems/material families are required in the initial Construction Catalog?
 - Does Room Planner expose editable construction-system templates, catalog-selected fixed systems, or both?
