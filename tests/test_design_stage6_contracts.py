@@ -32,10 +32,10 @@ def _make_unresolved(project: Path, function: str = "attach_local_source") -> No
 def test_cabinet_state6_contracts_are_closed_and_ready() -> None:
     report = design_stage6_contracts.coverage(CABINET)
     assert report["summary"] == {
-        "planned_functions": 190,
+        "planned_functions": 192,
         "public_functions": 35,
-        "internal_functions": 155,
-        "resolved": 190,
+        "internal_functions": 157,
+        "resolved": 192,
         "unresolved": 0,
         "errors": 0,
         "plan_closed": True,
@@ -104,7 +104,7 @@ def test_missing_router_handler_mapping_is_fail_closed(tmp_path: Path) -> None:
 def test_ready_handoff_contains_operation_and_handler_contracts() -> None:
     handoff = design_stage6_contracts.handoff(CABINET)
     assert handoff["ready"] is True
-    assert handoff["summary"]["resolved"] == 190
+    assert handoff["summary"]["resolved"] == 192
     domain = handoff["contracts"]["attach_local_source"]
     handler = handoff["contracts"]["attach_local_source_handler"]
     assert domain["public_operation"] == FIRST_EXTERNAL

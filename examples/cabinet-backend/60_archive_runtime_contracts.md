@@ -12,6 +12,8 @@ Both dependencies are required. There is no nullable, default, in-memory, or mod
 - DurableArchiveService.verify_durable_acceptance(self, invoice_id: str, content_hash: str | None = None) -> DurableAcceptanceVerification
 - DurableArchiveService.attach_local_source(self, invoice_id: str, files: tuple[LocalSourceFile, ...], authorization: AuthorizationDecision, expected_sources: tuple[ContentReference, ...] = ()) -> SourceAttachmentBatchResult
 - DurableArchiveService.get_source_status(self, invoice_id: str) -> SourceStatus
+- derive_source_status(archive: DurableArchiveService, invoice_id: str) -> SourceStatus
+- get_transfer_receipt(archive: DurableArchiveService, invoice_id: str, manifest_hash: str) -> InvoiceTransferReceipt | None
 - DurableArchiveService.get_archived_invoice(self, invoice_id: str, content_hash: str | None = None) -> StoredInvoiceCardRevision
 - DurableArchiveService.accept_incomplete_source_evidence(self, decision: IncompleteSourceAcceptance, authorization: AuthorizationDecision) -> SourceStatus
 - DurableArchiveService.record_source_loss(self, decision: SourceLossDecision, authorization: AuthorizationDecision) -> SourceStatus

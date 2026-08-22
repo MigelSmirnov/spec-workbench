@@ -183,7 +183,9 @@ attach_local_source
 accept_incomplete_source_evidence
 record_source_loss
 get_source_status
+derive_source_status
 verify_durable_acceptance
+get_transfer_receipt
 ```
 
 ### Consolidation decision
