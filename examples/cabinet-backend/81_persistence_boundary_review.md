@@ -328,3 +328,14 @@ implementation and fails closed on None. Factory canonical validation of the
 assembled specification now reports no issues. Building the VPS sync API and
 its experiment is a separate project; the transport then returns as a
 deterministic backend like Holded.
+
+## Invoice Card V1 projection and monetary basis (semantic-oracle finding)
+
+The first oracle run showed every consumer of `canonical_card` guessing at
+its shape. State 1 now projects the accepted card format (M79–M87, M01
+refinement) and `canonical_card` is typed; the plan/actual basis becomes a
+fact of each estimate item (`currency`, `monetary_basis`) and of the line
+(`net_amount`/`gross_amount`); `CardObjectAssignmentObservation` gets
+`observation_id` and storage, and `validate_card_assignment` reads the
+project from it. Deterministic review: zero blocks and zero prompts on every
+changed slice; both persistence modules emit with the new json_model columns.

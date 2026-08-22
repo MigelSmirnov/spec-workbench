@@ -80,7 +80,8 @@ def test_dependency_contracts_and_concrete_adapters_expand_import_context() -> N
         "HoldedPublication", "AuthorizationDecision",
         "HoldedPublicationAttempt", "HoldedPurchaseAttemptPayload",
         "HoldedPurchaseLookupEvidence", "StoredInvoiceCardRevision",
-        "HoldedPublicationRepository",
+        "HoldedPublicationRepository", "InvoiceCardV1", "InvoiceCardLine",
+        "InvoiceCardParty", "InvoiceCardObjectBlock", "InvoiceCardTotals",
     ]
 
 def test_models_slice_includes_owned_declarations_and_state1_evidence() -> None:

@@ -47,6 +47,10 @@ The Card already owns:
 - provenance;
 - canonical SHA-256 content revision.
 
+The typed field projection of this model (supplier, buyer, object, lines with net and gross
+amounts, totals, payment, source, provenance) is recorded in
+`01_models_invoice_card_projection.md`.
+
 Backend must preserve unknown or currently unused Card fields. It must not
 introduce alternative line kinds, payment meanings, arithmetic rules, object
 shape, source shape, or invoice revision numbering.

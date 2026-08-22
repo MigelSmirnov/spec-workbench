@@ -166,7 +166,11 @@
     "PostgresRegistryContextRepository.list_work_objects": "(self) -> tuple[WorkObject, ...]",
     "RegistryContextRepository.load_work_object": "(self, project_id: str) -> WorkObject | None",
     "PostgresRegistryContextRepository.load_work_object": "(self, project_id: str) -> WorkObject | None",
+    "RegistryContextRepository.load_assignment_observation": "(self, invoice_id: str, content_hash: str) -> CardObjectAssignmentObservation | None",
+    "RegistryContextRepository.insert_assignment_observation": "(self, observation: CardObjectAssignmentObservation) -> None",
     "RegistryContextRepository.save_assignment_validation": "(self, validation: ObjectAssignmentValidation) -> None",
+    "PostgresRegistryContextRepository.load_assignment_observation": "(self, invoice_id: str, content_hash: str) -> CardObjectAssignmentObservation | None",
+    "PostgresRegistryContextRepository.insert_assignment_observation": "(self, observation: CardObjectAssignmentObservation) -> None",
     "PostgresRegistryContextRepository.save_assignment_validation": "(self, validation: ObjectAssignmentValidation) -> None",
     "RegistryContextRepository.load_assignment_validation": "(self, invoice_id: str, content_hash: str) -> ObjectAssignmentValidation | None",
     "PostgresRegistryContextRepository.load_assignment_validation": "(self, invoice_id: str, content_hash: str) -> ObjectAssignmentValidation | None",
@@ -423,6 +427,7 @@
     "get_work_object: [VALIDATION_ERROR] Raise RegistryContextUnavailableError when the requested WorkObject or required Registry project context cannot be resolved safely instead of constructing a placeholder object.",
     "refresh_estimate_snapshot: [BEHAVIOR] MUST create a new immutable estimate snapshot only when the canonical observed estimate content is not already represented by the same stable source identity.",
     "refresh_estimate_snapshot: [PROVENANCE] Preserve enough source identity and observation evidence for later plan/actual calculations to pin the exact estimate snapshot they consumed.",
+    "refresh_estimate_snapshot: [FIELD_PROJECTION] EstimateSnapshot.items are PresuProEstimateObservation.items verbatim; each EstimateItemSnapshot carries its own currency and monetary_basis (\"net\" or \"gross\") as observed from PresuPro, and the snapshot currency is the observation currency.",
     "refresh_estimate_snapshot: [VALIDATION_ERROR] Raise EstimateObservationRejectedError when the PresuPro observation lacks stable source identity or contains unsupported or unprocessable content; never accept a partial snapshot.",
     "calculate_plan_actual: [RULE_REFERENCE] Consume only confirmed matching decisions when calculating plan versus actual; use = rules.plan_actual.confirmed_matches_only.",
     "calculate_plan_actual: [RULE_REFERENCE] Treat source invoice, Registry, and estimate records as immutable inputs; use = rules.plan_actual.source_records_are_immutable.",
@@ -567,6 +572,7 @@
     "synchronize_invoice_work: [DEPENDENCY_BOUNDARY] MUST call archive acceptance and verification through the exact supplied DurableArchiveService and MUST NOT construct or discover another archive runtime.",
     "calculate_plan_actual: [DEPENDENCY_BOUNDARY] MUST load pinned accepted invoice revisions through the exact supplied DurableArchiveService and MUST NOT read archive persistence directly.",
     "request_holded_publication: [DEPENDENCY_BOUNDARY] MUST resolve the exact accepted immutable invoice revision through the supplied DurableArchiveService before publication eligibility or gateway mutation.",
+    "request_holded_publication: [FIELD_PROJECTION] The purchase payload is built only from canonical_card of the exact revision: contact_name from supplier.name, contact_code from supplier.tax_id, invoice_num from invoice_number, date from issue_date, currency from currency, and one item per InvoiceCardLine with name from description_original, units from quantity, subtotal from unit_price_net, discount from discount_percent, and tax from tax_rate; A51 verification compares the read-back document with these same fields and with totals.gross.",
     "reconcile_holded_publication: [DEPENDENCY_BOUNDARY] MUST use the supplied DurableArchiveService to resolve the immutable revision bound to the logical publication; remote evidence cannot replace archive truth.",
     "evaluate_vps_release: [DEPENDENCY_BOUNDARY] MUST obtain every durable acceptance verification through the supplied DurableArchiveService.",
     "request_manual_vps_release: [DEPENDENCY_BOUNDARY] MUST re-check the exact evaluation evidence through the supplied DurableArchiveService before recording authorization.",
@@ -614,6 +620,8 @@
     "RegistryContextRepository.lock_catalogue: [BEHAVIOR] MUST serialize competing complete catalogue replacements before current WorkObject state is read.",
     "RegistryContextRepository.list_work_objects: [BEHAVIOR] MUST return every committed WorkObject in stable project_id order inside the active transaction and MUST NOT filter, synthesize, or reorder by observation.",
     "RegistryContextRepository.load_work_object: [BEHAVIOR] MUST return the exact committed WorkObject or None and MUST NOT synthesize context.",
+    "RegistryContextRepository.load_assignment_observation: [BEHAVIOR] MUST return the exact stored CardObjectAssignmentObservation for the invoice_id and content_hash or None and MUST NOT derive one from the card or the catalogue.",
+    "RegistryContextRepository.insert_assignment_observation: [PROVENANCE] MUST append one immutable observation row for the exact observation_id inside the active transaction; a second observation for the same card revision fails on uniqueness.",
     "RegistryContextRepository.save_assignment_validation: [PROVENANCE] MUST append the exact immutable ObjectAssignmentValidation evidence in the active transaction.",
     "RegistryContextRepository.load_assignment_validation: [BEHAVIOR] MUST return the exact validation selected by invoice_id and content_hash or None.",
     "create_registry_context_schema: [CONFIG_REFERENCE] MUST idempotently create only the tables named by = config.persistence.work_object_table_name and = config.persistence.assignment_validation_table_name on a connection it opens from database_url and closes; MUST NOT read environment variables or log the URL.",
@@ -624,6 +632,8 @@
     "PostgresRegistryContextRepository.lock_catalogue: [BEHAVIOR] MUST acquire PostgreSQL serialization for one complete Registry catalogue replacement.",
     "PostgresRegistryContextRepository.list_work_objects: [BEHAVIOR] MUST return every committed WorkObject in stable project_id order inside the active transaction and MUST NOT filter, synthesize, or reorder by observation.",
     "PostgresRegistryContextRepository.load_work_object: [BEHAVIOR] MUST return the exact committed WorkObject or None.",
+    "PostgresRegistryContextRepository.load_assignment_observation: [BEHAVIOR] MUST return the exact stored CardObjectAssignmentObservation for the invoice_id and content_hash or None and MUST NOT derive one from the card or the catalogue.",
+    "PostgresRegistryContextRepository.insert_assignment_observation: [PROVENANCE] MUST append one immutable observation row for the exact observation_id inside the active transaction; a second observation for the same card revision fails on uniqueness.",
     "PostgresRegistryContextRepository.save_assignment_validation: [PROVENANCE] MUST append immutable validation evidence and MUST NOT replace a different decision.",
     "PostgresRegistryContextRepository.load_assignment_validation: [BEHAVIOR] MUST return the exact persisted validation or None.",
     "RegistryContextService.__init__: [DEPENDENCY_BOUNDARY] MUST retain the exact supplied RegistryContextRepository; adapter construction, environment reads, nullable dependencies, and module-global fallbacks are forbidden.",
@@ -636,6 +646,7 @@
     "get_assignment_validation: [DEPENDENCY_BOUNDARY] MUST delegate through the exact supplied RegistryContextService and MUST NOT access PostgreSQL directly.",
     "get_work_object: [DEPENDENCY_BOUNDARY] MUST delegate through the exact supplied RegistryContextService and MUST NOT access PostgreSQL directly.",
     "calculate_plan_actual: [DEPENDENCY_BOUNDARY] MUST resolve WorkObject context through the exact supplied RegistryContextService and MUST NOT read Registry persistence directly.",
+    "calculate_plan_actual: [FIELD_PROJECTION] Invoice lines are canonical_card.lines of the pinned revision, identified by line_id; line quantity is InvoiceCardLine.quantity with InvoiceCardLine.unit; line currency is canonical_card.currency; the actual amount of a matched line is InvoiceCardLine.net_amount when the matched Estimate Item monetary_basis is \"net\" and InvoiceCardLine.gross_amount when it is \"gross\"; an Estimate Item whose currency or monetary_basis does not match the line is a basis mismatch unless an accepted assumption is pinned.",
     "refresh_registry_context_handler: [DEPENDENCY_BOUNDARY] MUST obtain the exact RegistryContextService bound to request.app.state.registry and pass it to refresh_registry_context.",
     "validate_card_assignment_handler: [DEPENDENCY_BOUNDARY] MUST obtain the exact RegistryContextService bound to request.app.state.registry and pass it to validate_card_assignment.",
     "get_assignment_validation_handler: [DEPENDENCY_BOUNDARY] MUST obtain the exact RegistryContextService bound to request.app.state.registry and pass it to get_assignment_validation.",
@@ -645,6 +656,7 @@
     "PostgresRegistryContextRepository.upsert_work_objects: [BEHAVIOR] MUST insert each supplied WorkObject by stable project_id or, when the row exists, update only registry_snapshot_id, last_seen_at, and attention_status from the supplied object inside the active locked transaction; MUST NOT delete rows or change first_seen_at.",
     "RegistryContextService.__init__: [DEPENDENCY_BOUNDARY] MUST retain the exact supplied RegistryContextRepository and DurableArchiveService; adapter construction, direct archive persistence, environment reads, nullable dependencies, and module-global fallbacks are forbidden.",
     "RegistryContextService.validate_card_assignment: [DEPENDENCY_BOUNDARY] MUST resolve the exact accepted immutable Card revision through the supplied DurableArchiveService before applying Registry assignment policy; invoice_id and content_hash alone are not evidence.",
+    "RegistryContextService.validate_card_assignment: [FIELD_PROJECTION] The Registry project of a card is the project_id of the stored CardObjectAssignmentObservation for the exact revision; canonical_card.object (card_id, label) is capture evidence only and is never mapped to a project inside this module. An absent observation or an observation without project_id is missing_requires_review evidence, not an error.",
     "create_local_app: [ORCHESTRATION] MUST construct RegistryContextService with the exact PostgresRegistryContextRepository and the already constructed DurableArchiveService, preserving one archive boundary.",
     "HoldedGatewayService.__init__: [DEPENDENCY_BOUNDARY] Retain the exact supplied repository and HTTP client; reject missing dependencies and never construct adapters, read environment variables, or use module-global fallbacks.",
     "HoldedGatewayService.create_holded_purchase: [ORCHESTRATION] Under the exact attempt lock, load the stored attempt: reuse it when publication identity, invoice revision hash, canonical payload hash, and marker are exactly equivalent, reject a conflicting one, otherwise insert the reservation; commit before network mutation, then re-read the locked attempt, require that no issuance is recorded, update it as issued with request_started_at, and commit before the sole permitted POST.",
@@ -893,7 +905,8 @@
       "principal_table_name": "local_service_principals",
       "credential_table_name": "local_service_credentials",
       "throttle_state_table_name": "authentication_throttle_states",
-      "security_audit_table_name": "security_audit_records"
+      "security_audit_table_name": "security_audit_records",
+      "assignment_observation_table_name": "card_object_assignment_observations"
     }
   },
   "models": {
@@ -940,12 +953,126 @@
         "media_type": "str | None"
       }
     },
+    "InvoiceCardParty": {
+      "identity": "value",
+      "fields": {
+        "name": "str | None",
+        "tax_id": "str | None",
+        "address": "str | None"
+      }
+    },
+    "InvoiceCardObjectBlock": {
+      "identity": "value",
+      "fields": {
+        "card_id": "str | None",
+        "label": "str | None"
+      }
+    },
+    "InvoiceCardLine": {
+      "identity": "value",
+      "fields": {
+        "line_id": "str",
+        "kind": "str",
+        "description_original": "str",
+        "description_normalized": "str | None",
+        "supplier_sku": "str | None",
+        "matched_material_id": "str | None",
+        "quantity": "Decimal",
+        "unit": "str",
+        "unit_price_net": "Decimal",
+        "discount_percent": "Decimal",
+        "discount_amount": "Decimal",
+        "net_amount": "Decimal",
+        "tax_rate": "Decimal",
+        "tax_amount": "Decimal",
+        "gross_amount": "Decimal"
+      }
+    },
+    "InvoiceCardTotals": {
+      "identity": "value",
+      "fields": {
+        "net": "Decimal",
+        "discount": "Decimal",
+        "tax": "Decimal",
+        "gross": "Decimal",
+        "withholding": "Decimal",
+        "payable": "Decimal"
+      }
+    },
+    "InvoiceCardPaymentEvidence": {
+      "identity": "value",
+      "fields": {
+        "basis": "str",
+        "source_ref": "str | None"
+      }
+    },
+    "InvoiceCardPaymentTransaction": {
+      "identity": "value",
+      "fields": {
+        "payment_id": "str",
+        "method": "str",
+        "paid_at": "datetime",
+        "currency": "str",
+        "tendered_amount": "Decimal | None",
+        "applied_amount": "Decimal",
+        "change_amount": "Decimal | None",
+        "reference": "str | None",
+        "evidence": "InvoiceCardPaymentEvidence"
+      }
+    },
+    "InvoiceCardPayment": {
+      "identity": "value",
+      "fields": {
+        "status": "str",
+        "transactions": "tuple[InvoiceCardPaymentTransaction, ...]"
+      }
+    },
+    "InvoiceCardSourceBlock": {
+      "identity": "value",
+      "fields": {
+        "source_id": "str",
+        "kind": "str",
+        "file_ref": "str | None",
+        "file_status": "str",
+        "note": "str | None"
+      }
+    },
+    "InvoiceCardProvenance": {
+      "identity": "value",
+      "fields": {
+        "created_at": "datetime",
+        "confirmed_at": "datetime | None",
+        "created_by": "str"
+      }
+    },
+    "InvoiceCardV1": {
+      "identity": "entity",
+      "fields": {
+        "card_type": "str",
+        "card_version": "int",
+        "id": "str",
+        "status": "str",
+        "invoice_number": "str",
+        "issue_date": "date",
+        "service_date": "date | None",
+        "due_date": "date | None",
+        "currency": "str",
+        "supplier": "InvoiceCardParty",
+        "buyer": "InvoiceCardParty",
+        "object": "InvoiceCardObjectBlock",
+        "lines": "tuple[InvoiceCardLine, ...]",
+        "totals": "InvoiceCardTotals",
+        "payment": "InvoiceCardPayment",
+        "source": "InvoiceCardSourceBlock",
+        "provenance": "InvoiceCardProvenance"
+      }
+    },
     "StoredInvoiceCardRevision": {
       "identity": "entity",
       "fields": {
         "revision_id": "str",
         "revision": "InvoiceCardRevisionReference",
-        "canonical_card": "dict[str, object]",
+        "canonical_card": "InvoiceCardV1",
         "received_at": "datetime",
         "received_from_node_id": "str",
         "received_by": "ActorReference",
@@ -1066,6 +1193,8 @@
         "quantity": "Decimal",
         "unit": "str",
         "unit_price": "Decimal",
+        "currency": "str",
+        "monetary_basis": "str",
         "total": "Decimal"
       }
     },
@@ -1409,7 +1538,9 @@
         "status": "str",
         "locked": "bool",
         "canonical_content": "str",
-        "observed_at": "datetime"
+        "observed_at": "datetime",
+        "currency": "str",
+        "items": "tuple[EstimateItemSnapshot, ...]"
       }
     },
     "HoldedPurchasePayloadItem": {
@@ -1606,6 +1737,7 @@
     "CardObjectAssignmentObservation": {
       "identity": "entity",
       "fields": {
+        "observation_id": "str",
         "card_revision": "InvoiceCardRevisionReference",
         "project_id": "str | None",
         "object_label": "str | None",
@@ -3108,10 +3240,10 @@
             {
               "column": "canonical_card",
               "field": "canonical_card",
-              "storage": "json_value",
+              "storage": "json_model",
               "nullable": false,
               "check": null,
-              "element_model": null
+              "element_model": "InvoiceCardV1"
             },
             {
               "column": "received_at",
@@ -4015,6 +4147,97 @@
             "evidence_id"
           ],
           "unique": []
+        },
+        {
+          "table": "card_object_assignment_observations",
+          "table_name_ref": "assignment_observation_table_name",
+          "model": "CardObjectAssignmentObservation",
+          "read_by": null,
+          "columns": [
+            {
+              "column": "observation_id",
+              "field": "observation_id",
+              "storage": "text",
+              "nullable": false,
+              "check": null,
+              "element_model": null
+            },
+            {
+              "column": "card_revision",
+              "field": "card_revision",
+              "storage": "json_model",
+              "nullable": false,
+              "check": null,
+              "element_model": "InvoiceCardRevisionReference"
+            },
+            {
+              "column": "project_id",
+              "field": "project_id",
+              "storage": "text",
+              "nullable": true,
+              "check": null,
+              "element_model": null
+            },
+            {
+              "column": "object_label",
+              "field": "object_label",
+              "storage": "text",
+              "nullable": true,
+              "check": null,
+              "element_model": null
+            },
+            {
+              "column": "catalogue_id",
+              "field": "catalogue_id",
+              "storage": "text",
+              "nullable": true,
+              "check": null,
+              "element_model": null
+            },
+            {
+              "column": "registry_snapshot_id",
+              "field": "registry_snapshot_id",
+              "storage": "text",
+              "nullable": true,
+              "check": null,
+              "element_model": null
+            },
+            {
+              "column": "decision_context",
+              "field": "decision_context",
+              "storage": "text",
+              "nullable": false,
+              "check": null,
+              "element_model": null
+            },
+            {
+              "column": "observed_at",
+              "field": "observed_at",
+              "storage": "datetime",
+              "nullable": false,
+              "check": null,
+              "element_model": null
+            }
+          ],
+          "primary_key": [
+            "observation_id"
+          ],
+          "unique": [
+            [
+              {
+                "column": "card_revision",
+                "path": [
+                  "invoice_id"
+                ]
+              },
+              {
+                "column": "card_revision",
+                "path": [
+                  "content_hash"
+                ]
+              }
+            ]
+          ]
         }
       ],
       "aggregates": [],
@@ -4325,6 +4548,55 @@
                 "registry_snapshot_id",
                 "last_seen_at",
                 "attention_status"
+              ]
+            },
+            {
+              "method": "load_assignment_observation",
+              "query": "get_unique",
+              "table": "card_object_assignment_observations",
+              "filter": [
+                {
+                  "column": "card_revision",
+                  "path": [
+                    "invoice_id"
+                  ],
+                  "bind": "argument",
+                  "argument": "invoice_id"
+                },
+                {
+                  "column": "card_revision",
+                  "path": [
+                    "content_hash"
+                  ],
+                  "bind": "argument",
+                  "argument": "content_hash"
+                }
+              ],
+              "select": [
+                "observation_id",
+                "card_revision",
+                "project_id",
+                "object_label",
+                "catalogue_id",
+                "registry_snapshot_id",
+                "decision_context",
+                "observed_at"
+              ],
+              "on_multiple": "error"
+            },
+            {
+              "method": "insert_assignment_observation",
+              "query": "insert",
+              "table": "card_object_assignment_observations",
+              "columns": [
+                "observation_id",
+                "card_revision",
+                "project_id",
+                "object_label",
+                "catalogue_id",
+                "registry_snapshot_id",
+                "decision_context",
+                "observed_at"
               ]
             }
           ]
@@ -6559,7 +6831,7 @@
   "determinism": {},
   "imports": {
     "stdlib": [
-      "from datetime import datetime",
+      "from datetime import date, datetime",
       "from decimal import Decimal"
     ],
     "third_party": [
@@ -6818,7 +7090,12 @@
           "PlanActualAnalysis",
           "StoredInvoiceCardRevision",
           "WorkObject",
-          "PlanActualRepository"
+          "PlanActualRepository",
+          "InvoiceCardV1",
+          "InvoiceCardLine",
+          "InvoiceCardParty",
+          "InvoiceCardObjectBlock",
+          "InvoiceCardTotals"
         ]
       },
       "holded_publication": {
@@ -6838,7 +7115,12 @@
           "HoldedPurchaseAttemptPayload",
           "HoldedPurchaseLookupEvidence",
           "StoredInvoiceCardRevision",
-          "HoldedPublicationRepository"
+          "HoldedPublicationRepository",
+          "InvoiceCardV1",
+          "InvoiceCardLine",
+          "InvoiceCardParty",
+          "InvoiceCardObjectBlock",
+          "InvoiceCardTotals"
         ]
       },
       "retention_release": {
@@ -7026,7 +7308,13 @@
           "RegistryRefreshResult",
           "ObjectAssignmentValidation",
           "WorkObject",
-          "RegistryContextRepository"
+          "RegistryContextRepository",
+          "InvoiceCardV1",
+          "InvoiceCardLine",
+          "InvoiceCardParty",
+          "InvoiceCardObjectBlock",
+          "InvoiceCardTotals",
+          "CardObjectAssignmentObservation"
         ]
       },
       "holded_gateway": {
@@ -7095,6 +7383,8 @@
           "ObjectAssignmentValidation",
           "RegistryContextRepository",
           "ActorReference",
+          "InvoiceCardRevisionReference",
+          "CardObjectAssignmentObservation",
           "InvoiceCardRevisionReference"
         ]
       },
@@ -7140,7 +7430,12 @@
           "ArchiveUnitOfWork",
           "ActorReference",
           "ContentReference",
-          "InvoiceCardRevisionReference"
+          "InvoiceCardRevisionReference",
+          "InvoiceCardV1",
+          "InvoiceCardLine",
+          "InvoiceCardParty",
+          "InvoiceCardObjectBlock",
+          "InvoiceCardTotals"
         ]
       },
       "source_byte_store": {
@@ -7250,7 +7545,17 @@
       "VpsSynchronizationTransport",
       "AccessControlRepository",
       "IssuedCredentialSecret",
-      "PresentedCredentialSecret"
+      "PresentedCredentialSecret",
+      "InvoiceCardParty",
+      "InvoiceCardObjectBlock",
+      "InvoiceCardLine",
+      "InvoiceCardTotals",
+      "InvoiceCardPaymentEvidence",
+      "InvoiceCardPaymentTransaction",
+      "InvoiceCardPayment",
+      "InvoiceCardSourceBlock",
+      "InvoiceCardProvenance",
+      "InvoiceCardV1"
     ],
     "credential_security": [
       "issue_service_credential",
@@ -7544,7 +7849,9 @@
     "RetentionReleaseRepository.load_decision",
     "RetentionReleaseRepository.insert_decision",
     "PostgresRetentionReleaseRepository.__init__",
-    "SourceByteStore.final_reference_for"
+    "SourceByteStore.final_reference_for",
+    "RegistryContextRepository.load_assignment_observation",
+    "RegistryContextRepository.insert_assignment_observation"
   ],
   "module_paths": {
     "models": "cabinet_backend/models",

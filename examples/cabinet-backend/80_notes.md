@@ -265,6 +265,8 @@ PostgresRegistryContextRepository.rollback: [FALLBACK] MUST rollback idempotentl
 PostgresRegistryContextRepository.lock_catalogue: [BEHAVIOR] MUST acquire PostgreSQL serialization for one complete Registry catalogue replacement.
 PostgresRegistryContextRepository.list_work_objects: [BEHAVIOR] MUST return every committed WorkObject in stable project_id order inside the active transaction and MUST NOT filter, synthesize, or reorder by observation.
 PostgresRegistryContextRepository.load_work_object: [BEHAVIOR] MUST return the exact committed WorkObject or None.
+PostgresRegistryContextRepository.load_assignment_observation: [BEHAVIOR] MUST return the exact stored CardObjectAssignmentObservation for the invoice_id and content_hash or None and MUST NOT derive one from the card or the catalogue.
+PostgresRegistryContextRepository.insert_assignment_observation: [PROVENANCE] MUST append one immutable observation row for the exact observation_id inside the active transaction; a second observation for the same card revision fails on uniqueness.
 PostgresRegistryContextRepository.save_assignment_validation: [PROVENANCE] MUST append immutable validation evidence and MUST NOT replace a different decision.
 PostgresRegistryContextRepository.load_assignment_validation: [BEHAVIOR] MUST return the exact persisted validation or None.
 PostgresRegistryContextRepository.upsert_work_objects: [BEHAVIOR] MUST insert each supplied WorkObject by stable project_id or, when the row exists, update only registry_snapshot_id, last_seen_at, and attention_status from the supplied object inside the active locked transaction; MUST NOT delete rows or change first_seen_at.
