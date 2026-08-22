@@ -1,6 +1,6 @@
 # Room Planner — State 0: Product Boundary
 
-> Status: closure audit candidate.
+> Status: stabilized.
 >
 > This document records product-level decisions only. Concrete modules, Python contracts, HTTP endpoints, persistence schemas, algorithms, and detailed domain models are intentionally deferred.
 
