@@ -263,6 +263,13 @@ Capture:
 - limits, paths, timeouts, and feature switches;
 - stable domain catalogs and enum-like values.
 
+When a value describes an external system and is known only from official
+documentation or runtime observation, read
+[EXTERNAL_CONTRACT_EVIDENCE.md](EXTERNAL_CONTRACT_EVIDENCE.md). Keep the value
+in its ordinary `config`, `models`, or `rules` home, but bind it to a
+content-addressed Workbench evidence record. A typed external value without
+provenance is not closed merely because it passes structural validation.
+
 Before State 3, complete the mandatory security gate in
 [SECURITY_REVIEW_EVIDENCE.md](SECURITY_REVIEW_EVIDENCE.md). Every required
 category needs an explicit outcome; any `UNRESOLVED` outcome is BLOCK.
@@ -578,6 +585,10 @@ If assembly exposes missing models, unclear ownership, generic contracts, or vag
 
 After assembly, use the existing factory validators and inspectors. Do not duplicate them inside this skill.
 
+Run the Workbench external-contract check before module review. An active
+verified binding changed without reciprocal supersession is a BLOCK; assembly
+must not infer or refresh its fingerprint automatically.
+
 ### Stage 8.1 — Assembled module review
 
 Review every complete assembled module slice after Stage 8. A structural
@@ -605,6 +616,10 @@ Use `tools/export_to_factory.py` only after that result. Export records the
 source commit, source and target hashes, Factory tool fingerprints, validation
 evidence and semantic-test hashes. Route B, deploy, runtime verification and
 terminal OTK are Factory responsibilities after Stage 9.
+
+External-contract evidence is checked and fingerprinted by Workbench admission.
+Factory receives the already-closed spec IR and does not become an evidence
+authority.
 
 ## Placeholder taxonomy
 
@@ -764,6 +779,8 @@ A specification is ready for the existing factory when:
 - notes prevent trivial placeholder implementations;
 - `config`, `models`, and `rules` are cleanly separated;
 - assembly introduces no new product or architecture decisions;
+- every externally owned wire fact is covered by current content-addressed
+  evidence or is explicitly outside the project;
 - the complete file conforms to `SPEC_STANDARD.md`.
 
 The objective is not maximal detail. The objective is enough precision that the code-generation factory does not need to invent missing architecture or product semantics.

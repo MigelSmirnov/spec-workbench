@@ -30,3 +30,17 @@ blocks and zero review prompts.
 Result: `PASS` for deterministic modules and `PASS_INTERNAL_VARIATION` for the
 behavioral modules. The change restores accepted behavior and introduces no
 retry/repair fallback.
+
+## Evidence closure review
+
+The external facts are now bound by
+`70_external_contract_evidence.json` to the SHA-256 of the sanitized successful
+experiment and to canonical hashes of twelve assembled values. The bindings
+cover the V1 credential slot, Unix timestamp types, origin, `key` header,
+purchase endpoints, item wire fields, subtotal semantics, and response mapping.
+The evidence contains no credential value and is not an instruction to rerun
+the mutation experiment.
+
+The `models`, `holded_transport`, `holded_gateway`, `holded_publication`, and
+`bootstrap` slices were re-reviewed with the active external contract included.
+Every structural review reports zero blocks and zero review prompts.

@@ -11,6 +11,7 @@ from typing import Any
 
 from assembly_workbench import verify as verify_assembly
 from module_review_workbench import build_slice
+from external_contract_workbench import coverage as external_contract_coverage
 from notes_workbench.language import signature_parameters
 from spec_language_workbench import SpecLanguageError, verify_payload as verify_language_payload
 
@@ -163,6 +164,50 @@ def _assembly_check(case_root: Path | None) -> AdmissionCheck:
         CHECK_PASS if report["ready"] else CHECK_BLOCK,
         "Workbench assembly is ready." if report["ready"] else "Workbench assembly is blocked.",
         report["summary"],
+    )
+
+
+def _external_contract_check(case_root: Path | None) -> AdmissionCheck:
+    if case_root is None:
+        return AdmissionCheck(
+            "FA011",
+            CHECK_NOT_APPLICABLE,
+            "Explicit --spec admission has no Workbench external-contract evidence.",
+            {},
+        )
+    report = external_contract_coverage(case_root)
+    if report["status"] == "not_applicable":
+        return AdmissionCheck(
+            "FA011",
+            CHECK_NOT_APPLICABLE,
+            "Case declares no verified external-contract evidence.",
+            {"manifest": report["manifest"], "summary": report["summary"]},
+        )
+    ready = bool(report["summary"]["handoff_ready"])
+    evidence = {
+        "manifest": report["manifest"],
+        "manifest_sha256": report["manifest_sha256"],
+        "summary": report["summary"],
+        "contracts": [
+            {
+                "id": record["id"],
+                "status": record["status"],
+                "verified_by": record["verified_by"],
+                "verified_at": record["verified_at"],
+                "artifact": record["evidence"]["artifact"],
+                "artifact_sha256": record["evidence"]["sha256"],
+                "run_id": record["evidence"]["run_id"],
+            }
+            for record in report["contracts"]
+        ],
+        "findings": report["findings"],
+    }
+    return AdmissionCheck(
+        "FA011",
+        CHECK_PASS if ready else CHECK_BLOCK,
+        "External-contract evidence is closed and content-addressed."
+        if ready else "External-contract evidence is invalid or stale.",
+        evidence,
     )
 
 
@@ -605,6 +650,7 @@ def check(
         _standard_check(workbench_root, factory_root),
         _language_check(source),
         _implementation_obligations_check(source),
+        _external_contract_check(case_root),
     ]
     validation_check, validation_report = _factory_validation_check(factory_root, source)
     checks.extend([

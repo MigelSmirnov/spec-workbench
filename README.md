@@ -149,12 +149,15 @@ Run the complete post-assembly gate with:
 ```bash
 python tools/design_assembly.py examples/<case>
 python tools/design_assembly.py examples/<case> --check language
+python tools/design_assembly.py examples/<case> --check external_contracts
 python tools/design_assembly.py examples/<case> --check persistence
 ```
 
 The transport-neutral `assembly_workbench` delegates to the language, identity,
-data, contract, notes, router, and persistence owners and returns a compact
-MCP-ready report.
+data, contract, external-contract evidence, notes, router, and persistence
+owners and returns a compact MCP-ready report. External facts are verified by
+the Workbench against committed content-addressed evidence; Factory receives
+only the already-closed specification IR.
 
 ### Notes language and dependency bindings
 
@@ -192,6 +195,8 @@ assembled generation constraints separate so a human or LLM can perform the
 Stage 8.1 adversarial semantic review without reconstructing context ad hoc.
 Modules accepted by deterministic persistence receive their repository/table/
 aggregate slice as explicit lowering evidence.
+Modules named by an active external-contract record also receive that exact
+content-addressed evidence in the accepted-evidence portion of their slice.
 
 ### State 3 stable addresses and handoff
 
@@ -256,7 +261,7 @@ python tools/export_to_factory.py \
   --project hydraulic_diagram_service
 ```
 
-Use `--update-existing` only when intentionally replacing an existing canonical specification. The export is blocked when the two repositories have different `SPEC_STANDARD.md` content, the Workbench checkout is dirty, the source does not declare the supported `standard_version`, or the Factory's canonical validator reports errors. Provenance and validation evidence are written to `projects/<project>/specs/working/`; `global_spec.json` remains in the factory-defined format.
+Use `--update-existing` only when intentionally replacing an existing canonical specification. The export is blocked when the two repositories have different `SPEC_STANDARD.md` content, the Workbench checkout is dirty, required external-contract evidence is stale, the source does not declare the supported `standard_version`, or the Factory's canonical validator reports errors. Provenance and validation evidence are written to `projects/<project>/specs/working/`; `global_spec.json` remains in the factory-defined format.
 
 `export_to_factory.py --check` exposes the same read-only admission report for
 automation. The standalone `design_factory_admission.py` command is the

@@ -60,6 +60,24 @@ transport: HTTPS
 Neither the API key nor authorization headers were printed or stored in this
 repository.
 
+## Observed transport envelope
+
+The successful recovery experiment is identified as
+`holded-v1-success-530df579-20260806T203434Z`. Its sanitized request envelope
+confirmed the following facts for the tested Holded Invoicing V1 account:
+
+```text
+origin: https://api.holded.com
+credential header name: key
+credential value source: HOLDED_V1_API_KEY
+create: POST /api/invoicing/v1/documents/purchase
+list: GET /api/invoicing/v1/documents/purchase
+exact document: GET /api/invoicing/v1/documents/purchase/{documentId}
+```
+
+The credential value was expanded only by the request process. It is absent
+from the saved command transcript, this evidence document, and the specification.
+
 ## Official API contract
 
 Create uses:

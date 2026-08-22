@@ -86,6 +86,8 @@ def test_explicit_spec_is_ready_when_factory_accepts_it(tmp_path: Path) -> None:
     language = next(item for item in report["checks"] if item["id"] == "FA009")
     assert language["status"] == "PASS"
     assert language["evidence"]["standard_version"] == 2
+    external = next(item for item in report["checks"] if item["id"] == "FA011")
+    assert external["status"] == "NOT_APPLICABLE"
 
 
 def test_missing_standard_version_blocks_admission_before_handoff(tmp_path: Path) -> None:

@@ -14,7 +14,8 @@ specification.
 Each slice separates:
 
 1. accepted evidence — owned/consumed State 2 decisions, responsibility, flows,
-   and public operations;
+   public operations, and any active external-contract records that explicitly
+   name the module;
 2. lowered specification — symbols, exports, owned contracts, dependency
    contracts, transitive model context, persistence, direct runtime
    dependencies, routes, and resolved rule values;

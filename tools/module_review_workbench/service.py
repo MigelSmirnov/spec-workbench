@@ -6,6 +6,7 @@ from typing import Any
 from notes_workbench import service as notes_service
 from persistence_workbench.slice import module_slice as persistence_module_slice
 from holded_transport_workbench import module_slice as holded_transport_module_slice
+from external_contract_workbench import module_evidence
 
 from module_review_workbench.model import MODULES_SCHEMA, REVIEW_SCHEMA, SLICE_SCHEMA, ModuleReviewError
 from module_review_workbench.sources import (
@@ -104,17 +105,22 @@ def build_slice(project: Path, module: str) -> dict[str, Any]:
     if holded_transport_backend is not None:
         lowered_specification["holded_transport_backend"] = holded_transport_backend
 
+    accepted_evidence = {
+        "responsibility": semantic["responsibility"],
+        "state1_models": state1_models(project, set(models)),
+        "decisions": decisions(project, f"module:{module_name}"),
+        "flows": semantic["flows"],
+        "public_operations": semantic["public_operations"],
+    }
+    external_contracts = module_evidence(project, module_name)
+    if external_contracts:
+        accepted_evidence["external_contracts"] = external_contracts
+
     return {
         "schema_version": SLICE_SCHEMA,
         "project_root": project.resolve().name,
         "module": module_name,
-        "accepted_evidence": {
-            "responsibility": semantic["responsibility"],
-            "state1_models": state1_models(project, set(models)),
-            "decisions": decisions(project, f"module:{module_name}"),
-            "flows": semantic["flows"],
-            "public_operations": semantic["public_operations"],
-        },
+        "accepted_evidence": accepted_evidence,
         "lowered_specification": lowered_specification,
         "generation_constraints": {
             "assembled_notes": notes,

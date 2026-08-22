@@ -22,13 +22,14 @@ def test_cabinet_assembly_is_ready_after_v2_language_migration() -> None:
     assert report["schema_version"] == "spec_workbench_assembly_verification.v1"
     assert report["ready"] is True
     assert report["summary"] == {
-        "checks": 7,
-        "ready_checks": 7,
+        "checks": 8,
+        "ready_checks": 8,
         "errors": 0,
         "warnings": 0,
     }
     assert [check["name"] for check in report["checks"]] == [
-        "language", "identity", "data", "contracts", "notes", "router", "persistence"
+        "language", "identity", "data", "contracts", "external_contracts",
+        "notes", "router", "persistence"
     ]
     language = report["checks"][0]
     assert language["ready"] is True
@@ -53,6 +54,15 @@ def test_persistence_check_preserves_optional_llm_path() -> None:
     assert report["check"]["ready"] is True
     assert report["check"]["summary"]["repositories"] == 0
     assert report["check"]["summary"]["errors"] == 0
+
+
+def test_external_contract_check_preserves_content_addressed_evidence() -> None:
+    report = inspect_check(CABINET, "external_contracts")
+    assert report["schema_version"] == "spec_workbench_assembly_check.v1"
+    assert report["check"]["schema_version"] == "spec_workbench_external_contract_coverage.v1"
+    assert report["check"]["ready"] is True
+    assert report["check"]["summary"]["active"] == 1
+    assert report["check"]["summary"]["bindings"] == 12
 
 
 def test_check_inspection_preserves_owner_report() -> None:

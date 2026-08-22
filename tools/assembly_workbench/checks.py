@@ -5,6 +5,7 @@ from typing import Any, Callable
 
 import design_stage6_contracts
 import design_stage6_data
+from external_contract_workbench import coverage as external_contract_coverage
 from identity_workbench import verify as verify_identity
 from notes_workbench import gate as notes_gate
 from persistence_workbench import coverage as persistence_coverage
@@ -39,6 +40,10 @@ def _normalize(name: str, report: dict[str, Any]) -> CheckResult:
         errors = int(summary.get("errors", 0))
         warnings = int(summary.get("warnings", _severity_count(findings, {"warning"})))
         ready = bool(summary.get("handoff_ready"))
+    elif name == "external_contracts":
+        errors = int(summary.get("errors", 0))
+        warnings = 0
+        ready = bool(summary.get("handoff_ready")) and errors == 0
     elif name == "notes":
         errors = int(summary.get("blocks", 0))
         warnings = int(summary.get("reviews", 0))
@@ -68,6 +73,7 @@ CHECKS: dict[str, ReportFunction] = {
     "identity": verify_identity,
     "data": design_stage6_data.lint,
     "contracts": design_stage6_contracts.lint,
+    "external_contracts": external_contract_coverage,
     "notes": notes_gate.coverage,
     "router": router_service.coverage,
     "persistence": persistence_coverage,
