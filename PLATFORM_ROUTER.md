@@ -187,7 +187,9 @@ PresuPro is the estimating application that consumes results produced by planner
 
 PresuPro should consume platform artifacts rather than requiring every producer to implement a dedicated PresuPro-specific integration.
 
-PresuPro owns pricing, labor/work costing, and estimate composition. Upstream planners should publish reproducible physical quantities for the construction scope they own rather than embedding pricing logic.
+PresuPro owns pricing, labor/work costing, estimate composition, and conversion of physical quantities into purchasable package counts when commercial package conversion or whole-package rounding is required.
+
+Upstream planners should publish reproducible physical quantities for the construction scope they own rather than embedding pricing or package-rounding logic.
 
 PresuPro may also publish its own versioned result so that downstream applications can consume estimate-related data without a direct PresuPro dependency.
 
@@ -205,6 +207,7 @@ Examples include:
 - stud/profile spacing rules;
 - fastener spacing or consumption rules;
 - technical thickness and density parameters where needed;
+- package-size or similar technical material facts when downstream commercial conversion requires them;
 - other measurable technical parameters required for deterministic quantity calculations.
 
 The Construction Catalog is **not** a shared business-logic library.
@@ -224,7 +227,7 @@ room_takeoff
     physical quantity
             ↓
 PresuPro
-    pricing / work costing
+    pricing / work costing / package conversion
 ```
 
 The exact ownership service, catalog schema, persistence model, and API are not yet defined.
@@ -374,6 +377,8 @@ The artifact should eventually preserve enough provenance to trace quantities ba
 
 `room_plan` and `room_takeoff` are two artifacts from one application boundary; this distinction does not imply separate backend services.
 
+Room Planner does not own production drawing generation in its initial scope. A downstream renderer/exporter may consume a published `room_plan` revision and publish a derived `drawing_set` or other client-facing drawing artifact with provenance back to that Room Planner revision.
+
 ## Platform contract rule
 
 Shared platform contracts SHOULD be language-neutral.
@@ -456,7 +461,7 @@ No HTTP paths or final DTOs are defined yet.
 
 A platform planner may publish physical quantities derived from its owned domain logic.
 
-PresuPro owns pricing and labor/work costing.
+PresuPro owns pricing, labor/work costing, estimate composition, and conversion of physical quantities into purchasable package counts when required.
 
 Current working rule:
 
@@ -467,10 +472,10 @@ physical quantities
         ↓
 PresuPro
         ↓
-prices + work costs + estimate
+package conversion/rounding + prices + work costs + estimate
 ```
 
-Commercial packaging conversion and whole-package rounding are intentionally unresolved. They must not be implicitly assigned to a component until the product workflow requires that decision.
+Upstream planners MUST NOT perform commercial whole-package rounding as part of their physical takeoff responsibility. Construction Catalog may provide package size or similar technical facts, while PresuPro owns the commercial conversion/rounding decision.
 
 ## Evolution rule
 
@@ -502,5 +507,4 @@ By final assembly, this file should contain enough stabilized material to serve 
 - How does authentication and authorization propagate between Registry, Platform Hub, and consuming applications?
 - How are stale dependent artifacts surfaced to users?
 - Does the client cabinet receive domain artifacts directly or only derived client-facing artifacts?
-- Who owns commercial package conversion/rounding when physical quantities must become purchasable package counts?
 - When, if ever, should declarative capability manifests evolve into executable typed capabilities with explicit authority/effect semantics?
