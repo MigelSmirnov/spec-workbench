@@ -13,7 +13,7 @@ The detailed original scenario plan remains represented by the six `71_flow_*_se
 | `flow:refresh_registry_and_validate_assignment` | `71_flow_3_semantic_review.md` | `tests/semantic/test_refresh_registry_and_validate_assignment.py` |
 | `flow:calculate_plan_actual` | `71_flow_4_semantic_review.md` | `tests/semantic/test_calculate_plan_actual.py` |
 | `flow:publish_invoice_to_holded` | `71_flow_5_semantic_review.md` | `tests/semantic/test_publish_invoice_to_holded.py` |
-| `flow:release_vps_working_copy` | `71_flow_6_semantic_review.md` | `tests/semantic/test_release_vps_working_copy.py` |
+| `flow:release_vps_working_copy` | withdrawn by A76 — moved to Cabinet Web (`examples/cabinet-web-backend/tests/semantic/`) | — |
 
 ## Runtime-oracle ownership
 
