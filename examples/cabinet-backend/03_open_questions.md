@@ -176,6 +176,11 @@ accepted.
 
 ### Required product decisions
 
+Flow 6 (VPS working-set release) is no longer an open question of this project:
+A76 assigns the working set and release policy to Cabinet Web; cabinet_backend
+exposes only its durable-acceptance evidence. The reciprocal wire fields are
+frozen jointly before Cabinet Web State 6.
+
 CardObjectAssignmentObservation now has one write path,
 `registry_context.record_card_assignment_observation` (2026-08-22); which
 caller produces it — synchronization on accepted transfer, or the API on

@@ -1,6 +1,8 @@
 # State 1 repair — retention release runtime evidence
 
-## Model M76 — VpsWorkingSetMembership
+## Withdrawn model M76 — VpsWorkingSetMembership
+
+Withdrawn by A76 (`02_rules_flow6_ownership_repair.md`): the VPS working set and its release belong to Cabinet Web.
 
 Immutable read observation with `project_id: str`, `working_set_id: str`,
 `invoice_revisions: tuple[InvoiceCardRevisionReference, ...]`, `node_id: str`, and

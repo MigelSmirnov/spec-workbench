@@ -485,7 +485,9 @@ Substitution: equal requester, request time, and working-set target carry the sa
 
 ---
 
-## Model M52 — VpsReleaseEvaluation
+## Withdrawn model M52 — VpsReleaseEvaluation
+
+Withdrawn by A76 (`02_rules_flow6_ownership_repair.md`): the VPS working set and its release belong to Cabinet Web.
 
 Immutable allow/block evaluation for one exact VPS working set.
 
@@ -511,7 +513,9 @@ Substitution: equal target, allow/block result, complete evidence, reason, and e
 
 ---
 
-## Model M53 — VpsReleaseDecision
+## Withdrawn model M53 — VpsReleaseDecision
+
+Withdrawn by A76 (`02_rules_flow6_ownership_repair.md`): the VPS working set and its release belong to Cabinet Web.
 
 Immutable recorded manual release decision.
 

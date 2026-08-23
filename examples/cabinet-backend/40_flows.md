@@ -212,7 +212,9 @@ No HTTP/MCP/CLI adapter may repeat POST, reinterpret unknown Holded status, or m
 
 ---
 
-## `flow:release_vps_working_copy`
+## Withdrawn — `flow:release_vps_working_copy`
+
+> **Withdrawn by A76** (`02_rules_flow6_ownership_repair.md`, 2026-08-23): the VPS working set, its release policy and this surface belong to Cabinet Web. Kept as design history; not assembled.
 
 ### Trigger
 

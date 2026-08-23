@@ -59,7 +59,6 @@ get_sync_status: [BEHAVIOR] Preserve unknown, unavailable, stale, or insufficien
 reconcile_transfer_outcome: [DEPENDENCY_BOUNDARY] MUST delegate read-only reconciliation through the exact supplied SynchronizationService.
 publish_registry_catalogue: [DEPENDENCY_BOUNDARY] MUST delegate exact catalogue delivery through the supplied SynchronizationService.
 observe_vps_connection: [DEPENDENCY_BOUNDARY] MUST delegate observation through the supplied SynchronizationService.
-get_working_set_membership: [DEPENDENCY_BOUNDARY] MUST delegate exact read-only membership through the supplied SynchronizationService.
 
 # durable_archive
 
@@ -141,14 +140,6 @@ lookup_holded_purchase: [BEHAVIOR] Preserve zero-match, multi-match, malformed-r
 
 # retention_release
 
-evaluate_vps_release: [RULE_REFERENCE] Evaluate release under the manual-release baseline; use = rules.retention_release.mode.
-evaluate_vps_release: [RULE_REFERENCE] Require authoritative durable local verification before allowing release; use = rules.retention_release.require_durable_local_verification_before_release.
-evaluate_vps_release: [RULE_REFERENCE] Registry status alone must never authorize release; use = rules.retention_release.registry_status_may_trigger_release.
-evaluate_vps_release: [BEHAVIOR] Return an allowed evaluation for the exact affected working set and include the evidence identity on which the decision depends without performing physical deletion.
-evaluate_vps_release: [VALIDATION_ERROR] Raise VpsReleaseBlockedError when durable replica proof, synchronization observation, working-set identity, or retention evidence is missing, inconsistent, or does not satisfy the accepted release preconditions.
-request_manual_vps_release: [BEHAVIOR] Record an explicit release decision only for the exact target covered by a still-applicable allowed evaluation; repeated equivalent requests must be idempotent and return the existing equivalent decision.
-request_manual_vps_release: [VALIDATION_ERROR] Raise VpsReleaseBlockedError when the evaluation is stale, mismatched, newly ineligible, or conflicts with the requested target instead of authorizing physical deletion.
-get_retention_status: [DEPENDENCY_BOUNDARY] MUST delegate exact decision reads through the supplied RetentionReleaseService.
 
 # deterministic HTTP seams
 
@@ -165,8 +156,6 @@ refresh_estimate_snapshot_handler: [DEPENDENCY_BOUNDARY] MUST obtain the exact P
 calculate_plan_actual_handler: [DEPENDENCY_BOUNDARY] MUST obtain the exact PlanActualService bound to request.app.state.plan_actual and pass it to calculate_plan_actual.
 request_holded_publication_handler: [DEPENDENCY_BOUNDARY] MUST obtain the exact HoldedPublicationService bound to request.app.state.holded_publication and pass it to request_holded_publication.
 reconcile_holded_publication_handler: [DEPENDENCY_BOUNDARY] MUST obtain the exact HoldedPublicationService bound to request.app.state.holded_publication and pass it to reconcile_holded_publication.
-evaluate_vps_release_handler: [DEPENDENCY_BOUNDARY] MUST obtain the exact RetentionReleaseService bound to request.app.state.retention_release and pass it to evaluate_vps_release.
-request_manual_vps_release_handler: [DEPENDENCY_BOUNDARY] MUST obtain the exact RetentionReleaseService bound to request.app.state.retention_release and pass it to request_manual_vps_release.
 
 ## Concrete adapter implementations
 create_holded_gateway_schema: [CONFIG_REFERENCE] MUST idempotently create only the tables named by = config.persistence.holded_attempt_table_name and = config.persistence.holded_lookup_evidence_table_name on a connection it opens from database_url and closes; MUST NOT read environment variables or log the URL.
@@ -179,8 +168,6 @@ create_plan_actual_schema: [CONFIG_REFERENCE] MUST idempotently create only the 
 PostgresPlanActualRepository.__init__: [SECURITY_BOUNDARY] Validate the supplied PostgreSQL connection, treat the URL as secret, and read no environment variables.
 create_holded_publication_schema: [CONFIG_REFERENCE] MUST idempotently create only the tables named by = config.persistence.holded_publication_table_name on a connection it opens from database_url and closes; MUST NOT read environment variables or log the URL.
 PostgresHoldedPublicationRepository.__init__: [SECURITY_BOUNDARY] Validate the supplied PostgreSQL connection, treat the URL as secret, and read no environment variables.
-create_retention_release_schema: [CONFIG_REFERENCE] MUST idempotently create only the evaluation and decision tables named by = config.persistence.retention_evaluation_table_name and = config.persistence.retention_decision_table_name on a connection it opens from database_url and closes; MUST NOT read environment variables or log the URL.
-PostgresRetentionReleaseRepository.__init__: [SECURITY_BOUNDARY] Validate the supplied PostgreSQL connection, protect the URL, and read no environment variables.
 HttpxHoldedHttpClient.create_purchase: [FORBIDDEN_ACTION] Issue exactly one POST per invocation with mutation retries and replaying redirects disabled.
 HttpxHoldedHttpClient.list_purchases: [BEHAVIOR] Perform the one read-only bounded Holded v1 list request defined by = rules.holded_transport_backend and return typed summaries in stable document-id order.
 HttpxHoldedHttpClient.get_purchase: [BEHAVIOR] Perform one read-only request for the exact document identifier and return bounded external evidence.
@@ -229,13 +216,6 @@ PostgresHoldedPublicationRepository.load_publication: [BEHAVIOR] Return exact pe
 PostgresHoldedPublicationRepository.load_by_invoice_revision: [BEHAVIOR] Return only the publication bound to the exact invoice revision or None.
 PostgresHoldedPublicationRepository.insert_publication: [PROVENANCE] Append one new logical publication row for the exact publication_id and immutable card revision inside the active locked transaction; a second row for the same publication_id or the same card revision and idempotency key fails on uniqueness and never replaces an existing publication.
 PostgresHoldedPublicationRepository.update_publication: [PROVENANCE] Write status, external_document_id, completed_at, and safe_outcome_code for the exact existing publication_id inside the active locked transaction; fail when the row is absent and never insert or change card_revision, idempotency_key, or created_at.
-PostgresRetentionReleaseRepository.begin: [DEPENDENCY_BOUNDARY] Open one PostgreSQL transaction for the exact release lifecycle and reject nested begin.
-PostgresRetentionReleaseRepository.commit: [BEHAVIOR] Commit one valid evidence transition and expose no partial state.
-PostgresRetentionReleaseRepository.rollback: [FALLBACK] Roll back idempotently and preserve the original release failure.
-PostgresRetentionReleaseRepository.lock_working_set: [BEHAVIOR] Serialize evaluation and decision changes for the exact project and working-set identity.
-PostgresRetentionReleaseRepository.save_evaluation: [PROVENANCE] Append immutable complete-coverage or blocked evaluation evidence.
-PostgresRetentionReleaseRepository.load_decision: [BEHAVIOR] Return the exact persisted decision or None without inferring physical release.
-PostgresRetentionReleaseRepository.insert_decision: [PROVENANCE] Append one immutable decision row for the exact project and working-set target inside the active locked transaction; a second decision for the same target fails on uniqueness and never replaces or updates the stored decision.
 
 create_durable_archive_schema: [CONFIG_REFERENCE] MUST idempotently create only the tables named by = config.persistence.invoice_card_table_name and = config.persistence.invoice_card_revision_table_name and = config.persistence.source_binary_table_name and = config.persistence.source_replica_table_name and = config.persistence.transfer_manifest_table_name and = config.persistence.transfer_receipt_table_name and = config.persistence.byte_publication_table_name and = config.persistence.incomplete_source_acceptance_table_name and = config.persistence.source_loss_decision_table_name on a connection it opens from database_url and closes; MUST NOT read environment variables or log the URL.
 PostgresArchiveUnitOfWork.__init__: [SECURITY_BOUNDARY] MUST treat database_url as secret configuration and MUST NOT log it or include it in safe errors.

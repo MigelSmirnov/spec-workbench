@@ -26,7 +26,7 @@ def _copy_identity_inputs(tmp_path: Path) -> Path:
 
 def test_cabinet_assembled_model_identity_is_closed() -> None:
     report = design_identity_closure.lint(CABINET)
-    assert report["summary"]["assembled_runtime_models"] == 82
+    assert report["summary"]["assembled_runtime_models"] == 79
     assert report["summary"]["errors"] == 0
 
 
@@ -34,10 +34,10 @@ def test_inventory_is_stable_for_mcp_consumers() -> None:
     report = inventory(CABINET)
     assert report["schema_version"] == "spec_workbench_identity_inventory.v1"
     assert report["summary"] == {
-        "models": 87,
-        "state1_models": 87,
-        "closure_models": 82,
-        "assembled_runtime_models": 82,
+        "models": 84,
+        "state1_models": 84,
+        "closure_models": 79,
+        "assembled_runtime_models": 79,
         "source_errors": 0,
     }
     assert [model["name"] for model in report["models"]] == sorted(
@@ -46,7 +46,7 @@ def test_inventory_is_stable_for_mcp_consumers() -> None:
 
 
 def test_model_inspection_exposes_source_locations() -> None:
-    report = inspect_model(CABINET, "VpsReleaseDecision")
+    report = inspect_model(CABINET, "SourceLossDecision")
     assert report["consistent"] is True
     assert {
         key: value["identity"] for key, value in report["sources"].items()
@@ -69,13 +69,13 @@ def test_assembled_identity_mismatch_is_rejected(tmp_path: Path) -> None:
     project = _copy_identity_inputs(tmp_path)
     path = project / "global_spec.json"
     payload = json.loads(path.read_text(encoding="utf-8"))
-    payload["models"]["VpsReleaseDecision"]["identity"] = "value"
+    payload["models"]["HoldedPublication"]["identity"] = "value"
     path.write_text(json.dumps(payload), encoding="utf-8")
 
     report = design_identity_closure.lint(project)
     assert {
         finding["code"] for finding in report["findings"]
-        if finding["model"] == "VpsReleaseDecision"
+        if finding["model"] == "HoldedPublication"
     } == {"state1_identity_mismatch", "closure_identity_mismatch"}
 
 

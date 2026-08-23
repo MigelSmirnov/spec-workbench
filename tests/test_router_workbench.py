@@ -135,9 +135,9 @@ def test_cabinet_coverage_schema_is_closed_and_resolved() -> None:
         "external_operations", "catalog_items", "resolved", "unresolved", "errors", "handoff_ready",
     }
     assert report["summary"] == {
-        "external_operations": 13,
-        "catalog_items": 13,
-        "resolved": 13,
+        "external_operations": 11,
+        "catalog_items": 11,
+        "resolved": 11,
         "unresolved": 0,
         "errors": 0,
         "handoff_ready": True,
@@ -151,9 +151,9 @@ def test_fully_resolved_synthetic_cabinet_is_handoff_ready(tmp_path: Path) -> No
     _resolve_all(project)
     report = service.coverage(project)
     assert report["summary"] == {
-        "external_operations": 13,
-        "catalog_items": 13,
-        "resolved": 13,
+        "external_operations": 11,
+        "catalog_items": 11,
+        "resolved": 11,
         "unresolved": 0,
         "errors": 0,
         "handoff_ready": True,
@@ -175,7 +175,7 @@ def test_fully_resolved_catalog_counts_irregular_as_resolved(tmp_path: Path) -> 
     payload["items"][0] = _irregular(payload["items"][0]["operation"])
     _write(project, payload)
     report = service.coverage(project)
-    assert report["summary"]["resolved"] == 13
+    assert report["summary"]["resolved"] == 11
     assert report["summary"]["unresolved"] == 0
     assert report["summary"]["errors"] == 0
     assert report["summary"]["handoff_ready"] is True
@@ -189,7 +189,7 @@ def test_resolved_and_unresolved_counts_are_exact(tmp_path: Path) -> None:
     _write(project, payload)
     summary = service.coverage(project)["summary"]
     assert summary["resolved"] == 1
-    assert summary["unresolved"] == 12
+    assert summary["unresolved"] == 10
     assert summary["handoff_ready"] is False
 
 
@@ -200,7 +200,7 @@ def test_resolution_is_not_sufficient_when_validation_fails(tmp_path: Path) -> N
     payload["items"][0]["delegate"]["args"] = ["payload.invoice_id"]
     _write(project, payload)
     report = service.coverage(project)
-    assert report["summary"]["resolved"] == 13
+    assert report["summary"]["resolved"] == 11
     assert report["summary"]["unresolved"] == 0
     assert report["summary"]["errors"] == 1
     assert report["summary"]["handoff_ready"] is False
@@ -456,7 +456,7 @@ def test_table_missing_required_fields_is_an_error_with_context() -> None:
 
 
 @pytest.mark.parametrize(("mutation", "code", "operation"), [
-    ("missing", "missing_external_operation", "public_op:retention_release.request_manual_vps_release"),
+    ("missing", "missing_external_operation", "public_op:registry_context.validate_card_assignment"),
     ("duplicate", "duplicate_operation", FIRST_EXTERNAL),
     ("internal", "internal_only_exposed", INTERNAL_OPERATION),
     ("unknown", "unknown_public_operation", UNKNOWN_OPERATION),
@@ -486,12 +486,12 @@ def test_coverage_boundary_violations_have_complete_findings(
     assert report["summary"]["errors"] >= 1
     assert report["summary"]["handoff_ready"] is False
     if mutation == "duplicate":
-        assert report["summary"]["catalog_items"] == 14
+        assert report["summary"]["catalog_items"] == 12
         assert report["summary"]["resolved"] == 0
-        assert report["summary"]["unresolved"] == 13
+        assert report["summary"]["unresolved"] == 11
     if mutation in {"internal", "unknown"}:
         assert report["summary"]["resolved"] == 0
-        assert report["summary"]["unresolved"] == 13
+        assert report["summary"]["unresolved"] == 11
 
 
 def test_catalog_order_does_not_change_coverage_or_next(tmp_path: Path) -> None:

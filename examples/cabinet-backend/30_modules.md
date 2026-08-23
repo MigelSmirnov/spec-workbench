@@ -484,7 +484,9 @@ Deep external-integration adapter. It is separate because credentials, remote pr
 
 ---
 
-## `retention_release`
+## Withdrawn — `retention_release`
+
+> **Withdrawn by A76** (`02_rules_flow6_ownership_repair.md`, 2026-08-23): the VPS working set, its release policy and this surface belong to Cabinet Web. Kept as design history; not assembled.
 
 ### Owns
 
@@ -528,7 +530,9 @@ Policy module. It exists because evidence release has independent safety invaria
 
 ---
 
-## `retention_release_persistence`
+## Withdrawn — `retention_release_persistence`
+
+> **Withdrawn by A76** (`02_rules_flow6_ownership_repair.md`, 2026-08-23): the VPS working set, its release policy and this surface belong to Cabinet Web. Kept as design history; not assembled.
 
 ### Owns
 

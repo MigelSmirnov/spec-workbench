@@ -19,7 +19,6 @@ def test_lists_final_assembled_modules() -> None:
         "holded_transport", "holded_gateway_persistence", "holded_gateway", "synchronization_persistence",
         "synchronization", "plan_actual_persistence", "plan_actual",
         "holded_publication_persistence", "holded_publication",
-        "retention_release_persistence", "retention_release",
         "api_irregular", "api", "bootstrap",
     ]
 
@@ -95,13 +94,13 @@ def test_models_slice_includes_owned_declarations_and_state1_evidence() -> None:
         "AccessControlBackend", "AccessControlRepository", "ArchiveUnitOfWork", "HoldedAttemptRepository",
         "HoldedHttpClient", "HoldedPublicationRepository",
         "PlanActualRepository", "RegistryContextRepository",
-        "RetentionReleaseRepository", "SourceByteStore",
+        "SourceByteStore",
         "SynchronizationRepository", "VpsSynchronizationTransport",
     }
     assert state1_models <= lowered_models
     assert lowered_models == state1_models | interface_declarations
     assert {
-        "VpsReleaseDecision", "ArchiveBytePublication",
+        "HoldedPublication", "ArchiveBytePublication",
         "HoldedRemotePurchaseDocument", "VpsInvoiceTransferPackage",
         "VpsConnectionObservation",
     } <= lowered_models

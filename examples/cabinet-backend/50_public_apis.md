@@ -566,7 +566,9 @@ May append technical observation evidence only.
 
 ---
 
-## `public_op:retention_release.evaluate_vps_release`
+## Withdrawn — `public_op:retention_release.evaluate_vps_release`
+
+> **Withdrawn by A76** (`02_rules_flow6_ownership_repair.md`, 2026-08-23): the VPS working set, its release policy and this surface belong to Cabinet Web. Kept as design history; not assembled.
 
 ### Owner
 `module:retention_release`
@@ -594,7 +596,9 @@ May append retention evaluation/audit state only.
 
 ---
 
-## `public_op:retention_release.request_manual_vps_release`
+## Withdrawn — `public_op:retention_release.request_manual_vps_release`
+
+> **Withdrawn by A76** (`02_rules_flow6_ownership_repair.md`, 2026-08-23): the VPS working set, its release policy and this surface belong to Cabinet Web. Kept as design history; not assembled.
 
 ### Owner
 `module:retention_release`

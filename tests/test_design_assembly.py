@@ -54,7 +54,7 @@ def test_persistence_check_covers_seven_deterministic_repositories() -> None:
     assert report["schema_version"] == "spec_workbench_assembly_check.v1"
     assert report["check"]["schema_version"] == "spec_workbench_persistence_backend_coverage.v1"
     assert report["check"]["ready"] is True
-    assert report["check"]["summary"]["repositories"] == 8
+    assert report["check"]["summary"]["repositories"] == 7
     assert report["check"]["summary"]["errors"] == 0
 
 
@@ -71,7 +71,7 @@ def test_check_inspection_preserves_owner_report() -> None:
     report = inspect_check(CABINET, "notes")
     assert report["schema_version"] == "spec_workbench_assembly_check.v1"
     assert report["check"]["schema_version"] == "spec_workbench_state7_notes_gate.v1"
-    assert report["check"]["summary"]["notes"] == 254
+    assert report["check"]["summary"]["notes"] == 234
     assert report["check"]["ready"] is True
 
 
@@ -79,7 +79,7 @@ def test_identity_failure_blocks_assembly(tmp_path: Path) -> None:
     project = _copy_project(tmp_path)
     path = project / "global_spec.json"
     payload = json.loads(path.read_text(encoding="utf-8"))
-    payload["models"]["VpsReleaseDecision"]["identity"] = "value"
+    payload["models"]["HoldedPublication"]["identity"] = "value"
     path.write_text(json.dumps(payload), encoding="utf-8")
     report = verify(project)
     assert report["ready"] is False
