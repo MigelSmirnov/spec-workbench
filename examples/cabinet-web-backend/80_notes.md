@@ -139,4 +139,3 @@ SourceDownload.read_chunk: [SECURITY_BOUNDARY] MUST return at most max_bytes fro
 InvoicePackageStream.read_chunk: [SECURITY_BOUNDARY] MUST return at most max_bytes from the already-issued exact package stream, return empty bytes only at exhaustion, and never reissue the package after interruption.
 _source_download_response: [SECURITY_BOUNDARY] MUST return a streaming HTTP response that reads only the authorized SourceDownload, preserves its declared media metadata, and never exposes a storage path or reference.
 _invoice_package_response: [SECURITY_BOUNDARY] MUST return a streaming HTTP attachment response that reads only the already-issued InvoicePackageStream and never regenerates, buffers into JSON, or exposes a storage reference.
-Response.render: [RETURN_SHAPE] MUST return the exact supplied bytes unchanged; the external HTTP implementation owns framing and MUST NOT reinterpret, decode, or serialize the content as JSON.
