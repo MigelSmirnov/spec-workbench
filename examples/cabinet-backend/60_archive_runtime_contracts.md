@@ -27,7 +27,7 @@ Both dependencies are required. There is no nullable, default, in-memory, or mod
 - ArchiveUnitOfWork.lock_invoice(self, invoice_id: str) -> None
 - ArchiveUnitOfWork.load_card_revision(self, invoice_id: str, content_hash: str) -> StoredInvoiceCardRevision | None
 - ArchiveUnitOfWork.list_source_replicas(self, source_ids: tuple[str, ...]) -> tuple[SourceBinaryReplica, ...]
-- ArchiveUnitOfWork.list_publications_in_states(self, states: tuple[str, ...]) -> tuple[ArchiveBytePublication, ...]
+- ArchiveUnitOfWork.list_publications_in_states(self, states: tuple[ArchivePublicationState, ...]) -> tuple[ArchiveBytePublication, ...]
 - ArchiveUnitOfWork.insert_publication(self, publication: ArchiveBytePublication) -> None
 - ArchiveUnitOfWork.update_publication_state(self, publication: ArchiveBytePublication) -> None
 - ArchiveUnitOfWork.load_publication(self, publication_id: str) -> ArchiveBytePublication | None
@@ -67,7 +67,7 @@ Storage references are opaque store-created values and are never accepted from H
 - PostgresArchiveUnitOfWork.lock_invoice(self, invoice_id: str) -> None
 - PostgresArchiveUnitOfWork.load_card_revision(self, invoice_id: str, content_hash: str) -> StoredInvoiceCardRevision | None
 - PostgresArchiveUnitOfWork.list_source_replicas(self, source_ids: tuple[str, ...]) -> tuple[SourceBinaryReplica, ...]
-- PostgresArchiveUnitOfWork.list_publications_in_states(self, states: tuple[str, ...]) -> tuple[ArchiveBytePublication, ...]
+- PostgresArchiveUnitOfWork.list_publications_in_states(self, states: tuple[ArchivePublicationState, ...]) -> tuple[ArchiveBytePublication, ...]
 - PostgresArchiveUnitOfWork.insert_publication(self, publication: ArchiveBytePublication) -> None
 - PostgresArchiveUnitOfWork.update_publication_state(self, publication: ArchiveBytePublication) -> None
 - PostgresArchiveUnitOfWork.load_publication(self, publication_id: str) -> ArchiveBytePublication | None
