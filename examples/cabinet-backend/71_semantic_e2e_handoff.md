@@ -9,6 +9,7 @@ The detailed original scenario plan remains represented by the six `71_flow_*_se
 | Flow | Review | Runtime oracle |
 |---|---|---|
 | `flow:synchronize_invoice_to_local_archive` | `71_flow_1_semantic_review.md` | `tests/semantic/test_synchronize_invoice_to_local_archive.py` |
+| `flow:accept_local_source_attachment` (access-control boundary oracle) | `01_models_local_access_control.md` M92–M95 | `tests/semantic/test_local_access_control.py` |
 | `flow:accept_local_source_attachment` | `71_flow_2_semantic_review.md` | `tests/semantic/test_accept_local_source_attachment.py` |
 | `flow:refresh_registry_and_validate_assignment` | `71_flow_3_semantic_review.md` | `tests/semantic/test_refresh_registry_and_validate_assignment.py` |
 | `flow:calculate_plan_actual` | `71_flow_4_semantic_review.md` | `tests/semantic/test_calculate_plan_actual.py` |
