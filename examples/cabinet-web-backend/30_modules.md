@@ -6,7 +6,7 @@ Transport modules are intentionally thin; they do not duplicate application
 policy. Dotted capability names from A16 remain product catalogue values and
 are not assumed to be Python function names.
 
-## `domain_models`
+## `models`
 
 ### Owns
 
