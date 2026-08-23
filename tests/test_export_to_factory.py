@@ -170,3 +170,33 @@ def test_export_blocks_standard_drift_before_project_creation(
     with pytest.raises(SystemExit, match="SPEC_STANDARD mismatch"):
         export_to_factory.main()
     assert not (factory / "projects/demo").exists()
+
+
+def test_export_blocks_note_drift_before_factory_admission(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    real_workbench_root = Path(export_to_factory.__file__).resolve().parents[1]
+    standard = (real_workbench_root / "skills/spec-authoring/SPEC_STANDARD.md").read_text(encoding="utf-8")
+    workbench_root = tmp_path / "spec-workbench"
+    _write(workbench_root / "skills/spec-authoring/SPEC_STANDARD.md", standard)
+    factory = _fake_factory(tmp_path, standard)
+    case_root = workbench_root / "examples/cabinet-web-backend"
+    source = case_root / "global_spec.json"
+    _write(case_root / "80_notes.md", "find_invoice_duplicates: [BEHAVIOR] MUST apply = rules.invoice_duplicate_matching.\n")
+    _write_json(source, {"standard_version": 2, "notes": ["find_invoice_duplicates: [BEHAVIOR] legacy"]})
+    monkeypatch.setattr(export_to_factory, "__file__", str(workbench_root / "tools/export_to_factory.py"))
+    monkeypatch.setattr(
+        export_to_factory.notes_propagation,
+        "propagate",
+        lambda *args, **kwargs: {
+            "ready": False,
+            "findings": [{"severity": "block", "message": "canonical note is missing"}],
+        },
+    )
+    monkeypatch.setattr(sys, "argv", [
+        "export_to_factory.py", "--case", "cabinet-web-backend", "--project", "demo",
+        "--factory-root", str(factory),
+    ])
+
+    with pytest.raises(SystemExit, match="note propagation blocked export"):
+        export_to_factory.main()
