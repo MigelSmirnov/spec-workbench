@@ -42,6 +42,7 @@ local Backend synchronization
 
 protected operator
   principal.enroll
+  principal.grant_capability
   credential.rotate
   credential.revoke
   backup.verify_restore
@@ -58,11 +59,14 @@ protected operator
 4. Synchronization capabilities are available only to the scoped active M17
    local node. Operator capabilities are absent from ChatGPT, browser, and
    synchronization tool catalogues.
-5. `source_upload_handoff.issue` creates M15; original bytes enter only through
+5. `principal.grant_capability` is callable only at the protected
+   composition/operator boundary. It provisions one exact A03 grant and is
+   never exposed as an ordinary plugin, browser, or synchronization tool.
+6. `source_upload_handoff.issue` creates M15; original bytes enter only through
    A05/A06 Web ingress. It is not a generic file capability.
-6. No arbitrary delete, SQL, filesystem, Git, shell, URL fetch, generic proxy,
+7. No arbitrary delete, SQL, filesystem, Git, shell, URL fetch, generic proxy,
    dynamic tool, or `cabinet_backend` operation capability exists.
-7. Adding or broadening a capability requires returning to the earliest
+8. Adding or broadening a capability requires returning to the earliest
    affected State 0–2 decision and security review before contracts change.
 
 ### Formal invariants
@@ -74,6 +78,7 @@ human_effect
 -> A03_authorized AND A04_idempotent
 
 operator_capability -/> plugin_or_browser_or_sync_catalogue
+principal.grant_capability -> A03_protected_grant_provisioning
 unknown_capability -> reject_without_dispatch
 ```
 

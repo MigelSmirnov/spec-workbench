@@ -395,9 +395,10 @@ claiming complete release after partial failure.
 
 ### Trigger
 
-A protected host operator enrolls a principal or rotates or revokes one exact human, plugin, local-node,
-or operator credential; this flow is never exposed as a normal plugin/browser/
-sync capability.
+A protected host operator enrolls a principal, provisions one exact capability
+grant, or rotates or revokes one exact human, plugin, local-node, or operator
+credential; this flow is never exposed as a normal plugin/browser/sync
+capability.
 
 ### Boundary
 
@@ -412,7 +413,11 @@ authentication, authorization, and credential lifecycle.
 2. `capability:access_control.authorize_capability` binds the exact lifecycle
    action and target identity.
 3. Initial enrollment uses `capability:access_control.enroll_principal` at the
-   protected boundary. Rotation uses `capability:access_control.rotate_credential` to activate the
+   protected boundary. The issued credential is authenticated before
+   `capability:access_control.provision_capability_grant` may idempotently bind
+   one exact target, channel, A16 capability, and optional entity scope; no
+   private grant store is part of composition. Rotation uses
+   `capability:access_control.rotate_credential` to activate the
    replacement and revoke the prior verifier atomically. Revocation uses
    `capability:access_control.revoke_credential` and creates no replacement.
 4. Plaintext replacement material is returned/injected once at the protected
@@ -422,15 +427,18 @@ authentication, authorization, and credential lifecycle.
 
 ### Outcomes
 
-The business principal/node identity remains unchanged; the prior credential
-cannot begin new work immediately. Failure leaves a bounded auditable result
-without revealing whether guessed secret material was close or valid.
+The business principal/node identity remains unchanged; exact grant replay is
+reported without broadening authority, and the prior credential cannot begin
+new work immediately. Failure leaves a bounded auditable result without
+revealing whether guessed secret material was close or valid.
 
 ### Errors
 
 `module:runtime_control` owns unavailable protected configuration/readiness.
-`module:access_control` owns target, verifier, lifecycle, throttle, atomic
-rotation, and audit errors. There is no public recovery or plaintext retrieval.
+`module:access_control` owns grantor/target/channel/scope validation, exact
+grant identity, verifier, lifecycle, throttle, atomic rotation, and audit
+errors. There is no public recovery, private-store fixture contract, or
+plaintext retrieval.
 
 ## `flow:verify_backup_restore_and_readiness`
 

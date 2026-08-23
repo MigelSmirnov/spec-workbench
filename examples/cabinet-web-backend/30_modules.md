@@ -225,9 +225,9 @@ probabilistic conversational UI and deterministic Cabinet capabilities.
 
 ### Owns
 
-Principal and credential enrollment, authentication, A03 authorization,
-rotation, revocation, channel separation, abuse throttling, and bounded
-security audit events under A11.
+Principal and credential enrollment, protected A03 capability-grant
+provisioning, authentication, authorization, rotation, revocation, channel
+separation, abuse throttling, and bounded security audit events under A11.
 
 ### Knows
 
@@ -241,9 +241,9 @@ secret recovery through public channels, or domain-specific decisions.
 
 ### Hides
 
-One-way verifiers, timing-safe comparison, credential lifecycle transitions,
-authorization matrix evaluation, throttle counters, and secret-free audit
-details.
+One-way verifiers, timing-safe comparison, exact grant identity and idempotent
+provisioning, credential lifecycle transitions, authorization matrix
+evaluation, throttle counters, and secret-free audit details.
 
 ### Candidate public capabilities
 
@@ -251,6 +251,7 @@ details.
 authenticate_request
 authorize_capability
 enroll_principal
+provision_capability_grant
 rotate_credential
 revoke_credential
 ```

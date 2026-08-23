@@ -240,6 +240,41 @@ EnrollmentConflict, InvalidCredentialMaterial, OperatorDenied.
 
 Creates credential state, not business Card identity.
 
+## `public_op:access_control.provision_capability_grant`
+
+### Owner
+
+`module:access_control`.
+
+### Callers
+
+`boundary:protected_operator` and the protected application composition bootstrap.
+
+### Inputs
+
+Authenticated active owner/operator context plus M106 exact target principal,
+channel, A16 capability, and optional entity scope.
+
+### Outputs
+
+M107 typed provisioning result identifying the exact grant and whether it was newly created.
+
+### Observable effect
+
+Persists one exact grant and secret-free audit evidence, or reports an exact idempotent replay.
+
+### Enforces
+
+No plugin, browser, synchronization, fixture, or composition caller may infer or mutate a private grant store; cross-channel, inactive-target, unknown, and affix-confused grants fail closed.
+
+### Errors
+
+GrantorDenied, TargetPrincipalInactive, CapabilityDenied, ChannelScopeDenied.
+
+### State impact
+
+Mutates authorization grant state only; no credential or domain Card mutation.
+
 ## `public_op:access_control.rotate_credential`
 
 ### Owner

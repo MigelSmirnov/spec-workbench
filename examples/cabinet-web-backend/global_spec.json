@@ -39,6 +39,7 @@
     "authenticate_request": "(service: AccessControlService, channel: str, presented_credential: str, abuse_context: str) -> AuthenticatedPrincipal",
     "authorize_capability": "(service: AccessControlService, principal: AuthenticatedPrincipal, capability: str, entity_scope: EntityScope | None = None) -> AuthorizationDecision",
     "enroll_principal": "(service: AccessControlService, command: PrincipalEnrollmentCommand) -> IssuedPrincipalCredential",
+    "provision_capability_grant": "(service: AccessControlService, grantor: AuthenticatedPrincipal, command: CapabilityGrantCommand) -> CapabilityGrantProvisioningResult",
     "rotate_credential": "(service: AccessControlService, command: CredentialRotationCommand) -> IssuedPrincipalCredential",
     "revoke_credential": "(service: AccessControlService, command: CredentialRevocationCommand) -> CredentialRevocationResult",
     "search_provider_cards": "(workspace: CardWorkspace, query: ProviderSearchQuery) -> ProviderCardPage",
@@ -145,6 +146,7 @@
     "authenticate_request: [SECURITY_BOUNDARY] MUST select exactly one credential verifier by channel, apply indistinguishable failure handling and the configured abuse throttle, compare protected verifiers timing-safely, and return only an active principal of the expected kind without retaining the presented secret.",
     "authorize_capability: [BEHAVIOR] MUST re-evaluate the active principal, exact closed capability, channel, entity scope, and current lifecycle state on every call; the grant source is the exact principal, channel, scope, and capability grant provisioned at the protected operator boundary, where route capability names are addressed by rules.http_router_backend.routes; return a scoped decision or raise AuthorizationDeniedError when that exact grant is absent, without granting prefix, suffix, cross-channel, or identifier-only authority.",
     "enroll_principal: [PROVENANCE] MUST at the protected operator boundary, create one stable principal plus one channel-bound credential atomically, return the reusable secret exactly once, and persist only its protected verifier and secret-free audit evidence; on an empty installation only the protected composition bootstrap may create the single initial owner without a pre-existing principal, while every later enrollment MUST require an active owner or operator actor.",
+    "provision_capability_grant: [SECURITY_BOUNDARY] MUST be callable only from the protected composition/operator boundary, re-authenticate an active owner or operator grantor, require an active target principal, validate the exact capability and channel against the closed A16 catalogue, and atomically persist the exact target/channel/capability/entity-scope grant; exact replay MUST return created false without broadening authority, while unknown, affix-confused, cross-channel, inactive, or unauthorized requests MUST leave grant state unchanged; composition and verification MUST NOT inspect or mutate private grant storage.",
     "rotate_credential: [SECURITY_BOUNDARY] MUST lock the principal and active credential set, issue the replacement, activate it and revoke the prior credential in one transaction, preserve business identity, and never return or recover the old secret.",
     "revoke_credential: [BEHAVIOR] MUST revoke only the selected active credential, make exact repeated revocation idempotent, preserve its principal and audit history, and reject any later authentication with that credential immediately.",
     "extract_plugin_credential: [SECURITY_BOUNDARY] MUST accept only one well-formed Bearer value on the private plugin route namespace, reject missing, duplicated, oversized, or wrong-scheme headers uniformly, and never log or echo the value.",
@@ -1191,6 +1193,26 @@
         "actor": "ActorReference"
       }
     },
+    "CapabilityGrantCommand": {
+      "identity": "value",
+      "fields": {
+        "target_principal_id": "str",
+        "channel": "str",
+        "capability": "str",
+        "entity_scope": "EntityScope | None"
+      }
+    },
+    "CapabilityGrantProvisioningResult": {
+      "identity": "value",
+      "fields": {
+        "target_principal_id": "str",
+        "channel": "str",
+        "capability": "str",
+        "entity_scope": "EntityScope | None",
+        "provisioned_at": "datetime",
+        "created": "bool"
+      }
+    },
     "ProjectCardPage": {
       "identity": "value",
       "fields": {
@@ -1486,6 +1508,8 @@
         "InvoiceWorkPage",
         "IssuedPrincipalCredential",
         "PrincipalEnrollmentCommand",
+        "CapabilityGrantCommand",
+        "CapabilityGrantProvisioningResult",
         "ProjectCardPage",
         "ProjectListQuery",
         "ProjectMutationResult",
@@ -1518,6 +1542,7 @@
         "authenticate_request",
         "authorize_capability",
         "enroll_principal",
+        "provision_capability_grant",
         "rotate_credential",
         "revoke_credential",
         "AccessControlService",
@@ -1885,6 +1910,8 @@
       "InvoiceWorkPage",
       "IssuedPrincipalCredential",
       "PrincipalEnrollmentCommand",
+      "CapabilityGrantCommand",
+      "CapabilityGrantProvisioningResult",
       "ProjectCardPage",
       "ProjectListQuery",
       "ProjectMutationResult",
@@ -1917,6 +1944,7 @@
       "authenticate_request",
       "authorize_capability",
       "enroll_principal",
+      "provision_capability_grant",
       "rotate_credential",
       "revoke_credential",
       "AccessControlService",
@@ -2094,6 +2122,7 @@
     "authenticate_request",
     "authorize_capability",
     "enroll_principal",
+    "provision_capability_grant",
     "rotate_credential",
     "revoke_credential",
     "search_provider_cards",

@@ -12,6 +12,30 @@ value
 
 Equal typed transport and application facts are interchangeable.
 
+## Model M106 — CapabilityGrantCommand
+
+Fields: `target_principal_id: str`, `channel: str`, `capability: str`, `entity_scope: EntityScope | None`.
+
+### Identity
+
+value
+
+### Identity evidence
+
+Equal target, channel, exact capability, and scope facts are interchangeable; changing any one of them names a different requested grant.
+
+## Model M107 — CapabilityGrantProvisioningResult
+
+Fields: `target_principal_id: str`, `channel: str`, `capability: str`, `entity_scope: EntityScope | None`, `provisioned_at: datetime`, `created: bool`.
+
+### Identity
+
+value
+
+### Identity evidence
+
+Equal typed provisioning outcomes are interchangeable. `created=False` reports an exact idempotent replay and never a broader pre-existing authority.
+
 ## Model M31 — InvoicePayment
 
 Fields: `status: str`, `transactions_json: str`, `paid_total: Decimal`, `outstanding_total: Decimal`.
@@ -911,4 +935,3 @@ value
 ### Identity evidence
 
 Equal typed transport and application facts are interchangeable.
-

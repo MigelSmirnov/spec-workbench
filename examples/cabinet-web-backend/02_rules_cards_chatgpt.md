@@ -103,7 +103,7 @@ confirmation_absent_or_declined -> no_effect
 Conversational convenience does not weaken Cabinet validation, confirmation,
 identity, or truthful partial-outcome rules.
 
-## Accepted decision A03 — Cabinet capabilities are authorized server-side
+## Accepted decision A03 — Cabinet capabilities are authorized and provisioned server-side
 
 ### Normative rules
 
@@ -120,12 +120,23 @@ identity, or truthful partial-outcome rules.
    publish one Registry catalogue, and observe compatibility.
 5. The local node credential cannot authorize ChatGPT/browser Card mutation,
    source upload, VPS release, operator actions, or another installation.
-6. Operator actions are reachable only through the protected host/operator
+6. Capability grants are created only by the public
+   `access_control.provision_capability_grant` operation invoked from the
+   protected composition/operator boundary. No caller may edit, infer, or
+   adapt a private grant store.
+7. Grant provisioning requires an authenticated active owner or operator and
+   an active target principal. It accepts only an exact A16 capability allowed
+   for the requested channel and binds the grant to the exact optional entity
+   scope.
+8. Exact replay of the same target, channel, capability, and scope is
+   idempotent. Any affix-confused capability, cross-channel grant, inactive
+   subject, or unauthorized grantor is rejected without partial state.
+9. Operator actions are reachable only through the protected host/operator
    boundary and are not ordinary public plugin tools.
-7. Authorization is evaluated for the exact principal, capability, Card or
-   synchronization entity, and current lifecycle state on every request.
-8. Revocation prevents new actions immediately without changing Card or node
-   business identity.
+10. Authorization is evaluated for the exact principal, capability, Card or
+    synchronization entity, and current lifecycle state on every request.
+11. Revocation prevents new actions immediately without changing Card or node
+    business identity.
 
 ### Formal invariants
 
@@ -133,7 +144,17 @@ identity, or truthful partial-outcome rules.
 protected_operation
 -> active_principal AND capability_allowed AND exact_entity_authorized
 
+new_capability_grant
+-> protected_boundary
+AND active_owner_or_operator_grantor
+AND active_target_principal
+AND exact_A16_capability_allowed_for_channel
+
+grant_identity = (target_principal_id, channel, capability, entity_scope)
+exact_grant_replay -> same_grant AND created = false
+
 identifier_known -/> authorization
+private_grant_store_access -/> accepted_composition
 local_node_credential -/> human_or_operator_capability
 human_browser_credential -/> synchronization_capability
 ```
@@ -146,11 +167,19 @@ human_browser_credential -/> synchronization_capability
 3. Revoked principals and node credentials cannot start new operations.
 4. A local node cannot access another installation's issuance or publication.
 5. Plugin tools cannot select arbitrary operations, paths, or effect scopes.
+6. Only an authenticated active owner/operator at the protected boundary can
+   provision a grant for an active target.
+7. Exact grant replay is idempotent; changed scope/channel/capability is a
+   distinct grant and never inherits authority.
+8. The runtime composition and verification harness provision grants only
+   through the public operation and remain independent of private storage
+   names or layouts.
 
 ### Consequence
 
-M02 and M17 identify subjects; credentials authenticate them, while this policy
-separately decides their allowed actions.
+M02 and M17 identify subjects; credentials authenticate them, the protected
+public provisioning operation creates exact grants, and authorization
+separately evaluates those grants for every action.
 
 ## Accepted decision A04 — every Cabinet effect is idempotent and revision-atomic
 
@@ -197,4 +226,3 @@ unknown_outcome -> reconcile_same_identity_before_mutation_retry
 
 ChatGPT retry behavior and intermittent local transport cannot duplicate or
 silently overwrite Cabinet work.
-
