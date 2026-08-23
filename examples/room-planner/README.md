@@ -66,16 +66,17 @@ The manifest and generated pack are dependency/indexing tools only. Canonical pr
 
 ## Design states
 
-1. **State 0 — Product boundary**
+1. **State 0 — Product boundary** — stabilized
    - [00 — Core product boundary](00_product.md)
    - [00 — Stage artifacts and demolition quantities](00_stage_artifacts.md)
-2. **State 1 — Domain models**
-   - [10 — Domain models](10_models.md) — working draft
+2. **State 1 — Domain models** — stabilized as a document set
+   - [10 — Domain models](10_models.md) — chronological base draft
    - [10 — Snapshot identity and Existing correction carry-forward](10_identity_carry_forward.md) — accepted refinement
    - [10 — Typed source and provenance references](10_source_provenance.md) — accepted refinement
    - [10 — Opening lifecycle and opening-change intent](10_opening_lifecycle.md) — accepted refinement
+   - [10 — Remaining model closure](10_model_closure.md) — accepted closure refinement
    - `frontend_context.json` — machine-readable frontend dependency manifest
-3. 20 — Rules and invariants
+3. **State 2 — Rules and invariants** — next
 4. 30 — Module responsibilities
 5. 40 — System flows
 6. 50 — Public APIs
@@ -83,6 +84,8 @@ The manifest and generated pack are dependency/indexing tools only. Canonical pr
 8. 70 — Notes
 9. Assembly
 
-State 0 is stabilized across both `00_*.md` documents. State 1 is active and remains a working draft until its explicit model closure questions are resolved. The accepted `10_*` refinements supersede provisional terminology or model shapes in `10_models.md` where stated. `context_pack.py` will carry the stabilized State 0 sources, current State 1 documents, and linked shared architecture boundaries into later work automatically.
+State 1 is stabilized by the complete set of `10_*` documents above. The later accepted refinements are normative where they explicitly supersede provisional names or shapes in `10_models.md`. A future readability consolidation may rewrite the base document, but it must not change the accepted semantics.
+
+`context_pack.py` will carry the stabilized State 0/1 sources and linked shared architecture boundaries into State 2 work automatically.
 
 Later state documents must carry the Platform Router dependency forward even when they do not introduce a new shared interaction. Frontend-relevant shared requirements should likewise be evaluated against `FRONTEND_EDITOR.md` rather than being duplicated privately in later Room Planner documents.
