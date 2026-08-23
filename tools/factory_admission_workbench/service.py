@@ -211,6 +211,55 @@ def _external_contract_check(case_root: Path | None) -> AdmissionCheck:
     )
 
 
+def _closure_gaps_check(case_root: Path | None) -> AdmissionCheck:
+    if case_root is None:
+        return AdmissionCheck(
+            "FA012",
+            CHECK_NOT_APPLICABLE,
+            "Explicit --spec admission has no Workbench case for closure-gap fuses.",
+            {},
+        )
+    from design_closure_gaps import run as closure_gaps_run
+
+    report = closure_gaps_run(case_root)
+    waivers_path = case_root / "closure_gap_waivers.json"
+    waivers: list[dict[str, Any]] = []
+    if waivers_path.is_file():
+        loaded = _load_json(waivers_path)
+        if isinstance(loaded, dict):
+            waivers = [w for w in loaded.get("waivers", []) if isinstance(w, dict)]
+
+    def waived(finding: dict[str, Any]) -> bool:
+        for waiver in waivers:
+            keys = {k: v for k, v in waiver.items() if k not in {"reason", "decided"}}
+            if keys and all(finding.get(k) == v for k, v in keys.items()):
+                return bool(waiver.get("reason"))
+        return False
+
+    open_findings = [f for f in report["findings"] if not waived(f)]
+    waived_count = len(report["findings"]) - len(open_findings)
+    evidence = {
+        "summary": report["summary"],
+        "open_findings": open_findings,
+        "waived": waived_count,
+        "waivers_file": str(waivers_path) if waivers else None,
+    }
+    if open_findings:
+        return AdmissionCheck(
+            "FA012",
+            CHECK_BLOCK,
+            f"Closure-gap fuses report {len(open_findings)} unwaived finding(s): "
+            "the specification reads, returns, or closes in prose what nothing produces.",
+            evidence,
+        )
+    return AdmissionCheck(
+        "FA012",
+        CHECK_PASS,
+        "Closure-gap fuses are clean" + (f" ({waived_count} waived with reasons)." if waived_count else "."),
+        evidence,
+    )
+
+
 def _standard_check(workbench_root: Path, factory_root: Path) -> AdmissionCheck:
     workbench = workbench_root / "skills/spec-authoring/SPEC_STANDARD.md"
     factory = factory_root / "SPEC_STANDARD.md"
@@ -651,6 +700,7 @@ def check(
         _language_check(source),
         _implementation_obligations_check(source),
         _external_contract_check(case_root),
+        _closure_gaps_check(case_root),
     ]
     validation_check, validation_report = _factory_validation_check(factory_root, source)
     checks.extend([

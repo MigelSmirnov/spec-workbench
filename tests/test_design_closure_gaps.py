@@ -54,3 +54,32 @@ def test_table_without_writer(tmp_path):
     }
     report = run(make_case(tmp_path, spec))
     assert codes(report) == ["table_without_writer"]
+
+
+def test_admission_fa012_blocks_unwaived_findings_and_honours_waivers(tmp_path):
+    import json as _json
+    from factory_admission_workbench.service import _closure_gaps_check
+
+    case = tmp_path
+    (case / "global_spec.json").write_text(_json.dumps({
+        "models": {"Ghost": {"identity": "entity", "fields": {"x": "str"}}},
+        "contracts": {"read_ghost": "(a: str) -> Ghost"},
+        "notes": [],
+    }), encoding="utf-8")
+    (case / "01_models.md").write_text("", encoding="utf-8")
+
+    blocked = _closure_gaps_check(case)
+    assert blocked.status == "BLOCK" and blocked.evidence["open_findings"]
+
+    (case / "closure_gap_waivers.json").write_text(_json.dumps({
+        "waivers": [{"code": "orphan_read_entity", "model": "Ghost",
+                     "reason": "produced by the peer system; frozen jointly", "decided": "2026-08-24"}],
+    }), encoding="utf-8")
+    waived = _closure_gaps_check(case)
+    assert waived.status == "PASS" and waived.evidence["waived"] == 1
+
+    # a waiver without a reason must not silence anything
+    (case / "closure_gap_waivers.json").write_text(_json.dumps({
+        "waivers": [{"code": "orphan_read_entity", "model": "Ghost"}],
+    }), encoding="utf-8")
+    assert _closure_gaps_check(case).status == "BLOCK"
