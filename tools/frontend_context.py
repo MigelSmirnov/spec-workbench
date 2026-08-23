@@ -9,7 +9,7 @@ from typing import Any
 
 
 HEADING_RE = re.compile(r"^(#{1,6})[ \t]+(.+?)[ \t]*#*[ \t]*$", re.MULTILINE)
-ALLOWED_MANIFEST_KEYS = {"schema_version", "name", "full_documents", "slices"}
+ALLOWED_MANIFEST_KEYS = {"$schema", "schema_version", "name", "full_documents", "slices"}
 ALLOWED_SLICE_KEYS = {"path", "headings"}
 
 
@@ -92,6 +92,12 @@ def load_manifest(*, manifest_path: Path, repo_root: Path) -> FrontendManifest:
         raise FrontendContextError(
             "unknown frontend manifest fields: " + ", ".join(sorted(unknown))
         )
+
+    schema_ref = raw.get("$schema")
+    if schema_ref is not None and (
+        not isinstance(schema_ref, str) or not schema_ref.strip()
+    ):
+        raise FrontendContextError("frontend manifest $schema must be a non-empty string")
 
     if raw.get("schema_version") != 1:
         raise FrontendContextError("frontend manifest schema_version must be 1")
