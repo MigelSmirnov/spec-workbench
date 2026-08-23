@@ -20,6 +20,9 @@ human read/proposal
   shopping_list.derive
   registry_catalogue.current
 
+browser source retrieval
+  source.download
+
 human effects
   invoice.create_draft
   invoice.update_draft
@@ -74,6 +77,11 @@ protected operator
 ```text
 requested_capability in first_release_capability_catalogue
 
+grantable(channel, requested_capability)
+<-> exists one row in rules.capability_catalogue.grantable
+    with row.channel = channel
+    and row.capability = requested_capability
+
 human_effect
 -> A03_authorized AND A04_idempotent
 
@@ -81,6 +89,11 @@ operator_capability -/> plugin_or_browser_or_sync_catalogue
 principal.grant_capability -> A03_protected_grant_provisioning
 unknown_capability -> reject_without_dispatch
 ```
+
+The machine-readable single home for the capability/channel/semantic-operation
+correspondence is `rules.capability_catalogue`. The protected-operator entries
+are catalogue members but are deliberately outside `grantable` and cannot be
+provisioned to plugin, browser, or local-node credentials.
 
 ### Required tests
 
