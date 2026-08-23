@@ -224,8 +224,13 @@ def stage9_lineage_manifest(
     handoff_path: Path,
 ) -> dict[str, Any]:
     identity = source_commit[:16] if source_commit else source_sha[:16]
+    # the Factory's OTK lineage gate requires every accepted-lineage artifact
+    # (base, normalized, editor manifest, deploy, handoff) to record the
+    # SPEC_STANDARD revision of the accepted base spec
+    standard_version = json.loads(base_spec_path.read_text(encoding="utf-8")).get("standard_version")
     return {
         "schema_version": 1,
+        "standard_version": standard_version,
         "project": project,
         "spec_editor_run_id": f"{project}-spec-workbench-{identity}",
         "spec_patch_id": f"{project}-spec-workbench-handoff-{source_sha[:16]}",
