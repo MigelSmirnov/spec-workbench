@@ -215,7 +215,7 @@
     "HttpxHoldedHttpClient.list_purchases": "(self) -> HoldedPurchaseListPage",
     "HttpxHoldedHttpClient.get_purchase": "(self, document_id: str) -> HoldedTransportResponse",
     "HoldedAttemptRepository.load_attempt_by_marker": "(self, attempt_marker: str) -> HoldedPublicationAttempt | None",
-    "SynchronizationService.__init__": "(self, repository: SynchronizationRepository, transport: VpsSynchronizationTransport, archive: DurableArchiveService) -> None",
+    "SynchronizationService.__init__": "(self, repository: SynchronizationRepository, transport: VpsSynchronizationTransport, archive: DurableArchiveService, registry: RegistryContextService) -> None",
     "SynchronizationService.synchronize_invoice_work": "(self, selection: SynchronizationWorkSelection, node: CabinetNodeIdentity) -> SynchronizationOutcome",
     "SynchronizationService.get_sync_status": "(self, invoice_id: str, node_id: str) -> SynchronizationStatusObservation",
     "SynchronizationService.reconcile_transfer_outcome": "(self, synchronization_id: str) -> SynchronizationOutcome",
@@ -630,7 +630,7 @@
     "refresh_registry_context: [DEPENDENCY_BOUNDARY] MUST delegate through the exact supplied RegistryContextService and MUST NOT access PostgreSQL directly.",
     "validate_card_assignment: [DEPENDENCY_BOUNDARY] MUST delegate through the exact supplied RegistryContextService and MUST NOT access PostgreSQL directly.",
     "record_card_assignment_observation: [ORCHESTRATION] MUST delegate to RegistryContextService.record_card_assignment_observation on the supplied registry and return its result.",
-    "record_card_assignment_observation: [PROVENANCE] MUST be the only write path for CardObjectAssignmentObservation: the observation is produced at capture or acceptance time from the Card object block and the catalogue provenance of that capture, never derived inside validation.",
+    "record_card_assignment_observation: [PROVENANCE] MUST be the only write path for CardObjectAssignmentObservation in this backend: the observation is produced by Cabinet Web when the exact Invoice Card revision and its capture provenance are fixed, travels unchanged inside the exact transfer package, and is imported here; it is never derived from canonical_card.object inside this backend.",
     "get_assignment_validation: [DEPENDENCY_BOUNDARY] MUST delegate through the exact supplied RegistryContextService and MUST NOT access PostgreSQL directly.",
     "get_work_object: [DEPENDENCY_BOUNDARY] MUST delegate through the exact supplied RegistryContextService and MUST NOT access PostgreSQL directly.",
     "calculate_plan_actual: [DEPENDENCY_BOUNDARY] MUST resolve WorkObject context through the exact supplied RegistryContextService and MUST NOT read Registry persistence directly.",
@@ -649,6 +649,7 @@
     "RegistryContextService.validate_card_assignment: [FIELD_PROJECTION] Current Registry context is the WorkObject loaded by the observation project_id: registry_status active is the exact current active match (result = rules.registry_context.active_exact_match_result), registry_status archived is archived_requires_review, and a missing WorkObject is missing_requires_review; attention_status takes no part in the result.",
     "RegistryContextService.record_card_assignment_observation: [ORCHESTRATION] MUST begin one transaction, load the observation stored for observation.card_revision (invoice_id, content_hash), return the stored one unchanged when it exists, otherwise insert the supplied observation through insert_assignment_observation, commit, and return it; rollback on any failure.",
     "RegistryContextService.record_card_assignment_observation: [VALIDATION_ERROR] MUST raise RegistryContextUnavailableError when observation.decision_context is not one of online_current, offline_cached, label_only, unassigned, or when project_id is set while decision_context is unassigned.",
+    "RegistryContextService.record_card_assignment_observation: [VALIDATION_ERROR] MUST raise RegistryContextUnavailableError when project_id is set without both catalogue_id and registry_snapshot_id naming the catalogue used at capture: object.card_id is never an implicit Registry project_id, and such an observation may only be stored as label_only, unassigned, or needs_review.",
     "create_local_app: [ORCHESTRATION] MUST construct RegistryContextService with the exact PostgresRegistryContextRepository and the already constructed DurableArchiveService, preserving one archive boundary.",
     "HoldedGatewayService: [ORCHESTRATION] HoldedAttemptRepository owns its transaction: every port method, reads included, runs only between begin() and commit() and raises without an active transaction; each public operation that touches the port opens it with begin() first, commits on success, rolls back on any failure, and never calls another public operation of this module that opens one (nested begin is rejected).",
     "HoldedGatewayService.__init__: [DEPENDENCY_BOUNDARY] Retain the exact supplied repository and HTTP client; reject missing dependencies and never construct adapters, read environment variables, or use module-global fallbacks.",
@@ -687,8 +688,9 @@
     "create_local_app: [VALIDATION_ERROR] Fail startup on missing or invalid Holded configuration or adapter construction; never substitute a disabled, anonymous, or in-memory gateway.",
     "HoldedAttemptRepository.load_attempt_by_marker: [BEHAVIOR] Return the exact attempt for one unique marker or None; reject duplicate persisted markers and never infer an attempt from payload similarity.",
     "SynchronizationService: [ORCHESTRATION] SynchronizationRepository owns its transaction: every port method, reads included, runs only between begin() and commit() and raises without an active transaction; each public operation that touches the port opens it with begin() first, commits on success, rolls back on any failure, and never calls another public operation of this module that opens one (nested begin is rejected).",
-    "SynchronizationService.__init__: [DEPENDENCY_BOUNDARY] Retain the exact supplied repository, transport, and archive; never construct or discover alternates.",
+    "SynchronizationService.__init__: [DEPENDENCY_BOUNDARY] Retain the exact supplied repository, transport, archive, and registry; never construct or discover alternates.",
     "SynchronizationService.synchronize_invoice_work: [ORCHESTRATION] Under the exact synchronization lock, load the attempt bound to invoice, target node, and idempotency key: reuse it when its source_node_id equals selection.source_node_id (manifest_hash is not compared: it is None until delivery), reject one whose source_node_id differs, otherwise insert the reservation; commit, then re-read the locked attempt, require that no issuance is recorded, update it as issued, and commit before transport; afterwards update the same locked attempt from its issued state with the conclusive or unknown status, finished_at, and safe_error_code, and send an exact delivered package through archive acceptance and verification.",
+    "SynchronizationService.synchronize_invoice_work: [ORCHESTRATION] When the archive receipt is accepted or already_accepted and package.assignment_observation is not None, MUST pass it unchanged to registry_context.record_card_assignment_observation (idempotent by card revision) after the archive transaction has committed and before the final attempt update; a package without an observation records nothing and is not an error.",
     "SynchronizationService.synchronize_invoice_work: [BEHAVIOR] Equivalent re-entry for a synchronization that already finished returns the existing evidence: the stored attempt, the archive receipt found through durable_archive.get_transfer_receipt by the attempt's manifest_hash, and a fresh verify_durable_acceptance for the accepted content hash; it issues no transport call and creates no second acceptance.",
     "SynchronizationService.synchronize_invoice_work: [FIELD_PROJECTION] The content_hash argument of every verify_durable_acceptance call is the Card revision identity (VpsInvoiceTransferPackage.card_revision.reference.content_hash on the transfer path, the accepted hash of the found receipt on re-entry); InvoiceSynchronization.manifest_hash and InvoiceTransferManifest.manifest_hash identify the manifest and are never passed as a content hash.",
     "SynchronizationService.synchronize_invoice_work: [FIELD_ASSIGNMENT] The local attempt identity is the reserved InvoiceSynchronization (synchronization_id = f\"{invoice_id}:{target_node_id}:{idempotency_key}\", idempotency_key = selection.manifest_id, manifest_hash None until the package is delivered and then package.manifest.manifest_hash, written by the final update); every later lock, reload, and final update addresses that reservation. VpsInvoiceTransferPackage.synchronization is transport-side evidence whose status and safe_error_code are copied onto the reservation; its synchronization_id is never used as a storage key.",
@@ -723,7 +725,7 @@
     "publish_registry_catalogue: [DEPENDENCY_BOUNDARY] MUST delegate exact catalogue delivery through the supplied SynchronizationService.",
     "observe_vps_connection: [DEPENDENCY_BOUNDARY] MUST delegate observation through the supplied SynchronizationService.",
     "create_local_app: [DEPENDENCY_BOUNDARY] Accept the VpsSynchronizationTransport implementation from the caller at the composition boundary; MUST NOT construct, import, or discover a transport, read VPS URL or node credential environment variables, or substitute a disabled, anonymous, or in-memory transport.",
-    "create_local_app: [ORCHESTRATION] Reuse the Cabinet database URL and exact archive, construct PostgresSynchronizationRepository and SynchronizationService with the supplied transport, then supply the service to create_app.",
+    "create_local_app: [ORCHESTRATION] Reuse the Cabinet database URL and exact archive, construct PostgresSynchronizationRepository and SynchronizationService with the supplied transport and the exact RegistryContextService, then supply the service to create_app.",
     "create_local_app: [VALIDATION_ERROR] Fail startup when the supplied transport is None or synchronization repository or service construction fails; no fallback is permitted.",
     "create_app: [DEPENDENCY_BOUNDARY] Bind the exact supplied SynchronizationService into application state without exposing its credential.",
     "PlanActualService: [ORCHESTRATION] PlanActualRepository owns its transaction: every port method, reads included, runs only between begin() and commit() and raises without an active transaction; each public operation that touches the port opens it with begin() first, commits on success, rolls back on any failure, and never calls another public operation of this module that opens one (nested begin is rejected).",
@@ -1359,7 +1361,8 @@
         "synchronization": "InvoiceSynchronization",
         "manifest": "InvoiceTransferManifest",
         "card_revision": "StoredInvoiceCardRevision",
-        "source_replicas": "tuple[SourceBinaryReplica, ...]"
+        "source_replicas": "tuple[SourceBinaryReplica, ...]",
+        "assignment_observation": "CardObjectAssignmentObservation | None = None"
       }
     },
     "VpsTransferReconciliationEvidence": {
@@ -6798,7 +6801,13 @@
           "RegistryCataloguePublication",
           "VpsConnectionObservation",
           "SynchronizationRepository",
-          "VpsSynchronizationTransport"
+          "VpsSynchronizationTransport",
+          "CardObjectAssignmentObservation",
+          "VpsInvoiceTransferPackage"
+        ],
+        "registry_context": [
+          "RegistryContextService",
+          "record_card_assignment_observation"
         ]
       },
       "plan_actual": {

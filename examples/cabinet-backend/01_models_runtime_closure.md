@@ -65,7 +65,9 @@ Equal exact typed GET observations are interchangeable technical evidence.
 
 Fields: `synchronization: InvoiceSynchronization`,
 `manifest: InvoiceTransferManifest`, `card_revision: StoredInvoiceCardRevision`,
-`source_replicas: tuple[SourceBinaryReplica, ...]`.
+`source_replicas: tuple[SourceBinaryReplica, ...]`,
+`assignment_observation: CardObjectAssignmentObservation | None` (produced by Cabinet Web at
+capture; carried unchanged, never derived here).
 ### Identity
 value
 ### Identity evidence

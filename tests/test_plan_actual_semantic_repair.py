@@ -18,24 +18,25 @@ def load_yaml(path: Path):
     return value
 
 
-def test_state2_monetary_decision_is_reopened_until_three_business_decisions_close():
+def test_state2_monetary_decision_is_accepted_with_three_business_decisions():
     text = STATE2.read_text(encoding="utf-8")
 
-    assert "**REOPENED" in text
+    assert "**ACCEPTED" in text
+    assert "**REOPENED" not in text
     assert "PA-MONEY-001" in text
     assert "PA-MONEY-002" in text
     assert "PA-MONEY-003" in text
-    assert "Full monetary PlanActual analysis" not in text or "fail" in text.lower()
-    assert "may return to **ACCEPTED** only after" in text
+    assert "InvoiceCardLine.gross_amount" in text
+    assert "returned to **ACCEPTED** after" in text
 
 
-def test_state1_refinement_forbids_reintroducing_total_aliases_as_semantic_proof():
+def test_state1_refinement_records_the_closed_gap_and_still_forbids_total_aliases():
     text = STATE1.read_text(encoding="utf-8")
 
-    assert "OPEN SEMANTIC GAP" in text
+    assert "**CLOSED (2026-08-23).**" in text
     assert "must not treat an undifferentiated field named `total` as" in text
     assert "must not introduce `InvoiceLine.total` as a compatibility alias" in text
-    assert "No answer is accepted yet" in text
+    assert "No answer is accepted yet" not in text
 
 
 def test_planned_target_references_reopened_design_state_not_accepted_alias_rule():

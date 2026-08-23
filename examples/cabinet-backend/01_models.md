@@ -838,7 +838,11 @@ Substitution: observations for different Card revisions or capture contexts are 
 
 ### Source of truth
 
-The accepted Card object block plus capture-time Backend catalogue provenance.
+Cabinet Web produces the observation when it fixes the exact Card revision and its capture
+provenance; synchronization carries it inside the exact transfer package; this backend imports
+and stores it. `object.card_id` is never an implicit Registry `project_id`: a `project_id` is
+valid only together with the `catalogue_id` and `registry_snapshot_id` used at capture, otherwise
+the state stays `label_only`, `unassigned`, or review-required (owner decision, 2026-08-23).
 
 ### Lifecycle
 

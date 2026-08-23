@@ -2,7 +2,7 @@
 
 ## Status
 
-**OPEN SEMANTIC GAP.**
+**CLOSED (2026-08-23).** The gap below was open from 2026-08-16; PA-MONEY-001..003 are accepted in `02_rules_plan_actual_semantic_gap.md`. The analysis is kept as the record of why the earlier `total` aliases were withdrawn.
 
 This refinement records source-contract evidence discovered after the earlier
 plan/actual decision was accepted. It does not choose a monetary meaning on
@@ -60,7 +60,7 @@ consumes.
 State 1 therefore must not introduce `InvoiceLine.total` as a compatibility alias
 or silently map `actual_amount` to either canonical field.
 
-## Model repair rule
+## Model repair rule (historical; the gap is closed)
 
 `EstimateItemSnapshot` and the Invoice Card line projection may preserve source
 monetary facts only with their source-owned meanings and bases.
@@ -80,21 +80,21 @@ Decimal type equality does not establish semantic compatibility.
 
 ## Open decisions
 
-### PA-MONEY-001 — planned item amount
+### PA-MONEY-001 — planned item amount (accepted 2026-08-23: `EstimateItemSnapshot.total` with its stored `monetary_basis` and `currency` from PresuPro)
 
 Which authoritative PresuPro item-level fact is the Cabinet planned amount, and
 what exact monetary/tax basis does it represent?
 
-No answer is accepted yet.
+Answered (see heading); recorded in `02_rules_plan_actual_semantic_gap.md`.
 
-### PA-MONEY-002 — actual line amount
+### PA-MONEY-002 — actual line amount (accepted 2026-08-23: `InvoiceCardLine.gross_amount`, tax-inclusive; `net_amount` is not used)
 
 Does Cabinet compare plan against Invoice Card V1 `net_amount` or
 `gross_amount`?
 
-No answer is accepted yet.
+Answered (see heading); recorded in `02_rules_plan_actual_semantic_gap.md`.
 
-### PA-MONEY-003 — comparability
+### PA-MONEY-003 — comparability (accepted 2026-08-23: direct only for `gross` and EUR on both sides; otherwise `PlanActualPreconditionError` without a pinned accepted assumption)
 
 What rule proves that the selected planned and actual amounts are directly
 comparable? If they are not directly comparable, what explicit accepted

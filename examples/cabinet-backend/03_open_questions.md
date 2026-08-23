@@ -181,15 +181,14 @@ A76 assigns the working set and release policy to Cabinet Web; cabinet_backend
 exposes only its durable-acceptance evidence. The reciprocal wire fields are
 frozen jointly before Cabinet Web State 6.
 
-CardObjectAssignmentObservation now has one write path,
-`registry_context.record_card_assignment_observation` (2026-08-22); which
-caller produces it — synchronization on accepted transfer, or the API on
-capture — and how `object.card_id` maps to a project through the catalogue
-provenance of that capture remain open.
+CardObjectAssignmentObservation is produced by Cabinet Web at capture, carried
+inside the exact transfer package, and imported through
+`registry_context.record_card_assignment_observation` by synchronization
+(owner decision, 2026-08-23). `object.card_id` never maps implicitly to a
+Registry project. Resolved.
 
-A resolution transcribed from the accepted semantic oracle is proposed in
-`02_rules_plan_actual_semantic_gap.md` ("Proposed monetary decisions",
-2026-08-22) and awaits the owner's acceptance.
+PA-MONEY-001..003 were accepted by the owner on 2026-08-23
+(`02_rules_plan_actual_semantic_gap.md`, "Accepted monetary decisions").
 
 `PA-MONEY-001` must identify the authoritative planned item amount and its exact
 monetary/tax basis.

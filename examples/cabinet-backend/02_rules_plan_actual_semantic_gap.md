@@ -2,19 +2,14 @@
 
 ## Status
 
-**REOPENED — quantity semantics remain accepted; monetary semantics await the
-owner's acceptance of the proposed resolution below (2026-08-22).**
+**ACCEPTED — quantity semantics and monetary semantics are both accepted.**
 
-The semantic runtime tests handed to the Factory (Stage 8.2 / FA006) fix the
-monetary meaning unambiguously: every Invoice Card line contributes its
-tax-inclusive amount, an Estimate Item is directly comparable only when it is
-observed in the same `gross` basis and currency, and any other pairing fails
-closed unless an accepted assumption is pinned. The answers below are
-transcribed from that oracle and pinned in `rules.plan_actual` so the oracle
-can be executed; the decision itself stays with the Cabinet owner — accepting
-it flips this status to ACCEPTED, rejecting it withdraws the pinned rule.
+The monetary part was reopened on 2026-08-16 and closed on 2026-08-23 by the
+Cabinet owner, who accepted the resolution transcribed from the semantic oracle
+(Stage 8.2 / FA006). The owner's decision, verbatim in substance: PlanActual
+shows actual spend with tax — the sum of `gross_amount`.
 
-### Proposed monetary decisions (transcribed from the oracle, not yet accepted)
+### Accepted monetary decisions (PA-MONEY-001..003, owner, 2026-08-23)
 
 - `PA-MONEY-001` — planned item amount is `EstimateItemSnapshot.total` in the
   basis PresuPro reported for that item (`EstimateItemSnapshot.monetary_basis`,
@@ -24,14 +19,13 @@ it flips this status to ACCEPTED, rejecting it withdraws the pinned rule.
   (tax-inclusive) for every line, matched or unmatched; the basis is pinned as
   `rules.plan_actual.actual_amount_basis = "gross"`. `net_amount` is never
   selected for plan/actual.
-- `PA-MONEY-003` — planned and actual are directly comparable iff the item's
-  `monetary_basis` equals `"gross"`; otherwise `calculate_plan_actual` raises
-  `PlanActualPreconditionError` unless an exact accepted basis assumption is
-  pinned for that match. No implicit net/gross or tax conversion exists.
-  Currency is not a comparability dimension: Cabinet operates in a single
-  currency, EUR (owner decision, 2026-08-22); a non-EUR estimate item or card
-  is invalid input, not a conversion case, and
-  `implicit_currency_conversion_allowed` stays `false`.
+- `PA-MONEY-003` — direct comparison is allowed only when `monetary_basis` is
+  `gross` and the currency is EUR on both sides. For `net`, another currency,
+  or an unknown basis, `calculate_plan_actual` raises
+  `PlanActualPreconditionError` unless an explicitly pinned accepted
+  assumption covers that match. Implicit tax / net / gross / currency
+  conversions are forbidden (`implicit_tax_basis_conversion_allowed` and
+  `implicit_currency_conversion_allowed` stay `false`).
 
 
 The earlier version of this decision treated `EstimateItemSnapshot.total` and
@@ -285,9 +279,9 @@ forecast assumptions must not cause Cabinet Backend to invent a forecast.
    records remain unchanged by calculation.
 13. No forecast is invented when no accepted forecast assumptions are pinned.
 
-## Closure condition
+## Closure condition (met on 2026-08-23)
 
-This decision may return to **ACCEPTED** only after:
+This decision returned to **ACCEPTED** after:
 
 1. PA-MONEY-001, PA-MONEY-002, and PA-MONEY-003 are explicitly resolved in the
    owning Cabinet semantic design;
