@@ -762,9 +762,9 @@
     "HoldedPublicationService.request_holded_publication: [ORCHESTRATION] Lock the exact revision, resolve archive truth, then load the publication bound to the exact revision: reuse it when it binds the same card revision and idempotency key, raise HoldedPublicationIneligibleError when a different active publication exists, and otherwise insert one logical publication — all before the sole gateway create.",
     "HoldedPublicationService.request_holded_publication: [VALIDATION_ERROR] The required-source precondition is SourceStatus.complete of durable_archive.get_source_status for the invoice, read after the revision is resolved and before any publication row is inserted; canonical_card.source (file_ref, file_status) is capture evidence and takes no part in eligibility. Raise HoldedPublicationIneligibleError(\\\"required_source_missing\\\") only when complete is false.",
     "HoldedPublicationService.request_holded_publication: [FIELD_ASSIGNMENT] The reservation passed to create_holded_purchase is a HoldedPublicationAttempt with publication_attempt_id = f\"{publication_id}:{attempt_marker}\", publication_id, invoice_id, invoice_revision_hash = content_hash, canonical_holded_payload_hash = sha256 of the payload's model_dump_json(), attempt_marker = f\"cabinet-publication:{publication_id}\" (the stable non-financial marker, also carried verbatim in payload.desc), outcome reserved, and request_started_at, request_finished_at, document_id, safe_error_code None.",
-    "HoldedPublicationService.request_holded_publication: [BEHAVIOR] Persist every lifecycle transition by updating the exact locked publication only from its reloaded current status along an accepted transition; a stale, skipped, or conflicting transition raises HoldedReconciliationRequiredError and writes nothing.",
+    "HoldedPublicationService.request_holded_publication: [BEHAVIOR] Persist every lifecycle transition by updating the exact locked publication only from its reloaded current status along a transition listed in = rules.holded_publication.status_transitions (entries \"current->next\"; a status that appears in no entry as current is terminal); a stale, skipped, or conflicting transition raises HoldedReconciliationRequiredError and writes nothing.",
     "HoldedPublicationService.reconcile_holded_publication: [FORBIDDEN_ACTION] Reload exact logical state and use read-only gateway recovery; never repeat create or change the bound revision.",
-    "HoldedPublicationService.reconcile_holded_publication: [BEHAVIOR] Settle or keep unresolved only by updating the exact locked publication from its reloaded current status along an accepted transition; a stale, skipped, or conflicting transition raises HoldedReconciliationRequiredError and writes nothing.",
+    "HoldedPublicationService.reconcile_holded_publication: [BEHAVIOR] Settle or keep unresolved only by updating the exact locked publication from its reloaded current status along a transition listed in = rules.holded_publication.status_transitions (outcome_unknown and reconciliation_required are re-enterable; verified, failed, payload_mismatch, duplicate_conflict and cancelled are terminal); a stale, skipped, or conflicting transition raises HoldedReconciliationRequiredError and writes nothing.",
     "HoldedPublicationService.get_holded_publication_status: [VALIDATION_ERROR] Return exact committed state or raise HoldedPublicationNotFoundError; never fabricate pending or success.",
     "HoldedPublicationRepository.begin: [DEPENDENCY_BOUNDARY] Open one PostgreSQL transaction for the exact publication transition and reject nested begin.",
     "HoldedPublicationRepository.commit: [BEHAVIOR] Commit one valid lifecycle transition and expose no partial state.",
@@ -1991,7 +1991,23 @@
       "max_automatic_create_attempts_per_logical_attempt": 1,
       "ambiguous_create_allows_automatic_retry": false,
       "recovered_candidate_requires_full_verification": true,
-      "clear_create_requires_readback_verification": true
+      "clear_create_requires_readback_verification": true,
+      "status_transitions": [
+        "pending->verified",
+        "pending->failed",
+        "pending->payload_mismatch",
+        "pending->outcome_unknown",
+        "pending->reconciliation_required",
+        "outcome_unknown->verified",
+        "outcome_unknown->duplicate_conflict",
+        "outcome_unknown->payload_mismatch",
+        "outcome_unknown->outcome_unknown",
+        "reconciliation_required->verified",
+        "reconciliation_required->duplicate_conflict",
+        "reconciliation_required->payload_mismatch",
+        "reconciliation_required->outcome_unknown",
+        "reconciliation_required->reconciliation_required"
+      ]
     },
     "registry_context": {
       "registry_is_read_only_from_cabinet": true,
