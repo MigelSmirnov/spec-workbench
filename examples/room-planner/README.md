@@ -52,6 +52,7 @@ Concrete HTTP paths, DTOs, and transport details are still deferred until their 
    - [00 — Stage artifacts and demolition quantities](00_stage_artifacts.md)
 2. **State 1 — Domain models**
    - [10 — Domain models](10_models.md) — working draft
+   - [10 — Snapshot identity and Existing correction carry-forward](10_identity_carry_forward.md) — accepted refinement
 3. 20 — Rules and invariants
 4. 30 — Module responsibilities
 5. 40 — System flows
@@ -60,6 +61,6 @@ Concrete HTTP paths, DTOs, and transport details are still deferred until their 
 8. 70 — Notes
 9. Assembly
 
-State 0 is stabilized across both `00_*.md` documents. State 1 is active and remains a working draft until its explicit model closure questions are resolved. `context_pack.py` will carry the stabilized State 0 sources and the current State 1 document into later work automatically.
+State 0 is stabilized across both `00_*.md` documents. State 1 is active and remains a working draft until its explicit model closure questions are resolved. `10_identity_carry_forward.md` records accepted refinements that supersede provisional terminology in `10_models.md` where stated. `context_pack.py` will carry the stabilized State 0 sources and the current State 1 documents into later work automatically.
 
 Later state documents must carry the Platform Router dependency forward even when they do not introduce a new shared interaction.
