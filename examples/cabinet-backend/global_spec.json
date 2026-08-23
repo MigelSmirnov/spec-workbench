@@ -416,7 +416,7 @@
     "get_work_object: [VALIDATION_ERROR] Raise RegistryContextUnavailableError when the requested WorkObject or required Registry project context cannot be resolved safely instead of constructing a placeholder object.",
     "refresh_estimate_snapshot: [BEHAVIOR] MUST create a new immutable estimate snapshot only when the canonical observed estimate content is not already represented by the same stable source identity.",
     "refresh_estimate_snapshot: [PROVENANCE] Preserve enough source identity and observation evidence for later plan/actual calculations to pin the exact estimate snapshot they consumed.",
-    "refresh_estimate_snapshot: [FIELD_PROJECTION] EstimateSnapshot.items are PresuProEstimateObservation.items verbatim; each EstimateItemSnapshot carries its own currency and monetary_basis (\"net\" or \"gross\") as observed from PresuPro, and the snapshot currency is the observation currency.",
+    "refresh_estimate_snapshot: [FIELD_PROJECTION] EstimateSnapshot.items are PresuProEstimateObservation.items verbatim; each EstimateItemSnapshot carries its own currency and monetary_basis (one MonetaryBasis member) as observed from PresuPro, and the snapshot currency is the observation currency.",
     "refresh_estimate_snapshot: [VALIDATION_ERROR] Raise EstimateObservationRejectedError when the PresuPro observation lacks stable source identity or contains unsupported or unprocessable content; never accept a partial snapshot.",
     "calculate_plan_actual: [RULE_REFERENCE] Consume only confirmed matching decisions when calculating plan versus actual; use = rules.plan_actual.confirmed_matches_only.",
     "calculate_plan_actual: [RULE_REFERENCE] Treat source invoice, Registry, and estimate records as immutable inputs; use = rules.plan_actual.source_records_are_immutable.",
@@ -507,6 +507,7 @@
     "DurableArchiveService.recover_pending_publications: [BEHAVIOR] MUST lock and inspect every committed pending ArchiveBytePublication, verify candidate or final bytes, finalize an equivalent candidate exactly once, and persist published or safe failed state before application exposure.",
     "DurableArchiveService.recover_pending_publications: [VALIDATION_ERROR] MUST raise a startup-blocking error when recovery cannot establish truthful recoverable or terminal state; MUST NOT mark unverifiable bytes available.",
     "DurableArchiveService.recover_pending_publications: [ORCHESTRATION] Advance each pending publication only from its reloaded state along = rules.archive_byte_publication.recovery_states through update_publication_state; never move published to failed and never skip metadata_committed.",
+    "DurableArchiveService.recover_pending_publications: [ORCHESTRATION] List publications in the staged and metadata_committed states, then for each one in a transaction of its own: lock_invoice(publication.invoice_id), reload it through load_publication, verify bytes through SourceByteStore.verify against the stored final_reference first and the stored staging_reference second (both references are stored values, never recomposed through final_reference_for), publish a verified candidate through SourceByteStore.publish, and write the resulting state; a publication whose bytes verify nowhere becomes failed with failure_code set, and remove_staging runs only after published or failed is committed.",
     "DurableArchiveService.recover_pending_publications: [RULE_REFERENCE] Select pending publications by listing the staged and metadata_committed states from = rules.archive_byte_publication.recovery_states; never treat published or failed as pending.",
     "create_durable_archive_schema: [CONFIG_REFERENCE] MUST idempotently create only the tables named by = config.persistence.invoice_card_table_name and = config.persistence.invoice_card_revision_table_name and = config.persistence.source_binary_table_name and = config.persistence.source_replica_table_name and = config.persistence.transfer_manifest_table_name and = config.persistence.transfer_receipt_table_name and = config.persistence.byte_publication_table_name and = config.persistence.incomplete_source_acceptance_table_name and = config.persistence.source_loss_decision_table_name on a connection it opens from database_url and closes; MUST NOT read environment variables or log the URL.",
     "PostgresArchiveUnitOfWork.__init__: [SECURITY_BOUNDARY] MUST treat database_url as secret configuration and MUST NOT log it or include it in safe errors.",
@@ -697,6 +698,7 @@
     "SynchronizationService: [ORCHESTRATION] SynchronizationRepository owns its transaction: every port method, reads included, runs only between begin() and commit() and raises without an active transaction; each public operation that touches the port opens it with begin() first, commits on success, rolls back on any failure, and never calls another public operation of this module that opens one (nested begin is rejected).",
     "SynchronizationService.__init__: [DEPENDENCY_BOUNDARY] Retain the exact supplied repository, transport, archive, and registry; never construct or discover alternates.",
     "SynchronizationService.synchronize_invoice_work: [ORCHESTRATION] Under the exact synchronization lock, load the attempt bound to invoice, target node, and idempotency key: reuse it when its source_node_id equals selection.source_node_id (manifest_hash is not compared: it is None until delivery), reject one whose source_node_id differs, otherwise insert the reservation; commit, then re-read the locked attempt, require that no issuance is recorded, update it as issued, and commit before transport; afterwards update the same locked attempt from its issued state with the conclusive or unknown status, finished_at, and safe_error_code, and send an exact delivered package through archive acceptance and verification.",
+    "SynchronizationService.synchronize_invoice_work: [RULE_REFERENCE] The reservation is inserted with status = rules.synchronization.reservation_status; issuance requires the reloaded status to equal that value and writes = rules.synchronization.issued_status; every later update of the attempt follows one entry of = rules.synchronization.status_transitions (\"current->next\") from the reloaded status, and a stale or skipped transition writes nothing.",
     "SynchronizationService.synchronize_invoice_work: [ORCHESTRATION] When the archive receipt is accepted or already_accepted and package.assignment_observation is not None, MUST pass it unchanged to registry_context.record_card_assignment_observation (idempotent by card revision) after the archive transaction has committed and before the final attempt update; a package without an observation records nothing and is not an error.",
     "SynchronizationService.synchronize_invoice_work: [BEHAVIOR] Equivalent re-entry for a synchronization that already finished returns the existing evidence: the stored attempt, the archive receipt found through durable_archive.get_transfer_receipt by the attempt's manifest_hash, and a fresh verify_durable_acceptance for the accepted content hash; it issues no transport call and creates no second acceptance.",
     "SynchronizationService.synchronize_invoice_work: [FIELD_PROJECTION] The content_hash argument of every verify_durable_acceptance call is the Card revision identity (VpsInvoiceTransferPackage.card_revision.reference.content_hash on the transfer path, the accepted hash of the found receipt on re-entry); InvoiceSynchronization.manifest_hash and InvoiceTransferManifest.manifest_hash identify the manifest and are never passed as a content hash.",
@@ -1263,6 +1265,13 @@
         "updated_at": "datetime"
       }
     },
+    "MonetaryBasis": {
+      "kind": "enum",
+      "values": [
+        "net",
+        "gross"
+      ]
+    },
     "EstimateItemSnapshot": {
       "identity": "entity",
       "fields": {
@@ -1272,7 +1281,7 @@
         "unit": "str",
         "unit_price": "Decimal",
         "currency": "str",
-        "monetary_basis": "str",
+        "monetary_basis": "MonetaryBasis",
         "total": "Decimal"
       }
     },
@@ -2239,7 +2248,15 @@
       "delivery_implies_durable_acceptance": false,
       "direction": "backend_to_vps_only",
       "unknown_outcome_reconciliation": "read_only",
-      "durable_reservation_before_mutation": true
+      "durable_reservation_before_mutation": true,
+      "reservation_status": "reserved",
+      "issued_status": "issued",
+      "status_transitions": [
+        "reserved->issued",
+        "issued->delivered",
+        "issued->failed",
+        "issued->unknown_outcome"
+      ]
     },
     "holded_publication": {
       "max_automatic_create_attempts_per_logical_attempt": 1,
@@ -6864,6 +6881,7 @@
         "InvoiceTransferReceipt",
         "ReplicaRole",
         "InvoiceWorkingReplica",
+        "MonetaryBasis",
         "EstimateItemSnapshot",
         "EstimateSnapshot",
         "HoldedPublicationStatus",
@@ -7457,7 +7475,8 @@
           "InvoiceCardRevisionReference",
           "ActorType",
           "InvoiceCardStatus",
-          "MatchStatus"
+          "MatchStatus",
+          "MonetaryBasis"
         ]
       },
       "durable_archive_persistence": {
@@ -7540,6 +7559,7 @@
       "InvoiceTransferReceipt",
       "ReplicaRole",
       "InvoiceWorkingReplica",
+      "MonetaryBasis",
       "EstimateItemSnapshot",
       "EstimateSnapshot",
       "HoldedPublicationStatus",

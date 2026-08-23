@@ -1557,11 +1557,21 @@ Durable when used by accepted matches or repeatable analysis.
 
 None for identity closure.
 
+## Model M119 — MonetaryBasis
+
+`kind: enum`: `net`, `gross`.
+
+### Identity
+
+enum (no runtime identity).
+
+---
+
 ## Model M29 — EstimateItemSnapshot
 
 Read-only comparable projection including stable item identity when available,
 zone, type, description, material reference, quantity, unit, unit price, waste,
-margin, discount, IVA, and totals.
+margin, discount, IVA, and totals; `monetary_basis: MonetaryBasis` — `net` or `gross`.
 
 ### Meaning
 

@@ -237,7 +237,7 @@ The complete Version 1 card as the typed projection of `StoredInvoiceCardRevisio
 ## Monetary basis closure (resolves `01_models_plan_actual_monetary_gap.md`)
 
 The basis is a fact of the data, not a global constant. `EstimateItemSnapshot` (M29) gains `currency`
-and `monetary_basis` (`net` or `gross`) as observed from PresuPro; `PresuProEstimateObservation` gains
+and `monetary_basis: MonetaryBasis` (`net` or `gross`) as observed from PresuPro; `PresuProEstimateObservation` gains
 `currency` and the typed `items` it was parsed into. Plan/actual takes `InvoiceCardLine.gross_amount` for every
 line (`rules.plan_actual.actual_amount_basis = "gross"`, PA-MONEY-002); an item observed in `net` basis or
 another currency is a basis mismatch unless an accepted assumption is pinned (PA-MONEY-003). The rule address
