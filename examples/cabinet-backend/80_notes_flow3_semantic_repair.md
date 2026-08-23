@@ -5,8 +5,8 @@ This file refines `80_notes.md` for the Stage 7.1 Flow 3 repair. The contract an
 # registry_context
 
 validate_card_assignment: [RULE_REFERENCE] An exact current active project match with no material conflict must use the accepted positive result from = rules.registry_context.active_exact_match_result.
-validate_card_assignment: [RULE_REFERENCE] An archived current project must remain review-required according to = rules.registry_context.archived_requires_review.
-validate_card_assignment: [RULE_REFERENCE] Missing current project evidence must remain review-required according to = rules.registry_context.missing_requires_review.
+validate_card_assignment: [RULE_REFERENCE] An archived current project must remain review-required according to = rules.registry_context.archived_requires_review and must record the result = rules.registry_context.archived_project_result.
+validate_card_assignment: [RULE_REFERENCE] Missing current project evidence must remain review-required according to = rules.registry_context.missing_requires_review and must record the result = rules.registry_context.missing_project_result.
 validate_card_assignment: [RULE_REFERENCE] Archived Registry status must not be reinterpreted as completion; use = rules.registry_context.archived_means_completed.
 validate_card_assignment: [BEHAVIOR] Do not use inconclusive or another review result as a universal fallback when accepted current Registry evidence deterministically establishes an exact active project match.
 validate_card_assignment: [BEHAVIOR] Preserve the exact immutable Card assignment while recording current validation evidence separately; a later Registry observation may change validation evidence but never rewrite the Card object block.

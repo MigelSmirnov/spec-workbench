@@ -182,6 +182,16 @@ Substitution: equal submitted bytes and declared expectations are interchangeabl
 
 ---
 
+## Model M117 — SourceAttachmentResult
+
+`kind: enum`: `attached`, `already_attached`, `rejected`.
+
+### Identity
+
+enum (no runtime identity).
+
+---
+
 ## Model M42 — SourceAttachmentItemResult
 
 Immutable per-file attachment outcome.
@@ -191,7 +201,7 @@ Fields:
 - `filename: str`;
 - `source_id: str | None`;
 - `content_hash: str`;
-- `result: str` — accepted values are `attached`, `already_attached`, or `rejected`;
+- `result: SourceAttachmentResult` — accepted values are `attached`, `already_attached`, or `rejected`;
 - `safe_error_code: str | None`.
 
 ### Identity
@@ -201,6 +211,16 @@ value
 ### Identity evidence
 
 Substitution: equal file, hash, source, result, and safe-error facts are interchangeable. Continuity: the outcome is issued for one attachment attempt and does not change afterward.
+
+---
+
+## Model M118 — SourceCompleteness
+
+`kind: enum`: `complete`, `awaiting_source`, `source_lost`.
+
+### Identity
+
+enum (no runtime identity).
 
 ---
 
@@ -215,6 +235,7 @@ Fields:
 - `missing_source_ids: tuple[str, ...]`;
 - `failed_source_ids: tuple[str, ...]`;
 - `complete: bool`;
+- `completeness: SourceCompleteness`;
 - `observed_at: datetime`.
 
 ### Identity

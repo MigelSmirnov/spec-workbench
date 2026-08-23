@@ -3,11 +3,21 @@
 The following runtime evidence shapes refine the accepted archive, Holded, and
 synchronization boundaries without moving business policy into adapters.
 
+## Model M105 — ArchivePublicationState
+
+`kind: enum`: `staged`, `metadata_committed`, `published`, `failed`.
+
+### Identity
+
+enum (no runtime identity).
+
+---
+
 ## Model M63 — ArchiveBytePublication
 
 Fields: `publication_id: str`, `source_id: str`, `invoice_id: str`,
 `content_hash: str`, `size_bytes: int`, `staging_reference: str`,
-`final_reference: str`, `state: str`, `created_at: datetime`,
+`final_reference: str`, `state: ArchivePublicationState`, `created_at: datetime`,
 `updated_at: datetime`, `failure_code: str | None`.
 
 ### Identity

@@ -328,7 +328,7 @@
     "LocalAccessControlService.authenticate: [RULE_REFERENCE] Begin progressive delay at = rules.access_control.progressive_delay_after_failures and temporary blocking at = rules.access_control.temporary_block_after_failures.",
     "LocalAccessControlService.authenticate: [RULE_REFERENCE] Keep temporary refusal active for = rules.access_control.temporary_block_seconds; the verifier algorithm is = rules.access_control.credential_hash_algorithm and is applied only through credential_security.",
     "LocalAccessControlService.authenticate: [SECURITY_BOUNDARY] Accept only an active credential of an active principal whose verifier matches; return a context containing identifiers and the authentication time but no reusable secret.",
-    "LocalAccessControlService.authenticate: [VALIDATION_ERROR] Reject malformed, unknown, revoked, delayed, or temporarily blocked credentials with AuthenticationRequiredError; a refusal still upserts the throttle state and inserts secret-free audit evidence before rollback-free commit of those rows.",
+    "LocalAccessControlService.authenticate: [VALIDATION_ERROR] Reject a malformed token, signalled by ValueError from parse_service_token, with AuthenticationRequiredError before any transaction begins and without throttle or audit rows because no credential id exists; reject unknown, revoked, delayed, or temporarily blocked credentials with AuthenticationRequiredError, and such a refusal still upserts the throttle state and inserts secret-free audit evidence before rollback-free commit of those rows.",
     "LocalAccessControlService.authenticate: [BEHAVIOR] On failure increment the consecutive-failure counter and compute delay_until or blocked_until from the rules; on success reset the counter to zero, update the credential last_authenticated_at, and insert audit evidence; audit history is never deleted.",
     "LocalAccessControlService.authenticate: [FIELD_ASSIGNMENT] Audit evidence uses event_type authentication, result allowed or refused, and reason_code throttled_block (blocked_until in the future), throttled_delay (delay_until in the future), unknown_credential, credential_revoked, principal_revoked, or secret_mismatch, evaluated in that order; a refusal is always AuthenticationRequiredError regardless of the reason.",
     "LocalAccessControlService.authorize: [SECURITY_BOUNDARY] Reread the current principal and credential for the supplied context and allow only an exact operation present in the stored capability tuple; stale context, localhost origin, client name, prompt, or entity identifier is not authority.",
@@ -460,8 +460,8 @@
     "attach_local_source: [FIELD_ASSIGNMENT] A SourceBinary written for verified bytes has byte_status available (SourceByteStatus); missing names an identity whose bytes are absent, quarantined a replica that failed verification after storage, corrupt a stored replica whose hash no longer matches, deleted a loss decision.",
     "attach_local_source: [PROVENANCE] Preserve previously accepted provenance when equivalent bytes are reattached; repeated attempts may add attempt evidence but must not silently replace the provenance of already accepted source evidence.",
     "validate_card_assignment: [RULE_REFERENCE] An exact current active project match with no material conflict must use the accepted positive result from = rules.registry_context.active_exact_match_result.",
-    "validate_card_assignment: [RULE_REFERENCE] An archived current project must remain review-required according to = rules.registry_context.archived_requires_review.",
-    "validate_card_assignment: [RULE_REFERENCE] Missing current project evidence must remain review-required according to = rules.registry_context.missing_requires_review.",
+    "validate_card_assignment: [RULE_REFERENCE] An archived current project must remain review-required according to = rules.registry_context.archived_requires_review and must record the result = rules.registry_context.archived_project_result.",
+    "validate_card_assignment: [RULE_REFERENCE] Missing current project evidence must remain review-required according to = rules.registry_context.missing_requires_review and must record the result = rules.registry_context.missing_project_result.",
     "validate_card_assignment: [RULE_REFERENCE] Archived Registry status must not be reinterpreted as completion; use = rules.registry_context.archived_means_completed.",
     "validate_card_assignment: [BEHAVIOR] Do not use inconclusive or another review result as a universal fallback when accepted current Registry evidence deterministically establishes an exact active project match.",
     "validate_card_assignment: [BEHAVIOR] Preserve the exact immutable Card assignment while recording current validation evidence separately; a later Registry observation may change validation evidence but never rewrite the Card object block.",
@@ -532,6 +532,7 @@
     "get_source_status: [ORCHESTRATION] Open one transaction, lock nothing, call derive_source_status, commit, and return its result; the derivation itself lives in derive_source_status.",
     "derive_source_status: [BEHAVIOR] MUST derive SourceStatus from rows read through ArchiveUnitOfWork in the transaction the caller already opened: load_source_binaries gives the required source ids, list_source_replicas the verified available ids, list_incomplete_source_acceptances the active_acceptance_ids (acceptances whose card_revision is the current head revision), list_source_loss_decisions the active_loss_decision_ids, and completeness from those together; missing = required minus available; raise InvoiceNotFoundError when load_invoice_card returns None; MUST NOT call begin(), commit(), rollback(), or another public operation of this module — every caller (get_source_status, accept_incomplete_source_evidence, record_source_loss, attach_local_source, verify_durable_acceptance) holds the open transaction and calls derive_source_status after its own writes.",
     "accept_transfer_manifest: [FIELD_PROJECTION] Required sources of the delivered revision are manifest.source_references (content_id as source_id, content_hash as expected hash); completeness compares them with the verified replicas in the package and in the archive; canonical_card.source carries no source identity.",
+    "accept_transfer_manifest: [FIELD_PROJECTION] A newly created StoredInvoiceCard head carries archive_status = rules.durable_archive.accepted_head_archive_status and current_status equal to the delivered revision observed_status; an existing head keeps its archive_status and only advances the current revision fields.",
     "accept_transfer_manifest: [ORCHESTRATION] MUST perform the idempotency lookup inside its own transaction through ArchiveUnitOfWork.list_transfer_receipts (a receipt with the same manifest_hash yields already_accepted) and MUST NOT call get_transfer_receipt, get_source_status, or verify_durable_acceptance, which open transactions of their own; completeness is computed with derive_source_status.",
     "get_archived_invoice: [DEPENDENCY_BOUNDARY] MUST read accepted immutable revisions only through the supplied DurableArchiveService.",
     "accept_incomplete_source_evidence: [DEPENDENCY_BOUNDARY] MUST persist the decision only through the supplied DurableArchiveService under the invoice lock.",
@@ -903,26 +904,50 @@
         "invoice_id": "str",
         "card_version": "int",
         "content_hash": "str",
-        "observed_status": "str",
+        "observed_status": "InvoiceCardStatus",
         "observed_at": "datetime"
       }
+    },
+    "ActorType": {
+      "kind": "enum",
+      "values": [
+        "user",
+        "agent",
+        "service",
+        "import",
+        "system"
+      ]
     },
     "ActorReference": {
       "identity": "value",
       "fields": {
-        "actor_type": "str",
+        "actor_type": "ActorType",
         "actor_id": "str",
         "delegated_by": "str | None",
         "interaction_id": "str | None",
         "display_label": "str | None"
       }
     },
+    "CabinetNodeKind": {
+      "kind": "enum",
+      "values": [
+        "vps_cabinet",
+        "local_backend"
+      ]
+    },
+    "CabinetNodeStatus": {
+      "kind": "enum",
+      "values": [
+        "active",
+        "revoked"
+      ]
+    },
     "CabinetNodeIdentity": {
       "identity": "entity",
       "fields": {
         "node_id": "str",
-        "node_kind": "str",
-        "status": "str",
+        "node_kind": "CabinetNodeKind",
+        "status": "CabinetNodeStatus",
         "contract_version": "str",
         "created_at": "datetime",
         "revoked_at": "datetime | None"
@@ -1029,13 +1054,21 @@
         "created_by": "str"
       }
     },
+    "InvoiceCardStatus": {
+      "kind": "enum",
+      "values": [
+        "draft",
+        "confirmed",
+        "archived"
+      ]
+    },
     "InvoiceCardV1": {
       "identity": "entity",
       "fields": {
         "card_type": "str",
         "card_version": "int",
         "id": "str",
-        "status": "str",
+        "status": "InvoiceCardStatus",
         "invoice_number": "str",
         "issue_date": "date",
         "service_date": "date | None",
@@ -1065,15 +1098,30 @@
         "superseded_by_content_hash": "str | None"
       }
     },
+    "StorageZone": {
+      "kind": "enum",
+      "values": [
+        "vps_working",
+        "local_durable"
+      ]
+    },
+    "ReplicaVerificationStatus": {
+      "kind": "enum",
+      "values": [
+        "pending",
+        "verified",
+        "failed"
+      ]
+    },
     "SourceBinaryReplica": {
       "identity": "entity",
       "fields": {
         "source_id": "str",
         "node_id": "str",
-        "storage_zone": "str",
+        "storage_zone": "StorageZone",
         "storage_reference": "str",
         "stored_hash": "str",
-        "verification_status": "str",
+        "verification_status": "ReplicaVerificationStatus",
         "stored_at": "datetime",
         "retention_deadline": "datetime | None",
         "deleted_at": "datetime | None"
@@ -1103,6 +1151,17 @@
         "attention_status": "str"
       }
     },
+    "AssignmentValidationResult": {
+      "kind": "enum",
+      "values": [
+        "valid",
+        "project_missing",
+        "project_closed",
+        "materially_changed",
+        "registry_unavailable",
+        "inconclusive"
+      ]
+    },
     "ObjectAssignmentValidation": {
       "identity": "entity",
       "fields": {
@@ -1110,7 +1169,7 @@
         "card_revision": "InvoiceCardRevisionReference",
         "project_id": "str | None",
         "registry_snapshot_id": "str | None",
-        "result": "str",
+        "result": "AssignmentValidationResult",
         "validated_at": "datetime",
         "actor": "ActorReference",
         "warning_codes": "tuple[str, ...]"
@@ -1128,6 +1187,19 @@
         "manifest_hash": "str"
       }
     },
+    "SynchronizationStatus": {
+      "kind": "enum",
+      "values": [
+        "reserved",
+        "issued",
+        "pending",
+        "transferring",
+        "unknown_outcome",
+        "delivered",
+        "failed",
+        "cancelled"
+      ]
+    },
     "InvoiceSynchronization": {
       "identity": "entity",
       "fields": {
@@ -1136,12 +1208,25 @@
         "source_node_id": "str",
         "target_node_id": "str",
         "manifest_hash": "str | None",
-        "status": "str",
+        "status": "SynchronizationStatus",
         "idempotency_key": "str",
         "started_at": "datetime",
         "finished_at": "datetime | None",
         "safe_error_code": "str | None"
       }
+    },
+    "TransferReceiptResult": {
+      "kind": "enum",
+      "values": [
+        "accepted",
+        "already_accepted",
+        "quarantined",
+        "rejected",
+        "conflicting",
+        "duplicate_review",
+        "incomplete",
+        "unknown"
+      ]
     },
     "InvoiceTransferReceipt": {
       "identity": "value",
@@ -1151,12 +1236,20 @@
         "idempotency_key": "str",
         "invoice_id": "str",
         "manifest_hash": "str",
-        "result": "str",
+        "result": "TransferReceiptResult",
         "accepted_card_hashes": "tuple[str, ...]",
         "accepted_source_hashes": "tuple[str, ...]",
         "receipt_at": "datetime",
         "safe_error_code": "str | None"
       }
+    },
+    "ReplicaRole": {
+      "kind": "enum",
+      "values": [
+        "vps_working",
+        "local_durable",
+        "read_only_cache"
+      ]
     },
     "InvoiceWorkingReplica": {
       "identity": "entity",
@@ -1166,7 +1259,7 @@
         "accepted_card_hashes": "tuple[str, ...]",
         "current_card_hash": "str | None",
         "source_manifest_hash": "str",
-        "role": "str",
+        "role": "ReplicaRole",
         "updated_at": "datetime"
       }
     },
@@ -1515,15 +1608,31 @@
         "expected_content_hash": "str | None = None"
       }
     },
+    "SourceAttachmentResult": {
+      "kind": "enum",
+      "values": [
+        "attached",
+        "already_attached",
+        "rejected"
+      ]
+    },
     "SourceAttachmentItemResult": {
       "identity": "value",
       "fields": {
         "filename": "str",
         "source_id": "str | None = None",
         "content_hash": "str",
-        "result": "str",
+        "result": "SourceAttachmentResult",
         "safe_error_code": "str | None = None"
       }
+    },
+    "SourceCompleteness": {
+      "kind": "enum",
+      "values": [
+        "complete",
+        "awaiting_source",
+        "source_lost"
+      ]
     },
     "SourceStatus": {
       "identity": "value",
@@ -1532,7 +1641,7 @@
         "available_source_ids": "tuple[str, ...]",
         "missing_source_ids": "tuple[str, ...]",
         "failed_source_ids": "tuple[str, ...]",
-        "completeness": "str",
+        "completeness": "SourceCompleteness",
         "active_loss_decision_ids": "tuple[str, ...]",
         "active_acceptance_ids": "tuple[str, ...]",
         "complete": "bool",
@@ -1678,18 +1787,33 @@
         "warning_codes": "tuple[str, ...]"
       }
     },
+    "ArchiveStatus": {
+      "kind": "enum",
+      "values": [
+        "active",
+        "archived"
+      ]
+    },
     "StoredInvoiceCard": {
       "identity": "entity",
       "fields": {
         "invoice_id": "str",
         "card_version": "int",
         "current_content_hash": "str",
-        "current_status": "str",
+        "current_status": "InvoiceCardStatus",
         "first_received_at": "datetime",
         "last_received_at": "datetime",
         "durable_at": "datetime | None",
-        "archive_status": "str"
+        "archive_status": "ArchiveStatus"
       }
+    },
+    "CardValidationResult": {
+      "kind": "enum",
+      "values": [
+        "valid",
+        "valid_with_warnings",
+        "invalid"
+      ]
     },
     "InvoiceCardValidationRecord": {
       "identity": "entity",
@@ -1698,12 +1822,21 @@
         "card_revision": "InvoiceCardRevisionReference",
         "validator_contract": "str",
         "validator_version": "str",
-        "result": "str",
+        "result": "CardValidationResult",
         "error_codes": "tuple[str, ...]",
         "warning_codes": "tuple[str, ...]",
         "acknowledgement_evidence_id": "str | None",
         "validated_at": "datetime"
       }
+    },
+    "DuplicateReviewStatus": {
+      "kind": "enum",
+      "values": [
+        "open",
+        "not_duplicate",
+        "confirmed_duplicate",
+        "resolved"
+      ]
     },
     "DuplicateCandidateReview": {
       "identity": "entity",
@@ -1713,7 +1846,7 @@
         "candidate_invoice_ids": "tuple[str, ...]",
         "candidate_content_hashes": "tuple[str, ...]",
         "matching_reasons": "tuple[str, ...]",
-        "status": "str",
+        "status": "DuplicateReviewStatus",
         "decided_by": "ActorReference | None",
         "decided_at": "datetime | None",
         "resolution_reference": "str | None"
@@ -1743,6 +1876,16 @@
         "byte_status": "SourceByteStatus"
       }
     },
+    "CataloguePublicationStatus": {
+      "kind": "enum",
+      "values": [
+        "pending",
+        "transferring",
+        "accepted",
+        "failed",
+        "unknown_outcome"
+      ]
+    },
     "RegistryCataloguePublication": {
       "identity": "entity",
       "fields": {
@@ -1751,7 +1894,7 @@
         "source_node_id": "str",
         "target_node_id": "str",
         "idempotency_key": "str",
-        "status": "str",
+        "status": "CataloguePublicationStatus",
         "requested_at": "datetime",
         "completed_at": "datetime | None",
         "acknowledged_at": "datetime | None",
@@ -1768,6 +1911,15 @@
         "expires_at": "datetime | None"
       }
     },
+    "AssignmentDecisionContext": {
+      "kind": "enum",
+      "values": [
+        "online_current",
+        "offline_cached",
+        "label_only",
+        "unassigned"
+      ]
+    },
     "CardObjectAssignmentObservation": {
       "identity": "entity",
       "fields": {
@@ -1777,9 +1929,20 @@
         "object_label": "str | None",
         "catalogue_id": "str | None",
         "registry_snapshot_id": "str | None",
-        "decision_context": "str",
+        "decision_context": "AssignmentDecisionContext",
         "observed_at": "datetime"
       }
+    },
+    "ImportStatus": {
+      "kind": "enum",
+      "values": [
+        "received",
+        "validating",
+        "quarantined",
+        "accepted",
+        "rejected",
+        "already_accepted"
+      ]
     },
     "InvoiceImport": {
       "identity": "entity",
@@ -1788,7 +1951,7 @@
         "synchronization_id": "str",
         "manifest_hash": "str",
         "invoice_id": "str",
-        "status": "str",
+        "status": "ImportStatus",
         "received_at": "datetime",
         "validation_completed_at": "datetime | None",
         "durable_commit_at": "datetime | None",
@@ -1798,17 +1961,44 @@
         "duplicate_review_id": "str | None"
       }
     },
+    "QuarantineReason": {
+      "kind": "enum",
+      "values": [
+        "missing_source_bytes",
+        "hash_mismatch",
+        "invalid_card",
+        "unsupported_card_version",
+        "incomplete_manifest",
+        "duplicate_review",
+        "operator_review"
+      ]
+    },
+    "QuarantineStatus": {
+      "kind": "enum",
+      "values": [
+        "open",
+        "resolved",
+        "discarded"
+      ]
+    },
     "ImportQuarantine": {
       "identity": "entity",
       "fields": {
         "quarantine_id": "str",
         "import_id": "str",
         "component_references": "tuple[ContentReference, ...]",
-        "reason": "str",
+        "reason": "QuarantineReason",
         "opened_at": "datetime",
-        "status": "str",
+        "status": "QuarantineStatus",
         "resolution_evidence_id": "str | None"
       }
+    },
+    "ConflictStatus": {
+      "kind": "enum",
+      "values": [
+        "open",
+        "resolved"
+      ]
     },
     "SynchronizationConflict": {
       "identity": "entity",
@@ -1821,9 +2011,17 @@
         "common_predecessor": "str | None",
         "reason": "str",
         "detected_at": "datetime",
-        "status": "str",
+        "status": "ConflictStatus",
         "resolution_evidence_id": "str | None"
       }
+    },
+    "MatchStatus": {
+      "kind": "enum",
+      "values": [
+        "confirmed",
+        "rejected",
+        "invalidated"
+      ]
     },
     "InvoiceLineEstimateMatch": {
       "identity": "entity",
@@ -1833,7 +2031,7 @@
         "invoice_line_id": "str",
         "estimate_snapshot_id": "str",
         "estimate_item_id": "str",
-        "status": "str",
+        "status": "MatchStatus",
         "decided_at": "datetime",
         "actor": "ActorReference",
         "explanation": "str | None",
@@ -1862,6 +2060,15 @@
         "decided_at": "datetime"
       }
     },
+    "ArchivePublicationState": {
+      "kind": "enum",
+      "values": [
+        "staged",
+        "metadata_committed",
+        "published",
+        "failed"
+      ]
+    },
     "ArchiveBytePublication": {
       "identity": "entity",
       "fields": {
@@ -1872,7 +2079,7 @@
         "size_bytes": "int",
         "staging_reference": "str",
         "final_reference": "str",
-        "state": "str",
+        "state": "ArchivePublicationState",
         "created_at": "datetime",
         "updated_at": "datetime",
         "failure_code": "str | None"
@@ -2062,7 +2269,9 @@
       "active_exact_match_result": "valid",
       "archived_requires_review": true,
       "missing_requires_review": true,
-      "archived_means_completed": false
+      "archived_means_completed": false,
+      "archived_project_result": "project_closed",
+      "missing_project_result": "project_missing"
     },
     "source_byte_store_backend": {
       "kind": "source_byte_store_backend",
@@ -2290,10 +2499,10 @@
             {
               "column": "result",
               "field": "result",
-              "storage": "text",
+              "storage": "enum",
               "nullable": false,
               "check": null,
-              "element_model": null
+              "element_model": "AssignmentValidationResult"
             },
             {
               "column": "validated_at",
@@ -2547,10 +2756,10 @@
             {
               "column": "status",
               "field": "status",
-              "storage": "text",
+              "storage": "enum",
               "nullable": false,
               "check": null,
-              "element_model": null
+              "element_model": "SynchronizationStatus"
             },
             {
               "column": "idempotency_key",
@@ -2645,10 +2854,10 @@
             {
               "column": "status",
               "field": "status",
-              "storage": "text",
+              "storage": "enum",
               "nullable": false,
               "check": null,
-              "element_model": null
+              "element_model": "CataloguePublicationStatus"
             },
             {
               "column": "requested_at",
@@ -2984,10 +3193,10 @@
             {
               "column": "status",
               "field": "status",
-              "storage": "text",
+              "storage": "enum",
               "nullable": false,
               "check": null,
-              "element_model": null
+              "element_model": "MatchStatus"
             },
             {
               "column": "decided_at",
@@ -3060,10 +3269,10 @@
             {
               "column": "current_status",
               "field": "current_status",
-              "storage": "text",
+              "storage": "enum",
               "nullable": false,
               "check": null,
-              "element_model": null
+              "element_model": "InvoiceCardStatus"
             },
             {
               "column": "first_received_at",
@@ -3092,10 +3301,10 @@
             {
               "column": "archive_status",
               "field": "archive_status",
-              "storage": "text",
+              "storage": "enum",
               "nullable": false,
               "check": null,
-              "element_model": null
+              "element_model": "ArchiveStatus"
             }
           ],
           "primary_key": [
@@ -3316,10 +3525,10 @@
             {
               "column": "storage_zone",
               "field": "storage_zone",
-              "storage": "text",
+              "storage": "enum",
               "nullable": false,
               "check": null,
-              "element_model": null
+              "element_model": "StorageZone"
             },
             {
               "column": "storage_reference",
@@ -3340,10 +3549,10 @@
             {
               "column": "verification_status",
               "field": "verification_status",
-              "storage": "text",
+              "storage": "enum",
               "nullable": false,
               "check": null,
-              "element_model": null
+              "element_model": "ReplicaVerificationStatus"
             },
             {
               "column": "stored_at",
@@ -3493,10 +3702,10 @@
             {
               "column": "result",
               "field": "result",
-              "storage": "text",
+              "storage": "enum",
               "nullable": false,
               "check": null,
-              "element_model": null
+              "element_model": "TransferReceiptResult"
             },
             {
               "column": "accepted_card_hashes",
@@ -3601,10 +3810,10 @@
             {
               "column": "state",
               "field": "state",
-              "storage": "text",
+              "storage": "enum",
               "nullable": false,
               "check": null,
-              "element_model": null
+              "element_model": "ArchivePublicationState"
             },
             {
               "column": "created_at",
@@ -4093,10 +4302,10 @@
             {
               "column": "decision_context",
               "field": "decision_context",
-              "storage": "text",
+              "storage": "enum",
               "nullable": false,
               "check": null,
-              "element_model": null
+              "element_model": "AssignmentDecisionContext"
             },
             {
               "column": "observed_at",
@@ -6500,6 +6709,9 @@
         "published",
         "failed"
       ]
+    },
+    "durable_archive": {
+      "accepted_head_archive_status": "active"
     }
   },
   "persistence": {
@@ -6631,17 +6843,26 @@
     "internal": {
       "models": [
         "InvoiceCardRevisionReference",
+        "ActorType",
         "ActorReference",
+        "CabinetNodeKind",
+        "CabinetNodeStatus",
         "CabinetNodeIdentity",
         "ContentReference",
         "StoredInvoiceCardRevision",
+        "StorageZone",
+        "ReplicaVerificationStatus",
         "SourceBinaryReplica",
         "RegistryProjectSnapshot",
         "WorkObject",
+        "AssignmentValidationResult",
         "ObjectAssignmentValidation",
         "InvoiceTransferManifest",
+        "SynchronizationStatus",
         "InvoiceSynchronization",
+        "TransferReceiptResult",
         "InvoiceTransferReceipt",
+        "ReplicaRole",
         "InvoiceWorkingReplica",
         "EstimateItemSnapshot",
         "EstimateSnapshot",
@@ -6665,7 +6886,9 @@
         "SynchronizationStatusObservation",
         "DurableAcceptanceVerification",
         "LocalSourceFile",
+        "SourceAttachmentResult",
         "SourceAttachmentItemResult",
+        "SourceCompleteness",
         "SourceStatus",
         "SourceAttachmentBatchResult",
         "RegistryProjectObservation",
@@ -6678,20 +6901,31 @@
         "PlanActualRequest",
         "PlanActualItemResult",
         "PlanActualAnalysis",
+        "ArchiveStatus",
         "StoredInvoiceCard",
+        "CardValidationResult",
         "InvoiceCardValidationRecord",
+        "DuplicateReviewStatus",
         "DuplicateCandidateReview",
         "SourceByteStatus",
         "SourceBinary",
+        "CataloguePublicationStatus",
         "RegistryCataloguePublication",
         "RegistryCatalogueReplica",
+        "AssignmentDecisionContext",
         "CardObjectAssignmentObservation",
+        "ImportStatus",
         "InvoiceImport",
+        "QuarantineReason",
+        "QuarantineStatus",
         "ImportQuarantine",
+        "ConflictStatus",
         "SynchronizationConflict",
+        "MatchStatus",
         "InvoiceLineEstimateMatch",
         "IncompleteSourceAcceptance",
         "SourceLossDecision",
+        "ArchivePublicationState",
         "ArchiveBytePublication",
         "HoldedTransportResponse",
         "HoldedRemotePurchaseSummary",
@@ -6727,6 +6961,7 @@
         "InvoiceCardPayment",
         "InvoiceCardSourceBlock",
         "InvoiceCardProvenance",
+        "InvoiceCardStatus",
         "InvoiceCardV1"
       ],
       "credential_security": [
@@ -6867,7 +7102,12 @@
           "SynchronizationRepository",
           "VpsSynchronizationTransport",
           "CardObjectAssignmentObservation",
-          "VpsInvoiceTransferPackage"
+          "VpsInvoiceTransferPackage",
+          "CabinetNodeKind",
+          "CabinetNodeStatus",
+          "CataloguePublicationStatus",
+          "AssignmentDecisionContext",
+          "TransferReceiptResult"
         ],
         "registry_context": [
           "RegistryContextService",
@@ -6898,7 +7138,9 @@
           "InvoiceCardLine",
           "InvoiceCardParty",
           "InvoiceCardObjectBlock",
-          "InvoiceCardTotals"
+          "InvoiceCardTotals",
+          "InvoiceCardStatus",
+          "MatchStatus"
         ]
       },
       "holded_publication": {
@@ -6929,7 +7171,9 @@
           "SourceStatus",
           "HoldedAttemptOutcome",
           "HoldedPublicationStatus",
-          "AuthorizationReasonCode"
+          "AuthorizationReasonCode",
+          "InvoiceCardStatus",
+          "SourceCompleteness"
         ],
         "holded_transport": [
           "holded_wire_date"
@@ -7011,7 +7255,9 @@
           "SourceAttachmentBatchResult",
           "AccessControlBackend",
           "HoldedPublicationStatus",
-          "AuthorizationReasonCode"
+          "AuthorizationReasonCode",
+          "AssignmentValidationResult",
+          "SourceCompleteness"
         ],
         "holded_gateway": [
           "HoldedGatewayService"
@@ -7080,7 +7326,8 @@
           "ArchiveUnitOfWork",
           "SourceByteStore",
           "SourceBinary",
-          "SourceByteStatus"
+          "SourceByteStatus",
+          "ArchivePublicationState"
         ]
       },
       "registry_context": {
@@ -7100,7 +7347,10 @@
           "InvoiceCardObjectBlock",
           "InvoiceCardTotals",
           "CardObjectAssignmentObservation",
-          "StoredInvoiceCardRevision"
+          "StoredInvoiceCardRevision",
+          "InvoiceCardStatus",
+          "AssignmentDecisionContext",
+          "AssignmentValidationResult"
         ]
       },
       "holded_gateway": {
@@ -7157,7 +7407,8 @@
           "HoldedPublication",
           "HoldedPublicationRepository",
           "InvoiceCardRevisionReference",
-          "HoldedPublicationStatus"
+          "HoldedPublicationStatus",
+          "InvoiceCardStatus"
         ]
       },
       "registry_context_persistence": {
@@ -7168,7 +7419,11 @@
           "ActorReference",
           "InvoiceCardRevisionReference",
           "CardObjectAssignmentObservation",
-          "InvoiceCardRevisionReference"
+          "InvoiceCardRevisionReference",
+          "ActorType",
+          "InvoiceCardStatus",
+          "AssignmentDecisionContext",
+          "AssignmentValidationResult"
         ]
       },
       "holded_gateway_persistence": {
@@ -7186,7 +7441,9 @@
           "SynchronizationStatusObservation",
           "RegistryCataloguePublication",
           "VpsConnectionObservation",
-          "SynchronizationRepository"
+          "SynchronizationRepository",
+          "CataloguePublicationStatus",
+          "SynchronizationStatus"
         ]
       },
       "plan_actual_persistence": {
@@ -7197,7 +7454,10 @@
           "PlanActualRepository",
           "ActorReference",
           "EstimateItemSnapshot",
-          "InvoiceCardRevisionReference"
+          "InvoiceCardRevisionReference",
+          "ActorType",
+          "InvoiceCardStatus",
+          "MatchStatus"
         ]
       },
       "durable_archive_persistence": {
@@ -7220,7 +7480,14 @@
           "InvoiceCardParty",
           "InvoiceCardObjectBlock",
           "InvoiceCardTotals",
-          "SourceByteStatus"
+          "SourceByteStatus",
+          "ActorType",
+          "InvoiceCardStatus",
+          "ArchiveStatus",
+          "StorageZone",
+          "ReplicaVerificationStatus",
+          "ArchivePublicationState",
+          "TransferReceiptResult"
         ]
       },
       "source_byte_store": {
@@ -7252,17 +7519,26 @@
   "module_functions": {
     "models": [
       "InvoiceCardRevisionReference",
+      "ActorType",
       "ActorReference",
+      "CabinetNodeKind",
+      "CabinetNodeStatus",
       "CabinetNodeIdentity",
       "ContentReference",
       "StoredInvoiceCardRevision",
+      "StorageZone",
+      "ReplicaVerificationStatus",
       "SourceBinaryReplica",
       "RegistryProjectSnapshot",
       "WorkObject",
+      "AssignmentValidationResult",
       "ObjectAssignmentValidation",
       "InvoiceTransferManifest",
+      "SynchronizationStatus",
       "InvoiceSynchronization",
+      "TransferReceiptResult",
       "InvoiceTransferReceipt",
+      "ReplicaRole",
       "InvoiceWorkingReplica",
       "EstimateItemSnapshot",
       "EstimateSnapshot",
@@ -7286,7 +7562,9 @@
       "SynchronizationStatusObservation",
       "DurableAcceptanceVerification",
       "LocalSourceFile",
+      "SourceAttachmentResult",
       "SourceAttachmentItemResult",
+      "SourceCompleteness",
       "SourceStatus",
       "SourceAttachmentBatchResult",
       "RegistryProjectObservation",
@@ -7299,20 +7577,31 @@
       "PlanActualRequest",
       "PlanActualItemResult",
       "PlanActualAnalysis",
+      "ArchiveStatus",
       "StoredInvoiceCard",
+      "CardValidationResult",
       "InvoiceCardValidationRecord",
+      "DuplicateReviewStatus",
       "DuplicateCandidateReview",
       "SourceByteStatus",
       "SourceBinary",
+      "CataloguePublicationStatus",
       "RegistryCataloguePublication",
       "RegistryCatalogueReplica",
+      "AssignmentDecisionContext",
       "CardObjectAssignmentObservation",
+      "ImportStatus",
       "InvoiceImport",
+      "QuarantineReason",
+      "QuarantineStatus",
       "ImportQuarantine",
+      "ConflictStatus",
       "SynchronizationConflict",
+      "MatchStatus",
       "InvoiceLineEstimateMatch",
       "IncompleteSourceAcceptance",
       "SourceLossDecision",
+      "ArchivePublicationState",
       "ArchiveBytePublication",
       "HoldedTransportResponse",
       "HoldedRemotePurchaseSummary",
@@ -7348,6 +7637,7 @@
       "InvoiceCardPayment",
       "InvoiceCardSourceBlock",
       "InvoiceCardProvenance",
+      "InvoiceCardStatus",
       "InvoiceCardV1"
     ],
     "credential_security": [

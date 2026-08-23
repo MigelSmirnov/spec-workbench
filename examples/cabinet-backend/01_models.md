@@ -28,6 +28,16 @@ Cabinet Backend must:
 
 # A. Accepted Invoice Card boundary
 
+## Model M99 — InvoiceCardStatus
+
+`kind: enum`: `draft`, `confirmed`, `archived`.
+
+### Identity
+
+enum (no runtime identity).
+
+---
+
 ## Model M01 — InvoiceCardV1
 
 Invoice Card V1 is an existing Cabinet contract. Backend consumes the complete
@@ -38,7 +48,7 @@ The Card already owns:
 
 - stable `id`;
 - `card_type` and `card_version`;
-- lifecycle `status` — `draft`, `confirmed`, or `archived`;
+- lifecycle `status: InvoiceCardStatus` — `draft`, `confirmed`, or `archived`;
 - invoice number and dates;
 - supplier and buyer facts;
 - currency, lines, totals, and payment transactions;
@@ -92,7 +102,7 @@ Candidate fields:
 - `invoice_id`;
 - `card_version`;
 - `content_hash`;
-- `observed_status`;
+- `observed_status: InvoiceCardStatus`;
 - `observed_at`.
 
 `content_hash` is the Card revision identity already defined by Cabinet.
@@ -129,13 +139,23 @@ None for identity closure.
 
 # B. Shared Backend primitives
 
+## Model M96 — ActorType
+
+`kind: enum`: `user`, `agent`, `service`, `import`, `system`.
+
+### Identity
+
+enum (no runtime identity).
+
+---
+
 ## Model M03 — ActorReference
 
 Provenance value object.
 
 Candidate fields:
 
-- `actor_type` — `user`, `agent`, `service`, `import`, or `system`;
+- `actor_type: ActorType` — `user`, `agent`, `service`, `import`, or `system`;
 - `actor_id`;
 - `delegated_by` optional;
 - `interaction_id` optional;
@@ -178,6 +198,26 @@ deployment. It may cross synchronization and audit boundaries, but it is not an
 authentication session, reusable credential, or authorization proof. Actor and
 delegation identifiers are sensitive audit data; the value contains no secret.
 
+## Model M97 — CabinetNodeKind
+
+`kind: enum`: `vps_cabinet`, `local_backend`.
+
+### Identity
+
+enum (no runtime identity).
+
+---
+
+## Model M98 — CabinetNodeStatus
+
+`kind: enum`: `active`, `revoked`.
+
+### Identity
+
+enum (no runtime identity).
+
+---
+
 ## Model M04 — CabinetNodeIdentity
 
 Identity of one participating Cabinet node.
@@ -185,8 +225,8 @@ Identity of one participating Cabinet node.
 Candidate fields:
 
 - `node_id`;
-- `node_kind` — `vps_cabinet` or `local_backend`;
-- `status` — `active` or `revoked`;
+- `node_kind: CabinetNodeKind` — `vps_cabinet` or `local_backend`;
+- `status: CabinetNodeStatus` — `active` or `revoked`;
 - `contract_version`;
 - `created_at`;
 - `revoked_at` optional.
@@ -276,6 +316,16 @@ None for identity closure.
 
 # C. Accepted Card archive
 
+## Model M100 — ArchiveStatus
+
+`kind: enum`: `active`, `archived`.
+
+### Identity
+
+enum (no runtime identity).
+
+---
+
 ## Model M06 — StoredInvoiceCard
 
 Local archive identity for one logical Invoice Card.
@@ -285,11 +335,11 @@ Candidate fields:
 - `invoice_id` — equal to Card `id`;
 - `card_version`;
 - `current_content_hash`;
-- `current_status`;
+- `current_status: InvoiceCardStatus`;
 - `first_received_at`;
 - `last_received_at`;
 - `durable_at` optional;
-- `archive_status` — `active` or `archived`.
+- `archive_status: ArchiveStatus` — `active` or `archived`.
 
 ### Meaning
 
@@ -376,6 +426,16 @@ Durable in the Card archive.
 
 None for identity closure.
 
+## Model M101 — CardValidationResult
+
+`kind: enum`: `valid`, `valid_with_warnings`, `invalid`.
+
+### Identity
+
+enum (no runtime identity).
+
+---
+
 ## Model M08 — InvoiceCardValidationRecord
 
 Deterministic validation evidence.
@@ -385,7 +445,7 @@ Candidate fields:
 - `validation_id`;
 - exact Card revision reference;
 - validator contract and version;
-- `result` — `valid`, `valid_with_warnings`, or `invalid`;
+- `result: CardValidationResult` — `valid`, `valid_with_warnings`, or `invalid`;
 - error codes;
 - warning codes;
 - acknowledgement evidence optional;
@@ -421,6 +481,16 @@ Durable validation history.
 
 None for identity closure.
 
+## Model M102 — DuplicateReviewStatus
+
+`kind: enum`: `open`, `not_duplicate`, `confirmed_duplicate`, `resolved`.
+
+### Identity
+
+enum (no runtime identity).
+
+---
+
 ## Model M09 — DuplicateCandidateReview
 
 Review record for possible duplicate logical invoices.
@@ -431,7 +501,7 @@ Candidate fields:
 - incoming Card revision reference;
 - candidate invoice IDs and revision hashes;
 - matching reasons and evidence;
-- `status` — `open`, `not_duplicate`, `confirmed_duplicate`, or `resolved`;
+- `status: DuplicateReviewStatus` — `open`, `not_duplicate`, `confirmed_duplicate`, or `resolved`;
 - decision actor and time optional;
 - resolution reference optional.
 
@@ -524,6 +594,26 @@ authorized Cabinet file operations. Filename and media metadata never grant path
 or execution authority; verified bytes may cross the VPS/local boundary through
 the accepted transfer workflow.
 
+## Model M103 — StorageZone
+
+`kind: enum`: `vps_working`, `local_durable`.
+
+### Identity
+
+enum (no runtime identity).
+
+---
+
+## Model M104 — ReplicaVerificationStatus
+
+`kind: enum`: `pending`, `verified`, `failed`.
+
+### Identity
+
+enum (no runtime identity).
+
+---
+
 ## Model M11 — SourceBinaryReplica
 
 Storage record for one binary on one Cabinet node.
@@ -532,10 +622,10 @@ Candidate fields:
 
 - `source_id`;
 - `node_id`;
-- `storage_zone` — `vps_working` or `local_durable`;
+- `storage_zone: StorageZone` — `vps_working` or `local_durable`;
 - storage reference;
 - stored hash;
-- verification status — `pending`, `verified`, or `failed`;
+- `verification_status: ReplicaVerificationStatus` — `pending`, `verified`, or `failed`;
 - stored time;
 - retention deadline optional;
 - deletion time optional.
@@ -674,6 +764,16 @@ Durable on local archive and cached on VPS through replica records.
 
 None for identity closure.
 
+## Model M106 — CataloguePublicationStatus
+
+`kind: enum`: `pending`, `transferring`, `accepted`, `failed`, `unknown_outcome`.
+
+### Identity
+
+enum (no runtime identity).
+
+---
+
 ## Model M14 — RegistryCataloguePublication
 
 Backend record of publishing one catalogue snapshot from local to VPS.
@@ -684,7 +784,7 @@ Candidate fields:
 - `catalogue_id`;
 - source and target node IDs;
 - idempotency key;
-- `status` — `pending`, `transferring`, `accepted`, `failed`, or
+- `status: CataloguePublicationStatus` — `pending`, `transferring`, `accepted`, `failed`, or
   `unknown_outcome`;
 - requested, completed, and acknowledged times;
 - safe error code optional.
@@ -805,6 +905,16 @@ Durable Cabinet relationship root keyed by Registry project id.
 
 None for identity closure.
 
+## Model M107 — AssignmentDecisionContext
+
+`kind: enum`: `online_current`, `offline_cached`, `label_only`, `unassigned`.
+
+### Identity
+
+enum (no runtime identity).
+
+---
+
 ## Model M17 — CardObjectAssignmentObservation
 
 Backend interpretation of the primary object context already stored in the Card
@@ -817,7 +927,7 @@ Candidate fields:
 - observed `object.label` optional;
 - catalogue ID used during capture optional;
 - Registry project snapshot used during capture optional;
-- decision context — `online_current`, `offline_cached`, `label_only`, or
+- `decision_context: AssignmentDecisionContext` — `online_current`, `offline_cached`, `label_only`, or
   `unassigned`;
 - observed time.
 
@@ -856,6 +966,16 @@ Durable when assignment provenance is available.
 
 None for identity closure.
 
+## Model M108 — AssignmentValidationResult
+
+`kind: enum`: `valid`, `project_missing`, `project_closed`, `materially_changed`, `registry_unavailable`, `inconclusive`.
+
+### Identity
+
+enum (no runtime identity).
+
+---
+
 ## Model M18 — ObjectAssignmentValidation
 
 Post-reconnection validation against current Registry data.
@@ -866,7 +986,7 @@ Candidate fields:
 - exact Card revision reference;
 - observed project ID optional;
 - current Registry snapshot reference optional;
-- `result` — `valid`, `project_missing`, `project_closed`,
+- `result: AssignmentValidationResult` — `valid`, `project_missing`, `project_closed`,
   `materially_changed`, `registry_unavailable`, or `inconclusive`;
 - validated time and actor;
 - warnings and safe details.
@@ -957,6 +1077,16 @@ by its stable manifest identity and content hash. It contains sensitive entity
 and artifact references but no credential. Knowledge of a manifest id or hash
 does not authenticate its sender or authorize an import transition.
 
+## Model M109 — SynchronizationStatus
+
+`kind: enum`: `reserved`, `issued`, `pending`, `transferring`, `unknown_outcome`, `delivered`, `failed`, `cancelled`.
+
+### Identity
+
+enum (no runtime identity).
+
+---
+
 ## Model M20 — InvoiceSynchronization
 
 Transport process for one manifest.
@@ -967,7 +1097,7 @@ Candidate fields:
 - invoice ID;
 - source and target node IDs;
 - manifest hash — absent until the package is delivered (the selection names only the manifest id);
-- `status` — `pending`, `transferring`, `unknown_outcome`, `delivered`,
+- `status: SynchronizationStatus` — `pending`, `transferring`, `unknown_outcome`, `delivered`,
   `failed`, or `cancelled`;
 - idempotency key;
 - started and finished times optional;
@@ -1004,6 +1134,16 @@ Durable until outcome and reconciliation obligations are closed; retained as his
 
 None for identity closure.
 
+## Model M110 — ImportStatus
+
+`kind: enum`: `received`, `validating`, `quarantined`, `accepted`, `rejected`, `already_accepted`.
+
+### Identity
+
+enum (no runtime identity).
+
+---
+
 ## Model M21 — InvoiceImport
 
 Local Backend process that validates and commits one delivered manifest.
@@ -1013,7 +1153,7 @@ Candidate fields:
 - `import_id`;
 - synchronization ID and manifest hash;
 - invoice ID;
-- `status` — `received`, `validating`, `quarantined`, `accepted`, `rejected`,
+- `status: ImportStatus` — `received`, `validating`, `quarantined`, `accepted`, `rejected`,
   or `already_accepted`;
 - received time;
 - validation completed time optional;
@@ -1054,6 +1194,26 @@ Durable local import history.
 
 None for identity closure.
 
+## Model M111 — QuarantineReason
+
+`kind: enum`: `missing_source_bytes`, `hash_mismatch`, `invalid_card`, `unsupported_card_version`, `incomplete_manifest`, `duplicate_review`, `operator_review`.
+
+### Identity
+
+enum (no runtime identity).
+
+---
+
+## Model M112 — QuarantineStatus
+
+`kind: enum`: `open`, `resolved`, `discarded`.
+
+### Identity
+
+enum (no runtime identity).
+
+---
+
 ## Model M22 — ImportQuarantine
 
 Record for a package that arrived but cannot yet be accepted or rejected safely.
@@ -1063,11 +1223,11 @@ Candidate fields:
 - `quarantine_id`;
 - import ID;
 - missing or invalid component references;
-- reason — `missing_source_bytes`, `hash_mismatch`, `invalid_card`,
+- `reason: QuarantineReason` — `missing_source_bytes`, `hash_mismatch`, `invalid_card`,
   `unsupported_card_version`, `incomplete_manifest`, `duplicate_review`, or
   `operator_review`;
 - opened time;
-- status — `open`, `resolved`, or `discarded`;
+- `status: QuarantineStatus` — `open`, `resolved`, or `discarded`;
 - resolution evidence optional.
 
 Quarantine preserves the received package without presenting it as part of the
@@ -1101,6 +1261,16 @@ Durable while open and retained with import evidence.
 
 None for identity closure.
 
+## Model M113 — TransferReceiptResult
+
+`kind: enum`: `accepted`, `already_accepted`, `quarantined`, `rejected`, `conflicting`, `duplicate_review`, `incomplete`, `unknown`.
+
+### Identity
+
+enum (no runtime identity).
+
+---
+
 ## Model M23 — InvoiceTransferReceipt
 
 Durable target evidence returned to the VPS.
@@ -1112,7 +1282,7 @@ Candidate fields:
 - idempotency key;
 - invoice ID;
 - manifest hash;
-- `result` — `accepted`, `already_accepted`, `quarantined`, `rejected`, or
+- `result: TransferReceiptResult` — `accepted`, `already_accepted`, `quarantined`, `rejected`, or
   `unknown`;
 - accepted Card and source hashes;
 - receipt time;
@@ -1149,6 +1319,16 @@ Durable on target and retained by sender for reconciliation.
 
 None for identity closure.
 
+## Model M114 — ReplicaRole
+
+`kind: enum`: `vps_working`, `local_durable`, `read_only_cache`.
+
+### Identity
+
+enum (no runtime identity).
+
+---
+
 ## Model M24 — InvoiceWorkingReplica
 
 Record describing which exact Card revisions and source bytes are available on
@@ -1161,7 +1341,7 @@ Candidate fields:
 - accepted Card content hashes;
 - current Card hash optional;
 - source manifest hash;
-- role — `vps_working`, `local_durable`, or `read_only_cache`;
+- `role: ReplicaRole` — `vps_working`, `local_durable`, or `read_only_cache`;
 - updated time.
 
 ### Meaning
@@ -1192,6 +1372,16 @@ Durable replica metadata on participating nodes.
 
 None for identity closure.
 
+## Model M115 — ConflictStatus
+
+`kind: enum`: `open`, `resolved`.
+
+### Identity
+
+enum (no runtime identity).
+
+---
+
 ## Model M25 — SynchronizationConflict
 
 Exceptional record for incompatible accepted Card revisions or Backend decisions
@@ -1206,7 +1396,7 @@ Candidate fields:
 - common predecessor optional;
 - reason;
 - detected time;
-- status — `open` or `resolved`;
+- `status: ConflictStatus` — `open` or `resolved`;
 - explicit resolution evidence optional.
 
 Source bytes are immutable. Conflicts concern Card JSON revisions or
@@ -1434,6 +1624,16 @@ Runtime only unless included as provenance in a separate accepted decision recor
 
 None for identity closure.
 
+## Model M116 — MatchStatus
+
+`kind: enum`: `confirmed`, `rejected`, `invalidated`.
+
+### Identity
+
+enum (no runtime identity).
+
+---
+
 ## Model M31 — InvoiceLineEstimateMatch
 
 Backend-owned decision entity.
@@ -1443,7 +1643,7 @@ Candidate fields:
 - `match_id`;
 - exact confirmed Card revision and line ID;
 - exact estimate snapshot and item reference;
-- `status` — `confirmed`, `rejected`, or `invalidated`;
+- `status: MatchStatus` — `confirmed`, `rejected`, or `invalidated`;
 - decided time and actor;
 - explanation optional;
 - invalidation reason optional.
