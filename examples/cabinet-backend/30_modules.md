@@ -207,7 +207,6 @@ Primary deep persistence/domain module for local durable Cabinet custody.
 - `SyncNodeCredential` use at the synchronization boundary without exposing it to other modules;
 - delivery lifecycle, retries, idempotency correlation, unknown-outcome reconciliation, and connection observations;
 - transmission and reconciliation of transfer receipts;
-- compact Registry catalogue delivery after `registry_context` has produced an exact catalogue snapshot;
 - reporting synchronization availability and transport outcome without claiming business acceptance.
 
 ### Knows
@@ -239,7 +238,6 @@ Primary deep persistence/domain module for local durable Cabinet custody.
 
 ```text
 synchronize_invoice_work
-publish_registry_catalogue
 reconcile_transfer_outcome
 get_sync_status
 observe_vps_connection
@@ -661,13 +659,83 @@ Protocol from `models` as plain reads, appends, and one field update;
 
 ---
 
+## `catalogue_publication`
+
+### Owns
+
+- idempotent delivery of one compact Registry catalogue snapshot to the VPS
+  Cabinet after `registry_context` has produced it;
+- the `RegistryCataloguePublication` lifecycle: binding by catalogue id,
+  target node and idempotency key, reuse of an equivalent publication,
+  rejection of a conflicting one, and the transition written after the
+  transport acknowledgement;
+- reporting the acknowledgement outcome and safe error code without
+  interpreting catalogue contents.
+
+### Knows
+
+- catalogue identity and ordered content hash;
+- idempotency binding and conflict rules;
+- `CataloguePublicationStatus` transitions.
+
+### Hides
+
+- transport selection and wire serialization (`VpsSynchronizationTransport`);
+- storage shape (`CataloguePublicationRepository`).
+
+### Candidate public capabilities
+
+```text
+publish_registry_catalogue
+```
+
+### Must not own
+
+- Registry catalogue contents or filter policy;
+- invoice transfer, transfer receipts, or durable acceptance;
+- connection observation or reconciliation of invoice transfers.
+
+### Depth assessment
+
+Split out of `synchronization` (decision 2026-08-23): invoice transfer and
+catalogue publication share only the transport; each has its own state machine,
+repository methods and wire models, and regenerations of the merged module
+were the least stable in the factory. One public operation hides the whole
+lifecycle; `synchronization` keeps the invoice transfer path only.
+
+---
+
+## `catalogue_publication_persistence`
+
+### Owns
+
+- `PostgresCataloguePublicationRepository`: the PostgreSQL storage shape for
+  `RegistryCataloguePublication` rows (`registry_catalogue_publications`);
+- one transaction per lifecycle transition; plain appends, field updates and
+  the exact read by idempotency binding.
+
+### Hides
+
+- psycopg connection handling, table, column and index names, codecs.
+
+### Must not own
+
+- equivalence, conflict or transition decisions;
+- VPS transport; environment reads.
+
+### Depth assessment
+
+Deterministic persistence module emitted from `rules.persistence_backend`; it
+implements the `CataloguePublicationRepository` Protocol from `models`.
+
+---
+
 ## `synchronization_persistence`
 
 ### Owns
 
 - `PostgresSynchronizationRepository`: the PostgreSQL storage shape for
-  synchronization attempts, catalogue publications, and connection
-  observations;
+  synchronization attempts and connection observations;
 - one transaction and the exact synchronization lock per lifecycle
   transition;
 - plain appends, plain field updates, and exact reads by id or idempotency
@@ -682,7 +750,6 @@ Protocol from `models` as plain reads, appends, and one field update;
 ### Must not own
 
 - reservation equivalence, issuance authority, or outcome classification;
-- catalogue content, endpoints binding, or acknowledgement interpretation;
 - VPS transport;
 - environment reads.
 

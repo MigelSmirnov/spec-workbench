@@ -17,7 +17,7 @@ def test_lists_final_assembled_modules() -> None:
         "registry_context_persistence",
         "registry_context",
         "holded_transport", "holded_gateway_persistence", "holded_gateway", "synchronization_persistence",
-        "synchronization", "plan_actual_persistence", "plan_actual",
+        "synchronization", "catalogue_publication_persistence", "catalogue_publication", "plan_actual_persistence", "plan_actual",
         "holded_publication_persistence", "holded_publication",
         "api_irregular", "api", "bootstrap",
     ]
@@ -96,7 +96,7 @@ def test_models_slice_includes_owned_declarations_and_state1_evidence() -> None:
         "HoldedHttpClient", "HoldedPublicationRepository",
         "PlanActualRepository", "RegistryContextRepository",
         "SourceByteStore",
-        "SynchronizationRepository", "VpsSynchronizationTransport",
+        "CataloguePublicationRepository", "SynchronizationRepository", "VpsSynchronizationTransport",
     }
     assert state1_models <= lowered_models
     assert lowered_models == state1_models | interface_declarations

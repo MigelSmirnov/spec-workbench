@@ -6,7 +6,7 @@
 - `SynchronizationService.synchronize_invoice_work(self, selection: SynchronizationWorkSelection, node: CabinetNodeIdentity) -> SynchronizationOutcome`
 - `SynchronizationService.get_sync_status(self, invoice_id: str, node_id: str) -> SynchronizationStatusObservation`
 - `SynchronizationService.reconcile_transfer_outcome(self, synchronization_id: str) -> SynchronizationOutcome`
-- `SynchronizationService.publish_registry_catalogue(self, delivery: RegistryCatalogueDelivery) -> RegistryCataloguePublication`
+- `CataloguePublicationService.publish_registry_catalogue(self, delivery: RegistryCatalogueDelivery) -> RegistryCataloguePublication`
 - `SynchronizationService.observe_vps_connection(self) -> VpsConnectionObservation`
 
 Module functions remain thin façades with an explicit `SynchronizationService`
@@ -30,9 +30,9 @@ first parameter.
 - `SynchronizationRepository.list_synchronizations_for_invoice(self, invoice_id: str, target_node_id: str) -> tuple[InvoiceSynchronization, ...]`
 - `SynchronizationRepository.load_synchronization(self, synchronization_id: str) -> InvoiceSynchronization | None`
 - `SynchronizationRepository.load_synchronization_by_idempotency(self, invoice_id: str, target_node_id: str, idempotency_key: str) -> InvoiceSynchronization | None`
-- `SynchronizationRepository.insert_catalogue_publication(self, publication: RegistryCataloguePublication) -> None`
-- `SynchronizationRepository.load_catalogue_publication_by_idempotency(self, catalogue_id: str, target_node_id: str, idempotency_key: str) -> RegistryCataloguePublication | None`
-- `SynchronizationRepository.update_catalogue_publication(self, publication: RegistryCataloguePublication) -> None`
+- `CataloguePublicationRepository.insert_catalogue_publication(self, publication: RegistryCataloguePublication) -> None`
+- `CataloguePublicationRepository.load_catalogue_publication_by_idempotency(self, catalogue_id: str, target_node_id: str, idempotency_key: str) -> RegistryCataloguePublication | None`
+- `CataloguePublicationRepository.update_catalogue_publication(self, publication: RegistryCataloguePublication) -> None`
 - `SynchronizationRepository.insert_connection_observation(self, observation: VpsConnectionObservation) -> None`
 
 Generic dictionaries and untyped save/query methods are forbidden.
@@ -49,9 +49,9 @@ Generic dictionaries and untyped save/query methods are forbidden.
 - `PostgresSynchronizationRepository.list_synchronizations_for_invoice(self, invoice_id: str, target_node_id: str) -> tuple[InvoiceSynchronization, ...]`
 - `PostgresSynchronizationRepository.load_synchronization(self, synchronization_id: str) -> InvoiceSynchronization | None`
 - `PostgresSynchronizationRepository.load_synchronization_by_idempotency(self, invoice_id: str, target_node_id: str, idempotency_key: str) -> InvoiceSynchronization | None`
-- `PostgresSynchronizationRepository.insert_catalogue_publication(self, publication: RegistryCataloguePublication) -> None`
-- `PostgresSynchronizationRepository.load_catalogue_publication_by_idempotency(self, catalogue_id: str, target_node_id: str, idempotency_key: str) -> RegistryCataloguePublication | None`
-- `PostgresSynchronizationRepository.update_catalogue_publication(self, publication: RegistryCataloguePublication) -> None`
+- `PostgresCataloguePublicationRepository.insert_catalogue_publication(self, publication: RegistryCataloguePublication) -> None`
+- `PostgresCataloguePublicationRepository.load_catalogue_publication_by_idempotency(self, catalogue_id: str, target_node_id: str, idempotency_key: str) -> RegistryCataloguePublication | None`
+- `PostgresCataloguePublicationRepository.update_catalogue_publication(self, publication: RegistryCataloguePublication) -> None`
 - `PostgresSynchronizationRepository.insert_connection_observation(self, observation: VpsConnectionObservation) -> None`
 - `create_app(access_control: AccessControlBackend, archive: DurableArchiveService, registry: RegistryContextService, holded_gateway: HoldedGatewayService, synchronization: SynchronizationService) -> FastAPI`
 

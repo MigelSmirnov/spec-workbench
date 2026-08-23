@@ -25,7 +25,7 @@ Performs bounded read-only remote reconciliation for an exact persisted unknown
 outcome and records the new observation atomically. It never issues a second
 transfer and never manufactures archive acceptance.
 
-## `public_op:synchronization.publish_registry_catalogue`
+## `public_op:catalogue_publication.publish_registry_catalogue`
 
 Owner: `module:synchronization`.
 
