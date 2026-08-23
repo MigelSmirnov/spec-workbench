@@ -391,6 +391,10 @@
     "accept_transfer_manifest: [BEHAVIOR] Accept a manifest only as one durable archive transition over the exact immutable card revision and supplied source replicas: under the invoice lock load the stored receipt and card revision for the exact manifest hash and content hash, return the existing acceptance when equivalent, reject a conflicting one, and otherwise insert manifest, card revision, replicas, and receipt, link the predecessor revision as superseded, and upsert the invoice card head in the one open transaction committed once; repeated equivalent acceptance must not create a second logical acceptance.",
     "accept_transfer_manifest: [VALIDATION_ERROR] Represent unsupported, integrity-invalid, conflicting, duplicate-review, incomplete, or quarantine-required evidence as the corresponding classified acceptance outcome instead of partially exposing an accepted manifest set.",
     "accept_transfer_manifest: [VALIDATION_ERROR] A delivered card revision is integrity-invalid when its revision reference (invoice_id, card_version, content_hash) is not listed in manifest.card_revisions or its invoice_id differs from manifest.invoice_id; the receipt result is then \"rejected\" with a safe error code, nothing is inserted, and no card head is created or advanced.",
+    "accept_transfer_manifest: [RULE_REFERENCE] A manifest is unsupported, and the receipt is rejected with unsupported_contract_version, exactly when manifest.manifest_version is not listed in = rules.synchronization.supported_manifest_versions.",
+    "accept_transfer_manifest: [FIELD_ASSIGNMENT] InvoiceTransferReceipt.safe_error_code is one TransferReceiptErrorCode bound to result: rejected carries unsupported_contract_version or integrity_invalid_revision, conflicting carries conflicting_manifest, duplicate_review carries duplicate_review, incomplete carries incomplete_sources, quarantined carries quarantine_required; accepted and already_accepted carry None.",
+    "accept_transfer_manifest: [FIELD_ASSIGNMENT] Every returned InvoiceTransferReceipt carries synchronization_id = manifest.manifest_id, idempotency_key = manifest.manifest_id, manifest_hash = manifest.manifest_hash, invoice_id = manifest.invoice_id, import_id None, receipt_at the acceptance time; accepted_card_hashes and accepted_source_hashes are empty unless the result is accepted or already_accepted.",
+    "accept_transfer_manifest: [ORCHESTRATION] The manifest version check and the revision integrity check run inside the transaction after lock_invoice(manifest.invoice_id) and after the stored receipts are read, so that an equivalent earlier acceptance is returned before any rejection is classified; a rejected receipt is returned after commit and is not persisted.",
     "accept_transfer_manifest: [PROVENANCE] Preserve acceptance evidence that identifies the exact manifest, card revision, and source evidence used for the decision.",
     "verify_durable_acceptance: [BEHAVIOR] Derive the answer only from authoritative local archive evidence for the requested invoice and optional content hash.",
     "verify_durable_acceptance: [ORCHESTRATION] Read every receipt of the invoice and select the one whose accepted_card_hashes contains the requested content hash (or the head's current hash when none is requested); absence of such a receipt is a not-accepted outcome, never an error.",
@@ -453,6 +457,7 @@
     "synchronize_invoice_work: [BEHAVIOR] A delivered exact package may return without positive durable acceptance only when durable_archive produced a classified non-accepted receipt or authoritative verification is negative/not-verifiable; omission of the archive acceptance or verification step is not a valid terminal behavior.",
     "attach_local_source: [ORCHESTRATION] Evaluate every submitted file independently after resolving the exact accepted invoice target; a file-local rejection must be represented in SourceAttachmentBatchResult.items and must not by itself prevent valid sibling files from being attached.",
     "attach_local_source: [VALIDATION_ERROR] A ValueError raised by SourceByteStore.stage or SourceByteStore.publish for one file (size or hash mismatch, unsafe token, failed reopen verification) is that file's local rejection: record it as a rejected item with a safe error code, leave no source, replica, or publication row for that file, and continue with its siblings; it never aborts the batch or the transaction of already accepted siblings.",
+    "attach_local_source: [FIELD_ASSIGNMENT] A rejected SourceAttachmentItemResult carries safe_error_code as one SourceAttachmentErrorCode: authorization_denied when the actor lacks the attach capability, unsupported_media_type for a file outside = rules.source_security.accepted_media_types, file_too_large above = config.source_upload.max_file_size_bytes, unreadable for content that cannot be parsed as its declared media, wrong_target for a file bound to another invoice, store_rejected for a ValueError from SourceByteStore.stage or SourceByteStore.publish; attached and already_attached items carry None.",
     "attach_local_source: [FIELD_ASSIGNMENT] Derive publication_id and the staging publication token only from characters in [A-Za-z0-9._-] (for example invoice id, source id, and content hash joined by \"-\" after replacing any other character with \"_\"); the byte store rejects any other token.",
     "attach_local_source: [BEHAVIOR] After classifiable per-file outcomes are applied, return one SourceAttachmentBatchResult containing every submitted file's attached, already_attached, or rejected outcome plus source_status recomputed from accepted archive truth.",
     "attach_local_source: [VALIDATION_ERROR] Raise InvoiceNotFoundError when the exact accepted invoice target cannot be resolved. Raise SourceAttachmentRejectedError only when a request-level source-attachment condition prevents trustworthy independent per-file classification; do not use it for an ordinary file-local rejection that can be represented as SourceAttachmentItemResult(result=\"rejected\").",
@@ -703,10 +708,12 @@
     "SynchronizationService.synchronize_invoice_work: [BEHAVIOR] Equivalent re-entry for a synchronization that already finished returns the existing evidence: the stored attempt, the archive receipt found through durable_archive.get_transfer_receipt by the attempt's manifest_hash, and a fresh verify_durable_acceptance for the accepted content hash; it issues no transport call and creates no second acceptance.",
     "SynchronizationService.synchronize_invoice_work: [FIELD_PROJECTION] The content_hash argument of every verify_durable_acceptance call is the Card revision identity (VpsInvoiceTransferPackage.card_revision.reference.content_hash on the transfer path, the accepted hash of the found receipt on re-entry); InvoiceSynchronization.manifest_hash and InvoiceTransferManifest.manifest_hash identify the manifest and are never passed as a content hash.",
     "SynchronizationService.synchronize_invoice_work: [FIELD_ASSIGNMENT] The local attempt identity is the reserved InvoiceSynchronization (synchronization_id = f\"{invoice_id}:{target_node_id}:{idempotency_key}\", idempotency_key = selection.manifest_id, manifest_hash None until the package is delivered and then package.manifest.manifest_hash, written by the final update); every later lock, reload, and final update addresses that reservation. VpsInvoiceTransferPackage.synchronization is transport-side evidence whose status and safe_error_code are copied onto the reservation; its synchronization_id is never used as a storage key.",
+    "SynchronizationService.synchronize_invoice_work: [FIELD_ASSIGNMENT] InvoiceSynchronization.safe_error_code is one SynchronizationErrorCode: failed carries authentication_failed, incompatible_contract, remote_unavailable, or remote_rejected as reported by the transport evidence, unknown_outcome carries transport_failure, delivered carries None.",
     "SynchronizationService.synchronize_invoice_work: [FALLBACK] Any exception raised by transport.transfer_invoice (timeout, connection loss, or response loss after issuance) is caught and classified as unknown_outcome: the reserved attempt is updated with status unknown_outcome and finished_at inside a new transaction, no archive acceptance is attempted, and the logical transfer is never repeated automatically.",
     "SynchronizationService.get_sync_status: [BEHAVIOR] Compose the observation from the latest persisted synchronization attempt for the exact invoice and node: absent attempts yield an absent status, unknown outcomes stay unknown, and the replica field stays None until replica storage is decided; never synthesize a synchronized default.",
     "SynchronizationService.reconcile_transfer_outcome: [FORBIDDEN_ACTION] Use only read-only remote reconciliation for a persisted unknown attempt and never issue another transfer.",
     "SynchronizationService.publish_registry_catalogue: [ORCHESTRATION] Bind catalogue id, ordered content hash, endpoints, and idempotency key, then load the publication bound to catalogue, target node, and idempotency key: reuse it when the binding is exactly equivalent, reject a conflict, otherwise insert it; after delivery update the exact publication from its reloaded current status with the acknowledgement status, acknowledged_at, completed_at, and safe_error_code; a stale or conflicting transition writes nothing.",
+    "SynchronizationService.publish_registry_catalogue: [FIELD_ASSIGNMENT] RegistryCataloguePublication.safe_error_code is one SynchronizationErrorCode: failed carries authentication_failed, incompatible_contract, remote_unavailable, remote_rejected, or conflicting_binding, unknown_outcome carries transport_failure, accepted carries None.",
     "SynchronizationService.observe_vps_connection: [BEHAVIOR] Report typed current evidence, insert it as one immutable observation row, and change no synchronization or archive state.",
     "SynchronizationRepository.begin: [DEPENDENCY_BOUNDARY] Open one PostgreSQL transaction for the exact synchronization transition and reject nested begin.",
     "SynchronizationRepository.commit: [BEHAVIOR] Commit the active typed transition exactly once and expose no partial state.",
@@ -741,6 +748,8 @@
     "PlanActualService.__init__: [DEPENDENCY_BOUNDARY] Retain the exact supplied repository, archive, and Registry services; never construct adapters or discover alternate runtimes.",
     "PlanActualService.refresh_estimate_snapshot: [ORCHESTRATION] Lock stable PresuPro identity, reuse exact canonical content, or append one immutable snapshot atomically.",
     "PlanActualService.propose_invoice_line_matches: [BEHAVIOR] Resolve exact archived and estimate evidence, return stable ordered non-authoritative proposals, and perform no confirmation transition.",
+    "PlanActualService.propose_invoice_line_matches: [RULE_REFERENCE] A proposal exists for every (invoice line, estimate item) pair whose fields listed in = rules.plan_actual.proposal_required_equalities are equal (line unit vs item unit, canonical_card.currency vs item currency); its score is = rules.plan_actual.proposal_quantity_equal_weight when the quantities are equal plus = rules.plan_actual.proposal_unit_price_proximity_weight multiplied by max(0, 1 - |line_unit_price - item.unit_price| / max(line_unit_price, item.unit_price)), quantized to = rules.plan_actual.proposal_score_places decimal places, and the result is ordered by = rules.plan_actual.proposal_ordering.",
+    "PlanActualService.propose_invoice_line_matches: [FIELD_PROJECTION] line_unit_price is InvoiceCardLine.unit_price_net when item.monetary_basis is net and InvoiceCardLine.gross_amount / InvoiceCardLine.quantity when it is gross (a zero quantity yields proximity 0); reason_codes are the ProposalReasonCode members that hold: unit_match and currency_match always, quantity_equal when quantities are equal, unit_price_close when the proximity factor is at least = rules.plan_actual.proposal_unit_price_close_threshold; descriptions take no part in scoring.",
     "PlanActualService.record_match_decision: [BEHAVIOR] Lock the exact invoice line, list its stored decisions, raise PlanActualPreconditionError for a confirmation when another active confirmed match exists for that line, insert a new decision or update only the status fields of the exact existing match_id for an invalidation, and never delete history.",
     "PlanActualService.get_unmatched_items: [DETERMINISM_OR_ORDERING] Compute unmatched invoice-line and estimate-item identities from exact pinned evidence and the confirmed decisions listed for the exact snapshot, restricted to the requested project, in stable ID order.",
     "PlanActualService.calculate_plan_actual: [ORCHESTRATION] Resolve every pinned snapshot, match, invoice, and project input through the supplied boundaries, raise PlanActualPreconditionError when any pinned match_id is absent from the loaded decisions, and only then apply accepted deterministic formulas.",
@@ -772,10 +781,12 @@
     "HoldedPublicationService.__init__: [DEPENDENCY_BOUNDARY] Retain the exact repository, archive, and gateway; never construct adapters or discover alternate services.",
     "HoldedPublicationService.request_holded_publication: [ORCHESTRATION] Lock the exact revision, resolve archive truth, then load the publication bound to the exact revision: reuse it when it binds the same card revision and idempotency key, raise HoldedPublicationIneligibleError when a different active publication exists, and otherwise insert one logical publication — all before the sole gateway create.",
     "HoldedPublicationService.request_holded_publication: [VALIDATION_ERROR] The required-source precondition is SourceStatus.complete of durable_archive.get_source_status for the invoice, read after the revision is resolved and before any publication row is inserted; canonical_card.source (file_ref, file_status) is capture evidence and takes no part in eligibility. Raise HoldedPublicationIneligibleError(\\\"required_source_missing\\\") only when complete is false.",
+    "HoldedPublicationService.request_holded_publication: [FIELD_PROJECTION] The HoldedPurchaseAttemptPayload is projected from the resolved canonical_card: contact_name = supplier.name or \"\", contact_code = supplier.tax_id or \"\", invoice_num = invoice_number, date = holded_wire_date(issue_date), currency = currency, desc = the attempt_marker, apply_contact_defaults = rules.holded_publication.payload_apply_contact_defaults, approve_doc = rules.holded_publication.payload_approve_doc; items are one HoldedPurchasePayloadItem per line in card order with name = description_original, units = quantity, subtotal = unit_price_net, discount = discount_percent, tax = tax_rate, desc None, sku = supplier_sku.",
     "HoldedPublicationService.request_holded_publication: [FIELD_ASSIGNMENT] The reservation passed to create_holded_purchase is a HoldedPublicationAttempt with publication_attempt_id = f\"{publication_id}:{attempt_marker}\", publication_id, invoice_id, invoice_revision_hash = content_hash, canonical_holded_payload_hash = sha256 of the payload's model_dump_json(), attempt_marker = f\"cabinet-publication:{publication_id}\" (the stable non-financial marker, also carried verbatim in payload.desc), outcome reserved, and request_started_at, request_finished_at, document_id, safe_error_code None.",
     "HoldedPublicationService.request_holded_publication: [BEHAVIOR] Persist every lifecycle transition by updating the exact locked publication only from its reloaded current status along a transition listed in = rules.holded_publication.status_transitions (entries \"current->next\"; a status that appears in no entry as current is terminal); a stale, skipped, or conflicting transition raises HoldedReconciliationRequiredError and writes nothing.",
     "HoldedPublicationService.reconcile_holded_publication: [FORBIDDEN_ACTION] Reload exact logical state and use read-only gateway recovery; never repeat create or change the bound revision.",
     "HoldedPublicationService.reconcile_holded_publication: [BEHAVIOR] Settle or keep unresolved only by updating the exact locked publication from its reloaded current status along a transition listed in = rules.holded_publication.status_transitions (outcome_unknown and reconciliation_required are re-enterable; verified, failed, payload_mismatch, duplicate_conflict and cancelled are terminal); a stale, skipped, or conflicting transition raises HoldedReconciliationRequiredError and writes nothing.",
+    "HoldedPublicationService.reconcile_holded_publication: [FIELD_ASSIGNMENT] HoldedPublication.safe_outcome_code is one HoldedPublicationOutcomeCode bound to the settled status: failed carries rejected_by_holded or malformed_response, outcome_unknown carries ambiguous_create, zero_matches, or lookup_failure, duplicate_conflict carries multiple_matches, payload_mismatch carries verification_mismatch, reconciliation_required carries inconsistent_attempt_evidence, pending and verified carry None; request_holded_publication writes the same vocabulary for the statuses it settles.",
     "HoldedPublicationService.get_holded_publication_status: [VALIDATION_ERROR] Return exact committed state or raise HoldedPublicationNotFoundError; never fabricate pending or success.",
     "HoldedPublicationRepository.begin: [DEPENDENCY_BOUNDARY] Open one PostgreSQL transaction for the exact publication transition and reject nested begin.",
     "HoldedPublicationRepository.commit: [BEHAVIOR] Commit one valid lifecycle transition and expose no partial state.",
@@ -1202,6 +1213,17 @@
         "cancelled"
       ]
     },
+    "SynchronizationErrorCode": {
+      "kind": "enum",
+      "values": [
+        "authentication_failed",
+        "incompatible_contract",
+        "remote_unavailable",
+        "remote_rejected",
+        "conflicting_binding",
+        "transport_failure"
+      ]
+    },
     "InvoiceSynchronization": {
       "identity": "entity",
       "fields": {
@@ -1214,7 +1236,7 @@
         "idempotency_key": "str",
         "started_at": "datetime",
         "finished_at": "datetime | None",
-        "safe_error_code": "str | None"
+        "safe_error_code": "SynchronizationErrorCode | None"
       }
     },
     "TransferReceiptResult": {
@@ -1230,6 +1252,17 @@
         "unknown"
       ]
     },
+    "TransferReceiptErrorCode": {
+      "kind": "enum",
+      "values": [
+        "unsupported_contract_version",
+        "integrity_invalid_revision",
+        "conflicting_manifest",
+        "duplicate_review",
+        "incomplete_sources",
+        "quarantine_required"
+      ]
+    },
     "InvoiceTransferReceipt": {
       "identity": "value",
       "fields": {
@@ -1242,7 +1275,7 @@
         "accepted_card_hashes": "tuple[str, ...]",
         "accepted_source_hashes": "tuple[str, ...]",
         "receipt_at": "datetime",
-        "safe_error_code": "str | None"
+        "safe_error_code": "TransferReceiptErrorCode | None"
       }
     },
     "ReplicaRole": {
@@ -1315,6 +1348,20 @@
         "cancelled"
       ]
     },
+    "HoldedPublicationOutcomeCode": {
+      "kind": "enum",
+      "values": [
+        "required_source_missing",
+        "rejected_by_holded",
+        "malformed_response",
+        "ambiguous_create",
+        "zero_matches",
+        "lookup_failure",
+        "multiple_matches",
+        "verification_mismatch",
+        "inconsistent_attempt_evidence"
+      ]
+    },
     "HoldedPublication": {
       "identity": "entity",
       "fields": {
@@ -1325,7 +1372,7 @@
         "external_document_id": "str | None",
         "created_at": "datetime",
         "completed_at": "datetime | None",
-        "safe_outcome_code": "str | None"
+        "safe_outcome_code": "HoldedPublicationOutcomeCode | None"
       }
     },
     "HoldedAttemptOutcome": {
@@ -1554,6 +1601,15 @@
         "safe_error_code": "str | None = None"
       }
     },
+    "ProposalReasonCode": {
+      "kind": "enum",
+      "values": [
+        "unit_match",
+        "currency_match",
+        "quantity_equal",
+        "unit_price_close"
+      ]
+    },
     "InvoiceLineMatchProposal": {
       "identity": "value",
       "fields": {
@@ -1563,7 +1619,7 @@
         "estimate_snapshot_id": "str",
         "estimate_item_id": "str",
         "score": "Decimal",
-        "reason_codes": "tuple[str, ...]",
+        "reason_codes": "tuple[ProposalReasonCode, ...]",
         "proposed_at": "datetime"
       }
     },
@@ -1625,6 +1681,17 @@
         "rejected"
       ]
     },
+    "SourceAttachmentErrorCode": {
+      "kind": "enum",
+      "values": [
+        "authorization_denied",
+        "unsupported_media_type",
+        "file_too_large",
+        "unreadable",
+        "wrong_target",
+        "store_rejected"
+      ]
+    },
     "SourceAttachmentItemResult": {
       "identity": "value",
       "fields": {
@@ -1632,7 +1699,7 @@
         "source_id": "str | None = None",
         "content_hash": "str",
         "result": "SourceAttachmentResult",
-        "safe_error_code": "str | None = None"
+        "safe_error_code": "SourceAttachmentErrorCode | None = None"
       }
     },
     "SourceCompleteness": {
@@ -1907,7 +1974,7 @@
         "requested_at": "datetime",
         "completed_at": "datetime | None",
         "acknowledged_at": "datetime | None",
-        "safe_error_code": "str | None"
+        "safe_error_code": "SynchronizationErrorCode | None"
       }
     },
     "RegistryCatalogueReplica": {
@@ -2256,6 +2323,9 @@
         "issued->delivered",
         "issued->failed",
         "issued->unknown_outcome"
+      ],
+      "supported_manifest_versions": [
+        "v1"
       ]
     },
     "holded_publication": {
@@ -2278,7 +2348,9 @@
         "reconciliation_required->payload_mismatch",
         "reconciliation_required->outcome_unknown",
         "reconciliation_required->reconciliation_required"
-      ]
+      ],
+      "payload_apply_contact_defaults": false,
+      "payload_approve_doc": false
     },
     "registry_context": {
       "registry_is_read_only_from_cabinet": true,
@@ -2389,10 +2461,10 @@
             {
               "column": "safe_outcome_code",
               "field": "safe_outcome_code",
-              "storage": "text",
+              "storage": "enum",
               "nullable": true,
               "check": null,
-              "element_model": null
+              "element_model": "HoldedPublicationOutcomeCode"
             }
           ],
           "primary_key": [
@@ -2805,10 +2877,10 @@
             {
               "column": "safe_error_code",
               "field": "safe_error_code",
-              "storage": "text",
+              "storage": "enum",
               "nullable": true,
               "check": null,
-              "element_model": null
+              "element_model": "SynchronizationErrorCode"
             }
           ],
           "primary_key": [
@@ -2903,10 +2975,10 @@
             {
               "column": "safe_error_code",
               "field": "safe_error_code",
-              "storage": "text",
+              "storage": "enum",
               "nullable": true,
               "check": null,
-              "element_model": null
+              "element_model": "SynchronizationErrorCode"
             }
           ],
           "primary_key": [
@@ -3142,10 +3214,10 @@
             {
               "column": "reason_codes",
               "field": "reason_codes",
-              "storage": "json_value",
+              "storage": "enum",
               "nullable": false,
               "check": null,
-              "element_model": null
+              "element_model": "ProposalReasonCode"
             },
             {
               "column": "proposed_at",
@@ -3751,10 +3823,10 @@
             {
               "column": "safe_error_code",
               "field": "safe_error_code",
-              "storage": "text",
+              "storage": "enum",
               "nullable": true,
               "check": null,
-              "element_model": null
+              "element_model": "TransferReceiptErrorCode"
             }
           ],
           "primary_key": [
@@ -6010,7 +6082,20 @@
       "unmatched_actual_contributes_to_item_actual": false,
       "implicit_unit_conversion_allowed": false,
       "implicit_currency_conversion_allowed": false,
-      "implicit_tax_basis_conversion_allowed": false
+      "implicit_tax_basis_conversion_allowed": false,
+      "proposal_required_equalities": [
+        "unit",
+        "currency"
+      ],
+      "proposal_quantity_equal_weight": "0.5",
+      "proposal_unit_price_proximity_weight": "0.5",
+      "proposal_unit_price_close_threshold": "0.9",
+      "proposal_score_places": 4,
+      "proposal_ordering": [
+        "score_desc",
+        "invoice_line_id_asc",
+        "estimate_item_id_asc"
+      ]
     },
     "credential_security_backend": {
       "kind": "credential_security_backend",
@@ -6876,8 +6961,10 @@
         "ObjectAssignmentValidation",
         "InvoiceTransferManifest",
         "SynchronizationStatus",
+        "SynchronizationErrorCode",
         "InvoiceSynchronization",
         "TransferReceiptResult",
+        "TransferReceiptErrorCode",
         "InvoiceTransferReceipt",
         "ReplicaRole",
         "InvoiceWorkingReplica",
@@ -6885,6 +6972,7 @@
         "EstimateItemSnapshot",
         "EstimateSnapshot",
         "HoldedPublicationStatus",
+        "HoldedPublicationOutcomeCode",
         "HoldedPublication",
         "HoldedAttemptOutcome",
         "HoldedPublicationAttempt",
@@ -6905,6 +6993,7 @@
         "DurableAcceptanceVerification",
         "LocalSourceFile",
         "SourceAttachmentResult",
+        "SourceAttachmentErrorCode",
         "SourceAttachmentItemResult",
         "SourceCompleteness",
         "SourceStatus",
@@ -6955,6 +7044,7 @@
         "RegistryCatalogueDelivery",
         "VpsCatalogueAcknowledgement",
         "VpsConnectionObservation",
+        "ProposalReasonCode",
         "InvoiceLineMatchProposal",
         "UnmatchedPlanActualItems",
         "AccessControlBackend",
@@ -7125,7 +7215,9 @@
           "CabinetNodeStatus",
           "CataloguePublicationStatus",
           "AssignmentDecisionContext",
-          "TransferReceiptResult"
+          "TransferReceiptResult",
+          "TransferReceiptErrorCode",
+          "SynchronizationErrorCode"
         ],
         "registry_context": [
           "RegistryContextService",
@@ -7158,7 +7250,12 @@
           "InvoiceCardObjectBlock",
           "InvoiceCardTotals",
           "InvoiceCardStatus",
-          "MatchStatus"
+          "MatchStatus",
+          "ProposalReasonCode",
+          "ObjectAssignmentValidation",
+          "AssignmentValidationResult",
+          "EstimateItemSnapshot",
+          "MonetaryBasis"
         ]
       },
       "holded_publication": {
@@ -7191,7 +7288,8 @@
           "HoldedPublicationStatus",
           "AuthorizationReasonCode",
           "InvoiceCardStatus",
-          "SourceCompleteness"
+          "SourceCompleteness",
+          "HoldedPublicationOutcomeCode"
         ],
         "holded_transport": [
           "holded_wire_date"
@@ -7275,7 +7373,8 @@
           "HoldedPublicationStatus",
           "AuthorizationReasonCode",
           "AssignmentValidationResult",
-          "SourceCompleteness"
+          "SourceCompleteness",
+          "HoldedPublicationOutcomeCode"
         ],
         "holded_gateway": [
           "HoldedGatewayService"
@@ -7426,7 +7525,8 @@
           "HoldedPublicationRepository",
           "InvoiceCardRevisionReference",
           "HoldedPublicationStatus",
-          "InvoiceCardStatus"
+          "InvoiceCardStatus",
+          "HoldedPublicationOutcomeCode"
         ]
       },
       "registry_context_persistence": {
@@ -7461,7 +7561,8 @@
           "VpsConnectionObservation",
           "SynchronizationRepository",
           "CataloguePublicationStatus",
-          "SynchronizationStatus"
+          "SynchronizationStatus",
+          "SynchronizationErrorCode"
         ]
       },
       "plan_actual_persistence": {
@@ -7476,7 +7577,8 @@
           "ActorType",
           "InvoiceCardStatus",
           "MatchStatus",
-          "MonetaryBasis"
+          "MonetaryBasis",
+          "ProposalReasonCode"
         ]
       },
       "durable_archive_persistence": {
@@ -7506,7 +7608,8 @@
           "StorageZone",
           "ReplicaVerificationStatus",
           "ArchivePublicationState",
-          "TransferReceiptResult"
+          "TransferReceiptResult",
+          "TransferReceiptErrorCode"
         ]
       },
       "source_byte_store": {
@@ -7554,8 +7657,10 @@
       "ObjectAssignmentValidation",
       "InvoiceTransferManifest",
       "SynchronizationStatus",
+      "SynchronizationErrorCode",
       "InvoiceSynchronization",
       "TransferReceiptResult",
+      "TransferReceiptErrorCode",
       "InvoiceTransferReceipt",
       "ReplicaRole",
       "InvoiceWorkingReplica",
@@ -7563,6 +7668,7 @@
       "EstimateItemSnapshot",
       "EstimateSnapshot",
       "HoldedPublicationStatus",
+      "HoldedPublicationOutcomeCode",
       "HoldedPublication",
       "HoldedAttemptOutcome",
       "HoldedPublicationAttempt",
@@ -7583,6 +7689,7 @@
       "DurableAcceptanceVerification",
       "LocalSourceFile",
       "SourceAttachmentResult",
+      "SourceAttachmentErrorCode",
       "SourceAttachmentItemResult",
       "SourceCompleteness",
       "SourceStatus",
@@ -7633,6 +7740,7 @@
       "RegistryCatalogueDelivery",
       "VpsCatalogueAcknowledgement",
       "VpsConnectionObservation",
+      "ProposalReasonCode",
       "InvoiceLineMatchProposal",
       "UnmatchedPlanActualItems",
       "AccessControlBackend",

@@ -1,11 +1,21 @@
 # State 1 repair — plan/actual runtime evidence
 
+## Model M124 — ProposalReasonCode
+
+`kind: enum`: `unit_match`, `currency_match`, `quantity_equal`, `unit_price_close`.
+
+### Identity
+
+enum (no runtime identity).
+
+---
+
 ## Model M74 — InvoiceLineMatchProposal
 
 Immutable non-authoritative candidate with fields `proposal_id: str`,
 `invoice_revision: InvoiceCardRevisionReference`, `invoice_line_id: str`,
 `estimate_snapshot_id: str`, `estimate_item_id: str`, `score: Decimal`,
-`reason_codes: tuple[str, ...]`, and `proposed_at: datetime`.
+`reason_codes: tuple[ProposalReasonCode, ...]`, and `proposed_at: datetime`.
 
 ### Identity
 value

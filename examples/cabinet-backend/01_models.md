@@ -787,7 +787,7 @@ Candidate fields:
 - `status: CataloguePublicationStatus` — `pending`, `transferring`, `accepted`, `failed`, or
   `unknown_outcome`;
 - requested, completed, and acknowledged times;
-- safe error code optional.
+- `safe_error_code: SynchronizationErrorCode | None`.
 
 ### Meaning
 
@@ -1087,6 +1087,16 @@ enum (no runtime identity).
 
 ---
 
+## Model M122 — SynchronizationErrorCode
+
+`kind: enum`: `authentication_failed`, `incompatible_contract`, `remote_unavailable`, `remote_rejected`, `conflicting_binding`, `transport_failure`.
+
+### Identity
+
+enum (no runtime identity).
+
+---
+
 ## Model M20 — InvoiceSynchronization
 
 Transport process for one manifest.
@@ -1101,7 +1111,7 @@ Candidate fields:
   `failed`, or `cancelled`;
 - idempotency key;
 - started and finished times optional;
-- safe error code optional.
+- `safe_error_code: SynchronizationErrorCode | None`.
 
 `delivered` means the target received the package. It does not by itself mean
 that the package was validated or committed to the durable archive.
@@ -1271,6 +1281,16 @@ enum (no runtime identity).
 
 ---
 
+## Model M121 — TransferReceiptErrorCode
+
+`kind: enum`: `unsupported_contract_version`, `integrity_invalid_revision`, `conflicting_manifest`, `duplicate_review`, `incomplete_sources`, `quarantine_required`.
+
+### Identity
+
+enum (no runtime identity).
+
+---
+
 ## Model M23 — InvoiceTransferReceipt
 
 Durable target evidence returned to the VPS.
@@ -1286,7 +1306,7 @@ Candidate fields:
   `unknown`;
 - accepted Card and source hashes;
 - receipt time;
-- safe error code optional.
+- `safe_error_code: TransferReceiptErrorCode | None` — bound to the result.
 
 A retry with the same idempotency key and manifest must resolve to the same
 logical import and must not create a second invoice.
@@ -1747,6 +1767,16 @@ None for identity closure.
 
 # I. Holded publication
 
+## Model M123 — HoldedPublicationOutcomeCode
+
+`kind: enum`: `required_source_missing`, `rejected_by_holded`, `malformed_response`, `ambiguous_create`, `zero_matches`, `lookup_failure`, `multiple_matches`, `verification_mismatch`, `inconsistent_attempt_evidence`.
+
+### Identity
+
+enum (no runtime identity).
+
+---
+
 ## Model M33 — HoldedPublication
 
 Business record for publishing one exact confirmed Card revision.
@@ -1759,7 +1789,7 @@ Candidate fields:
 - `status: HoldedPublicationStatus` — closed enum M91: `pending`, `verified`, `failed`, `payload_mismatch`, `outcome_unknown`, `duplicate_conflict`, `reconciliation_required`, `cancelled`;
 - external document ID optional;
 - created and completed times;
-- safe outcome details.
+- `safe_outcome_code: HoldedPublicationOutcomeCode | None` — bound to the settled status.
 
 ### Meaning
 

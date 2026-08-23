@@ -67,3 +67,31 @@ def test_malformed_token_is_refused_before_any_throttle_or_audit_row(semantic_ru
     with pytest.raises(semantic_runtime.AuthenticationRequiredError):
         semantic_runtime.authenticate("not-a-token")
     assert len(semantic_runtime.audit_records()) == before
+
+
+def test_match_proposals_follow_the_declared_heuristic(semantic_runtime):
+    """rules.plan_actual.proposal_*: unit and currency must match; score = 0.5 for equal
+    quantity + 0.5 * unit-price proximity; ordered by score desc; descriptions ignored."""
+    from decimal import Decimal
+
+    scenario = semantic_runtime.plan_actual_scenario(
+        project_id="P-proposals",
+        estimate_items=[
+            {"estimate_item_id": "A", "quantity": Decimal("10"), "unit": "m2", "currency": "EUR", "monetary_basis": "net", "total": Decimal("100.00")},
+            {"estimate_item_id": "B", "quantity": Decimal("5"), "unit": "kg", "currency": "EUR", "monetary_basis": "net", "total": Decimal("50.00")},
+            {"estimate_item_id": "C", "quantity": Decimal("4"), "unit": "m2", "currency": "EUR", "monetary_basis": "net", "total": Decimal("200.00")},
+        ],
+        invoice_lines=[
+            {"invoice_line_id": "L1", "quantity": Decimal("10"), "unit": "m2", "currency": "EUR", "monetary_basis": "net", "total": Decimal("110.00")},
+        ],
+        confirmed_matches=[],
+    )
+
+    proposals = semantic_runtime.propose_line_matches(scenario)
+
+    assert [p.estimate_item_id for p in proposals] == ["A", "C"]
+    first, second = proposals
+    assert first.score == Decimal("0.9545")
+    assert set(str(getattr(c, "value", c)) for c in first.reason_codes) == {"unit_match", "currency_match", "quantity_equal", "unit_price_close"}
+    assert second.score == Decimal("0.1100")  # 1 - |11 - 50| / 50 = 0.22
+    assert set(str(getattr(c, "value", c)) for c in second.reason_codes) == {"unit_match", "currency_match"}

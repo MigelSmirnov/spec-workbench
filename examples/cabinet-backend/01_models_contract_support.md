@@ -192,6 +192,16 @@ enum (no runtime identity).
 
 ---
 
+## Model M120 — SourceAttachmentErrorCode
+
+`kind: enum`: `authorization_denied`, `unsupported_media_type`, `file_too_large`, `unreadable`, `wrong_target`, `store_rejected`.
+
+### Identity
+
+enum (no runtime identity).
+
+---
+
 ## Model M42 — SourceAttachmentItemResult
 
 Immutable per-file attachment outcome.
@@ -202,7 +212,7 @@ Fields:
 - `source_id: str | None`;
 - `content_hash: str`;
 - `result: SourceAttachmentResult` — accepted values are `attached`, `already_attached`, or `rejected`;
-- `safe_error_code: str | None`.
+- `safe_error_code: SourceAttachmentErrorCode | None = None`.
 
 ### Identity
 
