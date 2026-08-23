@@ -40,6 +40,7 @@ Generic query dictionaries and untyped save methods are forbidden.
 - PostgresHoldedAttemptRepository.insert_attempt(self, attempt: HoldedPublicationAttempt) -> None
 - PostgresHoldedAttemptRepository.update_attempt(self, attempt: HoldedPublicationAttempt) -> None
 - PostgresHoldedAttemptRepository.insert_lookup_evidence(self, evidence: HoldedPurchaseLookupEvidence) -> None
+- holded_wire_date(value: date) -> int
 - HttpxHoldedHttpClient.__init__(self, base_url: str, api_key: str, timeout_seconds: int, max_response_bytes: int) -> None
 - HttpxHoldedHttpClient.create_purchase(self, payload: HoldedPurchaseAttemptPayload) -> HoldedTransportResponse
 - HttpxHoldedHttpClient.list_purchases(self) -> HoldedPurchaseListPage

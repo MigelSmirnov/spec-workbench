@@ -25,10 +25,11 @@ def test_closed_holded_transport_is_assembled_without_semantic_edits() -> None:
     assert "max_recovery_pages" not in spec["config"]["holded_runtime"]
 
 
-def test_holded_transport_owns_only_the_deterministic_concrete_client() -> None:
+def test_holded_transport_owns_the_deterministic_client_and_wire_date() -> None:
     spec = _load("global_spec.json")
 
-    assert spec["module_functions"]["holded_transport"] == ["HttpxHoldedHttpClient"]
+    assert spec["module_functions"]["holded_transport"] == ["holded_wire_date", "HttpxHoldedHttpClient"]
+    assert spec["contracts"]["holded_wire_date"] == "(value: date) -> int"
     assert "HttpxHoldedHttpClient" not in spec["module_functions"]["holded_gateway"]
     assert spec["contracts"]["HoldedHttpClient.list_purchases"] == "(self) -> HoldedPurchaseListPage"
     assert spec["contracts"]["HttpxHoldedHttpClient.list_purchases"] == "(self) -> HoldedPurchaseListPage"

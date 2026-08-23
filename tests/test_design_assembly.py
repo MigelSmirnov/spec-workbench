@@ -71,7 +71,7 @@ def test_check_inspection_preserves_owner_report() -> None:
     report = inspect_check(CABINET, "notes")
     assert report["schema_version"] == "spec_workbench_assembly_check.v1"
     assert report["check"]["schema_version"] == "spec_workbench_state7_notes_gate.v1"
-    assert report["check"]["summary"]["notes"] == 234
+    assert report["check"]["summary"]["notes"] == 235
     assert report["check"]["ready"] is True
 
 

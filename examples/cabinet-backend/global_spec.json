@@ -210,6 +210,7 @@
     "PostgresHoldedAttemptRepository.insert_attempt": "(self, attempt: HoldedPublicationAttempt) -> None",
     "PostgresHoldedAttemptRepository.update_attempt": "(self, attempt: HoldedPublicationAttempt) -> None",
     "PostgresHoldedAttemptRepository.insert_lookup_evidence": "(self, evidence: HoldedPurchaseLookupEvidence) -> None",
+    "holded_wire_date": "(value: date) -> int",
     "HttpxHoldedHttpClient.__init__": "(self, base_url: str, api_key: str, timeout_seconds: int, max_response_bytes: int) -> None",
     "HttpxHoldedHttpClient.create_purchase": "(self, payload: HoldedPurchaseAttemptPayload) -> HoldedTransportResponse",
     "HttpxHoldedHttpClient.list_purchases": "(self) -> HoldedPurchaseListPage",
@@ -478,7 +479,7 @@
     "calculate_plan_actual: [RULE_REFERENCE] Unit comparison must obey = rules.plan_actual.implicit_unit_conversion_allowed; currency comparison must obey = rules.plan_actual.implicit_currency_conversion_allowed; monetary and tax-basis comparison must obey = rules.plan_actual.implicit_tax_basis_conversion_allowed.",
     "request_holded_publication: [ORCHESTRATION] Persist the logical publication attempt and exact immutable Invoice Card revision binding before the one permitted create mutation; a technical create response never by itself settles Cabinet publication success.",
     "request_holded_publication: [ORCHESTRATION] When create_holded_purchase returns a clear canonical documentId, obtain read-only evidence for that exact Holded document through the existing Holded gateway read operation and perform complete A51 business verification before returning a successful logical publication.",
-    "request_holded_publication: [BEHAVIOR] Complete A51 verification must preserve and compare exactly the fields the read-back carries (= rules.holded_transport_backend.responses): supplier name (contactName) against supplier.name, supplier invoice number (docNumber) against invoice_number, date against the Unix-seconds projection of issue_date, currency, line count and order, line names against description_original, quantities against quantity, tax rates against tax_rate, and final gross total (total) against totals.gross within accepted currency precision — and MUST NOT compare any other field: not supplier code, not item subtotal, discount, sku or description, not raw status; Holded intermediate rounding differences may be preserved without failure only under the accepted A51 rules.",
+    "request_holded_publication: [BEHAVIOR] Complete A51 verification must preserve and compare exactly the fields the read-back carries (= rules.holded_transport_backend.responses): supplier name (contactName) against supplier.name, supplier invoice number (docNumber) against invoice_number, document_date against holded_wire_date(issue_date), currency, line count and order, line names against description_original, quantities against quantity, tax rates against tax_rate, and final gross total (total) against totals.gross within accepted currency precision — and MUST NOT compare any other field: not supplier code, not item subtotal, discount, sku or description, not raw status; Holded intermediate rounding differences may be preserved without failure only under the accepted A51 rules.",
     "request_holded_publication: [RETURN_SHAPE] A clear create followed by GET/read failure returns the publication in reconciliation_required, a business-field mismatch returns it in payload_mismatch, an ambiguous create returns it in outcome_unknown, a rejected create returns it in failed, and a verified read-back returns it in verified with external_document_id; none of these raise, none authorize another automatic POST, and none rewrite Invoice Card facts.",
     "request_holded_publication: [BEHAVIOR] Store Holded numeric status as raw external evidence only; do not infer draft, approved, paid, posted, cancelled, or other accounting meaning.",
     "reconcile_holded_publication: [ORCHESTRATION] After an ambiguous create outcome, perform only read-only marker recovery; zero matches remain outcome-unknown, multiple exact matches remain duplicate conflict, and one exact marker candidate must be GET-read and completely A51-verified before settlement.",
@@ -556,7 +557,7 @@
     "synchronize_invoice_work: [DEPENDENCY_BOUNDARY] MUST call archive acceptance and verification through the exact supplied DurableArchiveService and MUST NOT construct or discover another archive runtime.",
     "calculate_plan_actual: [DEPENDENCY_BOUNDARY] MUST load pinned accepted invoice revisions through the exact supplied DurableArchiveService and MUST NOT read archive persistence directly.",
     "request_holded_publication: [DEPENDENCY_BOUNDARY] MUST resolve the exact accepted immutable invoice revision through the supplied DurableArchiveService before publication eligibility or gateway mutation.",
-    "request_holded_publication: [FIELD_PROJECTION] The purchase payload is built only from canonical_card of the exact revision: contact_name from supplier.name, contact_code from supplier.tax_id, invoice_num from invoice_number, date as the Unix timestamp in seconds of issue_date at 00:00:00 UTC, i.e. int(datetime(y, m, d, tzinfo=timezone.utc).timestamp()) — never a naive local midnight (Holded v1 carries dates as integers; the same projection is applied to issue_date before comparing it with the read-back document_date), currency from currency, and one item per InvoiceCardLine with name from description_original, units from quantity, subtotal from unit_price_net, discount from discount_percent, and tax from tax_rate; A51 verification compares the read-back document with these same fields and with totals.gross.",
+    "request_holded_publication: [FIELD_PROJECTION] The purchase payload is built only from canonical_card of the exact revision: contact_name from supplier.name, contact_code from supplier.tax_id, invoice_num from invoice_number, date = holded_transport.holded_wire_date(issue_date) (the only date projection; never computed locally), currency from currency, and one item per InvoiceCardLine with name from description_original, units from quantity, subtotal from unit_price_net, discount from discount_percent, and tax from tax_rate; A51 verification compares the read-back document with these same fields and with totals.gross.",
     "reconcile_holded_publication: [DEPENDENCY_BOUNDARY] MUST use the supplied DurableArchiveService to resolve the immutable revision bound to the logical publication; remote evidence cannot replace archive truth.",
     "attach_local_source_handler: [DEPENDENCY_BOUNDARY] MUST obtain the exact DurableArchiveService bound to request.app.state.archive and pass it to attach_local_source; service construction or fallback is forbidden.",
     "get_source_status_handler: [DEPENDENCY_BOUNDARY] MUST obtain the exact DurableArchiveService bound to request.app.state.archive and pass it to get_source_status.",
@@ -676,6 +677,7 @@
     "HoldedAttemptRepository.insert_lookup_evidence: [PROVENANCE] Append one immutable secret-free lookup observation row keyed by attempt_marker and observed_at inside the active transaction; never update, delete, or settle any attempt or publication state.",
     "create_holded_gateway_schema: [CONFIG_REFERENCE] MUST idempotently create only the tables named by = config.persistence.holded_attempt_table_name and = config.persistence.holded_lookup_evidence_table_name on a connection it opens from database_url and closes; MUST NOT read environment variables or log the URL.",
     "PostgresHoldedAttemptRepository.__init__: [SECURITY_BOUNDARY] Bind to the supplied PostgreSQL URL, validate connectivity, treat the URL as secret, and never read environment variables or log credentials.",
+    "holded_wire_date: [BEHAVIOR] MUST return the Holded v1 document date for a calendar date: the Unix timestamp in seconds of 00:00:00 UTC on that day, computed with an explicit UTC tzinfo; this is the only date projection used toward or from Holded.",
     "HttpxHoldedHttpClient.__init__: [VALIDATION_ERROR] Require the verified Holded v1 HTTPS origin, a non-empty API key, and positive finite timeout and response-size bounds according to = rules.holded_transport_backend.",
     "HttpxHoldedHttpClient.__init__: [SECURITY_BOUNDARY] Keep the credential only in the outbound key header defined by = rules.holded_transport_backend, enable TLS verification, and never log or return reusable credential material.",
     "create_holded_purchase: [DEPENDENCY_BOUNDARY] Delegate through the exact supplied HoldedGatewayService; no ad-hoc client, repository, environment read, or fallback is permitted.",
@@ -6764,6 +6766,7 @@
         "HoldedGatewayService"
       ],
       "holded_transport": [
+        "holded_wire_date",
         "HttpxHoldedHttpClient"
       ],
       "api": [
@@ -6865,6 +6868,9 @@
           "SourceStatus",
           "HoldedAttemptOutcome",
           "HoldedPublicationStatus"
+        ],
+        "holded_transport": [
+          "holded_wire_date"
         ]
       },
       "api_irregular": {
@@ -7367,6 +7373,7 @@
       "HoldedGatewayService"
     ],
     "holded_transport": [
+      "holded_wire_date",
       "HttpxHoldedHttpClient"
     ],
     "api": [
