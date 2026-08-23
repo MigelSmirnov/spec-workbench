@@ -76,7 +76,8 @@ The manifest and generated pack are dependency/indexing tools only. Canonical pr
    - [10 — Opening lifecycle and opening-change intent](10_opening_lifecycle.md) — accepted refinement
    - [10 — Remaining model closure](10_model_closure.md) — accepted closure refinement
    - `frontend_context.json` — machine-readable frontend dependency manifest
-3. **State 2 — Rules and invariants** — next
+3. **State 2 — Rules and invariants** — active working draft
+   - [20 — Rules and invariants](20_rules.md)
 4. 30 — Module responsibilities
 5. 40 — System flows
 6. 50 — Public APIs
@@ -86,6 +87,8 @@ The manifest and generated pack are dependency/indexing tools only. Canonical pr
 
 State 1 is stabilized by the complete set of `10_*` documents above. The later accepted refinements are normative where they explicitly supersede provisional names or shapes in `10_models.md`. A future readability consolidation may rewrite the base document, but it must not change the accepted semantics.
 
-`context_pack.py` will carry the stabilized State 0/1 sources and linked shared architecture boundaries into State 2 work automatically.
+State 2 is now active. Its current open policy areas are recorded in `20_rules.md`; they must be closed before proceeding to module responsibilities unless a later rule exposes a missing State 1 model decision.
+
+`context_pack.py` carries the stabilized State 0/1 sources, current State 2 source, and linked shared architecture boundaries into State 2 work automatically.
 
 Later state documents must carry the Platform Router dependency forward even when they do not introduce a new shared interaction. Frontend-relevant shared requirements should likewise be evaluated against `FRONTEND_EDITOR.md` rather than being duplicated privately in later Room Planner documents.
