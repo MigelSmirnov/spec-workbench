@@ -124,6 +124,29 @@ def signature_parameters(signature: str) -> list[tuple[str, str]]:
     return result
 
 
+def signature_return(signature: str) -> str:
+    """Return the top-level return annotation of a contract signature."""
+    text = signature.strip()
+    if not text.startswith("("):
+        return ""
+    depth = 0
+    close = -1
+    for index, char in enumerate(text):
+        if char in _OPENERS:
+            depth += 1
+        elif char in _CLOSERS:
+            depth -= 1
+            if depth == 0:
+                close = index
+                break
+    if close == -1:
+        return ""
+    tail = text[close + 1 :].strip()
+    if not tail.startswith("->"):
+        return ""
+    return tail[2:].strip()
+
+
 def is_function_contract(name: str, signature: object) -> bool:
     if not isinstance(name, str) or not isinstance(signature, str):
         return False

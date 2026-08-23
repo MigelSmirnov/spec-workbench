@@ -32,6 +32,20 @@ def _codes(report):
     return {item["code"] for item in report["findings"]}
 
 
+def _add_interface_project(project, contracts):
+    contract_payload = json.loads((project / "60_contracts.json").read_text(encoding="utf-8"))
+    contract_payload["contracts"].update(contracts)
+    (project / "60_contracts.json").write_text(json.dumps(contract_payload), encoding="utf-8")
+    (project / "global_spec.json").write_text(
+        json.dumps({
+            "models": {"UploadPort": {"kind": "interface"}},
+            "contracts": contract_payload["contracts"],
+        }),
+        encoding="utf-8",
+    )
+    return project
+
+
 def test_gate_accepts_addressed_classified_notes(tmp_path):
     project = _project(
         tmp_path,
@@ -63,6 +77,72 @@ def test_gate_blocks_semantic_stub(tmp_path):
     report = gate.coverage(project)
     assert "semantic_stub" in _codes(report)
     assert report["summary"]["blocks"] == 1
+
+
+def test_gate_blocks_interface_return_without_concrete_producer_guidance(tmp_path):
+    project = _project(
+        tmp_path,
+        "parse: [BEHAVIOR] MUST return normalized content.\n"
+        "open_upload: [BEHAVIOR] MUST return an UploadPort.\n"
+        "UploadPort.read_chunk: [BEHAVIOR] MUST return bounded bytes.\n",
+    )
+    _add_interface_project(project, {
+        "open_upload": "(path: str) -> UploadPort",
+        "UploadPort.read_chunk": "(self, max_bytes: int) -> bytes",
+    })
+    report = gate.coverage(project)
+    finding = next(item for item in report["findings"] if item["code"] == "interface_construction_not_closed")
+    assert finding["scope"] == "open_upload"
+    assert finding["interface"] == "UploadPort"
+    assert finding["boundary"] == "producer"
+
+
+def test_gate_accepts_closed_interface_return_producer(tmp_path):
+    project = _project(
+        tmp_path,
+        "parse: [BEHAVIOR] MUST return normalized content.\n"
+        "open_upload: [BEHAVIOR] MUST return a module-owned concrete UploadPort implementation; "
+        "MUST NOT instantiate the UploadPort interface.\n"
+        "UploadPort.read_chunk: [BEHAVIOR] MUST return bounded bytes.\n",
+    )
+    _add_interface_project(project, {
+        "open_upload": "(path: str) -> UploadPort",
+        "UploadPort.read_chunk": "(self, max_bytes: int) -> bytes",
+    })
+    report = gate.coverage(project)
+    assert "interface_construction_not_closed" not in _codes(report)
+
+
+def test_gate_blocks_transport_adapter_named_only_in_note(tmp_path):
+    project = _project(
+        tmp_path,
+        "parse: [BEHAVIOR] MUST return normalized content.\n"
+        "upload_handler: [ORCHESTRATION] MUST delegate one UploadPort from the multipart file.\n"
+        "UploadPort.read_chunk: [BEHAVIOR] MUST return bounded bytes.\n",
+    )
+    _add_interface_project(project, {
+        "upload_handler": "(file: object) -> bool",
+        "UploadPort.read_chunk": "(self, max_bytes: int) -> bytes",
+    })
+    report = gate.coverage(project)
+    finding = next(item for item in report["findings"] if item["code"] == "interface_construction_not_closed")
+    assert finding["scope"] == "upload_handler"
+    assert finding["boundary"] == "adapter"
+
+
+def test_gate_does_not_require_construction_guidance_for_injected_interface(tmp_path):
+    project = _project(
+        tmp_path,
+        "parse: [BEHAVIOR] MUST return normalized content.\n"
+        "consume_upload: [BEHAVIOR] MUST read the injected UploadPort incrementally.\n"
+        "UploadPort.read_chunk: [BEHAVIOR] MUST return bounded bytes.\n",
+    )
+    _add_interface_project(project, {
+        "consume_upload": "(upload: UploadPort) -> bool",
+        "UploadPort.read_chunk": "(self, max_bytes: int) -> bytes",
+    })
+    report = gate.coverage(project)
+    assert "interface_construction_not_closed" not in _codes(report)
 
 
 def test_reference_class_requires_matching_namespace(tmp_path):

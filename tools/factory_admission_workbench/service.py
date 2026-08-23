@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import re
 import subprocess
 import sys
 import tempfile
@@ -12,7 +11,7 @@ from typing import Any
 from assembly_workbench import verify as verify_assembly
 from module_review_workbench import build_slice
 from external_contract_workbench import coverage as external_contract_coverage
-from notes_workbench.language import signature_parameters
+from interface_workbench import implementation_obligation_findings
 from spec_language_workbench import SpecLanguageError, verify_payload as verify_language_payload
 
 from factory_admission_workbench.model import (
@@ -464,10 +463,6 @@ def _language_check(source: Path) -> AdmissionCheck:
     )
 
 
-def _annotation_mentions(annotation: str, type_name: str) -> bool:
-    return re.search(rf"(?<![A-Za-z0-9_]){re.escape(type_name)}(?![A-Za-z0-9_])", annotation) is not None
-
-
 def _implementation_obligations_check(source: Path) -> AdmissionCheck:
     """Require an explicit disposition for every interface used as a dependency.
 
@@ -476,10 +471,7 @@ def _implementation_obligations_check(source: Path) -> AdmissionCheck:
     structured spec cells; class names and prose notes are not evidence.
     """
     spec = _load_json(source)
-    contracts = spec.get("contracts", {}) if isinstance(spec, dict) else None
-    models = spec.get("models", {}) if isinstance(spec, dict) else None
-    obligations = spec.get("implementation_obligations") if isinstance(spec, dict) else None
-    if not isinstance(contracts, dict) or not isinstance(models, dict):
+    if not isinstance(spec, dict):
         return AdmissionCheck(
             "FA010",
             CHECK_BLOCK,
@@ -487,122 +479,23 @@ def _implementation_obligations_check(source: Path) -> AdmissionCheck:
             {"path": str(source)},
         )
 
-    interfaces = {
-        name
-        for name, declaration in models.items()
-        if isinstance(name, str)
-        and isinstance(declaration, dict)
-        and declaration.get("kind") == "interface"
-    }
-    dependency_uses: dict[str, list[str]] = {name: [] for name in interfaces}
-    for owner, signature in contracts.items():
-        if not isinstance(owner, str) or not isinstance(signature, str):
-            continue
-        owner_class = owner.split(".", 1)[0] if "." in owner else None
-        for _parameter, annotation in signature_parameters(signature):
-            for interface in interfaces:
-                if owner_class != interface and _annotation_mentions(annotation, interface):
-                    dependency_uses[interface].append(owner)
-    dependency_uses = {name: sorted(set(uses)) for name, uses in dependency_uses.items() if uses}
+    report = implementation_obligation_findings(spec)
+    dependency_uses = report["dependency_uses"]
+    findings = report["findings"]
+    if any(item.get("code") == "malformed_contracts_or_models" for item in findings):
+        return AdmissionCheck(
+            "FA010",
+            CHECK_BLOCK,
+            "Implementation obligations cannot be checked on malformed contracts/models.",
+            {"path": str(source), "findings": findings},
+        )
     if not dependency_uses:
         return AdmissionCheck(
             "FA010",
             CHECK_NOT_APPLICABLE,
             "No interface-typed dependency parameters require an implementation disposition.",
-            {"interfaces": sorted(interfaces)},
+            {"interfaces": report["interfaces"]},
         )
-
-    findings: list[dict[str, Any]] = []
-    if not isinstance(obligations, dict):
-        obligations = {}
-    unknown = sorted(set(obligations) - interfaces)
-    for interface in unknown:
-        findings.append({
-            "code": "unknown_interface_obligation",
-            "interface": interface,
-        })
-
-    interface_methods: dict[str, dict[str, str]] = {}
-    for interface in interfaces:
-        prefix = interface + "."
-        interface_methods[interface] = {
-            name[len(prefix):]: signature
-            for name, signature in contracts.items()
-            if isinstance(name, str)
-            and name.startswith(prefix)
-            and isinstance(signature, str)
-        }
-
-    module_functions = spec.get("module_functions") or {}
-    declared_classes = {
-        symbol
-        for symbols in module_functions.values()
-        if isinstance(symbols, list)
-        for symbol in symbols
-        if isinstance(symbol, str)
-        and any(name.startswith(symbol + ".") for name in contracts)
-    } if isinstance(module_functions, dict) else set()
-
-    for interface, uses in sorted(dependency_uses.items()):
-        row = obligations.get(interface)
-        if not isinstance(row, dict):
-            findings.append({
-                "code": "missing_implementation_disposition",
-                "interface": interface,
-                "used_by": uses,
-            })
-            continue
-        disposition = row.get("disposition")
-        implementations = row.get("implementations", [])
-        if disposition not in {"local", "policy", "external"}:
-            findings.append({
-                "code": "invalid_implementation_disposition",
-                "interface": interface,
-                "disposition": disposition,
-            })
-            continue
-        if disposition == "external":
-            if implementations not in (None, []):
-                findings.append({
-                    "code": "external_disposition_has_local_classes",
-                    "interface": interface,
-                })
-            continue
-        if not isinstance(implementations, list) or not implementations:
-            findings.append({
-                "code": "local_disposition_has_no_classes",
-                "interface": interface,
-            })
-            continue
-        for concrete in implementations:
-            if not isinstance(concrete, str) or concrete not in declared_classes or concrete in interfaces:
-                findings.append({
-                    "code": "unknown_concrete_implementation",
-                    "interface": interface,
-                    "concrete": concrete,
-                })
-                continue
-            for method, expected in sorted(interface_methods[interface].items()):
-                concrete_contract = f"{concrete}.{method}"
-                actual = contracts.get(concrete_contract)
-                if actual is None:
-                    findings.append({
-                        "code": "missing_concrete_method_contract",
-                        "interface": interface,
-                        "concrete": concrete,
-                        "method": method,
-                        "expected_contract": expected,
-                    })
-                elif actual != expected:
-                    findings.append({
-                        "code": "incompatible_concrete_method_contract",
-                        "interface": interface,
-                        "concrete": concrete,
-                        "method": method,
-                        "expected_contract": expected,
-                        "actual_contract": actual,
-                    })
-
     return AdmissionCheck(
         "FA010",
         CHECK_BLOCK if findings else CHECK_PASS,

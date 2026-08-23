@@ -346,6 +346,24 @@ def test_missing_interface_implementation_disposition_blocks_admission(tmp_path:
     assert implementation["evidence"]["findings"][0]["code"] == "missing_implementation_disposition"
 
 
+def test_malformed_interface_cells_block_admission(tmp_path: Path) -> None:
+    report = _run(tmp_path)
+    source = tmp_path / "spec-workbench/accepted/global_spec.json"
+    _write_json(source, {"standard_version": 2, "contracts": []})
+    blocked = check(
+        workbench_root=tmp_path / "spec-workbench",
+        source=source,
+        project="demo",
+        factory_root=Path(report["factory_root"]),
+        source_git=CLEAN_GIT,
+    )
+    implementation = next(item for item in blocked["checks"] if item["id"] == "FA010")
+    assert implementation["status"] == "BLOCK"
+    assert implementation["evidence"]["findings"] == [
+        {"code": "malformed_contracts_or_models"}
+    ]
+
+
 def test_local_implementation_without_port_methods_blocks_admission(tmp_path: Path) -> None:
     report = _run(tmp_path)
     source = tmp_path / "spec-workbench/accepted/global_spec.json"
