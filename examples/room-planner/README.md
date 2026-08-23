@@ -49,9 +49,11 @@ Concrete HTTP paths, DTOs, and transport details are still deferred until their 
 
 Room Planner also uses the repository-level [Frontend Editor](../../FRONTEND_EDITOR.md) as its living browser/editor architecture boundary.
 
-That document accumulates shared frontend knowledge without copying Room Planner domain models into a second source of truth. In particular it records the browser-first delivery boundary, domain-authoritative versus transient editor state, rendering-as-projection, and the expected progression from model completeness to later interaction/API contracts.
+Opening/aperture behavior has additionally produced an accepted shared refinement in [Frontend Editor — Opening/Aperture Refinement](../../FRONTEND_EDITOR_OPENINGS.md). It supersedes the older one-object opening sketch in the shared frontend document for building-layer opening behavior: aperture geometry, installed door/window elements, and renderer symbols are distinct meanings.
 
-Because this README links the Frontend Editor document, the normal case context pack imports it automatically alongside the Platform Router.
+That frontend material accumulates shared knowledge without copying Room Planner domain models into a second source of truth. In particular it records the browser-first delivery boundary, domain-authoritative versus transient editor state, rendering-as-projection, opening/aperture projection, and the expected progression from model completeness to later interaction/API contracts.
+
+Because this README links the frontend documents, the normal case context pack imports them automatically alongside the Platform Router.
 
 For focused frontend work, build the narrower manifest-driven context with:
 
@@ -62,7 +64,7 @@ python tools/frontend_context.py \
 
 The manifest lists exact canonical Markdown headings needed by the Room Planner browser editor. The tool fails if a referenced file or heading disappears, so frontend dependencies cannot silently rot when domain documents are renamed or refined.
 
-The manifest and generated pack are dependency/indexing tools only. Canonical product and domain decisions remain in the numbered Room Planner state documents; shared frontend/editor architecture remains in `FRONTEND_EDITOR.md`.
+The manifest and generated pack are dependency/indexing tools only. Canonical product and domain decisions remain in the numbered Room Planner state documents; shared frontend/editor architecture remains in `FRONTEND_EDITOR.md` and its accepted refinements.
 
 ## Design states
 
@@ -78,6 +80,7 @@ The manifest and generated pack are dependency/indexing tools only. Canonical pr
    - `frontend_context.json` — machine-readable frontend dependency manifest
 3. **State 2 — Rules and invariants** — active working draft
    - [20 — Rules and invariants](20_rules.md)
+   - [20 — Frontend opening projection rules](20_frontend_opening_rules.md) — accepted refinement
 4. 30 — Module responsibilities
 5. 40 — System flows
 6. 50 — Public APIs
@@ -89,6 +92,6 @@ State 1 is stabilized by the complete set of `10_*` documents above. The later a
 
 State 2 is now active. Its current open policy areas are recorded in `20_rules.md`; they must be closed before proceeding to module responsibilities unless a later rule exposes a missing State 1 model decision.
 
-`context_pack.py` carries the stabilized State 0/1 sources, current State 2 source, and linked shared architecture boundaries into State 2 work automatically.
+`context_pack.py` carries the stabilized State 0/1 sources, current State 2 sources, and linked shared architecture boundaries into State 2 work automatically.
 
-Later state documents must carry the Platform Router dependency forward even when they do not introduce a new shared interaction. Frontend-relevant shared requirements should likewise be evaluated against `FRONTEND_EDITOR.md` rather than being duplicated privately in later Room Planner documents.
+Later state documents must carry the Platform Router dependency forward even when they do not introduce a new shared interaction. Frontend-relevant shared requirements should likewise be evaluated against `FRONTEND_EDITOR.md` and its accepted refinements rather than being duplicated privately in later Room Planner documents.
