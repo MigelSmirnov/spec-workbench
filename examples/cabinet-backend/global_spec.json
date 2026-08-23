@@ -317,7 +317,7 @@
   },
   "notes": [
     "authorize_operation: [SECURITY_BOUNDARY] MUST evaluate authorization only for the exact operation supplied by the caller and return the decision without performing the protected business operation.",
-    "authorize_operation: [VALIDATION_ERROR] Raise AuthenticationRequiredError when no valid authenticated principal exists and OperationForbiddenError when the authenticated principal lacks authority for the exact requested operation; possession of an entity identifier is never authority.",
+    "authorize_operation: [VALIDATION_ERROR] Raise AuthenticationRequiredError when principal is None or the returned decision has allowed False with reason_code in {authentication_required, unknown_credential, credential_revoked, principal_revoked, stale_context}; raise OperationForbiddenError when allowed is False with reason_code operation_forbidden; possession of an entity identifier is never authority. The exception is chosen only by the enum value, never by string prefix or message.",
     "AccessControlBackend.authenticate: [SECURITY_BOUNDARY] Resolve the supplied local credential to one canonical authenticated principal context and do not expose reusable credential material in the returned context.",
     "AccessControlBackend.authenticate: [VALIDATION_ERROR] Raise AuthenticationRequiredError when the supplied credential cannot establish a valid active local principal.",
     "AccessControlBackend.authorize: [SECURITY_BOUNDARY] Evaluate the principal against the exact operation and current access-control state; keep local service authority distinct from synchronization-node identity.",
@@ -330,12 +330,16 @@
     "LocalAccessControlService.authenticate: [SECURITY_BOUNDARY] Accept only an active credential of an active principal whose verifier matches; return a context containing identifiers and the authentication time but no reusable secret.",
     "LocalAccessControlService.authenticate: [VALIDATION_ERROR] Reject malformed, unknown, revoked, delayed, or temporarily blocked credentials with AuthenticationRequiredError; a refusal still upserts the throttle state and inserts secret-free audit evidence before rollback-free commit of those rows.",
     "LocalAccessControlService.authenticate: [BEHAVIOR] On failure increment the consecutive-failure counter and compute delay_until or blocked_until from the rules; on success reset the counter to zero, update the credential last_authenticated_at, and insert audit evidence; audit history is never deleted.",
+    "LocalAccessControlService.authenticate: [FIELD_ASSIGNMENT] Audit evidence uses event_type authentication, result allowed or refused, and reason_code throttled_block (blocked_until in the future), throttled_delay (delay_until in the future), unknown_credential, credential_revoked, principal_revoked, or secret_mismatch, evaluated in that order; a refusal is always AuthenticationRequiredError regardless of the reason.",
     "LocalAccessControlService.authorize: [SECURITY_BOUNDARY] Reread the current principal and credential for the supplied context and allow only an exact operation present in the stored capability tuple; stale context, localhost origin, client name, prompt, or entity identifier is not authority.",
-    "LocalAccessControlService.authorize: [VALIDATION_ERROR] Raise AuthenticationRequiredError for a stale, revoked, or unknown context and OperationForbiddenError for an active principal lacking the exact capability; insert refusal evidence without performing the protected operation.",
+    "LocalAccessControlService.authorize: [RETURN_SHAPE] MUST never raise for a refusal: return AuthorizationDecision with allowed False and reason_code unknown_credential, credential_revoked, principal_revoked, or stale_context for a missing, revoked, or mismatched credential/principal, and operation_forbidden for an active principal lacking the exact capability; insert refusal evidence (result refused, the same reason_code) without performing the protected operation; the façade authorize_operation turns the decision into the exception.",
     "LocalAccessControlService.authorize: [FIELD_ASSIGNMENT] Populate AuthorizationDecision from the exact principal, operation, outcome, timestamp, reason code, and the evidence_id of the SecurityAuditRecord inserted in the same transaction; never fabricate evidence identifiers.",
     "LocalAccessControlService.enroll_local_service: [BEHAVIOR] Issue the credential through issue_service_credential with the retained pepper, insert the principal, the credential carrying only the verifier, and audit evidence in one transaction, and return the plaintext token exactly once in IssuedServiceCredential.",
+    "LocalAccessControlService.enroll_local_service: [FIELD_ASSIGNMENT] principal_id = f\"prn-{uuid4 hex}\" and credential_id = f\"crd-{uuid4 hex}\" are opaque: never derived from display_name, timestamps, or any caller-supplied text; status is active; audit event_type enrollment, result allowed.",
     "LocalAccessControlService.rotate_local_service_credential: [BEHAVIOR] Under the principal lock insert one replacement credential and update every prior active credential of the exact principal to revoked while preserving identity and capabilities; return the new token once and never log it.",
+    "LocalAccessControlService.rotate_local_service_credential: [FIELD_ASSIGNMENT] The replacement credential_id is f\"crd-{uuid4 hex}\"; every prior active credential becomes status revoked with revoked_at; audit event_type rotation, result allowed.",
     "LocalAccessControlService.revoke_local_service_principal: [BEHAVIOR] Under the principal lock update the principal to its terminal revoked status, update all active credentials to revoked, and insert evidence; never delete security history.",
+    "LocalAccessControlService.revoke_local_service_principal: [FIELD_ASSIGNMENT] Principal and credentials take status revoked with revoked_at; audit event_type revocation, result allowed.",
     "AccessControlRepository.begin: [DEPENDENCY_BOUNDARY] Open one PostgreSQL transaction for the exact access-control operation and reject nested begin.",
     "AccessControlRepository.commit: [BEHAVIOR] Commit the active transaction exactly once and release its connection.",
     "AccessControlRepository.rollback: [FALLBACK] Roll back idempotently, release the connection, and preserve the original failure.",
@@ -1249,13 +1253,20 @@
         "safe_error_code": "str | None"
       }
     },
+    "PrincipalStatus": {
+      "kind": "enum",
+      "values": [
+        "active",
+        "revoked"
+      ]
+    },
     "LocalServicePrincipal": {
       "identity": "entity",
       "fields": {
         "principal_id": "str",
         "display_name": "str",
         "principal_kind": "str",
-        "status": "str",
+        "status": "PrincipalStatus",
         "capabilities": "tuple[str, ...]",
         "created_at": "datetime",
         "revoked_at": "datetime | None = None"
@@ -1267,7 +1278,7 @@
         "credential_id": "str",
         "principal_id": "str",
         "secret_hash": "str",
-        "status": "str",
+        "status": "PrincipalStatus",
         "issued_at": "datetime",
         "rotated_from_credential_id": "str | None = None",
         "revoked_at": "datetime | None = None",
@@ -1285,16 +1296,33 @@
         "updated_at": "datetime"
       }
     },
+    "SecurityAuditResult": {
+      "kind": "enum",
+      "values": [
+        "allowed",
+        "refused"
+      ]
+    },
+    "SecurityAuditEventType": {
+      "kind": "enum",
+      "values": [
+        "authentication",
+        "authorization",
+        "enrollment",
+        "rotation",
+        "revocation"
+      ]
+    },
     "SecurityAuditRecord": {
       "identity": "entity",
       "fields": {
         "evidence_id": "str",
-        "event_type": "str",
+        "event_type": "SecurityAuditEventType",
         "principal_id": "str | None = None",
         "credential_id": "str | None = None",
         "operation": "str | None = None",
-        "result": "str",
-        "reason_code": "str | None = None",
+        "result": "SecurityAuditResult",
+        "reason_code": "AuthorizationReasonCode | None = None",
         "occurred_at": "datetime"
       }
     },
@@ -1317,13 +1345,27 @@
         "interaction_id": "str | None = None"
       }
     },
+    "AuthorizationReasonCode": {
+      "kind": "enum",
+      "values": [
+        "authentication_required",
+        "unknown_credential",
+        "credential_revoked",
+        "principal_revoked",
+        "stale_context",
+        "throttled_delay",
+        "throttled_block",
+        "secret_mismatch",
+        "operation_forbidden"
+      ]
+    },
     "AuthorizationDecision": {
       "identity": "value",
       "fields": {
         "principal_id": "str",
         "operation": "str",
         "allowed": "bool",
-        "reason_code": "str | None = None",
+        "reason_code": "AuthorizationReasonCode | None = None",
         "evidence_id": "str",
         "decided_at": "datetime"
       }
@@ -3747,10 +3789,10 @@
             {
               "column": "status",
               "field": "status",
-              "storage": "text",
+              "storage": "enum",
               "nullable": false,
               "check": null,
-              "element_model": null
+              "element_model": "PrincipalStatus"
             },
             {
               "column": "capabilities",
@@ -3815,10 +3857,10 @@
             {
               "column": "status",
               "field": "status",
-              "storage": "text",
+              "storage": "enum",
               "nullable": false,
               "check": null,
-              "element_model": null
+              "element_model": "PrincipalStatus"
             },
             {
               "column": "issued_at",
@@ -3935,10 +3977,10 @@
             {
               "column": "event_type",
               "field": "event_type",
-              "storage": "text",
+              "storage": "enum",
               "nullable": false,
               "check": null,
-              "element_model": null
+              "element_model": "SecurityAuditEventType"
             },
             {
               "column": "principal_id",
@@ -3967,18 +4009,18 @@
             {
               "column": "result",
               "field": "result",
-              "storage": "text",
+              "storage": "enum",
               "nullable": false,
               "check": null,
-              "element_model": null
+              "element_model": "SecurityAuditResult"
             },
             {
               "column": "reason_code",
               "field": "reason_code",
-              "storage": "text",
+              "storage": "enum",
               "nullable": true,
               "check": null,
-              "element_model": null
+              "element_model": "AuthorizationReasonCode"
             },
             {
               "column": "occurred_at",
@@ -6592,12 +6634,16 @@
         "HoldedPublication",
         "HoldedAttemptOutcome",
         "HoldedPublicationAttempt",
+        "PrincipalStatus",
         "LocalServicePrincipal",
         "LocalServiceCredential",
         "AuthenticationThrottleState",
+        "SecurityAuditResult",
+        "SecurityAuditEventType",
         "SecurityAuditRecord",
         "IssuedServiceCredential",
         "AuthenticatedPrincipalContext",
+        "AuthorizationReasonCode",
         "AuthorizationDecision",
         "SynchronizationWorkSelection",
         "SynchronizationOutcome",
@@ -6867,7 +6913,8 @@
           "HoldedLookupOutcome",
           "SourceStatus",
           "HoldedAttemptOutcome",
-          "HoldedPublicationStatus"
+          "HoldedPublicationStatus",
+          "AuthorizationReasonCode"
         ],
         "holded_transport": [
           "holded_wire_date"
@@ -6890,7 +6937,8 @@
           "SourceAttachmentBatchResult",
           "AuthenticatedPrincipalContext",
           "AuthorizationDecision",
-          "AccessControlBackend"
+          "AccessControlBackend",
+          "AuthorizationReasonCode"
         ]
       },
       "api": {
@@ -6947,7 +6995,8 @@
           "AuthorizationDecision",
           "SourceAttachmentBatchResult",
           "AccessControlBackend",
-          "HoldedPublicationStatus"
+          "HoldedPublicationStatus",
+          "AuthorizationReasonCode"
         ],
         "holded_gateway": [
           "HoldedGatewayService"
@@ -7076,7 +7125,11 @@
           "AuthenticatedPrincipalContext",
           "AuthorizationDecision",
           "IssuedCredentialSecret",
-          "PresentedCredentialSecret"
+          "PresentedCredentialSecret",
+          "PrincipalStatus",
+          "AuthorizationReasonCode",
+          "SecurityAuditResult",
+          "SecurityAuditEventType"
         ],
         "credential_security": [
           "issue_service_credential",
@@ -7172,7 +7225,11 @@
           "LocalServicePrincipal",
           "LocalServiceCredential",
           "AuthenticationThrottleState",
-          "SecurityAuditRecord"
+          "SecurityAuditRecord",
+          "PrincipalStatus",
+          "AuthorizationReasonCode",
+          "SecurityAuditResult",
+          "SecurityAuditEventType"
         ]
       }
     }
@@ -7198,12 +7255,16 @@
       "HoldedPublication",
       "HoldedAttemptOutcome",
       "HoldedPublicationAttempt",
+      "PrincipalStatus",
       "LocalServicePrincipal",
       "LocalServiceCredential",
       "AuthenticationThrottleState",
+      "SecurityAuditResult",
+      "SecurityAuditEventType",
       "SecurityAuditRecord",
       "IssuedServiceCredential",
       "AuthenticatedPrincipalContext",
+      "AuthorizationReasonCode",
       "AuthorizationDecision",
       "SynchronizationWorkSelection",
       "SynchronizationOutcome",

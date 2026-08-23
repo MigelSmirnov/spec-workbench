@@ -47,7 +47,7 @@ Fields:
 - `principal_id: str`;
 - `operation: str`;
 - `allowed: bool`;
-- `reason_code: str | None`;
+- `reason_code: AuthorizationReasonCode | None` — M93;
 - `evidence_id: str`;
 - `decided_at: datetime`.
 

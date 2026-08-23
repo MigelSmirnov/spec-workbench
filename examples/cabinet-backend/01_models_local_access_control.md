@@ -7,6 +7,51 @@ Accepted Stage 8.1 repair for the concrete local implementation behind
 application. Codex and Claude Code authenticate as distinct local service
 principals; neither inherits authority merely by running on the machine.
 
+## Model M92 — PrincipalStatus
+
+Closed status of a local principal or credential (`kind: enum`): `active`, `revoked`.
+
+### Identity
+
+enum (no runtime identity).
+
+---
+
+## Model M93 — AuthorizationReasonCode
+
+Closed reason vocabulary shared by `AuthorizationDecision` and `SecurityAuditRecord`
+(`kind: enum`): `authentication_required`, `unknown_credential`, `credential_revoked`,
+`principal_revoked`, `stale_context`, `throttled_delay`, `throttled_block`,
+`secret_mismatch`, `operation_forbidden`. The façade maps the first five to
+`AuthenticationRequiredError` and `operation_forbidden` to `OperationForbiddenError`;
+no string prefix or message is ever inspected.
+
+### Identity
+
+enum (no runtime identity).
+
+---
+
+## Model M94 — SecurityAuditResult
+
+`kind: enum`: `allowed`, `refused`.
+
+### Identity
+
+enum (no runtime identity).
+
+---
+
+## Model M95 — SecurityAuditEventType
+
+`kind: enum`: `authentication`, `authorization`, `enrollment`, `rotation`, `revocation`.
+
+### Identity
+
+enum (no runtime identity).
+
+---
+
 ## Model M58 — LocalServicePrincipal
 
 Persistent identity and exact capability assignment for one enrolled local
@@ -17,7 +62,7 @@ Fields:
 - `principal_id: str`;
 - `display_name: str`;
 - `principal_kind: str` — `agent` or `service`;
-- `status: str` — `active` or `revoked`;
+- `status: PrincipalStatus` — M92: `active` or `revoked`;
 - `capabilities: tuple[str, ...]` — exact protected operation identifiers;
 - `created_at: datetime`;
 - `revoked_at: datetime | None`.
@@ -51,7 +96,7 @@ Fields:
 - `credential_id: str`;
 - `principal_id: str`;
 - `secret_hash: str`;
-- `status: str` — `active` or `revoked`;
+- `status: PrincipalStatus` — M92: `active` or `revoked`;
 - `issued_at: datetime`;
 - `rotated_from_credential_id: str | None`;
 - `revoked_at: datetime | None`;
@@ -115,12 +160,12 @@ revocation, throttling, and refusal.
 Fields:
 
 - `evidence_id: str`;
-- `event_type: str`;
+- `event_type: SecurityAuditEventType` — M95;
 - `principal_id: str | None`;
 - `credential_id: str | None`;
 - `operation: str | None`;
-- `result: str`;
-- `reason_code: str | None`;
+- `result: SecurityAuditResult` — M94;
+- `reason_code: AuthorizationReasonCode | None` — M93;
 - `occurred_at: datetime`.
 
 ### Identity
