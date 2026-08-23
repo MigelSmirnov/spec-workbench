@@ -2,22 +2,25 @@
 
 > Living cross-case frontend/editor architecture contract.
 >
-> Status: architecture working document. This file is developed alongside
-> browser-based case studies in the same way that `PLATFORM_ROUTER.md` accumulates
-> shared Platform Hub requirements.
+> Status: **Architecture v0 working document**. The boundaries below are the current
+> implementation direction for browser-based engineering planners. Concrete IR
+> schemas and third-party dependency choices remain provisional until proven by
+> real case studies.
 
 ## Purpose
 
-Interactive applications need a frontend contract without turning transient UI
-state into domain truth or forcing every case study to invent its frontend
-boundary again.
+The platform is expected to contain several interactive engineering planners:
+Room Planner, Plumbing Planner, Electrical Planner, Tile Planner, and related
+future tools. They should not become unrelated React applications that each
+reimplement drawing, selection, snapping, layers, geometry, symbols, and editor
+state.
 
-For Room Planner the initial delivery target is a **browser editor**. A separate
-desktop application is not required by the current product boundary. A future
-desktop shell may host the same web application if a real requirement appears,
-but no desktop-specific domain model is introduced now.
+The target is a shared browser-first engineering workspace with reusable editor
+packages and reusable domain/editor layers. Individual planner applications
+remain owners of their own domain behavior, persistence, backend endpoints, and
+published artifacts.
 
-The architectural shape is:
+The high-level boundary remains:
 
 ```text
 browser editor
@@ -28,1032 +31,362 @@ Platform Hub
 ```
 
 The browser talks to its own application backend for private working state and
-interactive editing. It does not route ordinary editor operations through the
-Platform Hub.
+interactive editing. Ordinary editor operations do not route through Platform
+Hub. Platform Hub remains the cross-application boundary for Registry objects,
+shared platform data, published artifacts, publication history, provenance, and
+cross-application discovery.
 
-The Platform Hub remains the shared integration boundary for Registry objects,
-Construction Catalog data, published artifacts, publication history, provenance,
-and cross-application discovery.
+---
 
-## Authoritative state versus frontend state
+# 1. Non-negotiable architectural rules
 
-The frontend consumes and edits application domain data, but rendered pixels and
-interaction state are not domain data.
+## 1.1 Domain state is not editor state
 
-### Domain-authoritative data
+Durable domain facts remain meaningful without React, Canvas, SVG, Konva, DOM,
+or a particular browser library.
 
-Examples include:
+Examples of domain-authoritative data:
 
 - real-world coordinates and dimensions;
-- walls, openings, rooms, surfaces, and stage intent;
+- walls, openings, rooms, surfaces, pipes, fixtures, circuits, and other
+  planner-owned entities;
 - accepted snapshot identities and bases;
-- typed provenance/source references;
-- validation-relevant construction parameters;
-- persisted working drafts that the application intentionally owns.
+- stable domain references;
+- validation-relevant parameters;
+- persisted working drafts intentionally owned by the application.
 
-These facts must remain meaningful without a particular browser library.
+Examples of transient frontend state:
 
-### Frontend-only transient state
-
-Examples include:
-
-- viewport pan and zoom;
-- current selection and hover state;
-- active editor tool/mode;
-- drag handles and temporary guides;
-- snap hints and cursor previews;
-- temporary unconfirmed geometry;
-- local panel expansion/collapse;
-- purely visual visibility toggles.
-
-These values must not leak into Platform Hub artifacts or accepted domain
-snapshots merely because the browser needs them to render an editor.
-
-A later product requirement may justify persisting selected user preferences,
-but persistence does not automatically make a value part of the renovation
-domain.
-
-## Rendering rule
-
-The browser may use SVG, Canvas, WebGL, DOM, or another suitable rendering
-technology. That choice is an implementation detail until a later frontend
-architecture decision requires otherwise.
-
-The browser rendering is a **projection of domain geometry**. The rendered scene
-must not become an independent geometric source of truth.
-
-For example:
-
-```text
-ExistingWall + vertices + thickness
-        ↓ browser projection
-visible wall shape
-```
-
-Dragging or editing may create a transient visual preview, but accepted editor
-changes must be expressed back through domain/application operations in
-real-world coordinates.
-
-Production drawing/document export is a separate concern. An interactive SVG or
-Canvas scene does not imply that Room Planner itself owns production DXF/PDF/SVG
-artifact generation.
-
-## Frontend-aware authoring rule
-
-Starting in State 1, every durable domain model used by an interactive case
-should be checked with this question:
-
-> Can the browser editor render, identify, select, and edit the concept without
-> inventing a second source of domain truth?
-
-This is a model-completeness check, not permission to add React/component fields
-to domain models.
-
-Later design states should become progressively more frontend-specific:
-
-```text
-State 1 — domain data sufficient for editor projection
-State 2 — validation/snap/topology rules that constrain editing
-State 3 — frontend/backend/domain responsibilities
-State 4 — concrete interaction flows and preview/commit semantics
-State 5 — public application API required by the browser
-State 6 — exact request/response contracts and DTOs
-```
-
-Framework components, event handlers, canvas library APIs, and visual styling
-should not be designed before the relevant flows and public contracts are known.
-
-## Frontend context manifests
-
-Frontend requirements should not be maintained by copying domain model prose
-into this file.
-
-A case may define a machine-readable frontend context manifest, for example:
-
-```text
-examples/room-planner/frontend_context.json
-```
-
-The manifest contains explicit repository-relative Markdown source paths and
-exact headings that are relevant to frontend work. The tool:
-
-```bash
-python tools/frontend_context.py \
-  --manifest examples/room-planner/frontend_context.json
-```
-
-builds a deterministic working context containing:
-
-- this living frontend boundary when listed by the manifest;
-- selected product/frontend constraints;
-- selected canonical domain-model sections;
-- selected accepted refinements such as provenance or carry-forward models.
-
-The generated context is not canonical source. The referenced Markdown sources
-remain authoritative.
-
-### Fail-closed rule
-
-The manifest is an explicit dependency map, not a semantic search query.
-
-If a referenced Markdown file, heading, or manifest field is invalid, the tool
-must fail instead of silently omitting the dependency. This makes renamed or
-removed models visible during authoring.
-
-The tool must not infer frontend requirements from words such as `wall`, `view`,
-`render`, or `editor`, and it must not parse arbitrary model semantics from
-prose. Authors explicitly declare which canonical sections matter.
-
-## What belongs in this living contract
-
-Add a requirement here when it is shared frontend/editor architecture rather
-than a Room Planner-only domain decision. Examples:
-
-- browser versus desktop delivery boundary;
-- authoritative-domain versus transient-editor-state separation;
-- rendering-as-projection rule;
-- preview/commit separation shared by interactive editors;
-- cross-application overlay conventions if they become shared;
-- generated TypeScript/client contract expectations if adopted platform-wide;
-- accessibility/input-device requirements if they become common platform rules.
-
-Room Planner-specific geometry, demolition semantics, construction systems, and
-quantity rules remain in the Room Planner design-state documents.
-
-## Relationship to Platform Hub
-
-`FRONTEND_EDITOR.md` and `PLATFORM_ROUTER.md` accumulate different knowledge:
-
-```text
-FRONTEND_EDITOR.md
-    browser/editor architecture and interaction boundary
-
-PLATFORM_ROUTER.md
-    cross-service Platform Hub integration and artifact boundary
-```
-
-A frontend may consume data that originated from the Platform Hub through its
-application backend, but this does not make the Hub the application's
-backend-for-frontend.
-
-If a future platform feature needs a genuinely shared browser-to-Hub contract,
-that requirement must be recorded explicitly in both affected architecture
-boundaries rather than appearing accidentally in one case implementation.
-
-## Frontend factory direction
-
-The current working direction is to avoid treating every planner frontend as a
-fresh React/TypeScript code-generation problem.
-
-The preferred architecture is a **specification compiler with frontend
-backends/emitters**, analogous to deterministic backend emitters already used by
-the Python factory. React and Canvas are target runtime technologies, not the
-source of product truth.
-
-The key separation is:
-
-```text
-product/domain decisions
-        ↓
-canonical specification / frontend IR
-        ↓
-validation
-        ↓
-deterministic lowering where the IR is closed
-        ↓
-TypeScript/React declarations + shared editor runtime
-        ↓
-LLM/agent only for explicitly irregular behavior
-```
-
-A missing semantic decision must not be silently invented by an emitter. If a
-frontend IR block claims ownership of an area, invalid or incomplete IR should
-fail closed. LLM fallback is acceptable only for an area that is explicitly not
-owned by deterministic IR.
-
-### One compiler, multiple backends
-
-The long-term shape should be one specification system rather than an unrelated
-Python factory and frontend factory:
-
-```text
-                   PRODUCT SPEC
-                        │
-        ┌───────────────┼────────────────┐
-        │               │                │
-        ▼               ▼                ▼
-     models           rules           contracts
-        │               │                │
-        └───────────────┼────────────────┘
-                        │
-          ┌─────────────┴─────────────┐
-          │                           │
-          ▼                           ▼
-   Python backends             Frontend backends
-          │                           │
-    persistence                 api_client
-    router                      react_app
-    models                      canvas_editor
-    etc.                        forms
-          │                           │
-          ▼                           ▼
-       Python                    TypeScript
-                                 + shared
-                               Editor Runtime
-```
-
-The existing Python factory is therefore a first family of compiler backends,
-not necessarily a separate architectural system.
-
-## Shared editor runtime instead of repeated generated code
-
-For browser planners and drawing editors, generic interaction machinery should
-preferably be implemented once as a reusable editor runtime rather than emitted
-again for each project.
-
-Repeated platform-level concerns likely include:
-
-- scene/layer management;
-- camera and real-world ↔ viewport coordinate transforms;
 - pan and zoom;
-- pointer normalization;
-- selection and hover;
-- hit testing;
-- tool lifecycle;
-- command dispatch;
-- undo/redo history;
-- preview versus commit lifecycle;
-- snapping infrastructure;
-- drag/move/resize interaction primitives;
-- renderer registration;
-- keyboard shortcut binding;
-- generic toolbar/context-menu command invocation.
+- hover;
+- current selection;
+- active tool;
+- drag handles;
+- snap hints;
+- uncommitted preview geometry;
+- cursor state;
+- panel expansion/collapse;
+- temporary visibility state.
 
-Conceptually:
+Persistence of a user preference does not automatically make that value domain
+truth.
 
-```text
-React shell
- ├── Toolbar
- ├── PropertyPanel
- ├── LayerPanel
- └── EditorViewport
-          │
-          ▼
-     Editor Runtime
-     ├── Scene
-     ├── Camera
-     ├── Selection
-     ├── ToolController
-     ├── CommandBus
-     ├── History
-     ├── HitTest
-     ├── Snapping
-     └── Renderer
-              │
-              ▼
-        project declarations
-        ├── entity types
-        ├── tools
-        ├── commands
-        ├── constraints
-        ├── renderers
-        └── rules
-```
+## 1.2 Rendering is a projection
 
-The factory should generate or compile project declarations and wiring into this
-runtime. It should not regenerate generic pointer, history, camera, and
-selection algorithms unless a real project requirement makes them irregular.
-
-This is intentionally compatible with the rendering-as-projection rule: the
-runtime projects authoritative/domain state and transient interaction previews;
-it does not become a second domain model.
-
-## Frontend generation surface
-
-The following areas are strong candidates for deterministic generation or
-lowering when their source decisions are closed and machine-readable:
-
-1. TypeScript domain/boundary types from canonical models.
-2. Typed browser API clients from application/public contracts.
-3. Route/screen registration from a closed navigation catalog.
-4. Store/state shape for declared frontend state.
-5. Reducers or command wiring for declared state transitions.
-6. Forms and property panels from typed field/UI metadata.
-7. Toolbar, menu, context-menu, and keyboard shortcut bindings from a command catalog.
-8. Canvas/SVG layer registration and stable rendering order.
-9. Generic selection, history, pan/zoom, camera, and pointer wiring through the editor runtime.
-10. Snapping and editing constraints when represented as structured rules.
-11. Entity renderer registration when shape semantics fit a closed renderer DSL/registry.
-12. Standard React layout composition from a machine-readable layout tree.
-13. Request/response DTOs, loading/error boundaries, and query keys when these derive from declared application contracts.
-
-Areas expected to remain more irregular include highly specialized geometry,
-auto-routing, novel direct-manipulation behavior, bespoke visualization, unusual
-animation, and intentionally custom interaction patterns for which no stable
-cross-case IR yet exists.
-
-## Commands as the primary interaction contract
-
-Planner frontends should be modeled primarily as state + commands + effects +
-views, not as a collection of React event-handler implementations.
-
-Typical commands may include:
+SVG, Canvas, WebGL, DOM, or another renderer is a projection of domain/editor
+state. Rendered pixels and scene objects are not an independent source of domain
+truth.
 
 ```text
-AddWall
-MoveSelection
-ResizeRoom
-ConnectNode
-DeleteSelection
-DuplicateSelection
-SetProperty
-SelectAll
-Undo
-Redo
-ZoomToFit
+canonical domain geometry
+        ↓ projection
+scene geometry
+        ↓ renderer
+Canvas / SVG / pixels
 ```
 
-A command contract may eventually declare, in structured form:
+A renderer may create transient preview geometry during interaction. Accepted
+changes return through commands/application operations into canonical world
+geometry.
 
-- typed input;
-- preconditions;
-- authoritative state transition or delegated application operation;
-- transient preview behavior where relevant;
-- history behavior;
-- side effects;
-- resulting selection/focus behavior;
-- validation and constraint policy.
+## 1.3 Engineering geometry uses real-world units
 
-The same command can then be invoked by toolbar actions, keyboard shortcuts,
-context menus, or Canvas gestures without duplicating business behavior in each
-UI entry point.
+Canonical design geometry uses real-world units. For the current planner family,
+the base unit is **millimetres**.
 
-Conceptually:
+Viewport pixels, SVG viewBox units, Canvas backing-store coordinates, device
+pixels, zoom, and pan are rendering concerns and must not corrupt real project
+dimensions.
 
-```text
-toolbar button ─┐
-keyboard binding ├──> command ───> application/editor state transition
-canvas gesture  ─┘
-```
+The target Room Planner interaction accuracy is millimetre-level. Geometry
+algorithms may use higher internal floating-point precision when intersections,
+angles, or transforms require it, but committed domain values must follow an
+explicit canonical precision/quantization policy. The initial working candidate
+is canonical millimetre coordinates with a 1 mm user-edit precision; the exact
+storage quantization remains an explicit design decision rather than an implicit
+renderer behavior.
 
-This reduces generated React code and makes interaction semantics independently
-validatable.
+## 1.4 React is thin
 
-## Thin React rule
-
-React components should remain presentation/wiring boundaries in the same sense
-that an application HTTP router should remain a thin transport boundary.
-
-A component may:
-
-- render declared state;
-- project domain/editor state into visual components;
-- bind user input to commands;
-- bind forms to typed values;
-- display validation/error/loading state;
-- compose reusable editor/runtime components.
-
-A component should not become the hidden owner of domain calculations, geometry
-policy, persistence semantics, publication rules, or command behavior merely
-because the interaction originates from a button or pointer event.
+React owns composition, display, and input wiring. React components must not
+become hidden owners of geometry rules, domain calculations, persistence,
+publication semantics, or multi-step editor behavior.
 
 Prefer:
 
 ```text
-Button / gesture
-      ↓
-dispatch typed command
-      ↓
-editor/application behavior
-```
-
-over embedding multi-step domain behavior directly inside React handlers.
-
-## Candidate versioned frontend backends
-
-Do not begin with one giant `frontend` schema. Separate concerns into versioned
-backend-owned IR families when repeated cases prove the boundary.
-
-Current candidates are:
-
-```text
-react_app_backend/v1
-canvas_editor_backend/v1
-form_backend/v1
-api_client_backend/v1
-```
-
-Possible responsibilities:
-
-### `react_app_backend/v1`
-
-- screen catalog;
-- navigation;
-- layout composition;
-- standard panels;
-- component instances;
-- state/view bindings;
-- dialogs/modals;
-- command bindings.
-
-### `canvas_editor_backend/v1`
-
-- scene/layer catalog;
-- tool catalog;
-- commands and gesture bindings;
-- selection policy;
-- history policy;
-- camera policy;
-- snapping policy;
-- hit-test policy;
-- renderer registry;
-- preview/commit rules.
-
-### `form_backend/v1`
-
-- editable model/DTO fields;
-- widget/control selection from closed metadata;
-- validation projection;
-- grouping/order;
-- read-only versus editable fields;
-- command or API submit binding.
-
-### `api_client_backend/v1`
-
-- application endpoint exposure to the browser;
-- typed parameters/body/result;
-- authentication boundary where applicable;
-- error mapping;
-- request/response serialization;
-- deterministic client generation.
-
-These names and exact schemas are provisional. A backend should be introduced
-only after multiple real cases reveal a stable class of decisions.
-
-### Regular versus irregular ownership
-
-A useful pattern is the existing deterministic-router distinction between normal
-table-driven emission and explicit irregular ownership.
-
-Frontend backends should follow the same principle:
-
-```text
-regular declaration
-    → validated deterministic emitter/runtime registration
-
-irregular declaration
-    → explicit owner module/component/tool
-    → LLM/handwritten implementation
-```
-
-An irregular area must be explicit. It must not appear because a deterministic
-emitter encountered an unknown field and guessed a fallback implementation.
-
-## Reuse from the existing specification standard
-
-Several existing specification concepts are already largely language-neutral
-and should be reused instead of duplicated for frontend authoring.
-
-Strong reuse candidates:
-
-- `models` as canonical domain/DTO structure;
-- `config` for build/runtime product knobs;
-- `rules` for structured read-only policies;
-- `properties` for observable invariants where the expression subset applies;
-- `determinism` for explicit repeatability requirements;
-- classified notes for semantic requirements that are not yet captured by a closed IR;
-- dependency graph and affected-set analysis;
-- fail-closed validators;
-- schema/backend versioning;
-- deterministic emitter conventions;
-- explicit imports/dependency surfaces;
-- authoring states and case-study methodology.
-
-Frontend-specific structured policy should prefer extending the same overall
-specification system rather than creating prose-only frontend requirements.
-
-### Contracts need a language-neutral direction
-
-The current Python contract notation is valuable but ultimately language-bound.
-A future compiler may need a canonical language-neutral contract representation
-from which both Python and TypeScript signatures can be lowered.
-
-Conceptually:
-
-```text
-canonical contract
-      ├──> Python signature / Pydantic boundary
-      └──> TypeScript function/type signature
-```
-
-This does not require immediate replacement of existing Python contracts. It is
-a direction to avoid making browser/client contracts a separately maintained
-source of truth.
-
-## Backend contract reuse for browser API clients
-
-The frontend should not require an independent manually authored copy of the
-application API when the backend specification already knows the same boundary.
-
-Where the canonical application spec defines method/path/parameters/auth/result
-and canonical request/response types, the same source should be able to lower to
-both:
-
-```text
-application HTTP router
-        ↑
-        │
- canonical contracts
-        │
+button / key / pointer gesture
         ↓
-TypeScript API client
-```
-
-OpenAPI may be an emitted interoperability artifact, but it should not
-necessarily become a second source of truth if the specification already owns
-the contract.
-
-The desired result is that parameter names, DTO fields, result types, route
-identity, and error semantics cannot silently drift between Python backend and
-TypeScript browser client.
-
-## Notes as an IR-discovery signal
-
-Prose notes remain necessary where the product has made a semantic decision but
-no stable closed frontend IR can yet express it.
-
-For example, a domain-specific statement such as:
-
-```text
-when connecting two electrical elements, choose the most appropriate compatible
-connection type according to the declared domain compatibility policy
-```
-
-may initially remain classified behavior.
-
-However, repeated note shapes across several planners are evidence that a new
-structured policy or frontend backend is missing.
-
-The intended evolution is:
-
-```text
-one-off semantic note
-        ↓ repeated across cases
-identify common decision class
+typed command
         ↓
-closed structured IR / policy
+editor/application operation
         ↓
-validator + deterministic lowering
-```
-
-Notes should therefore be treated not only as LLM input but also as a discovery
-surface for future deterministic compiler features.
-
-## Expected deterministic share
-
-These figures are planning hypotheses, not contractual targets.
-
-For a completely arbitrary React application, frontend generation remains highly
-underconstrained because visual hierarchy, responsive behavior, composition,
-interaction style, and animation admit many valid implementations.
-
-For a narrow family of browser-based engineering planners/editors, the expected
-repeatability is much higher because the same editor kernel recurs across cases.
-
-A rough working expectation is:
-
-- an initial frontend factory may deterministically own roughly 50–70% of the conventional structure/wiring;
-- after a shared editor runtime, command IR, layout IR, and typed client generation mature, typical planners may reach roughly 70–90% deterministic/runtime-driven structure;
-- genuinely prose/LLM-dependent semantic decisions may fall to roughly 10–20% of decisions in ordinary cases, while specialized geometry and novel UX remain explicit irregular islands.
-
-These percentages should be revised from evidence across real case studies rather
-than treated as design requirements.
-
-## Relative factory complexity
-
-A universal frontend factory would not necessarily be simpler than the existing
-Python factory because arbitrary UI composition is highly underdetermined.
-
-A frontend factory specifically for planners/drawing editors is expected to be
-simpler in an important way: many apparently complex interactions belong to one
-shared runtime rather than to generated per-project code.
-
-Backend applications may vary across persistence, authentication, files,
-external APIs, transactions, queues, LLM calls, calculations, exports, and other
-unrelated mechanisms. By contrast, planner frontends repeatedly use a narrower
-architectural family:
-
-```text
-scene
-+ tools
-+ canvas/svg projection
-+ commands
-+ history
-+ panels
-+ typed application client
-```
-
-The major complexity should therefore be concentrated in the reusable editor
-runtime and a small number of deterministic frontend backends. Individual
-projects should mostly supply domain types, policies, commands, renderer/tool
-declarations, and irregular extensions.
-
-## Reusable editor packages and capability composition
-
-The shared runtime should not necessarily become one monolithic package. The
-planner family is expected to benefit from several small packages with explicit
-capabilities and dependency direction.
-
-A provisional decomposition is:
-
-```text
-@factory/editor-core
-    commands
-    undo/redo history
-    selection
-    tool lifecycle
-    preview/commit lifecycle
-    transient editor state primitives
-
-@factory/editor-geometry
-    point/vector/segment/rect/transform primitives
-    local ↔ world transforms
-    world ↔ viewport transforms
-    rotation
-    generic hit-test primitives
-    generic snapping primitives
-
-@factory/editor-scene
-    scene/layer registry
-    entity definition registry
-    entity instances
-    anchors/ports
-    relations/connections
-    renderer capability registration
-
-@factory/editor-canvas
-    Canvas-specific renderer adapter
-    camera integration
-    pointer normalization
-    render loop
-    picking integration
-
-@factory/editor-svg
-    SVG-specific renderer adapter
-    path/marker helpers
-    SVG projection utilities
-
-@factory/editor-react
-    viewport shell
-    toolbar/palette/property panels
-    layer panel
-    command bindings
-    standard interaction composition
-
-@factory/editor-routing
-    connection routing
-    orthogonal routing where requested
-    anchor-direction-aware route helpers
-```
-
-These names are provisional. Package boundaries should be validated by real
-planner implementations before becoming platform API commitments.
-
-A project should import only the capabilities it needs. A form-heavy planner may
-use `editor-core` and `editor-react` without a drawing renderer. A Room Planner
-may use core + geometry + scene + Canvas + React. An electrical schematic editor
-may additionally use SVG or routing capabilities.
-
-The purpose of package decomposition is not package-count optimization. It is to
-prevent React, Canvas, SVG, routing, persistence, or one domain's assumptions
-from leaking into the shared semantic core.
-
-## Definition versus instance
-
-Reusable editor entities should distinguish a reusable **definition** from a
-concrete **instance**.
-
-A definition describes reusable rendering/interaction capabilities. An instance
-represents a concrete object participating in a scene or projection.
-
-Conceptually:
-
-```text
-EntityDefinition
-    stable type/capability identity
-    metadata
-    default/local geometry when applicable
-    anchors/ports
-    renderer capability key
-    optional interaction capabilities
-
-EntityInstance
-    stable instance identity
-    definition/type reference
-    authoritative domain reference/state
-    transform where the entity model requires one
-```
-
-The exact fields must remain domain-appropriate. A wall, room polygon, plumbing
-fixture, and electrical symbol do not all have to fit one simplistic
-`x/y/rotation` record.
-
-The important rule is that reusable visual definitions must not be duplicated
-inside every scene instance, and scene instances must not duplicate rendered SVG
-or Canvas instructions as authoritative data.
-
-Renderer bindings should preferably use renderer capabilities/registry keys
-rather than making the scene model depend directly on `React.ComponentType` or
-another framework-specific type.
-
-## Coordinate-space contract
-
-Engineering editors need explicit coordinate spaces. Ambiguous coordinates are
-a source of both rendering defects and domain corruption.
-
-The general projection chain is:
-
-```text
-definition-local coordinates
-        ↓ entity/domain transform
-world/domain coordinates
-        ↓ camera/viewport transform
-viewport coordinates
-        ↓ device scaling
-screen/device coordinates
-```
-
-Pointer input follows the inverse path before an accepted command changes domain
-geometry.
-
-Domain/world units MUST NOT become viewport units merely because a renderer uses
-pixels internally. Real dimensions remain meaningful independently of zoom,
-pan, device pixel ratio, SVG viewBox, or Canvas backing-store resolution.
-
-Local renderer geometry should be expressed in its own local frame when the
-concept has one. Camera state, pan/zoom, and viewport placement are owned outside
-the renderer definition.
-
-## Semantic anchors and derived render coordinates
-
-Reusable connections and attachment points should refer to semantic anchors,
-not permanently stored render coordinates.
-
-`Anchor` is the general concept. Domain-specific anchor kinds may include:
-
-- element connection ports;
-- wall endpoints or midpoints;
-- wall faces;
-- room vertices;
-- opening attachment positions;
-- plumbing connection points;
-- electrical terminals;
-- other explicitly addressable geometric attachment points.
-
-A connection or relation should preserve semantic topology such as:
-
-```text
-entity A + anchor outlet
+state transition
         ↓
-entity B + anchor inlet
+projection
 ```
 
-rather than persisting stale endpoint pixels such as:
+instead of implementing business behavior directly inside JSX handlers.
+
+## 1.5 Code reuse, data exchange, and data ownership are separate axes
 
 ```text
-fromX/fromY/toX/toY
+code reuse
+    shared editor packages + reusable layer packages
+
+data exchange
+    stable contracts + Platform Hub artifacts
+
+data ownership
+    the application/domain backend that owns authoritative working state
 ```
 
-Rendering resolves current anchor positions from the authoritative entities and
-then derives connection geometry. Moving, rotating, resizing, or otherwise
-changing an entity must therefore update the rendered connection without
-rewriting its semantic endpoint identity.
+Sharing a wall layer package does not authorize another planner to write Room
+Planner's private database. Rendering a plumbing layer does not make the host
+application the plumbing owner. Consuming `room_plan.v1` does not grant wall
+editing authority.
 
-The general rule is:
+## 1.6 Deterministic ownership fails closed
 
-> Persist semantic references; derive render coordinates.
+Where a frontend IR/backend claims ownership of a structural area, missing or
+invalid decisions must fail validation. An emitter must not silently invent a
+plausible implementation.
 
-This is broader than pipe/electrical ports and should apply anywhere a planner
-can express stable attachment semantics.
+LLM/agent implementation remains allowed for explicitly irregular areas that are
+not owned by a deterministic backend.
 
-## Topology versus derived geometry
+---
 
-For connected editor concepts, topology and displayed path geometry are separate
-meanings.
+# 2. Target architecture v0
 
-Conceptually:
+The intended system is one specification/compiler ecosystem with Python and
+frontend backends, plus reusable runtime packages.
 
 ```text
-stored relation
-    A.anchor-1 → B.anchor-4
-
-render projection
-    resolve anchors
-        ↓
-    calculate world positions
-        ↓
-    choose routing/projection policy
-        ↓
-    draw current path
+                         PRODUCT / DOMAIN SPEC
+                                  │
+          ┌───────────────────────┼───────────────────────┐
+          │                       │                       │
+        models                  rules                 contracts
+          │                       │                       │
+          └───────────────────────┼───────────────────────┘
+                                  │
+                         validated canonical IR
+                                  │
+              ┌───────────────────┴───────────────────┐
+              │                                       │
+              ▼                                       ▼
+       Python backends                         Frontend backends
+     router/persistence/...                client/layout/editor/forms
+              │                                       │
+              ▼                                       ▼
+            Python                          generated TypeScript
+                                                      │
+                                                      ▼
+                                          planner workspace config
+                                                      │
+                       ┌──────────────────────────────┼──────────────────────────────┐
+                       │                              │                              │
+                       ▼                              ▼                              ▼
+                shared editor packages        reusable domain layers       app adapter/client
+                       │                              │                              │
+                       └──────────────────────────────┼──────────────────────────────┘
+                                                      ▼
+                                               browser workspace
+                                                      │
+                                                      ▼
+                                            own application backend
+                                                      │
+                                                      ▼
+                                                Platform Hub
 ```
 
-The route may be straight, orthogonal, curved, automatically routed, or custom.
-That rendering choice must not silently change which domain entities are
-connected.
+The frontend factory should generate declarations, registrations, typed clients,
+and conventional wiring. It should not regenerate thousands of lines of generic
+camera, selection, history, pointer, or snapping machinery for every planner.
 
-A domain may intentionally own route geometry when the physical path itself is
-meaningful — for example, a real pipe run with bends. In that case the route is
-explicit domain data, not renderer-generated connection decoration. The spec
-must distinguish those cases rather than letting the renderer guess ownership.
+---
 
-## Stable durable identity
+# 3. Reusable package architecture
 
-Durable entities that can be referenced by other entities, layers, artifacts, or
-applications require stable identities appropriate to their domain semantics.
+Package names are provisional; responsibilities and dependency direction are the
+important part.
 
-Array position, React key order, current draw order, SVG node identity, Canvas
-index, and transient selection index are not durable cross-model identities.
+## 3.1 `@factory/editor-core`
 
-This matters especially when one planner projects another planner's published
-or accepted data. Plumbing, electrical, tile, estimating, and downstream drawing
-systems must be able to refer to stable wall/room/surface identities without
-scraping the visual scene.
+Owns generic editor interaction semantics independent of React and a drawing
+backend:
 
-Stable identity requirements remain domain decisions; this frontend rule does
-not imply adding arbitrary IDs to value concepts that do not have independent
-identity in the canonical model.
+- command dispatch;
+- command history;
+- undo/redo;
+- selection model;
+- tool lifecycle;
+- preview/commit lifecycle;
+- transient editor state primitives;
+- dirty/clean state hooks;
+- generic keyboard-command mapping contracts.
 
-## Editable persistence versus rendered export
+It does not own:
 
-Saving an editable planner model and exporting a rendered document are separate
-operations.
+- building geometry;
+- Canvas/SVG rendering;
+- backend transport;
+- planner-specific validation.
 
-Conceptually:
+## 3.2 `@factory/editor-geometry`
+
+Owns language-level geometry primitives and operations exposed through a stable
+platform API:
+
+- `Point`, `Vector`, `Segment`, `Line`, `Ray`, `Rect`, `Polygon`, transforms;
+- distance and projection;
+- intersections;
+- angle calculations;
+- local ↔ world transforms;
+- world ↔ viewport transforms;
+- generic hit-test geometry;
+- generic snapping primitives;
+- polygon operations where required;
+- offset geometry where required.
+
+The public editor API must not expose a third-party geometry library as the
+canonical model. A third-party engine may live behind this package.
+
+Initial implementation candidate: `@flatten-js/core`, hidden behind the
+`editor-geometry` boundary. This is an implementation candidate, not a platform
+contract.
+
+## 3.3 `@factory/editor-scene`
+
+Owns renderer-independent scene composition:
+
+- scene registry;
+- layer registry;
+- entity-definition registry;
+- entity instances/projections;
+- semantic anchors;
+- relations/connections;
+- layer visibility;
+- renderer capability registration;
+- picking/hit-test capability declarations.
+
+The scene is a projection/composition layer. It must not become a replacement
+for canonical planner domain models.
+
+## 3.4 `@factory/editor-canvas`
+
+Owns Canvas-specific projection and interaction adaptation:
+
+- drawing-stage adapter;
+- camera integration;
+- pointer normalization;
+- render loop/invalidation;
+- Canvas picking integration;
+- Canvas renderer registry;
+- image/SVG-symbol placement on Canvas.
+
+Initial implementation candidate: Konva + `react-konva`, hidden behind this
+package where practical. Planner layers should not depend directly on Konva
+objects as domain data.
+
+## 3.5 `@factory/editor-svg-symbols`
+
+Owns reusable engineering-symbol assets and their machine-readable registry:
+
+- SVG asset loading;
+- symbol manifests;
+- local symbol coordinate systems;
+- symbol bounds/viewBox;
+- symbol anchors;
+- categories/palette metadata;
+- Canvas/SVG projection adapters;
+- symbol validation.
+
+SVG is preserved deliberately because it is an effective authoring format for
+engineering blocks and AI agents can generate or refine it from visual
+references.
+
+SVG is **not** the editable domain model.
+
+## 3.6 `@factory/editor-react`
+
+Owns standard React workspace composition:
+
+- viewport shell;
+- toolbar;
+- palette;
+- property panel;
+- layer panel;
+- status/readout areas;
+- command bindings;
+- dialogs and standard editor chrome;
+- loading/error/validation presentation.
+
+The package consumes editor/domain capabilities; it does not own planner
+semantics.
+
+## 3.7 `@factory/editor-routing`
+
+Optional package for connection/path routing:
+
+- straight routes;
+- orthogonal routes;
+- anchor-direction-aware routing;
+- routing preview helpers;
+- future obstacle-aware routing if evidence requires it.
+
+Routing used only for display is derived geometry. If a physical route itself is
+domain-significant, such as a real pipe run with bends, the route belongs to the
+owning domain model instead.
+
+## 3.8 `@factory/editor-export`
+
+Optional export boundary for presentation/document outputs:
+
+- SVG export;
+- DXF adapter;
+- PDF/drawing adapter;
+- image export.
+
+A future implementation may use Maker.js or another CAD/export library behind
+this boundary. Export dependencies must not leak into canonical editor/domain
+models.
+
+---
+
+# 4. Reusable planner/domain layers
+
+The generic editor packages are complemented by reusable domain/editor layers.
+Applications do not import each other as whole applications.
+
+Initial expected layer family:
 
 ```text
-editable/domain working state
-        ↓ persistence contract
-private application working storage
-
-editable/domain state
-        ↓ renderer/export projection
-SVG / Canvas pixels / PDF / image / drawing artifact
-```
-
-Rendered SVG, Canvas pixels, PDF, PNG, or other presentation output must not
-become the only persisted editable source merely because it is convenient to
-serialize.
-
-When an application loads durable editable state, the eventual persistence
-contract should support explicit schema/version handling, migration when
-required, structural/domain validation, and only then replacement of current
-working state.
-
-The exact persistence owner remains the application/backend design. This rule
-only protects the distinction between editable state and visual/export
-projection.
-
-## Cross-planner layer composition
-
-The planner family should converge on a common editor workspace in which domain
-capabilities can be composed as layers rather than each application reimplementing
-foreign visualization from scratch.
-
-A useful conceptual shape is:
-
-```text
-shared editor workspace
-        │
-        ├── room/wall layer
-        ├── plumbing layer
-        ├── electrical layer
-        ├── tile layer
-        └── annotations / auxiliary layers
-```
-
-A Room Planner, Plumbing Planner, Electrical Planner, or another planner may
-therefore load several layer packages into the same scene. This makes common
-geometry, navigation, selection, visibility, rendering, anchors, and snapping
-infrastructure reusable across applications.
-
-Applications should not import each other as whole applications. Reuse should
-happen through shared editor packages and domain/editor layer packages with
-explicit public boundaries.
-
-Conceptually:
-
-```text
-@planner/walls-layer
+@planner/building-layer
 @planner/plumbing-layer
 @planner/electrical-layer
 @planner/tiles-layer
+@planner/annotations-layer
 ```
 
-A layer package may expose domain/editor-facing definitions such as:
+A layer package may expose:
 
-- model/boundary types needed for projection;
-- renderers;
-- tools and command declarations;
-- anchors;
+- projection/boundary types;
+- renderer registrations;
+- tools;
+- command declarations;
+- semantic anchors;
 - hit-test behavior;
 - snapping policies;
 - property descriptors;
-- editor-side validation useful for interaction;
-- layer metadata and visibility behavior.
+- interaction validation;
+- layer metadata.
 
-A layer package must not gain persistence authority merely because another
-application imported it.
+A layer package must not directly own backend transport or silently persist
+itself.
 
-## Layer ownership modes
-
-Rendering, editing, persistence, and publication are separate capabilities. A
-planner being able to display or manipulate a layer does not mean it owns the
-layer's authoritative domain state.
-
-The current working model distinguishes three layer modes.
-
-### `owned`
-
-The current application owns the authoritative working state for that layer.
-
-Typical capabilities:
-
-```text
-render = yes
-edit = yes
-persist through current application backend = yes
-publish under current application's declared contracts = when product flow allows
-```
-
-Examples may include walls in Room Planner or plumbing entities in Plumbing
-Planner.
-
-### `reference`
-
-The current application consumes another domain's accepted/published/otherwise
-resolved state for context.
-
-Typical capabilities:
-
-```text
-render = yes
-edit authoritative source = no
-persist foreign authoritative state = no
-publish foreign domain = no
-```
-
-For example, Plumbing Planner may render a Room Planner wall/room basis while
-owning only plumbing changes.
-
-### `draft`
-
-The current application may host an uncommitted/local proposal using another
-layer capability without thereby becoming the authoritative owner of that
-foreign domain.
-
-Typical capabilities:
-
-```text
-render = yes
-edit local draft = yes
-persist as host-private/local overlay = optional explicit product decision
-write foreign authoritative backend = no
-publish as foreign authoritative artifact = no
-```
-
-A draft may later be transferred/opened in the owning planner, validated under
-that planner's domain rules, and converted into owned working state through an
-explicit application flow.
-
-The exact transfer protocol is not yet defined. The architectural point is that
-"the user can draw it here" does not imply "this application now owns that
-domain".
-
-## Rendering capability is not data ownership
-
-The following distinctions are normative architectural direction:
-
-> Rendering capability is not data ownership.
-
-> Editing capability is not persistence authority.
-
-> Importing a layer package is not authorization to mutate the layer owner's
-> backend.
-
-A Room Planner may be technically capable of showing or locally sketching pipes
-without exposing Room Planner backend endpoints for authoritative plumbing
-state. Likewise, a plumbing or electrical application may reuse wall rendering,
-selection, snapping, and geometry capabilities without becoming the owner of
-room geometry.
-
-This protects planner boundaries while allowing a rich cross-domain workspace.
-
-## Layer packages must not own backend transport
-
-Reusable layer packages should not directly call their domain backend as part of
-rendering or ordinary editor behavior.
-
-Avoid coupling such as:
+Avoid:
 
 ```text
 @planner/plumbing-layer
@@ -1063,105 +396,899 @@ Avoid coupling such as:
 Prefer:
 
 ```text
-plumbing layer capabilities
-        ↓ typed editor/domain operations
+plumbing layer
+    ↓ typed operation
 host application adapter
-        ↓
-application client/backend boundary
+    ↓ generated/typed client
+Plumbing backend
 ```
 
-The host application decides which operations have persistence authority. A
-foreign/reference layer can therefore be imported safely without accidentally
-acquiring backend write capability.
+---
 
-Generated TypeScript API clients belong to explicit application integration
-boundaries, not implicitly inside reusable render packages.
+# 5. Building layer: geometry and topology
 
-## Code reuse, data exchange, and data ownership are separate axes
+The first reusable domain layer should be a building/room geometry layer because
+walls, openings, rooms, and surfaces are useful context for most later planners.
 
-Cross-planner architecture should preserve three independent meanings:
+## 5.1 Wall model
+
+A wall is not canonically stored as a thick Canvas/SVG stroke or arbitrary
+rendered polygon.
+
+The working model is a semantic centreline plus thickness and topology:
 
 ```text
-code reuse
-    shared editor packages + reusable layer packages
+WallNode
+    id
+    positionMm
 
-data exchange
-    stable application/platform contracts and Platform Hub artifacts
-
-data ownership
-    the application/domain backend that owns authoritative working state
+Wall
+    id
+    startNodeId
+    endNodeId
+    thicknessMm
+    additional domain properties...
 ```
 
-These mechanisms should not be collapsed into one another.
+The visible wall outline is derived from the centreline, thickness, and join
+policy.
 
-Sharing `@planner/walls-layer` does not mean Plumbing Planner reads Room Planner's
-private database. Consuming `room_plan.v1` does not mean the consumer owns wall
-editing. Drawing a local pipe overlay in another planner does not publish a
-plumbing artifact.
+```text
+node A ───────────── node B       canonical centreline
+          +
+      thicknessMm
+          ↓
+      derived wall outline
+```
 
-The Platform Hub remains the cross-application data/artifact boundary described
-in `PLATFORM_ROUTER.md`; reusable frontend packages are a code-sharing mechanism,
-not an alternative integration mesh.
+This makes movement, joining, dimensions, openings, surfaces, and downstream
+references easier than treating a rendered polygon as the primary model.
 
-## Planner applications as workspace configurations
+## 5.2 Shared nodes and closed wall chains
 
-If the shared packages and ownership rules prove stable, several planner
-frontends may become relatively small configurations of one engineering editor
-workspace.
+Walls that meet at a true shared endpoint should share a `WallNode` identity,
+not merely happen to contain almost-equal coordinates.
+
+```text
+Wall A ───────●
+              │
+              │ Wall B
+```
+
+Dragging the shared node changes all connected wall projections while
+preserving topology.
+
+Closed rooms/wall loops should therefore be representable as topology, not only
+as visually touching strokes.
+
+## 5.3 Junction kinds
+
+At minimum the geometry design must distinguish:
+
+- endpoint/corner junctions;
+- T-junctions;
+- crossings/intersections where the domain allows them;
+- continuation/collinear joins where useful.
+
+A T-junction is not necessarily two walls with the same endpoint coordinates.
+One wall endpoint may be semantically attached to another wall segment.
+
+The exact canonical representation of T-junctions remains to be proven. A likely
+shape is a semantic attachment to a wall/segment position rather than duplicated
+floating coordinates.
+
+## 5.4 Wall joins and outline generation
+
+The renderer/geometry projection must support wall thickness through corners and
+junctions without cracks or accidental overlaps.
+
+Join behavior may include miter/butt/intersection policies, but the exact policy
+must be explicit and deterministic. It must not be whatever a Canvas `lineJoin`
+happens to produce if that differs from domain geometry.
+
+The centreline/topology remains canonical; visible outline polygons are derived
+unless later domain requirements make a particular boundary independently
+meaningful.
+
+## 5.5 Wall movement commands
+
+"Move wall" is not one ambiguous operation. The editor should distinguish
+commands such as:
+
+```text
+MoveWallNode
+    move a shared endpoint/junction
+
+TranslateWall
+    move the whole wall with its relevant topology policy
+
+OffsetWall
+    move a wall parallel to itself while preserving/repairing joins
+
+ResizeWall / MoveWallEndpoint
+    alter one endpoint according to constraints
+```
+
+Tools may map gestures to these commands, but command semantics remain explicit
+and testable.
+
+## 5.6 Angles and constraints
+
+A wall angle is normally derived from its canonical endpoints:
+
+```text
+angle = atan2(end.y - start.y, end.x - start.x)
+```
+
+Do not store a redundant mutable angle when it is fully derivable.
+
+Persistent design intent may instead be represented by explicit constraints,
+for example:
+
+- horizontal;
+- vertical;
+- fixed angle;
+- perpendicular to another segment;
+- parallel to another segment.
+
+Geometry facts and constraints are separate meanings.
+
+## 5.7 Openings, doors, and windows
+
+Openings are semantically attached to walls rather than placed as unrelated
+screen objects.
+
+A working conceptual form is:
+
+```text
+Opening
+    id
+    wallId
+    offsetMm / attachment position
+    widthMm
+    kind
+    additional domain properties
+```
+
+Door/window domain state may include hinge side, swing direction, opening type,
+height, or other product-required properties.
+
+The visual block is selected separately through a renderer/symbol definition.
+
+---
+
+# 6. Coordinate-space contract
+
+All engineering editor code must be explicit about coordinate space.
+
+```text
+symbol/definition-local
+        ↓ local/entity transform
+world/domain millimetres
+        ↓ camera transform
+viewport coordinates
+        ↓ device scaling
+screen/device coordinates
+```
+
+Pointer input travels in the inverse direction before becoming a candidate world
+position.
+
+Geometry calculations that change accepted domain state happen in world/domain
+space, not viewport pixels.
+
+Renderers may use local coordinates. They must not read arbitrary camera state
+and bake screen placement into reusable entity/symbol definitions.
+
+---
+
+# 7. Snapping architecture
+
+Snapping is shared infrastructure, not planner-specific pointer spaghetti.
+
+The pipeline is:
+
+```text
+pointer screen position
+        ↓ inverse camera transform
+raw world position
+        ↓
+collect snap candidates
+        ↓
+rank/filter candidates
+        ↓
+SnapResult
+        ↓
+transient preview
+        ↓ explicit command commit
+canonical geometry
+```
+
+Expected candidate classes for building/planner editors include:
+
+- grid;
+- endpoint/node;
+- midpoint;
+- segment/wall axis;
+- horizontal/vertical alignment;
+- angle;
+- perpendicular projection;
+- intersection;
+- extension line;
+- semantic anchors supplied by layers.
+
+A `SnapResult` proposes geometry. It does not become authoritative state by
+itself.
+
+Layer packages may contribute snap candidates while the shared geometry/editor
+runtime owns candidate collection/ranking mechanics.
+
+---
+
+# 8. Definition versus instance
+
+Reusable editor entities distinguish reusable definitions from concrete scene or
+domain instances.
+
+```text
+EntityDefinition
+    stable type/capability identity
+    metadata
+    default/local geometry when applicable
+    anchors
+    renderer capability key
+    interaction capabilities
+
+EntityInstance / domain entity
+    stable instance identity
+    definition/type reference where relevant
+    authoritative domain state/reference
+    transform where relevant
+```
+
+Not every domain type must fit a simplistic `x/y/rotation` record. Walls,
+polygons, pipes, doors, and electrical symbols have different semantics.
+
+Definitions must not be copied into every instance. Instances must not persist
+SVG markup or Canvas scene objects as canonical state.
+
+---
+
+# 9. Semantic anchors
+
+`Anchor` is the shared concept for an explicitly addressable attachment point or
+attachment feature.
+
+Possible anchor kinds include:
+
+- wall endpoints;
+- wall midpoint;
+- wall face;
+- room vertex;
+- opening attachment;
+- plumbing port;
+- electrical terminal;
+- generic engineering symbol port;
+- future domain-specific attachment semantics.
+
+Relations should persist semantic references where possible:
+
+```text
+entity A + anchor outlet
+        ↓
+entity B + anchor inlet
+```
+
+rather than stale render coordinates.
+
+General rule:
+
+> **Persist semantic references; derive render coordinates.**
+
+If a connection path is merely visual, its rendered geometry is derived from the
+current anchor positions. If the path itself is physically meaningful, the
+owning domain explicitly stores it.
+
+---
+
+# 10. SVG engineering-symbol architecture
+
+SVG remains a first-class reusable **asset format** even when the primary scene
+renderer is Canvas.
+
+This is intentional:
+
+- SVG scales cleanly;
+- engineering blocks are naturally represented as vector symbols;
+- agents can generate SVG effectively from visual references;
+- symbols can be reviewed visually;
+- assets can be versioned independently from editor code;
+- one symbol can be reused by several planners.
+
+## 10.1 Symbol definition
+
+A symbol is an asset plus machine-readable semantics, not merely a loose SVG
+file.
 
 Conceptually:
 
 ```text
+SymbolDefinition
+    id
+    title
+    category
+    svgAsset
+    viewBox/local bounds
+    defaultSizeMm where meaningful
+    anchors[]
+    renderer = svg
+    optional variant/parameter metadata
+```
+
+The exact schema is deferred until the first implementation.
+
+## 10.2 Clean local SVG rule
+
+Generated SVG symbols should:
+
+- use a local `viewBox`;
+- avoid project/world absolute coordinates;
+- contain no application/editor state;
+- contain no executable JavaScript;
+- avoid external network dependencies;
+- keep semantic attachment points in the symbol manifest/anchor metadata rather
+  than guessing them from path shapes.
+
+The runtime controls world position, scale, rotation, selection, and viewport
+projection.
+
+## 10.3 Palette generation
+
+The palette should read a validated symbol registry rather than hard-code every
+item in React.
+
+```text
+SVG assets + symbol manifests
+        ↓ validate
+symbol registry
+        ↓
+palette categories/items
+```
+
+Adding an accepted symbol definition should therefore make the symbol available
+to any compatible planner palette without custom palette code.
+
+## 10.4 Agent-generated symbols
+
+LLM/agent image-to-SVG generation is an authoring-time tool, not a runtime
+requirement.
+
+```text
+visual reference
+        ↓ agent
+candidate SVG
+        ↓ review/validation
+versioned symbol asset
+        ↓ deterministic registry/runtime
+all compatible planners
+```
+
+Once accepted, the symbol is ordinary versioned input and does not require an
+LLM to render.
+
+## 10.5 Parametric symbols
+
+Do not begin with a general parametric-SVG language unless evidence requires it.
+Early versions may use explicit variants such as:
+
+```text
+door.single.left
+door.single.right
+door.double
+door.sliding
+```
+
+A richer parametric renderer may be introduced later for repeated cases that
+cannot be represented cleanly by variants plus runtime scale/rotation.
+
+---
+
+# 11. Cross-planner workspace composition
+
+The planner family should converge on a common workspace capable of composing
+multiple domain layers.
+
+```text
+shared engineering workspace
+        │
+        ├── building / room layer
+        ├── plumbing layer
+        ├── electrical layer
+        ├── tile layer
+        └── annotations / auxiliary layers
+```
+
+This allows, for example:
+
+- Plumbing Planner to open Room Planner wall/room geometry as context;
+- Electrical Planner to render building and plumbing references;
+- Room Planner to display or locally sketch plumbing/electrical overlays when
+  useful;
+- several planners to reuse the same doors/windows/symbols, camera, snapping,
+  selection, and measurement behavior.
+
+Shared rendering capability must not erase domain ownership.
+
+---
+
+# 12. Layer ownership modes
+
+Rendering, selecting, editing, persisting, and publishing are separate
+capabilities.
+
+The current working model has three modes.
+
+## 12.1 `owned`
+
+The host application owns authoritative working state for the layer.
+
+```text
+render = yes
+select = yes
+edit = yes
+persist through host backend = yes
+publish under host contracts = when product flow allows
+```
+
+Example: building/walls in Room Planner; plumbing in Plumbing Planner.
+
+## 12.2 `reference`
+
+The host consumes another domain's accepted/published/resolved state for context.
+
+```text
+render = yes
+select/inspect = optional
+edit authoritative source = no
+persist foreign authoritative state = no
+publish foreign domain = no
+```
+
+Example: Plumbing Planner rendering Room Planner geometry.
+
+## 12.3 `draft`
+
+The host may let the user locally sketch/propose another domain's entities
+without becoming their authoritative owner.
+
+```text
+render = yes
+edit local proposal = yes
+persist as host-private overlay = explicit product decision
+write foreign authoritative backend = no
+publish foreign authoritative artifact = no
+```
+
+A draft may later be transferred/opened in the owning planner and validated
+there before becoming owned state.
+
+The transfer protocol remains open.
+
+## 12.4 Ownership rule
+
+> **Rendering capability is not data ownership.**
+>
+> **Editing capability is not persistence authority.**
+>
+> **Importing a layer package is not authorization to mutate the layer owner's
+> backend.**
+
+This is the basis for allowing "draw almost anything anywhere" without mixing
+backend data ownership.
+
+---
+
+# 13. Planner applications become workspace configurations
+
+If the boundaries above hold across real applications, planner frontends become
+small configurations of the same engineering workspace.
+
+```text
 Room Planner
     shared editor shell
-    + room/wall owned layers
+    + building owned layer
     + demolition/construction capabilities
-    + optional foreign reference/draft layers
-    + Room Planner application adapter
+    + optional plumbing/electrical reference or draft layers
+    + Room Planner adapter/client
 
 Plumbing Planner
     shared editor shell
-    + room/wall reference layers
+    + building reference layer
     + plumbing owned layer
-    + optional electrical/tile reference layers
-    + Plumbing application adapter
+    + optional electrical reference/draft layer
+    + Plumbing adapter/client
 
 Electrical Planner
     shared editor shell
-    + room/wall reference layers
+    + building reference layer
     + electrical owned layer
     + optional plumbing reference layer
-    + Electrical application adapter
+    + Electrical adapter/client
 ```
 
-This is a desirable convergence direction, not permission to erase domain
-boundaries. The applications may share most editor mechanics while still having
-different authoritative models, validation, backend endpoints, publication
-contracts, and Platform Hub artifacts.
+They may reuse most frontend mechanics while retaining different authoritative
+models, backend endpoints, validation rules, and Platform Hub artifacts.
 
-## Open design questions
+---
 
-The following should be resolved through real case studies rather than fixed in
-advance:
+# 14. Browser ↔ Backend ↔ Platform Hub boundary
 
-1. Which editor concerns belong in a reusable runtime versus generated project code?
-2. What is the smallest useful closed command IR?
-3. Which preview/commit semantics are genuinely cross-case?
-4. How should structured snapping/constraint policies reference domain rules?
-5. Which renderer shapes are common enough for a closed renderer DSL, and which remain custom code?
-6. Should frontend-only persisted preferences have a dedicated spec area separate from domain models?
-7. What becomes the canonical language-neutral contract representation for Python + TypeScript lowering?
-8. How should deterministic frontend backend ownership interact with classified notes and irregular modules?
-9. Which React layout decisions are stable enough to compile without over-constraining product UX?
-10. Which existing Python-factory dependency/affected-set tools can be reused unchanged versus generalized to language-neutral symbols?
-11. Which frontend backend should be implemented first to produce the highest evidence value across planners?
-12. Which proposed editor packages are stable cross-case boundaries and which should remain one package initially?
-13. What is the minimal common `LayerDefinition` contract across room, plumbing, electrical, tile, and other planners?
-14. Which layer capabilities must be declared explicitly: render, select, edit, snap, persist, publish, export?
-15. How should a foreign `draft` layer be transferred to its owning planner without confusing provenance or ownership?
-16. Which semantic anchor kinds can be generic and which must remain domain-owned?
-17. How should a host application resolve compatible versions of reusable layer packages and artifact schemas independently?
+A planner frontend uses its own application backend as its authoritative
+persistence/application boundary.
 
-Until these questions have cross-case evidence, `FRONTEND_EDITOR.md` records the
-architectural direction but does not pretend that the final frontend IR schema is
+```text
+Browser workspace
+    ↓ host application API
+Application Backend
+    ↓ shared integration contracts
+Platform Hub
+```
+
+A foreign layer package does not add foreign backend endpoints to the host
+application.
+
+If Room Planner displays a plumbing draft, Room Planner does not suddenly gain
+canonical plumbing CRUD endpoints. If Plumbing Planner renders walls, it does
+not gain authority over Room Planner's private working database.
+
+Cross-application durable exchange remains artifact/contract-based through
+Platform Hub, consistent with `PLATFORM_ROUTER.md`.
+
+The application backend may resolve foreign published/reference data for the
+browser, but Platform Hub is not the application's backend-for-frontend for
+ordinary editor operations.
+
+---
+
+# 15. Frontend factory and deterministic generation
+
+The frontend should not be generated as a fresh arbitrary React application for
+each planner.
+
+The preferred pipeline is:
+
+```text
+product/domain decisions
+        ↓
+canonical specification
+        ↓
+frontend IR / structured policies
+        ↓ validation
+runtime registrations + generated TypeScript
+        ↓
+shared editor packages
+        ↓
+small planner-specific irregular islands
+```
+
+Strong deterministic-generation candidates:
+
+1. TypeScript domain/boundary types from canonical models.
+2. Typed application API clients.
+3. Screen/navigation registration.
+4. Layer registration and stable draw order.
+5. Command catalog and toolbar/key/context-menu bindings.
+6. Standard transient state declarations.
+7. Forms/property panels from typed field metadata.
+8. Symbol registries and palette catalogs.
+9. Renderer capability registration.
+10. Standard snapping/selection/history policies.
+11. Standard React workspace composition.
+12. Request/response DTOs and error mappings.
+
+Prose/LLM remains appropriate for semantic behavior that does not yet have a
+stable closed IR and for intentionally irregular UX/geometry implementations.
+
+Repeated note shapes across planners are evidence that a new structured IR or
+runtime capability is missing.
+
+---
+
+# 16. Candidate frontend IR backends
+
+Do not start with one giant `frontend` schema. Current provisional families:
+
+```text
+react_app_backend/v1
+canvas_editor_backend/v1
+form_backend/v1
+api_client_backend/v1
+symbol_catalog_backend/v1       # candidate
+```
+
+Possible responsibilities:
+
+## `react_app_backend/v1`
+
+- screens/navigation;
+- layout composition;
+- standard panels;
+- dialogs;
+- state/view bindings;
+- command bindings.
+
+## `canvas_editor_backend/v1`
+
+- scene/layer catalog;
+- layer ownership/capability declarations;
+- tool catalog;
+- gesture-command bindings;
+- selection policy;
+- history policy;
+- camera policy;
+- snapping policy;
+- renderer registry;
+- preview/commit behavior.
+
+## `form_backend/v1`
+
+- editable fields;
+- controls/widgets from closed metadata;
+- validation projection;
+- grouping/order;
+- read-only/editable policy;
+- submit command/API binding.
+
+## `api_client_backend/v1`
+
+- application endpoints exposed to the browser;
+- parameters/body/result;
+- auth boundary;
+- error mapping;
+- serialization;
+- deterministic typed client generation.
+
+## `symbol_catalog_backend/v1` candidate
+
+Only introduce after real use proves the schema. Candidate ownership:
+
+- symbol metadata;
+- asset identities;
+- categories;
+- anchors;
+- default dimensions;
+- allowed variants;
+- deterministic registry/palette generation.
+
+Presence of a valid backend-owned IR should mean deterministic/fail-closed
+emission. Irregular components/tools remain explicit owners rather than silent
+fallbacks.
+
+---
+
+# 17. Reuse from the existing specification system
+
+Do not create a second independent truth model for frontend generation.
+
+Strong reuse candidates from the existing specification standard:
+
+- `models`;
+- `config`;
+- `rules`;
+- `properties`;
+- `determinism`;
+- classified notes;
+- dependency graph and affected-set analysis;
+- fail-closed validation;
+- schema/backend versioning;
+- deterministic emitter conventions;
+- explicit dependency surfaces;
+- case-study authoring methodology.
+
+The current Python contract notation is language-bound. Long term, application
+boundaries may need a canonical language-neutral contract representation that
+can lower to both Python and TypeScript.
+
+```text
+canonical API/data contract
+        ├── Python / Pydantic / router
+        └── TypeScript client / DTOs
+```
+
+OpenAPI/JSON Schema may be emitted interoperability artifacts without becoming a
+second manually maintained source of truth.
+
+---
+
+# 18. Editable persistence versus rendered export
+
+Saving an editable planner model and exporting a visual/document artifact are
+separate operations.
+
+```text
+editable/domain working state
+        ↓ persistence contract
+private application working storage
+
+editable/domain state
+        ↓ renderer/export projection
+SVG / Canvas / PDF / DXF / image
+```
+
+Rendered SVG, Canvas pixels, PDF, PNG, or DXF must not accidentally become the
+only editable source of truth.
+
+Loading durable editable state should eventually follow explicit version/migrate/
+validate/replace semantics appropriate to the owning backend/domain.
+
+---
+
+# 19. Initial implementation stack candidates
+
+These are implementation hypotheses, not normative platform dependencies.
+
+## Canvas interaction/rendering
+
+Candidate: **Konva + react-konva** behind `@factory/editor-canvas`.
+
+Use for:
+
+- Canvas scene rendering;
+- pointer events;
+- hit detection;
+- transforms;
+- layer redraw/invalidation;
+- rendering SVG-derived images/paths where appropriate.
+
+Do not use Konva nodes/serialization as the canonical project model.
+
+## Geometry
+
+Candidate: **`@flatten-js/core`** behind `@factory/editor-geometry`.
+
+Use for low-level intersections, distances, polygons, transforms, and related
+geometry where it proves suitable.
+
+Do not leak Flatten-specific types through canonical planner contracts unless a
+later decision intentionally standardizes them.
+
+## Symbols
+
+Canonical authoring format candidate: **SVG assets + validated manifests**.
+
+SVG remains useful even if Canvas/Konva is the main interactive renderer.
+
+## Export
+
+Candidate to evaluate later: **Maker.js** or another CAD-oriented export adapter
+behind `@factory/editor-export`.
+
+No export dependency is selected by Architecture v0.
+
+---
+
+# 20. First vertical slice / proof of architecture
+
+Before designing a large frontend IR, prove the runtime/package boundaries with
+a small Room Planner slice.
+
+The first spike should support:
+
+1. world coordinates in millimetres;
+2. four walls forming a closed rectangle through shared nodes;
+3. thick-wall projection from centreline + thickness;
+4. clean corner joins;
+5. dragging a shared corner node while connected walls remain closed;
+6. translating/offsetting a wall through explicit commands;
+7. at least one T-junction;
+8. endpoint/intersection/horizontal/vertical snapping;
+9. zoom/pan without changing domain dimensions;
+10. one door attached to a wall;
+11. the door rendered from an SVG symbol definition;
+12. automatic palette population from a symbol registry;
+13. one foreign example layer, such as a local plumbing draft line, to prove
+    that rendering/editing capability does not imply backend ownership;
+14. undo/redo through commands;
+15. serialization of editable domain state without serializing Canvas/Konva
+    scene objects.
+
+The purpose of the spike is architectural evidence, not UI polish.
+
+If this slice requires planner code to reach into Konva internals, duplicates
+world geometry in pixels, stores stale connection coordinates, or performs
+backend calls inside reusable layers, the package boundaries should be corrected
+before adding more planner features.
+
+---
+
+# 21. Frontend-aware authoring rule
+
+Starting from early design states, every durable model used by an interactive
+case should be checked with this question:
+
+> Can the browser editor render, identify, select, reference, and edit the
+> concept without inventing a second source of domain truth?
+
+This is a domain-model completeness check, not permission to add React/Canvas
+fields to domain models.
+
+A useful progression is:
+
+```text
+State 1 — domain data sufficient for projection and stable references
+State 2 — validation/topology/snap constraints
+State 3 — frontend/backend/domain responsibilities and layer ownership
+State 4 — interaction flows, commands, preview/commit semantics
+State 5 — public application API required by the browser
+State 6 — exact request/response contracts, DTOs, and deterministic frontend IR
+```
+
+Framework-specific implementation should be delayed until the relevant product
+and interaction decisions are known.
+
+---
+
+# 22. Frontend context manifests
+
+Frontend requirements should not be maintained by copying domain prose into this
+file.
+
+A case may define an explicit context manifest, for example:
+
+```text
+examples/room-planner/frontend_context.json
+```
+
+The manifest lists exact repository-relative Markdown sources/headings relevant
+to frontend work. `tools/frontend_context.py` may build deterministic working
+context from those declared dependencies.
+
+The manifest is an explicit dependency map, not semantic search. Missing files,
+headings, or invalid fields must fail closed rather than silently omitting a
+frontend dependency.
+
+Generated context is not canonical source; the referenced design documents
+remain authoritative.
+
+---
+
+# 23. Open design questions
+
+The following remain intentionally open until implementation/case evidence exists:
+
+1. Is the proposed package split (`core`, `geometry`, `scene`, `canvas`,
+   `svg-symbols`, `react`, `routing`) correct, or should some packages begin
+   merged?
+2. Does Konva remain sufficiently thin for engineering-editor requirements after
+   the first wall/junction spike?
+3. Does `@flatten-js/core` cover the required intersection/offset/polygon
+   operations cleanly, or should `editor-geometry` use another engine?
+4. What exact canonical coordinate quantization is used at commit time: 1 mm,
+   sub-mm storage with 1 mm UI snapping, or another policy?
+5. What is the canonical T-junction representation?
+6. Which wall-join policies are domain-significant versus pure projection?
+7. Are rooms canonical entities, derived closed regions, or both under different
+   lifecycle states?
+8. What is the minimal common `LayerDefinition` schema?
+9. Which layer capabilities must be explicit: render, select, inspect, edit,
+   snap, persist, publish, export?
+10. What is the smallest useful closed command IR?
+11. Which preview/commit rules are genuinely shared across planners?
+12. Which semantic anchors are generic and which must remain domain-owned?
+13. How is a foreign `draft` layer transferred into its owning planner while
+    preserving provenance and preventing accidental ownership changes?
+14. Which symbol metadata belongs in a future `symbol_catalog_backend/v1`?
+15. When are SVG variants enough, and when is a parametric symbol renderer
+    justified?
+16. Which React layout decisions are stable enough for deterministic lowering?
+17. What becomes the canonical language-neutral contract representation for
+    Python + TypeScript lowering?
+18. Which existing Python-factory dependency/affected-set tools can operate on
+    language-neutral symbols without redesign?
+19. Which frontend backend should be implemented first after the runtime spike?
+20. Which export formats need canonical domain-level semantics versus adapter-only
+    rendering?
+
+Until these questions have evidence, Architecture v0 defines boundaries and the
+implementation direction without pretending the final frontend IR schema is
 already known.
