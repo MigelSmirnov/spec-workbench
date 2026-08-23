@@ -658,6 +658,487 @@ runtime and a small number of deterministic frontend backends. Individual
 projects should mostly supply domain types, policies, commands, renderer/tool
 declarations, and irregular extensions.
 
+## Reusable editor packages and capability composition
+
+The shared runtime should not necessarily become one monolithic package. The
+planner family is expected to benefit from several small packages with explicit
+capabilities and dependency direction.
+
+A provisional decomposition is:
+
+```text
+@factory/editor-core
+    commands
+    undo/redo history
+    selection
+    tool lifecycle
+    preview/commit lifecycle
+    transient editor state primitives
+
+@factory/editor-geometry
+    point/vector/segment/rect/transform primitives
+    local ↔ world transforms
+    world ↔ viewport transforms
+    rotation
+    generic hit-test primitives
+    generic snapping primitives
+
+@factory/editor-scene
+    scene/layer registry
+    entity definition registry
+    entity instances
+    anchors/ports
+    relations/connections
+    renderer capability registration
+
+@factory/editor-canvas
+    Canvas-specific renderer adapter
+    camera integration
+    pointer normalization
+    render loop
+    picking integration
+
+@factory/editor-svg
+    SVG-specific renderer adapter
+    path/marker helpers
+    SVG projection utilities
+
+@factory/editor-react
+    viewport shell
+    toolbar/palette/property panels
+    layer panel
+    command bindings
+    standard interaction composition
+
+@factory/editor-routing
+    connection routing
+    orthogonal routing where requested
+    anchor-direction-aware route helpers
+```
+
+These names are provisional. Package boundaries should be validated by real
+planner implementations before becoming platform API commitments.
+
+A project should import only the capabilities it needs. A form-heavy planner may
+use `editor-core` and `editor-react` without a drawing renderer. A Room Planner
+may use core + geometry + scene + Canvas + React. An electrical schematic editor
+may additionally use SVG or routing capabilities.
+
+The purpose of package decomposition is not package-count optimization. It is to
+prevent React, Canvas, SVG, routing, persistence, or one domain's assumptions
+from leaking into the shared semantic core.
+
+## Definition versus instance
+
+Reusable editor entities should distinguish a reusable **definition** from a
+concrete **instance**.
+
+A definition describes reusable rendering/interaction capabilities. An instance
+represents a concrete object participating in a scene or projection.
+
+Conceptually:
+
+```text
+EntityDefinition
+    stable type/capability identity
+    metadata
+    default/local geometry when applicable
+    anchors/ports
+    renderer capability key
+    optional interaction capabilities
+
+EntityInstance
+    stable instance identity
+    definition/type reference
+    authoritative domain reference/state
+    transform where the entity model requires one
+```
+
+The exact fields must remain domain-appropriate. A wall, room polygon, plumbing
+fixture, and electrical symbol do not all have to fit one simplistic
+`x/y/rotation` record.
+
+The important rule is that reusable visual definitions must not be duplicated
+inside every scene instance, and scene instances must not duplicate rendered SVG
+or Canvas instructions as authoritative data.
+
+Renderer bindings should preferably use renderer capabilities/registry keys
+rather than making the scene model depend directly on `React.ComponentType` or
+another framework-specific type.
+
+## Coordinate-space contract
+
+Engineering editors need explicit coordinate spaces. Ambiguous coordinates are
+a source of both rendering defects and domain corruption.
+
+The general projection chain is:
+
+```text
+definition-local coordinates
+        ↓ entity/domain transform
+world/domain coordinates
+        ↓ camera/viewport transform
+viewport coordinates
+        ↓ device scaling
+screen/device coordinates
+```
+
+Pointer input follows the inverse path before an accepted command changes domain
+geometry.
+
+Domain/world units MUST NOT become viewport units merely because a renderer uses
+pixels internally. Real dimensions remain meaningful independently of zoom,
+pan, device pixel ratio, SVG viewBox, or Canvas backing-store resolution.
+
+Local renderer geometry should be expressed in its own local frame when the
+concept has one. Camera state, pan/zoom, and viewport placement are owned outside
+the renderer definition.
+
+## Semantic anchors and derived render coordinates
+
+Reusable connections and attachment points should refer to semantic anchors,
+not permanently stored render coordinates.
+
+`Anchor` is the general concept. Domain-specific anchor kinds may include:
+
+- element connection ports;
+- wall endpoints or midpoints;
+- wall faces;
+- room vertices;
+- opening attachment positions;
+- plumbing connection points;
+- electrical terminals;
+- other explicitly addressable geometric attachment points.
+
+A connection or relation should preserve semantic topology such as:
+
+```text
+entity A + anchor outlet
+        ↓
+entity B + anchor inlet
+```
+
+rather than persisting stale endpoint pixels such as:
+
+```text
+fromX/fromY/toX/toY
+```
+
+Rendering resolves current anchor positions from the authoritative entities and
+then derives connection geometry. Moving, rotating, resizing, or otherwise
+changing an entity must therefore update the rendered connection without
+rewriting its semantic endpoint identity.
+
+The general rule is:
+
+> Persist semantic references; derive render coordinates.
+
+This is broader than pipe/electrical ports and should apply anywhere a planner
+can express stable attachment semantics.
+
+## Topology versus derived geometry
+
+For connected editor concepts, topology and displayed path geometry are separate
+meanings.
+
+Conceptually:
+
+```text
+stored relation
+    A.anchor-1 → B.anchor-4
+
+render projection
+    resolve anchors
+        ↓
+    calculate world positions
+        ↓
+    choose routing/projection policy
+        ↓
+    draw current path
+```
+
+The route may be straight, orthogonal, curved, automatically routed, or custom.
+That rendering choice must not silently change which domain entities are
+connected.
+
+A domain may intentionally own route geometry when the physical path itself is
+meaningful — for example, a real pipe run with bends. In that case the route is
+explicit domain data, not renderer-generated connection decoration. The spec
+must distinguish those cases rather than letting the renderer guess ownership.
+
+## Stable durable identity
+
+Durable entities that can be referenced by other entities, layers, artifacts, or
+applications require stable identities appropriate to their domain semantics.
+
+Array position, React key order, current draw order, SVG node identity, Canvas
+index, and transient selection index are not durable cross-model identities.
+
+This matters especially when one planner projects another planner's published
+or accepted data. Plumbing, electrical, tile, estimating, and downstream drawing
+systems must be able to refer to stable wall/room/surface identities without
+scraping the visual scene.
+
+Stable identity requirements remain domain decisions; this frontend rule does
+not imply adding arbitrary IDs to value concepts that do not have independent
+identity in the canonical model.
+
+## Editable persistence versus rendered export
+
+Saving an editable planner model and exporting a rendered document are separate
+operations.
+
+Conceptually:
+
+```text
+editable/domain working state
+        ↓ persistence contract
+private application working storage
+
+editable/domain state
+        ↓ renderer/export projection
+SVG / Canvas pixels / PDF / image / drawing artifact
+```
+
+Rendered SVG, Canvas pixels, PDF, PNG, or other presentation output must not
+become the only persisted editable source merely because it is convenient to
+serialize.
+
+When an application loads durable editable state, the eventual persistence
+contract should support explicit schema/version handling, migration when
+required, structural/domain validation, and only then replacement of current
+working state.
+
+The exact persistence owner remains the application/backend design. This rule
+only protects the distinction between editable state and visual/export
+projection.
+
+## Cross-planner layer composition
+
+The planner family should converge on a common editor workspace in which domain
+capabilities can be composed as layers rather than each application reimplementing
+foreign visualization from scratch.
+
+A useful conceptual shape is:
+
+```text
+shared editor workspace
+        │
+        ├── room/wall layer
+        ├── plumbing layer
+        ├── electrical layer
+        ├── tile layer
+        └── annotations / auxiliary layers
+```
+
+A Room Planner, Plumbing Planner, Electrical Planner, or another planner may
+therefore load several layer packages into the same scene. This makes common
+geometry, navigation, selection, visibility, rendering, anchors, and snapping
+infrastructure reusable across applications.
+
+Applications should not import each other as whole applications. Reuse should
+happen through shared editor packages and domain/editor layer packages with
+explicit public boundaries.
+
+Conceptually:
+
+```text
+@planner/walls-layer
+@planner/plumbing-layer
+@planner/electrical-layer
+@planner/tiles-layer
+```
+
+A layer package may expose domain/editor-facing definitions such as:
+
+- model/boundary types needed for projection;
+- renderers;
+- tools and command declarations;
+- anchors;
+- hit-test behavior;
+- snapping policies;
+- property descriptors;
+- editor-side validation useful for interaction;
+- layer metadata and visibility behavior.
+
+A layer package must not gain persistence authority merely because another
+application imported it.
+
+## Layer ownership modes
+
+Rendering, editing, persistence, and publication are separate capabilities. A
+planner being able to display or manipulate a layer does not mean it owns the
+layer's authoritative domain state.
+
+The current working model distinguishes three layer modes.
+
+### `owned`
+
+The current application owns the authoritative working state for that layer.
+
+Typical capabilities:
+
+```text
+render = yes
+edit = yes
+persist through current application backend = yes
+publish under current application's declared contracts = when product flow allows
+```
+
+Examples may include walls in Room Planner or plumbing entities in Plumbing
+Planner.
+
+### `reference`
+
+The current application consumes another domain's accepted/published/otherwise
+resolved state for context.
+
+Typical capabilities:
+
+```text
+render = yes
+edit authoritative source = no
+persist foreign authoritative state = no
+publish foreign domain = no
+```
+
+For example, Plumbing Planner may render a Room Planner wall/room basis while
+owning only plumbing changes.
+
+### `draft`
+
+The current application may host an uncommitted/local proposal using another
+layer capability without thereby becoming the authoritative owner of that
+foreign domain.
+
+Typical capabilities:
+
+```text
+render = yes
+edit local draft = yes
+persist as host-private/local overlay = optional explicit product decision
+write foreign authoritative backend = no
+publish as foreign authoritative artifact = no
+```
+
+A draft may later be transferred/opened in the owning planner, validated under
+that planner's domain rules, and converted into owned working state through an
+explicit application flow.
+
+The exact transfer protocol is not yet defined. The architectural point is that
+"the user can draw it here" does not imply "this application now owns that
+domain".
+
+## Rendering capability is not data ownership
+
+The following distinctions are normative architectural direction:
+
+> Rendering capability is not data ownership.
+
+> Editing capability is not persistence authority.
+
+> Importing a layer package is not authorization to mutate the layer owner's
+> backend.
+
+A Room Planner may be technically capable of showing or locally sketching pipes
+without exposing Room Planner backend endpoints for authoritative plumbing
+state. Likewise, a plumbing or electrical application may reuse wall rendering,
+selection, snapping, and geometry capabilities without becoming the owner of
+room geometry.
+
+This protects planner boundaries while allowing a rich cross-domain workspace.
+
+## Layer packages must not own backend transport
+
+Reusable layer packages should not directly call their domain backend as part of
+rendering or ordinary editor behavior.
+
+Avoid coupling such as:
+
+```text
+@planner/plumbing-layer
+    → fetch('/plumbing/...')
+```
+
+Prefer:
+
+```text
+plumbing layer capabilities
+        ↓ typed editor/domain operations
+host application adapter
+        ↓
+application client/backend boundary
+```
+
+The host application decides which operations have persistence authority. A
+foreign/reference layer can therefore be imported safely without accidentally
+acquiring backend write capability.
+
+Generated TypeScript API clients belong to explicit application integration
+boundaries, not implicitly inside reusable render packages.
+
+## Code reuse, data exchange, and data ownership are separate axes
+
+Cross-planner architecture should preserve three independent meanings:
+
+```text
+code reuse
+    shared editor packages + reusable layer packages
+
+data exchange
+    stable application/platform contracts and Platform Hub artifacts
+
+data ownership
+    the application/domain backend that owns authoritative working state
+```
+
+These mechanisms should not be collapsed into one another.
+
+Sharing `@planner/walls-layer` does not mean Plumbing Planner reads Room Planner's
+private database. Consuming `room_plan.v1` does not mean the consumer owns wall
+editing. Drawing a local pipe overlay in another planner does not publish a
+plumbing artifact.
+
+The Platform Hub remains the cross-application data/artifact boundary described
+in `PLATFORM_ROUTER.md`; reusable frontend packages are a code-sharing mechanism,
+not an alternative integration mesh.
+
+## Planner applications as workspace configurations
+
+If the shared packages and ownership rules prove stable, several planner
+frontends may become relatively small configurations of one engineering editor
+workspace.
+
+Conceptually:
+
+```text
+Room Planner
+    shared editor shell
+    + room/wall owned layers
+    + demolition/construction capabilities
+    + optional foreign reference/draft layers
+    + Room Planner application adapter
+
+Plumbing Planner
+    shared editor shell
+    + room/wall reference layers
+    + plumbing owned layer
+    + optional electrical/tile reference layers
+    + Plumbing application adapter
+
+Electrical Planner
+    shared editor shell
+    + room/wall reference layers
+    + electrical owned layer
+    + optional plumbing reference layer
+    + Electrical application adapter
+```
+
+This is a desirable convergence direction, not permission to erase domain
+boundaries. The applications may share most editor mechanics while still having
+different authoritative models, validation, backend endpoints, publication
+contracts, and Platform Hub artifacts.
+
 ## Open design questions
 
 The following should be resolved through real case studies rather than fixed in
@@ -674,6 +1155,12 @@ advance:
 9. Which React layout decisions are stable enough to compile without over-constraining product UX?
 10. Which existing Python-factory dependency/affected-set tools can be reused unchanged versus generalized to language-neutral symbols?
 11. Which frontend backend should be implemented first to produce the highest evidence value across planners?
+12. Which proposed editor packages are stable cross-case boundaries and which should remain one package initially?
+13. What is the minimal common `LayerDefinition` contract across room, plumbing, electrical, tile, and other planners?
+14. Which layer capabilities must be declared explicitly: render, select, edit, snap, persist, publish, export?
+15. How should a foreign `draft` layer be transferred to its owning planner without confusing provenance or ownership?
+16. Which semantic anchor kinds can be generic and which must remain domain-owned?
+17. How should a host application resolve compatible versions of reusable layer packages and artifact schemas independently?
 
 Until these questions have cross-case evidence, `FRONTEND_EDITOR.md` records the
 architectural direction but does not pretend that the final frontend IR schema is
