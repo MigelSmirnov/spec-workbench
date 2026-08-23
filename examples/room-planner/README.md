@@ -45,6 +45,25 @@ This applies in particular to Registry object identity, Construction Catalog res
 
 Concrete HTTP paths, DTOs, and transport details are still deferred until their proper design states.
 
+## Shared frontend/editor contract
+
+Room Planner also uses the repository-level [Frontend Editor](../../FRONTEND_EDITOR.md) as its living browser/editor architecture boundary.
+
+That document accumulates shared frontend knowledge without copying Room Planner domain models into a second source of truth. In particular it records the browser-first delivery boundary, domain-authoritative versus transient editor state, rendering-as-projection, and the expected progression from model completeness to later interaction/API contracts.
+
+Because this README links the Frontend Editor document, the normal case context pack imports it automatically alongside the Platform Router.
+
+For focused frontend work, build the narrower manifest-driven context with:
+
+```bash
+python tools/frontend_context.py \
+  --manifest examples/room-planner/frontend_context.json
+```
+
+The manifest lists exact canonical Markdown headings needed by the Room Planner browser editor. The tool fails if a referenced file or heading disappears, so frontend dependencies cannot silently rot when domain documents are renamed or refined.
+
+The manifest and generated pack are dependency/indexing tools only. Canonical product and domain decisions remain in the numbered Room Planner state documents; shared frontend/editor architecture remains in `FRONTEND_EDITOR.md`.
+
 ## Design states
 
 1. **State 0 — Product boundary**
@@ -54,6 +73,7 @@ Concrete HTTP paths, DTOs, and transport details are still deferred until their 
    - [10 — Domain models](10_models.md) — working draft
    - [10 — Snapshot identity and Existing correction carry-forward](10_identity_carry_forward.md) — accepted refinement
    - [10 — Typed source and provenance references](10_source_provenance.md) — accepted refinement
+   - `frontend_context.json` — machine-readable frontend dependency manifest
 3. 20 — Rules and invariants
 4. 30 — Module responsibilities
 5. 40 — System flows
@@ -62,6 +82,6 @@ Concrete HTTP paths, DTOs, and transport details are still deferred until their 
 8. 70 — Notes
 9. Assembly
 
-State 0 is stabilized across both `00_*.md` documents. State 1 is active and remains a working draft until its explicit model closure questions are resolved. The accepted `10_*` refinements supersede provisional terminology or model shapes in `10_models.md` where stated. `context_pack.py` will carry the stabilized State 0 sources and the current State 1 documents into later work automatically.
+State 0 is stabilized across both `00_*.md` documents. State 1 is active and remains a working draft until its explicit model closure questions are resolved. The accepted `10_*` refinements supersede provisional terminology or model shapes in `10_models.md` where stated. `context_pack.py` will carry the stabilized State 0 sources, current State 1 documents, and linked shared architecture boundaries into later work automatically.
 
-Later state documents must carry the Platform Router dependency forward even when they do not introduce a new shared interaction.
+Later state documents must carry the Platform Router dependency forward even when they do not introduce a new shared interaction. Frontend-relevant shared requirements should likewise be evaluated against `FRONTEND_EDITOR.md` rather than being duplicated privately in later Room Planner documents.
