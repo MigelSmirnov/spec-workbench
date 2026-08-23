@@ -73,6 +73,7 @@ The manifest and generated pack are dependency/indexing tools only. Canonical pr
    - [10 — Domain models](10_models.md) — working draft
    - [10 — Snapshot identity and Existing correction carry-forward](10_identity_carry_forward.md) — accepted refinement
    - [10 — Typed source and provenance references](10_source_provenance.md) — accepted refinement
+   - [10 — Opening lifecycle and opening-change intent](10_opening_lifecycle.md) — accepted refinement
    - `frontend_context.json` — machine-readable frontend dependency manifest
 3. 20 — Rules and invariants
 4. 30 — Module responsibilities
