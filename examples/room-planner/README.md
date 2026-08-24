@@ -32,7 +32,7 @@ Every Room Planner design-state document from State 1 onward must contain an exp
 
 That section must do one of the following:
 
-- identify the platform requirements introduced, refined, or consumed by that state and link them to `../../PLATFORM_ROUTER.md`; or
+- identify the platform requirements introduced, refined, or consumed by that state and link them to `../../PLATFORM_ROUTER.md` at the appropriate level of abstraction; or
 - explicitly state that the state introduces no new Platform Router requirements while preserving all previously established platform dependencies.
 
 When a Room Planner decision reveals a requirement that is shared across applications, the change is incomplete until:
@@ -101,6 +101,7 @@ The manifest and generated pack are dependency/indexing tools only. Canonical pr
    - [20 — Planar region construction rules](20_planar_regions_rules.md) — accepted refinement
    - [20 — Ceiling and wall niche rules](20_niche_rules.md) — accepted refinement
    - [20 — Wall elevation projection rules](20_elevation_furniture_rules.md) — corrected refinement; furniture policy removed from Room Planner
+   - [20 — Backend-authoritative calculation boundary](20_backend_calculation_boundary.md) — accepted refinement
 4. 30 — Module responsibilities
 5. 40 — System flows
 6. 50 — Public APIs
