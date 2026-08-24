@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 from factory_admission_workbench import check
+from factory_admission_workbench.service import _review_check, _runtime_persistence_check
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -88,6 +89,94 @@ def test_explicit_spec_is_ready_when_factory_accepts_it(tmp_path: Path) -> None:
     assert language["evidence"]["standard_version"] == 2
     external = next(item for item in report["checks"] if item["id"] == "FA011")
     assert external["status"] == "NOT_APPLICABLE"
+
+
+def test_case_without_stage81_ledger_is_blocked(tmp_path: Path) -> None:
+    result = _review_check(tmp_path / "case")
+
+    assert result.status == "BLOCK"
+    assert "implementation readiness is unproven" in result.summary
+
+
+def test_master_persistence_without_backend_closure_is_blocked(tmp_path: Path) -> None:
+    result = _runtime_persistence_check(
+        {
+            "persistence": {"InvoiceCardV1": {"class": "master"}},
+            "rules": {},
+        },
+        tmp_path / "case",
+    )
+
+    assert result.status == "BLOCK"
+    assert result.evidence == {
+        "persistent_masters": ["InvoiceCardV1"],
+        "missing": "rules.persistence_backend",
+        "revision_entrypoint": "Stage 8.1 module review",
+        "repair_policy": "return each open decision to its earliest owning design state",
+    }
+
+
+def test_master_persistence_with_backend_closure_passes(tmp_path: Path) -> None:
+    case_root = tmp_path / "case"
+    _write_json(case_root / "70_persistence_closure.json", {"status": "closed"})
+    result = _runtime_persistence_check(
+        {
+            "persistence": {"InvoiceCardV1": {"class": "master"}},
+            "rules": {
+                "persistence_backend": {
+                    "kind": "persistence_backend",
+                    "schema_version": 2,
+                    "tables": [{"table": "invoice_cards"}],
+                    "repositories": [{"repository": "InvoiceRepository"}],
+                }
+            },
+        },
+        case_root,
+    )
+
+    assert result.status == "PASS"
+
+
+def test_master_persistence_with_empty_backend_marker_is_blocked(tmp_path: Path) -> None:
+    result = _runtime_persistence_check(
+        {
+            "persistence": {"InvoiceCardV1": {"class": "master"}},
+            "rules": {
+                "persistence_backend": {
+                    "kind": "persistence_backend",
+                    "schema_version": 3,
+                    "tables": [],
+                    "repositories": [],
+                }
+            },
+        },
+        tmp_path / "case",
+    )
+
+    assert result.status == "BLOCK"
+    assert "no concrete table/repository lowering" in result.summary
+
+
+def test_master_persistence_with_open_authoring_closure_is_blocked(tmp_path: Path) -> None:
+    case_root = tmp_path / "case"
+    _write_json(case_root / "70_persistence_closure.json", {"status": "open"})
+    result = _runtime_persistence_check(
+        {
+            "persistence": {"CabinetEffect": {"class": "master"}},
+            "rules": {
+                "persistence_backend": {
+                    "kind": "persistence_backend",
+                    "schema_version": 3,
+                    "tables": [{"table": "cabinet_effects"}],
+                    "repositories": [{"repository": "PostgresCabinetUnitOfWork"}],
+                }
+            },
+        },
+        case_root,
+    )
+
+    assert result.status == "BLOCK"
+    assert result.evidence["closure_status"] == "open"
 
 
 def test_missing_standard_version_blocks_admission_before_handoff(tmp_path: Path) -> None:

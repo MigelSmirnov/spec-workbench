@@ -1,0 +1,4675 @@
+{
+  "standard_version": 2,
+  "config": {
+    "upload": {
+      "max_file_bytes": 31457280,
+      "files_per_handoff": 1,
+      "handoff_ttl_seconds": 900
+    },
+    "synchronization": {
+      "request_timeout_seconds": 120,
+      "metadata_max_bytes": 8388608,
+      "source_max_file_bytes": 31457280,
+      "invoice_package_max_bytes": 41943040,
+      "registry_catalogue_max_bytes": 5242880
+    },
+    "authentication": {
+      "failure_window_seconds": 900,
+      "failures_before_throttle": 5,
+      "throttle_seconds": 900
+    },
+    "search": {
+      "default_limit": 20,
+      "max_limit": 100
+    },
+    "recovery": {
+      "backup_interval_hours": 24,
+      "backup_retention_days": 30,
+      "restore_drill_interval_days": 90
+    },
+    "runtime_storage": {
+      "metadata_engine": "postgres",
+      "database_url_required": true,
+      "source_store_kind": "local_filesystem",
+      "source_store_root_required": true,
+      "source_store_root_must_be_absolute": true,
+      "staging_and_final_same_filesystem": true,
+      "startup_recovery_required": true,
+      "local_backend_required_for_service": false
+    },
+    "persistence": {
+      "cabinet_effect_table_name": "cabinet_effects"
+    },
+    "role": "data",
+    "schema_version": 1
+  },
+  "default_module": "runtime_control",
+  "contracts": {
+    "resolve_capability": "(policy: CapabilityPolicy, principal: CabinetPrincipal, channel: str, requested_capability: str) -> CapabilityResolution",
+    "prepare_chatgpt_proposal": "(service: ChatGptInteractionService, principal: CabinetPrincipal, request: ChatGptProposalRequest) -> ChatGptProposal",
+    "confirm_chatgpt_effect": "(service: ChatGptInteractionService, principal: CabinetPrincipal, request: ChatGptConfirmationRequest) -> ConfirmedEffectAuthorization",
+    "report_composite_outcome": "(service: ChatGptInteractionService, principal: CabinetPrincipal, outcome: CompositeOutcome) -> ChatGptOutcomeReport",
+    "authenticate_request": "(service: AccessControlService, channel: str, presented_credential: str, abuse_context: str) -> AuthenticatedPrincipal",
+    "authorize_capability": "(service: AccessControlService, principal: AuthenticatedPrincipal, capability: str, entity_scope: EntityScope | None = None) -> AuthorizationDecision",
+    "enroll_principal": "(service: AccessControlService, command: PrincipalEnrollmentCommand) -> IssuedPrincipalCredential",
+    "provision_capability_grant": "(service: AccessControlService, grantor: AuthenticatedPrincipal, command: CapabilityGrantCommand) -> CapabilityGrantProvisioningResult",
+    "rotate_credential": "(service: AccessControlService, command: CredentialRotationCommand) -> IssuedPrincipalCredential",
+    "revoke_credential": "(service: AccessControlService, command: CredentialRevocationCommand) -> CredentialRevocationResult",
+    "search_provider_cards": "(workspace: CardWorkspace, query: ProviderSearchQuery) -> ProviderCardPage",
+    "list_project_cards": "(workspace: CardWorkspace, query: ProjectListQuery) -> ProjectCardPage",
+    "get_card_revision": "(workspace: CardWorkspace, reference: CardRevisionReference) -> CanonicalCardRevision",
+    "commit_card_revision": "(workspace: CardWorkspace, command: CardRevisionCommitCommand) -> CardRevisionCommitResult",
+    "search_invoices": "(workspace: InvoiceWorkspace, query: InvoiceSearchQuery) -> InvoiceCardPage",
+    "get_invoice": "(workspace: InvoiceWorkspace, invoice_id: str, content_hash: str | None = None) -> InvoiceCardView",
+    "find_invoice_duplicates": "(workspace: InvoiceWorkspace, candidate: InvoiceDuplicateCandidateInput) -> tuple[InvoiceDuplicateCandidate, ...]",
+    "prepare_invoice_draft": "(workspace: InvoiceWorkspace, proposal: InvoiceDraftInput) -> InvoiceDraftProposal",
+    "validate_invoice": "(workspace: InvoiceWorkspace, candidate: InvoiceValidationInput) -> InvoiceValidationResult",
+    "create_invoice_draft": "(workspace: InvoiceWorkspace, command: CreateInvoiceDraftCommand, authorization: AuthorizationDecision) -> InvoiceMutationResult",
+    "update_invoice_draft": "(workspace: InvoiceWorkspace, command: UpdateInvoiceDraftCommand, authorization: AuthorizationDecision) -> InvoiceMutationResult",
+    "confirm_invoice": "(workspace: InvoiceWorkspace, command: ConfirmInvoiceCommand, authorization: AuthorizationDecision) -> InvoiceMutationResult",
+    "record_invoice_payment": "(workspace: InvoiceWorkspace, command: RecordInvoicePaymentCommand, authorization: AuthorizationDecision) -> InvoiceMutationResult",
+    "attach_invoice_source_metadata": "(workspace: InvoiceWorkspace, command: AttachInvoiceSourceCommand, authorization: AuthorizationDecision) -> InvoiceMutationResult",
+    "archive_invoice": "(workspace: InvoiceWorkspace, command: ArchiveInvoiceCommand, authorization: AuthorizationDecision) -> InvoiceMutationResult",
+    "get_project_summary": "(workspace: ProjectWorkspace, project_id: str, content_hash: str | None = None) -> ProjectSummary",
+    "validate_estimate": "(workspace: ProjectWorkspace, proposal: EstimateValidationInput) -> EstimateValidationResult",
+    "derive_shopping_list": "(workspace: ProjectWorkspace, request: ShoppingListDerivationRequest) -> ShoppingListProposal",
+    "attach_project_estimate": "(workspace: ProjectWorkspace, command: AttachProjectEstimateCommand, authorization: AuthorizationDecision) -> ProjectMutationResult",
+    "save_shopping_list": "(workspace: ProjectWorkspace, command: SaveShoppingListCommand, authorization: AuthorizationDecision) -> ProjectMutationResult",
+    "begin_effect": "(journal: EffectJournal, request: BeginEffectRequest) -> EffectReservation",
+    "commit_effect": "(journal: EffectJournal, effect_id: str, result: EffectResult) -> CabinetEffect",
+    "reconcile_effect": "(journal: EffectJournal, effect_id: str, principal_id: str) -> EffectReconciliation",
+    "issue_upload_handoff": "(custody: SourceCustodyService, command: UploadHandoffCommand, authorization: AuthorizationDecision) -> SourceUploadHandoff",
+    "store_original_source": "(custody: SourceCustodyService, handoff_id: str, presented_handoff_secret: str, upload: BinaryUpload) -> SourceCustodyResult",
+    "retrieve_original_source": "(custody: SourceCustodyService, request: SourceRetrievalRequest, authorization: AuthorizationDecision) -> SourceDownload",
+    "release_vps_working_set": "(custody: SourceCustodyService, command: VpsWorkingSetReleaseCommand, authorization: AuthorizationDecision) -> VpsWorkingSetReleaseResult",
+    "accept_source_upload": "(gateway: WebGateway, request: BrowserUploadRequest, upload: BinaryUpload) -> SourceCustodyResult",
+    "serve_source_download": "(gateway: WebGateway, card_id: str, source_id: str, authorization: AuthorizationDecision) -> SourceDownload",
+    "observe_sync_compatibility": "(gateway: SyncGateway, request: SyncCompatibilityRequest) -> LocalBackendConnectionObservation",
+    "serve_sync_request": "(gateway: SyncGateway, request: ClosedSyncRequest) -> ClosedSyncResponse",
+    "discover_invoice_work": "(exchange: InvoiceExchange, node: CabinetNodeIdentity, query: InvoiceWorkDiscoveryQuery) -> InvoiceWorkPage",
+    "pull_invoice_package": "(exchange: InvoiceExchange, node: CabinetNodeIdentity, command: InvoicePackagePullCommand) -> InvoicePackageStream",
+    "record_invoice_transfer_receipt": "(exchange: InvoiceExchange, node: CabinetNodeIdentity, issuance_id: str, receipt: InvoiceTransferReceipt) -> InvoiceTransferReceiptResult",
+    "reconcile_invoice_transfer": "(exchange: InvoiceExchange, node: CabinetNodeIdentity, request: InvoiceTransferReconciliationRequest) -> InvoiceTransferReconciliation",
+    "publish_registry_catalogue": "(replica: RegistryReplicaService, node: CabinetNodeIdentity, delivery: RegistryCatalogueDelivery) -> VpsCatalogueAcknowledgement",
+    "get_current_registry_catalogue": "(replica: RegistryReplicaService) -> RegistryCatalogueView",
+    "evaluate_readiness": "(control: RuntimeControl, request: ReadinessEvaluationRequest) -> ReadinessReport",
+    "verify_backup_restore": "(control: RuntimeControl, request: BackupRestoreVerificationRequest) -> BackupRestoreVerificationReport",
+    "search_provider_cards_handler": "(request: Request, query: ProviderSearchQuery) -> ProviderCardPage",
+    "list_project_cards_handler": "(request: Request, query: ProjectListQuery) -> ProjectCardPage",
+    "search_invoices_handler": "(request: Request, query: InvoiceSearchQuery) -> InvoiceCardPage",
+    "get_invoice_handler": "(request: Request, invoice_id: str, content_hash: str | None = None) -> InvoiceCardView",
+    "find_invoice_duplicates_handler": "(request: Request, candidate: InvoiceDuplicateCandidateInput) -> tuple[InvoiceDuplicateCandidate, ...]",
+    "prepare_invoice_draft_handler": "(request: Request, proposal: InvoiceDraftInput) -> InvoiceDraftProposal",
+    "validate_invoice_handler": "(request: Request, candidate: InvoiceValidationInput) -> InvoiceValidationResult",
+    "create_invoice_draft_handler": "(request: Request, command: CreateInvoiceDraftCommand) -> InvoiceMutationResult",
+    "update_invoice_draft_handler": "(request: Request, command: UpdateInvoiceDraftCommand) -> InvoiceMutationResult",
+    "confirm_invoice_handler": "(request: Request, command: ConfirmInvoiceCommand) -> InvoiceMutationResult",
+    "record_invoice_payment_handler": "(request: Request, command: RecordInvoicePaymentCommand) -> InvoiceMutationResult",
+    "attach_invoice_source_metadata_handler": "(request: Request, command: AttachInvoiceSourceCommand) -> InvoiceMutationResult",
+    "archive_invoice_handler": "(request: Request, command: ArchiveInvoiceCommand) -> InvoiceMutationResult",
+    "get_project_summary_handler": "(request: Request, project_id: str, content_hash: str | None = None) -> ProjectSummary",
+    "validate_estimate_handler": "(request: Request, proposal: EstimateValidationInput) -> EstimateValidationResult",
+    "derive_shopping_list_handler": "(request: Request, payload: ShoppingListDerivationRequest) -> ShoppingListProposal",
+    "attach_project_estimate_handler": "(request: Request, command: AttachProjectEstimateCommand) -> ProjectMutationResult",
+    "save_shopping_list_handler": "(request: Request, command: SaveShoppingListCommand) -> ProjectMutationResult",
+    "issue_upload_handoff_handler": "(request: Request, command: UploadHandoffCommand) -> SourceUploadHandoff",
+    "release_vps_working_set_handler": "(request: Request, command: VpsWorkingSetReleaseCommand) -> VpsWorkingSetReleaseResult",
+    "accept_source_upload_handler": "(request: Request, handoff_id: str, handoff_secret: str, csrf_token: str, file: UploadFile) -> SourceCustodyResult",
+    "serve_source_download_handler": "(request: Request, card_id: str, source_id: str) -> StreamingResponse",
+    "observe_sync_compatibility_handler": "(request: Request, payload: SyncCompatibilityRequest) -> LocalBackendConnectionObservation",
+    "discover_invoice_work_handler": "(request: Request, query: InvoiceWorkDiscoveryQuery) -> InvoiceWorkPage",
+    "pull_invoice_package_handler": "(request: Request, command: InvoicePackagePullCommand) -> StreamingResponse",
+    "record_invoice_transfer_receipt_handler": "(request: Request, issuance_id: str, receipt: InvoiceTransferReceipt) -> InvoiceTransferReceiptResult",
+    "reconcile_invoice_transfer_handler": "(request: Request, payload: InvoiceTransferReconciliationRequest) -> InvoiceTransferReconciliation",
+    "publish_registry_catalogue_handler": "(request: Request, delivery: RegistryCatalogueDelivery) -> VpsCatalogueAcknowledgement",
+    "get_current_registry_catalogue_handler": "(request: Request) -> RegistryCatalogueView",
+    "create_app": "(capability_policy: CapabilityPolicy, chatgpt_interaction: ChatGptInteractionService, access_control: AccessControlService, card_workspace: CardWorkspace, invoice_workspace: InvoiceWorkspace, project_workspace: ProjectWorkspace, effect_journal: EffectJournal, source_custody: SourceCustodyService, web_gateway: WebGateway, sync_gateway: SyncGateway, invoice_exchange: InvoiceExchange, registry_replica: RegistryReplicaService, runtime_control: RuntimeControl) -> FastAPI",
+    "extract_plugin_credential": "(request: Request) -> str",
+    "extract_browser_principal": "(request: Request) -> str",
+    "extract_local_node_credential": "(request: Request) -> str",
+    "resolve_plugin_principal": "(access_control: AccessControlService, credential: str) -> AuthenticatedPrincipal",
+    "resolve_browser_principal": "(access_control: AccessControlService, principal_assertion: str) -> AuthenticatedPrincipal",
+    "resolve_local_node_principal": "(access_control: AccessControlService, credential: str) -> CabinetNodeIdentity",
+    "CapabilityPolicy.__init__": "(self) -> None",
+    "AccessControlService.__init__": "(self, unit_of_work_factory: CabinetUnitOfWorkFactory, credential_pepper: str) -> None",
+    "CardWorkspace.__init__": "(self, unit_of_work_factory: CabinetUnitOfWorkFactory) -> None",
+    "ChatGptInteractionService.__init__": "(self, card_workspace: CardWorkspace, invoice_workspace: InvoiceWorkspace, project_workspace: ProjectWorkspace, effect_journal: EffectJournal, source_custody: SourceCustodyService) -> None",
+    "EffectJournal.__init__": "(self, unit_of_work_factory: CabinetUnitOfWorkFactory) -> None",
+    "InvoiceExchange.__init__": "(self, unit_of_work_factory: CabinetUnitOfWorkFactory, card_workspace: CardWorkspace, source_custody: SourceCustodyService) -> None",
+    "InvoiceWorkspace.__init__": "(self, unit_of_work_factory: CabinetUnitOfWorkFactory, card_workspace: CardWorkspace) -> None",
+    "ProjectWorkspace.__init__": "(self, unit_of_work_factory: CabinetUnitOfWorkFactory, card_workspace: CardWorkspace) -> None",
+    "RegistryReplicaService.__init__": "(self, unit_of_work_factory: CabinetUnitOfWorkFactory) -> None",
+    "RuntimeControl.__init__": "(self, unit_of_work_factory: CabinetUnitOfWorkFactory, source_byte_store: SourceByteStore) -> None",
+    "SourceCustodyService.__init__": "(self, unit_of_work_factory: CabinetUnitOfWorkFactory, source_byte_store: SourceByteStore) -> None",
+    "SyncGateway.__init__": "(self, access_control: AccessControlService, invoice_exchange: InvoiceExchange, registry_replica: RegistryReplicaService) -> None",
+    "WebGateway.__init__": "(self, access_control: AccessControlService, source_custody: SourceCustodyService) -> None",
+    "BinaryUpload.read_chunk": "(self, max_bytes: int) -> bytes",
+    "SourceDownload.read_chunk": "(self, max_bytes: int) -> bytes",
+    "InvoicePackageStream.read_chunk": "(self, max_bytes: int) -> bytes",
+    "_source_download_response": "(download: SourceDownload) -> Response",
+    "_invoice_package_response": "(package: InvoicePackageStream) -> Response",
+    "LocalFilesystemSourceByteStore.__init__": "(self, root_path: str) -> None",
+    "LocalFilesystemSourceByteStore.final_reference_for": "(self, expected_hash: str) -> str",
+    "LocalFilesystemSourceByteStore.stage": "(self, publication_id: str, content: bytes, expected_hash: str, expected_size: int) -> str",
+    "LocalFilesystemSourceByteStore.verify": "(self, storage_reference: str, expected_hash: str, expected_size: int) -> bool",
+    "LocalFilesystemSourceByteStore.publish": "(self, staging_reference: str, final_reference: str, expected_hash: str, expected_size: int) -> None",
+    "LocalFilesystemSourceByteStore.remove_staging": "(self, staging_reference: str) -> None",
+    "SourceByteStore.final_reference_for": "(self, expected_hash: str) -> str",
+    "SourceByteStore.stage": "(self, publication_id: str, content: bytes, expected_hash: str, expected_size: int) -> str",
+    "SourceByteStore.verify": "(self, storage_reference: str, expected_hash: str, expected_size: int) -> bool",
+    "SourceByteStore.publish": "(self, staging_reference: str, final_reference: str, expected_hash: str, expected_size: int) -> None",
+    "SourceByteStore.remove_staging": "(self, staging_reference: str) -> None",
+    "CabinetUnitOfWork.begin": "(self) -> None",
+    "CabinetUnitOfWork.commit": "(self) -> None",
+    "CabinetUnitOfWork.rollback": "(self) -> None",
+    "PostgresCabinetUnitOfWork.__init__": "(self, database_url: str) -> None",
+    "PostgresCabinetUnitOfWork.begin": "(self) -> None",
+    "PostgresCabinetUnitOfWork.commit": "(self) -> None",
+    "PostgresCabinetUnitOfWork.rollback": "(self) -> None",
+    "CabinetUnitOfWork.lock_effect": "(self, effect_id: str) -> None",
+    "CabinetUnitOfWork.load_effect": "(self, effect_id: str) -> CabinetEffect | None",
+    "CabinetUnitOfWork.load_effect_by_idempotency": "(self, principal_id: str, idempotency_key: str) -> CabinetEffect | None",
+    "CabinetUnitOfWork.insert_effect": "(self, effect: CabinetEffect) -> None",
+    "CabinetUnitOfWork.update_effect_result": "(self, effect: CabinetEffect) -> None",
+    "create_cabinet_schema": "(database_url: str) -> None",
+    "PostgresCabinetUnitOfWork.lock_effect": "(self, effect_id: str) -> None",
+    "PostgresCabinetUnitOfWork.load_effect": "(self, effect_id: str) -> CabinetEffect | None",
+    "PostgresCabinetUnitOfWork.load_effect_by_idempotency": "(self, principal_id: str, idempotency_key: str) -> CabinetEffect | None",
+    "PostgresCabinetUnitOfWork.insert_effect": "(self, effect: CabinetEffect) -> None",
+    "PostgresCabinetUnitOfWork.update_effect_result": "(self, effect: CabinetEffect) -> None",
+    "CabinetUnitOfWorkFactory.open": "(self) -> CabinetUnitOfWork"
+  },
+  "notes": [
+    "accept_source_upload: [SECURITY_BOUNDARY] MUST accept only the authenticated browser-owner context with valid same-origin and CSRF evidence, then pass the still-bounded stream to source custody; never treat a filename, media declaration, handoff identifier, or browser control as storage-path or authorization evidence.",
+    "accept_source_upload_handler: [ORCHESTRATION] MUST read multipart UploadFile content incrementally under the 30 MiB limit, preserve only the safe display filename, verify the handoff secret without logging it, enforce CSRF before consumption, and delegate one module-owned concrete BinaryUpload adapter over the bounded UploadFile stream without buffering or interpreting the whole document; MUST NOT instantiate the BinaryUpload interface itself.",
+      "issue_upload_handoff: [BEHAVIOR] MUST under one authorization decision, verify the exact Card, logical source, and expected current revision before issuing a new 900-second single-use handoff; persist only the verifier and return the bearer value once without placing it in Card data or logs; constructs the one-time SourceUploadHandoff value at the protected source-custody boundary.",
+    "store_original_source: [PROVENANCE] MUST lock the exact handoff, identify an accepted content format from bounded bytes, stream to private candidate storage while calculating size and content hash, atomically commit immutable custody and consume the handoff, and make equal replay idempotent while rejecting conflicting bytes.",
+      "retrieve_original_source: [SECURITY_BOUNDARY] MUST resolve only the authorized Card/source pair to its immutable verified content reference, reopen a private regular file beneath the configured store, recheck integrity, and return a module-owned concrete SourceDownload stream over that verified file with no filesystem path or credential; the module constructs SourceDownload; MUST NOT instantiate the SourceDownload interface itself.",
+    "serve_source_download: [PATH_OR_ARTIFACT_POLICY] MUST return the concrete SourceDownload implementation obtained from source custody as a non-inline attachment source using an encoded safe display filename and verified media type, disable active-content interpretation, and never expose the internal storage reference in headers, body, logs, or errors; MUST NOT instantiate the SourceDownload interface itself.",
+    "authenticate_request: [SECURITY_BOUNDARY] MUST select exactly one credential verifier by channel, apply indistinguishable failure handling and the configured abuse throttle, compare protected verifiers timing-safely, and return only an active principal of the expected kind without retaining the presented secret.",
+    "authorize_capability: [BEHAVIOR] MUST re-evaluate the active principal, exact closed capability/channel pair declared by = rules.capability_catalogue.grantable, entity scope, and current lifecycle state on every call; the grant source is the exact principal, channel, scope, and capability grant provisioned at the protected operator boundary; return a scoped decision or raise AuthorizationDeniedError when that exact grant is absent, without granting prefix, suffix, cross-channel, or identifier-only authority.",
+    "enroll_principal: [PROVENANCE] MUST at the protected operator boundary, create one stable principal plus one channel-bound credential atomically, return the reusable secret exactly once, and persist only its protected verifier and secret-free audit evidence; on an empty installation only the protected composition bootstrap may create the single initial owner without a pre-existing principal, while every later enrollment MUST require an active owner or operator actor.",
+    "provision_capability_grant: [SECURITY_BOUNDARY] MUST be callable only from the protected composition/operator boundary, re-authenticate an active owner or operator grantor, require an active target principal, validate the exact capability/channel pair against = rules.capability_catalogue.grantable, and atomically persist the exact target/channel/capability/entity-scope grant; exact replay MUST return created false without broadening authority, while protected-operator, unknown, affix-confused, cross-channel, inactive, or unauthorized requests MUST leave grant state unchanged; composition and verification MUST NOT inspect or mutate private grant storage.",
+    "rotate_credential: [SECURITY_BOUNDARY] MUST lock the principal and active credential set, issue the replacement, activate it and revoke the prior credential in one transaction, preserve business identity, and never return or recover the old secret.",
+    "revoke_credential: [BEHAVIOR] MUST revoke only the selected active credential, make exact repeated revocation idempotent, preserve its principal and audit history, and reject any later authentication with that credential immediately.",
+    "extract_plugin_credential: [SECURITY_BOUNDARY] MUST accept only one well-formed Bearer value on the private plugin route namespace, reject missing, duplicated, oversized, or wrong-scheme headers uniformly, and never log or echo the value.",
+    "extract_local_node_credential: [SECURITY_BOUNDARY] MUST accept only one well-formed Bearer value on the synchronization route namespace, reject missing, duplicated, oversized, or wrong-scheme headers uniformly, and keep it distinct from the plugin credential scope.",
+    "extract_browser_principal: [SECURITY_BOUNDARY] MUST accept only the TrustedEdge owner assertion injected by the private nginx hop after Basic Auth; reject direct or duplicated assertions, and rely on deployment enforcement that strips the client-supplied header before injection.",
+    "resolve_plugin_principal: [SECURITY_BOUNDARY] MUST authenticate the plugin credential as the configured single owner principal and reject machine, browser, revoked, or absent identities without an anonymous fallback. Credential source precedence is the single plugin Bearer value; on any missing, ambiguous, or failed resolution it MUST raise AuthenticationRequiredError, otherwise it MUST return one AuthenticatedPrincipal.",
+    "resolve_browser_principal: [SECURITY_BOUNDARY] MUST resolve the trusted-edge assertion only to the configured active owner principal and reject every other label; this resolver never validates Basic Auth itself or accepts a public listener. Principal source precedence is the single trusted-edge assertion; on any missing, ambiguous, or failed resolution it MUST raise AuthenticationRequiredError, otherwise it MUST return one AuthenticatedPrincipal.",
+    "resolve_local_node_principal: [SECURITY_BOUNDARY] MUST authenticate the credential only as one enrolled active local_backend node supporting the reciprocal contract and reject owner, operator, revoked, incompatible, or cross-installation identities. Credential source precedence is the single local-node Bearer value; on any missing, ambiguous, or failed resolution it MUST raise AuthenticationRequiredError, otherwise it MUST return one CabinetNodeIdentity.",
+    "resolve_capability: [DETERMINISM_OR_ORDERING] MUST match the requested dotted value and channel by exact equality against = rules.capability_catalogue.grantable and exclude every entry in = rules.capability_catalogue.protected_operator, return its single semantic operation in catalogue order, and reject unknown, affix-confused, or cross-channel names without dynamic dispatch.",
+    "create_app: [DEPENDENCY_BOUNDARY] MUST preserve the application composition boundary and require all thirteen explicit module services, bind them to private application state, install only the accepted plugin, browser, and sync routers plus empty-body exception mappings, and fail startup when protected configuration or any required service is unavailable.",
+    "prepare_chatgpt_proposal: [BEHAVIOR] MUST treat conversational fields as untrusted suggestions, normalize them into the requested typed proposal, preserve missing and uncertain facts, attach exact revision and duplicate warnings, and perform no durable Card, source, effect, or synchronization mutation.",
+    "confirm_chatgpt_effect: [SECURITY_BOUNDARY] MUST verify that the owner explicitly confirmed the exact proposal digest, target revision, capability, and effect identity before expiry; any mismatch, ambiguity, decline, or stale revision produces no authorization and no mutation.",
+    "report_composite_outcome: [RETURN_SHAPE] MUST return separate typed Card, original-source custody, and local-synchronization outcomes with bounded safe codes, preserving partial or unknown states instead of collapsing them into a single success flag.",
+    "begin_effect: [BEHAVIOR] MUST reserve one principal-scoped idempotency identity before mutation, return the prior compatible reservation or committed result on replay, reject conflicting payload reuse, and preserve outcome_unknown for read-only reconciliation.",
+    "commit_effect: [PROVENANCE] MUST preserve the effect journal boundary and atomically bind the exact durable operation result and completion time to the existing effect reservation; reject absent, conflicting, or already-differently-committed effects and never rewrite prior evidence.",
+    "reconcile_effect: [BEHAVIOR] MUST read the exact reserved effect and its durable result evidence without issuing the mutation again, returning committed, rejected, or outcome_unknown truthfully and leaving all domain state unchanged.",
+    "commit_card_revision: [PROVENANCE] MUST preserve the revision effect boundary and under a Card-identity lock, require the expected current content hash, accepted type-specific validation, and immutable successor content; append the revision and move the head atomically, rejecting stale or conflicting commits without rewriting history.",
+    "search_provider_cards: [DETERMINISM_OR_ORDERING] MUST apply only the closed bounded Provider criteria, encode external text as data, order equal matches by stable Provider Card ID, cap results at the configured search limit, and perform no mutation.",
+    "list_project_cards: [DETERMINISM_OR_ORDERING] MUST return authorized canonical Project summaries in the accepted stable ordering with an opaque bounded cursor, never substituting Registry snapshots for Project Card master facts.",
+    "get_card_revision: [BEHAVIOR] MUST return only the exact Card ID, type, and content-hash revision requested for package assembly; never silently substitute the current or newer revision and report absence or type mismatch explicitly.",
+    "search_invoices: [DETERMINISM_OR_ORDERING] MUST apply only closed bounded Invoice criteria, return exact revision identities in stable date and Invoice ID order, and never change duplicate, payment, archive, or source state.",
+    "get_invoice: [BEHAVIOR] MUST return the authorized current revision only when content_hash is absent, otherwise return exactly the pinned immutable revision; include source and synchronization status as separate projections without rewriting the Card.",
+    "find_invoice_duplicates: [BEHAVIOR] MUST apply = rules.invoice_duplicate_matching to the supplied or stored Invoice and the exact candidate fields, compare only non-null comparable fields with exact normalized equality, emit one candidate per matching revision with reason codes for the matched fields, order results by the declared revision keys, and return the declared empty result when no comparable fields or matches exist; MUST never merge, archive, confirm, or choose a duplicate automatically.",
+    "prepare_invoice_draft: [BEHAVIOR] MUST normalize supplied facts into InvoiceCardV1 draft form, compute deterministic totals from explicit monetary inputs, preserve missing values and validation issues, and return a proposal without persistence.",
+    "validate_invoice: [RETURN_SHAPE] MUST return the normalized candidate, deterministic totals, structured errors and warnings, exact revision context, and duplicate signals; a model confidence value never suppresses a validation error or becomes confirmation evidence.",
+    "create_invoice_draft: [BEHAVIOR] MUST require exact capability authorization and a command bound to one idempotent effect, validate the proposed InvoiceCardV1, append the initial draft revision atomically, and return replay-safe mutation evidence without confirming it.",
+    "update_invoice_draft: [BEHAVIOR] MUST require the exact expected draft content hash, reject confirmed, archived, stale, or invalid targets, append one validated successor revision under the same Invoice ID, and preserve the predecessor unchanged.",
+      "confirm_invoice: [BEHAVIOR] MUST require exact confirmation binding for the reviewed draft revision, revalidate it under the current InvoiceCardV1 rules, append the confirmed successor atomically, construct the immutable InvoiceWorkingSetItem and InvoiceTransferManifest for the exact confirmed revision and verified source membership, and reject stale confirmation without modifying either revision.",
+    "record_invoice_payment: [PROVENANCE] MUST require the exact Invoice revision and explicit payment evidence, validate currency and transaction identity, append a successor revision plus audit provenance, and make equal replay idempotent without inferring payment from totals.",
+    "attach_invoice_source_metadata: [BEHAVIOR] MUST bind one stable logical source identity and supplied provenance to the exact Invoice revision, append a successor revision, keep byte custody pending until M14 proves storage, and never derive a storage path from metadata.",
+    "archive_invoice: [BEHAVIOR] MUST require explicit confirmation for the exact current Invoice revision, append or record the archived lifecycle transition without deleting revisions, sources, receipts, release evidence, or duplicate history, and make exact replay idempotent.",
+    "get_project_summary: [BEHAVIOR] MUST derive the summary from the exact Project Card revision, accepted estimate, shopping-list snapshots, and explicit ProjectInvoiceLinks, marking gaps and unmatched facts without mutating any source artifact.",
+    "validate_estimate: [RETURN_SHAPE] MUST return the normalized estimate proposal, deterministic net, tax, and gross totals, exact Project revision context, and structured issues; invalid or missing monetary facts remain visible and are never defaulted into acceptance.",
+    "derive_shopping_list: [DETERMINISM_OR_ORDERING] MUST from one pinned accepted estimate, derive stable item identities and ordered planned quantities and totals, preserve estimate provenance, and return a proposal without saving or merging it.",
+    "attach_project_estimate: [PROVENANCE] MUST require the exact Project revision and authorized reviewed estimate, append the immutable AcceptedEstimateSnapshot and successor Project revision atomically, and reject stale or conflicting attachment without replacing earlier snapshots.",
+    "save_shopping_list: [PROVENANCE] MUST preserve the immutable artifact effect boundary and require a reviewed derivation pinned to one Project and estimate revision, issue a new immutable ShoppingListSnapshot version with stable ordering, and never overwrite or silently merge a prior issued list.",
+    "observe_sync_compatibility: [SECURITY_BOUNDARY] MUST record a bounded observation for the authenticated local node and contract version before any package issue, returning incompatible or unavailable truthfully without probing or calling into the local network.",
+    "serve_sync_request: [SECURITY_BOUNDARY] MUST dispatch only the six closed synchronization capabilities for the authenticated local node, enforce metadata and timeout limits before delegation, and reject unknown operation names or generic payloads without partial protocol state.",
+    "discover_invoice_work: [DETERMINISM_OR_ORDERING] MUST snapshot only available Invoice work into a bounded M27 page ordered by Invoice ID and manifest ID, include exact Card and source hashes plus an opaque cursor, and never export Provider, Client, Project, estimate, or shopping-list data.",
+    "pull_invoice_package: [ORCHESTRATION] MUST resolve only a manifest returned by discovery, verify exactly one unchanged Card revision and every source hash and size, persist node-scoped issuance before returning a module-owned concrete InvoicePackageStream implementation over the exact metadata and binary parts, and classify any post-issuance interruption as outcome_unknown without automatic reissue; MUST NOT instantiate the InvoicePackageStream interface itself.",
+    "record_invoice_transfer_receipt: [PROVENANCE] MUST accept only the authenticated issuance node and an exact receipt whose synchronization, Invoice, manifest hash, and accepted hashes match persisted issuance; append it once and reject wrong-node, malformed, conflicting, or partial acknowledgement.",
+    "reconcile_invoice_transfer: [BEHAVIOR] MUST read the exact node-scoped issuance, matching receipt, local durable-verification evidence, and conflict state, returning accepted, non-complete, conflict, or unknown without issuing another package or choosing a revision winner.",
+    "publish_registry_catalogue: [DETERMINISM_OR_ORDERING] MUST verify cabinet-web-sync-v1, nodes, idempotency, declared count, project_id ordering, monotonic observation, and SHA-256 canonical UTF-8 JSON before atomically committing the complete replica and current selector; partial or older delivery leaves current unchanged.",
+    "get_current_registry_catalogue: [RETURN_SHAPE] MUST return the last complete accepted Registry replica, exact catalogue identity and hash, ordered project snapshots, freshness and last-publication evidence; stale or offline is explicit and never rewrites Project Cards.",
+    "release_vps_working_set: [SECURITY_BOUNDARY] MUST require exact owner confirmation plus accepted or already-accepted receipt for the manifest, exact Card and all source hashes, accepted durable verification with evidence ID, and equality of required, verified, and manifest source IDs before releasing only eligible bytes and preserving all logical evidence.",
+    "evaluate_readiness: [BEHAVIOR] MUST report ready only when protected configuration, durable state, credential verifiers, private listener assumptions, contract compatibility, backup evidence, and required module dependencies are available; expose bounded component status without secrets.",
+    "verify_backup_restore: [ORCHESTRATION] MUST select one protected backup, restore it into an isolated disposable location, verify exact Card revisions, source hashes and relationships, effects, transfer, Registry and release evidence, record the drill result, and never replace live state with the test restore.",
+    "search_provider_cards_handler: [ORCHESTRATION] MUST preserve the closed effect boundary, use only the authentication, dependency wiring, canonical operation, request projection, response projection, and error mapping fixed for this handler by http_router_backend/v1, and return exactly that closed response shape without adding business policy or dynamic dispatch.",
+    "list_project_cards_handler: [ORCHESTRATION] MUST preserve the closed effect boundary, use only the authentication, dependency wiring, canonical operation, request projection, response projection, and error mapping fixed for this handler by http_router_backend/v1, and return exactly that closed response shape without adding business policy or dynamic dispatch.",
+    "search_invoices_handler: [ORCHESTRATION] MUST preserve the closed effect boundary, use only the authentication, dependency wiring, canonical operation, request projection, response projection, and error mapping fixed for this handler by http_router_backend/v1, and return exactly that closed response shape without adding business policy or dynamic dispatch.",
+    "get_invoice_handler: [ORCHESTRATION] MUST preserve the closed effect boundary, use only the authentication, dependency wiring, canonical operation, request projection, response projection, and error mapping fixed for this handler by http_router_backend/v1, and return exactly that closed response shape without adding business policy or dynamic dispatch.",
+    "find_invoice_duplicates_handler: [ORCHESTRATION] MUST preserve the closed effect boundary, use only the authentication, dependency wiring, canonical operation, request projection, response projection, and error mapping fixed for this handler by http_router_backend/v1, and return exactly that closed response shape without adding business policy or dynamic dispatch.",
+    "prepare_invoice_draft_handler: [ORCHESTRATION] MUST preserve the closed effect boundary, use only the authentication, dependency wiring, canonical operation, request projection, response projection, and error mapping fixed for this handler by http_router_backend/v1, and return exactly that closed response shape without adding business policy or dynamic dispatch.",
+    "validate_invoice_handler: [ORCHESTRATION] MUST preserve the closed effect boundary, use only the authentication, dependency wiring, canonical operation, request projection, response projection, and error mapping fixed for this handler by http_router_backend/v1, and return exactly that closed response shape without adding business policy or dynamic dispatch.",
+    "create_invoice_draft_handler: [ORCHESTRATION] MUST preserve the closed effect boundary, use only the authentication, dependency wiring, canonical operation, request projection, response projection, and error mapping fixed for this handler by http_router_backend/v1, and return exactly that closed response shape without adding business policy or dynamic dispatch.",
+    "update_invoice_draft_handler: [ORCHESTRATION] MUST preserve the closed effect boundary, use only the authentication, dependency wiring, canonical operation, request projection, response projection, and error mapping fixed for this handler by http_router_backend/v1, and return exactly that closed response shape without adding business policy or dynamic dispatch.",
+    "confirm_invoice_handler: [ORCHESTRATION] MUST preserve the closed effect boundary, use only the authentication, dependency wiring, canonical operation, request projection, response projection, and error mapping fixed for this handler by http_router_backend/v1, and return exactly that closed response shape without adding business policy or dynamic dispatch.",
+    "record_invoice_payment_handler: [ORCHESTRATION] MUST preserve the closed effect boundary, use only the authentication, dependency wiring, canonical operation, request projection, response projection, and error mapping fixed for this handler by http_router_backend/v1, and return exactly that closed response shape without adding business policy or dynamic dispatch.",
+    "attach_invoice_source_metadata_handler: [ORCHESTRATION] MUST preserve the closed effect boundary, use only the authentication, dependency wiring, canonical operation, request projection, response projection, and error mapping fixed for this handler by http_router_backend/v1, and return exactly that closed response shape without adding business policy or dynamic dispatch.",
+    "archive_invoice_handler: [ORCHESTRATION] MUST preserve the closed effect boundary, use only the authentication, dependency wiring, canonical operation, request projection, response projection, and error mapping fixed for this handler by http_router_backend/v1, and return exactly that closed response shape without adding business policy or dynamic dispatch.",
+    "get_project_summary_handler: [ORCHESTRATION] MUST preserve the closed effect boundary, use only the authentication, dependency wiring, canonical operation, request projection, response projection, and error mapping fixed for this handler by http_router_backend/v1, and return exactly that closed response shape without adding business policy or dynamic dispatch.",
+    "validate_estimate_handler: [ORCHESTRATION] MUST preserve the closed effect boundary, use only the authentication, dependency wiring, canonical operation, request projection, response projection, and error mapping fixed for this handler by http_router_backend/v1, and return exactly that closed response shape without adding business policy or dynamic dispatch.",
+    "derive_shopping_list_handler: [ORCHESTRATION] MUST preserve the closed effect boundary, use only the authentication, dependency wiring, canonical operation, request projection, response projection, and error mapping fixed for this handler by http_router_backend/v1, and return exactly that closed response shape without adding business policy or dynamic dispatch.",
+    "attach_project_estimate_handler: [ORCHESTRATION] MUST preserve the closed effect boundary, use only the authentication, dependency wiring, canonical operation, request projection, response projection, and error mapping fixed for this handler by http_router_backend/v1, and return exactly that closed response shape without adding business policy or dynamic dispatch.",
+    "save_shopping_list_handler: [ORCHESTRATION] MUST preserve the closed effect boundary, use only the authentication, dependency wiring, canonical operation, request projection, response projection, and error mapping fixed for this handler by http_router_backend/v1, and return exactly that closed response shape without adding business policy or dynamic dispatch.",
+    "issue_upload_handoff_handler: [ORCHESTRATION] MUST preserve the closed effect boundary, use only the authentication, dependency wiring, canonical operation, request projection, response projection, and error mapping fixed for this handler by http_router_backend/v1, and return exactly that closed response shape without adding business policy or dynamic dispatch.",
+    "release_vps_working_set_handler: [ORCHESTRATION] MUST preserve the closed effect boundary, use only the authentication, dependency wiring, canonical operation, request projection, response projection, and error mapping fixed for this handler by http_router_backend/v1, and return exactly that closed response shape without adding business policy or dynamic dispatch.",
+    "serve_source_download_handler: [ORCHESTRATION] MUST preserve the closed effect boundary, use only the authentication, dependency wiring, canonical operation, request projection, response projection, and error mapping fixed for this handler by http_router_backend/v1, and return exactly that closed response shape without adding business policy or dynamic dispatch.",
+    "observe_sync_compatibility_handler: [ORCHESTRATION] MUST preserve the closed effect boundary, use only the authentication, dependency wiring, canonical operation, request projection, response projection, and error mapping fixed for this handler by http_router_backend/v1, and return exactly that closed response shape without adding business policy or dynamic dispatch.",
+    "discover_invoice_work_handler: [ORCHESTRATION] MUST preserve the closed effect boundary, use only the authentication, dependency wiring, canonical operation, request projection, response projection, and error mapping fixed for this handler by http_router_backend/v1, and return exactly that closed response shape without adding business policy or dynamic dispatch.",
+    "pull_invoice_package_handler: [ORCHESTRATION] MUST preserve the closed effect boundary, use only the authentication, dependency wiring, canonical operation, request projection, response projection, and error mapping fixed for this handler by http_router_backend/v1, and return exactly that closed response shape without adding business policy or dynamic dispatch.",
+    "record_invoice_transfer_receipt_handler: [ORCHESTRATION] MUST preserve the closed effect boundary, use only the authentication, dependency wiring, canonical operation, request projection, response projection, and error mapping fixed for this handler by http_router_backend/v1, and return exactly that closed response shape without adding business policy or dynamic dispatch.",
+    "reconcile_invoice_transfer_handler: [ORCHESTRATION] MUST preserve the closed effect boundary, use only the authentication, dependency wiring, canonical operation, request projection, response projection, and error mapping fixed for this handler by http_router_backend/v1, and return exactly that closed response shape without adding business policy or dynamic dispatch.",
+    "publish_registry_catalogue_handler: [ORCHESTRATION] MUST preserve the closed effect boundary, use only the authentication, dependency wiring, canonical operation, request projection, response projection, and error mapping fixed for this handler by http_router_backend/v1, and return exactly that closed response shape without adding business policy or dynamic dispatch.",
+    "get_current_registry_catalogue_handler: [ORCHESTRATION] MUST preserve the closed effect boundary, use only the authentication, dependency wiring, canonical operation, request projection, response projection, and error mapping fixed for this handler by http_router_backend/v1, and return exactly that closed response shape without adding business policy or dynamic dispatch.",
+    "commit_card_revision: [BEHAVIOR] MUST commit exactly one validated successor or return an explicit stale or conflict failure without a partial mutation.",
+    "save_shopping_list: [BEHAVIOR] MUST issue exactly one immutable snapshot or return an explicit stale or validation failure without a partial mutation.",
+    "commit_effect: [BEHAVIOR] MUST commit exactly one matching reserved effect result or return an explicit conflict without rewriting prior evidence.",
+    "create_app: [ORCHESTRATION] MUST construct and return exactly one FastAPI application from the thirteen required services or fail startup before serving requests.",
+    "resolve_plugin_principal: [RETURN_SHAPE] MUST return one AuthenticatedPrincipal for the single accepted plugin credential and never return an anonymous or partial principal.",
+    "resolve_browser_principal: [RETURN_SHAPE] MUST return one AuthenticatedPrincipal for the single accepted trusted-edge assertion and never return an anonymous or partial principal.",
+    "resolve_local_node_principal: [RETURN_SHAPE] MUST return one CabinetNodeIdentity for the single accepted local-node credential and never return an owner, anonymous, or partial identity.",
+    "CapabilityPolicy.__init__: [DEPENDENCY_BOUNDARY] MUST initialize only the immutable closed capability catalogue and MUST NOT load credentials, persistence, or dynamic operation names.",
+    "AccessControlService.__init__: [SECURITY_BOUNDARY] MUST retain the supplied per-operation CabinetUnitOfWork factory and protected credential pepper without retaining plaintext presented credentials; MUST NOT receive a database URL, share an active transaction, construct adapters, or read environment variables.",
+    "CardWorkspace.__init__: [DEPENDENCY_BOUNDARY] MUST retain the supplied per-operation CabinetUnitOfWork factory for durable Card revision state and initialize no transport, credential policy, database connection, or environment reader.",
+    "ChatGptInteractionService.__init__: [DEPENDENCY_BOUNDARY] MUST retain only the five explicit application services required for proposal, confirmation, and composite outcomes, with no generic dispatcher.",
+    "EffectJournal.__init__: [DEPENDENCY_BOUNDARY] MUST retain the supplied per-operation CabinetUnitOfWork factory and MUST NOT receive a database URL, share an active transaction, construct adapters, or read environment variables.",
+    "InvoiceExchange.__init__: [DEPENDENCY_BOUNDARY] MUST retain the per-operation CabinetUnitOfWork factory, exact Card workspace, and source custody without receiving a database URL or creating an outbound VPS connector.",
+    "InvoiceWorkspace.__init__: [DEPENDENCY_BOUNDARY] MUST retain the per-operation CabinetUnitOfWork factory and canonical Card workspace without receiving a database URL or owning source bytes or transport.",
+    "ProjectWorkspace.__init__: [DEPENDENCY_BOUNDARY] MUST retain the per-operation CabinetUnitOfWork factory and canonical Card workspace without receiving a database URL or importing Registry master authority.",
+    "RegistryReplicaService.__init__: [DEPENDENCY_BOUNDARY] MUST retain the per-operation CabinetUnitOfWork factory for received Registry replica state and never receive a database URL or mutable Registry master connection.",
+    "RuntimeControl.__init__: [DEPENDENCY_BOUNDARY] MUST retain the per-operation CabinetUnitOfWork factory and SourceByteStore port for readiness and recovery verification without receiving or exposing database URLs or filesystem roots.",
+    "SourceCustodyService.__init__: [SECURITY_BOUNDARY] MUST retain the per-operation CabinetUnitOfWork factory and SourceByteStore port; MUST NOT receive a database URL or filesystem root, construct adapters, or read environment variables.",
+    "SyncGateway.__init__: [DEPENDENCY_BOUNDARY] MUST retain only access control, invoice exchange, and Registry replica services for the six closed local-initiated synchronization capabilities.",
+    "WebGateway.__init__: [DEPENDENCY_BOUNDARY] MUST retain only access control and source custody for the protected browser upload and download boundary.",
+    "BinaryUpload.read_chunk: [SECURITY_BOUNDARY] MUST return at most max_bytes from the presented upload stream, return empty bytes only at exhaustion, and never expose a filesystem path.",
+    "SourceDownload.read_chunk: [SECURITY_BOUNDARY] MUST return at most max_bytes from the integrity-verified private source, return empty bytes only at exhaustion, and never expose its storage reference.",
+    "InvoicePackageStream.read_chunk: [SECURITY_BOUNDARY] MUST return at most max_bytes from the already-issued exact package stream, return empty bytes only at exhaustion, and never reissue the package after interruption.",
+    "_source_download_response: [SECURITY_BOUNDARY] MUST return a streaming HTTP response that reads only the authorized SourceDownload, preserves its declared media metadata, and never exposes a storage path or reference.",
+    "_invoice_package_response: [SECURITY_BOUNDARY] MUST return a streaming HTTP attachment response that reads only the already-issued InvoicePackageStream and never regenerates, buffers into JSON, or exposes a storage reference.",
+    "LocalFilesystemSourceByteStore.__init__: [SECURITY_BOUNDARY] MUST require one absolute non-symlink private directory, create confined staging and final subdirectories with owner-only permissions, verify they share one filesystem, and fail construction without serving traffic when confinement or atomic rename cannot be guaranteed; MUST NOT read environment variables or log the root.",
+    "LocalFilesystemSourceByteStore.final_reference_for: [DETERMINISM_OR_ORDERING] MUST accept only one lowercase 64-hex SHA-256 value and return the unique opaque content-addressed reference beneath the final namespace; MUST NOT accept separators, relative components, or caller filenames.",
+    "LocalFilesystemSourceByteStore.stage: [SECURITY_BOUNDARY] MUST create one exclusive owner-only staging file for publication_id, write exactly content, flush file and parent directory, reopen without following symlinks, verify expected_size and SHA-256, and return only an opaque confined staging reference; mismatch removes the candidate and fails without publication.",
+    "LocalFilesystemSourceByteStore.verify: [SECURITY_BOUNDARY] MUST resolve only a canonical opaque staging or final reference beneath the configured root, reject symlinks and non-regular files, reopen and stream-hash it, and return true only for the exact expected size and SHA-256 without exposing a path.",
+    "LocalFilesystemSourceByteStore.publish: [PROVENANCE] MUST reverify the candidate, require the caller-supplied final reference to equal final_reference_for(expected_hash), atomically rename within the same filesystem without replacing different bytes, flush the final parent, and make an already-present equal verified final idempotent.",
+    "LocalFilesystemSourceByteStore.remove_staging: [FALLBACK] MUST remove only a canonical confined staging regular file, treat absence as idempotent success, reject final references, symlinks, directories, and escapes, and preserve the original application failure when used for compensation.",
+    "SourceByteStore.final_reference_for: [DEPENDENCY_BOUNDARY] MUST expose only deterministic opaque content-addressed reference derivation and no physical path.",
+    "SourceByteStore.stage: [DEPENDENCY_BOUNDARY] MUST expose one verified private staging operation for exact bytes, size, and SHA-256.",
+    "SourceByteStore.verify: [DEPENDENCY_BOUNDARY] MUST expose one confined exact byte-integrity predicate without storage details.",
+    "SourceByteStore.publish: [DEPENDENCY_BOUNDARY] MUST expose one verified same-filesystem atomic publication operation and no custody policy.",
+    "SourceByteStore.remove_staging: [DEPENDENCY_BOUNDARY] MUST expose only bounded compensation of an uncommitted staging reference.",
+    "CabinetUnitOfWork.begin: [DEPENDENCY_BOUNDARY] MUST start one explicit operation-scoped metadata transaction and reject a nested active transaction.",
+    "CabinetUnitOfWork.commit: [DEPENDENCY_BOUNDARY] MUST commit exactly the active metadata transaction once and release its connection.",
+    "CabinetUnitOfWork.rollback: [FALLBACK] MUST roll back the active metadata transaction idempotently, release its connection, and preserve the original application failure.",
+    "PostgresCabinetUnitOfWork.__init__: [SECURITY_BOUNDARY] MUST bind only the supplied PostgreSQL URL, validate connectivity and schema compatibility, treat it as secret, and never read environment variables or log credentials.",
+    "PostgresCabinetUnitOfWork.begin: [DEPENDENCY_BOUNDARY] MUST open one PostgreSQL transaction for the exact application operation and reject nested begin.",
+    "PostgresCabinetUnitOfWork.commit: [BEHAVIOR] MUST commit the active PostgreSQL transaction exactly once and release its connection without exposing partial state.",
+    "PostgresCabinetUnitOfWork.rollback: [FALLBACK] MUST roll back idempotently, release the connection, and preserve the original application failure.",
+    "CabinetUnitOfWork.lock_effect: [DEPENDENCY_BOUNDARY] MUST serialize the exact effect identity inside the active transaction before mutable state is read.",
+    "CabinetUnitOfWork.load_effect: [DEPENDENCY_BOUNDARY] MUST return only the exact persisted effect or None.",
+    "CabinetUnitOfWork.load_effect_by_idempotency: [DEPENDENCY_BOUNDARY] MUST return only the effect bound to the exact principal and idempotency key or None and reject duplicate persisted matches.",
+    "CabinetUnitOfWork.insert_effect: [DEPENDENCY_BOUNDARY] MUST append one effect reservation without replacement inside the active transaction.",
+    "CabinetUnitOfWork.update_effect_result: [DEPENDENCY_BOUNDARY] MUST update only completion state and result fields of the exact existing effect.",
+    "create_cabinet_schema: [SECURITY_BOUNDARY] MUST apply only the closed monotonic PostgreSQL schema before traffic, fail on incompatible schema or connection, treat database_url as secret, and never drop accepted evidence.",
+    "PostgresCabinetUnitOfWork.lock_effect: [BEHAVIOR] MUST acquire a transaction-scoped PostgreSQL advisory lock for the exact effect_id before effect state is read or changed.",
+    "PostgresCabinetUnitOfWork.load_effect: [BEHAVIOR] MUST return the exact CabinetEffect row or None without synthesizing defaults.",
+    "PostgresCabinetUnitOfWork.load_effect_by_idempotency: [BEHAVIOR] MUST return the unique row for principal_id and idempotency_key or None and treat multiple rows as storage failure.",
+    "PostgresCabinetUnitOfWork.insert_effect: [PROVENANCE] MUST append one complete CabinetEffect reservation; duplicate effect identity or principal-scoped idempotency identity fails without replacement.",
+    "PostgresCabinetUnitOfWork.update_effect_result: [PROVENANCE] MUST update status, result_revision, safe_error_code, and completed_at for the exact existing effect, require an existing row, and never change request identity or creation evidence.",
+    "CabinetUnitOfWorkFactory.open: [DEPENDENCY_BOUNDARY] MUST return one fresh inactive CabinetUnitOfWork for exactly one application operation; callers begin, commit or roll it back and never share it with another request."
+  ],
+  "models": {
+    "ActorReference": {
+      "identity": "value",
+      "fields": {
+        "actor_type": "str",
+        "principal_id": "str",
+        "channel": "str",
+        "interaction_id": "str | None",
+        "display_label": "str | None"
+      }
+    },
+    "CabinetPrincipal": {
+      "identity": "entity",
+      "fields": {
+        "principal_id": "str",
+        "principal_kind": "str",
+        "status": "str",
+        "created_at": "datetime",
+        "revoked_at": "datetime | None"
+      }
+    },
+    "CardRevisionReference": {
+      "identity": "value",
+      "fields": {
+        "card_id": "str",
+        "card_type": "str",
+        "content_hash": "str",
+        "card_format_version": "int | None",
+        "observed_status": "str",
+        "observed_at": "datetime"
+      }
+    },
+    "ValidationIssue": {
+      "identity": "value",
+      "fields": {
+        "severity": "str",
+        "code": "str",
+        "field_path": "str | None",
+        "message": "str",
+        "expected": "str | None",
+        "actual": "str | None"
+      }
+    },
+    "CardSource": {
+      "identity": "entity",
+      "fields": {
+        "card_id": "str",
+        "source_id": "str",
+        "media_type": "str | None",
+        "file_status": "str",
+        "storage_reference": "str | None",
+        "origin_context": "dict[str, str]"
+      }
+    },
+    "SourceContentReference": {
+      "identity": "value",
+      "fields": {
+        "card_id": "str",
+        "source_id": "str",
+        "content_hash": "str",
+        "size_bytes": "int",
+        "media_type": "str",
+        "display_filename": "str | None"
+      }
+    },
+    "ProviderCard": {
+      "identity": "entity",
+      "fields": {
+        "id": "str",
+        "card_type": "str",
+        "title": "str",
+        "status": "str",
+        "contacts": "tuple[dict[str, str], ...]",
+        "services": "tuple[str, ...]",
+        "service_areas": "tuple[str, ...]",
+        "languages": "tuple[dict[str, str], ...]",
+        "notes": "tuple[str, ...]",
+        "sources": "tuple[CardSource, ...]"
+      }
+    },
+    "ClientCard": {
+      "identity": "entity",
+      "fields": {
+        "id": "str",
+        "card_type": "str",
+        "title": "str",
+        "status": "str",
+        "tax_id": "str | None",
+        "country": "str | None",
+        "contacts": "tuple[dict[str, str], ...]",
+        "contact_people": "tuple[dict[str, str], ...]",
+        "project_ids": "tuple[str, ...]",
+        "notes": "tuple[str, ...]",
+        "sources": "tuple[CardSource, ...]"
+      }
+    },
+    "ProjectCard": {
+      "identity": "entity",
+      "fields": {
+        "id": "str",
+        "card_type": "str",
+        "title": "str",
+        "status": "str",
+        "client_id": "str | None",
+        "contact_people": "tuple[dict[str, str], ...]",
+        "object_name": "str | None",
+        "object_address": "str | None",
+        "currency": "str",
+        "scope": "str | None",
+        "accepted_estimate": "AcceptedEstimateSnapshot | None",
+        "invoice_links": "tuple[ProjectInvoiceLink, ...]",
+        "shopping_lists": "tuple[ShoppingListSnapshot, ...]",
+        "notes": "tuple[str, ...]",
+        "sources": "tuple[CardSource, ...]"
+      }
+    },
+    "InvoiceCardV1": {
+      "identity": "entity",
+      "fields": {
+        "card_type": "str",
+        "card_version": "int",
+        "id": "str",
+        "status": "str",
+        "invoice_number": "str | None",
+        "issue_date": "date | None",
+        "due_date": "date | None",
+        "currency": "str",
+        "supplier": "dict[str, str | None]",
+        "buyer": "dict[str, str | None]",
+        "object_context": "dict[str, str | None]",
+        "lines": "tuple[InvoiceCardLine, ...]",
+        "totals": "dict[str, Decimal]",
+        "payment": "InvoicePayment",
+        "source": "CardSource",
+        "created_by": "ActorReference",
+        "confirmed_by": "ActorReference | None"
+      }
+    },
+    "AcceptedEstimateSnapshot": {
+      "identity": "entity",
+      "fields": {
+        "estimate_id": "str",
+        "version": "int",
+        "project_id": "str",
+        "status": "str",
+        "currency": "str",
+        "sections": "tuple[EstimateSection, ...]",
+        "net_total": "Decimal",
+        "tax_total": "Decimal",
+        "gross_total": "Decimal",
+        "issued_at": "datetime",
+        "accepted_at": "datetime"
+      }
+    },
+    "ShoppingListSnapshot": {
+      "identity": "entity",
+      "fields": {
+        "id": "str",
+        "version": "int",
+        "project_id": "str",
+        "estimate_id": "str",
+        "status": "str",
+        "currency": "str",
+        "created_at": "datetime",
+        "source_status": "str",
+        "items": "tuple[ShoppingListItem, ...]",
+        "net_total": "Decimal",
+        "tax_total": "Decimal",
+        "gross_total": "Decimal"
+      }
+    },
+    "ProjectInvoiceLink": {
+      "identity": "entity",
+      "fields": {
+        "link_id": "str",
+        "schema_version": "int",
+        "project_revision": "CardRevisionReference",
+        "invoice_revision": "CardRevisionReference",
+        "line_matches": "tuple[ProjectInvoiceLineMatch, ...]",
+        "decided_by": "ActorReference",
+        "decided_at": "datetime"
+      }
+    },
+    "SourceCustodyRecord": {
+      "identity": "entity",
+      "fields": {
+        "card_id": "str",
+        "source_id": "str",
+        "content": "SourceContentReference | None",
+        "custody_status": "str",
+        "accepted_at": "datetime | None",
+        "rejected_at": "datetime | None",
+        "released_at": "datetime | None",
+        "rejection_reason": "str | None",
+        "actor": "ActorReference"
+      }
+    },
+    "SourceUploadHandoff": {
+      "identity": "entity",
+      "fields": {
+        "handoff_id": "str",
+        "card_id": "str",
+        "source_id": "str",
+        "expected_revision": "CardRevisionReference",
+        "principal_id": "str",
+        "actor": "ActorReference",
+        "status": "str",
+        "issued_at": "datetime",
+        "expires_at": "datetime",
+        "consumed_at": "datetime | None",
+        "revoked_at": "datetime | None"
+      }
+    },
+    "CabinetEffect": {
+      "identity": "entity",
+      "fields": {
+        "effect_id": "str",
+        "idempotency_key": "str",
+        "operation_kind": "str",
+        "principal_id": "str",
+        "actor": "ActorReference",
+        "target_identity": "str | None",
+        "expected_revision": "CardRevisionReference | None",
+        "request_hash": "str",
+        "status": "str",
+        "result_revision": "CardRevisionReference | None",
+        "safe_error_code": "str | None",
+        "created_at": "datetime",
+        "completed_at": "datetime | None"
+      }
+    },
+    "CabinetNodeIdentity": {
+      "identity": "entity",
+      "fields": {
+        "node_id": "str",
+        "node_kind": "str",
+        "status": "str",
+        "contract_version": "str",
+        "created_at": "datetime",
+        "revoked_at": "datetime | None"
+      }
+    },
+    "RegistryProjectSnapshot": {
+      "identity": "entity",
+      "fields": {
+        "snapshot_id": "str",
+        "project_id": "str",
+        "display_name": "str",
+        "address": "str | None",
+        "status": "str",
+        "customer_reference": "str | None",
+        "registry_version": "str | None",
+        "content_hash": "str",
+        "registry_updated_at": "datetime | None",
+        "captured_at": "datetime",
+        "contract_version": "str"
+      }
+    },
+    "RegistryCatalogueSnapshot": {
+      "identity": "entity",
+      "fields": {
+        "catalogue_id": "str",
+        "generated_at": "datetime",
+        "source_node_id": "str",
+        "registry_observed_at": "datetime",
+        "contract_version": "str",
+        "content_hash": "str",
+        "projects": "tuple[RegistryProjectSnapshot, ...]",
+        "project_count": "int",
+        "filter_description": "str | None"
+      }
+    },
+    "RegistryCatalogueReplica": {
+      "identity": "entity",
+      "fields": {
+        "catalogue_id": "str",
+        "content_hash": "str",
+        "node_id": "str",
+        "status": "str",
+        "received_at": "datetime",
+        "verified_at": "datetime | None",
+        "current_at": "datetime | None",
+        "superseded_at": "datetime | None",
+        "rejected_at": "datetime | None",
+        "rejection_reason": "str | None"
+      }
+    },
+    "InvoiceTransferManifest": {
+      "identity": "entity",
+      "fields": {
+        "manifest_id": "str",
+        "invoice_id": "str",
+        "card_revisions": "tuple[InvoiceCardRevisionReference, ...]",
+        "source_references": "tuple[ContentReference, ...]",
+        "manifest_version": "str",
+        "generated_at": "datetime",
+        "manifest_hash": "str"
+      }
+    },
+    "InvoiceTransferIssuance": {
+      "identity": "entity",
+      "fields": {
+        "issuance_id": "str",
+        "manifest_id": "str",
+        "manifest_hash": "str",
+        "invoice_id": "str",
+        "local_node_id": "str",
+        "idempotency_key": "str",
+        "status": "str",
+        "issued_at": "datetime | None",
+        "acknowledged_at": "datetime | None",
+        "receipt_result": "str | None",
+        "safe_error_code": "str | None"
+      }
+    },
+    "InvoiceTransferReceipt": {
+      "identity": "value",
+      "fields": {
+        "synchronization_id": "str",
+        "import_id": "str | None",
+        "idempotency_key": "str",
+        "invoice_id": "str",
+        "manifest_hash": "str",
+        "result": "TransferReceiptResult",
+        "accepted_card_hashes": "tuple[str, ...]",
+        "accepted_source_hashes": "tuple[str, ...]",
+        "receipt_at": "datetime",
+        "safe_error_code": "TransferReceiptErrorCode | None"
+      }
+    },
+    "RegistryCatalogueDelivery": {
+      "identity": "value",
+      "fields": {
+        "catalogue_id": "str",
+        "projects": "tuple[RegistryProjectSnapshot, ...]",
+        "source_node_id": "str",
+        "target_node_id": "str",
+        "idempotency_key": "str",
+        "created_at": "datetime"
+      }
+    },
+    "VpsCatalogueAcknowledgement": {
+      "identity": "value",
+      "fields": {
+        "publication_id": "str",
+        "catalogue_id": "str",
+        "status": "str",
+        "acknowledged_at": "datetime | None",
+        "safe_error_code": "str | None"
+      }
+    },
+    "InvoiceCardRevisionReference": {
+      "identity": "value",
+      "fields": {
+        "invoice_id": "str",
+        "card_version": "int",
+        "content_hash": "str",
+        "observed_status": "str",
+        "observed_at": "datetime"
+      }
+    },
+    "StoredInvoiceCardRevision": {
+      "identity": "entity",
+      "fields": {
+        "revision_id": "str",
+        "reference": "InvoiceCardRevisionReference",
+        "canonical_card": "InvoiceCardV1",
+        "received_at": "datetime",
+        "received_from_node_id": "str",
+        "received_by": "ActorReference",
+        "validation_id": "str | None",
+        "predecessor_content_hash": "str | None",
+        "superseded_by_content_hash": "str | None"
+      }
+    },
+    "SourceBinaryReplica": {
+      "identity": "entity",
+      "fields": {
+        "source_id": "str",
+        "node_id": "str",
+        "storage_zone": "str",
+        "storage_reference": "str",
+        "stored_hash": "str",
+        "verification_status": "str",
+        "stored_at": "datetime",
+        "retention_deadline": "datetime | None",
+        "deleted_at": "datetime | None"
+      }
+    },
+    "InvoiceSynchronization": {
+      "identity": "entity",
+      "fields": {
+        "synchronization_id": "str",
+        "invoice_id": "str",
+        "source_node_id": "str",
+        "target_node_id": "str",
+        "manifest_hash": "str | None",
+        "status": "str",
+        "idempotency_key": "str",
+        "started_at": "datetime",
+        "finished_at": "datetime | None",
+        "safe_error_code": "str | None"
+      }
+    },
+    "VpsInvoiceTransferPackage": {
+      "identity": "value",
+      "fields": {
+        "synchronization": "InvoiceSynchronization",
+        "manifest": "InvoiceTransferManifest",
+        "card_revision": "StoredInvoiceCardRevision",
+        "source_replicas": "tuple[SourceBinaryReplica, ...]",
+        "assignment_observation": "CardObjectAssignmentObservation | None"
+      }
+    },
+    "SynchronizationWorkSelection": {
+      "identity": "value",
+      "fields": {
+        "invoice_id": "str",
+        "manifest_id": "str",
+        "source_node_id": "str",
+        "target_node_id": "str",
+        "requested_at": "datetime"
+      }
+    },
+    "ContentReference": {
+      "identity": "value",
+      "fields": {
+        "content_id": "str",
+        "content_hash": "str",
+        "size_bytes": "int",
+        "media_type": "str",
+        "display_filename": "str | None"
+      }
+    },
+    "TransferReceiptResult": {"kind": "enum"},
+    "TransferReceiptErrorCode": {"kind": "enum"},
+    "LocalBackendConnectionObservation": {
+      "identity": "value",
+      "fields": {
+        "available": "bool",
+        "authenticated": "bool",
+        "compatible": "bool",
+        "local_node_id": "str | None",
+        "remote_contract_version": "str | None",
+        "observed_at": "datetime",
+        "last_successful_session_at": "datetime | None",
+        "safe_error_code": "str | None"
+      }
+    },
+    "InvoiceWorkingSetMembership": {
+      "identity": "value",
+      "fields": {
+        "working_set_id": "str",
+        "vps_node_id": "str",
+        "work_items": "tuple[InvoiceWorkingSetItem, ...]",
+        "observed_at": "datetime",
+        "continuation_cursor": "str | None"
+      }
+    },
+    "SynchronizationConflict": {
+      "identity": "entity",
+      "fields": {
+        "conflict_id": "str",
+        "invoice_id": "str",
+        "cabinet_web_revision": "CardRevisionReference",
+        "local_current_reference": "str",
+        "common_predecessor": "CardRevisionReference | None",
+        "reason": "str",
+        "detected_at": "datetime",
+        "status": "str",
+        "resolution_evidence": "str | None",
+        "resolved_at": "datetime | None"
+      }
+    },
+    "CardObjectAssignmentObservation": {
+      "identity": "entity",
+      "fields": {
+        "observation_id": "str",
+        "card_revision": "InvoiceCardRevisionReference",
+        "project_id": "str | None",
+        "object_label": "str | None",
+        "catalogue_id": "str | None",
+        "registry_snapshot_id": "str | None",
+        "decision_context": "AssignmentDecisionContext",
+        "observed_at": "datetime"
+      }
+    },
+    "AssignmentDecisionContext": {"kind": "enum"},
+    "InvoiceCardLine": {
+      "identity": "value",
+      "fields": {
+        "line_id": "str",
+        "description_original": "str",
+        "description_normalized": "str | None",
+        "classification": "str | None",
+        "quantity": "Decimal",
+        "unit": "str",
+        "unit_price_net": "Decimal",
+        "discount_amount": "Decimal",
+        "net_amount": "Decimal",
+        "tax_rate": "Decimal",
+        "tax_amount": "Decimal",
+        "gross_amount": "Decimal"
+      }
+    },
+    "InvoicePayment": {
+      "identity": "value",
+      "fields": {
+        "status": "str",
+        "transactions_json": "str",
+        "paid_total": "Decimal",
+        "outstanding_total": "Decimal"
+      }
+    },
+    "EstimateSection": {
+      "identity": "value",
+      "fields": {
+        "section_id": "str",
+        "title": "str",
+        "items_json": "str",
+        "net_total": "Decimal",
+        "tax_total": "Decimal",
+        "gross_total": "Decimal"
+      }
+    },
+    "ShoppingListItem": {
+      "identity": "value",
+      "fields": {
+        "item_id": "str",
+        "estimate_item_id": "str",
+        "description": "str",
+        "planned_quantity": "Decimal",
+        "unit": "str",
+        "unit_price_net": "Decimal",
+        "net_total": "Decimal",
+        "tax_total": "Decimal",
+        "gross_total": "Decimal"
+      }
+    },
+    "ProjectInvoiceLineMatch": {
+      "identity": "value",
+      "fields": {
+        "invoice_line_id": "str",
+        "estimate_item_id": "str | None",
+        "decision": "str",
+        "reason": "str | None"
+      }
+    },
+    "InvoiceWorkingSetItem": {
+      "identity": "value",
+      "fields": {
+        "invoice_id": "str",
+        "revision": "CardRevisionReference",
+        "manifest_id": "str",
+        "manifest_hash": "str",
+        "required_sources": "tuple[SourceContentReference, ...]"
+      }
+    },
+    "ArchiveInvoiceCommand": {
+      "identity": "value",
+      "fields": {
+        "invoice_id": "str",
+        "expected_revision": "CardRevisionReference",
+        "authorization": "AuthorizationDecision",
+        "confirmation": "ConfirmedEffectAuthorization",
+        "effect_id": "str"
+      }
+    },
+    "AttachInvoiceSourceCommand": {
+      "identity": "value",
+      "fields": {
+        "invoice_id": "str",
+        "expected_revision": "CardRevisionReference",
+        "source": "CardSource",
+        "authorization": "AuthorizationDecision",
+        "effect_id": "str"
+      }
+    },
+    "AttachProjectEstimateCommand": {
+      "identity": "value",
+      "fields": {
+        "project_id": "str",
+        "expected_revision": "CardRevisionReference",
+        "estimate": "EstimateValidationResult",
+        "authorization": "AuthorizationDecision",
+        "effect_id": "str"
+      }
+    },
+    "AuthenticatedPrincipal": {
+      "identity": "value",
+      "fields": {
+        "principal": "CabinetPrincipal",
+        "actor": "ActorReference",
+        "channel": "str",
+        "authenticated_at": "datetime"
+      }
+    },
+    "AuthorizationDecision": {
+      "identity": "value",
+      "fields": {
+        "allowed": "bool",
+        "principal_id": "str",
+        "capability": "str",
+        "entity_scope": "EntityScope | None",
+        "decided_at": "datetime",
+        "reason_code": "str | None"
+      }
+    },
+    "BackupRestoreVerificationReport": {
+      "identity": "value",
+      "fields": {
+        "drill_id": "str",
+        "backup_id": "str",
+        "status": "str",
+        "verified_card_revisions": "int",
+        "verified_source_hashes": "int",
+        "started_at": "datetime",
+        "completed_at": "datetime | None",
+        "safe_error_code": "str | None"
+      }
+    },
+    "BackupRestoreVerificationRequest": {
+      "identity": "value",
+      "fields": {
+        "backup_id": "str",
+        "requested_by": "ActorReference",
+        "requested_at": "datetime"
+      }
+    },
+    "BeginEffectRequest": {
+      "identity": "value",
+      "fields": {
+        "idempotency_key": "str",
+        "operation_kind": "str",
+        "principal_id": "str",
+        "actor": "ActorReference",
+        "target_identity": "str | None",
+        "expected_revision": "CardRevisionReference | None",
+        "request_hash": "str"
+      }
+    },
+    "BrowserUploadRequest": {
+      "identity": "value",
+      "fields": {
+        "handoff_id": "str",
+        "handoff_secret": "str",
+        "csrf_token": "str",
+        "display_filename": "str | None",
+        "declared_media_type": "str | None"
+      }
+    },
+    "CanonicalCardRevision": {
+      "identity": "value",
+      "fields": {
+        "reference": "CardRevisionReference",
+        "canonical_json": "str",
+        "created_by": "ActorReference",
+        "created_at": "datetime"
+      }
+    },
+    "CapabilityResolution": {
+      "identity": "value",
+      "fields": {
+        "capability": "str",
+        "operation_class": "str",
+        "channel": "str",
+        "allowed": "bool"
+      }
+    },
+    "CardRevisionCommitCommand": {
+      "identity": "value",
+      "fields": {
+        "card_id": "str",
+        "card_type": "str",
+        "expected_content_hash": "str | None",
+        "canonical_json": "str",
+        "validation_issues": "tuple[ValidationIssue, ...]",
+        "actor": "ActorReference"
+      }
+    },
+    "CardRevisionCommitResult": {
+      "identity": "value",
+      "fields": {
+        "revision": "CardRevisionReference",
+        "created": "bool",
+        "replayed": "bool"
+      }
+    },
+    "ChatGptConfirmationRequest": {
+      "identity": "value",
+      "fields": {
+        "proposal_id": "str",
+        "proposal_digest": "str",
+        "effect_id": "str",
+        "target_revision": "CardRevisionReference | None",
+        "capability": "str",
+        "confirmed": "bool",
+        "acknowledged_warning_codes": "tuple[str, ...]",
+        "confirmed_at": "datetime"
+      }
+    },
+    "ChatGptOutcomeReport": {
+      "identity": "value",
+      "fields": {
+        "interaction_id": "str",
+        "outcome": "CompositeOutcome",
+        "reported_at": "datetime"
+      }
+    },
+    "ChatGptProposal": {
+      "identity": "value",
+      "fields": {
+        "proposal_id": "str",
+        "proposal_digest": "str",
+        "capability": "str",
+        "target_revision": "CardRevisionReference | None",
+        "normalized_request": "str",
+        "issues": "tuple[ValidationIssue, ...]",
+        "expires_at": "datetime"
+      }
+    },
+    "ChatGptProposalRequest": {
+      "identity": "value",
+      "fields": {
+        "interaction_id": "str",
+        "capability": "str",
+        "target_revision": "CardRevisionReference | None",
+        "suggested_content": "str"
+      }
+    },
+    "ClosedSyncRequest": {
+      "identity": "value",
+      "fields": {
+        "operation": "str",
+        "request_id": "str",
+        "contract_version": "str",
+        "metadata_json": "str"
+      }
+    },
+    "ClosedSyncResponse": {
+      "identity": "value",
+      "fields": {
+        "request_id": "str",
+        "operation": "str",
+        "status": "str",
+        "metadata_json": "str",
+        "safe_error_code": "str | None"
+      }
+    },
+    "CompositeOutcome": {
+      "identity": "value",
+      "fields": {
+        "card_status": "str",
+        "card_revision": "CardRevisionReference | None",
+        "source_status": "str",
+        "synchronization_status": "str",
+        "safe_codes": "tuple[str, ...]"
+      }
+    },
+    "ConfirmInvoiceCommand": {
+      "identity": "value",
+      "fields": {
+        "invoice_id": "str",
+        "expected_revision": "CardRevisionReference",
+        "authorization": "AuthorizationDecision",
+        "confirmation": "ConfirmedEffectAuthorization",
+        "effect_id": "str"
+      }
+    },
+    "ConfirmedEffectAuthorization": {
+      "identity": "value",
+      "fields": {
+        "effect_id": "str",
+        "proposal_id": "str",
+        "proposal_digest": "str",
+        "capability": "str",
+        "target_revision": "CardRevisionReference | None",
+        "principal_id": "str",
+        "expires_at": "datetime"
+      }
+    },
+    "CreateInvoiceDraftCommand": {
+      "identity": "value",
+      "fields": {
+        "draft": "InvoiceDraftProposal",
+        "authorization": "AuthorizationDecision",
+        "effect_id": "str",
+        "idempotency_key": "str",
+        "actor": "ActorReference"
+      }
+    },
+    "CredentialRevocationCommand": {
+      "identity": "value",
+      "fields": {
+        "principal_id": "str",
+        "credential_id": "str",
+        "actor": "ActorReference"
+      }
+    },
+    "CredentialRevocationResult": {
+      "identity": "value",
+      "fields": {
+        "principal_id": "str",
+        "credential_id": "str",
+        "revoked": "bool",
+        "revoked_at": "datetime"
+      }
+    },
+    "CredentialRotationCommand": {
+      "identity": "value",
+      "fields": {
+        "principal_id": "str",
+        "credential_id": "str",
+        "channel": "str",
+        "actor": "ActorReference"
+      }
+    },
+    "EffectReconciliation": {
+      "identity": "value",
+      "fields": {
+        "effect": "CabinetEffect",
+        "result": "EffectResult | None",
+        "status": "str"
+      }
+    },
+    "EffectReservation": {
+      "identity": "value",
+      "fields": {
+        "effect": "CabinetEffect",
+        "replayed": "bool"
+      }
+    },
+    "EffectResult": {
+      "identity": "value",
+      "fields": {
+        "effect_id": "str",
+        "status": "str",
+        "result_revision": "CardRevisionReference | None",
+        "safe_error_code": "str | None",
+        "completed_at": "datetime"
+      }
+    },
+    "EntityScope": {
+      "identity": "value",
+      "fields": {
+        "entity_kind": "str",
+        "entity_id": "str",
+        "revision": "CardRevisionReference | None"
+      }
+    },
+    "EstimateValidationInput": {
+      "identity": "value",
+      "fields": {
+        "project_id": "str",
+        "expected_project_revision": "CardRevisionReference",
+        "estimate_id": "str",
+        "version": "int",
+        "currency": "str",
+        "canonical_json": "str"
+      }
+    },
+    "EstimateValidationResult": {
+      "identity": "value",
+      "fields": {
+        "normalized_estimate": "AcceptedEstimateSnapshot | None",
+        "net_total": "Decimal",
+        "tax_total": "Decimal",
+        "gross_total": "Decimal",
+        "issues": "tuple[ValidationIssue, ...]",
+        "project_revision": "CardRevisionReference"
+      }
+    },
+    "InvoiceCardPage": {
+      "identity": "value",
+      "fields": {
+        "items": "tuple[InvoiceCardView, ...]",
+        "next_cursor": "str | None"
+      }
+    },
+    "InvoiceCardView": {
+      "identity": "value",
+      "fields": {
+        "revision": "CardRevisionReference",
+        "invoice": "InvoiceCardV1",
+        "source_status": "str",
+        "synchronization_status": "str"
+      }
+    },
+    "InvoiceDraftInput": {
+      "identity": "value",
+      "fields": {
+        "invoice_id": "str | None",
+        "currency": "str",
+        "canonical_json": "str",
+        "source_provenance": "str | None"
+      }
+    },
+    "InvoiceDraftProposal": {
+      "identity": "value",
+      "fields": {
+        "invoice": "InvoiceCardV1",
+        "issues": "tuple[ValidationIssue, ...]",
+        "duplicate_candidates": "tuple[InvoiceDuplicateCandidate, ...]"
+      }
+    },
+    "InvoiceDuplicateCandidate": {
+      "identity": "value",
+      "fields": {
+        "invoice_revision": "CardRevisionReference",
+        "reason_codes": "tuple[str, ...]"
+      }
+    },
+    "InvoiceDuplicateCandidateInput": {
+      "identity": "value",
+      "fields": {
+        "invoice_id": "str | None",
+        "invoice_number": "str | None",
+        "supplier_tax_id": "str | None",
+        "issue_date": "date | None",
+        "gross_total": "Decimal | None"
+      }
+    },
+    "InvoiceMutationResult": {
+      "identity": "value",
+      "fields": {
+        "effect_id": "str",
+        "revision": "CardRevisionReference | None",
+        "status": "str",
+        "replayed": "bool",
+        "issues": "tuple[ValidationIssue, ...]",
+        "safe_error_code": "str | None"
+      }
+    },
+    "InvoicePackagePullCommand": {
+      "identity": "value",
+      "fields": {
+        "manifest_id": "str",
+        "idempotency_key": "str"
+      }
+    },
+    "InvoiceSearchQuery": {
+      "identity": "value",
+      "fields": {
+        "text": "str | None",
+        "status": "str | None",
+        "date_from": "date | None",
+        "date_to": "date | None",
+        "provider_id": "str | None",
+        "limit": "int",
+        "cursor": "str | None"
+      }
+    },
+    "InvoiceTransferReceiptResult": {
+      "identity": "value",
+      "fields": {
+        "issuance": "InvoiceTransferIssuance",
+        "receipt": "InvoiceTransferReceipt",
+        "recorded": "bool"
+      }
+    },
+    "InvoiceTransferReconciliation": {
+      "identity": "value",
+      "fields": {
+        "issuance": "InvoiceTransferIssuance",
+        "receipt": "InvoiceTransferReceipt | None",
+        "conflict": "SynchronizationConflict | None",
+        "status": "str",
+        "safe_error_code": "str | None"
+      }
+    },
+    "InvoiceTransferReconciliationRequest": {
+      "identity": "value",
+      "fields": {
+        "issuance_id": "str",
+        "manifest_hash": "str"
+      }
+    },
+    "InvoiceValidationInput": {
+      "identity": "value",
+      "fields": {
+        "invoice": "InvoiceCardV1",
+        "expected_revision": "CardRevisionReference | None"
+      }
+    },
+    "InvoiceValidationResult": {
+      "identity": "value",
+      "fields": {
+        "normalized_invoice": "InvoiceCardV1",
+        "issues": "tuple[ValidationIssue, ...]",
+        "duplicate_candidates": "tuple[InvoiceDuplicateCandidate, ...]",
+        "revision_context": "CardRevisionReference | None"
+      }
+    },
+    "InvoiceWorkDiscoveryQuery": {
+      "identity": "value",
+      "fields": {
+        "limit": "int",
+        "cursor": "str | None"
+      }
+    },
+    "InvoiceWorkPage": {
+      "identity": "value",
+      "fields": {
+        "membership": "InvoiceWorkingSetMembership",
+        "next_cursor": "str | None"
+      }
+    },
+    "IssuedPrincipalCredential": {
+      "identity": "value",
+      "fields": {
+        "principal": "CabinetPrincipal",
+        "credential_id": "str",
+        "channel": "str",
+        "secret": "str",
+        "issued_at": "datetime"
+      }
+    },
+    "PrincipalEnrollmentCommand": {
+      "identity": "value",
+      "fields": {
+        "principal_kind": "str",
+        "channel": "str",
+        "display_label": "str | None",
+        "actor": "ActorReference"
+      }
+    },
+    "CapabilityGrantCommand": {
+      "identity": "value",
+      "fields": {
+        "target_principal_id": "str",
+        "channel": "str",
+        "capability": "str",
+        "entity_scope": "EntityScope | None"
+      }
+    },
+    "CapabilityGrantProvisioningResult": {
+      "identity": "value",
+      "fields": {
+        "target_principal_id": "str",
+        "channel": "str",
+        "capability": "str",
+        "entity_scope": "EntityScope | None",
+        "provisioned_at": "datetime",
+        "created": "bool"
+      }
+    },
+    "ProjectCardPage": {
+      "identity": "value",
+      "fields": {
+        "items": "tuple[ProjectSummary, ...]",
+        "next_cursor": "str | None"
+      }
+    },
+    "ProjectListQuery": {
+      "identity": "value",
+      "fields": {
+        "status": "str | None",
+        "client_id": "str | None",
+        "limit": "int",
+        "cursor": "str | None"
+      }
+    },
+    "ProjectMutationResult": {
+      "identity": "value",
+      "fields": {
+        "effect_id": "str",
+        "project_revision": "CardRevisionReference | None",
+        "artifact_id": "str | None",
+        "status": "str",
+        "issues": "tuple[ValidationIssue, ...]"
+      }
+    },
+    "ProjectSummary": {
+      "identity": "value",
+      "fields": {
+        "project_revision": "CardRevisionReference",
+        "project": "ProjectCard",
+        "estimate": "AcceptedEstimateSnapshot | None",
+        "shopping_lists": "tuple[ShoppingListSnapshot, ...]",
+        "invoice_links": "tuple[ProjectInvoiceLink, ...]",
+        "gap_codes": "tuple[str, ...]"
+      }
+    },
+    "ProviderCardPage": {
+      "identity": "value",
+      "fields": {
+        "items": "tuple[ProviderCard, ...]",
+        "next_cursor": "str | None"
+      }
+    },
+    "ProviderSearchQuery": {
+      "identity": "value",
+      "fields": {
+        "text": "str | None",
+        "service": "str | None",
+        "area": "str | None",
+        "language": "str | None",
+        "limit": "int",
+        "cursor": "str | None"
+      }
+    },
+    "ReadinessEvaluationRequest": {
+      "identity": "value",
+      "fields": {
+        "include_backup_evidence": "bool",
+        "observed_at": "datetime"
+      }
+    },
+    "ReadinessReport": {
+      "identity": "value",
+      "fields": {
+        "ready": "bool",
+        "component_statuses": "tuple[str, ...]",
+        "safe_error_codes": "tuple[str, ...]",
+        "observed_at": "datetime"
+      }
+    },
+    "RecordInvoicePaymentCommand": {
+      "identity": "value",
+      "fields": {
+        "invoice_id": "str",
+        "expected_revision": "CardRevisionReference",
+        "payment_json": "str",
+        "authorization": "AuthorizationDecision",
+        "effect_id": "str",
+        "actor": "ActorReference"
+      }
+    },
+    "RegistryCatalogueView": {
+      "identity": "value",
+      "fields": {
+        "catalogue": "RegistryCatalogueSnapshot | None",
+        "replica": "RegistryCatalogueReplica | None",
+        "freshness": "str",
+        "last_publication_at": "datetime | None"
+      }
+    },
+    "SaveShoppingListCommand": {
+      "identity": "value",
+      "fields": {
+        "proposal": "ShoppingListProposal",
+        "authorization": "AuthorizationDecision",
+        "effect_id": "str",
+        "actor": "ActorReference"
+      }
+    },
+    "ShoppingListDerivationRequest": {
+      "identity": "value",
+      "fields": {
+        "project_id": "str",
+        "project_revision": "CardRevisionReference",
+        "estimate_id": "str"
+      }
+    },
+    "ShoppingListProposal": {
+      "identity": "value",
+      "fields": {
+        "project_revision": "CardRevisionReference",
+        "estimate": "AcceptedEstimateSnapshot",
+        "items_json": "str",
+        "net_total": "Decimal",
+        "tax_total": "Decimal",
+        "gross_total": "Decimal"
+      }
+    },
+    "SourceCustodyResult": {
+      "identity": "value",
+      "fields": {
+        "custody": "SourceCustodyRecord",
+        "content": "SourceContentReference | None",
+        "status": "str",
+        "replayed": "bool",
+        "safe_error_code": "str | None"
+      }
+    },
+    "SourceRetrievalRequest": {
+      "identity": "value",
+      "fields": {
+        "card_id": "str",
+        "source_id": "str",
+        "authorization": "AuthorizationDecision"
+      }
+    },
+    "SyncCompatibilityRequest": {
+      "identity": "value",
+      "fields": {
+        "node_id": "str",
+        "contract_version": "str",
+        "observed_at": "datetime"
+      }
+    },
+    "UpdateInvoiceDraftCommand": {
+      "identity": "value",
+      "fields": {
+        "invoice_id": "str",
+        "expected_revision": "CardRevisionReference",
+        "proposal": "InvoiceDraftProposal",
+        "authorization": "AuthorizationDecision",
+        "effect_id": "str",
+        "actor": "ActorReference"
+      }
+    },
+    "UploadHandoffCommand": {
+      "identity": "value",
+      "fields": {
+        "card_id": "str",
+        "source_id": "str",
+        "expected_revision": "CardRevisionReference",
+        "authorization": "AuthorizationDecision",
+        "actor": "ActorReference"
+      }
+    },
+    "VpsWorkingSetReleaseCommand": {
+      "identity": "value",
+      "fields": {
+        "working_set_id": "str",
+        "manifest_id": "str",
+        "invoice_revision": "CardRevisionReference",
+        "required_source_hashes": "tuple[str, ...]",
+        "receipt": "InvoiceTransferReceipt",
+        "durable_evidence_id": "str",
+        "verified_source_hashes": "tuple[str, ...]",
+        "authorization": "AuthorizationDecision",
+        "confirmation": "ConfirmedEffectAuthorization"
+      }
+    },
+    "VpsWorkingSetReleaseResult": {
+      "identity": "value",
+      "fields": {
+        "working_set_id": "str",
+        "released_source_ids": "tuple[str, ...]",
+        "preserved_evidence_ids": "tuple[str, ...]",
+        "status": "str"
+      }
+    },
+    "BinaryUpload": {
+      "kind": "interface"
+    },
+    "SourceDownload": {
+      "kind": "interface"
+    },
+    "InvoicePackageStream": {
+      "kind": "interface"
+    },
+    "CabinetUnitOfWork": {
+      "kind": "interface"
+    },
+    "CabinetUnitOfWorkFactory": {
+      "kind": "interface"
+    },
+    "SourceByteStore": {
+      "kind": "interface"
+    }
+  },
+  "imports": {
+    "stdlib": [
+      "from datetime import date, datetime",
+      "from decimal import Decimal"
+    ],
+    "third_party": [
+      "from fastapi import FastAPI, Request, Response, UploadFile",
+      "from fastapi.responses import StreamingResponse"
+    ],
+    "internal": {
+      "models": [
+        "ActorReference",
+        "CabinetPrincipal",
+        "CardRevisionReference",
+        "ValidationIssue",
+        "CardSource",
+        "SourceContentReference",
+        "ProviderCard",
+        "ClientCard",
+        "ProjectCard",
+        "InvoiceCardV1",
+        "AcceptedEstimateSnapshot",
+        "ShoppingListSnapshot",
+        "ProjectInvoiceLink",
+        "SourceCustodyRecord",
+        "SourceUploadHandoff",
+        "CabinetEffect",
+        "CabinetNodeIdentity",
+        "RegistryProjectSnapshot",
+      "RegistryCatalogueSnapshot",
+        "RegistryCatalogueReplica",
+        "AssignmentDecisionContext",
+        "ContentReference",
+        "InvoiceCardRevisionReference",
+        "InvoiceSynchronization",
+        "SourceBinaryReplica",
+        "StoredInvoiceCardRevision",
+        "SynchronizationWorkSelection",
+        "TransferReceiptErrorCode",
+        "TransferReceiptResult",
+        "AssignmentDecisionContext",
+        "ContentReference",
+        "InvoiceCardRevisionReference",
+        "InvoiceSynchronization",
+        "SourceBinaryReplica",
+        "StoredInvoiceCardRevision",
+        "SynchronizationWorkSelection",
+        "TransferReceiptErrorCode",
+        "TransferReceiptResult",
+      "AssignmentDecisionContext",
+      "ContentReference",
+      "InvoiceCardRevisionReference",
+      "InvoiceSynchronization",
+      "SourceBinaryReplica",
+      "StoredInvoiceCardRevision",
+      "SynchronizationWorkSelection",
+      "TransferReceiptErrorCode",
+      "TransferReceiptResult",
+      "InvoiceTransferManifest",
+        "InvoiceTransferIssuance",
+        "InvoiceTransferReceipt",
+        "RegistryCatalogueDelivery",
+        "VpsCatalogueAcknowledgement",
+        "LocalBackendConnectionObservation",
+        "InvoiceWorkingSetMembership",
+        "SynchronizationConflict",
+        "CardObjectAssignmentObservation",
+        "InvoiceCardLine",
+        "InvoicePayment",
+        "EstimateSection",
+        "ShoppingListItem",
+        "ProjectInvoiceLineMatch",
+        "InvoiceWorkingSetItem",
+        "ArchiveInvoiceCommand",
+        "AttachInvoiceSourceCommand",
+        "AttachProjectEstimateCommand",
+        "AuthenticatedPrincipal",
+        "AuthorizationDecision",
+        "BackupRestoreVerificationReport",
+        "BackupRestoreVerificationRequest",
+        "BeginEffectRequest",
+        "BrowserUploadRequest",
+        "CanonicalCardRevision",
+        "CapabilityResolution",
+        "CardRevisionCommitCommand",
+        "CardRevisionCommitResult",
+        "ChatGptConfirmationRequest",
+        "ChatGptOutcomeReport",
+        "ChatGptProposal",
+        "ChatGptProposalRequest",
+        "ClosedSyncRequest",
+        "ClosedSyncResponse",
+        "CompositeOutcome",
+        "ConfirmInvoiceCommand",
+        "ConfirmedEffectAuthorization",
+        "CreateInvoiceDraftCommand",
+        "CredentialRevocationCommand",
+        "CredentialRevocationResult",
+        "CredentialRotationCommand",
+        "EffectReconciliation",
+        "EffectReservation",
+        "EffectResult",
+        "EntityScope",
+        "EstimateValidationInput",
+        "EstimateValidationResult",
+        "InvoiceCardPage",
+        "InvoiceCardView",
+        "InvoiceDraftInput",
+        "InvoiceDraftProposal",
+        "InvoiceDuplicateCandidate",
+        "InvoiceDuplicateCandidateInput",
+        "InvoiceMutationResult",
+        "InvoicePackagePullCommand",
+        "InvoiceSearchQuery",
+        "InvoiceTransferReceiptResult",
+        "InvoiceTransferReconciliation",
+        "InvoiceTransferReconciliationRequest",
+        "InvoiceValidationInput",
+        "InvoiceValidationResult",
+        "InvoiceWorkDiscoveryQuery",
+        "InvoiceWorkPage",
+        "IssuedPrincipalCredential",
+        "PrincipalEnrollmentCommand",
+        "CapabilityGrantCommand",
+        "CapabilityGrantProvisioningResult",
+        "ProjectCardPage",
+        "ProjectListQuery",
+        "ProjectMutationResult",
+        "ProjectSummary",
+        "ProviderCardPage",
+        "ProviderSearchQuery",
+        "ReadinessEvaluationRequest",
+        "ReadinessReport",
+        "RecordInvoicePaymentCommand",
+        "RegistryCatalogueView",
+        "SaveShoppingListCommand",
+        "ShoppingListDerivationRequest",
+        "ShoppingListProposal",
+        "SourceCustodyResult",
+        "SourceRetrievalRequest",
+        "SyncCompatibilityRequest",
+        "UpdateInvoiceDraftCommand",
+        "UploadHandoffCommand",
+        "VpsWorkingSetReleaseCommand",
+        "VpsWorkingSetReleaseResult",
+        "VpsInvoiceTransferPackage",
+        "BinaryUpload",
+        "InvoicePackageStream",
+        "SourceDownload",
+        "CabinetUnitOfWork",
+        "CabinetUnitOfWorkFactory",
+        "SourceByteStore"
+      ],
+      "capability_policy": [
+        "resolve_capability",
+        "CapabilityPolicy"
+      ],
+      "access_control": [
+        "authenticate_request",
+        "authorize_capability",
+        "enroll_principal",
+        "provision_capability_grant",
+        "rotate_credential",
+        "revoke_credential",
+        "AccessControlService",
+        "AuthenticationRequiredError",
+        "AuthorizationDeniedError",
+        "AuthenticationThrottledError",
+        "resolve_plugin_principal",
+        "resolve_browser_principal",
+        "resolve_local_node_principal"
+      ],
+      "effect_journal": [
+        "begin_effect",
+        "commit_effect",
+        "reconcile_effect",
+        "EffectJournal",
+        "IdempotencyConflictError",
+        "OutcomeUnknownError"
+      ],
+      "card_workspace": [
+        "search_provider_cards",
+        "list_project_cards",
+        "get_card_revision",
+        "commit_card_revision",
+        "CardWorkspace",
+        "ResourceNotFoundError",
+        "RevisionConflictError"
+      ],
+      "invoice_workspace": [
+        "search_invoices",
+        "get_invoice",
+        "find_invoice_duplicates",
+        "prepare_invoice_draft",
+        "validate_invoice",
+        "create_invoice_draft",
+        "update_invoice_draft",
+        "confirm_invoice",
+        "record_invoice_payment",
+        "attach_invoice_source_metadata",
+        "archive_invoice",
+        "InvoiceWorkspace",
+        "ValidationRejectedError"
+      ],
+      "project_workspace": [
+        "get_project_summary",
+        "validate_estimate",
+        "derive_shopping_list",
+        "attach_project_estimate",
+        "save_shopping_list",
+        "ProjectWorkspace"
+      ],
+      "source_custody": [
+        "issue_upload_handoff",
+        "store_original_source",
+        "retrieve_original_source",
+        "release_vps_working_set",
+        "SourceCustodyService",
+        "RequestTooLargeError",
+        "UnsupportedMediaTypeError",
+        "IntegrityMismatchError"
+      ],
+      "source_byte_store": [
+        "LocalFilesystemSourceByteStore"
+      ],
+      "cabinet_persistence": [
+        "PostgresCabinetUnitOfWork"
+      ],
+      "invoice_exchange": [
+        "discover_invoice_work",
+        "pull_invoice_package",
+        "record_invoice_transfer_receipt",
+        "reconcile_invoice_transfer",
+        "InvoiceExchange"
+      ],
+      "registry_replica": [
+        "publish_registry_catalogue",
+        "get_current_registry_catalogue",
+        "RegistryReplicaService"
+      ],
+      "chatgpt_interaction": [
+        "prepare_chatgpt_proposal",
+        "confirm_chatgpt_effect",
+        "report_composite_outcome",
+        "ChatGptInteractionService",
+        "ConfirmationRequiredError"
+      ],
+      "web_gateway": [
+        "accept_source_upload",
+        "serve_source_download",
+        "accept_source_upload_handler",
+        "WebGateway",
+        "_source_download_response",
+        "_invoice_package_response"
+      ],
+      "sync_gateway": [
+        "observe_sync_compatibility",
+        "serve_sync_request",
+        "SyncGateway",
+        "ContractIncompatibleError"
+      ],
+      "runtime_control": [
+        "evaluate_readiness",
+        "verify_backup_restore",
+        "RuntimeControl",
+        "ServiceUnavailableError",
+        "BackupVerificationFailedError"
+      ],
+      "api": [
+        "search_provider_cards_handler",
+        "list_project_cards_handler",
+        "search_invoices_handler",
+        "get_invoice_handler",
+        "find_invoice_duplicates_handler",
+        "prepare_invoice_draft_handler",
+        "validate_invoice_handler",
+        "create_invoice_draft_handler",
+        "update_invoice_draft_handler",
+        "confirm_invoice_handler",
+        "record_invoice_payment_handler",
+        "attach_invoice_source_metadata_handler",
+        "archive_invoice_handler",
+        "get_project_summary_handler",
+        "validate_estimate_handler",
+        "derive_shopping_list_handler",
+        "attach_project_estimate_handler",
+        "save_shopping_list_handler",
+        "issue_upload_handoff_handler",
+        "release_vps_working_set_handler",
+        "serve_source_download_handler",
+        "observe_sync_compatibility_handler",
+        "discover_invoice_work_handler",
+        "pull_invoice_package_handler",
+        "record_invoice_transfer_receipt_handler",
+        "reconcile_invoice_transfer_handler",
+        "publish_registry_catalogue_handler",
+        "get_current_registry_catalogue_handler",
+        "create_app",
+        "extract_plugin_credential",
+        "extract_browser_principal",
+        "extract_local_node_credential"
+      ]
+    },
+    "module_internal": {
+      "cabinet_persistence": {
+        "models": [
+          "ActorReference",
+          "CabinetEffect",
+          "CabinetUnitOfWork",
+          "CardRevisionReference"
+        ]
+      },
+      "effect_journal": {
+        "models": [
+          "CabinetEffect",
+          "CabinetUnitOfWork",
+          "CabinetUnitOfWorkFactory"
+        ]
+      },
+      "source_byte_store": {
+        "models": [
+          "SourceByteStore"
+        ]
+      },
+      "access_control": {
+        "models": ["CabinetUnitOfWork", "CabinetUnitOfWorkFactory"]
+      },
+      "card_workspace": {
+        "models": ["CabinetUnitOfWork", "CabinetUnitOfWorkFactory"]
+      },
+      "invoice_workspace": {
+        "models": ["CabinetUnitOfWork", "CabinetUnitOfWorkFactory"],
+        "card_workspace": ["CardWorkspace", "commit_card_revision", "get_card_revision"]
+      },
+      "project_workspace": {
+        "models": ["CabinetUnitOfWork", "CabinetUnitOfWorkFactory"],
+        "card_workspace": ["CardWorkspace", "commit_card_revision", "get_card_revision"]
+      },
+      "source_custody": {
+        "models": ["CabinetUnitOfWork", "CabinetUnitOfWorkFactory", "SourceByteStore"]
+      },
+      "invoice_exchange": {
+        "models": ["CabinetUnitOfWork", "CabinetUnitOfWorkFactory"],
+        "card_workspace": ["CardWorkspace", "get_card_revision"],
+        "source_custody": ["SourceCustodyService", "retrieve_original_source"]
+      },
+      "registry_replica": {
+        "models": ["CabinetUnitOfWork", "CabinetUnitOfWorkFactory"]
+      },
+      "runtime_control": {
+        "models": ["CabinetUnitOfWork", "CabinetUnitOfWorkFactory", "SourceByteStore"]
+      },
+      "chatgpt_interaction": {
+        "card_workspace": ["CardWorkspace", "get_card_revision", "commit_card_revision", "search_provider_cards", "list_project_cards"],
+        "invoice_workspace": ["InvoiceWorkspace", "search_invoices", "get_invoice", "find_invoice_duplicates", "prepare_invoice_draft", "validate_invoice", "create_invoice_draft", "update_invoice_draft", "confirm_invoice", "record_invoice_payment", "attach_invoice_source_metadata", "archive_invoice"],
+        "project_workspace": ["ProjectWorkspace", "get_project_summary", "validate_estimate", "derive_shopping_list", "attach_project_estimate", "save_shopping_list"],
+        "effect_journal": ["EffectJournal", "begin_effect", "commit_effect", "reconcile_effect"],
+        "source_custody": ["SourceCustodyService", "issue_upload_handoff", "retrieve_original_source", "release_vps_working_set"]
+      },
+      "web_gateway": {
+        "access_control": ["AccessControlService", "authenticate_request", "authorize_capability"],
+        "source_custody": ["SourceCustodyService", "store_original_source", "retrieve_original_source"]
+      },
+      "sync_gateway": {
+        "access_control": ["AccessControlService", "authenticate_request", "authorize_capability", "resolve_local_node_principal"],
+        "invoice_exchange": ["InvoiceExchange", "discover_invoice_work", "pull_invoice_package", "record_invoice_transfer_receipt", "reconcile_invoice_transfer"],
+        "registry_replica": ["RegistryReplicaService", "publish_registry_catalogue", "get_current_registry_catalogue"]
+      },
+      "api": {
+        "access_control": [
+          "AccessControlService",
+          "AuthenticationRequiredError",
+          "AuthenticationThrottledError",
+          "AuthorizationDeniedError",
+          "authorize_capability",
+          "resolve_plugin_principal",
+          "resolve_browser_principal",
+          "resolve_local_node_principal"
+        ],
+        "capability_policy": [
+          "CapabilityPolicy"
+        ],
+        "card_workspace": [
+          "CardWorkspace",
+          "ResourceNotFoundError",
+          "RevisionConflictError",
+          "list_project_cards",
+          "search_provider_cards"
+        ],
+        "chatgpt_interaction": [
+          "ChatGptInteractionService",
+          "ConfirmationRequiredError"
+        ],
+        "models": [
+          "ArchiveInvoiceCommand",
+          "AttachInvoiceSourceCommand",
+          "AttachProjectEstimateCommand",
+          "AuthenticatedPrincipal",
+          "AuthorizationDecision",
+          "CabinetNodeIdentity",
+          "ConfirmInvoiceCommand",
+          "CreateInvoiceDraftCommand",
+          "EstimateValidationInput",
+          "EstimateValidationResult",
+          "EntityScope",
+          "InvoiceCardPage",
+          "InvoiceCardView",
+          "InvoiceDraftInput",
+          "InvoiceDraftProposal",
+          "InvoiceDuplicateCandidate",
+          "InvoiceDuplicateCandidateInput",
+          "InvoiceMutationResult",
+          "InvoicePackagePullCommand",
+          "InvoicePackageStream",
+          "InvoiceSearchQuery",
+          "InvoiceTransferReceipt",
+          "InvoiceTransferReceiptResult",
+          "InvoiceTransferReconciliation",
+          "InvoiceTransferReconciliationRequest",
+          "InvoiceValidationInput",
+          "InvoiceValidationResult",
+          "InvoiceWorkDiscoveryQuery",
+          "InvoiceWorkPage",
+          "LocalBackendConnectionObservation",
+          "ProjectCardPage",
+          "ProjectListQuery",
+          "ProjectMutationResult",
+          "ProjectSummary",
+          "ProviderCardPage",
+          "ProviderSearchQuery",
+          "RecordInvoicePaymentCommand",
+          "RegistryCatalogueDelivery",
+          "RegistryCatalogueView",
+          "SaveShoppingListCommand",
+          "ShoppingListDerivationRequest",
+          "ShoppingListProposal",
+          "SourceUploadHandoff",
+          "SourceCustodyResult",
+          "SourceDownload",
+          "SyncCompatibilityRequest",
+          "UpdateInvoiceDraftCommand",
+          "UploadHandoffCommand",
+          "VpsCatalogueAcknowledgement",
+          "VpsWorkingSetReleaseCommand",
+          "VpsWorkingSetReleaseResult"
+        ],
+        "effect_journal": [
+          "EffectJournal",
+          "IdempotencyConflictError",
+          "OutcomeUnknownError"
+        ],
+        "invoice_exchange": [
+          "InvoiceExchange",
+          "discover_invoice_work",
+          "pull_invoice_package",
+          "reconcile_invoice_transfer",
+          "record_invoice_transfer_receipt"
+        ],
+        "invoice_workspace": [
+          "InvoiceWorkspace",
+          "ValidationRejectedError",
+          "archive_invoice",
+          "attach_invoice_source_metadata",
+          "confirm_invoice",
+          "create_invoice_draft",
+          "find_invoice_duplicates",
+          "get_invoice",
+          "prepare_invoice_draft",
+          "record_invoice_payment",
+          "search_invoices",
+          "update_invoice_draft",
+          "validate_invoice"
+        ],
+        "project_workspace": [
+          "ProjectWorkspace",
+          "attach_project_estimate",
+          "derive_shopping_list",
+          "get_project_summary",
+          "save_shopping_list",
+          "validate_estimate"
+        ],
+        "registry_replica": [
+          "RegistryReplicaService",
+          "get_current_registry_catalogue",
+          "publish_registry_catalogue"
+        ],
+        "runtime_control": [
+          "BackupVerificationFailedError",
+          "RuntimeControl",
+          "ServiceUnavailableError"
+        ],
+        "source_custody": [
+          "IntegrityMismatchError",
+          "RequestTooLargeError",
+          "SourceCustodyService",
+          "UnsupportedMediaTypeError",
+          "issue_upload_handoff",
+          "release_vps_working_set"
+        ],
+        "sync_gateway": [
+          "ContractIncompatibleError",
+          "SyncGateway",
+          "observe_sync_compatibility"
+        ],
+        "web_gateway": [
+          "WebGateway",
+          "accept_source_upload_handler",
+          "serve_source_download"
+        ]
+      }
+    }
+  },
+  "module_functions": {
+    "models": [
+      "ActorReference",
+      "CabinetPrincipal",
+      "CardRevisionReference",
+      "ValidationIssue",
+      "CardSource",
+      "SourceContentReference",
+      "ProviderCard",
+      "ClientCard",
+      "ProjectCard",
+      "InvoiceCardV1",
+      "AcceptedEstimateSnapshot",
+      "ShoppingListSnapshot",
+      "ProjectInvoiceLink",
+      "SourceCustodyRecord",
+      "SourceUploadHandoff",
+      "CabinetEffect",
+      "CabinetNodeIdentity",
+      "RegistryProjectSnapshot",
+      "RegistryCatalogueSnapshot",
+      "RegistryCatalogueReplica",
+      "AssignmentDecisionContext",
+      "ContentReference",
+      "InvoiceCardRevisionReference",
+      "InvoiceSynchronization",
+      "SourceBinaryReplica",
+      "StoredInvoiceCardRevision",
+      "SynchronizationWorkSelection",
+      "TransferReceiptErrorCode",
+      "TransferReceiptResult",
+      "InvoiceTransferManifest",
+      "InvoiceTransferIssuance",
+      "InvoiceTransferReceipt",
+      "RegistryCatalogueDelivery",
+      "VpsCatalogueAcknowledgement",
+      "LocalBackendConnectionObservation",
+      "InvoiceWorkingSetMembership",
+      "SynchronizationConflict",
+      "CardObjectAssignmentObservation",
+      "InvoiceCardLine",
+      "InvoicePayment",
+      "EstimateSection",
+      "ShoppingListItem",
+      "ProjectInvoiceLineMatch",
+        "InvoiceWorkingSetItem",
+        "ArchiveInvoiceCommand",
+      "AttachInvoiceSourceCommand",
+      "AttachProjectEstimateCommand",
+      "AuthenticatedPrincipal",
+      "AuthorizationDecision",
+      "BackupRestoreVerificationReport",
+      "BackupRestoreVerificationRequest",
+      "BeginEffectRequest",
+      "BrowserUploadRequest",
+      "CanonicalCardRevision",
+      "CapabilityResolution",
+      "CardRevisionCommitCommand",
+      "CardRevisionCommitResult",
+      "ChatGptConfirmationRequest",
+      "ChatGptOutcomeReport",
+      "ChatGptProposal",
+      "ChatGptProposalRequest",
+      "ClosedSyncRequest",
+      "ClosedSyncResponse",
+      "CompositeOutcome",
+      "ConfirmInvoiceCommand",
+      "ConfirmedEffectAuthorization",
+      "CreateInvoiceDraftCommand",
+      "CredentialRevocationCommand",
+      "CredentialRevocationResult",
+      "CredentialRotationCommand",
+      "EffectReconciliation",
+      "EffectReservation",
+      "EffectResult",
+      "EntityScope",
+      "EstimateValidationInput",
+      "EstimateValidationResult",
+      "InvoiceCardPage",
+      "InvoiceCardView",
+      "InvoiceDraftInput",
+      "InvoiceDraftProposal",
+      "InvoiceDuplicateCandidate",
+      "InvoiceDuplicateCandidateInput",
+      "InvoiceMutationResult",
+      "InvoicePackagePullCommand",
+      "InvoiceSearchQuery",
+      "InvoiceTransferReceiptResult",
+      "InvoiceTransferReconciliation",
+      "InvoiceTransferReconciliationRequest",
+      "InvoiceValidationInput",
+      "InvoiceValidationResult",
+      "InvoiceWorkDiscoveryQuery",
+      "InvoiceWorkPage",
+      "IssuedPrincipalCredential",
+      "PrincipalEnrollmentCommand",
+      "CapabilityGrantCommand",
+      "CapabilityGrantProvisioningResult",
+      "ProjectCardPage",
+      "ProjectListQuery",
+      "ProjectMutationResult",
+      "ProjectSummary",
+      "ProviderCardPage",
+      "ProviderSearchQuery",
+      "ReadinessEvaluationRequest",
+      "ReadinessReport",
+      "RecordInvoicePaymentCommand",
+      "RegistryCatalogueView",
+      "SaveShoppingListCommand",
+      "ShoppingListDerivationRequest",
+      "ShoppingListProposal",
+      "SourceCustodyResult",
+      "SourceRetrievalRequest",
+      "SyncCompatibilityRequest",
+      "UpdateInvoiceDraftCommand",
+      "UploadHandoffCommand",
+      "VpsWorkingSetReleaseCommand",
+      "VpsWorkingSetReleaseResult",
+      "VpsInvoiceTransferPackage",
+      "BinaryUpload",
+      "InvoicePackageStream",
+      "SourceDownload",
+      "CabinetUnitOfWork",
+      "CabinetUnitOfWorkFactory",
+      "SourceByteStore"
+    ],
+    "capability_policy": [
+      "resolve_capability",
+      "CapabilityPolicy"
+    ],
+    "access_control": [
+      "authenticate_request",
+      "authorize_capability",
+      "enroll_principal",
+      "provision_capability_grant",
+      "rotate_credential",
+      "revoke_credential",
+      "AccessControlService",
+      "AuthenticationRequiredError",
+      "AuthorizationDeniedError",
+      "AuthenticationThrottledError",
+      "resolve_plugin_principal",
+      "resolve_browser_principal",
+      "resolve_local_node_principal"
+    ],
+    "effect_journal": [
+      "begin_effect",
+      "commit_effect",
+      "reconcile_effect",
+      "EffectJournal",
+      "IdempotencyConflictError",
+      "OutcomeUnknownError"
+    ],
+    "card_workspace": [
+      "search_provider_cards",
+      "list_project_cards",
+      "get_card_revision",
+      "commit_card_revision",
+      "CardWorkspace",
+      "ResourceNotFoundError",
+      "RevisionConflictError"
+    ],
+    "invoice_workspace": [
+      "search_invoices",
+      "get_invoice",
+      "find_invoice_duplicates",
+      "prepare_invoice_draft",
+      "validate_invoice",
+      "create_invoice_draft",
+      "update_invoice_draft",
+      "confirm_invoice",
+      "record_invoice_payment",
+      "attach_invoice_source_metadata",
+      "archive_invoice",
+      "InvoiceWorkspace",
+      "ValidationRejectedError"
+    ],
+    "project_workspace": [
+      "get_project_summary",
+      "validate_estimate",
+      "derive_shopping_list",
+      "attach_project_estimate",
+      "save_shopping_list",
+      "ProjectWorkspace"
+    ],
+    "source_custody": [
+      "issue_upload_handoff",
+      "store_original_source",
+      "retrieve_original_source",
+      "release_vps_working_set",
+      "SourceCustodyService",
+      "RequestTooLargeError",
+      "UnsupportedMediaTypeError",
+      "IntegrityMismatchError"
+    ],
+    "invoice_exchange": [
+      "discover_invoice_work",
+      "pull_invoice_package",
+      "record_invoice_transfer_receipt",
+      "reconcile_invoice_transfer",
+      "InvoiceExchange"
+    ],
+    "registry_replica": [
+      "publish_registry_catalogue",
+      "get_current_registry_catalogue",
+      "RegistryReplicaService"
+    ],
+    "chatgpt_interaction": [
+      "prepare_chatgpt_proposal",
+      "confirm_chatgpt_effect",
+      "report_composite_outcome",
+      "ChatGptInteractionService",
+      "ConfirmationRequiredError"
+    ],
+    "web_gateway": [
+      "accept_source_upload",
+      "serve_source_download",
+      "accept_source_upload_handler",
+      "WebGateway",
+      "_source_download_response",
+      "_invoice_package_response"
+    ],
+    "sync_gateway": [
+      "observe_sync_compatibility",
+      "serve_sync_request",
+      "SyncGateway",
+      "ContractIncompatibleError"
+    ],
+    "runtime_control": [
+      "evaluate_readiness",
+      "verify_backup_restore",
+      "RuntimeControl",
+      "ServiceUnavailableError",
+      "BackupVerificationFailedError"
+    ],
+    "source_byte_store": [
+      "LocalFilesystemSourceByteStore"
+    ],
+    "cabinet_persistence": [
+      "create_cabinet_schema",
+      "PostgresCabinetUnitOfWork"
+    ],
+    "api": [
+      "search_provider_cards_handler",
+      "list_project_cards_handler",
+      "search_invoices_handler",
+      "get_invoice_handler",
+      "find_invoice_duplicates_handler",
+      "prepare_invoice_draft_handler",
+      "validate_invoice_handler",
+      "create_invoice_draft_handler",
+      "update_invoice_draft_handler",
+      "confirm_invoice_handler",
+      "record_invoice_payment_handler",
+      "attach_invoice_source_metadata_handler",
+      "archive_invoice_handler",
+      "get_project_summary_handler",
+      "validate_estimate_handler",
+      "derive_shopping_list_handler",
+      "attach_project_estimate_handler",
+      "save_shopping_list_handler",
+      "issue_upload_handoff_handler",
+      "release_vps_working_set_handler",
+      "serve_source_download_handler",
+      "observe_sync_compatibility_handler",
+      "discover_invoice_work_handler",
+      "pull_invoice_package_handler",
+      "record_invoice_transfer_receipt_handler",
+      "reconcile_invoice_transfer_handler",
+      "publish_registry_catalogue_handler",
+      "get_current_registry_catalogue_handler",
+      "create_app",
+      "extract_plugin_credential",
+      "extract_browser_principal",
+      "extract_local_node_credential"
+    ]
+  },
+  "module_order": [
+    "models",
+    "capability_policy",
+    "access_control",
+    "effect_journal",
+    "card_workspace",
+    "invoice_workspace",
+    "project_workspace",
+    "cabinet_persistence",
+    "source_byte_store",
+    "source_custody",
+    "invoice_exchange",
+    "registry_replica",
+    "chatgpt_interaction",
+    "web_gateway",
+    "sync_gateway",
+    "runtime_control",
+    "api"
+  ],
+  "module_paths": {
+    "models": "cabinet_web_backend/models",
+    "capability_policy": "cabinet_web_backend/capability_policy",
+    "access_control": "cabinet_web_backend/access_control",
+    "effect_journal": "cabinet_web_backend/effect_journal",
+    "card_workspace": "cabinet_web_backend/card_workspace",
+    "invoice_workspace": "cabinet_web_backend/invoice_workspace",
+    "project_workspace": "cabinet_web_backend/project_workspace",
+    "cabinet_persistence": "cabinet_web_backend/cabinet_persistence",
+    "source_byte_store": "cabinet_web_backend/source_byte_store",
+    "source_custody": "cabinet_web_backend/source_custody",
+    "invoice_exchange": "cabinet_web_backend/invoice_exchange",
+    "registry_replica": "cabinet_web_backend/registry_replica",
+    "chatgpt_interaction": "cabinet_web_backend/chatgpt_interaction",
+    "web_gateway": "cabinet_web_backend/web_gateway",
+    "sync_gateway": "cabinet_web_backend/sync_gateway",
+    "runtime_control": "cabinet_web_backend/runtime_control",
+    "api": "cabinet_web_backend/api"
+  },
+  "function_order": [
+    "resolve_capability",
+    "prepare_chatgpt_proposal",
+    "confirm_chatgpt_effect",
+    "report_composite_outcome",
+    "authenticate_request",
+    "authorize_capability",
+    "enroll_principal",
+    "provision_capability_grant",
+    "rotate_credential",
+    "revoke_credential",
+    "search_provider_cards",
+    "list_project_cards",
+    "get_card_revision",
+    "commit_card_revision",
+    "search_invoices",
+    "get_invoice",
+    "find_invoice_duplicates",
+    "prepare_invoice_draft",
+    "validate_invoice",
+    "create_invoice_draft",
+    "update_invoice_draft",
+    "confirm_invoice",
+    "record_invoice_payment",
+    "attach_invoice_source_metadata",
+    "archive_invoice",
+    "get_project_summary",
+    "validate_estimate",
+    "derive_shopping_list",
+    "attach_project_estimate",
+    "save_shopping_list",
+    "begin_effect",
+    "commit_effect",
+    "reconcile_effect",
+    "issue_upload_handoff",
+    "store_original_source",
+    "retrieve_original_source",
+    "release_vps_working_set",
+    "accept_source_upload",
+    "serve_source_download",
+    "observe_sync_compatibility",
+    "serve_sync_request",
+    "discover_invoice_work",
+    "pull_invoice_package",
+    "record_invoice_transfer_receipt",
+    "reconcile_invoice_transfer",
+    "publish_registry_catalogue",
+    "get_current_registry_catalogue",
+    "evaluate_readiness",
+    "verify_backup_restore",
+    "search_provider_cards_handler",
+    "list_project_cards_handler",
+    "search_invoices_handler",
+    "get_invoice_handler",
+    "find_invoice_duplicates_handler",
+    "prepare_invoice_draft_handler",
+    "validate_invoice_handler",
+    "create_invoice_draft_handler",
+    "update_invoice_draft_handler",
+    "confirm_invoice_handler",
+    "record_invoice_payment_handler",
+    "attach_invoice_source_metadata_handler",
+    "archive_invoice_handler",
+    "get_project_summary_handler",
+    "validate_estimate_handler",
+    "derive_shopping_list_handler",
+    "attach_project_estimate_handler",
+    "save_shopping_list_handler",
+    "issue_upload_handoff_handler",
+    "release_vps_working_set_handler",
+    "accept_source_upload_handler",
+    "serve_source_download_handler",
+    "observe_sync_compatibility_handler",
+    "discover_invoice_work_handler",
+    "pull_invoice_package_handler",
+    "record_invoice_transfer_receipt_handler",
+    "reconcile_invoice_transfer_handler",
+    "publish_registry_catalogue_handler",
+    "get_current_registry_catalogue_handler",
+    "create_app",
+    "extract_plugin_credential",
+    "extract_browser_principal",
+    "extract_local_node_credential",
+    "resolve_plugin_principal",
+    "resolve_browser_principal",
+    "resolve_local_node_principal",
+    "CapabilityPolicy.__init__",
+    "AccessControlService.__init__",
+    "CardWorkspace.__init__",
+    "ChatGptInteractionService.__init__",
+    "EffectJournal.__init__",
+    "InvoiceExchange.__init__",
+    "InvoiceWorkspace.__init__",
+    "ProjectWorkspace.__init__",
+    "RegistryReplicaService.__init__",
+    "RuntimeControl.__init__",
+    "SourceCustodyService.__init__",
+    "SyncGateway.__init__",
+    "WebGateway.__init__",
+    "BinaryUpload.read_chunk",
+    "SourceDownload.read_chunk",
+    "InvoicePackageStream.read_chunk",
+    "_source_download_response",
+    "_invoice_package_response",
+    "LocalFilesystemSourceByteStore.__init__",
+    "LocalFilesystemSourceByteStore.final_reference_for",
+    "LocalFilesystemSourceByteStore.stage",
+    "LocalFilesystemSourceByteStore.verify",
+    "LocalFilesystemSourceByteStore.publish",
+    "LocalFilesystemSourceByteStore.remove_staging",
+    "SourceByteStore.final_reference_for",
+    "SourceByteStore.stage",
+    "SourceByteStore.verify",
+    "SourceByteStore.publish",
+    "SourceByteStore.remove_staging",
+    "CabinetUnitOfWork.begin",
+    "CabinetUnitOfWork.commit",
+    "CabinetUnitOfWork.rollback",
+    "PostgresCabinetUnitOfWork.__init__",
+    "PostgresCabinetUnitOfWork.begin",
+    "PostgresCabinetUnitOfWork.commit",
+    "PostgresCabinetUnitOfWork.rollback",
+    "CabinetUnitOfWork.lock_effect",
+    "CabinetUnitOfWork.load_effect",
+    "CabinetUnitOfWork.load_effect_by_idempotency",
+    "CabinetUnitOfWork.insert_effect",
+    "CabinetUnitOfWork.update_effect_result",
+    "create_cabinet_schema",
+    "PostgresCabinetUnitOfWork.lock_effect",
+    "PostgresCabinetUnitOfWork.load_effect",
+    "PostgresCabinetUnitOfWork.load_effect_by_idempotency",
+    "PostgresCabinetUnitOfWork.insert_effect",
+    "PostgresCabinetUnitOfWork.update_effect_result"
+    ,"CabinetUnitOfWorkFactory.open"
+  ],
+  "persistence": {
+    "ActorReference": {
+      "class": "issued"
+    },
+    "CabinetPrincipal": {
+      "class": "master"
+    },
+    "CardRevisionReference": {
+      "class": "issued"
+    },
+    "ValidationIssue": {
+      "class": "derived"
+    },
+    "CardSource": {
+      "class": "master"
+    },
+    "SourceContentReference": {
+      "class": "issued"
+    },
+    "ProviderCard": {
+      "class": "master"
+    },
+    "ClientCard": {
+      "class": "master"
+    },
+    "ProjectCard": {
+      "class": "master"
+    },
+    "InvoiceCardV1": {
+      "class": "master"
+    },
+    "AcceptedEstimateSnapshot": {
+      "class": "issued"
+    },
+    "ShoppingListSnapshot": {
+      "class": "issued"
+    },
+    "ProjectInvoiceLink": {
+      "class": "master"
+    },
+    "SourceCustodyRecord": {
+      "class": "master"
+    },
+    "SourceUploadHandoff": {
+      "class": "master"
+    },
+    "CabinetEffect": {
+      "class": "master"
+    },
+    "CabinetNodeIdentity": {
+      "class": "master"
+    },
+    "RegistryProjectSnapshot": {
+      "class": "mirrored",
+      "remote": "Registry via local cabinet_backend"
+    },
+    "RegistryCatalogueSnapshot": {
+      "class": "mirrored",
+      "remote": "local cabinet_backend catalogue issuer"
+    },
+    "RegistryCatalogueReplica": {
+      "class": "master"
+    },
+    "InvoiceTransferManifest": {
+      "class": "issued"
+    },
+    "InvoiceTransferIssuance": {
+      "class": "master"
+    },
+    "InvoiceTransferReceipt": {
+      "class": "mirrored",
+      "remote": "local cabinet_backend durable import state"
+    },
+    "RegistryCatalogueDelivery": {
+      "class": "mirrored",
+      "remote": "local cabinet_backend catalogue publication"
+    },
+    "VpsCatalogueAcknowledgement": {
+      "class": "issued"
+    },
+    "LocalBackendConnectionObservation": {
+      "class": "issued"
+    },
+    "InvoiceWorkingSetMembership": {
+      "class": "issued"
+    },
+    "SynchronizationConflict": {
+      "class": "master"
+    },
+    "CardObjectAssignmentObservation": {
+      "class": "issued"
+    }
+  },
+  "properties": {},
+  "determinism": {},
+  "implementation_obligations": {
+    "BinaryUpload": {
+      "disposition": "external"
+    },
+    "SourceDownload": {
+      "disposition": "external"
+    },
+    "InvoicePackageStream": {
+      "disposition": "external"
+    },
+    "CabinetUnitOfWork": {
+      "disposition": "local",
+      "implementations": [
+        "PostgresCabinetUnitOfWork"
+      ]
+    },
+    "CabinetUnitOfWorkFactory": {
+      "disposition": "external"
+    },
+    "SourceByteStore": {
+      "disposition": "local",
+      "implementations": [
+        "LocalFilesystemSourceByteStore"
+      ]
+    }
+  },
+  "rules": {
+    "capability_catalogue": {
+      "catalogue_version": 1,
+      "grantable": [
+        {"channel": "plugin", "capability": "provider.search", "operation": "search_provider_cards"},
+        {"channel": "plugin", "capability": "project.list", "operation": "list_project_cards"},
+        {"channel": "plugin", "capability": "project.summary", "operation": "get_project_summary"},
+        {"channel": "plugin", "capability": "invoice.search", "operation": "search_invoices"},
+        {"channel": "plugin", "capability": "invoice.get", "operation": "get_invoice"},
+        {"channel": "plugin", "capability": "invoice.find_duplicates", "operation": "find_invoice_duplicates"},
+        {"channel": "plugin", "capability": "invoice.prepare_draft", "operation": "prepare_invoice_draft"},
+        {"channel": "plugin", "capability": "invoice.validate", "operation": "validate_invoice"},
+        {"channel": "plugin", "capability": "estimate.validate", "operation": "validate_estimate"},
+        {"channel": "plugin", "capability": "shopping_list.derive", "operation": "derive_shopping_list"},
+        {"channel": "plugin", "capability": "registry_catalogue.current", "operation": "get_current_registry_catalogue"},
+        {"channel": "plugin", "capability": "invoice.create_draft", "operation": "create_invoice_draft"},
+        {"channel": "plugin", "capability": "invoice.update_draft", "operation": "update_invoice_draft"},
+        {"channel": "plugin", "capability": "invoice.confirm", "operation": "confirm_invoice"},
+        {"channel": "plugin", "capability": "invoice.record_payment", "operation": "record_invoice_payment"},
+        {"channel": "plugin", "capability": "invoice.attach_source_metadata", "operation": "attach_invoice_source_metadata"},
+        {"channel": "plugin", "capability": "invoice.archive", "operation": "archive_invoice"},
+        {"channel": "plugin", "capability": "project.attach_estimate", "operation": "attach_project_estimate"},
+        {"channel": "plugin", "capability": "shopping_list.save", "operation": "save_shopping_list"},
+        {"channel": "plugin", "capability": "source_upload_handoff.issue", "operation": "issue_upload_handoff"},
+        {"channel": "plugin", "capability": "vps_working_set.release", "operation": "release_vps_working_set"},
+        {"channel": "browser", "capability": "source.download", "operation": "serve_source_download"},
+        {"channel": "local_node", "capability": "synchronization.observe_compatibility", "operation": "observe_sync_compatibility"},
+        {"channel": "local_node", "capability": "invoice_work.discover", "operation": "discover_invoice_work"},
+        {"channel": "local_node", "capability": "invoice_package.pull", "operation": "pull_invoice_package"},
+        {"channel": "local_node", "capability": "invoice_transfer.receipt", "operation": "record_invoice_transfer_receipt"},
+        {"channel": "local_node", "capability": "invoice_transfer.reconcile", "operation": "reconcile_invoice_transfer"},
+        {"channel": "local_node", "capability": "registry_catalogue.publish", "operation": "publish_registry_catalogue"}
+      ],
+      "protected_operator": [
+        {"capability": "principal.enroll", "operation": "enroll_principal"},
+        {"capability": "principal.grant_capability", "operation": "provision_capability_grant"},
+        {"capability": "credential.rotate", "operation": "rotate_credential"},
+        {"capability": "credential.revoke", "operation": "revoke_credential"},
+        {"capability": "backup.verify_restore", "operation": "verify_backup_restore"}
+      ]
+    },
+    "invoice_duplicate_matching": {
+      "policy_version": 1,
+      "candidate_field_order": [
+        "invoice_number",
+        "supplier_tax_id",
+        "issue_date",
+        "gross_total"
+      ],
+      "minimum_match_fields": 1,
+      "invoice_id_match_requires_exact_identity": true,
+      "reason_code_prefix": "matched.",
+      "stable_order": [
+        "invoice_revision.revision_number",
+        "invoice_revision.revision_id"
+      ],
+      "no_comparable_fields_result": "empty"
+    },
+    "source_ingress": {
+      "accepted_content_formats": [
+        "PDF",
+        "JPEG",
+        "PNG",
+        "WebP",
+        "HEIC",
+        "HEIF"
+      ],
+      "originals_per_handoff": 1,
+      "server_ocr_enabled": false,
+      "filename_selects_storage_path": false,
+      "delivery_implies_local_acceptance": false
+    },
+    "synchronization": {
+      "connection_initiator": "local_backend",
+      "discovery_scope": "invoice_only",
+      "manifest_card_revision_count": 1,
+      "source_transfer_encoding": "streamed_binary",
+      "binary_in_json_allowed": false,
+      "wire_storage_reference_allowed": false,
+      "delivery_implies_durable_acceptance": false,
+      "timeout_after_issuance_result": "outcome_unknown",
+      "timeout_after_issuance_allows_automatic_retry": false
+    },
+    "registry_publication": {
+      "contract_version": "cabinet-web-sync-v1",
+      "snapshot_order_key": "project_id",
+      "acceptance_atomic": true,
+      "older_observation_replaces_current": false
+    },
+    "vps_release": {
+      "automatic_after_sync": false,
+      "explicit_owner_confirmation_required": true,
+      "accepted_receipt_results": [
+        "accepted",
+        "already_accepted"
+      ],
+      "card_hash_required": true,
+      "all_source_hashes_required": true,
+      "durable_evidence_id_required": true,
+      "source_membership_comparison": "required_equals_verified_equals_manifest"
+    },
+    "assignment_observation": {
+      "producer": "cabinet_web_invoice_capture",
+      "transport_mutation_allowed": false,
+      "implicit_card_or_label_mapping_allowed": false,
+      "explicit_project_requires_catalogue_snapshot_provenance": true
+    },
+    "http_router_backend": {
+      "kind": "http_router_backend",
+      "schema_version": 1,
+      "backend": {
+        "framework": "fastapi",
+        "emitter": "fastapi_sync_v1"
+      },
+      "wiring": {
+        "module": "api",
+        "app_factory": "create_app",
+        "request_parameter": "request",
+        "state_bindings": {
+          "capability_policy": {
+            "factory_parameter": "capability_policy",
+            "state_attribute": "capability_policy"
+          },
+          "chatgpt_interaction": {
+            "factory_parameter": "chatgpt_interaction",
+            "state_attribute": "chatgpt_interaction"
+          },
+          "access_control": {
+            "factory_parameter": "access_control",
+            "state_attribute": "access_control"
+          },
+          "card_workspace": {
+            "factory_parameter": "card_workspace",
+            "state_attribute": "card_workspace"
+          },
+          "invoice_workspace": {
+            "factory_parameter": "invoice_workspace",
+            "state_attribute": "invoice_workspace"
+          },
+          "project_workspace": {
+            "factory_parameter": "project_workspace",
+            "state_attribute": "project_workspace"
+          },
+          "effect_journal": {
+            "factory_parameter": "effect_journal",
+            "state_attribute": "effect_journal"
+          },
+          "source_custody": {
+            "factory_parameter": "source_custody",
+            "state_attribute": "source_custody"
+          },
+          "web_gateway": {
+            "factory_parameter": "web_gateway",
+            "state_attribute": "web_gateway"
+          },
+          "sync_gateway": {
+            "factory_parameter": "sync_gateway",
+            "state_attribute": "sync_gateway"
+          },
+          "invoice_exchange": {
+            "factory_parameter": "invoice_exchange",
+            "state_attribute": "invoice_exchange"
+          },
+          "registry_replica": {
+            "factory_parameter": "registry_replica",
+            "state_attribute": "registry_replica"
+          },
+          "runtime_control": {
+            "factory_parameter": "runtime_control",
+            "state_attribute": "runtime_control"
+          }
+        },
+        "credential_extractors": {
+          "plugin_credential": {
+            "kind": "header_scheme",
+            "function": "extract_plugin_credential",
+            "header": "Authorization",
+            "scheme": "Bearer",
+            "reject_with": "AuthenticationRequiredError"
+          },
+          "browser_principal": {
+            "kind": "header_scheme",
+            "function": "extract_browser_principal",
+            "header": "X-Cabinet-Authenticated-Owner",
+            "scheme": "TrustedEdge",
+            "reject_with": "AuthenticationRequiredError"
+          },
+          "local_node_credential": {
+            "kind": "header_scheme",
+            "function": "extract_local_node_credential",
+            "header": "Authorization",
+            "scheme": "Bearer",
+            "reject_with": "AuthenticationRequiredError"
+          }
+        }
+      },
+      "principals": {
+        "plugin_owner": {
+          "resolver": "resolve_plugin_principal",
+          "args": [
+            {
+              "ref": "slot",
+              "name": "access_control"
+            },
+            {
+              "ref": "credential",
+              "name": "plugin_credential"
+            }
+          ]
+        },
+        "browser_owner": {
+          "resolver": "resolve_browser_principal",
+          "args": [
+            {
+              "ref": "slot",
+              "name": "access_control"
+            },
+            {
+              "ref": "credential",
+              "name": "browser_principal"
+            }
+          ]
+        },
+        "local_node": {
+          "resolver": "resolve_local_node_principal",
+          "args": [
+            {
+              "ref": "slot",
+              "name": "access_control"
+            },
+            {
+              "ref": "credential",
+              "name": "local_node_credential"
+            }
+          ]
+        }
+      },
+      "auth_policies": {
+        "plugin_bearer": {
+          "principal": "plugin_owner"
+        },
+        "browser_edge": {
+          "principal": "browser_owner"
+        },
+        "local_bearer": {
+          "principal": "local_node"
+        }
+      },
+      "projections": [],
+      "routes": [
+        {
+          "handler": "search_provider_cards_handler",
+          "method": "POST",
+          "path": "/plugin/v1/providers/search",
+          "auth": "plugin_bearer",
+          "success_status": 200,
+          "response_mode": "json",
+          "emission": "table",
+          "authorize": [
+            {
+              "function": "authorize_capability",
+              "args": [
+                {
+                  "ref": "slot",
+                  "name": "access_control"
+                },
+                {
+                  "ref": "slot",
+                  "name": "actor"
+                },
+                {
+                  "ref": "literal",
+                  "value": "provider.search"
+                }
+              ],
+              "binds": false
+            }
+          ],
+          "delegate": {
+            "function": "search_provider_cards",
+            "args": [
+              {
+                "ref": "slot",
+                "name": "card_workspace"
+              },
+              {
+                "ref": "parameter",
+                "path": [
+                  "query"
+                ]
+              }
+            ]
+          },
+          "projection": null,
+          "returns": "delegate"
+        },
+        {
+          "handler": "list_project_cards_handler",
+          "method": "GET",
+          "path": "/plugin/v1/projects",
+          "auth": "plugin_bearer",
+          "success_status": 200,
+          "response_mode": "json",
+          "emission": "table",
+          "authorize": [
+            {
+              "function": "authorize_capability",
+              "args": [
+                {
+                  "ref": "slot",
+                  "name": "access_control"
+                },
+                {
+                  "ref": "slot",
+                  "name": "actor"
+                },
+                {
+                  "ref": "literal",
+                  "value": "project.list"
+                }
+              ],
+              "binds": false
+            }
+          ],
+          "delegate": {
+            "function": "list_project_cards",
+            "args": [
+              {
+                "ref": "slot",
+                "name": "card_workspace"
+              },
+              {
+                "ref": "parameter",
+                "path": [
+                  "query"
+                ]
+              }
+            ]
+          },
+          "projection": null,
+          "returns": "delegate"
+        },
+        {
+          "handler": "search_invoices_handler",
+          "method": "POST",
+          "path": "/plugin/v1/invoices/search",
+          "auth": "plugin_bearer",
+          "success_status": 200,
+          "response_mode": "json",
+          "emission": "table",
+          "authorize": [
+            {
+              "function": "authorize_capability",
+              "args": [
+                {
+                  "ref": "slot",
+                  "name": "access_control"
+                },
+                {
+                  "ref": "slot",
+                  "name": "actor"
+                },
+                {
+                  "ref": "literal",
+                  "value": "invoice.search"
+                }
+              ],
+              "binds": false
+            }
+          ],
+          "delegate": {
+            "function": "search_invoices",
+            "args": [
+              {
+                "ref": "slot",
+                "name": "invoice_workspace"
+              },
+              {
+                "ref": "parameter",
+                "path": [
+                  "query"
+                ]
+              }
+            ]
+          },
+          "projection": null,
+          "returns": "delegate"
+        },
+        {
+          "handler": "get_invoice_handler",
+          "method": "GET",
+          "path": "/plugin/v1/invoices/{invoice_id}",
+          "auth": "plugin_bearer",
+          "success_status": 200,
+          "response_mode": "json",
+          "emission": "table",
+          "authorize": [
+            {
+              "function": "authorize_capability",
+              "args": [
+                {
+                  "ref": "slot",
+                  "name": "access_control"
+                },
+                {
+                  "ref": "slot",
+                  "name": "actor"
+                },
+                {
+                  "ref": "literal",
+                  "value": "invoice.get"
+                }
+              ],
+              "binds": false
+            }
+          ],
+          "delegate": {
+            "function": "get_invoice",
+            "args": [
+              {
+                "ref": "slot",
+                "name": "invoice_workspace"
+              },
+              {
+                "ref": "parameter",
+                "path": [
+                  "invoice_id"
+                ]
+              },
+              {
+                "ref": "parameter",
+                "path": [
+                  "content_hash"
+                ]
+              }
+            ]
+          },
+          "projection": null,
+          "returns": "delegate"
+        },
+        {
+          "handler": "find_invoice_duplicates_handler",
+          "method": "POST",
+          "path": "/plugin/v1/invoices/duplicates",
+          "auth": "plugin_bearer",
+          "success_status": 200,
+          "response_mode": "json",
+          "emission": "table",
+          "authorize": [
+            {
+              "function": "authorize_capability",
+              "args": [
+                {
+                  "ref": "slot",
+                  "name": "access_control"
+                },
+                {
+                  "ref": "slot",
+                  "name": "actor"
+                },
+                {
+                  "ref": "literal",
+                  "value": "invoice.find_duplicates"
+                }
+              ],
+              "binds": false
+            }
+          ],
+          "delegate": {
+            "function": "find_invoice_duplicates",
+            "args": [
+              {
+                "ref": "slot",
+                "name": "invoice_workspace"
+              },
+              {
+                "ref": "parameter",
+                "path": [
+                  "candidate"
+                ]
+              }
+            ]
+          },
+          "projection": null,
+          "returns": "delegate"
+        },
+        {
+          "handler": "prepare_invoice_draft_handler",
+          "method": "POST",
+          "path": "/plugin/v1/invoices/draft-proposals",
+          "auth": "plugin_bearer",
+          "success_status": 200,
+          "response_mode": "json",
+          "emission": "table",
+          "authorize": [
+            {
+              "function": "authorize_capability",
+              "args": [
+                {
+                  "ref": "slot",
+                  "name": "access_control"
+                },
+                {
+                  "ref": "slot",
+                  "name": "actor"
+                },
+                {
+                  "ref": "literal",
+                  "value": "invoice.prepare_draft"
+                }
+              ],
+              "binds": false
+            }
+          ],
+          "delegate": {
+            "function": "prepare_invoice_draft",
+            "args": [
+              {
+                "ref": "slot",
+                "name": "invoice_workspace"
+              },
+              {
+                "ref": "parameter",
+                "path": [
+                  "proposal"
+                ]
+              }
+            ]
+          },
+          "projection": null,
+          "returns": "delegate"
+        },
+        {
+          "handler": "validate_invoice_handler",
+          "method": "POST",
+          "path": "/plugin/v1/invoices/validate",
+          "auth": "plugin_bearer",
+          "success_status": 200,
+          "response_mode": "json",
+          "emission": "table",
+          "authorize": [
+            {
+              "function": "authorize_capability",
+              "args": [
+                {
+                  "ref": "slot",
+                  "name": "access_control"
+                },
+                {
+                  "ref": "slot",
+                  "name": "actor"
+                },
+                {
+                  "ref": "literal",
+                  "value": "invoice.validate"
+                }
+              ],
+              "binds": false
+            }
+          ],
+          "delegate": {
+            "function": "validate_invoice",
+            "args": [
+              {
+                "ref": "slot",
+                "name": "invoice_workspace"
+              },
+              {
+                "ref": "parameter",
+                "path": [
+                  "candidate"
+                ]
+              }
+            ]
+          },
+          "projection": null,
+          "returns": "delegate"
+        },
+        {
+          "handler": "create_invoice_draft_handler",
+          "method": "POST",
+          "path": "/plugin/v1/invoice-effects/create-draft",
+          "auth": "plugin_bearer",
+          "success_status": 201,
+          "response_mode": "json",
+          "emission": "table",
+          "authorize": [
+            {
+              "function": "authorize_capability",
+              "args": [
+                {
+                  "ref": "slot",
+                  "name": "access_control"
+                },
+                {
+                  "ref": "slot",
+                  "name": "actor"
+                },
+                {
+                  "ref": "literal",
+                  "value": "invoice.create_draft"
+                }
+              ],
+              "binds": true
+            }
+          ],
+          "delegate": {
+            "function": "create_invoice_draft",
+            "args": [
+              {
+                "ref": "slot",
+                "name": "invoice_workspace"
+              },
+              {
+                "ref": "parameter",
+                "path": [
+                  "command"
+                ]
+              },
+              {
+                "ref": "slot",
+                "name": "context"
+              }
+            ]
+          },
+          "projection": null,
+          "returns": "delegate"
+        },
+        {
+          "handler": "update_invoice_draft_handler",
+          "method": "POST",
+          "path": "/plugin/v1/invoice-effects/update-draft",
+          "auth": "plugin_bearer",
+          "success_status": 200,
+          "response_mode": "json",
+          "emission": "table",
+          "authorize": [
+            {
+              "function": "authorize_capability",
+              "args": [
+                {
+                  "ref": "slot",
+                  "name": "access_control"
+                },
+                {
+                  "ref": "slot",
+                  "name": "actor"
+                },
+                {
+                  "ref": "literal",
+                  "value": "invoice.update_draft"
+                }
+              ],
+              "binds": true
+            }
+          ],
+          "delegate": {
+            "function": "update_invoice_draft",
+            "args": [
+              {
+                "ref": "slot",
+                "name": "invoice_workspace"
+              },
+              {
+                "ref": "parameter",
+                "path": [
+                  "command"
+                ]
+              },
+              {
+                "ref": "slot",
+                "name": "context"
+              }
+            ]
+          },
+          "projection": null,
+          "returns": "delegate"
+        },
+        {
+          "handler": "confirm_invoice_handler",
+          "method": "POST",
+          "path": "/plugin/v1/invoice-effects/confirm",
+          "auth": "plugin_bearer",
+          "success_status": 200,
+          "response_mode": "json",
+          "emission": "table",
+          "authorize": [
+            {
+              "function": "authorize_capability",
+              "args": [
+                {
+                  "ref": "slot",
+                  "name": "access_control"
+                },
+                {
+                  "ref": "slot",
+                  "name": "actor"
+                },
+                {
+                  "ref": "literal",
+                  "value": "invoice.confirm"
+                }
+              ],
+              "binds": true
+            }
+          ],
+          "delegate": {
+            "function": "confirm_invoice",
+            "args": [
+              {
+                "ref": "slot",
+                "name": "invoice_workspace"
+              },
+              {
+                "ref": "parameter",
+                "path": [
+                  "command"
+                ]
+              },
+              {
+                "ref": "slot",
+                "name": "context"
+              }
+            ]
+          },
+          "projection": null,
+          "returns": "delegate"
+        },
+        {
+          "handler": "record_invoice_payment_handler",
+          "method": "POST",
+          "path": "/plugin/v1/invoice-effects/record-payment",
+          "auth": "plugin_bearer",
+          "success_status": 200,
+          "response_mode": "json",
+          "emission": "table",
+          "authorize": [
+            {
+              "function": "authorize_capability",
+              "args": [
+                {
+                  "ref": "slot",
+                  "name": "access_control"
+                },
+                {
+                  "ref": "slot",
+                  "name": "actor"
+                },
+                {
+                  "ref": "literal",
+                  "value": "invoice.record_payment"
+                }
+              ],
+              "binds": true
+            }
+          ],
+          "delegate": {
+            "function": "record_invoice_payment",
+            "args": [
+              {
+                "ref": "slot",
+                "name": "invoice_workspace"
+              },
+              {
+                "ref": "parameter",
+                "path": [
+                  "command"
+                ]
+              },
+              {
+                "ref": "slot",
+                "name": "context"
+              }
+            ]
+          },
+          "projection": null,
+          "returns": "delegate"
+        },
+        {
+          "handler": "attach_invoice_source_metadata_handler",
+          "method": "POST",
+          "path": "/plugin/v1/invoice-effects/attach-source-metadata",
+          "auth": "plugin_bearer",
+          "success_status": 200,
+          "response_mode": "json",
+          "emission": "table",
+          "authorize": [
+            {
+              "function": "authorize_capability",
+              "args": [
+                {
+                  "ref": "slot",
+                  "name": "access_control"
+                },
+                {
+                  "ref": "slot",
+                  "name": "actor"
+                },
+                {
+                  "ref": "literal",
+                  "value": "invoice.attach_source_metadata"
+                }
+              ],
+              "binds": true
+            }
+          ],
+          "delegate": {
+            "function": "attach_invoice_source_metadata",
+            "args": [
+              {
+                "ref": "slot",
+                "name": "invoice_workspace"
+              },
+              {
+                "ref": "parameter",
+                "path": [
+                  "command"
+                ]
+              },
+              {
+                "ref": "slot",
+                "name": "context"
+              }
+            ]
+          },
+          "projection": null,
+          "returns": "delegate"
+        },
+        {
+          "handler": "archive_invoice_handler",
+          "method": "POST",
+          "path": "/plugin/v1/invoice-effects/archive",
+          "auth": "plugin_bearer",
+          "success_status": 200,
+          "response_mode": "json",
+          "emission": "table",
+          "authorize": [
+            {
+              "function": "authorize_capability",
+              "args": [
+                {
+                  "ref": "slot",
+                  "name": "access_control"
+                },
+                {
+                  "ref": "slot",
+                  "name": "actor"
+                },
+                {
+                  "ref": "literal",
+                  "value": "invoice.archive"
+                }
+              ],
+              "binds": true
+            }
+          ],
+          "delegate": {
+            "function": "archive_invoice",
+            "args": [
+              {
+                "ref": "slot",
+                "name": "invoice_workspace"
+              },
+              {
+                "ref": "parameter",
+                "path": [
+                  "command"
+                ]
+              },
+              {
+                "ref": "slot",
+                "name": "context"
+              }
+            ]
+          },
+          "projection": null,
+          "returns": "delegate"
+        },
+        {
+          "handler": "get_project_summary_handler",
+          "method": "GET",
+          "path": "/plugin/v1/projects/{project_id}/summary",
+          "auth": "plugin_bearer",
+          "success_status": 200,
+          "response_mode": "json",
+          "emission": "table",
+          "authorize": [
+            {
+              "function": "authorize_capability",
+              "args": [
+                {
+                  "ref": "slot",
+                  "name": "access_control"
+                },
+                {
+                  "ref": "slot",
+                  "name": "actor"
+                },
+                {
+                  "ref": "literal",
+                  "value": "project.summary"
+                }
+              ],
+              "binds": false
+            }
+          ],
+          "delegate": {
+            "function": "get_project_summary",
+            "args": [
+              {
+                "ref": "slot",
+                "name": "project_workspace"
+              },
+              {
+                "ref": "parameter",
+                "path": [
+                  "project_id"
+                ]
+              },
+              {
+                "ref": "parameter",
+                "path": [
+                  "content_hash"
+                ]
+              }
+            ]
+          },
+          "projection": null,
+          "returns": "delegate"
+        },
+        {
+          "handler": "validate_estimate_handler",
+          "method": "POST",
+          "path": "/plugin/v1/estimates/validate",
+          "auth": "plugin_bearer",
+          "success_status": 200,
+          "response_mode": "json",
+          "emission": "table",
+          "authorize": [
+            {
+              "function": "authorize_capability",
+              "args": [
+                {
+                  "ref": "slot",
+                  "name": "access_control"
+                },
+                {
+                  "ref": "slot",
+                  "name": "actor"
+                },
+                {
+                  "ref": "literal",
+                  "value": "estimate.validate"
+                }
+              ],
+              "binds": false
+            }
+          ],
+          "delegate": {
+            "function": "validate_estimate",
+            "args": [
+              {
+                "ref": "slot",
+                "name": "project_workspace"
+              },
+              {
+                "ref": "parameter",
+                "path": [
+                  "proposal"
+                ]
+              }
+            ]
+          },
+          "projection": null,
+          "returns": "delegate"
+        },
+        {
+          "handler": "derive_shopping_list_handler",
+          "method": "POST",
+          "path": "/plugin/v1/shopping-lists/derive",
+          "auth": "plugin_bearer",
+          "success_status": 200,
+          "response_mode": "json",
+          "emission": "table",
+          "authorize": [
+            {
+              "function": "authorize_capability",
+              "args": [
+                {
+                  "ref": "slot",
+                  "name": "access_control"
+                },
+                {
+                  "ref": "slot",
+                  "name": "actor"
+                },
+                {
+                  "ref": "literal",
+                  "value": "shopping_list.derive"
+                }
+              ],
+              "binds": false
+            }
+          ],
+          "delegate": {
+            "function": "derive_shopping_list",
+            "args": [
+              {
+                "ref": "slot",
+                "name": "project_workspace"
+              },
+              {
+                "ref": "parameter",
+                "path": [
+                  "payload"
+                ]
+              }
+            ]
+          },
+          "projection": null,
+          "returns": "delegate"
+        },
+        {
+          "handler": "attach_project_estimate_handler",
+          "method": "POST",
+          "path": "/plugin/v1/project-effects/attach-estimate",
+          "auth": "plugin_bearer",
+          "success_status": 200,
+          "response_mode": "json",
+          "emission": "table",
+          "authorize": [
+            {
+              "function": "authorize_capability",
+              "args": [
+                {
+                  "ref": "slot",
+                  "name": "access_control"
+                },
+                {
+                  "ref": "slot",
+                  "name": "actor"
+                },
+                {
+                  "ref": "literal",
+                  "value": "project.attach_estimate"
+                }
+              ],
+              "binds": true
+            }
+          ],
+          "delegate": {
+            "function": "attach_project_estimate",
+            "args": [
+              {
+                "ref": "slot",
+                "name": "project_workspace"
+              },
+              {
+                "ref": "parameter",
+                "path": [
+                  "command"
+                ]
+              },
+              {
+                "ref": "slot",
+                "name": "context"
+              }
+            ]
+          },
+          "projection": null,
+          "returns": "delegate"
+        },
+        {
+          "handler": "save_shopping_list_handler",
+          "method": "POST",
+          "path": "/plugin/v1/project-effects/save-shopping-list",
+          "auth": "plugin_bearer",
+          "success_status": 201,
+          "response_mode": "json",
+          "emission": "table",
+          "authorize": [
+            {
+              "function": "authorize_capability",
+              "args": [
+                {
+                  "ref": "slot",
+                  "name": "access_control"
+                },
+                {
+                  "ref": "slot",
+                  "name": "actor"
+                },
+                {
+                  "ref": "literal",
+                  "value": "shopping_list.save"
+                }
+              ],
+              "binds": true
+            }
+          ],
+          "delegate": {
+            "function": "save_shopping_list",
+            "args": [
+              {
+                "ref": "slot",
+                "name": "project_workspace"
+              },
+              {
+                "ref": "parameter",
+                "path": [
+                  "command"
+                ]
+              },
+              {
+                "ref": "slot",
+                "name": "context"
+              }
+            ]
+          },
+          "projection": null,
+          "returns": "delegate"
+        },
+        {
+          "handler": "issue_upload_handoff_handler",
+          "method": "POST",
+          "path": "/plugin/v1/source-upload-handoffs",
+          "auth": "plugin_bearer",
+          "success_status": 201,
+          "response_mode": "json",
+          "emission": "table",
+          "authorize": [
+            {
+              "function": "authorize_capability",
+              "args": [
+                {
+                  "ref": "slot",
+                  "name": "access_control"
+                },
+                {
+                  "ref": "slot",
+                  "name": "actor"
+                },
+                {
+                  "ref": "literal",
+                  "value": "source_upload_handoff.issue"
+                }
+              ],
+              "binds": true
+            }
+          ],
+          "delegate": {
+            "function": "issue_upload_handoff",
+            "args": [
+              {
+                "ref": "slot",
+                "name": "source_custody"
+              },
+              {
+                "ref": "parameter",
+                "path": [
+                  "command"
+                ]
+              },
+              {
+                "ref": "slot",
+                "name": "context"
+              }
+            ]
+          },
+          "projection": null,
+          "returns": "delegate"
+        },
+        {
+          "handler": "release_vps_working_set_handler",
+          "method": "POST",
+          "path": "/plugin/v1/vps-working-set/releases",
+          "auth": "plugin_bearer",
+          "success_status": 200,
+          "response_mode": "json",
+          "emission": "table",
+          "authorize": [
+            {
+              "function": "authorize_capability",
+              "args": [
+                {
+                  "ref": "slot",
+                  "name": "access_control"
+                },
+                {
+                  "ref": "slot",
+                  "name": "actor"
+                },
+                {
+                  "ref": "literal",
+                  "value": "vps_working_set.release"
+                }
+              ],
+              "binds": true
+            }
+          ],
+          "delegate": {
+            "function": "release_vps_working_set",
+            "args": [
+              {
+                "ref": "slot",
+                "name": "source_custody"
+              },
+              {
+                "ref": "parameter",
+                "path": [
+                  "command"
+                ]
+              },
+              {
+                "ref": "slot",
+                "name": "context"
+              }
+            ]
+          },
+          "projection": null,
+          "returns": "delegate"
+        },
+        {
+          "handler": "accept_source_upload_handler",
+          "method": "POST",
+          "path": "/web/v1/source-uploads/{handoff_id}",
+          "auth": "browser_edge",
+          "success_status": 201,
+          "response_mode": "json",
+          "emission": "irregular",
+          "irregular_reason": "Multipart UploadFile streaming, handoff-secret handling, CSRF verification, and bounded content identification cannot be lowered by the table emitter without materializing untrusted bytes; the canonical web_gateway handler performs only this transport transformation and delegates custody policy."
+        },
+        {
+          "handler": "serve_source_download_handler",
+          "method": "GET",
+          "path": "/web/v1/cards/{card_id}/sources/{source_id}",
+          "auth": "browser_edge",
+          "success_status": 200,
+          "response_mode": "binary",
+          "emission": "table",
+          "authorize": [
+            {
+              "function": "authorize_capability",
+              "args": [
+                {
+                  "ref": "slot",
+                  "name": "access_control"
+                },
+                {
+                  "ref": "slot",
+                  "name": "actor"
+                },
+                {
+                  "ref": "literal",
+                  "value": "source.download"
+                }
+              ],
+              "binds": true
+            }
+          ],
+          "delegate": {
+            "function": "serve_source_download",
+            "args": [
+              {
+                "ref": "slot",
+                "name": "web_gateway"
+              },
+              {
+                "ref": "parameter",
+                "path": [
+                  "card_id"
+                ]
+              },
+              {
+                "ref": "parameter",
+                "path": [
+                  "source_id"
+                ]
+              },
+              {
+                "ref": "slot",
+                "name": "context"
+              }
+            ]
+          },
+          "projection": {
+            "function": "_source_download_response",
+            "args": [
+              {
+                "ref": "slot",
+                "name": "result"
+              }
+            ]
+          },
+          "returns": "projection"
+        },
+        {
+          "handler": "observe_sync_compatibility_handler",
+          "method": "POST",
+          "path": "/sync/v1/compatibility/observe",
+          "auth": "local_bearer",
+          "success_status": 200,
+          "response_mode": "json",
+          "emission": "table",
+          "authorize": [
+            {
+              "function": "authorize_capability",
+              "args": [
+                {
+                  "ref": "slot",
+                  "name": "access_control"
+                },
+                {
+                  "ref": "slot",
+                  "name": "actor"
+                },
+                {
+                  "ref": "literal",
+                  "value": "synchronization.observe_compatibility"
+                }
+              ],
+              "binds": false
+            }
+          ],
+          "delegate": {
+            "function": "observe_sync_compatibility",
+            "args": [
+              {
+                "ref": "slot",
+                "name": "sync_gateway"
+              },
+              {
+                "ref": "parameter",
+                "path": [
+                  "payload"
+                ]
+              }
+            ]
+          },
+          "projection": null,
+          "returns": "delegate"
+        },
+        {
+          "handler": "discover_invoice_work_handler",
+          "method": "POST",
+          "path": "/sync/v1/invoice-work/discover",
+          "auth": "local_bearer",
+          "success_status": 200,
+          "response_mode": "json",
+          "emission": "table",
+          "authorize": [
+            {
+              "function": "authorize_capability",
+              "args": [
+                {
+                  "ref": "slot",
+                  "name": "access_control"
+                },
+                {
+                  "ref": "slot",
+                  "name": "actor"
+                },
+                {
+                  "ref": "literal",
+                  "value": "invoice_work.discover"
+                }
+              ],
+              "binds": false
+            }
+          ],
+          "delegate": {
+            "function": "discover_invoice_work",
+            "args": [
+              {
+                "ref": "slot",
+                "name": "invoice_exchange"
+              },
+              {
+                "ref": "slot",
+                "name": "actor"
+              },
+              {
+                "ref": "parameter",
+                "path": [
+                  "query"
+                ]
+              }
+            ]
+          },
+          "projection": null,
+          "returns": "delegate"
+        },
+        {
+          "handler": "pull_invoice_package_handler",
+          "method": "POST",
+          "path": "/sync/v1/invoice-packages/pull",
+          "auth": "local_bearer",
+          "success_status": 200,
+          "response_mode": "binary",
+          "emission": "table",
+          "authorize": [
+            {
+              "function": "authorize_capability",
+              "args": [
+                {
+                  "ref": "slot",
+                  "name": "access_control"
+                },
+                {
+                  "ref": "slot",
+                  "name": "actor"
+                },
+                {
+                  "ref": "literal",
+                  "value": "invoice_package.pull"
+                }
+              ],
+              "binds": false
+            }
+          ],
+          "delegate": {
+            "function": "pull_invoice_package",
+            "args": [
+              {
+                "ref": "slot",
+                "name": "invoice_exchange"
+              },
+              {
+                "ref": "slot",
+                "name": "actor"
+              },
+              {
+                "ref": "parameter",
+                "path": [
+                  "command"
+                ]
+              }
+            ]
+          },
+          "projection": {
+            "function": "_invoice_package_response",
+            "args": [
+              {
+                "ref": "slot",
+                "name": "result"
+              }
+            ]
+          },
+          "returns": "projection"
+        },
+        {
+          "handler": "record_invoice_transfer_receipt_handler",
+          "method": "POST",
+          "path": "/sync/v1/invoice-transfer-receipts/{issuance_id}",
+          "auth": "local_bearer",
+          "success_status": 200,
+          "response_mode": "json",
+          "emission": "table",
+          "authorize": [
+            {
+              "function": "authorize_capability",
+              "args": [
+                {
+                  "ref": "slot",
+                  "name": "access_control"
+                },
+                {
+                  "ref": "slot",
+                  "name": "actor"
+                },
+                {
+                  "ref": "literal",
+                  "value": "invoice_transfer.receipt"
+                }
+              ],
+              "binds": false
+            }
+          ],
+          "delegate": {
+            "function": "record_invoice_transfer_receipt",
+            "args": [
+              {
+                "ref": "slot",
+                "name": "invoice_exchange"
+              },
+              {
+                "ref": "slot",
+                "name": "actor"
+              },
+              {
+                "ref": "parameter",
+                "path": [
+                  "issuance_id"
+                ]
+              },
+              {
+                "ref": "parameter",
+                "path": [
+                  "receipt"
+                ]
+              }
+            ]
+          },
+          "projection": null,
+          "returns": "delegate"
+        },
+        {
+          "handler": "reconcile_invoice_transfer_handler",
+          "method": "POST",
+          "path": "/sync/v1/invoice-transfers/reconcile",
+          "auth": "local_bearer",
+          "success_status": 200,
+          "response_mode": "json",
+          "emission": "table",
+          "authorize": [
+            {
+              "function": "authorize_capability",
+              "args": [
+                {
+                  "ref": "slot",
+                  "name": "access_control"
+                },
+                {
+                  "ref": "slot",
+                  "name": "actor"
+                },
+                {
+                  "ref": "literal",
+                  "value": "invoice_transfer.reconcile"
+                }
+              ],
+              "binds": false
+            }
+          ],
+          "delegate": {
+            "function": "reconcile_invoice_transfer",
+            "args": [
+              {
+                "ref": "slot",
+                "name": "invoice_exchange"
+              },
+              {
+                "ref": "slot",
+                "name": "actor"
+              },
+              {
+                "ref": "parameter",
+                "path": [
+                  "payload"
+                ]
+              }
+            ]
+          },
+          "projection": null,
+          "returns": "delegate"
+        },
+        {
+          "handler": "publish_registry_catalogue_handler",
+          "method": "POST",
+          "path": "/sync/v1/registry-catalogues",
+          "auth": "local_bearer",
+          "success_status": 200,
+          "response_mode": "json",
+          "emission": "table",
+          "authorize": [
+            {
+              "function": "authorize_capability",
+              "args": [
+                {
+                  "ref": "slot",
+                  "name": "access_control"
+                },
+                {
+                  "ref": "slot",
+                  "name": "actor"
+                },
+                {
+                  "ref": "literal",
+                  "value": "registry_catalogue.publish"
+                }
+              ],
+              "binds": false
+            }
+          ],
+          "delegate": {
+            "function": "publish_registry_catalogue",
+            "args": [
+              {
+                "ref": "slot",
+                "name": "registry_replica"
+              },
+              {
+                "ref": "slot",
+                "name": "actor"
+              },
+              {
+                "ref": "parameter",
+                "path": [
+                  "delivery"
+                ]
+              }
+            ]
+          },
+          "projection": null,
+          "returns": "delegate"
+        },
+        {
+          "handler": "get_current_registry_catalogue_handler",
+          "method": "GET",
+          "path": "/plugin/v1/registry-catalogue",
+          "auth": "plugin_bearer",
+          "success_status": 200,
+          "response_mode": "json",
+          "emission": "table",
+          "authorize": [
+            {
+              "function": "authorize_capability",
+              "args": [
+                {
+                  "ref": "slot",
+                  "name": "access_control"
+                },
+                {
+                  "ref": "slot",
+                  "name": "actor"
+                },
+                {
+                  "ref": "literal",
+                  "value": "registry_catalogue.current"
+                }
+              ],
+              "binds": false
+            }
+          ],
+          "delegate": {
+            "function": "get_current_registry_catalogue",
+            "args": [
+              {
+                "ref": "slot",
+                "name": "registry_replica"
+              }
+            ]
+          },
+          "projection": null,
+          "returns": "delegate"
+        }
+      ],
+      "error_policy": {
+        "body": "empty",
+        "default_status": 500,
+        "mapping": [
+          {
+            "exception": "AuthenticationRequiredError",
+            "status": 401
+          },
+          {
+            "exception": "AuthorizationDeniedError",
+            "status": 403
+          },
+          {
+            "exception": "ResourceNotFoundError",
+            "status": 404
+          },
+          {
+            "exception": "RevisionConflictError",
+            "status": 409
+          },
+          {
+            "exception": "IdempotencyConflictError",
+            "status": 409
+          },
+          {
+            "exception": "ConfirmationRequiredError",
+            "status": 409
+          },
+          {
+            "exception": "OutcomeUnknownError",
+            "status": 409
+          },
+          {
+            "exception": "RequestTooLargeError",
+            "status": 413
+          },
+          {
+            "exception": "UnsupportedMediaTypeError",
+            "status": 415
+          },
+          {
+            "exception": "ValidationRejectedError",
+            "status": 422
+          },
+          {
+            "exception": "IntegrityMismatchError",
+            "status": 422
+          },
+          {
+            "exception": "ContractIncompatibleError",
+            "status": 426
+          },
+          {
+            "exception": "AuthenticationThrottledError",
+            "status": 429
+          },
+          {
+            "exception": "ServiceUnavailableError",
+            "status": 503
+          },
+          {
+            "exception": "BackupVerificationFailedError",
+            "status": 503
+          }
+        ],
+        "unavailable_to_module": []
+      },
+      "irregular_ownership": {
+        "module": "web_gateway"
+      }
+    },
+    "registry_catalogue_hash": {
+      "algorithm": "SHA-256",
+      "encoding": "UTF-8",
+      "json_object_key_order": "lexicographic",
+      "snapshot_order_key": "project_id"
+    },
+    "runtime_durability": {
+      "metadata_authority": "postgresql",
+      "source_byte_authority": "protected_vps_filesystem",
+      "transaction_scope": "one_application_operation",
+      "domain_reads_environment": false,
+      "domain_opens_database_connections": false,
+      "path_from_caller_data": false,
+      "publication_hash": "sha256",
+      "publication_primitive": "same_filesystem_atomic_rename",
+      "availability_requires_metadata_and_verified_bytes": true,
+      "offline_local_backend_preserves_web_operations": true
+    },
+    "persistence_backend": {
+      "kind": "persistence_backend",
+      "schema_version": 3,
+      "backend": {
+        "engine": "postgres",
+        "emitter": "postgres_sync_v1"
+      },
+      "conventions": {
+        "assert_open": "inside_try",
+        "guard_reraise": "unchanged",
+        "codec_naming": "row_to_snake_model",
+        "primary_key_not_null": "always"
+      },
+      "tables": [
+        {
+          "table": "cabinet_effects",
+          "table_name_ref": "cabinet_effect_table_name",
+          "model": "CabinetEffect",
+          "read_by": null,
+          "columns": [
+            {
+              "column": "effect_id",
+              "field": "effect_id",
+              "storage": "text",
+              "nullable": false,
+              "check": null,
+              "element_model": null
+            },
+            {
+              "column": "idempotency_key",
+              "field": "idempotency_key",
+              "storage": "text",
+              "nullable": false,
+              "check": null,
+              "element_model": null
+            },
+            {
+              "column": "operation_kind",
+              "field": "operation_kind",
+              "storage": "text",
+              "nullable": false,
+              "check": null,
+              "element_model": null
+            },
+            {
+              "column": "principal_id",
+              "field": "principal_id",
+              "storage": "text",
+              "nullable": false,
+              "check": null,
+              "element_model": null
+            },
+            {
+              "column": "actor",
+              "field": "actor",
+              "storage": "json_model",
+              "nullable": false,
+              "check": null,
+              "element_model": "ActorReference"
+            },
+            {
+              "column": "target_identity",
+              "field": "target_identity",
+              "storage": "text",
+              "nullable": true,
+              "check": null,
+              "element_model": null
+            },
+            {
+              "column": "expected_revision",
+              "field": "expected_revision",
+              "storage": "json_model",
+              "nullable": true,
+              "check": null,
+              "element_model": "CardRevisionReference"
+            },
+            {
+              "column": "request_hash",
+              "field": "request_hash",
+              "storage": "text",
+              "nullable": false,
+              "check": null,
+              "element_model": null
+            },
+            {
+              "column": "status",
+              "field": "status",
+              "storage": "text",
+              "nullable": false,
+              "check": null,
+              "element_model": null
+            },
+            {
+              "column": "result_revision",
+              "field": "result_revision",
+              "storage": "json_model",
+              "nullable": true,
+              "check": null,
+              "element_model": "CardRevisionReference"
+            },
+            {
+              "column": "safe_error_code",
+              "field": "safe_error_code",
+              "storage": "text",
+              "nullable": true,
+              "check": null,
+              "element_model": null
+            },
+            {
+              "column": "created_at",
+              "field": "created_at",
+              "storage": "datetime",
+              "nullable": false,
+              "check": null,
+              "element_model": null
+            },
+            {
+              "column": "completed_at",
+              "field": "completed_at",
+              "storage": "datetime",
+              "nullable": true,
+              "check": null,
+              "element_model": null
+            }
+          ],
+          "primary_key": [
+            "effect_id"
+          ],
+          "unique": [
+            [
+              "principal_id",
+              "idempotency_key"
+            ]
+          ]
+        }
+      ],
+      "aggregates": [],
+      "repositories": [
+        {
+          "repository": "PostgresCabinetUnitOfWork",
+          "module": "cabinet_persistence",
+          "schema_function": "create_cabinet_schema",
+          "emission": "table",
+          "transaction": "owned",
+          "methods": [
+            {
+              "method": "lock_effect",
+              "query": "lock",
+              "scope": "cabinet.effect",
+              "keys": [
+                "effect_id"
+              ]
+            },
+            {
+              "method": "load_effect",
+              "query": "get_by_key",
+              "table": "cabinet_effects",
+              "filter": [
+                {
+                  "column": "effect_id",
+                  "bind": "argument",
+                  "argument": "effect_id"
+                }
+              ],
+              "select": [
+                "effect_id",
+                "idempotency_key",
+                "operation_kind",
+                "principal_id",
+                "actor",
+                "target_identity",
+                "expected_revision",
+                "request_hash",
+                "status",
+                "result_revision",
+                "safe_error_code",
+                "created_at",
+                "completed_at"
+              ]
+            },
+            {
+              "method": "load_effect_by_idempotency",
+              "query": "get_unique",
+              "table": "cabinet_effects",
+              "filter": [
+                {
+                  "column": "principal_id",
+                  "bind": "argument",
+                  "argument": "principal_id"
+                },
+                {
+                  "column": "idempotency_key",
+                  "bind": "argument",
+                  "argument": "idempotency_key"
+                }
+              ],
+              "select": [
+                "effect_id",
+                "idempotency_key",
+                "operation_kind",
+                "principal_id",
+                "actor",
+                "target_identity",
+                "expected_revision",
+                "request_hash",
+                "status",
+                "result_revision",
+                "safe_error_code",
+                "created_at",
+                "completed_at"
+              ],
+              "on_multiple": "error"
+            },
+            {
+              "method": "insert_effect",
+              "query": "insert",
+              "table": "cabinet_effects",
+              "columns": [
+                "effect_id",
+                "idempotency_key",
+                "operation_kind",
+                "principal_id",
+                "actor",
+                "target_identity",
+                "expected_revision",
+                "request_hash",
+                "status",
+                "result_revision",
+                "safe_error_code",
+                "created_at",
+                "completed_at"
+              ]
+            },
+            {
+              "method": "update_effect_result",
+              "query": "update_fields",
+              "table": "cabinet_effects",
+              "filter": [
+                {
+                  "column": "effect_id",
+                  "bind": "argument",
+                  "argument": "effect_id"
+                }
+              ],
+              "updates": [
+                "status",
+                "result_revision",
+                "safe_error_code",
+                "completed_at"
+              ],
+              "require_existing": true
+            }
+          ]
+        }
+      ]
+    },
+
+    "source_byte_store_backend": {
+      "kind": "source_byte_store_backend",
+      "schema_version": 1,
+      "backend": {
+        "emitter": "python_filesystem_source_byte_store_v1"
+      },
+      "wiring": {
+        "module": "source_byte_store",
+        "concrete_class": "LocalFilesystemSourceByteStore",
+        "interface": "SourceByteStore",
+        "models_module": "cabinet_web_backend.models"
+      },
+      "layout": {
+        "staging_directory": "staging",
+        "final_directory": "final",
+        "hash_algorithm": "sha256",
+        "final_path_scheme": "sha256_content_addressed",
+        "publication_primitive": "same_filesystem_atomic_rename"
+      }
+    }
+  }
+}

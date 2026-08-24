@@ -110,8 +110,8 @@ def _review_check(case_root: Path | None) -> AdmissionCheck:
     if not ledger_path.is_file():
         return AdmissionCheck(
             "FA002",
-            CHECK_NOT_APPLICABLE,
-            "Case has no Stage 8.1 module-review ledger.",
+            CHECK_BLOCK,
+            "Case has no Stage 8.1 module-review ledger; semantic implementation readiness is unproven.",
             {"path": str(ledger_path)},
         )
     ledger = _load_json(ledger_path)
@@ -147,6 +147,110 @@ def _review_check(case_root: Path | None) -> AdmissionCheck:
         CHECK_PASS,
         "Stage 8.1 is closed and every recorded module slice hash is current.",
         {"path": str(ledger_path), "summary": summary},
+    )
+
+
+def _runtime_persistence_check(source_spec: object, case_root: Path | None) -> AdmissionCheck:
+    """Require a closed persistence backend when the spec declares master state.
+
+    ``persistence.<Model>.class = master`` is structured evidence that the
+    application owns durable state.  Treating the backend as optional in that
+    situation leaves repository, unit-of-work, atomicity, and restart behavior
+    for the generator to invent.  Stage 9 must stop before that can happen.
+
+    Explicit ``--spec`` admission remains outside the case authoring sequence;
+    it has no Stage 8.1/runtime-closure evidence to validate here.
+    """
+    if case_root is None:
+        return AdmissionCheck(
+            "FA013",
+            CHECK_NOT_APPLICABLE,
+            "Explicit --spec admission has no case-level runtime-closure evidence.",
+            {},
+        )
+    spec = source_spec if isinstance(source_spec, dict) else {}
+    persistence = spec.get("persistence")
+    persistent_masters = sorted(
+        name
+        for name, declaration in (persistence.items() if isinstance(persistence, dict) else [])
+        if isinstance(name, str)
+        and isinstance(declaration, dict)
+        and declaration.get("class") == "master"
+    )
+    if not persistent_masters:
+        return AdmissionCheck(
+            "FA013",
+            CHECK_NOT_APPLICABLE,
+            "Case declares no master persistence requiring a backend closure.",
+            {"persistent_masters": []},
+        )
+    rules = spec.get("rules")
+    backend = rules.get("persistence_backend") if isinstance(rules, dict) else None
+    if not isinstance(backend, dict):
+        return AdmissionCheck(
+            "FA013",
+            CHECK_BLOCK,
+            "Master persistence is declared without rules.persistence_backend; runtime implementation decisions remain open.",
+            {
+                "persistent_masters": persistent_masters,
+                "missing": "rules.persistence_backend",
+                "revision_entrypoint": "Stage 8.1 module review",
+                "repair_policy": "return each open decision to its earliest owning design state",
+            },
+        )
+    tables = backend.get("tables")
+    repositories = backend.get("repositories")
+    if not isinstance(tables, list) or not tables or not isinstance(repositories, list) or not repositories:
+        return AdmissionCheck(
+            "FA013",
+            CHECK_BLOCK,
+            "Master persistence has a backend marker but no concrete table/repository lowering.",
+            {
+                "persistent_masters": persistent_masters,
+                "tables": len(tables) if isinstance(tables, list) else None,
+                "repositories": len(repositories) if isinstance(repositories, list) else None,
+                "revision_entrypoint": "Stage 8.1 module review",
+                "repair_policy": "complete persistence projection and repository ownership before generation",
+            },
+        )
+    closure_path = case_root / "70_persistence_closure.json"
+    if not closure_path.is_file():
+        return AdmissionCheck(
+            "FA013",
+            CHECK_BLOCK,
+            "Structured persistence backend has no post-contract authoring closure.",
+            {
+                "persistent_masters": persistent_masters,
+                "missing": str(closure_path),
+                "revision_entrypoint": "Stage 8.1 module review",
+            },
+        )
+    closure = _load_json(closure_path)
+    if closure.get("status") != "closed":
+        return AdmissionCheck(
+            "FA013",
+            CHECK_BLOCK,
+            "Persistence backend authoring remains open and is not eligible for Factory generation.",
+            {
+                "persistent_masters": persistent_masters,
+                "path": str(closure_path),
+                "closure_status": closure.get("status"),
+                "tables": len(tables),
+                "repositories": len(repositories),
+                "revision_entrypoint": "Stage 8.1 module review",
+            },
+        )
+    return AdmissionCheck(
+        "FA013",
+        CHECK_PASS,
+        "Master persistence has a closed structured persistence-backend authoring handoff.",
+        {
+            "persistent_masters": persistent_masters,
+            "backend_kind": backend.get("kind"),
+            "backend_schema_version": backend.get("schema_version"),
+            "tables": len(tables),
+            "repositories": len(repositories),
+        },
     )
 
 
@@ -699,6 +803,7 @@ def check(
         _standard_check(workbench_root, factory_root),
         _language_check(source),
         _implementation_obligations_check(source),
+        _runtime_persistence_check(source_spec, case_root),
         _external_contract_check(case_root),
         _closure_gaps_check(case_root),
     ]

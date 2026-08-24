@@ -1,0 +1,88 @@
+{
+  "schema_version": "spec_workbench_persistence_closure.v1",
+  "status": "open",
+  "backend_ir": {
+    "kind": "persistence_backend",
+    "schema_version": 3,
+    "backend": {
+      "engine": "postgres",
+      "emitter": "postgres_sync_v1"
+    },
+    "conventions": {
+      "assert_open": "inside_try",
+      "guard_reraise": "unchanged",
+      "codec_naming": "row_to_snake_model",
+      "primary_key_not_null": "always"
+    },
+    "tables": [
+      {
+        "table": "cabinet_effects",
+        "table_name_ref": "cabinet_effect_table_name",
+        "model": "CabinetEffect",
+        "read_by": null,
+        "columns": [
+          {"column": "effect_id", "field": "effect_id", "storage": "text", "nullable": false, "check": null, "element_model": null},
+          {"column": "idempotency_key", "field": "idempotency_key", "storage": "text", "nullable": false, "check": null, "element_model": null},
+          {"column": "operation_kind", "field": "operation_kind", "storage": "text", "nullable": false, "check": null, "element_model": null},
+          {"column": "principal_id", "field": "principal_id", "storage": "text", "nullable": false, "check": null, "element_model": null},
+          {"column": "actor", "field": "actor", "storage": "json_model", "nullable": false, "check": null, "element_model": "ActorReference"},
+          {"column": "target_identity", "field": "target_identity", "storage": "text", "nullable": true, "check": null, "element_model": null},
+          {"column": "expected_revision", "field": "expected_revision", "storage": "json_model", "nullable": true, "check": null, "element_model": "CardRevisionReference"},
+          {"column": "request_hash", "field": "request_hash", "storage": "text", "nullable": false, "check": null, "element_model": null},
+          {"column": "status", "field": "status", "storage": "text", "nullable": false, "check": null, "element_model": null},
+          {"column": "result_revision", "field": "result_revision", "storage": "json_model", "nullable": true, "check": null, "element_model": "CardRevisionReference"},
+          {"column": "safe_error_code", "field": "safe_error_code", "storage": "text", "nullable": true, "check": null, "element_model": null},
+          {"column": "created_at", "field": "created_at", "storage": "datetime", "nullable": false, "check": null, "element_model": null},
+          {"column": "completed_at", "field": "completed_at", "storage": "datetime", "nullable": true, "check": null, "element_model": null}
+        ],
+        "primary_key": ["effect_id"],
+        "unique": [["principal_id", "idempotency_key"]]
+      }
+    ],
+    "aggregates": [],
+    "repositories": [
+      {
+        "repository": "PostgresCabinetUnitOfWork",
+        "module": "cabinet_persistence",
+        "schema_function": "create_cabinet_schema",
+        "emission": "table",
+        "transaction": "owned",
+        "methods": [
+          {"method": "lock_effect", "query": "lock", "scope": "cabinet.effect", "keys": ["effect_id"]},
+          {
+            "method": "load_effect",
+            "query": "get_by_key",
+            "table": "cabinet_effects",
+            "filter": [{"column": "effect_id", "bind": "argument", "argument": "effect_id"}],
+            "select": ["effect_id", "idempotency_key", "operation_kind", "principal_id", "actor", "target_identity", "expected_revision", "request_hash", "status", "result_revision", "safe_error_code", "created_at", "completed_at"]
+          },
+          {
+            "method": "load_effect_by_idempotency",
+            "query": "get_unique",
+            "table": "cabinet_effects",
+            "filter": [
+              {"column": "principal_id", "bind": "argument", "argument": "principal_id"},
+              {"column": "idempotency_key", "bind": "argument", "argument": "idempotency_key"}
+            ],
+            "select": ["effect_id", "idempotency_key", "operation_kind", "principal_id", "actor", "target_identity", "expected_revision", "request_hash", "status", "result_revision", "safe_error_code", "created_at", "completed_at"],
+            "on_multiple": "error"
+          },
+          {
+            "method": "insert_effect",
+            "query": "insert",
+            "table": "cabinet_effects",
+            "columns": ["effect_id", "idempotency_key", "operation_kind", "principal_id", "actor", "target_identity", "expected_revision", "request_hash", "status", "result_revision", "safe_error_code", "created_at", "completed_at"]
+          },
+          {
+            "method": "update_effect_result",
+            "query": "update_fields",
+            "table": "cabinet_effects",
+            "filter": [{"column": "effect_id", "bind": "argument", "argument": "effect_id"}],
+            "updates": ["status", "result_revision", "safe_error_code", "completed_at"],
+            "require_existing": true
+          }
+        ]
+      }
+    ]
+  }
+}
