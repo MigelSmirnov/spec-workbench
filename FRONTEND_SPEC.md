@@ -1,225 +1,162 @@
 # Frontend Specification
 
-> Draft authoring/compiler contract for `frontend_spec/v1`.
+> Authoring/compiler contract draft for `frontend_spec/v1`.
 >
-> Status: working design. This document defines the smallest useful frontend
-> specification shape to prove against Room Planner before it is promoted into a
-> normative standard.
+> Status: **v1 implementation contract** for the first Room Planner compiler
+> slice. The language is intentionally small. New fields require real case
+> evidence rather than speculative UI modeling.
 
 `FRONTEND_EDITOR.md` defines the shared editor architecture and ownership
-boundaries. This document answers a different question:
+boundaries. `FRONTEND_PACKAGE_MANIFEST.md` defines the generated package/linker
+contract. This document defines the **application-authored composition file**.
 
-> Which frontend decisions must be authored, which facts are derived from the
-> backend specification, which behavior comes from reusable packages, and what
-> should the frontend compiler emit deterministically?
+The frontend spec answers:
 
-The goal is not to describe React files. The goal is to describe a planner
-workspace as machine-readable decisions and references to declared capabilities.
+> Which workspace/layers/tools/symbols/panels does this planner compose, which
+> ownership mode applies to each layer, and which explicit irregular areas remain
+> outside deterministic frontend ownership?
+
+It does not describe React files or duplicate backend HTTP contracts.
 
 ---
 
-# 1. Core compilation model
-
-The frontend build has four distinct sources of truth.
+# 1. Four sources of frontend truth
 
 ```text
 1. backend canonical specification
         models / contracts / browser-visible HTTP surface / errors
 
 2. frontend_spec.yaml
-        workspace composition / layers / tools / symbols / bindings / panels
+        application workspace composition and explicit frontend decisions
 
-3. reusable package manifests
-        capabilities / commands / renderers / snap providers / layer definitions
+3. generated package manifests
+        verified capabilities / exports / package provenance / layer support
 
 4. explicit irregular code
-        project-specific behavior not represented by closed IR
+        behavior not represented by closed frontend IR
 ```
 
-They compile into one validated frontend IR:
+They normalize into one strict IR:
 
 ```text
 backend global_spec.json
         │
-        ├── derive browser contract IR
-        │
+        └── browser_contract_ir
 frontend_spec.yaml
-        │
-package manifests
-        │
-        ▼
-FRONTEND NORMALIZER
-        │
-        ▼
+resolved package builds
+        └── generated package manifests
+symbol manifests/catalogs
+        ↓
+FRONTEND NORMALIZER + LINKER
+        ↓
 validated frontend_ir.json
-        │
-        ├── TypeScript models/client
-        ├── workspace registration
-        ├── layer registration
-        ├── tools/bindings
-        ├── palette/symbol registry
-        ├── panel/layout config
-        └── irregular imports
-        │
-        ▼
-shared editor runtime + reusable planner layers
-        │
-        ▼
+        ↓
+generated TS client + registrations + imports
+        ↓
+shared runtime/packages + explicit irregular modules
+        ↓
 browser application
 ```
 
-A decision must have one owner. The frontend spec MUST NOT manually duplicate a
-fact that can be derived canonically from the backend specification or a package
-manifest.
+A decision has one owner. The frontend spec MUST NOT manually copy facts that are
+canonically derivable from backend contracts or generated package manifests.
 
 ---
 
 # 2. What is derived from the backend specification
 
-The Python/backend specification remains the source of truth for the application
-boundary it already owns.
-
-The frontend compiler should derive at least the following from canonical backend
-spec data when available:
+The frontend compiler derives browser-facing transport facts from the canonical
+backend specification when available:
 
 - browser-visible request/response models;
-- enums and discriminated unions used by those models;
-- browser-visible operation identities;
-- HTTP method and path;
+- enums/discriminated unions needed by those models;
+- stable browser operation identities;
+- HTTP method/path;
 - path/query/body parameter names and types;
 - return/result type;
-- authentication requirement represented by the router IR;
-- success response mode/status where relevant to client generation;
-- canonical error mapping exposed by the HTTP boundary;
-- serialization/deserialization shape;
-- model schema/version information required by the browser boundary.
+- auth requirement represented by router IR;
+- response/status mode required by client generation;
+- canonical HTTP error mapping;
+- serialization shape;
+- relevant schema/version metadata.
 
-The browser-visible operation catalog SHOULD be derived from the deterministic
-HTTP-router IR rather than from every Python `contract`. The existence of an
-internal Python function does not make it a browser API.
-
-Conceptually:
+The browser-visible operation catalog SHOULD be derived from deterministic
+`http_router_backend/v1`, not from every Python function contract.
 
 ```text
-contracts + models + http_router_backend/v1
+models + contracts + http_router_backend/v1
                 │
                 ▼
         browser_contract_ir
-                │
-        ┌───────┴────────┐
-        ▼                ▼
-FastAPI router      TypeScript client
+          ├── FastAPI emitter
+          └── TypeScript client emitter
 ```
 
-The frontend specification MUST NOT restate method/path/signature/body/result for
-an operation already owned by the canonical backend contract.
-
-A frontend tool or form may reference a browser operation by stable operation
-identity, for example:
+The frontend spec references operations by stable identity only:
 
 ```yaml
-submit:
-  operation: project.update_draft
+operation: project.save_draft
 ```
 
-The referenced operation must exist in `browser_contract_ir` or validation fails.
+It MUST NOT restate method/path/signature/body/result/auth.
 
 ---
 
-# 3. What is authored in `frontend_spec.yaml`
+# 3. What reusable packages own
 
-The frontend spec owns decisions that the backend cannot infer safely:
-
-- which workspace kind the application uses;
-- renderer/runtime policy;
-- which reusable layers are loaded;
-- ownership mode of each loaded layer;
-- which tools are exposed;
-- which reusable commands/capabilities tools invoke;
-- which symbols/catalogs appear in palettes;
-- keyboard/gesture/menu bindings;
-- standard panel/layout composition;
-- visibility and editor-only presentation policy;
-- explicit irregular owners.
-
-The frontend spec describes capabilities and composition. It MUST NOT prescribe
-TypeScript filenames, React component internals, Konva nodes, JSX, or imperative
-pointer-handler algorithms.
-
----
-
-# 4. What is implemented once in reusable packages
-
-Reusable packages own algorithms and behavior that should not be regenerated for
-every planner.
-
-Examples:
+Reusable packages implement algorithms once:
 
 ```text
 @factory/editor-core
-    command bus / selection / undo-redo / tool lifecycle
+    commands / selection / history / tool lifecycle
 
 @factory/editor-geometry
-    intersections / projection / coordinate transforms / snap primitives
+    intersections / transforms / snap primitives
 
 @factory/editor-scene
-    layer registry / anchors / renderer registration
+    layers / anchors / renderer registration
 
 @factory/editor-canvas
     Canvas adapter / pointer normalization / picking
 
 @factory/editor-svg-symbols
-    SVG symbol loading / validation / projection
+    SVG loading / validation / projection
 
 @factory/editor-react
-    workspace shell / palette / panels / toolbar
+    standard workspace shell / panels / toolbar / palette
 
 @planner/building-layer
-    wall nodes / walls / joins / openings / building commands
+    wall topology / joins / openings / building commands
 ```
 
-For example, `frontend_spec.yaml` may request capability
-`building.wall.create`; it does not cause the emitter to invent a wall-creation
-algorithm. The capability must be provided by a declared package manifest.
+`frontend_spec.yaml` selects a capability; it does not cause the emitter to
+invent its implementation.
+
+Canonical package manifests are generated by package builds and verified against
+their public TypeScript export surfaces as defined in
+`FRONTEND_PACKAGE_MANIFEST.md`.
 
 ---
 
-# 5. What remains handwritten or LLM-generated
+# 4. What remains handwritten/LLM
 
-Handwritten/LLM code is allowed only for explicitly declared irregular areas.
+Only explicitly declared `irregular` areas may remain outside deterministic
+frontend ownership, for example:
 
-Typical examples:
-
-- novel direct-manipulation behavior with no reusable capability yet;
-- highly specialized domain geometry;
+- novel direct manipulation not represented by v1;
+- specialized domain geometry;
 - unique visualization;
-- one-off workflow UI that does not fit the standard workspace composition;
-- an experimental interaction being evaluated before promotion to shared IR.
+- bespoke workflow UI;
+- experimental behavior being evaluated before promotion into shared runtime/IR.
 
-The intended lifecycle is:
+Invalid deterministic IR never falls back to LLM.
 
-```text
-one irregular implementation
-        ↓
-repeated in several planners
-        ↓
-identify stable semantic class
-        ↓
-shared package capability or closed frontend IR
-        ↓
-deterministic use thereafter
-```
-
-An emitter MUST NOT fall back to LLM because deterministic IR is invalid.
+Repeated irregular patterns are evidence for a shared capability or future IR
+extension.
 
 ---
 
-# 6. Proposed top-level `frontend_spec/v1`
-
-The initial author-facing file is YAML for readability. The normalizer may lower
-it to canonical JSON IR.
-
-Closed top-level shape for the first experiment:
+# 5. Closed top-level shape
 
 ```yaml
 kind: frontend_spec
@@ -237,15 +174,9 @@ irregular: []
 
 Unknown top-level fields are invalid in v1.
 
-Sections should remain small. New sections are introduced only after a real case
-proves that the decision cannot be derived from backend contracts or package
-manifests and cannot be expressed by an existing section.
-
 ---
 
-# 7. `application`
-
-Minimal identity and workspace selection:
+# 6. `application`
 
 ```yaml
 application:
@@ -255,21 +186,14 @@ application:
 
 Rules:
 
-- `id` is a stable application identifier.
-- `workspace` selects a supported shared workspace family.
-- v1 SHOULD initially support only `engineering_editor` for planner cases rather
-  than becoming a universal application-layout language.
-- application title/branding should not be added here unless a real deterministic
-  consumer needs it.
+- `id` is stable application identity;
+- v1 supports `workspace: engineering_editor` for planner cases;
+- branding/file layout/framework details do not belong here unless a deterministic
+  consumer later proves the need.
 
 ---
 
-# 8. `runtime`
-
-Runtime contains frontend-only policies that cannot be inferred from domain
-models.
-
-Initial candidate:
+# 7. `runtime`
 
 ```yaml
 runtime:
@@ -278,77 +202,24 @@ runtime:
   edit_precision_mm: 1
 ```
 
-Closed candidate fields:
+Initial v1 registries:
 
-- `renderer`: initial registry `canvas | svg`; `canvas` is expected for Room
-  Planner.
-- `world_unit`: initial planner value `mm`.
-- `edit_precision_mm`: explicit user-edit/commit precision policy.
-
-The frontend spec must not name Konva, Flatten, React, or other third-party
-libraries. Those are implementation choices behind shared packages.
-
-If `world_unit` or precision is canonical domain policy in a future common spec,
-this section should reference/derive it rather than duplicate it.
-
----
-
-# 9. Package capability manifests
-
-The frontend spec should reference semantic capabilities rather than package
-internals. To make this possible, each reusable editor/domain package exposes a
-machine-readable manifest.
-
-Conceptual manifest:
-
-```yaml
-kind: frontend_package_manifest
-schema_version: 1
-package: "@planner/building-layer"
-version: 0.1.0
-
-provides:
-  capabilities:
-    - building.wall.render
-    - building.wall.create
-    - building.wall.move_node
-    - building.wall.translate
-    - building.wall.offset
-    - building.opening.place
-    - building.snap.endpoint
-    - building.snap.intersection
-
-  commands:
-    - building.add_wall
-    - building.move_wall_node
-    - building.translate_wall
-    - building.offset_wall
-    - building.place_opening
-
-  renderers:
-    - building.wall
-    - building.opening
-
-  snap_providers:
-    - building.endpoints
-    - building.intersections
+```text
+renderer: canvas | svg
+world_unit: mm
 ```
 
-The exact manifest schema is provisional, but the ownership rule is not:
+Third-party libraries such as Konva/Flatten/React are implementation details
+behind shared packages and MUST NOT appear in the frontend spec.
 
-> The package declares what it can do; the application frontend spec declares
-> which of those capabilities are enabled/composed for this workspace.
-
-Package manifests MUST NOT grant backend authorization and SHOULD NOT contain
-implicit backend URLs.
+If unit/precision later becomes canonical shared domain policy, this section must
+reference/derive it rather than duplicate it.
 
 ---
 
-# 10. `layers`
+# 8. `layers`
 
-Layers compose reusable planner/domain capabilities in one workspace.
-
-Candidate shape:
+Layers compose reusable domain/editor capabilities.
 
 ```yaml
 layers:
@@ -360,6 +231,7 @@ layers:
   plumbing:
     provider: "@planner/plumbing-layer"
     mode: draft
+    draft_persistence: host_private
     visible: true
 
   electrical:
@@ -370,43 +242,84 @@ layers:
 
 Required fields:
 
-- `provider`: package manifest identity.
+- `provider`: resolved package identity whose generated manifest provides the
+  named layer;
 - `mode`: `owned | reference | draft`.
 
-Optional v1 field:
+Optional editor-only field:
 
-- `visible`: initial editor visibility only; it is not domain state.
+- `visible`: initial visibility; never domain truth.
 
-Mode is authority, not styling.
+## 8.1 `owned`
 
-### `owned`
+The host application owns authoritative working state. Layer edit capabilities
+may be exposed if allowed by the generated package manifest. Persistence still
+occurs only through explicit host application operations/adapters derived from
+canonical backend contracts.
 
-The current application owns authoritative working state for this layer. The
-frontend may expose edit commands supplied by the layer, but actual persistence
-still occurs only through explicit host application operations/adapters.
+## 8.2 `reference`
 
-### `reference`
+The layer may render/inspect resolved foreign state. Mutation commands are
+forbidden in v1. Importing a package never grants foreign persistence authority.
 
-The layer may render/inspect resolved foreign state but cannot expose commands
-that mutate the foreign authoritative source.
+## 8.3 `draft`
 
-### `draft`
+The host may edit a local proposal for a foreign domain without becoming that
+domain's authoritative owner.
 
-The host may expose local proposal/edit commands, but those commands cannot call
-or imply foreign authoritative persistence.
+For `mode: draft`, `draft_persistence` is REQUIRED.
 
-Validator rules MUST prevent a reference layer from binding authoritative edit
-commands and MUST prevent draft/reference package composition from acquiring
-foreign backend write authority merely through import.
+Closed registry:
+
+```text
+none
+host_private
+```
+
+Meaning:
+
+- `none` — draft exists only in current frontend working state;
+- `host_private` — the host application may persist the draft overlay in its own
+  private application storage through an explicitly resolved host backend
+  operation.
+
+`draft_persistence` is forbidden for `owned` and `reference`.
+
+`host_private` MUST NOT call or imply the foreign owning planner backend. The
+persistence operation, when one is required, is referenced from
+`browser_contract_ir`; HTTP details are never written here.
+
+The future cross-planner transfer/promotion protocol remains outside v1.
 
 ---
 
-# 11. `tools`
+# 9. Package manifest resolution
 
-Tools expose reusable behavior to the user. They bind UI tool identity to a
-shared capability/command; they do not contain implementation algorithms.
+Application authors do not copy package capabilities into this file.
 
-Candidate shape:
+For every `provider`, the build system resolves the exact package build and its
+canonical generated manifest. `frontend_ir.json` records at least:
+
+```json
+{
+  "package": "@planner/building-layer",
+  "resolved_version": "0.1.0",
+  "manifest_schema_version": 1,
+  "manifest_hash": "sha256:..."
+}
+```
+
+A package upgrade or capability-manifest change therefore produces an IR diff
+before runtime.
+
+The frontend spec itself does not contain a manually maintained package version.
+Package resolution belongs to the package manager/lockfile/build environment.
+
+---
+
+# 10. `tools`
+
+Tools expose existing runtime/package behavior to users.
 
 ```yaml
 tools:
@@ -414,54 +327,49 @@ tools:
     builtin: editor.select
 
   - id: wall
-    command: building.add_wall
-    requires:
-      - building.wall.create
+    command: building.wall.create
+    requires: [building.wall.create]
 
   - id: move_wall_node
-    command: building.move_wall_node
-    requires:
-      - building.wall.move_node
+    command: building.wall.node.move
+    requires: [building.wall.node.move]
 
   - id: door
-    command: building.place_opening
+    command: building.opening.place
     symbol: door.single.left
-    requires:
-      - building.opening.place
+    requires: [building.opening.place]
 ```
 
 Exactly one of `builtin` or `command` is required.
 
-`requires` is a list of capability identities and MUST resolve against loaded
-package manifests. A missing capability is a validation error.
+`requires` must resolve exactly against runtime/generated package manifests.
+Missing capability = `BLOCK`.
 
-`symbol` is optional and references the normalized symbol registry.
+A tool does not name React components, TypeScript files, Konva handlers, or
+implementation algorithms.
 
-A tool does not directly name React components or pointer handlers.
+The package manifest determines whether the selected command is legal for the
+layer's ownership mode.
 
 ---
 
-# 12. `symbols`
+# 11. `symbols`
 
-SVG remains an authoring asset; the frontend spec composes accepted symbol
-catalogs rather than embedding SVG markup.
-
-Candidate shape:
+SVG is an authoring asset, not embedded frontend-spec markup.
 
 ```yaml
 symbols:
   catalogs:
     - building.standard
-    - plumbing.standard
 ```
 
-A symbol catalog is produced from validated symbol manifests, conceptually:
+Accepted symbol manifests/catalogs are validated separately and then composed by
+identity. Example symbol contract direction:
 
 ```yaml
 kind: symbol_manifest
 schema_version: 1
 id: door.single.left
-title: Single door — left hinge
 category: doors
 asset: symbols/doors/single-left.svg
 view_box: [0, 0, 100, 100]
@@ -474,77 +382,54 @@ anchors:
     local: [0, 50]
 ```
 
-The symbol pipeline should be:
+Pipeline:
 
 ```text
-agent/human authored SVG + manifest
-        ↓ validate
+human/agent SVG + manifest
+        ↓ validation
 versioned symbol catalog
-        ↓ frontend compiler
-registry + palette
-        ↓ runtime
-Canvas/SVG projection
+        ↓ frontend linker
+registry/palette
+        ↓ runtime renderer
 ```
 
-No LLM is required at runtime after a symbol is accepted.
+No runtime LLM is required after acceptance.
 
 ---
 
-# 13. `bindings`
+# 12. `bindings`
 
-Bindings map standard user inputs to commands/tools without duplicating command
-behavior.
-
-Candidate v1 shape:
+V1 implements keyboard bindings only:
 
 ```yaml
 bindings:
   keyboard:
-    - key: Delete
-      command: editor.delete_selection
-
-    - key: Ctrl+Z
-      command: editor.undo
-
-    - key: Ctrl+Shift+Z
-      command: editor.redo
-
-    - key: Escape
-      command: editor.cancel_tool
+    - { key: Delete, command: editor.selection.delete }
+    - { key: Ctrl+Z, command: editor.history.undo }
+    - { key: Ctrl+Shift+Z, command: editor.history.redo }
+    - { key: Escape, command: editor.tool.cancel }
 ```
 
-V1 should begin with keyboard bindings only. Pointer gesture grammar should not
-be standardized until the wall-tool spike proves a stable representation.
+Every command/action must resolve exactly to a loaded runtime/package capability.
+Conflicting bindings are invalid.
 
-Every referenced command must be supplied by the editor runtime or a loaded
-package manifest.
-
-Conflicting key bindings are invalid unless a future version defines explicit
-scope/priority semantics.
+Pointer gesture grammar is deliberately deferred until the wall-tool spike proves
+a stable representation.
 
 ---
 
-# 14. `panels`
+# 13. `panels`
 
-V1 should describe only standard workspace composition, not arbitrary React
-layout.
-
-Candidate shape:
+V1 describes standard workspace composition only:
 
 ```yaml
 panels:
-  left:
-    - palette
-    - layers
-
-  right:
-    - properties
-
-  bottom:
-    - status
+  left: [palette, layers]
+  right: [properties]
+  bottom: [status]
 ```
 
-Initial closed panel registry may include:
+Initial closed panel registry:
 
 ```text
 palette
@@ -554,54 +439,12 @@ status
 history
 ```
 
-Unknown standard panel IDs are invalid. Bespoke panels belong in `irregular`
-until repeated evidence justifies a new standard panel contract.
-
-Panel entries select standard runtime capabilities. They do not point to JSX
-filenames.
+Unknown panel IDs are invalid. Bespoke panels belong in `irregular` until repeated
+use justifies a standard panel contract.
 
 ---
 
-# 15. Browser operations referenced by frontend behavior
-
-A frontend specification may bind a standard form/action to an existing backend
-operation, but it must reference the canonical derived operation rather than
-restate HTTP data.
-
-Conceptual future extension:
-
-```yaml
-submit:
-  operation: project.save_draft
-```
-
-The operation resolver reads canonical metadata from `browser_contract_ir`:
-
-```text
-project.save_draft
-    method
-    path
-    request model
-    response model
-    auth
-    errors
-```
-
-The frontend compiler then emits the typed client call and conventional
-loading/error wiring.
-
-V1 does not need a generic action/form language until Room Planner produces a
-real browser flow requiring it. The important rule is already fixed: HTTP
-contract data is referenced, never copied.
-
----
-
-# 16. `irregular`
-
-Irregular entries explicitly name code that lies outside deterministic frontend
-ownership.
-
-Candidate shape:
+# 14. `irregular`
 
 ```yaml
 irregular:
@@ -612,26 +455,21 @@ irregular:
 
 Required fields:
 
-- `id`: unique stable irregular identity.
-- `owner`: module/package boundary responsible for implementation.
-- `reason`: short architectural reason the behavior is not represented by
-  deterministic IR.
+- stable `id`;
+- explicit implementation `owner`;
+- mandatory architectural `reason`.
 
 Rules:
 
-- irregular ownership must not overlap a deterministic section silently;
-- an irregular owner may consume generated types/runtime capabilities;
-- an irregular owner must obey the same domain/editor/backend ownership rules;
-- irregular code is not permission to mutate foreign backend state;
-- repeated irregular shapes should trigger review for promotion into a reusable
-  capability or future IR version.
+- irregular ownership cannot silently overlap deterministic ownership;
+- irregular code may consume generated types/runtime capabilities;
+- it obeys all layer/backend ownership constraints;
+- it never gains foreign persistence authority;
+- repetition triggers review for promotion into shared capability/IR.
 
 ---
 
-# 17. Room Planner candidate `frontend_spec.yaml`
-
-The first implementation should attempt to compile something approximately this
-small:
+# 15. Room Planner v1 candidate
 
 ```yaml
 kind: frontend_spec
@@ -655,6 +493,7 @@ layers:
   plumbing:
     provider: "@planner/plumbing-layer"
     mode: draft
+    draft_persistence: host_private
     visible: true
 
   electrical:
@@ -667,28 +506,27 @@ tools:
     builtin: editor.select
 
   - id: wall
-    command: building.add_wall
+    command: building.wall.create
     requires: [building.wall.create]
 
   - id: move_wall_node
-    command: building.move_wall_node
-    requires: [building.wall.move_node]
+    command: building.wall.node.move
+    requires: [building.wall.node.move]
 
   - id: door
-    command: building.place_opening
+    command: building.opening.place
     symbol: door.single.left
     requires: [building.opening.place]
 
 symbols:
-  catalogs:
-    - building.standard
+  catalogs: [building.standard]
 
 bindings:
   keyboard:
-    - { key: Delete, command: editor.delete_selection }
-    - { key: Ctrl+Z, command: editor.undo }
-    - { key: Ctrl+Shift+Z, command: editor.redo }
-    - { key: Escape, command: editor.cancel_tool }
+    - { key: Delete, command: editor.selection.delete }
+    - { key: Ctrl+Z, command: editor.history.undo }
+    - { key: Ctrl+Shift+Z, command: editor.history.redo }
+    - { key: Escape, command: editor.tool.cancel }
 
 panels:
   left: [palette, layers]
@@ -698,93 +536,102 @@ panels:
 irregular: []
 ```
 
-This example deliberately does not contain:
-
-- wall geometry algorithms;
-- SVG markup;
-- HTTP paths;
-- request/response DTO definitions;
-- React component names;
-- Konva objects;
-- persistence implementation;
-- Platform Hub calls.
-
-Those decisions have other owners.
+This deliberately contains no wall algorithm, SVG markup, HTTP path, DTO
+definition, React component, Konva node, persistence implementation, or Platform
+Hub call.
 
 ---
 
-# 18. Normalized frontend IR
-
-`frontend_spec.yaml` is authoring syntax. The compiler should normalize it into a
-strict machine representation before any emission.
-
-Conceptually:
+# 16. Normalized frontend IR
 
 ```text
 frontend_spec.yaml
-        + browser_contract_ir
-        + package manifests
-        + symbol manifests
++ browser_contract_ir
++ resolved/generated package manifests
++ symbol manifests
         ↓
-normalize + resolve + validate
+normalize + link + validate
         ↓
 frontend_ir.json
 ```
 
-The normalized IR should replace loose references with resolved identities while
-preserving source/provenance for diagnostics.
+The IR resolves loose author references into exact providers and records
+provenance.
 
-For example a normalized tool record may contain:
+Example:
 
 ```json
 {
-  "id": "wall",
-  "command": "building.add_wall",
-  "provider": "@planner/building-layer",
-  "required_capabilities": ["building.wall.create"],
-  "layer": "building"
+  "layers": {
+    "building": {
+      "provider": "@planner/building-layer",
+      "mode": "owned"
+    },
+    "plumbing": {
+      "provider": "@planner/plumbing-layer",
+      "mode": "draft",
+      "draft_persistence": "host_private"
+    }
+  },
+  "packages": {
+    "@planner/building-layer": {
+      "resolved_version": "0.1.0",
+      "manifest_hash": "sha256:..."
+    }
+  },
+  "tools": {
+    "wall": {
+      "command": "building.wall.create",
+      "provider": "@planner/building-layer",
+      "layer": "building",
+      "layer_mode": "owned"
+    }
+  }
 }
 ```
 
-The exact normalized schema should be derived from implementation needs; it is
-not necessary to expose compiler-only lowering details to authors.
+Source/provenance information should be retained for diagnostics and affected-set
+analysis.
 
 ---
 
-# 19. Validation / fail-closed rules
+# 17. Fail-closed validation
 
-The first validator should reject at least:
+The first frontend validator/linker rejects at least:
 
-1. unknown top-level fields;
-2. unsupported `schema_version`;
-3. unsupported workspace/renderer/unit;
-4. duplicate tool IDs;
-5. missing package manifests;
-6. requested capabilities not supplied by loaded packages/runtime;
-7. requested commands not supplied by loaded packages/runtime;
-8. symbol references not present in loaded catalogs;
-9. invalid symbol manifests/SVG policy violations;
-10. duplicate/conflicting keyboard bindings;
-11. unknown standard panel IDs;
-12. `reference` layers exposing authoritative edit commands;
-13. foreign `draft` layers attempting authoritative persistence;
-14. frontend records that duplicate/redefine canonical HTTP method/path/signature
-    fields;
-15. referenced browser operation absent from backend-derived
-    `browser_contract_ir`;
-16. irregular IDs without explicit owners/reasons;
-17. overlapping deterministic and irregular ownership without an explicit future
-    extension mechanism.
+1. unknown top-level field or unsupported schema version;
+2. unsupported workspace/renderer/unit;
+3. duplicate tool IDs;
+4. missing resolved package/generated manifest;
+5. requested capability/command with no exact provider;
+6. a capability kind not implemented by package-manifest v1;
+7. symbol absent from loaded catalogs;
+8. invalid symbol manifest/SVG policy violation;
+9. conflicting keyboard binding;
+10. unknown standard panel;
+11. application layer mode not supported by provider layer manifest;
+12. `reference` layer binding a mutation command;
+13. command illegal for selected layer mode;
+14. `draft` layer missing `draft_persistence`;
+15. `draft_persistence` on non-draft layer;
+16. host-private draft persistence without an explicit host application backend
+    operation when persistence is actually wired;
+17. frontend records duplicating/redefining canonical HTTP details;
+18. referenced browser operation absent from `browser_contract_ir`;
+19. irregular record missing owner/reason;
+20. deterministic/irregular ownership overlap;
+21. package DAG/linker/provenance errors defined by
+    `FRONTEND_PACKAGE_MANIFEST.md`;
+22. generated TypeScript failing mandatory `tsc`.
 
-A validation failure blocks deterministic emission. It does not switch to an LLM
+Validation failure blocks deterministic emission. It never requests an LLM
 fallback.
 
 ---
 
-# 20. Deterministic compiler outputs
+# 18. Deterministic outputs
 
-A successful compile should be capable of producing conventional generated files
-such as:
+A successful compile may emit conventional files such as:
 
 ```text
 src/generated/
@@ -800,122 +647,104 @@ src/generated/
     irregular.generated.ts
 ```
 
-Exact filenames are emitter implementation details, not authoring spec fields.
+Filenames are emitter details, not authoring fields.
 
-The generated workspace should be thin enough that application bootstrap is
-conceptually equivalent to:
+Application bootstrap should remain conceptually close to:
 
 ```ts
 createEngineeringWorkspace(generatedWorkspace)
 ```
 
-Generated files should not contain domain algorithms already owned by reusable
-packages.
+Generated files do not contain algorithms already owned by reusable packages.
 
 ---
 
-# 21. Deterministic versus handwritten boundary
+# 19. Ownership table
 
-Working ownership table:
-
-| Area | Owner | Per-project generation |
+| Area | Canonical owner | Per-project handling |
 | --- | --- | --- |
 | Browser DTO/types | backend canonical spec | deterministic |
 | Browser API client | backend router/contracts | deterministic |
-| HTTP method/path/auth/errors | backend canonical spec | derived, never duplicated |
+| HTTP method/path/auth/errors | backend canonical spec | derived only |
 | Workspace/layers | `frontend_spec.yaml` | deterministic |
-| Tool registration | `frontend_spec.yaml` + package manifests | deterministic |
-| Keyboard bindings | `frontend_spec.yaml` | deterministic |
-| Standard panels | `frontend_spec.yaml` | deterministic |
+| Layer ownership/draft persistence choice | `frontend_spec.yaml` | deterministic validation |
+| Package capabilities/exports | generated package manifest | deterministic linkage |
+| Package version/hash | resolved package build | recorded in IR |
+| Tool registration | frontend spec + package manifests | deterministic |
+| Keyboard bindings | frontend spec | deterministic |
+| Standard panels | frontend spec | deterministic |
 | Symbol registry/palette | symbol manifests + frontend spec | deterministic |
-| Canvas interaction engine | shared editor package | written once |
-| Geometry primitives | shared editor package | written once |
+| Canvas interaction engine | shared package | written once |
+| Geometry primitives | shared package | written once |
 | Wall/junction algorithms | `building-layer` | written once |
-| Undo/redo/selection | shared editor package | written once |
-| SVG symbol artwork | agent/human authoring | authored once per symbol/variant |
-| Novel project behavior | explicit `irregular` owner | handwritten/LLM |
-| Foreign domain persistence | owning planner backend only | never gained by frontend import |
-
-This table should be reviewed whenever a new proposed frontend field appears. If
-it merely duplicates backend truth or a reusable package algorithm, it should not
-enter `frontend_spec/v1`.
+| Undo sequencing | `editor-core` | written once |
+| Domain undo inverse/snapshot contract | owning command package | written once |
+| SVG artwork | human/agent | authored once per symbol/variant |
+| Novel behavior | explicit irregular owner | handwritten/LLM |
+| Foreign authoritative persistence | foreign owning backend | never gained by frontend import |
 
 ---
 
-# 22. V1 intentional non-goals
+# 20. V1 non-goals
 
-Do not solve these in v1 unless the first Room Planner implementation proves they
-are required:
+Do not add these until real evidence requires them:
 
 - arbitrary React component graph generation;
-- general CSS/theme DSL;
-- general pointer gesture language;
+- CSS/theme DSL;
+- generic pointer gesture language;
 - arbitrary state-machine language;
-- arbitrary command implementation language;
+- command implementation language;
 - parametric SVG programming language;
-- generic form system for every application type;
+- universal form language;
 - universal frontend framework support;
-- cross-planner draft transfer protocol;
+- cross-planner draft promotion protocol;
 - production drawing/export schema;
-- WebGL-specific renderer IR;
-- automatic inference of layer ownership from package names or backend endpoints.
-
-Keeping v1 small is intentional. The first objective is to prove deterministic
-composition, not to model every UI decision.
-
----
-
-# 23. First implementation order
-
-Recommended evidence-driven order:
-
-1. Define `frontend_spec/v1` validator for the closed top-level sections.
-2. Define minimal package manifest schema and manifests for `editor-core` and
-   `building-layer`.
-3. Derive a small `browser_contract_ir` from one real backend/router spec.
-4. Define symbol manifest validation for one door SVG.
-5. Normalize the Room Planner YAML example into `frontend_ir.json`.
-6. Emit workspace/layer/tool/binding/symbol registries.
-7. Connect emitted registrations to the Room Planner wall/junction runtime spike.
-8. Verify that removing a capability, command, symbol, or backend operation fails
-   closed with a precise diagnostic.
-9. Add one explicit irregular module to prove the boundary.
-10. Only then decide whether forms, pointer gestures, richer layout, or additional
-    backend families deserve v1 extensions.
-
-The first successful milestone is not a polished application. It is:
-
-> A small Room Planner frontend can be rebuilt from backend spec +
-> `frontend_spec.yaml` + package/symbol manifests, while reusable algorithms live
-> outside the generated project and invalid composition is rejected before code
-> generation.
+- WebGL-specific IR;
+- ownership inference from package/backend names;
+- manual capability-version negotiation;
+- manifest-level fake TypeScript type compatibility checks.
 
 ---
 
-# 24. Open questions for `frontend_spec/v1`
+# 21. First implementation order
 
-The following remain intentionally unresolved until the first compiler spike:
+1. Implement generated package manifests from verified package public exports.
+2. Build canonical manifests for `editor-core` and `building-layer`.
+3. Implement `frontend_spec/v1` closed-shape validation.
+4. Derive minimal `browser_contract_ir` from one real backend/router spec.
+5. Validate one door SVG/symbol manifest.
+6. Normalize/link the Room Planner candidate YAML.
+7. Record resolved package versions + manifest hashes in `frontend_ir.json`.
+8. Emit workspace/layer/tool/binding/symbol registrations.
+9. Run mandatory `tsc` on generated linkage.
+10. Prove negative fixtures: missing export/capability, package cycle, illegal mode,
+    draft without persistence decision, duplicate provider, missing undo, package
+    version/hash change.
+11. Add one explicit irregular module to prove the escape-hatch boundary.
+12. Only then extend the language.
 
-1. Should package identities/versions be listed explicitly in `frontend_spec`, or
-   resolved from layer/tool capability providers by the build system?
-2. Should `visible` remain in the spec or be treated as a frontend preference?
-3. Should tools bind directly to commands, capabilities, or a separate tool
-   definition registry supplied by packages?
-4. How should an owned layer declare which host backend operations persist it,
-   without duplicating backend contracts?
-5. What stable operation identity should `browser_contract_ir` use?
-6. Should symbol catalogs be package manifests, separate catalog files, or both?
-7. What is the minimum metadata required to safely project an SVG symbol into
-   millimetre world space?
-8. When does a pointer gesture representation become stable enough for closed IR?
-9. How should standard property panels obtain editable field metadata without
-   duplicating domain model semantics?
-10. Should package manifest compatibility reference frontend IR versions, editor
-    runtime versions, or both?
-11. What provenance should `frontend_ir.json` retain for diagnostics and
-    affected-set rebuilds?
-12. Which current `SPEC_STANDARD` dependency tools can be generalized to validate
-    capability and operation references across Python and TypeScript outputs?
+The first milestone is:
 
-Until these have implementation evidence, `frontend_spec/v1` should remain a
-small composition language rather than a universal UI description format.
+> Room Planner can be rebuilt from backend spec + `frontend_spec.yaml` + exact
+> package/symbol artifacts, while reusable algorithms stay outside generated code
+> and invalid composition fails before application runtime.
+
+---
+
+# 22. Remaining open questions
+
+Only questions not required for deterministic v1 remain open:
+
+1. What stable identity scheme should `browser_contract_ir` use for operations?
+2. How should `host_private` draft persistence bind to a host backend operation
+   without creating a generic action language too early?
+3. What minimum metadata is required to project SVG symbols safely into mm space?
+4. When does pointer gesture representation become stable enough for closed IR?
+5. How should standard property panels obtain editable-field metadata without
+   duplicating domain semantics?
+6. What provenance granularity should be retained for affected-set rebuilds?
+7. Which current backend dependency tools can be generalized across Python and
+   frontend capability graphs?
+
+Until implementation evidence answers these, `frontend_spec/v1` remains a small
+composition language rather than a universal UI description format.
