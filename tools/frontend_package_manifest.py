@@ -4,6 +4,8 @@ import argparse
 import hashlib
 import json
 import re
+import shutil
+import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -50,6 +52,41 @@ _COMMENT_LINE_RE = re.compile(r"//.*?$", re.MULTILINE)
 
 class ManifestError(ValueError):
     """Raised when a package cannot produce a canonical frontend manifest."""
+
+
+def verify_typescript_package(
+    package_dir: Path, *, tsconfig_name: str = "tsconfig.json"
+) -> None:
+    """Typecheck the package before accepting its public export surface."""
+    tsconfig = package_dir / tsconfig_name
+    if not tsconfig.is_file():
+        raise ManifestError(
+            f"missing TypeScript config required for verification: {tsconfig}"
+        )
+
+    local_tsc = package_dir / "node_modules" / ".bin" / "tsc"
+    if local_tsc.is_file():
+        executable = str(local_tsc)
+    else:
+        executable = shutil.which("tsc")
+    if not executable:
+        raise ManifestError(
+            "TypeScript compiler 'tsc' is required to generate a canonical frontend manifest"
+        )
+
+    completed = subprocess.run(
+        [executable, "--noEmit", "--pretty", "false", "-p", str(tsconfig)],
+        cwd=package_dir,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if completed.returncode != 0:
+        details = (completed.stdout + completed.stderr).strip()
+        raise ManifestError(
+            "TypeScript public package verification failed"
+            + (f":\n{details}" if details else "")
+        )
 
 
 def _load_json(path: Path) -> dict[str, Any]:
@@ -333,7 +370,13 @@ def _normalize_layers(layers: Any, public_exports: set[str]) -> dict[str, Any]:
         defaults = record.get("default_capabilities", {})
         if not isinstance(defaults, dict):
             raise ManifestError(f"layer {layer_id}.default_capabilities must be an object")
-        allowed_default_fields = {"projection", "renderers", "hit_test", "anchors", "snap"}
+        allowed_default_fields = {
+            "projection",
+            "renderers",
+            "hit_test",
+            "anchors",
+            "snap",
+        }
         unknown_defaults = set(defaults) - allowed_default_fields
         if unknown_defaults:
             raise ManifestError(
@@ -355,7 +398,11 @@ def _normalize_layers(layers: Any, public_exports: set[str]) -> dict[str, Any]:
                     f"layer {layer_id}.default_capabilities.{field}",
                 )
 
-        unknown = set(record) - {"implementation", "supported_modes", "default_capabilities"}
+        unknown = set(record) - {
+            "implementation",
+            "supported_modes",
+            "default_capabilities",
+        }
         if unknown:
             raise ManifestError(f"layer {layer_id}: unknown fields {sorted(unknown)}")
 
@@ -426,8 +473,10 @@ def build_manifest(
     *,
     declarations_name: str = "frontend-package-declarations.json",
     public_index_name: str = "index.ts",
+    tsconfig_name: str = "tsconfig.json",
 ) -> dict[str, Any]:
     package_dir = package_dir.resolve()
+    verify_typescript_package(package_dir, tsconfig_name=tsconfig_name)
     package_json = _load_json(package_dir / "package.json")
     declarations = _load_json(package_dir / declarations_name)
 
@@ -552,6 +601,11 @@ def main() -> int:
         help="Public TypeScript entry point relative to package_dir.",
     )
     parser.add_argument(
+        "--tsconfig",
+        default="tsconfig.json",
+        help="TypeScript config relative to package_dir; tsc --noEmit is mandatory.",
+    )
+    parser.add_argument(
         "--output",
         type=Path,
         help="Output path. Defaults to <package_dir>/frontend-package-manifest.json.",
@@ -565,6 +619,7 @@ def main() -> int:
             package_dir,
             declarations_name=args.declarations,
             public_index_name=args.public_index,
+            tsconfig_name=args.tsconfig,
         )
         write_manifest(manifest, output)
     except ManifestError as exc:
