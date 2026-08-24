@@ -105,10 +105,19 @@ Rules:
    is incomplete/invalid for acceptance.
 3. The resulting clear height below the box is derived against the applicable
    floor surface and must remain observable to the user.
-4. Accepted Construction box footprints do not overlap one another in the
-   initial product; nested/stacked boxes require an explicit later stacking
-   relation rather than implicit ordering.
-5. Adjacent boxes may share boundaries when their geometry remains valid.
+4. One room may contain several independent ceiling-box/lowered-ceiling regions
+   with different explicit `drop_height_mm` values. For example, the kitchen
+   zone may be lower than the adjacent living area without introducing a
+   parent/child ceiling hierarchy.
+5. Independent ceiling regions may be adjacent and may share boundaries even
+   when their drop heights differ; the resulting vertical step is explicit
+   construction geometry.
+6. Accepted Construction box footprints do not overlap one another in the
+   initial product. A region physically stacked beneath another lowered region
+   would require an explicit later stacking/base relation rather than collection
+   order or renderer precedence.
+7. Because nested/stacked boxes are not a current proven workflow, no parent-box
+   or stacking field is introduced in the initial model.
 
 ## 6. Ceiling-box vertical side faces
 
@@ -123,6 +132,12 @@ side_face_area
 ```
 
 for the complete exposed perimeter before any later adjacency/occlusion rule.
+
+When two independent ceiling regions share a boundary and have different
+underside elevations, the shared boundary produces a vertical transition face
+whose height is the difference between the two resulting underside elevations.
+That transition is derived from the canonical region geometry and drop values;
+it is not an extra hand-drawn wall or renderer-only edge.
 
 The underside surface area is the derived surface area of the base ceiling patch
 translated downward by `drop_height_mm`; it is not automatically assumed equal
