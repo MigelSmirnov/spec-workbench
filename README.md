@@ -59,6 +59,40 @@ Create specifications that:
 
 Each layer is stabilized before moving to the next.
 
+## Frontend compiler contracts
+
+Browser/editor generation has its own linked contract set. Treat these documents
+as one architecture/compiler family rather than discovering them independently:
+
+- [FRONTEND_EDITOR.md](FRONTEND_EDITOR.md) — shared browser/editor architecture,
+  package boundaries, geometry, rendering, ownership, and reusable planner layers;
+- [FRONTEND_SPEC.md](FRONTEND_SPEC.md) — application-facing `frontend_spec/v1`
+  authoring/compiler contract: what is derived from backend specs versus authored
+  as frontend composition;
+- [FRONTEND_PACKAGE_MANIFEST.md](FRONTEND_PACKAGE_MANIFEST.md) —
+  `frontend_package_manifest/v1` linker contract that declares reusable package
+  capabilities, public exports, dependencies, layer modes, and symbol catalogs.
+
+The intended relationship is:
+
+```text
+backend canonical spec
+        +
+frontend_spec/v1
+        +
+frontend package manifests
+        +
+symbol manifests
+        ↓
+validated frontend IR
+        ↓
+generated browser wiring over shared runtime/packages
+```
+
+When working on reusable frontend/editor architecture, read all three documents.
+A package manifest declares frontend capabilities only; it does not create backend
+authority, persistence rights, or application endpoints.
+
 ## Repository structure
 
 ```text
