@@ -7,9 +7,8 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 READINESS = ROOT / "experiments" / "cabinet-vault" / "cabinet_web_real_data_canary_readiness_v1.yaml"
-F260001_TASK = ROOT / "experiments" / "cabinet-vault" / "LOCAL_AGENT_F260001_REAL_CANARY_TASK.md"
-BRIDGE_TASK = ROOT / "experiments" / "cabinet-vault" / "LOCAL_AGENT_AUTHORIZED_CAPABILITY_BRIDGE_TASK.md"
-CONNECTION_EVIDENCE = ROOT / "experiments" / "cabinet-vault" / "F260001_REAL_CANARY_CONNECTION_PREFLIGHT_EVIDENCE_2026-08-21.md"
+FUNCTIONAL_EVIDENCE = ROOT / "experiments" / "cabinet-vault" / "F260001_REAL_DATA_CANARY_PASS_EVIDENCE_2026-08-21.md"
+ASSURANCE_REVIEW = ROOT / "experiments" / "cabinet-vault" / "F260001_REAL_RUN_ASSURANCE_REVIEW_2026-08-21.md"
 
 
 def load():
@@ -18,81 +17,73 @@ def load():
     return value
 
 
-def test_real_candidate_is_ready_but_authorized_local_connection_is_the_only_current_block():
+def test_real_execution_pass_does_not_imply_assurance_closure():
     readiness = load()
-    assert readiness["readiness_id"] == "cabinet_web_real_data_canary.v6"
-    assert readiness["status"] == "blocked_authorized_backend_connection_unavailable"
-    assert readiness["real_candidate"]["readiness"] == "PASS"
-    assert readiness["blocking_condition"] == {
-        "id": "CW-LOCAL-CONNECTION-001",
-        "class": "AUTHORIZED_CAPABILITY_TRANSPORT_UNAVAILABLE",
-        "statement": readiness["blocking_condition"]["statement"],
-        "owner": "local_box_host_wiring",
-        "severity": "BLOCK",
-    }
+    assert readiness["readiness_id"] == "cabinet_web_real_data_canary.v8"
+    assert readiness["status"] == "real_data_execution_pass_assurance_partial"
+    assert readiness["real_execution"]["functional_result"] == "PASS"
+    assert readiness["real_execution"]["real_user_data_canary_executed"] is True
+    assert readiness["assurance_review"]["overall"] == "PARTIAL"
+    assert readiness["assurance_review"]["all_guarantees_proven_by_exact_real_run"] is False
+    assert FUNCTIONAL_EVIDENCE.is_file()
+    assert ASSURANCE_REVIEW.is_file()
 
 
-def test_f260001_is_pinned_to_merged_cabinet_web_main_revision():
+def test_exact_real_card_and_source_functional_evidence_remains_pinned():
     readiness = load()
-    source = readiness["source_repository"]
     candidate = readiness["real_candidate"]
-
-    assert source["repository"] == "MigelSmirnov/Cabinet_web"
-    assert source["ref"] == "main"
-    assert source["current_head_commit_sha"] == "d3fac8e5d2b85c12904cba24060717b84e2757c2"
-    assert source["normalization_pull_request"] == 17
-    assert source["contract_fingerprints_changed"] is False
-
+    real = readiness["real_execution"]
     assert candidate["invoice_id"] == "invoice-f260001"
-    assert candidate["invoice_card_path"] == "data/cards/invoice-f260001/card.json"
-    assert candidate["status"] == "confirmed"
     assert candidate["source_id"] == "source-f260001"
-    assert candidate["source_kind"] == "pdf"
     assert candidate["card_content_hash"] == "sha256:e52e9d1fe3ff273b1510fd45d516daf576df4404320f75db4dfabc51c8f8a0cf"
-    assert candidate["source_git_commit_sha"] == "386134cbb28e3689fec8ffb49815db9416ebe9a8"
     assert candidate["real_pdf_local_sha256"] == "sha256:b1ad4b4f15ddcba8c91f0f2d17f8a45ab58fd4febcd1064360aed758f14dec66"
-    assert candidate["validation"] == {"status": "PASS", "errors": 0, "warnings": 0}
+    assert real["revision_receipt_outcome"] == "accepted"
+    assert real["source_attachment_result"] == "attached"
+    assert real["parser_validated_media_type"] == "application/pdf"
+    assert real["card_unchanged"] is True
+    assert real["durable_acceptance_audit_present"] is True
+    assert real["durable_attachment_audit_present"] is True
 
 
-def test_latest_local_preflight_stopped_before_every_backend_effect():
-    preflight = load()["latest_local_preflight"]
-    assert preflight["result"] == "PASS_FAIL_CLOSED_AUTHORIZED_CONNECTION_UNAVAILABLE"
-    assert preflight["delivery_created"] is False
-    assert preflight["backend_invocation_performed"] is False
-    assert preflight["postgres_effect_performed"] is False
-    assert preflight["source_attachment_performed"] is False
-    assert preflight["parser_validation_performed"] is False
-    assert preflight["acceptance_audit_present"] is False
-    assert preflight["attachment_audit_present"] is False
-    assert preflight["card_unchanged"] is True
-    assert CONNECTION_EVIDENCE.is_file()
-
-
-def test_connection_repair_preserves_both_executor_authority_boundaries():
-    repair = load()["required_connection_repair"]
-    assert "preserve_SYNCHRONIZATION_BOUNDARY_for_invoice.archive.accept_revision" in repair["authority"]
-    assert "preserve_LOCAL_AGENT_BOUNDARY_for_invoice.source.attach" in repair["authority"]
-    assert "grant_resource_scope_exactly_invoice:invoice-f260001_for_the_canary" in repair["authority"]
-    assert "use_verified_PostgresRecordKernel" in repair["providers"]
-    assert "use_verified_LocalPrivateByteVault" in repair["providers"]
-    assert "use_ProtectedConfigurationKernel_or_equivalent_host_owned_secret_resolution" in repair["providers"]
-
-
-def test_no_direct_database_preflight_read_is_required_for_first_delivery():
+def test_grant_claims_are_classified_by_evidence_class_not_real_success():
     readiness = load()
-    rule = readiness["base_revision_rule"]
-    assert "base_backend_content_hash may be null" in rule
-    assert "reconciliation_required" in rule
-    assert "perform no overwrite" in rule
+    properties = readiness["assurance_review"]["properties"]
+    assert properties["exact_non_wildcard_grant_configuration"] == {
+        "status": "PASS",
+        "evidence_class": "PINNED_CODE",
+    }
+    enforcement = properties["exact_scope_and_credential_class_negative_enforcement"]
+    assert enforcement["status"] == "PASS"
+    assert enforcement["evidence_class"] == "CI_PROBE"
+    assert enforcement["real_run_negative_case_executed"] is False
 
 
-def test_bridge_task_is_narrow_and_forbids_authority_bypass():
-    text = BRIDGE_TASK.read_text(encoding="utf-8")
-    assert "invoice.archive.accept_revision" in text
-    assert "invoice.source.attach" in text
-    assert "local_tool" in text
-    assert "Do not route the real canary through `cabinet_host.py` or `cabinet_graph_host.py`" in text
-    assert "The bridge must not call protected executor internals that bypass `AuthorityKernel.invoke()`" in text
-    assert "invoice:invoice-f260001" in text
-    assert "Do not add arbitrary SQL" in text
-    assert F260001_TASK.is_file()
+def test_real_path_does_not_claim_authorization_before_source_byte_access():
+    prop = load()["assurance_review"]["properties"]["authorization_before_source_byte_read_or_parser_access"]
+    assert prop["status"] == "FAIL"
+    assert "reads PDF bytes before bridge invocation" in prop["reason"]
+    assert "before AuthorityKernel.invoke()" in prop["reason"]
+
+
+def test_real_path_did_not_exercise_declared_stdio_isolation():
+    properties = load()["assurance_review"]["properties"]
+    assert properties["declared_local_cli_stdio_transport_exercised_by_real_run"]["status"] == "FAIL"
+    assert properties["real_agent_confined_from_bridge_internals"]["status"] == "UNVERIFIED"
+    assert properties["credentials_independently_host_owned_relative_to_runner"]["status"] == "PARTIAL"
+
+
+def test_invoice_refset_is_not_claimed_by_f260001_evidence():
+    prop = load()["assurance_review"]["properties"]["InvoiceRefSet_opaque_in_this_real_run"]
+    assert prop["status"] == "NOT_APPLICABLE"
+    assert "CabinetGraphHost" in prop["reason"]
+
+
+def test_assurance_closure_has_explicit_block_and_required_run():
+    readiness = load()
+    block = readiness["assurance_closure_condition"]
+    assert block["id"] == "CW-ASSURANCE-001"
+    assert block["class"] == "REAL_RUN_ASSURANCE_INCOMPLETE"
+    assert block["severity"] == "BLOCK_FOR_ASSURANCE_CLOSURE"
+    required = set(readiness["required_assurance_run"])
+    assert "execute_agent_and_bridge_as_separate_processes_over_actual_local_transport" in required
+    assert "persist_bounded_non_secret_audit_event_ids_or_digests_and_exact_decision_fields" in required
