@@ -268,6 +268,21 @@ Admission prints and records the exact `case -> Factory project` pair. A
 different `--project` is blocked before export; a case without this manifest
 remains admissible but receives an explicit warning.
 
+## GitHub Actions CI
+
+`.github/workflows/spec-workbench-ci.yml` runs the complete Workbench test
+suite and Cabinet assembly gates on every push and pull request. This makes
+the checks available when changes are authored through a GitHub connector
+that cannot execute local commands.
+
+The cross-repository admission job additionally checks out the private
+`MigelSmirnov/panelforge-sandbox` repository and runs the real Factory
+validator. Enable that job by creating a fine-grained repository token with
+read-only `Contents` access to `panelforge-sandbox`, then save it in the
+`spec-workbench` repository as the Actions secret `FACTORY_REPO_TOKEN`.
+Without the secret, Workbench CI still runs and the Factory job records an
+explicit skip notice.
+
 Export an admitted case into a new Factory project with:
 
 ```bash
