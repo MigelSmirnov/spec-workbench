@@ -25,11 +25,46 @@ def _write_package(
         json.dumps({"name": "@planner/building-layer", "version": "0.1.0"}),
         encoding="utf-8",
     )
+    (package_dir / "tsconfig.json").write_text(
+        json.dumps(
+            {
+                "compilerOptions": {
+                    "target": "ES2020",
+                    "module": "ESNext",
+                    "moduleResolution": "Bundler",
+                    "strict": True,
+                    "skipLibCheck": True,
+                },
+                "include": ["index.ts", "public-api.ts"],
+            }
+        ),
+        encoding="utf-8",
+    )
+    (package_dir / "public-api.ts").write_text(
+        """
+export type WallCreateInput = { x: number; y: number };
+export type BuildingEditResult = { changed: boolean };
+export type BuildingState = { id: string };
+export type BuildingProjection = { id: string };
+
+export const wallCreateCommand = () => ({ changed: true });
+export const wallRenderer = () => undefined;
+export const wallSnapProvider = () => [];
+export const wallHitTestProvider = () => [];
+export const wallAnchorProvider = () => [];
+export const projectBuildingScene = () => ({ id: "projection" });
+export const buildingLayerDefinition = {};
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
     (package_dir / "index.ts").write_text(
         index_source
         or """
 export { wallCreateCommand, wallRenderer, wallSnapProvider, wallHitTestProvider,
          wallAnchorProvider, projectBuildingScene, buildingLayerDefinition }
+  from "./public-api";
+export type { WallCreateInput, BuildingEditResult, BuildingState, BuildingProjection }
   from "./public-api";
 """.strip()
         + "\n",
@@ -246,6 +281,22 @@ def test_declared_for_later_kind_is_rejected(tmp_path: Path) -> None:
     )
 
     with pytest.raises(ManifestError, match="not v1-implemented"):
+        build_manifest(package_dir)
+
+
+def test_nonexistent_reexport_is_rejected_by_typescript_verification(
+    tmp_path: Path,
+) -> None:
+    package_dir = _write_package(
+        tmp_path,
+        index_source="""
+export { wallCreateCommand, definitelyMissingExport, buildingLayerDefinition }
+  from "./public-api";
+""".strip()
+        + "\n",
+    )
+
+    with pytest.raises(ManifestError, match="TypeScript public package verification failed"):
         build_manifest(package_dir)
 
 
