@@ -45,11 +45,22 @@ This applies in particular to Registry object identity, Construction Catalog res
 
 Concrete HTTP paths, DTOs, and transport details are still deferred until their proper design states.
 
-## Shared frontend/editor contract
+## Shared frontend/editor and compiler contracts
 
-Room Planner also uses the repository-level [Frontend Editor](../../FRONTEND_EDITOR.md) as its living browser/editor architecture boundary.
+Room Planner uses a linked repository-level frontend contract family. These files
+must be read together for frontend work:
 
-Accepted shared refinements now include:
+- [Frontend Editor](../../FRONTEND_EDITOR.md) — browser/editor architecture,
+  reusable runtime packages and planner layers;
+- [Frontend Specification](../../FRONTEND_SPEC.md) — `frontend_spec/v1`, which
+  declares application workspace/layer/tool/palette composition while deriving
+  browser contracts from the canonical backend spec;
+- [Frontend Package Manifest](../../FRONTEND_PACKAGE_MANIFEST.md) —
+  `frontend_package_manifest/v1`, which proves reusable package capabilities,
+  public exports, dependencies, legal layer modes, and symbol catalogs to the
+  frontend compiler/linker.
+
+Accepted shared refinements additionally include:
 
 - [Frontend Editor — Opening/Aperture Refinement](../../FRONTEND_EDITOR_OPENINGS.md);
 - [Frontend Editor — Door Swing Refinement](../../FRONTEND_EDITOR_DOOR_SWING.md);
@@ -57,11 +68,27 @@ Accepted shared refinements now include:
 - [Frontend Editor — Niche / Recess Refinement](../../FRONTEND_EDITOR_NICHES.md);
 - [Frontend Editor — Wall Elevations and Multi-View Block Refinement](../../FRONTEND_EDITOR_ELEVATIONS.md).
 
-Together they clarify that aperture geometry, installed door/window elements, canonical door swing, renderer symbols, planar construction regions, host-surface niches, coordinated plan/elevation views, and multi-view reusable blocks are different meanings.
+The compiler relationship is conceptually:
 
-A critical ownership rule is now explicit: generic furniture/layout blocks are shared **frontend overlays**. They may be reused visually by every planner, but they are not automatically domain/backend data of Room Planner or any other host application. A planner backend owns only its own domain concepts.
+```text
+backend canonical spec
+        +
+frontend_spec/v1
+        +
+frontend package manifests
+        +
+symbol manifests
+        ↓
+validated frontend IR
+        ↓
+generated imports / registries / wiring
+```
 
-That frontend material accumulates shared knowledge without copying Room Planner domain models into a second source of truth. Because this README links the frontend documents, the normal case context pack imports them automatically alongside the Platform Router.
+Together these contracts clarify that aperture geometry, installed door/window elements, canonical door swing, renderer symbols, planar construction regions, host-surface niches, coordinated plan/elevation views, and multi-view reusable blocks are different meanings.
+
+A critical ownership rule is explicit across these contracts: generic furniture/layout blocks are shared **frontend overlays**. They may be reused visually by every planner, but they are not automatically domain/backend data of Room Planner or any other host application. Likewise, a package-manifest capability does not grant backend persistence or mutation authority; actual browser/backend operations remain owned by the host application's canonical contracts.
+
+Because this README links the frontend contract family, the normal case context pack imports them automatically alongside the Platform Router.
 
 For focused frontend work, build the narrower manifest-driven context with:
 
@@ -70,9 +97,12 @@ python tools/frontend_context.py \
   --manifest examples/room-planner/frontend_context.json
 ```
 
-The manifest lists exact canonical Markdown headings needed by the Room Planner browser editor. The tool fails if a referenced file or heading disappears, so frontend dependencies cannot silently rot when domain documents are renamed or refined.
+The manifest deliberately includes `FRONTEND_EDITOR.md`, `FRONTEND_SPEC.md`, and
+`FRONTEND_PACKAGE_MANIFEST.md` as full documents so package/linker decisions stay
+visible while Room Planner frontend capabilities are refined. It also carries the
+accepted frontend refinements and selected Room Planner domain slices.
 
-The manifest and generated pack are dependency/indexing tools only. Canonical product and domain decisions remain in the numbered Room Planner state documents; shared frontend/editor architecture remains in `FRONTEND_EDITOR.md` and its accepted refinements.
+The manifest and generated pack are dependency/indexing tools only. Canonical product and domain decisions remain in the numbered Room Planner state documents; shared frontend/editor architecture and compiler contracts remain in the repository-level frontend documents.
 
 ## Design states
 
@@ -113,6 +143,6 @@ State 1 remains stabilized as a document set after the ownership correction beca
 
 State 2 is active. Its current open policy areas are recorded in `20_rules.md`; accepted `20_*` refinements close or narrow some of those areas. State 2 must be stabilized before proceeding to module responsibilities unless a later rule exposes another missing State 0/1 decision.
 
-`context_pack.py` carries the stabilized State 0/1 sources, current State 2 sources, and linked shared architecture boundaries into State 2 work automatically.
+`context_pack.py` carries the stabilized State 0/1 sources, current State 2 sources, and linked shared architecture/compiler boundaries into State 2 work automatically.
 
-Later state documents must carry the Platform Router dependency forward even when they do not introduce a new shared interaction. Frontend-relevant shared requirements should likewise be evaluated against `FRONTEND_EDITOR.md` and its accepted refinements rather than being duplicated privately in later Room Planner documents.
+Later state documents must carry the Platform Router dependency forward even when they do not introduce a new shared interaction. Frontend-relevant shared requirements should likewise be evaluated against the complete repository-level frontend contract family rather than being duplicated privately in later Room Planner documents.
