@@ -57,11 +57,11 @@ Accepted shared refinements now include:
 - [Frontend Editor — Niche / Recess Refinement](../../FRONTEND_EDITOR_NICHES.md);
 - [Frontend Editor — Wall Elevations and Multi-View Block Refinement](../../FRONTEND_EDITOR_ELEVATIONS.md).
 
-Together they clarify that aperture geometry, installed door/window elements, canonical door swing, renderer symbols, planar construction regions, host-surface niches, coordinated plan/elevation views, and multi-view reusable blocks are different meanings. In particular, symbol placement, plan-region authoring, wall-face recess authoring, and wall-elevation editing may share the same workspace/palette shell without sharing the same domain capability.
+Together they clarify that aperture geometry, installed door/window elements, canonical door swing, renderer symbols, planar construction regions, host-surface niches, coordinated plan/elevation views, and multi-view reusable blocks are different meanings.
 
-That frontend material accumulates shared knowledge without copying Room Planner domain models into a second source of truth. It records the browser-first delivery boundary, domain-authoritative versus transient editor state, rendering-as-projection, opening/door projection, planar region editing, niche/recess editing, coordinated wall elevations, multi-view block assets, and the expected progression from model completeness to later interaction/API contracts.
+A critical ownership rule is now explicit: generic furniture/layout blocks are shared **frontend overlays**. They may be reused visually by every planner, but they are not automatically domain/backend data of Room Planner or any other host application. A planner backend owns only its own domain concepts.
 
-Because this README links the frontend documents, the normal case context pack imports them automatically alongside the Platform Router.
+That frontend material accumulates shared knowledge without copying Room Planner domain models into a second source of truth. Because this README links the frontend documents, the normal case context pack imports them automatically alongside the Platform Router.
 
 For focused frontend work, build the narrower manifest-driven context with:
 
@@ -82,7 +82,7 @@ The manifest and generated pack are dependency/indexing tools only. Canonical pr
    - [00 — Door swing product requirement](00_door_swing.md) — stabilized refinement
    - [00 — Planar construction regions](00_planar_regions.md) — stabilized refinement
    - [00 — Ceiling and wall niches](00_niches.md) — stabilized refinement
-   - [00 — Wall elevations and furniture layout](00_elevations_furniture.md) — stabilized refinement
+   - [00 — Wall elevations and shared frontend block overlay boundary](00_elevations_furniture.md) — corrected refinement
 2. **State 1 — Domain models** — stabilized as a document set
    - [10 — Domain models](10_models.md) — chronological base draft
    - [10 — Snapshot identity and Existing correction carry-forward](10_identity_carry_forward.md) — accepted refinement
@@ -92,7 +92,7 @@ The manifest and generated pack are dependency/indexing tools only. Canonical pr
    - [10 — Remaining model closure](10_model_closure.md) — accepted closure refinement where not superseded by later refinements
    - [10 — Planar build-up regions and ceiling boxes](10_planar_regions.md) — accepted refinement
    - [10 — Ceiling and wall niche models](10_niches.md) — accepted refinement
-   - [10 — Wall elevation projection and furniture layout models](10_elevations_furniture.md) — accepted refinement
+   - [10 — Wall elevation projection boundary](10_elevations_furniture.md) — corrected refinement; previous furniture domain models are retracted
    - `frontend_context.json` — machine-readable frontend dependency manifest
 3. **State 2 — Rules and invariants** — active working draft
    - [20 — Rules and invariants](20_rules.md)
@@ -100,7 +100,7 @@ The manifest and generated pack are dependency/indexing tools only. Canonical pr
    - [20 — Door swing rules](20_door_swing_rules.md) — accepted refinement
    - [20 — Planar region construction rules](20_planar_regions_rules.md) — accepted refinement
    - [20 — Ceiling and wall niche rules](20_niche_rules.md) — accepted refinement
-   - [20 — Wall elevation and furniture layout rules](20_elevation_furniture_rules.md) — accepted refinement
+   - [20 — Wall elevation projection rules](20_elevation_furniture_rules.md) — corrected refinement; furniture policy removed from Room Planner
 4. 30 — Module responsibilities
 5. 40 — System flows
 6. 50 — Public APIs
@@ -108,7 +108,7 @@ The manifest and generated pack are dependency/indexing tools only. Canonical pr
 8. 70 — Notes
 9. Assembly
 
-State 1 remains stabilized as a document set after the door-swing, planar-region, niche, and elevation/furniture repairs because newly discovered product requirements have been propagated through their owning State 0/1 documents. Later accepted refinements are normative where they explicitly supersede provisional names or shapes in earlier State 1 files. A future readability consolidation may rewrite the base documents, but it must not change the accepted semantics.
+State 1 remains stabilized as a document set after the ownership correction because the mistakenly introduced furniture/layout backend models have been explicitly withdrawn rather than carried forward.
 
 State 2 is active. Its current open policy areas are recorded in `20_rules.md`; accepted `20_*` refinements close or narrow some of those areas. State 2 must be stabilized before proceeding to module responsibilities unless a later rule exposes another missing State 0/1 decision.
 
