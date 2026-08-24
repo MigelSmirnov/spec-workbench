@@ -253,6 +253,21 @@ python tools/design_factory_admission.py examples/hydraulic-diagram-service \
   --project hydraulic_diagram_service
 ```
 
+Cases that have a stable Factory destination should pin it in
+`90_factory_target.json`:
+
+```json
+{
+  "schema_version": "spec_workbench_factory_target.v1",
+  "case": "hydraulic-diagram-service",
+  "factory_project": "hydraulic_diagram_service"
+}
+```
+
+Admission prints and records the exact `case -> Factory project` pair. A
+different `--project` is blocked before export; a case without this manifest
+remains admissible but receives an explicit warning.
+
 Export an admitted case into a new Factory project with:
 
 ```bash

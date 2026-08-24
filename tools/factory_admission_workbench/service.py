@@ -28,6 +28,8 @@ from factory_admission_workbench.model import (
 SEMANTIC_EXPORT_SCHEMA = "spec_workbench_semantic_test_export.v1"
 SEMANTIC_EXPORT_MANIFEST = "71_semantic_test_export.json"
 REVIEW_LEDGER = "81_module_review_status.json"
+FACTORY_TARGET_SCHEMA = "spec_workbench_factory_target.v1"
+FACTORY_TARGET_MANIFEST = "90_factory_target.json"
 
 
 def _load_json(path: Path) -> Any:
@@ -95,6 +97,53 @@ def _source_clean_check(metadata: dict[str, Any], allow_dirty_source: bool) -> A
         )
     return AdmissionCheck(
         "FA001", CHECK_PASS, "Workbench source is committed and clean.", metadata
+    )
+
+
+def _target_identity_check(case_root: Path | None, project: str) -> AdmissionCheck:
+    if case_root is None:
+        return AdmissionCheck(
+            "FA014",
+            CHECK_NOT_APPLICABLE,
+            "Explicit --spec admission has no case-to-Factory target declaration.",
+            {"factory_project": project},
+        )
+    manifest_path = case_root / FACTORY_TARGET_MANIFEST
+    if not manifest_path.is_file():
+        return AdmissionCheck(
+            "FA014",
+            CHECK_WARNING,
+            "Case has no pinned Factory target; the CLI project name is not independently verified.",
+            {
+                "case": case_root.name,
+                "factory_project": project,
+                "missing": str(manifest_path),
+            },
+        )
+    manifest = _load_json(manifest_path)
+    expected_case = manifest.get("case") if isinstance(manifest, dict) else None
+    expected_project = manifest.get("factory_project") if isinstance(manifest, dict) else None
+    valid = (
+        isinstance(manifest, dict)
+        and manifest.get("schema_version") == FACTORY_TARGET_SCHEMA
+        and expected_case == case_root.name
+        and expected_project == project
+    )
+    return AdmissionCheck(
+        "FA014",
+        CHECK_PASS if valid else CHECK_BLOCK,
+        "Workbench case is pinned to the requested Factory project."
+        if valid
+        else "Workbench case and requested Factory project do not match the pinned target.",
+        {
+            "path": str(manifest_path),
+            "schema_version": manifest.get("schema_version") if isinstance(manifest, dict) else None,
+            "expected_schema_version": FACTORY_TARGET_SCHEMA,
+            "case": case_root.name,
+            "declared_case": expected_case,
+            "requested_factory_project": project,
+            "declared_factory_project": expected_project,
+        },
     )
 
 
@@ -798,6 +847,7 @@ def check(
     source_standard_version = source_spec.get("standard_version") if isinstance(source_spec, dict) else None
     checks: list[AdmissionCheck] = [
         _source_clean_check(metadata, allow_dirty_source),
+        _target_identity_check(case_root, project),
         _review_check(case_root),
         _assembly_check(case_root),
         _standard_check(workbench_root, factory_root),
@@ -823,6 +873,12 @@ def check(
         "status": "READY_TO_EXPORT" if blocks == 0 else "BLOCKED",
         "ready": blocks == 0,
         "project": project,
+        "admission_target": {
+            "case": case_root.name if case_root is not None else None,
+            "case_path": str(case_root) if case_root is not None else None,
+            "factory_project": project,
+            "factory_project_path": str(factory_root / "projects" / project),
+        },
         "source": {
             "path": str(source),
             "sha256": _sha256_file(source),

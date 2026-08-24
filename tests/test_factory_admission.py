@@ -5,7 +5,11 @@ import json
 from pathlib import Path
 
 from factory_admission_workbench import check
-from factory_admission_workbench.service import _review_check, _runtime_persistence_check
+from factory_admission_workbench.service import (
+    _review_check,
+    _runtime_persistence_check,
+    _target_identity_check,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -81,6 +85,12 @@ def test_explicit_spec_is_ready_when_factory_accepts_it(tmp_path: Path) -> None:
     assert report["status"] == "READY_TO_EXPORT"
     assert report["ready"] is True
     assert report["source"]["standard_version"] == 2
+    assert report["admission_target"] == {
+        "case": None,
+        "case_path": None,
+        "factory_project": "demo",
+        "factory_project_path": str((tmp_path / "code_factory/projects/demo").resolve()),
+    }
     assert report["summary"]["blocks"] == 0
     assert report["codec_coverage"]["status"] == "not_applicable"
     assert report["codec_coverage"]["complete"] is True
@@ -89,6 +99,41 @@ def test_explicit_spec_is_ready_when_factory_accepts_it(tmp_path: Path) -> None:
     assert language["evidence"]["standard_version"] == 2
     external = next(item for item in report["checks"] if item["id"] == "FA011")
     assert external["status"] == "NOT_APPLICABLE"
+
+
+def test_case_target_manifest_pins_factory_project(tmp_path: Path) -> None:
+    case_root = tmp_path / "cabinet-backend"
+    _write_json(
+        case_root / "90_factory_target.json",
+        {
+            "schema_version": "spec_workbench_factory_target.v1",
+            "case": "cabinet-backend",
+            "factory_project": "cabinet_backend",
+        },
+    )
+
+    result = _target_identity_check(case_root, "cabinet_backend")
+
+    assert result.status == "PASS"
+    assert result.evidence["declared_factory_project"] == "cabinet_backend"
+
+
+def test_case_target_manifest_blocks_similar_wrong_project(tmp_path: Path) -> None:
+    case_root = tmp_path / "cabinet-backend"
+    _write_json(
+        case_root / "90_factory_target.json",
+        {
+            "schema_version": "spec_workbench_factory_target.v1",
+            "case": "cabinet-backend",
+            "factory_project": "cabinet_backend",
+        },
+    )
+
+    result = _target_identity_check(case_root, "Cabinet_web")
+
+    assert result.status == "BLOCK"
+    assert result.evidence["requested_factory_project"] == "Cabinet_web"
+    assert result.evidence["declared_factory_project"] == "cabinet_backend"
 
 
 def test_case_without_stage81_ledger_is_blocked(tmp_path: Path) -> None:

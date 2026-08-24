@@ -46,6 +46,11 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(report, indent=2, ensure_ascii=False, sort_keys=True))
     else:
         summary = report["summary"]
+        target = report["admission_target"]
+        print(
+            f"Admission target: case={target['case']} -> "
+            f"Factory project={target['factory_project']}"
+        )
         print(
             f"Factory admission: status={report['status']} "
             f"passes={summary['passes']} blocks={summary['blocks']} warnings={summary['warnings']}"
