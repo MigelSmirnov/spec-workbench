@@ -277,9 +277,9 @@ that cannot execute local commands.
 
 The cross-repository admission job additionally checks out the private
 `MigelSmirnov/panelforge-sandbox` repository and runs the real Factory
-validator. Enable that job by creating a fine-grained repository token with
-read-only `Contents` access to `panelforge-sandbox`, then save it in the
-`spec-workbench` repository as the Actions secret `FACTORY_REPO_TOKEN`.
+validator. It authenticates with a dedicated read-only deploy key whose
+private half is stored in `spec-workbench` as the Actions secret
+`FACTORY_REPO_DEPLOY_KEY`; no personal GitHub token is exposed to the job.
 Without the secret, Workbench CI still runs and the Factory job records an
 explicit skip notice.
 
