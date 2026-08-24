@@ -1,30 +1,30 @@
-# Room Planner — State 0: Wall Elevations and Furniture Layout
+# Room Planner — State 0: Wall Elevations and Shared Frontend Block Overlay
 
-> Status: accepted State 0 refinement.
+> Status: accepted State 0 correction/refinement.
 >
-> This document adds a wall-elevation authoring view and manual furniture layout
-> to the stabilized Room Planner product boundary. It preserves the browser-first,
-> 2D-authoring direction: plan and elevation are coordinated projections of one
-> spatial domain model, not independent drawings.
+> This document keeps wall-elevation authoring inside the Room Planner product,
+> while correcting an earlier ownership mistake: furniture and similar reusable
+> layout blocks are a shared **frontend/editor capability**, not Room Planner
+> backend/domain data.
 
 ## 1. Wall elevation is a required editor view
 
 Room Planner needs a wall-elevation / unfolded-wall workflow in addition to the
 plan view.
 
-The elevation view is used to inspect and edit vertical relationships that are
-awkward or ambiguous in plan, including:
+The elevation view is used to inspect and edit Room Planner-owned vertical
+relationships that are awkward or ambiguous in plan, including:
 
 - opening sill and head heights;
 - door/window element placement and door swing projection;
 - wall niches and their vertical extent;
 - wall-face treatment regions where later product scope requires them;
 - ceiling/base-ceiling lines and lowered ceiling/box consequences;
-- local floor line and clear-height consequences;
-- vertical placement and dimensions of furniture/layout blocks.
+- local floor line and clear-height consequences.
 
 The elevation is not a separately authored copy of the room. It is a projection
-of the same authoritative wall/opening/surface/furniture data used by plan view.
+of the same authoritative Room Planner wall/opening/surface/construction data used
+by plan view.
 
 ```text
 canonical Room Planner working state
@@ -32,8 +32,8 @@ canonical Room Planner working state
         └── wall-face elevation projection
 ```
 
-Editing from either view changes the same working-domain facts through explicit
-application/editor commands.
+Editing Room Planner concepts from either view changes the same working-domain
+facts through explicit application/editor commands.
 
 ## 2. Elevations are wall-face centric
 
@@ -49,54 +49,54 @@ wall identity
 wall-face elevation view
 ```
 
-The view must preserve deterministic correspondence to wall-relative geometry.
 The browser may orient/flip the viewport for usability, but that display transform
 must not change canonical wall direction, `WallSide`, opening offsets, door swing,
-or persisted dimensions.
+niche placement, or persisted dimensions.
 
 ## 3. Height entry belongs naturally in elevation
 
-The elevation view is a primary interaction surface for entering vertical
-parameters.
-
-Examples include:
+The elevation view is a primary interaction surface for entering Room
+Planner-owned vertical parameters, for example:
 
 ```text
 opening sill height
 opening height
 wall-niche sill / height / recess depth
-furniture bottom elevation / height
 ceiling-box drop shown at the wall intersection
 ```
 
 The property panel and direct dimension handles may both expose these values, but
 accepted domain values remain real-world millimetres. Dragging a visual handle is
-only an input gesture that proposes a new domain value.
+only an input gesture that proposes a new Room Planner domain value.
 
-## 4. Manual furniture layout is in scope as a spatial planning aid
+## 4. Shared frontend blocks are not Room Planner domain
 
-Room Planner may support manual placement of furniture and similar room-layout
-blocks so the renovation professional can reason about the planned space in both
-plan and elevation views.
+The shared engineering workspace may provide furniture, appliances, sanitary
+fixtures, equipment silhouettes, or other reusable visual/layout blocks as a
+frontend capability.
 
-This refines the earlier out-of-scope statement only narrowly:
+These blocks are useful spatial context in plan and elevation, but Room Planner
+backend ownership remains limited to Room Planner's own renovation domain.
 
-- **manual placement and visual spatial planning are in scope**;
-- automatic domain decisions that furniture/kitchens/equipment "fit" or satisfy
-  ergonomic/code rules remain out of scope unless introduced explicitly later;
-- furniture pricing, procurement, manufacturing/BOM, labor, and commercial
-  estimating are not Room Planner responsibilities.
+Therefore a generic furniture/layout block placed in the browser:
 
-Furniture layout is therefore useful spatial context, not a new estimating
-subsystem.
+- is not Existing, Demolition, Construction, Proposed, or takeoff data;
+- is not persisted in a Room Planner snapshot;
+- is not published inside `room_plan` or `room_takeoff` merely because it is
+  visible in the Room Planner workspace;
+- does not require Room Planner API endpoints, persistence tables, basis refs, or
+  carry-forward logic;
+- does not transfer ownership of furniture/kitchen/equipment semantics into Room
+  Planner.
 
-## 5. Furniture uses the reusable block library, not custom React components
+If a future planner genuinely owns a type of placed equipment, that planner may
+model its own domain entity and use the same shared block library only as its
+renderer/palette layer.
 
-Furniture items should use the shared versioned block-definition / SVG-library
-architecture.
+## 5. Reusable multi-view block library is shared frontend infrastructure
 
-A block definition may provide several validated renderer assets for the same
-semantic item, for example:
+A reusable block definition may provide several validated renderer assets for one
+visual/semantic library item:
 
 ```text
 plan
@@ -107,77 +107,61 @@ side_elevation
 The palette consumes manifest metadata and capabilities. It does not parse or
 understand the internal SVG paths.
 
-The block definition does not own the item's project placement or project
-identity. A Room Planner furniture placement references a definition and stores
-its own real-world position/dimensions/mounting data.
+The same library may be reused by Room Planner, Plumbing Planner, Electrical
+Planner, and other planner frontends. Reuse of the frontend library does not
+imply that every planner backend knows or stores those blocks.
 
-## 6. Multi-view assets represent one block definition
+The exact frontend-only placement/overlay representation belongs to the shared
+frontend/editor architecture in `../../FRONTEND_EDITOR_ELEVATIONS.md`, not to the
+Room Planner domain model.
 
-Plan and elevation SVGs for the same furniture item are renderer projections of
-one reusable definition, not different project objects.
+## 6. Frontend overlay persistence is a separate concern
 
-```text
-FurnitureDefinition F42
-    ├── plan asset
-    ├── front-elevation asset
-    └── optional side-elevation asset
+The initial Room Planner backend has no responsibility to durably persist generic
+frontend block overlays.
 
-FurniturePlacement P7
-    → definition F42
-    → one canonical project placement
-```
+If the platform later needs shared overlay state to survive browser sessions or
+move between devices, that requires an explicit shared-workspace persistence
+boundary. It must not be introduced by silently adding foreign-layout fields to
+each planner backend.
 
-Changing editor view selects another projection of `P7`; it must not create a
-second placement.
+Local/session frontend persistence may be evaluated by the frontend architecture
+without changing Room Planner domain ownership.
 
-If a definition lacks an elevation asset, the editor may use a validated neutral
-fallback derived from its physical envelope, but must not fabricate detailed
-construction semantics.
+## 7. Frontend/editor consequence
 
-## 7. Furniture does not silently become Construction work
-
-Furniture placement is a distinct layout meaning. Placing a sofa/cabinet/block
-must not create drywall, finish, Demolition, or Construction takeoff merely
-because it is visible in the Room Planner scene.
-
-A furniture item may be used as spatial context while designing walls, doors,
-niches, ceiling regions, or services, but those domains retain their own explicit
-intent and quantity models.
-
-Future built-in/custom joinery that Room Planner is expected to quantify would
-require an explicit product/model decision rather than being inferred from the
-furniture library.
-
-## 8. Publication boundary
-
-Furniture layout may be retained in Room Planner working/accepted plan state and
-may be included as an auxiliary structured layer of `room_plan` when publication
-contracts are defined.
-
-It does not participate in `room_takeoff` unless a later explicit product scope
-assigns physical quantity responsibility to Room Planner.
-
-## 9. Frontend/editor consequence
-
-The browser workspace now needs coordinated view modes at minimum:
+The browser workspace needs coordinated view modes at minimum:
 
 ```text
 Plan
 Wall Elevation
 ```
 
-Selection should be able to move between them through stable domain references.
-For example, selecting a wall face or niche in plan can open/select the same
-entity in elevation; selecting a door/furniture placement in elevation can reveal
-it in plan.
+Room Planner domain selection should move between them through stable Room Planner
+refs. Shared frontend overlay blocks may also project into both views using their
+own editor-layer identity, but those overlay ids are not Room Planner domain ids.
 
-No Canvas/Konva/SVG scene object becomes the cross-view identity.
+No Canvas/Konva/SVG scene object becomes canonical Room Planner identity.
 
-## 10. Platform Router impact
+## 8. Platform Router impact
 
-This product refinement introduces no new Platform Hub mechanism.
+This correction introduces no new Platform Hub mechanism.
 
-If furniture layout is later exposed cross-application through `room_plan`, its
-language-neutral artifact schema belongs to the normal Room Planner publication
-contract. The Platform Hub does not own furniture editing, wall elevations, or
-block rendering.
+Wall elevation remains a Room Planner editor projection. Generic frontend block
+libraries/overlays remain frontend/editor concerns and are not added to Room
+Planner publication provenance.
+
+## State 0 effect
+
+The earlier wording that manual furniture layout was Room Planner product/domain
+state is superseded.
+
+The accepted boundary is now:
+
+```text
+Room Planner backend/domain
+    → owns only Room Planner renovation concepts
+
+Shared browser workspace
+    → may additionally render/edit reusable frontend-only block overlays
+```
