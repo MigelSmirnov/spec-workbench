@@ -6,11 +6,11 @@ from pathlib import Path
 import yaml
 
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[3]
 CONTRACT = ROOT / "experiments" / "cabinet-vault" / "cabinet_web_source_attach_canary_v1.yaml"
-ADAPTER = ROOT / "tools" / "cabinet_web_source_attach_adapter.py"
-OLD_RUNTIME = ROOT / "tools" / "invoice_source_attach_runtime.py"
-PROBE = ROOT / "tools" / "cabinet_web_source_attach_canary_probe.py"
+ADAPTER = ROOT / "experiments" / "cabinet-vault" / "tools" / "cabinet_web_source_attach_adapter.py"
+OLD_RUNTIME = ROOT / "experiments" / "cabinet-vault" / "tools" / "invoice_source_attach_runtime.py"
+PROBE = ROOT / "experiments" / "cabinet-vault" / "tools" / "cabinet_web_source_attach_canary_probe.py"
 EVIDENCE = ROOT / "experiments" / "cabinet-vault" / "CABINET_WEB_ATTACH_CANARY_RUNTIME_EVIDENCE.md"
 
 
@@ -69,7 +69,7 @@ def test_verified_canary_opens_interop_but_does_not_claim_real_user_data_executi
 def test_canary_preserves_old_verified_attach_runtime_blob():
     contract = load()
     binding = contract["implementation"]["existing_verified_attach_runtime"]
-    assert binding["path"] == "tools/invoice_source_attach_runtime.py"
+    assert binding["path"] == "experiments/cabinet-vault/tools/invoice_source_attach_runtime.py"
     assert binding["must_remain_unmodified_by_this_canary"] is True
     assert binding["blob_sha"] == "4517dd23f68a81a065823941d686fec4026be433"
     assert git_blob_sha(OLD_RUNTIME) == binding["blob_sha"]

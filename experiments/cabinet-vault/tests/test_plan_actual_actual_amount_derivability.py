@@ -6,7 +6,7 @@ from pathlib import Path
 from box_derivability import derive_capability_mapping, load_definition
 
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[3]
 SOURCE = ROOT / "experiments" / "cabinet-vault" / "invoice_card_v1_line_monetary_contract_v0.yaml"
 TARGET = ROOT / "experiments" / "cabinet-vault" / "cabinet_plan_actual_actual_amount_requirement_v0.yaml"
 

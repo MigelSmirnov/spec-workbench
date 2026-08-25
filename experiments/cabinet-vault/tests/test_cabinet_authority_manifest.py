@@ -5,7 +5,7 @@ from pathlib import Path
 import yaml
 
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[3]
 BOX = ROOT / "experiments" / "cabinet-vault" / "cabinet_backend_box_v0.yaml"
 AUTHORITY = ROOT / "experiments" / "cabinet-vault" / "cabinet_authority_contract_v0.yaml"
 

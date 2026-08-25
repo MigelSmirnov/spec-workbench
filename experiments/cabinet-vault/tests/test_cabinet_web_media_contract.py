@@ -17,7 +17,7 @@ from bounded_media_identification import (
 )
 
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[3]
 CONTRACT = ROOT / "experiments" / "cabinet-vault" / "cabinet_web_source_media_lowering_v1.yaml"
 EVIDENCE = ROOT / "experiments" / "cabinet-vault" / "CABINET_WEB_ATTACH_CANARY_RUNTIME_EVIDENCE.md"
 ACCEPTED = frozenset({"image/jpeg", "image/png", "application/pdf"})
@@ -109,10 +109,10 @@ def test_contract_uses_only_existing_verified_parser_provider():
     parser = contract["lowering"]["verified_parser_provider"]
     implementation = contract["lowering"]["implementation"]
     assert parser == {
-        "path": "tools/bounded_content_validation_kernel.py",
+        "path": "experiments/cabinet-vault/tools/bounded_content_validation_kernel.py",
         "blob_sha": "4d236d1332935577d81c78b332e5082fb1e6ae91",
     }
-    assert implementation["path"] == "tools/bounded_media_identification.py"
+    assert implementation["path"] == "experiments/cabinet-vault/tools/bounded_media_identification.py"
     assert implementation["blob_sha"] == "19d2c6c66d90984fae59b0658fbb30320a95bea2"
 
 

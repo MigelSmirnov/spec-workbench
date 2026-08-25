@@ -102,7 +102,7 @@ def execute_real_canary(
     if receipt["outcome"] not in {"accepted", "already_accepted"}:
         return {
             "Cabinet_web main commit": _git(web_root, "rev-parse", "HEAD"),
-            "spec-workbench commit": _git(Path(__file__).resolve().parents[1], "rev-parse", "HEAD"),
+            "spec-workbench commit": _git(Path(__file__).resolve().parents[3], "rev-parse", "HEAD"),
             "invoice_id": TARGET_INVOICE_ID,
             "Card repository path": f"data/cards/{TARGET_INVOICE_ID}/card.json",
             "Card content hash": delivery["card_content_hash"],
@@ -175,7 +175,7 @@ def execute_real_canary(
     item = attachment["items"][0]
     report = {
         "Cabinet_web main commit": _git(web_root, "rev-parse", "HEAD"),
-        "spec-workbench commit": _git(Path(__file__).resolve().parents[1], "rev-parse", "HEAD"),
+        "spec-workbench commit": _git(Path(__file__).resolve().parents[3], "rev-parse", "HEAD"),
         "invoice_id": TARGET_INVOICE_ID,
         "Card repository path": delivery["card_repository_path"],
         "Card content hash": delivery["card_content_hash"],

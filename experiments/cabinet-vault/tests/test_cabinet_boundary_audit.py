@@ -14,7 +14,7 @@ from cabinet_boundary_audit import (
 )
 
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[3]
 EVIDENCE = ROOT / "experiments" / "cabinet-vault" / "generated_backend_failure_evidence_v0.yaml"
 
 

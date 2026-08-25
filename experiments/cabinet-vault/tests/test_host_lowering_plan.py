@@ -9,11 +9,11 @@ import yaml
 from host_lowering_plan import IMPLEMENTED_HOST_LOWERING_RULES, compile_host_lowering
 
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[3]
 BOX_PATH = ROOT / "experiments" / "cabinet-vault" / "cabinet_backend_box_v0.yaml"
 PROFILE_PATH = ROOT / "experiments" / "cabinet-vault" / "generic_host_profile_candidate_v0.yaml"
 CONTRACT_PATH = ROOT / "experiments" / "cabinet-vault" / "generic_host_lowering_contract_v0.yaml"
-TOOL_PATH = ROOT / "tools" / "host_lowering_plan.py"
+TOOL_PATH = ROOT / "experiments" / "cabinet-vault" / "tools" / "host_lowering_plan.py"
 
 
 def load(path: Path):
@@ -117,7 +117,7 @@ def test_planner_declares_exact_contract_rules_and_reviewed_source_fingerprint()
     contract = load(CONTRACT_PATH)
     binding = contract["tool_bindings"]["host_lowering_plan"]
     assert set(binding["declared_rules"]) == set(IMPLEMENTED_HOST_LOWERING_RULES)
-    assert binding["implementation"] == "tools/host_lowering_plan.py"
+    assert binding["implementation"] == "experiments/cabinet-vault/tools/host_lowering_plan.py"
     assert binding["implementation_blob_sha"] == git_blob_sha(TOOL_PATH)
 
 

@@ -6,7 +6,7 @@ from pathlib import Path
 from holded_transport_workbench import deterministic_method_scopes, structured_addresses
 
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[3]
 CABINET = ROOT / "examples" / "cabinet-backend"
 
 

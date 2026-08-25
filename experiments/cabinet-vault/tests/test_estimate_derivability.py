@@ -6,7 +6,7 @@ from box_composition import compile_composition, execute_composition
 from box_derivability import derive_capability_mapping, load_definition
 
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[3]
 SOURCE = ROOT / "experiments" / "cabinet-vault" / "presupro_estimate_box_v0.yaml"
 TARGET = ROOT / "experiments" / "cabinet-vault" / "cabinet_estimate_context_box_v0.yaml"
 

@@ -5,7 +5,7 @@ from pathlib import Path
 import yaml
 
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[3]
 READINESS = ROOT / "experiments" / "cabinet-vault" / "cabinet_web_real_data_canary_readiness_v1.yaml"
 FUNCTIONAL_EVIDENCE = ROOT / "experiments" / "cabinet-vault" / "F260001_REAL_DATA_CANARY_PASS_EVIDENCE_2026-08-21.md"
 ASSURANCE_REVIEW = ROOT / "experiments" / "cabinet-vault" / "F260001_REAL_RUN_ASSURANCE_REVIEW_2026-08-21.md"

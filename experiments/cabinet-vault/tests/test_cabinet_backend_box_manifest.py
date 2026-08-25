@@ -6,7 +6,7 @@ from pathlib import Path
 from cabinet_host import load_definition
 
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[3]
 MANIFEST = ROOT / "experiments" / "cabinet-vault" / "cabinet_backend_box_v0.yaml"
 
 

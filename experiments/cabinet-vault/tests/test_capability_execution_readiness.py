@@ -12,13 +12,13 @@ from capability_execution_readiness import (
 )
 
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[3]
 BOX_PATH = ROOT / "experiments" / "cabinet-vault" / "cabinet_backend_box_v0.yaml"
 PROFILE_PATH = ROOT / "experiments" / "cabinet-vault" / "generic_host_profile_candidate_v0.yaml"
 CONTRACT_PATH = ROOT / "experiments" / "cabinet-vault" / "invoice_source_attach_execution_contract_v0.yaml"
-TOOL_PATH = ROOT / "tools" / "capability_execution_readiness.py"
-CONTENT_PROVIDER_PATH = ROOT / "tools" / "bounded_content_validation_kernel.py"
-CONTENT_PROBE_PATH = ROOT / "tools" / "bounded_content_validation_kernel_probe.py"
+TOOL_PATH = ROOT / "experiments" / "cabinet-vault" / "tools" / "capability_execution_readiness.py"
+CONTENT_PROVIDER_PATH = ROOT / "experiments" / "cabinet-vault" / "tools" / "bounded_content_validation_kernel.py"
+CONTENT_PROBE_PATH = ROOT / "experiments" / "cabinet-vault" / "tools" / "bounded_content_validation_kernel_probe.py"
 
 
 def load(path: Path):
@@ -77,7 +77,7 @@ def test_source_readiness_and_content_provider_fingerprints_are_bound():
 
     assert source["path"] == "experiments/cabinet-vault/cabinet_backend_box_v0.yaml"
     assert source["blob_sha"] == git_blob_sha(BOX_PATH)
-    assert tool["implementation"] == "tools/capability_execution_readiness.py"
+    assert tool["implementation"] == "experiments/cabinet-vault/tools/capability_execution_readiness.py"
     assert tool["implementation_blob_sha"] == git_blob_sha(TOOL_PATH)
     assert set(tool["declared_rules"]) == set(IMPLEMENTED_CAPABILITY_EXECUTION_RULES)
     assert set(contract["machine_rules"]) == set(IMPLEMENTED_CAPABILITY_EXECUTION_RULES)

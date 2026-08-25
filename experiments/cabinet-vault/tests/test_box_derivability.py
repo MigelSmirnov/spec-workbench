@@ -13,7 +13,7 @@ from box_derivability import (
 )
 
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[3]
 SOURCE = ROOT / "experiments" / "cabinet-vault" / "registry_project_box_v0.yaml"
 TARGET = ROOT / "experiments" / "cabinet-vault" / "cabinet_registry_context_box_v0.yaml"
 TARGET_CAPABILITY = "project.catalogue_observation.accept"

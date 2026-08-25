@@ -6,7 +6,7 @@ from pathlib import Path
 import yaml
 
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[3]
 PROFILE = ROOT / "experiments" / "cabinet-vault" / "generic_host_profile_candidate_v0.yaml"
 PACKETS = ROOT / "experiments" / "cabinet-vault" / "generic_host_provider_verification_v0.yaml"
 AUTHORITY = ROOT / "experiments" / "cabinet-vault" / "cabinet_authority_contract_v0.yaml"

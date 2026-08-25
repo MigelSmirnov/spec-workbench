@@ -11,13 +11,13 @@ from invoice_source_attach_runtime_probe import run_probe
 from typed_schema_kernel import TypedSchemaKernel
 
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[3]
 LOWERING = ROOT / "experiments" / "cabinet-vault" / "invoice_source_attach_runtime_lowering_v0.yaml"
 EXECUTION_CONTRACT = ROOT / "experiments" / "cabinet-vault" / "invoice_source_attach_execution_contract_v0.yaml"
 EVIDENCE = ROOT / "experiments" / "cabinet-vault" / "INVOICE_SOURCE_ATTACH_RUNTIME_EVIDENCE.md"
-MODELS = ROOT / "tools" / "invoice_source_attach_models.py"
-RUNTIME = ROOT / "tools" / "invoice_source_attach_runtime.py"
-PROBE = ROOT / "tools" / "invoice_source_attach_runtime_probe.py"
+MODELS = ROOT / "experiments" / "cabinet-vault" / "tools" / "invoice_source_attach_models.py"
+RUNTIME = ROOT / "experiments" / "cabinet-vault" / "tools" / "invoice_source_attach_runtime.py"
+PROBE = ROOT / "experiments" / "cabinet-vault" / "tools" / "invoice_source_attach_runtime_probe.py"
 
 
 def load(path: Path):

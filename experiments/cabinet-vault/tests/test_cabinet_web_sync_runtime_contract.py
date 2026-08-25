@@ -16,11 +16,11 @@ from cabinet_web_revision_accept_runtime import (
 from cabinet_web_revision_accept_runtime_probe import run_probe
 
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[3]
 EXTENSION = ROOT / "experiments" / "cabinet-vault" / "cabinet_web_sync_box_extension_v1.yaml"
 BASE_BOX = ROOT / "experiments" / "cabinet-vault" / "cabinet_backend_box_v0.yaml"
-RUNTIME = ROOT / "tools" / "cabinet_web_revision_accept_runtime.py"
-ADAPTER = ROOT / "tools" / "cabinet_web_checkout_sync_adapter.py"
+RUNTIME = ROOT / "experiments" / "cabinet-vault" / "tools" / "cabinet_web_revision_accept_runtime.py"
+ADAPTER = ROOT / "experiments" / "cabinet-vault" / "tools" / "cabinet_web_checkout_sync_adapter.py"
 
 
 def load(path: Path):

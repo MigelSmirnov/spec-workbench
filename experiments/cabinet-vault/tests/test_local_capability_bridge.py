@@ -17,9 +17,9 @@ from local_capability_bridge_probe import run_probe
 from protected_configuration_kernel import ProtectedConfigurationNotReady
 
 
-ROOT = Path(__file__).resolve().parents[1]
-BRIDGE = ROOT / "tools" / "local_capability_bridge.py"
-REAL_CANARY = ROOT / "tools" / "f260001_real_canary_via_bridge.py"
+ROOT = Path(__file__).resolve().parents[3]
+BRIDGE = ROOT / "experiments" / "cabinet-vault" / "tools" / "local_capability_bridge.py"
+REAL_CANARY = ROOT / "experiments" / "cabinet-vault" / "tools" / "f260001_real_canary_via_bridge.py"
 
 
 def test_bridge_fails_closed_without_protected_configuration():

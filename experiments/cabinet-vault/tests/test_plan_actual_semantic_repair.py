@@ -5,7 +5,7 @@ from pathlib import Path
 import yaml
 
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[3]
 STATE1 = ROOT / "examples" / "cabinet-backend" / "01_models_plan_actual_monetary_gap.md"
 STATE2 = ROOT / "examples" / "cabinet-backend" / "02_rules_plan_actual_semantic_gap.md"
 PLANNED = ROOT / "experiments" / "cabinet-vault" / "cabinet_plan_actual_amount_requirement_v0.yaml"

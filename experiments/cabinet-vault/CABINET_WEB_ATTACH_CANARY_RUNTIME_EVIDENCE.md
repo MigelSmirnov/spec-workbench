@@ -49,7 +49,7 @@ WEB-ATTACH-004: PASS
 
 ## Boundary preserved
 
-The canary did not modify the previously verified `tools/invoice_source_attach_runtime.py`. Cabinet_web-owned `source_id` remained the source identity. Parser-observed media type and locally calculated SHA-256 remained local-box evidence and were not written into the confirmed Card or converted into fabricated upstream expectations.
+The canary did not modify the previously verified `experiments/cabinet-vault/tools/invoice_source_attach_runtime.py`. Cabinet_web-owned `source_id` remained the source identity. Parser-observed media type and locally calculated SHA-256 remained local-box evidence and were not written into the confirmed Card or converted into fabricated upstream expectations.
 
 ## Gate consequence
 
