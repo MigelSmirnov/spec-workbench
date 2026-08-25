@@ -165,7 +165,7 @@ Check patch integrity:
 git diff --check
 Search for obvious placeholders:
 grep -RInE \
-  'TODO|FIXME|pass$|dict\[str, Any\]|process correctly|handle errors appropriately' \
+  'TODO|FIXME|pass$|dictstr, Any|process correctly|handle errors appropriately' \
   skills examples
 Do not invent validator commands. Use only commands documented by the current repository or factory workspace.
 Definition of done
@@ -178,4 +178,3 @@ public package exports remain narrow;
 models, rules, contracts, notes, imports, and module order are consistent;
 placeholder implementations violate explicit notes;
 valid local implementation freedom remains;
-```
