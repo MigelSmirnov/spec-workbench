@@ -101,27 +101,35 @@ jobs:
           assert a["summary"]["ready_checks"] == a["summary"]["checks"], a
           PY
 
-      - name: Capture Stage 8.1 review packets
-        shell: bash
+      - name: Capture every Stage 8.1 review packet
         run: |
-          mkdir -p ci-artifacts/final/module-review
+          mkdir -p ci-artifacts/final/module-review/slices ci-artifacts/final/module-review/reviews
           python tools/design_module_review.py examples/cabinet-web-backend --list --json \
             > ci-artifacts/final/module-review/list.json
-          for module in \
-            access_control card_workspace invoice_workspace project_workspace \
-            cabinet_persistence source_custody invoice_exchange registry_replica runtime_control bootstrap
-          do
-            set +e
-            python tools/design_module_review.py examples/cabinet-web-backend \
-              --module "$module" --slice --json \
-              > "ci-artifacts/final/module-review/$module.json"
-            echo "$?" > "ci-artifacts/final/module-review/$module.exit"
-            set -e
-          done
           python - <<'PY'
           import json
+          import subprocess
           from pathlib import Path
-          bootstrap = json.loads(Path("ci-artifacts/final/module-review/bootstrap.json").read_text())
+
+          project = "examples/cabinet-web-backend"
+          root = Path("ci-artifacts/final/module-review")
+          modules = json.loads((root / "list.json").read_text())["modules"]
+          assert len(modules) == 18, modules
+          for module in modules:
+              with (root / "slices" / f"{module}.json").open("w") as handle:
+                  subprocess.run(
+                      ["python", "tools/design_module_review.py", project,
+                       "--module", module, "--slice", "--json"],
+                      check=True, stdout=handle, text=True,
+                  )
+              with (root / "reviews" / f"{module}.json").open("w") as handle:
+                  result = subprocess.run(
+                      ["python", "tools/design_module_review.py", project,
+                       "--module", module, "--review", "--json"],
+                      check=False, stdout=handle, text=True,
+                  )
+                  assert result.returncode in (0, 1), (module, result.returncode)
+          bootstrap = json.loads((root / "slices" / "bootstrap.json").read_text())
           notes = bootstrap["generation_constraints"]["assembled_notes"]
           assert any(row["scope"] == "create_cabinet_web_app" for row in notes), bootstrap
           PY
