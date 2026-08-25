@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import Any
 
 from factory_admission_workbench import check as check_factory_admission
+from notes_workbench import propagation as notes_propagation
 
 HANDOFF_SCHEMA = "spec_workbench_handoff.v1"
 SEMANTIC_EXPORT_SCHEMA = "spec_workbench_semantic_test_export.v1"
@@ -311,6 +312,22 @@ def main() -> int:
     standard_version = source_spec.get("standard_version")
     if not isinstance(standard_version, int) or isinstance(standard_version, bool):
         raise SystemExit("source specification has no valid standard_version")
+
+    # 80_notes.md is an authored source surface, while global_spec.json is the
+    # exported canonical surface.  Never let an accepted export carry a stale
+    # note array: propagation is deliberately check-only here so the operator
+    # must repair the Workbench source before Factory admission/export.
+    notes_path = source.parent / "80_notes.md"
+    if notes_path.is_file():
+        propagation = notes_propagation.propagate(source.parent, write=False)
+        if not propagation.get("ready", False):
+            blockers = [
+                item.get("message", item.get("code", "unknown note propagation blocker"))
+                for item in propagation.get("findings", [])
+                if item.get("severity") == "block"
+            ]
+            detail = "; ".join(blockers) if blockers else "canonical notes are not synchronized"
+            raise SystemExit("Workbench note propagation blocked export: " + detail)
 
     workbench_git = git_metadata(workbench_root)
     admission = check_factory_admission(
