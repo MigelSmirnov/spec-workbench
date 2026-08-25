@@ -100,6 +100,41 @@ def test_invoice_notes_close_security_orchestration_and_result_mapping() -> None
         assert required in confirmation
 
 
+def test_invoice_runtime_policy_closes_validation_and_confirmation_derivations() -> None:
+    rules = _json("60_data_closure.json")["sections"]["rules"]["invoice_workspace"]
+
+    assert rules["card_type"] == "invoice"
+    assert rules["lifecycle"] == {
+        "draft": "draft",
+        "confirmed": "confirmed",
+        "archived": "archived",
+    }
+    assert rules["manifest_hash_algorithm"] == "sha256_canonical_json_v1"
+    assert rules["manifest_hash_fields"] == [
+        "invoice_id",
+        "manifest_version",
+        "generated_at",
+        "card_revisions",
+        "source_references",
+    ]
+    assert rules["stored_custody_status"] == "stored"
+    assert rules["working_set_status"] == "available"
+    assert len(rules["validation_checks"]) == len(rules["validation_issue_order"])
+
+
+def test_invoice_read_and_validation_notes_name_executable_uow_calls() -> None:
+    notes = _notes()
+    duplicate_text = " ".join(text for _, text in notes["find_invoice_duplicates"])
+    assert "list_current_card_references_by_type" in duplicate_text
+    assert "load_card_revision" in duplicate_text
+    assert "candidate_field_sources" in duplicate_text
+
+    validation_text = " ".join(text for _, text in notes["validate_invoice"])
+    assert "validation_checks" in validation_text
+    assert "InvoiceDuplicateCandidateInput" in validation_text
+    assert "find_invoice_duplicates exactly once" in validation_text
+
+
 def test_invoice_workspace_constructor_has_exact_dependency_assignments() -> None:
     constructor_notes = _notes()["InvoiceWorkspace.__init__"]
     assert {note_class for note_class, _ in constructor_notes} >= {
