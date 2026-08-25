@@ -130,10 +130,38 @@ def resolve_project(repo_root: Path, query: str) -> Project:
     raise NavigationError(f"unknown project {query!r}; available: {available}")
 
 
+def _has_commit(repo_root: Path, ref: str) -> bool:
+    return bool(
+        _git(repo_root, "rev-parse", "--verify", f"{ref}^{{commit}}", check=False).strip()
+    )
+
+
+def _fetch_canonical_ref(repo_root: Path, ref: str) -> None:
+    """Fetch one indexed branch when a single-branch/shallow checkout omitted it."""
+    if not _git(repo_root, "remote", "get-url", "origin", check=False).strip():
+        return
+    _git(
+        repo_root,
+        "fetch",
+        "--quiet",
+        "origin",
+        f"refs/heads/{ref}:refs/remotes/origin/{ref}",
+        check=False,
+    )
+
+
 def _resolve_ref(repo_root: Path, ref: str) -> str:
     for candidate in (ref, f"origin/{ref}"):
-        if _git(repo_root, "rev-parse", "--verify", f"{candidate}^{{commit}}", check=False).strip():
+        if _has_commit(repo_root, candidate):
             return candidate
+
+    # Agent sandboxes and external readers often use --single-branch clones.
+    # Fetch only the curated canonical ref needed by PROJECT_INDEX.json; do not
+    # scan or fetch arbitrary repository branches for normal project discovery.
+    _fetch_canonical_ref(repo_root, ref)
+    if _has_commit(repo_root, f"origin/{ref}"):
+        return f"origin/{ref}"
+
     remote_refs = _git(
         repo_root,
         "for-each-ref",
@@ -147,7 +175,8 @@ def _resolve_ref(repo_root: Path, ref: str) -> str:
         if short == ref:
             return candidate
     raise NavigationError(
-        f"canonical ref {ref!r} is not available locally; run 'git fetch --all --prune'"
+        f"canonical ref {ref!r} is unavailable locally and could not be fetched "
+        "from origin; verify that the branch still exists and that origin is reachable"
     )
 
 
