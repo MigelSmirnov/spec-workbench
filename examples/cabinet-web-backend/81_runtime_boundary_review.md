@@ -142,6 +142,16 @@ elapsed intervals. Each behavioral service constructor note projects that
 shared rule into its module generation slice, preventing local clock-style
 invention without introducing a shared transaction or clock-derived state.
 
+### Invoice workspace implementation-completeness re-review
+
+**Resolved.** Factory received the complete invoice rules, UoW surface, Card
+workspace seams, and runtime model fields, but the generator substituted
+unconditional rejection and empty-return bodies for ten owned operations. The
+invoice workspace boundary now explicitly forbids fail-closed placeholders and
+requires every owned callable to execute its complete specified algorithm.
+This closes implementation completeness without weakening any security rule or
+changing the public contract surface.
+
 ## Stage 8.1 semantic re-review
 
 All **18 assembled modules** were rebuilt from the final specification. Every structural module review reports **0 blocks and 0 review findings**. Deterministic modules (`models`, `cabinet_persistence`, `source_byte_store`, `api`) are `PASS`; behavioral modules are `PASS_INTERNAL_VARIATION` where their observable behavior is closed but internal algorithms/construction details may vary.
