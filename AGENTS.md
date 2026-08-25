@@ -83,6 +83,23 @@ The repository entry points are discovery/orchestration only. They do not
 replace the ordered design-state methodology or the requirement to read the
 resolved project context before changing architecture.
 
+## Tool ownership
+
+Generic tooling — `tools/`, `tests/`, `skills/`, `.github/`, the repository
+entry points and `PROJECT_INDEX.json` — changes only on `main`, through a
+short-lived `tools/<topic>` branch and a pull request. Project branches
+(`agent/<project>`) own only `examples/<project>/` and `experiments/`.
+
+Product-specific policy never enters `tools/`. A project that needs its own
+deterministic backend ships it under `examples/<project>/tools/` and declares
+it in `examples/<project>/workbench_extensions.json`; generic gates reach it
+through `tools/project_extensions.py` by protocol, never by module name.
+
+The rule is enforced, not assumed: `.github/workflows/tools-ownership.yml`
+runs `python tools/tools_ownership_check.py --base origin/main` on every pull
+request and fails when a non-`tools/*` branch touches a generic path. Run the
+same command before pushing.
+
 ## Read first
 
 Before changing the methodology, read:

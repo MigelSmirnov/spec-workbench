@@ -347,3 +347,12 @@ normative human-facing gate. Stage 9 lineage and handoff receipts record both
 the canonical spec identity and its `standard_version`. Stage 9 ends after the
 exact canonical spec and handoff receipts are present in Factory; Route B
 generation and terminal OTK belong to Factory.
+
+## Tool ownership
+
+`tools/`, `tests/`, `skills/` and `.github/` change only on `main` via
+`tools/<topic>` branches. `agent/<project>` branches own `examples/<project>/`
+and `experiments/` only; `python tools/tools_ownership_check.py --base origin/main`
+is the pre-push check and the CI gate. Project-owned deterministic backends are
+declared in `examples/<project>/workbench_extensions.json` and loaded through
+`tools/project_extensions.py`.
