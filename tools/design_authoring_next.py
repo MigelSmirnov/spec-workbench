@@ -15,7 +15,6 @@ import sys
 from pathlib import Path
 from typing import Any
 
-import design_index
 import design_lint
 import design_stage3
 import design_stage4
@@ -66,8 +65,9 @@ def _action(
     tool = phase.get("gate_tool") or phase.get("inspect_tool")
     if not tool:
         return None
-    args = list(phase.get("next_tool_args") if use_next else phase.get("gate_args", []))
-    if "--json" not in args:
+    configured = phase.get("next_tool_args") if use_next else phase.get("gate_args", [])
+    args = list(configured or [])
+    if not phase.get("json_default") and "--json" not in args:
         args.append("--json")
     return {
         "tool": tool,
