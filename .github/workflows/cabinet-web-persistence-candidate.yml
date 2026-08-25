@@ -30,6 +30,13 @@ jobs:
         run: |
           python tools/_cabinet_web_candidate_materialize.py \
             > cabinet-web-materialization.json
+          mkdir -p ci-artifacts/final
+          python tools/design_notes.py examples/cabinet-web-backend \
+            --propagate --base-ref HEAD --json \
+            > ci-artifacts/final/notes-propagation.json
+          python tools/design_notes.py examples/cabinet-web-backend \
+            --propagate --base-ref HEAD --check --json \
+            > ci-artifacts/final/notes-propagation-check.json
           python - <<'PY'
           import json
           from pathlib import Path
@@ -52,7 +59,6 @@ jobs:
 
       - name: Validate closed authoring handoffs
         run: |
-          mkdir -p ci-artifacts/final
           python tools/design_stage6_data.py examples/cabinet-web-backend --lint --json \
             > ci-artifacts/final/data.json
           python tools/design_stage6_contracts.py examples/cabinet-web-backend --handoff --json \
@@ -112,6 +118,13 @@ jobs:
             echo "$?" > "ci-artifacts/final/module-review/$module.exit"
             set -e
           done
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          bootstrap = json.loads(Path("ci-artifacts/final/module-review/bootstrap.json").read_text())
+          notes = bootstrap["generation_constraints"]["assembled_notes"]
+          assert any(row["scope"] == "create_cabinet_web_app" for row in notes), bootstrap
+          PY
 
       - name: Capture canonical promotion files
         run: |
