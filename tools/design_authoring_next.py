@@ -108,7 +108,10 @@ def _has_state_source(project: Path, state: int) -> bool:
         lines = path.read_text(encoding="utf-8").splitlines()[:40]
         if any((match := STATE_RE.search(line)) and int(match.group(1)) == state for line in lines):
             return True
-        if state == 0 and (path.name.startswith("00_") or path.name == "01_product_boundary.md"):
+        name = path.name
+        if state == 0 and (name.startswith("00_") or name == "01_product_boundary.md"):
+            return True
+        if state == 1 and (name.startswith("10_") or name.startswith("01_models")):
             return True
     return False
 
@@ -121,8 +124,6 @@ def next_step(project: Path, *, display_path: str | None = None) -> dict[str, An
     sequence = load_sequence()
     project_text = display_path or project.as_posix()
 
-    # State 0 is intentionally a manual semantic gate. Presence proves only that
-    # the product frame exists; it is not represented as deterministic PASS.
     if not _has_state_source(project, 0):
         return _result(
             sequence=sequence,
@@ -142,6 +143,19 @@ def next_step(project: Path, *, display_path: str | None = None) -> dict[str, An
             reason=f"State 1 could not be inspected deterministically: {exc}",
         )
     s1 = state1.summary
+    if s1.models == 0 and not _has_state_source(project, 1):
+        return _result(
+            sequence=sequence,
+            project=project,
+            project_text=project_text,
+            phase="state0_product_frame",
+            blocked=False,
+            reason=(
+                "State 0 exists but has no deterministic acceptance gate. Review the product frame "
+                "semantically; starting a State 1 source is the explicit transition out of State 0."
+            ),
+            summary={"manual_review_required": True},
+        )
     if s1.models == 0 or s1.errors:
         return _result(
             sequence=sequence, project=project, project_text=project_text,
