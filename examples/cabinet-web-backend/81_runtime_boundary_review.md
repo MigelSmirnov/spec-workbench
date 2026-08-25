@@ -53,6 +53,17 @@ findings for both changed slices. `cabinet_persistence` remains `PASS` and
 `bootstrap` remains `PASS_INTERNAL_VARIATION` because only private construction
 details vary.
 
+### Imported contract type-surface re-review
+
+**Resolved.** Factory Spec Inspector exposed 78 missing model edges in the
+direct runtime import surfaces of `invoice_workspace`, `project_workspace`,
+`invoice_exchange`, `chatgpt_interaction`, `web_gateway`, and `sync_gateway`.
+Every added edge points to the unique `models` owner and is required by the
+signature of an already accepted imported callable; no callable dependency,
+ownership boundary, or business behavior changed. Rebuilt structural reviews
+for all six affected slices report zero findings. Their current hashes are
+recorded in `81_module_review_status.json`.
+
 ## Stage 8.1 semantic re-review
 
 All **18 assembled modules** were rebuilt from the final specification. Every structural module review reports **0 blocks and 0 review findings**. Deterministic modules (`models`, `cabinet_persistence`, `source_byte_store`, `api`) are `PASS`; behavioral modules are `PASS_INTERNAL_VARIATION` where their observable behavior is closed but internal algorithms/construction details may vary.

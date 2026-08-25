@@ -52,6 +52,25 @@ open(a.out, 'w', encoding='utf-8').write(json.dumps(r))
 """,
     )
     _write(
+        factory / "tools/run_spec_inspector_preflight.py",
+        """import argparse, hashlib, json
+p = argparse.ArgumentParser()
+p.add_argument('--project', required=True)
+p.add_argument('--spec', required=True)
+p.add_argument('--out', required=True)
+a = p.parse_args()
+raw = open(a.spec, 'rb').read()
+r = {
+    'status': 'PASS',
+    'summary': {'BLOCK': 0, 'WARN': 0, 'INFO': 0},
+    'spec_sha': 'sha256:' + hashlib.sha256(raw).hexdigest(),
+    'findings': [],
+    'exit_policy': {'exit_code': 0},
+}
+open(a.out, 'w', encoding='utf-8').write(json.dumps(r))
+""",
+    )
+    _write(
         factory / "tools/bootstrap_project.py",
         """import argparse, json, pathlib, shutil
 p = argparse.ArgumentParser()

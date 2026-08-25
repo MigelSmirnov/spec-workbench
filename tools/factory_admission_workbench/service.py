@@ -667,6 +667,74 @@ def _factory_validation_check(factory_root: Path, source: Path) -> tuple[Admissi
     ), report
 
 
+def _factory_inspector_check(
+    factory_root: Path, project: str, source: Path
+) -> tuple[AdmissionCheck, dict[str, Any] | None]:
+    runner = factory_root / "tools/run_spec_inspector_preflight.py"
+    if not runner.is_file():
+        return AdmissionCheck(
+            "FA015",
+            CHECK_BLOCK,
+            "Factory Spec Inspector preflight is missing.",
+            {"path": str(runner)},
+        ), None
+    with tempfile.TemporaryDirectory(prefix="spec-workbench-inspector-") as temp_dir:
+        report_path = Path(temp_dir) / "spec_inspector_report.json"
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(runner),
+                "--project",
+                project,
+                "--spec",
+                str(source),
+                "--out",
+                str(report_path),
+            ],
+            cwd=factory_root,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        if not report_path.is_file():
+            return AdmissionCheck(
+                "FA015",
+                CHECK_BLOCK,
+                "Factory Spec Inspector did not produce a bound report.",
+                {
+                    "returncode": result.returncode,
+                    "stdout": result.stdout.strip(),
+                    "stderr": result.stderr.strip(),
+                },
+            ), None
+        report = _load_json(report_path)
+    source_sha = "sha256:" + _sha256_file(source)
+    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    ready = (
+        report.get("status") == "PASS"
+        and summary.get("BLOCK") == 0
+        and report.get("spec_sha") == source_sha
+        and result.returncode == 0
+    )
+    return AdmissionCheck(
+        "FA015",
+        CHECK_PASS if ready else CHECK_BLOCK,
+        "Factory Spec Inspector accepts the source specification."
+        if ready
+        else "Factory Spec Inspector rejects the source specification.",
+        {
+            "returncode": result.returncode,
+            "status": report.get("status"),
+            "summary": summary,
+            "spec_sha": report.get("spec_sha"),
+            "expected_spec_sha": source_sha,
+            "findings": report.get("findings", []),
+            "stdout": result.stdout.strip(),
+            "stderr": result.stderr.strip(),
+        },
+    ), report
+
+
 def _semantic_check(case_root: Path | None) -> AdmissionCheck:
     if case_root is None:
         return AdmissionCheck(
@@ -808,6 +876,7 @@ def _factory_toolchain_check(factory_root: Path) -> AdmissionCheck:
     required = [
         factory_root / "SPEC_STANDARD.md",
         factory_root / "tools/validate_spec.py",
+        factory_root / "tools/run_spec_inspector_preflight.py",
         factory_root / "tools/bootstrap_project.py",
         factory_root / "project_index/structure.json",
     ]
@@ -858,8 +927,12 @@ def check(
         _closure_gaps_check(case_root),
     ]
     validation_check, validation_report = _factory_validation_check(factory_root, source)
+    inspector_check, inspector_report = _factory_inspector_check(
+        factory_root, project, source
+    )
     checks.extend([
         validation_check,
+        inspector_check,
         _semantic_check(case_root),
         _target_check(factory_root, project, source, update_existing),
         _factory_toolchain_check(factory_root),
@@ -894,4 +967,5 @@ def check(
         },
         "checks": [item.to_dict() for item in checks],
         "factory_validation": validation_report,
+        "factory_inspector": inspector_report,
     }
