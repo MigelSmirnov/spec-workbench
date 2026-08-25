@@ -53,9 +53,35 @@ python tools/workbench.py status
 only when an exhaustive checkout/history view is explicitly needed. Normal
 project discovery must not use exhaustive ref scanning.
 
-This entry point is discovery/navigation only. It does not replace the ordered
-design-state methodology or the requirement to read the resolved project
-context before changing architecture.
+## Authoring pipeline entry point
+
+After resolving a logical project, do not choose design-state tools by memory,
+filename prefix, repository search, or project-local orchestration. Ask the
+common pipeline what comes next:
+
+```bash
+python tools/authoring.py next <project> --json
+```
+
+`tools/authoring.py` is a thin CLI over `tools/authoring_pipeline.py`. Future MCP
+transports must call the same pipeline API and must not reproduce project
+resolution or phase-routing logic.
+
+`skills/spec-authoring/authoring_sequence.json` is the machine-readable source
+of truth for authoring order. `AUTHORING_SEQUENCE.md` explains the same contract.
+Project branches own project design data and artifacts; they do not own a forked
+copy of the generic authoring sequence.
+
+The generic pipeline currently promoted to `main` covers State 0 through State
+5 plus the explicit State 2 -> State 3 ownership trace. It intentionally blocks
+at `post_state5_toolchain` until the mature State 6-9 tooling is refactored to
+remove Cabinet-specific policy and promoted as generic Workbench functionality.
+Never bypass that boundary by invoking Cabinet-specific late-stage tools for an
+unrelated project.
+
+The repository entry points are discovery/orchestration only. They do not
+replace the ordered design-state methodology or the requirement to read the
+resolved project context before changing architecture.
 
 ## Read first
 
@@ -64,6 +90,7 @@ Before changing the methodology, read:
 1. `skills/spec-authoring/SKILL.md`
 2. `skills/spec-authoring/SPEC_STANDARD.md`
 3. `skills/spec-authoring/BEHAVIORAL_NOTES.md`
+4. `skills/spec-authoring/AUTHORING_SEQUENCE.md`
 
 When working on a case study, read its design-state documents in numerical
 order before modifying its assembled `global_spec.json`.
@@ -165,7 +192,7 @@ Check patch integrity:
 git diff --check
 Search for obvious placeholders:
 grep -RInE \
-  'TODO|FIXME|pass$|dictstr, Any|process correctly|handle errors appropriately' \
+  'TODO|FIXME|pass$|dict\[str, Any\]|process correctly|handle errors appropriately' \
   skills examples
 Do not invent validator commands. Use only commands documented by the current repository or factory workspace.
 Definition of done
