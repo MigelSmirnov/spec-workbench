@@ -6,31 +6,48 @@ Unlike the factory, which generates code from an existing specification, Spec Wo
 
 ## Start here
 
-Use the repository entry point before looking for a case manually:
+Spec Workbench uses two related terms:
+
+- a **project** is a logical working product selected through `PROJECT_INDEX.json`, such as `room-planner` or `cabinet-backend`;
+- a **case** or **reference case** is specification-design content under `examples/`, used by the methodology and diagnostic/history tooling.
+
+For normal repository navigation, do not search branches or `examples/` manually. Start with:
 
 ```bash
 python tools/workbench.py
 ```
 
-With no arguments it runs `status`: it shows the current checkout, its case
-studies and cases that exist only on other known local/remote Git refs.
+With no arguments the command runs `list`. It shows only the curated working projects and resolves their canonical refs, paths, and current design stages.
 
-List all discovered case-study snapshots explicitly with:
+Equivalent explicit command:
 
 ```bash
 python tools/workbench.py list
 ```
 
-Both commands support `--json` for agents and other tooling:
+If a canonical project branch is missing from a single-branch or agent sandbox checkout, `list` attempts to fetch only that indexed branch from `origin`. It does not fetch or scan arbitrary branches for normal discovery.
+
+After choosing a project, resolve its working context with:
 
 ```bash
-python tools/workbench.py status --json
-python tools/workbench.py list --json
+python tools/workbench.py show <project>
 ```
 
-`list` deliberately inspects known Git refs, not only the checked-out
-`examples/` directory. This makes active case studies discoverable even when
-their working branch has not yet been merged to `main`.
+`show` returns the canonical ref, project path, current stage, next stage, and a minimal read order. Both `list` and `show` support `--json` for agents and other tooling:
+
+```bash
+python tools/workbench.py list --json
+python tools/workbench.py show room-planner --json
+```
+
+Use the exhaustive case/ref view only for repository or index diagnostics:
+
+```bash
+python tools/workbench.py status
+python tools/workbench.py status --json
+```
+
+`status` may report historical case snapshots and unindexed cases. It is not the normal project-selection mechanism.
 
 ## Goal
 
