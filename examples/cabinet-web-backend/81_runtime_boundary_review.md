@@ -128,6 +128,9 @@ authorization, enrollment, grant provisioning, resolution, rotation, and
 revocation to exact UoW calls and commit-or-rollback behavior. Rebuilt slices
 for `models`, `access_control`, and `cabinet_persistence` report zero blocks;
 the behavioral implementation may vary only behind this closed port.
+The plugin-owner resolver delegates to the transaction-owning authentication
+operation and performs only an in-memory owner-kind check after it returns, so
+it cannot create a re-entrant or nested UoW.
 
 ## Stage 8.1 semantic re-review
 
