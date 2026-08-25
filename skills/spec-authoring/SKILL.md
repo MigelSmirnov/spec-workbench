@@ -527,9 +527,6 @@ For each function consider:
 - security boundary;
 - path or artifact policy;
 - forbidden actions;
-- concrete producer or adapter ownership, plus an explicit prohibition on
-  instantiating a spec-declared interface at every LLM-owned interface return
-  or transport adaptation boundary;
 - fallback;
 - orchestration boundaries;
 - evidence expectations where relevant.

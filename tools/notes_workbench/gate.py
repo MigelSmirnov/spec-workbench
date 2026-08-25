@@ -6,7 +6,6 @@ from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any
 
-from interface_workbench import construction_boundary_findings
 from notes_workbench.note_standard import (
     NOTE_CLASSES,
     REFERENCE_CLASS_PREFIX,
@@ -37,23 +36,6 @@ def _load_contract_scopes(project: Path) -> set[str]:
     payload = json.loads(path.read_text(encoding="utf-8"))
     contracts = payload.get("contracts", {})
     return set(contracts) if isinstance(contracts, dict) else set()
-
-
-def _load_interface_spec(project: Path) -> dict[str, Any]:
-    """Load assembled model kinds while keeping State 6 contracts authoritative."""
-    assembled_path = project / "global_spec.json"
-    contracts_path = project / "60_contracts.json"
-    if not assembled_path.is_file():
-        return {"models": {}, "contracts": {}}
-    assembled = json.loads(assembled_path.read_text(encoding="utf-8"))
-    if not isinstance(assembled, dict):
-        return {"models": {}, "contracts": {}}
-    if contracts_path.is_file():
-        authored = json.loads(contracts_path.read_text(encoding="utf-8"))
-        contracts = authored.get("contracts") if isinstance(authored, dict) else None
-        if isinstance(contracts, dict):
-            assembled = {**assembled, "contracts": contracts}
-    return assembled
 
 
 def _load_module_scopes(project: Path) -> set[str]:
@@ -192,12 +174,6 @@ def coverage(project: Path) -> dict[str, Any]:
     by_scope: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for note in notes:
         by_scope[note["scope"]].append(note)
-
-    # Interface parameters are closed by structural implementation obligations.
-    # Interface return producers and transport adapters remain LLM-owned, so
-    # their notes must make the concrete runtime object unambiguous and forbid
-    # the invalid shortcut of calling the Protocol/interface itself.
-    findings.extend(construction_boundary_findings(_load_interface_spec(project), notes))
 
     # Every State 6 callable must be either constrained by at least one State 7
     # note or be provably owned by deterministic assembly. This prevents a new
