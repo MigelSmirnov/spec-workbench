@@ -63,6 +63,7 @@ def test_module_keys_and_capabilities_are_stable_handoff(tmp_path: Path) -> None
                 {"key": "capability:archive.get_record", "name": "get_record"},
                 {"key": "capability:archive.store_record", "name": "store_record"},
             ],
+            "depth": {},
         }
     ]
     assert payload["capabilities"] == [
