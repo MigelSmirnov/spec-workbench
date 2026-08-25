@@ -308,6 +308,76 @@ def _project(project: Path) -> tuple[dict[str, Any], dict[str, Any], list[dict[s
     findings: list[dict[str, Any]] = []
     source_checks: list[dict[str, Any]] = []
 
+    model_paths = sorted(project.glob("60_model_closure_*.json"))
+    if model_paths:
+        model_overlay: dict[str, Any] = {}
+        model_errors = 0
+        for path in model_paths:
+            payload = _read_json(path, path.name)
+            if payload.get("schema_version") != "spec_workbench_model_closure.v1":
+                model_errors += 1
+                findings.append(
+                    _finding(
+                        "block",
+                        "model_handoff_not_ready",
+                        f"{path.name} has an unsupported model-closure schema",
+                        source=path.name,
+                    )
+                )
+                continue
+            if payload.get("status") != "closed":
+                model_errors += 1
+                findings.append(
+                    _finding(
+                        "block",
+                        "model_handoff_not_ready",
+                        f"{path.name} must be closed before model projection",
+                        source=path.name,
+                    )
+                )
+                continue
+            models = payload.get("models")
+            if not isinstance(models, dict):
+                model_errors += 1
+                findings.append(
+                    _finding(
+                        "block",
+                        "model_handoff_not_ready",
+                        f"{path.name}.models must be an object",
+                        source=path.name,
+                    )
+                )
+                continue
+            for name, declaration in models.items():
+                if not isinstance(name, str) or not name or not isinstance(declaration, dict):
+                    raise SpecProjectionError(
+                        f"{path.name} contains an invalid model declaration"
+                    )
+                previous = model_overlay.get(name)
+                if previous is not None and previous != declaration:
+                    raise SpecProjectionError(
+                        f"model {name!r} has conflicting closed declarations across model closures"
+                    )
+                model_overlay[name] = declaration
+        model_ready = model_errors == 0
+        source_checks.append(
+            _source_check(
+                " + ".join(path.name for path in model_paths),
+                enabled=True,
+                ready=model_ready,
+                status="closed" if model_ready else "open",
+                errors=model_errors,
+            )
+        )
+        if model_ready:
+            current_models = current.get("models")
+            if not isinstance(current_models, dict):
+                raise SpecProjectionError("global_spec.models must be an object")
+            projected_models = copy.deepcopy(current_models)
+            for name, declaration in model_overlay.items():
+                projected_models[name] = copy.deepcopy(declaration)
+            _set(projected, "models", projected_models)
+
     data_report = design_stage6_data.lint(project)
     data_errors = int(data_report.get("summary", {}).get("errors", 0))
     data_payload = design_stage6_data.load(project)
@@ -517,6 +587,7 @@ def build_plan(project: Path) -> dict[str, Any]:
         "module_functions",
         "module_order",
         "module_paths",
+        "models",
         "persistence",
         "properties",
         "determinism",

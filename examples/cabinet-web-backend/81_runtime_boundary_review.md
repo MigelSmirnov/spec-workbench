@@ -1,125 +1,53 @@
 # Stage 8.1 — runtime boundary review
 
-Date: 2026-08-24
+Date: 2026-08-25
 
-Status: **AMBIGUITY**
-
-Product decision update (2026-08-24): the owner accepted PostgreSQL as the
-authoritative Cabinet Web metadata store and a mandatory protected local VPS
-filesystem store for original bytes. The exact decision is recorded as D0-006,
-A17, and `70_runtime_closure.json`. The module results remain `AMBIGUITY` until
-that decision is lowered through repository/unit-of-work, byte-store, and
-composition contracts and the rebuilt slices are reviewed.
-
-Lowering update: the protected local filesystem mechanism is now closed as a
-Factory-owned deterministic `source_byte_store_backend`; PostgreSQL v3
-authoring is open and currently proves only the `CabinetEffect` table and
-effect-journal repository methods. It intentionally remains `open`: the other
-master projections, per-request unit-of-work factory, source-publication
-journal, and composition root are not yet closed.
+Status: **PASS**
 
 ## Result
 
-The assembled specification is not ready for implementation.  Its business
-rules are substantive, but the final module slices do not close the runtime
-mechanisms needed to preserve those rules across requests and process
-restarts.  A generator can therefore satisfy the visible Python contracts
-with materially different storage, transaction, and dependency behaviour.
+The Cabinet Web Backend runtime boundary is implementation-ready for the accepted VPS architecture. The earlier Stage 8.1 ambiguities were returned to their owning design states, lowered, assembled, and re-reviewed rather than waived.
 
-This is a specification revision.  It is not eligible for bounded generation
-repair.
+PostgreSQL remains the authoritative Cabinet Web metadata store and the protected local VPS filesystem remains the authority for original source bytes. The local `cabinet_backend` remains a separate intermittent synchronization peer and is not required for ordinary Cabinet Web reads or mutations.
 
-## Finding 1 — accepted durable backend is not yet lowered
+Final deterministic evidence:
 
-Fourteen models are classified as `master`, while
-`rules.persistence_backend` is absent and the persistence authoring workbench
-is disabled for this case.  Stateful services receive a generic
-`database_url`, but no accepted repository, unit-of-work, transaction,
-concurrency, migration, or restart-recovery contract is lowered into their
-module slices.
+- `persistence_backend/v3` is closed for **25 PostgreSQL tables**;
+- `PostgresCabinetUnitOfWork` has **80 deterministic `postgres_sync_v1` methods**;
+- one `CabinetUnitOfWorkFactory` opens a fresh UoW per application operation;
+- the protected filesystem `source_byte_store_backend` is closed;
+- the recoverable source-byte publication journal is durable in PostgreSQL;
+- transfer issuance/receipt/conflict, Registry replica/current-selector, security, restore-drill, and release evidence all have explicit durable projections;
+- `bootstrap.create_cabinet_web_app` is the sole composition root and owns protected configuration reads, migrations/connectivity checks, startup recovery, adapter/service construction, and the final `create_app` handoff;
+- State 7 notes are propagated into the assembled specification before module review;
+- complete Workbench assembly is **8/8 ready with 0 errors**.
 
-The omission was deliberate in the earlier product document, not an implicit
-SQLite decision. It is now superseded for runtime implementation by accepted
-decisions D0-006 and A17: PostgreSQL owns metadata and the protected local VPS
-filesystem owns original bytes. `VPS_RUNTIME_DISCOVERY_2026-08-22.md` remains
-correct that the Client Portal's one-worker SQLite pattern must not be copied.
-The open defect is propagation: final contracts and backend IR still expose the
-old generic `database_url` service boundary.
+The mature local `cabinet-backend` was used only as an E2E-tested structural precedent for shared Factory mechanisms such as `persistence_backend/v3`, `postgres_sync_v1`, verifier-only credential storage, transaction ownership, and recoverable byte publication. No local-backend product ownership or Holded behavior was transferred into the server application.
 
-Affected modules:
+## Resolution of prior findings
 
-- `access_control`;
-- `effect_journal`;
-- `card_workspace`;
-- `invoice_workspace`;
-- `project_workspace`;
-- `source_custody`;
-- `invoice_exchange`;
-- `registry_replica`;
-- `runtime_control`.
+### Finding 1 — durable backend lowering
 
-Earliest return point: State 0/2 must accept the deployment and failure-policy
-decision.  State 6 must then lower it into a structured persistence backend,
-narrow repositories/unit-of-work contracts, and explicit startup
-configuration.  State 8 assembly is rebuilt only after those sources close.
+**Resolved.** Every accepted server durable state family now has an explicit PostgreSQL projection or is intentionally embedded in the immutable canonical Card revision aggregate. Table names are closed under `config.persistence`; persistence adapters do not read deployment configuration or invent business policy.
 
-## Finding 2 — stateful repository operations are only partly lowered
+### Finding 2 — typed repository and UoW surface
 
-The cross-module application graph is now explicit. `chatgpt_interaction`,
-`web_gateway`, and `sync_gateway` receive the exact service and operation
-contracts they orchestrate. Stateful services receive an external
-`CabinetUnitOfWorkFactory`; each operation opens a fresh UoW, so singleton HTTP
-services cannot share an active PostgreSQL transaction.
+**Resolved.** Stateful application services depend on the external `CabinetUnitOfWorkFactory`; each operation receives a fresh transaction-scoped UoW. The deterministic repository surface covers Card revisions/current heads, effects, principals/nodes/credentials/grants/throttle/audit, source handoffs/custody/publication, working sets/manifests/issuance/receipts/conflicts, Registry publication/replica/current selection, restore drills, and VPS release evidence.
 
-The remaining gap is the UoW surface. Effect-journal storage is closed, but
-access control, Card revision history, source custody/publication journal,
-transfer evidence, Registry replicas, and runtime recovery do not yet have
-their typed repository methods and deterministic projections.
+### Finding 3 — cross-resource atomicity and recovery
 
-Affected modules:
+**Resolved.** One application operation owns one PostgreSQL transaction. Card/effect, Invoice producer, transfer, Registry, security, and release transitions can share that transaction. Source-byte custody uses the accepted staged/verified/metadata-committed/atomic-publish protocol with durable recovery journal evidence; startup recovery finalizes or fails pending publications without reporting unavailable bytes as present.
 
-- all still-ambiguous stateful modules listed in the Stage 8.1 ledger;
-- `cabinet_persistence` until its post-contract closure is complete.
+### Finding 4 — runtime composition
 
-State 3 dependency ownership is repaired. State 6 must now complete the typed
-repository operations and projections. Domain modules remain forbidden from
-reading deployment configuration or constructing persistence/transport
-adapters themselves.
+**Resolved.** `bootstrap` is now a first-class assembled module with the exact `create_cabinet_web_app() -> FastAPI` contract and a State 7 orchestration constraint. It is the only boundary allowed to read protected deployment configuration and construct the concrete PostgreSQL/filesystem/runtime graph.
 
-## Finding 3 — atomic effects cannot be implemented from the slice
+## Stage 8.1 semantic re-review
 
-The accepted flows require atomic or recoverable coordination across effect
-reservation, Card revision mutation, source custody, transfer issuance, and
-receipt/reconciliation.  The final slices contain the behavioral rules but no
-shared transaction boundary or declared compensation/recovery protocol.  In
-particular, the `invoice_workspace` flow calls for coordination with
-`effect_journal` and `card_workspace`, while its lowered dependency map is
-empty.
+All **18 assembled modules** were rebuilt from the final specification. Every structural module review reports **0 blocks and 0 review findings**. Deterministic modules (`models`, `cabinet_persistence`, `source_byte_store`, `api`) are `PASS`; behavioral modules are `PASS_INTERNAL_VARIATION` where their observable behavior is closed but internal algorithms/construction details may vary.
 
-Earliest return point: State 2 owns the failure and truthfulness policy; State
-5 owns the end-to-end effect boundaries; State 6 owns the repository/unit-of-
-work contracts that make those boundaries executable.
+The exact current slice SHA-256 values and per-module results are recorded in `81_module_review_status.json`. That ledger is the Stage 9 lineage gate and must become stale if any assembled module slice changes.
 
-## Closed slices
+## Stage 9 handoff condition
 
-- `models`: **PASS** for the deterministic model surface.
-- `capability_policy`: **PASS_INTERNAL_VARIATION**; its closed capability rules
-  do not require a durable adapter.
-- `api`: **PASS** for the deterministic router/handler lowering.  This does not
-  constitute application bootstrap or runtime-persistence closure.
-
-## Required revision sequence
-
-1. Accept a VPS persistence mechanism and its operational constraints; do not
-   infer SQLite from the Client Portal evidence.
-2. Accept the source-byte store and the database/file atomicity and recovery
-   policy.
-3. Define narrow repositories and unit-of-work ownership for the fourteen
-   master models, including uniqueness, concurrency, migration, and restart
-   behaviour.
-4. Restore the behavioral module dependency graph and add an explicit
-   composition/bootstrap boundary.
-5. Recheck the cross-resource flows, then rebuild contracts, persistence IR,
-   notes, and `global_spec.json`.
-6. Rebuild and manually review every affected module slice.  Only then may the
-   Stage 8.1 ledger become `closed` and Factory admission be retried.
+Stage 8.1 is closed. Factory admission may proceed only against the clean committed source and must independently re-check assembly, current slice hashes, persistence closure, closure-completeness fuses, target identity, Factory compatibility, and the remaining Stage 9 checks.
