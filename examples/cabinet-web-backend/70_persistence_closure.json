@@ -37,6 +37,41 @@
         ],
         "primary_key": ["effect_id"],
         "unique": [["principal_id", "idempotency_key"]]
+      },
+      {
+        "table": "card_revisions",
+        "table_name_ref": "card_revision_table_name",
+        "model": "CanonicalCardRevision",
+        "read_by": null,
+        "columns": [
+          {"column": "reference", "field": "reference", "storage": "json_model", "nullable": false, "check": null, "element_model": "CardRevisionReference"},
+          {"column": "canonical_json", "field": "canonical_json", "storage": "text", "nullable": false, "check": null, "element_model": null},
+          {"column": "created_by", "field": "created_by", "storage": "json_model", "nullable": false, "check": null, "element_model": "ActorReference"},
+          {"column": "created_at", "field": "created_at", "storage": "datetime", "nullable": false, "check": null, "element_model": null}
+        ],
+        "primary_key": ["reference"],
+        "unique": [
+          [
+            {"column": "reference", "path": ["card_id"]},
+            {"column": "reference", "path": ["content_hash"]}
+          ]
+        ]
+      },
+      {
+        "table": "card_current_revisions",
+        "table_name_ref": "card_current_revision_table_name",
+        "model": "CardRevisionReference",
+        "read_by": null,
+        "columns": [
+          {"column": "card_id", "field": "card_id", "storage": "text", "nullable": false, "check": null, "element_model": null},
+          {"column": "card_type", "field": "card_type", "storage": "text", "nullable": false, "check": null, "element_model": null},
+          {"column": "content_hash", "field": "content_hash", "storage": "text", "nullable": false, "check": null, "element_model": null},
+          {"column": "card_format_version", "field": "card_format_version", "storage": "integer", "nullable": true, "check": null, "element_model": null},
+          {"column": "observed_status", "field": "observed_status", "storage": "text", "nullable": false, "check": null, "element_model": null},
+          {"column": "observed_at", "field": "observed_at", "storage": "datetime", "nullable": false, "check": null, "element_model": null}
+        ],
+        "primary_key": ["card_id"],
+        "unique": []
       }
     ],
     "aggregates": [],
@@ -79,6 +114,53 @@
             "table": "cabinet_effects",
             "filter": [{"column": "effect_id", "bind": "argument", "argument": "effect_id"}],
             "updates": ["status", "result_revision", "safe_error_code", "completed_at"],
+            "require_existing": true
+          },
+          {"method": "lock_card", "query": "lock", "scope": "cabinet.card", "keys": ["card_id"]},
+          {
+            "method": "load_current_card_reference",
+            "query": "get_by_key",
+            "table": "card_current_revisions",
+            "filter": [{"column": "card_id", "bind": "argument", "argument": "card_id"}],
+            "select": ["card_id", "card_type", "content_hash", "card_format_version", "observed_status", "observed_at"]
+          },
+          {
+            "method": "list_current_card_references_by_type",
+            "query": "list_by",
+            "table": "card_current_revisions",
+            "filter": [{"column": "card_type", "bind": "argument", "argument": "card_type"}],
+            "select": ["card_id", "card_type", "content_hash", "card_format_version", "observed_status", "observed_at"],
+            "order_by": [{"column": "card_id", "direction": "asc"}]
+          },
+          {
+            "method": "load_card_revision",
+            "query": "get_unique",
+            "table": "card_revisions",
+            "filter": [
+              {"column": "reference", "path": ["card_id"], "bind": "argument", "argument": "card_id"},
+              {"column": "reference", "path": ["content_hash"], "bind": "argument", "argument": "content_hash"}
+            ],
+            "select": ["reference", "canonical_json", "created_by", "created_at"],
+            "on_multiple": "error"
+          },
+          {
+            "method": "insert_card_revision",
+            "query": "insert",
+            "table": "card_revisions",
+            "columns": ["reference", "canonical_json", "created_by", "created_at"]
+          },
+          {
+            "method": "insert_current_card_reference",
+            "query": "insert",
+            "table": "card_current_revisions",
+            "columns": ["card_id", "card_type", "content_hash", "card_format_version", "observed_status", "observed_at"]
+          },
+          {
+            "method": "update_current_card_reference",
+            "query": "update_fields",
+            "table": "card_current_revisions",
+            "filter": [{"column": "card_id", "bind": "argument", "argument": "card_id"}],
+            "updates": ["card_type", "content_hash", "card_format_version", "observed_status", "observed_at"],
             "require_existing": true
           }
         ]
