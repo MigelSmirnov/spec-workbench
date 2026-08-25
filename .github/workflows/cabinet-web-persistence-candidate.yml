@@ -131,6 +131,32 @@ jobs:
       - name: Run complete Workbench test suite against materialized candidate
         run: python -m pytest -q --junitxml=ci-artifacts/cabinet-web-persistence-candidate-pytest.xml
 
+      - name: Simulate closed persistence projection and assembly
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          path = Path("examples/cabinet-web-backend/70_persistence_closure.json")
+          payload = json.loads(path.read_text())
+          payload["status"] = "closed"
+          path.write_text(json.dumps(payload, indent=2) + "\n")
+          PY
+          set +e
+          python tools/design_spec_projection.py examples/cabinet-web-backend --apply --json \
+            > ci-artifacts/cabinet-web-persistence-candidate-projection-closed.json \
+            2> ci-artifacts/cabinet-web-persistence-candidate-projection-closed.stderr
+          projection_code=$?
+          echo "$projection_code" > ci-artifacts/cabinet-web-persistence-candidate-projection-closed.exit
+          if test "$projection_code" = "0"; then
+            cp examples/cabinet-web-backend/global_spec.json \
+              ci-artifacts/cabinet-web-persistence-candidate/global_spec.after-closed-projection.json
+            python tools/design_assembly.py examples/cabinet-web-backend --json \
+              > ci-artifacts/cabinet-web-persistence-candidate-assembly-after-closed-projection.json
+            echo "$?" > ci-artifacts/cabinet-web-persistence-candidate-assembly-after-closed-projection.exit
+          fi
+          set -e
+
       - name: Check materialized diff integrity
         run: git diff --check
 
