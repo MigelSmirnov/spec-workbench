@@ -141,3 +141,66 @@ def test_router_semantic_slice_contains_both_canonical_contracts() -> None:
     )
     assert payload["canonical_handler_contract"]["router_operation"] == FIRST_EXTERNAL
     assert payload["canonical_handler_contract"]["signature"] == "(request: Request, invoice_id: str, files: list[UploadFile]) -> SourceAttachmentBatchResult"
+
+
+def test_module_surface_flags_modules_that_hide_nothing(tmp_path: Path) -> None:
+    project = tmp_path / "demo"
+    project.mkdir()
+    (project / "30_modules.md").write_text(
+        """# State 3
+
+## `wide`
+
+### Owns
+
+- x
+
+### Knows
+
+- x
+
+### Must not own
+
+- y
+
+### Depth assessment
+
+kind: deep
+hidden mechanism: nothing much
+
+## `gateway`
+
+### Owns
+
+- composition
+
+### Knows
+
+- delegates
+
+### Must not own
+
+- policy
+
+### Depth assessment
+
+kind: facade
+delegates to: `wide`
+""",
+        encoding="utf-8",
+    )
+    rows = (
+        [{"module": "module:wide", "visibility": "public"} for _ in range(6)]
+        + [{"module": "module:wide", "visibility": "internal"}]
+        + [{"module": "module:gateway", "visibility": "public"} for _ in range(7)]
+        + [{"module": "module:narrow", "visibility": "public"} for _ in range(3)]
+    )
+    surface = {item["module"]: item for item in design_stage6_contracts._module_surface(project, rows)}
+    assert surface["wide"]["public_ratio"] == 0.857 and surface["wide"]["shallow"] is True
+    assert surface["gateway"]["depth_kind"] == "facade" and surface["gateway"]["shallow"] is False
+    assert surface["narrow"]["shallow"] is False  # below the minimum owned-function count
+
+
+def test_cabinet_state6_surface_has_no_shallow_module() -> None:
+    report = design_stage6_contracts.coverage(CABINET)
+    assert [item["module"] for item in report["module_surface"] if item["shallow"]] == []
