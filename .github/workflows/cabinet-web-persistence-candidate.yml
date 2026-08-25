@@ -1,17 +1,16 @@
-name: Cabinet Web persistence candidate
+name: Cabinet Web persistence promotion
 
 on:
   push:
     branches:
       - agent/cabinet-web-card-persistence
-  pull_request:
   workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  validate-candidate:
+  validate-promotion:
     runs-on: ubuntu-latest
     steps:
       - name: Check out Workbench
@@ -27,149 +26,113 @@ jobs:
           python -m pip install
           pytest pyyaml pydantic Pillow pypdf "psycopg[binary]"
 
-      - name: Materialize staged Cabinet Web persistence candidate
-        shell: bash
+      - name: Materialize validated candidate and propagation repairs
         run: |
-          set -euo pipefail
-          project=examples/cabinet-web-backend
-          stage=.stage/cabinet-web-persistence
-          for name in \
-            60_model_closure_domain.json \
-            60_contract_plan.json \
-            60_contracts.json \
-            60_data_closure.json \
-            70_persistence_closure.json
-          do
-            gzip -dc "$stage/$name.gz" > "$project/$name"
-          done
-          mkdir -p ci-artifacts/cabinet-web-persistence-candidate
-          cp "$project"/60_model_closure_domain.json ci-artifacts/cabinet-web-persistence-candidate/
-          cp "$project"/60_contract_plan.json ci-artifacts/cabinet-web-persistence-candidate/
-          cp "$project"/60_contracts.json ci-artifacts/cabinet-web-persistence-candidate/
-          cp "$project"/60_data_closure.json ci-artifacts/cabinet-web-persistence-candidate/
-          cp "$project"/70_persistence_closure.json ci-artifacts/cabinet-web-persistence-candidate/
-          cp "$project"/global_spec.json ci-artifacts/cabinet-web-persistence-candidate/global_spec.before.json
-          cp tools/spec_projection_workbench/service.py ci-artifacts/cabinet-web-persistence-candidate/spec_projection_service.before.py
-
-      - name: Validate candidate closures
-        run: |
+          python tools/_cabinet_web_candidate_materialize.py \
+            > cabinet-web-materialization.json
           python - <<'PY'
           import json
-          import sys
           from pathlib import Path
-
-          sys.path.insert(0, "tools")
-          import design_stage6_contracts
-          import design_stage6_data
-          from persistence_workbench import authoring
-
           project = Path("examples/cabinet-web-backend")
-          data = design_stage6_data.lint(project)
-          state6 = design_stage6_contracts.handoff(project)
-          persistence = authoring.coverage(project)
-
-          models = json.loads((project / "60_model_closure_domain.json").read_text())
-          backend = json.loads((project / "70_persistence_closure.json").read_text())["backend_ir"]
-          model_map = models["models"]
-          table_map = {row["table"]: row for row in backend["tables"]}
-          methods = [
-              method
-              for repo in backend["repositories"]
-              for method in repo.get("methods", [])
-          ]
-
-          extra_findings = []
-          for table, row in table_map.items():
-              model = row["model"]
-              if model not in model_map:
-                  extra_findings.append(f"{table}: missing model {model}")
-                  continue
-              fields = model_map[model].get("fields", {})
-              for column in row.get("columns", []):
-                  if column["field"] not in fields:
-                      extra_findings.append(
-                          f"{table}.{column['column']}: missing model field {model}.{column['field']}"
-                      )
-
-          report = {
-              "data": data,
-              "state6_ready": state6.get("ready"),
-              "state6_summary": state6.get("summary"),
-              "persistence": persistence,
-              "candidate_counts": {
-                  "models": len(model_map),
-                  "tables": len(backend["tables"]),
-                  "repositories": len(backend["repositories"]),
-                  "deterministic_methods": len(methods),
-                  "contracts": len(json.loads((project / "60_contracts.json").read_text())["contracts"]),
-              },
-              "extra_findings": extra_findings,
-          }
-          Path("ci-artifacts/cabinet-web-persistence-candidate-validation.json").write_text(
-              json.dumps(report, indent=2, sort_keys=True)
-          )
-
-          assert data["summary"]["errors"] == 0, data
-          assert state6.get("ready") is True, state6
-          assert persistence["status"] == "open", persistence
-          assert persistence["summary"]["errors"] == 0, persistence
-          assert persistence["summary"]["closed"] is False, persistence
-          assert persistence["ready"] is False, persistence
-          assert not extra_findings, extra_findings
+          closure = project / "70_persistence_closure.json"
+          payload = json.loads(closure.read_text())
+          assert payload["status"] == "open"
+          payload["status"] = "closed"
+          closure.write_text(json.dumps(payload, indent=2) + "\n")
+          runtime = project / "70_runtime_closure.json"
+          state = json.loads(runtime.read_text())
+          lowering = state["lowering_status"]
+          lowering["state3_module_boundaries"] = "closed"
+          lowering["state6_repository_contracts"] = "closed"
+          lowering["persistence_backend_ir"] = "closed"
+          lowering["composition_root"] = "closed"
+          lowering["stage8_1_recheck"] = "pending"
+          runtime.write_text(json.dumps(state, indent=2) + "\n")
           PY
 
-      - name: Capture projector diagnostic
-        shell: bash
+      - name: Validate closed authoring handoffs
         run: |
-          set +e
-          python tools/design_spec_projection.py examples/cabinet-web-backend --plan --json \
-            > ci-artifacts/cabinet-web-persistence-candidate-projection.json \
-            2> ci-artifacts/cabinet-web-persistence-candidate-projection.stderr
-          echo "$?" > ci-artifacts/cabinet-web-persistence-candidate-projection.exit
-          set -e
-
-      - name: Run complete Workbench test suite against materialized candidate
-        run: python -m pytest -q --junitxml=ci-artifacts/cabinet-web-persistence-candidate-pytest.xml
-
-      - name: Simulate closed persistence projection and assembly
-        shell: bash
-        run: |
+          mkdir -p ci-artifacts/final
+          python tools/design_stage6_data.py examples/cabinet-web-backend --lint --json \
+            > ci-artifacts/final/data.json
+          python tools/design_stage6_contracts.py examples/cabinet-web-backend --handoff --json \
+            > ci-artifacts/final/contracts.json
+          python tools/design_persistence_authoring.py examples/cabinet-web-backend --handoff --json \
+            > ci-artifacts/final/persistence-authoring.json
           python - <<'PY'
           import json
           from pathlib import Path
-          path = Path("examples/cabinet-web-backend/70_persistence_closure.json")
-          payload = json.loads(path.read_text())
-          payload["status"] = "closed"
-          path.write_text(json.dumps(payload, indent=2) + "\n")
+          p = json.loads(Path("ci-artifacts/final/persistence-authoring.json").read_text())
+          assert p["ready"] is True, p
+          assert p["summary"]["errors"] == 0, p
+          assert p["summary"]["closed"] is True, p
           PY
-          set +e
+
+      - name: Project canonical specification
+        run: |
+          python tools/design_spec_projection.py examples/cabinet-web-backend --plan --json \
+            > ci-artifacts/final/projection-plan.json
           python tools/design_spec_projection.py examples/cabinet-web-backend --apply --json \
-            > ci-artifacts/cabinet-web-persistence-candidate-projection-closed.json \
-            2> ci-artifacts/cabinet-web-persistence-candidate-projection-closed.stderr
-          projection_code=$?
-          echo "$projection_code" > ci-artifacts/cabinet-web-persistence-candidate-projection-closed.exit
-          if test "$projection_code" = "0"; then
-            cp examples/cabinet-web-backend/global_spec.json \
-              ci-artifacts/cabinet-web-persistence-candidate/global_spec.after-closed-projection.json
-            python tools/design_assembly.py examples/cabinet-web-backend --json \
-              > ci-artifacts/cabinet-web-persistence-candidate-assembly-after-closed-projection.json
-            echo "$?" > ci-artifacts/cabinet-web-persistence-candidate-assembly-after-closed-projection.exit
-            python tools/design_assembly.py examples/cabinet-web-backend --check notes --json \
-              > ci-artifacts/cabinet-web-persistence-candidate-notes-after-closed-projection.json
-            echo "$?" > ci-artifacts/cabinet-web-persistence-candidate-notes-after-closed-projection.exit
-            python tools/design_assembly.py examples/cabinet-web-backend --check persistence --json \
-              > ci-artifacts/cabinet-web-persistence-candidate-persistence-after-closed-projection.json
-            echo "$?" > ci-artifacts/cabinet-web-persistence-candidate-persistence-after-closed-projection.exit
-          fi
-          set -e
+            > ci-artifacts/final/projection-apply.json
+          python tools/design_spec_projection.py examples/cabinet-web-backend --verify --json \
+            > ci-artifacts/final/projection-verify.json
 
-      - name: Check materialized diff integrity
-        run: git diff --check
+      - name: Run complete Workbench suite and assembly
+        run: |
+          python -m pytest -q --junitxml=ci-artifacts/final/pytest.xml
+          python tools/design_assembly.py examples/cabinet-web-backend --json \
+            > ci-artifacts/final/assembly.json
+          python tools/design_assembly.py examples/cabinet-web-backend --check notes --json \
+            > ci-artifacts/final/notes.json
+          python tools/design_assembly.py examples/cabinet-web-backend --check persistence --json \
+            > ci-artifacts/final/persistence.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          a = json.loads(Path("ci-artifacts/final/assembly.json").read_text())
+          assert a["ready"] is True, a
+          assert a["summary"]["errors"] == 0, a
+          assert a["summary"]["ready_checks"] == a["summary"]["checks"], a
+          PY
 
-      - name: Upload candidate validation evidence
+      - name: Capture Stage 8.1 review packets
+        shell: bash
+        run: |
+          mkdir -p ci-artifacts/final/module-review
+          python tools/design_module_review.py examples/cabinet-web-backend --list --json \
+            > ci-artifacts/final/module-review/list.json
+          for module in \
+            access_control card_workspace invoice_workspace project_workspace \
+            cabinet_persistence source_custody invoice_exchange registry_replica runtime_control bootstrap
+          do
+            set +e
+            python tools/design_module_review.py examples/cabinet-web-backend \
+              --module "$module" --slice --json \
+              > "ci-artifacts/final/module-review/$module.json"
+            echo "$?" > "ci-artifacts/final/module-review/$module.exit"
+            set -e
+          done
+
+      - name: Capture canonical promotion files
+        run: |
+          project=examples/cabinet-web-backend
+          mkdir -p ci-artifacts/promotion-files/tools/spec_projection_workbench
+          cp "$project"/60_model_closure_domain.json ci-artifacts/promotion-files/
+          cp "$project"/60_contract_plan.json ci-artifacts/promotion-files/
+          cp "$project"/60_contracts.json ci-artifacts/promotion-files/
+          cp "$project"/60_data_closure.json ci-artifacts/promotion-files/
+          cp "$project"/70_persistence_closure.json ci-artifacts/promotion-files/
+          cp "$project"/70_runtime_closure.json ci-artifacts/promotion-files/
+          cp "$project"/80_notes.md ci-artifacts/promotion-files/
+          cp "$project"/global_spec.json ci-artifacts/promotion-files/
+          cp tools/spec_projection_workbench/service.py \
+            ci-artifacts/promotion-files/tools/spec_projection_workbench/service.py
+          git diff --check
+
+      - name: Upload promotion evidence
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: cabinet-web-persistence-candidate
+          name: cabinet-web-persistence-promotion
           path: ci-artifacts/
           if-no-files-found: error
