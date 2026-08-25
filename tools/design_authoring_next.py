@@ -12,6 +12,7 @@ import json
 import re
 import shlex
 import sys
+from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
@@ -101,6 +102,10 @@ def _result(
     }
 
 
+def _lint_findings(report: object) -> list[dict[str, Any]]:
+    return [asdict(item) for item in getattr(report, "findings", ())]
+
+
 def _has_state_source(project: Path, state: int) -> bool:
     for path in sorted(project.rglob("*.md")):
         if not path.is_file():
@@ -112,6 +117,8 @@ def _has_state_source(project: Path, state: int) -> bool:
         if state == 0 and (name.startswith("00_") or name == "01_product_boundary.md"):
             return True
         if state == 1 and (name.startswith("10_") or name.startswith("01_models")):
+            return True
+        if state == 2 and (name.startswith("20_") or name.startswith("02_rules")):
             return True
     return False
 
@@ -134,6 +141,7 @@ def next_step(project: Path, *, display_path: str | None = None) -> dict[str, An
             reason="Author the State 0 product frame before deterministic model work.",
         )
 
+    state1_source = _has_state_source(project, 1)
     try:
         state1 = design_lint.lint_project(project, state=1)
     except design_lint.DesignLintError as exc:
@@ -143,7 +151,7 @@ def next_step(project: Path, *, display_path: str | None = None) -> dict[str, An
             reason=f"State 1 could not be inspected deterministically: {exc}",
         )
     s1 = state1.summary
-    if s1.models == 0 and not _has_state_source(project, 1):
+    if s1.models == 0 and not state1_source:
         return _result(
             sequence=sequence,
             project=project,
@@ -157,13 +165,18 @@ def next_step(project: Path, *, display_path: str | None = None) -> dict[str, An
             summary={"manual_review_required": True},
         )
     if s1.models == 0 or s1.errors:
+        if s1.models == 0 and state1_source:
+            reason = "State 1 source exists but is not indexed as canonical models; normalize or migrate its model structure."
+        else:
+            reason = "Repair deterministic State 1 model findings."
         return _result(
             sequence=sequence, project=project, project_text=project_text,
-            phase="state1_models", blocked=bool(s1.errors),
-            reason=("Author indexed State 1 models." if s1.models == 0 else "Repair deterministic State 1 model findings."),
+            phase="state1_models", blocked=bool(s1.errors), reason=reason,
             summary={"models": s1.models, "errors": s1.errors, "warnings": s1.warnings},
+            findings=_lint_findings(state1),
         )
 
+    state2_source = _has_state_source(project, 2)
     try:
         state2 = design_lint.lint_project(project, state=2)
     except design_lint.DesignLintError as exc:
@@ -174,11 +187,17 @@ def next_step(project: Path, *, display_path: str | None = None) -> dict[str, An
         )
     s2 = state2.summary
     if s2.decisions == 0 or s2.errors:
+        if s2.decisions == 0 and state2_source:
+            reason = "State 2 source exists but has no indexed accepted decisions; normalize or migrate its decision structure."
+        elif s2.decisions == 0:
+            reason = "Author indexed State 2 accepted decisions."
+        else:
+            reason = "Repair deterministic State 2/security findings."
         return _result(
             sequence=sequence, project=project, project_text=project_text,
-            phase="state2_rules_decisions", blocked=bool(s2.errors),
-            reason=("Author indexed State 2 accepted decisions." if s2.decisions == 0 else "Repair deterministic State 2/security findings."),
+            phase="state2_rules_decisions", blocked=bool(s2.errors), reason=reason,
             summary={"decisions": s2.decisions, "errors": s2.errors, "warnings": s2.warnings},
+            findings=_lint_findings(state2),
         )
 
     state3 = design_stage3.lint(project)
