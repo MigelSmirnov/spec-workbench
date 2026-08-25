@@ -35,6 +35,36 @@ jobs:
           mkdir -p ci-artifacts
           python -m pytest -q --junitxml=ci-artifacts/pytest.xml
 
+      - name: Verify Cabinet Web projection blocks open persistence
+        shell: bash
+        run: |
+          set +e
+          python tools/design_spec_projection.py examples/cabinet-web-backend --plan --json \
+            > ci-artifacts/cabinet-web-backend-projection.json
+          code=$?
+          set -e
+          test "$code" = "1"
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          report = json.loads(
+              Path("ci-artifacts/cabinet-web-backend-projection.json").read_text()
+          )
+          assert report["ready_to_apply"] is False
+          assert any(
+              item["code"] == "persistence_handoff_not_ready"
+              for item in report["findings"]
+          )
+          persistence = next(
+              item for item in report["source_checks"]
+              if item["source"] == "70_persistence_closure.json"
+          )
+          assert persistence["enabled"] is True
+          assert persistence["ready"] is False
+          assert persistence["status"] == "open"
+          PY
+
       - name: Verify mature Cabinet assembly
         run: >-
           python tools/design_assembly.py examples/cabinet-backend --json
