@@ -88,6 +88,87 @@ def _contract_symbol(contract_name: str) -> str:
     return contract_name.split(".", 1)[0]
 
 
+def _handoff_modules(handoff_contracts: dict[str, Any]) -> list[str]:
+    modules: list[str] = []
+    seen: set[str] = set()
+    for name, entry in handoff_contracts.items():
+        if not isinstance(name, str) or not name:
+            raise SpecProjectionError("State 6 handoff contains an invalid contract name")
+        if not isinstance(entry, dict):
+            raise SpecProjectionError(f"State 6 handoff contract {name!r} is invalid")
+        raw_module = entry.get("module")
+        if not isinstance(raw_module, str) or not raw_module.startswith("module:"):
+            raise SpecProjectionError(
+                f"State 6 handoff contract {name!r} has invalid module ownership"
+            )
+        module = raw_module.removeprefix("module:")
+        if not module:
+            raise SpecProjectionError(
+                f"State 6 handoff contract {name!r} has empty module ownership"
+            )
+        if module not in seen:
+            seen.add(module)
+            modules.append(module)
+    return modules
+
+
+def _sync_module_topology(
+    current_order: Any,
+    current_paths: Any,
+    handoff_contracts: dict[str, Any],
+) -> tuple[list[str] | None, dict[str, str] | None]:
+    order_present = current_order is not None
+    paths_present = current_paths is not None
+    if not order_present and not paths_present:
+        return None, None
+    if order_present != paths_present:
+        raise SpecProjectionError(
+            "global_spec.module_order and global_spec.module_paths must either both exist or both be absent"
+        )
+    if not isinstance(current_order, list) or not current_order or not all(
+        isinstance(module, str) and module for module in current_order
+    ):
+        raise SpecProjectionError(
+            "global_spec.module_order must be a non-empty string list"
+        )
+    if len(set(current_order)) != len(current_order):
+        raise SpecProjectionError("global_spec.module_order contains duplicate modules")
+    if not isinstance(current_paths, dict):
+        raise SpecProjectionError("global_spec.module_paths must be an object")
+    if set(current_paths) != set(current_order):
+        raise SpecProjectionError(
+            "global_spec.module_paths keys must match global_spec.module_order exactly"
+        )
+
+    parents: set[str] = set()
+    result_paths: dict[str, str] = {}
+    for module in current_order:
+        path = current_paths.get(module)
+        if not isinstance(path, str) or not path:
+            raise SpecProjectionError(
+                f"global_spec.module_paths[{module!r}] must be a non-empty string"
+            )
+        parent, separator, leaf = path.rpartition("/")
+        if not separator or not parent or leaf != module:
+            raise SpecProjectionError(
+                f"global_spec.module_paths[{module!r}] must end with '/{module}'"
+            )
+        parents.add(parent)
+        result_paths[module] = path
+    if len(parents) != 1:
+        raise SpecProjectionError(
+            "global_spec.module_paths must share one deterministic module root before new modules can be projected"
+        )
+    module_root = next(iter(parents))
+
+    result_order = list(current_order)
+    for module in _handoff_modules(handoff_contracts):
+        if module not in result_paths:
+            result_order.append(module)
+            result_paths[module] = f"{module_root}/{module}"
+    return result_order, result_paths
+
+
 def _sync_module_functions(
     current: Any,
     current_contracts: dict[str, Any],
@@ -144,10 +225,7 @@ def _sync_module_functions(
     for symbol in target_order:
         module = target_owner[symbol]
         if module not in result:
-            raise SpecProjectionError(
-                f"State 6 owns {symbol!r} in module {module!r}, "
-                "but global_spec.module_functions has no such module"
-            )
+            result[module] = []
         if symbol not in result[module]:
             result[module].append(symbol)
     return result
@@ -309,6 +387,14 @@ def _project(project: Path) -> tuple[dict[str, Any], dict[str, Any], list[dict[s
             raise SpecProjectionError("global_spec.contracts must be an object")
         _set(projected, "contracts", signatures)
         _set(projected, "function_order", list(handoff_contracts))
+        module_order, module_paths = _sync_module_topology(
+            current.get("module_order"),
+            current.get("module_paths"),
+            handoff_contracts,
+        )
+        if module_order is not None and module_paths is not None:
+            _set(projected, "module_order", module_order)
+            _set(projected, "module_paths", module_paths)
         projected["module_functions"] = _sync_module_functions(
             current.get("module_functions"),
             current_contracts,
@@ -429,6 +515,8 @@ def build_plan(project: Path) -> dict[str, Any]:
         "contracts",
         "function_order",
         "module_functions",
+        "module_order",
+        "module_paths",
         "persistence",
         "properties",
         "determinism",
