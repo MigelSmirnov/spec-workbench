@@ -113,18 +113,20 @@ def test_ready_handoff_contains_operation_and_handler_contracts() -> None:
     assert handler["router_operation"] == FIRST_EXTERNAL
 
 
-def test_authoring_gate_advances_to_assembly_after_notes_are_closed() -> None:
+def test_authoring_gate_advances_to_assembly_after_notes_are_closed(monkeypatch) -> None:
+    monkeypatch.setattr(design_authoring_next, "_promoted_states_step", lambda sequence, project, text: None)
     report = design_authoring_next.next_step(CABINET)
     assert report["phase"] == "state8_assembly"
     assert report["blocked"] is False
     assert report["router_allowed"] is True
-    assert report["next_command"] is None
+    assert report["action"]["tool"] == "tools/design_assembly.py"
     assert report["summary"]["handoff_ready"] is True
 
 
-def test_authoring_gate_returns_to_state6_when_contract_is_unresolved(tmp_path: Path) -> None:
+def test_authoring_gate_returns_to_state6_when_contract_is_unresolved(tmp_path: Path, monkeypatch) -> None:
     project = _project(tmp_path)
     _make_unresolved(project)
+    monkeypatch.setattr(design_authoring_next, "_promoted_states_step", lambda sequence, project, text: None)
     report = design_authoring_next.next_step(project)
     assert report["phase"] == "state6_exact_contracts"
     assert report["router_allowed"] is False

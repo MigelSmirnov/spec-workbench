@@ -17,6 +17,72 @@ structurally valid but leave important engineering decisions unresolved.
 - `BEHAVIORAL_NOTES.md` explains how to design effective notes without
   changing the factory specification language.
 
+## Repository entry point
+
+Do not search `examples/`, inspect arbitrary branches, or recursively read the
+repository to discover which working project the user means.
+
+Start with:
+
+```bash
+python tools/workbench.py
+```
+
+The default command is `list`. It reads the curated `PROJECT_INDEX.json` and
+shows only the logical working projects and their canonical refs. It does not
+present historical, reference, methodology, or divergent side refs as separate
+projects.
+
+If the user has not already identified a project, show the listed project names
+and ask which one to work on. After the project is identified, resolve its
+context with:
+
+```bash
+python tools/workbench.py show <project>
+```
+
+`show` returns the canonical ref, project path, current design stage, and a
+minimal project read order. Both `list` and `show` support `--json`.
+
+Use:
+
+```bash
+python tools/workbench.py status
+```
+
+only when an exhaustive checkout/history view is explicitly needed. Normal
+project discovery must not use exhaustive ref scanning.
+
+## Authoring pipeline entry point
+
+After resolving a logical project, do not choose design-state tools by memory,
+filename prefix, repository search, or project-local orchestration. Ask the
+common pipeline what comes next:
+
+```bash
+python tools/authoring.py next <project> --json
+```
+
+`tools/authoring.py` is a thin CLI over `tools/authoring_pipeline.py`. Future MCP
+transports must call the same pipeline API and must not reproduce project
+resolution or phase-routing logic.
+
+`skills/spec-authoring/authoring_sequence.json` is the machine-readable source
+of truth for authoring order. `AUTHORING_SEQUENCE.md` explains the same contract.
+Project branches own project design data and artifacts; they do not own a forked
+copy of the generic authoring sequence.
+
+The generic pipeline promoted to `main` covers State 0 through Stage 9: the
+explicit State 2 -> State 3 ownership trace, pre-contract structured data
+closure, State 6 exact contracts, the enabled deterministic persistence and
+HTTP router closures, State 7 notes, assembly, module review, and Factory
+admission. Project-specific policy belongs in project artifacts under
+`examples/<project>/`, never in `tools/`.
+
+The repository entry points are discovery/orchestration only. They do not
+replace the ordered design-state methodology or the requirement to read the
+resolved project context before changing architecture.
+
 ## Read first
 
 Before changing the methodology, read:
@@ -24,6 +90,7 @@ Before changing the methodology, read:
 1. `skills/spec-authoring/SKILL.md`
 2. `skills/spec-authoring/SPEC_STANDARD.md`
 3. `skills/spec-authoring/BEHAVIORAL_NOTES.md`
+4. `skills/spec-authoring/AUTHORING_SEQUENCE.md`
 
 When working on a case study, read its design-state documents in numerical
 order before modifying its assembled `global_spec.json`.
@@ -203,7 +270,7 @@ Check patch integrity:
 git diff --check
 Search for obvious placeholders:
 grep -RInE \
-  'TODO|FIXME|pass$|dictstr, Any|process correctly|handle errors appropriately' \
+  'TODO|FIXME|pass$|dict\[str, Any\]|process correctly|handle errors appropriately' \
   skills examples
 Do not invent validator commands. Use only commands documented by the current repository or factory workspace.
 Definition of done
