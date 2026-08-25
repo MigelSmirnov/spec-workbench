@@ -115,6 +115,20 @@ elapsed intervals. The rebuilt `access_control` slice retains ten contracts
 and thirteen notes with zero blocks; implementations may vary internally but
 cannot mix naive timestamps, aware persistence values, and throttle timing.
 
+### Access-control UoW surface re-review
+
+**Resolved.** The next Factory handoff showed that behavioral requirements
+named durable effects but did not project the records and exact port calls
+needed to implement them, so the generator either invented repository methods
+or returned security-denial stubs. State 3 now names the operation-scoped UoW
+and its four access-control records. State 6 adds the bounded
+`list_principals_by_kind` interface/concrete pair and deterministic PostgreSQL
+query. State 7 fixes the self-identifying bearer shape and maps authentication,
+authorization, enrollment, grant provisioning, resolution, rotation, and
+revocation to exact UoW calls and commit-or-rollback behavior. Rebuilt slices
+for `models`, `access_control`, and `cabinet_persistence` report zero blocks;
+the behavioral implementation may vary only behind this closed port.
+
 ## Stage 8.1 semantic re-review
 
 All **18 assembled modules** were rebuilt from the final specification. Every structural module review reports **0 blocks and 0 review findings**. Deterministic modules (`models`, `cabinet_persistence`, `source_byte_store`, `api`) are `PASS`; behavioral modules are `PASS_INTERNAL_VARIATION` where their observable behavior is closed but internal algorithms/construction details may vary.

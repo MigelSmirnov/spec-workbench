@@ -235,8 +235,10 @@ separation, abuse throttling, and bounded security audit events under A11.
 ### Knows
 
 M02 and M17 identities, fixed capability classes, credential status, channel,
-entity scope, current lifecycle state, configured throttle limits,
-timezone-aware UTC lifecycle timestamps, and monotonic throttle intervals.
+entity scope, current lifecycle state, configured throttle limits, the
+operation-scoped `CabinetUnitOfWork` port and its access credential, capability
+grant, throttle, and security-audit records, timezone-aware UTC lifecycle
+timestamps, and monotonic throttle intervals.
 
 ### Must not own
 
