@@ -149,6 +149,10 @@ runtime cannot substitute unbounded or client-controlled defaults.
 10. Cabinet Web remains operational with the local backend offline. No Cabinet
     Web read or mutation performs an outbound connection to the local network,
     and synchronization reads only already committed Web-side state.
+11. Every wall-clock timestamp persisted, emitted in a runtime model, or
+    compared with persisted state is timezone-aware UTC. Naive datetimes are
+    forbidden. Elapsed intervals use a monotonic clock and are never derived
+    by subtracting wall-clock timestamps.
 
 ### Formal invariants
 
@@ -158,6 +162,8 @@ source_available -> committed_metadata AND reopened_final_bytes_hash_match
 domain_service -/> database_url OR environment OR adapter_construction
 local_backend_offline -/> cabinet_web_state_unavailable
 request_path -/> filesystem_path
+persisted_or_emitted_timestamp -> timezone_aware_utc
+elapsed_interval -> monotonic_clock
 ```
 
 ### Required tests
@@ -172,6 +178,8 @@ request_path -/> filesystem_path
    Web-owned reads and authorized mutations and preserves pending synchronization.
 5. Isolated restore verifies the database/byte-store relationship before the
    restored instance can become ready.
+6. Runtime timestamp tests reject naive values, compare only timezone-aware UTC
+   values, and keep elapsed timeout/throttle measurement monotonic.
 
 ### Consequence
 

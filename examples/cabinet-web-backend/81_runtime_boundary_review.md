@@ -132,6 +132,16 @@ The plugin-owner resolver delegates to the transaction-owning authentication
 operation and performs only an in-memory owner-kind check after it returns, so
 it cannot create a re-entrant or nested UoW.
 
+### Runtime timestamp policy re-review
+
+**Resolved globally.** Repeated Factory generation exposed that timezone
+awareness was implicit across the persistence-backed service boundary. A17 now
+requires every persisted, emitted, or compared wall-clock value to be
+timezone-aware UTC, forbids naive datetimes, and reserves monotonic clocks for
+elapsed intervals. Each behavioral service constructor note projects that
+shared rule into its module generation slice, preventing local clock-style
+invention without introducing a shared transaction or clock-derived state.
+
 ## Stage 8.1 semantic re-review
 
 All **18 assembled modules** were rebuilt from the final specification. Every structural module review reports **0 blocks and 0 review findings**. Deterministic modules (`models`, `cabinet_persistence`, `source_byte_store`, `api`) are `PASS`; behavioral modules are `PASS_INTERNAL_VARIATION` where their observable behavior is closed but internal algorithms/construction details may vary.
