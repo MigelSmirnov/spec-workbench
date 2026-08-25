@@ -102,3 +102,58 @@ def test_show_resolves_alias_and_returns_minimal_read_order(tmp_path: Path):
         "examples/demo/spec/10_models.md",
         "examples/demo/spec/20_rules.md",
     )
+
+
+def test_single_branch_clone_fetches_only_missing_canonical_ref(tmp_path: Path):
+    source = tmp_path / "source"
+    source.mkdir()
+    git(source, "init", "-b", "main")
+    git(source, "config", "user.email", "test@example.com")
+    git(source, "config", "user.name", "Spec Workbench Test")
+    write_index(source)
+    commit_all(source, "index")
+
+    git(source, "checkout", "-b", "agent/demo")
+    write(source / "examples" / "demo" / "00_product.md")
+    write(source / "examples" / "demo" / "10_models.md")
+    commit_all(source, "demo")
+    git(source, "checkout", "main")
+
+    origin = tmp_path / "origin.git"
+    subprocess.run(
+        ["git", "clone", "--bare", str(source), str(origin)],
+        check=True,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    clone = tmp_path / "clone"
+    subprocess.run(
+        [
+            "git",
+            "clone",
+            "--single-branch",
+            "--branch",
+            "main",
+            str(origin),
+            str(clone),
+        ],
+        check=True,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+
+    remote_refs_before = git(
+        clone, "for-each-ref", "--format=%(refname:short)", "refs/remotes"
+    ).splitlines()
+    assert "origin/agent/demo" not in remote_refs_before
+
+    view = project_view(clone, "demo")
+
+    assert view.resolved_ref == "origin/agent/demo"
+    assert view.stage_name == "Domain models"
+    remote_refs_after = git(
+        clone, "for-each-ref", "--format=%(refname:short)", "refs/remotes"
+    ).splitlines()
+    assert "origin/agent/demo" in remote_refs_after
