@@ -19,25 +19,43 @@ structurally valid but leave important engineering decisions unresolved.
 
 ## Repository entry point
 
-Before manually searching `examples/` or guessing which branch contains an
-active case, inspect the repository with:
+Do not search `examples/`, inspect arbitrary branches, or recursively read the
+repository to discover which working project the user means.
+
+Start with:
 
 ```bash
 python tools/workbench.py
 ```
 
-The default `status` command summarizes the current checkout and surfaces cases
-that exist only on other known Git refs. Use:
+The default command is `list`. It reads the curated `PROJECT_INDEX.json` and
+shows only the logical working projects and their canonical refs. It does not
+present historical, reference, methodology, or divergent side refs as separate
+projects.
+
+If the user has not already identified a project, show the listed project names
+and ask which one to work on. After the project is identified, resolve its
+context with:
 
 ```bash
-python tools/workbench.py list
+python tools/workbench.py show <project>
 ```
 
-for the full case catalog. Both commands support `--json`.
+`show` returns the canonical ref, project path, current design stage, and a
+minimal project read order. Both `list` and `show` support `--json`.
+
+Use:
+
+```bash
+python tools/workbench.py status
+```
+
+only when an exhaustive checkout/history view is explicitly needed. Normal
+project discovery must not use exhaustive ref scanning.
 
 This entry point is discovery/navigation only. It does not replace the ordered
-design-state methodology or the requirement to read the relevant case context
-before changing architecture.
+design-state methodology or the requirement to read the resolved project
+context before changing architecture.
 
 ## Read first
 
