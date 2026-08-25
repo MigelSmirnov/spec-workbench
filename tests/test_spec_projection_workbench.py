@@ -17,14 +17,14 @@ def _project(tmp_path):
     (sequence_dir / "authoring_sequence.json").write_text(
         json.dumps(
             {
-                "schema_version": "spec_workbench_authoring_sequence.v1",
-                "intermediate_phases": [
+                "schema_version": "spec_workbench_authoring_sequence.v2",
+                "phases": [
                     {
-                        "id": "deterministic_persistence_backend_closure",
+                        "id": "deterministic_persistence_closure",
                         "compatibility_artifacts": ["70_persistence_closure.json"],
                     },
                     {
-                        "id": "deterministic_http_route_closure",
+                        "id": "deterministic_http_router_closure",
                         "compatibility_artifacts": ["70_router_closure.json"],
                     },
                     {

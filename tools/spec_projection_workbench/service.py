@@ -49,7 +49,7 @@ def _load_sequence(project: Path) -> dict[str, Any]:
         _repo_root(project) / "skills" / "spec-authoring" / "authoring_sequence.json",
         "authoring sequence",
     )
-    if sequence.get("schema_version") != "spec_workbench_authoring_sequence.v1":
+    if sequence.get("schema_version") != "spec_workbench_authoring_sequence.v2":
         raise SpecProjectionError("unsupported authoring_sequence.json schema")
     invariants = sequence.get("invariants")
     if not isinstance(invariants, dict):
@@ -66,9 +66,9 @@ def _load_sequence(project: Path) -> dict[str, Any]:
 
 
 def _phase_artifacts(sequence: dict[str, Any], phase_id: str) -> tuple[str, ...]:
-    phases = sequence.get("intermediate_phases")
+    phases = sequence.get("phases")
     if not isinstance(phases, list):
-        raise SpecProjectionError("authoring_sequence.json lacks intermediate_phases")
+        raise SpecProjectionError("authoring_sequence.json lacks phases")
     for row in phases:
         if isinstance(row, dict) and row.get("id") == phase_id:
             values = row.get("compatibility_artifacts", [])
@@ -515,7 +515,7 @@ def _project(project: Path) -> tuple[dict[str, Any], dict[str, Any], list[dict[s
             )
 
     persistence_artifacts = _phase_artifacts(
-        sequence, "deterministic_persistence_backend_closure"
+        sequence, "deterministic_persistence_closure"
     )
     persistence_report = persistence_authoring.handoff(project)
     persistence_enabled = persistence_report.get("enabled") is True
@@ -568,7 +568,7 @@ def _project(project: Path) -> tuple[dict[str, Any], dict[str, Any], list[dict[s
         )
 
     router_artifacts = (
-        _phase_artifacts(sequence, "deterministic_http_route_closure")
+        _phase_artifacts(sequence, "deterministic_http_router_closure")
         + _phase_artifacts(sequence, "deterministic_http_router_context_closure")
     )
     router_enabled = _source_present(project, router_artifacts)
