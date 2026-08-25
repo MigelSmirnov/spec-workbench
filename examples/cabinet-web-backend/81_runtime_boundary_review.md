@@ -2,9 +2,16 @@
 
 Date: 2026-08-25
 
-Status: **PASS**
+Status: **REOPENED — INVOICE NOTES AMBIGUITY**
 
 ## Result
+
+The earlier PASS is no longer authoritative. Manual reading of the
+`invoice_workspace` generation packet showed that presence of classified
+`MUST` notes had been mistaken for semantic closure. The slice is reopened
+until its State 2–6 inputs and manually authored State 7 notes specify exact
+ordering, dependency calls, transaction boundaries, result fields, and error
+outcomes without invented model fields.
 
 The Cabinet Web Backend runtime boundary is implementation-ready for the accepted VPS architecture. The earlier Stage 8.1 ambiguities were returned to their owning design states, lowered, assembled, and re-reviewed rather than waived.
 
