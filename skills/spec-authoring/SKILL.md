@@ -364,6 +364,82 @@ Prefer deep modules:
 - stable ownership boundary;
 - no leakage of internal sequencing to callers.
 
+#### Cohesion test (mandatory)
+
+A module is deep only when most of its public capabilities rest on **one**
+coherent hidden mechanism, one set of invariants, and one reason to change. A
+shared domain entity, namespace, or product word is a taxonomic link, not
+cohesion: "everything here is about Invoice" justifies a domain boundary, never
+an implementation module.
+
+A domain boundary is not an implementation module. The correct chain is:
+
+```text
+domain area
+→ several independent knowledge / change clusters
+→ several deep implementation modules
+→ optionally one thin public façade
+```
+
+not:
+
+```text
+domain area → one owner of its rules → one module → every operation of the area
+```
+
+Every module records the outcome of the test in its `Depth assessment` as a
+declaration the State 3 lint reads:
+
+```text
+### Depth assessment
+
+kind: deep
+hidden mechanism: <the one mechanism most public capabilities share>
+```
+
+or
+
+```text
+### Depth assessment
+
+kind: facade
+delegates to: `module_a`, `module_b`
+```
+
+A module with a wide candidate surface (`WIDE_SURFACE_CAPABILITIES` or more)
+without this declaration is a State 3 error; narrower modules get a warning.
+"Substantial hidden responsibility" is not enough: many mechanisms in one file
+make the module big, not deep.
+
+#### Split triggers
+
+Any of the following means the candidate is several modules, not one:
+
+- several independent state machines;
+- several unrelated transactional topologies;
+- groups of operations that use almost disjoint dependency sets;
+- public operations each carrying its own large algorithm with little shared
+  internal implementation;
+- consumers that regularly need only one subset of the API;
+- a public surface that nearly equals the whole owned function surface
+  (State 6 reports `module_surface_not_deep` when it does);
+- a change in one group of rules that should not require revisiting the
+  others.
+
+For each public operation ask: which internal mechanism does it reuse; which
+invariants are genuinely shared; does it change for the same reason as its
+neighbours; does it need the same dependencies; could a consumer depend on a
+subset only. When the answers split, the module splits — and the split runs
+along the mechanism, never along size.
+
+#### Shallow façade
+
+A thin façade is admissible as a composition boundary when it owns no policy
+and delegates to several deep modules. Its shallowness must be declared
+(`kind: facade`), never mistaken for depth; the generation gates treat a
+declared façade's short functions as intended, and an undeclared one as
+collapse.
+
 Treat the following as warning signs:
 
 - `utils`, `helpers`, `common`, `manager`, `processor`, or `service` without a precise domain qualifier and ownership statement;
@@ -372,14 +448,16 @@ Treat the following as warning signs:
 - rendering changing domain state;
 - modules that only rename or forward arguments;
 - one module per endpoint when several endpoints share one responsibility;
-- modules whose public API is nearly identical to all internal functions.
+- modules whose public API is nearly identical to all internal functions;
+- one module per whole entity or subsystem when its operations do not share a mechanism — the mirror image of one module per endpoint.
 
 Readiness questions:
 
 - Can each invariant be assigned to one primary enforcement owner?
 - Can each model’s creation and mutation be assigned to a responsible module?
-- Does each module hide something meaningful?
+- Does each module hide something meaningful — and is that one mechanism named in its Depth assessment?
 - Is the public API smaller than the module’s internal behavior?
+- Would any split trigger fire if the module were implemented as one file?
 - Are forbidden responsibilities explicit?
 
 Expected specification output at this stage:
@@ -473,6 +551,22 @@ For each public operation:
 3. add internal functions to `module_functions`;
 4. add exact contracts for every public and private function;
 5. establish `function_order`.
+
+The chain for every product operation is:
+
+```text
+product operation
+→ responsible capability
+→ deep implementation module that owns the mechanism
+→ public façade or handler, when the boundary needs one
+```
+
+not "product operation → one public function of the domain module". A module
+whose planned functions are almost all public has been assembled from use
+cases, not from a mechanism; the State 6 lint reports it as
+`module_surface_not_deep` (see `module_surface` in the coverage report) unless
+State 3 declares the module a façade. Treat that report as a State 3 question,
+not as a State 6 formatting issue: go back and split along the mechanism.
 
 For every interface used as a dependency parameter, decide whether its runtime
 implementation is local or external. Record the decision structurally in

@@ -19,6 +19,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+import design_stage3
 import design_stage5
 import design_stage5_exposure
 
@@ -181,6 +182,19 @@ def coverage(project: Path) -> dict[str, Any]:
             unresolved.append(function)
         rows.append({**entry, "signature": signature, "resolved": resolved})
 
+    module_surface = _module_surface(project, rows)
+    for item in module_surface:
+        if item["shallow"]:
+            findings.append({
+                "severity": "warning",
+                "code": "module_surface_not_deep",
+                "message": (
+                    f"{item['module']}: {item['public']} of {item['functions']} owned functions are public "
+                    f"(ratio {item['public_ratio']}); the module hides almost nothing behind its surface. "
+                    "Split it along its hidden mechanisms or declare it a façade in State 3."
+                ),
+            })
+
     plan_closed = plan["status"] == "closed"
     if not plan_closed:
         findings.append({
@@ -204,9 +218,50 @@ def coverage(project: Path) -> dict[str, Any]:
             "handoff_ready": ready,
         },
         "functions": rows,
+        "module_surface": module_surface,
         "unresolved_functions": sorted(unresolved),
         "findings": findings,
     }
+
+
+SHALLOW_SURFACE_MIN_FUNCTIONS = 6
+SHALLOW_SURFACE_PUBLIC_RATIO = 0.85
+
+
+def _module_surface(project: Path, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Per module: how much of the owned function surface is public, against the State 3 depth declaration."""
+    try:
+        depth_by_module = {item.name: item.depth for item in design_stage3.parse_modules(project)}
+    except OSError:
+        depth_by_module = {}
+    counts: dict[str, dict[str, int]] = {}
+    for row in rows:
+        module = str(row.get("module") or "").removeprefix("module:")
+        if not module:
+            continue
+        bucket = counts.setdefault(module, {"public": 0, "internal": 0})
+        bucket["public" if row.get("visibility") == "public" else "internal"] += 1
+    result: list[dict[str, Any]] = []
+    for module in sorted(counts):
+        public = counts[module]["public"]
+        total = public + counts[module]["internal"]
+        ratio = round(public / total, 3) if total else 0.0
+        kind = (depth_by_module.get(module) or {}).get("kind")
+        shallow = (
+            kind != "facade"
+            and total >= SHALLOW_SURFACE_MIN_FUNCTIONS
+            and ratio >= SHALLOW_SURFACE_PUBLIC_RATIO
+        )
+        result.append({
+            "module": module,
+            "functions": total,
+            "public": public,
+            "internal": counts[module]["internal"],
+            "public_ratio": ratio,
+            "depth_kind": kind,
+            "shallow": shallow,
+        })
+    return result
 
 
 def lint(project: Path) -> dict[str, Any]:
