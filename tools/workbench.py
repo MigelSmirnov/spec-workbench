@@ -7,7 +7,12 @@ import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
-from project_navigation import NavigationError, list_projects, project_view
+from project_navigation import (
+    NavigationError,
+    load_index,
+    project_view,
+    projects as indexed_projects,
+)
 
 
 PRIMARY_STATES = (
@@ -120,7 +125,11 @@ def _case_files_from_ref(repo_root: Path, ref: str, case: str) -> list[str]:
         f"examples/{case}",
         check=False,
     )
-    return [line.strip()[len(prefix):] for line in out.splitlines() if line.strip().startswith(prefix)]
+    return [
+        line.strip()[len(prefix):]
+        for line in out.splitlines()
+        if line.strip().startswith(prefix)
+    ]
 
 
 def _case_names_from_ref(repo_root: Path, ref: str) -> list[str]:
@@ -158,7 +167,11 @@ def _working_case_files(repo_root: Path, case: str) -> list[str]:
     case_dir = repo_root / "examples" / case
     if not case_dir.is_dir():
         return []
-    return sorted(p.relative_to(case_dir).as_posix() for p in case_dir.rglob("*") if p.is_file())
+    return sorted(
+        p.relative_to(case_dir).as_posix()
+        for p in case_dir.rglob("*")
+        if p.is_file()
+    )
 
 
 def _stage_from_files(files: list[str]) -> tuple[int | None, str, str | None, int]:
@@ -166,7 +179,12 @@ def _stage_from_files(files: list[str]) -> tuple[int | None, str, str | None, in
     numbered: list[tuple[int, str]] = []
     for rel in files:
         name = Path(rel).name
-        if len(name) >= 4 and name[:2].isdigit() and name[2] == "_" and name.lower().endswith(".md"):
+        if (
+            len(name) >= 4
+            and name[:2].isdigit()
+            and name[2] == "_"
+            and name.lower().endswith(".md")
+        ):
             numbered.append((int(name[:2]), rel))
     primary = [(code, rel) for code, rel in numbered if code in labels]
     if primary:
@@ -196,7 +214,9 @@ def list_cases(repo_root: Path, *, include_worktree: bool = True) -> list[CaseSt
         branch = current_branch(repo_root)
         label = f"{branch} (worktree)"
         for case in _working_case_names(repo_root):
-            result.append(case_state_from_files(case, label, _working_case_files(repo_root, case)))
+            result.append(
+                case_state_from_files(case, label, _working_case_files(repo_root, case))
+            )
 
     current = current_branch(repo_root)
     current_case_trees: dict[str, str] = {}
@@ -215,7 +235,9 @@ def list_cases(repo_root: Path, *, include_worktree: bool = True) -> list[CaseSt
             tree_oid = _case_tree_oid(repo_root, ref, case)
             if tree_oid is None or current_case_trees.get(case) == tree_oid:
                 continue
-            row = case_state_from_files(case, ref, _case_files_from_ref(repo_root, ref, case))
+            row = case_state_from_files(
+                case, ref, _case_files_from_ref(repo_root, ref, case)
+            )
             key = (case, tree_oid)
             if key not in grouped:
                 grouped[key] = (row, [ref])
@@ -223,7 +245,9 @@ def list_cases(repo_root: Path, *, include_worktree: bool = True) -> list[CaseSt
                 grouped[key][1].append(ref)
 
     for row, refs in grouped.values():
-        refs = sorted(dict.fromkeys(refs), key=lambda ref: (0 if ref == "main" else 1, ref))
+        refs = sorted(
+            dict.fromkeys(refs), key=lambda ref: (0 if ref == "main" else 1, ref)
+        )
         result.append(
             CaseState(
                 case=row.case,
@@ -256,7 +280,9 @@ def repo_status(repo_root: Path) -> RepoStatus:
     current_ref = f"{branch} (worktree)"
     current_rows = [row for row in rows if row.ref == current_ref]
     current_names = {row.case for row in current_rows}
-    other_rows = [row for row in rows if row.ref != current_ref and row.case not in current_names]
+    other_rows = [
+        row for row in rows if row.ref != current_ref and row.case not in current_names
+    ]
     return RepoStatus(
         branch=branch,
         commit=current_commit(repo_root),
@@ -266,36 +292,104 @@ def repo_status(repo_root: Path) -> RepoStatus:
     )
 
 
+def project_rows(repo_root: Path) -> list[dict[str, object]]:
+    """Curated project list that preserves stale index entries as warnings."""
+    result: list[dict[str, object]] = []
+    for project in indexed_projects(repo_root):
+        try:
+            row = asdict(project_view(repo_root, project))
+            row["status"] = "ok"
+            row["problem"] = None
+        except NavigationError as exc:
+            row = {
+                "id": project.id,
+                "title": project.title,
+                "group": project.group,
+                "canonical_ref": project.canonical_ref,
+                "resolved_ref": None,
+                "path": project.path,
+                "summary": project.summary,
+                "stage_code": None,
+                "stage_name": "Unavailable",
+                "state_file": None,
+                "assembled": False,
+                "next": "fix PROJECT_INDEX.json",
+                "read_order": [],
+                "status": "stale",
+                "problem": str(exc),
+            }
+        result.append(row)
+    return result
+
+
+def _indexed_case_names(repo_root: Path) -> set[str]:
+    payload = load_index(repo_root)
+    result: set[str] = set()
+    for section in ("projects", "reference_cases"):
+        for item in payload.get(section, []):
+            path = str(item.get("path", "")).strip("/")
+            if path:
+                result.add(Path(path).name)
+    return result
+
+
+def unindexed_cases(repo_root: Path, status: RepoStatus | None = None) -> list[str]:
+    status = status or repo_status(repo_root)
+    known = _indexed_case_names(repo_root)
+    observed = {row.case for row in (*status.current_cases, *status.other_cases)}
+    return sorted(observed - known)
+
+
 def _print_case_table(rows: list[CaseState]) -> None:
     if not rows:
         print("No case studies found.")
         return
     headers = ("CASE", "REF", "STAGE", "NEXT")
     data = [(row.case, row.ref, row.stage_name, next_primary_state(row)) for row in rows]
-    widths = [max(len(headers[i]), *(len(str(row[i])) for row in data)) for i in range(len(headers))]
+    widths = [
+        max(len(headers[i]), *(len(str(row[i])) for row in data))
+        for i in range(len(headers))
+    ]
     print("  ".join(headers[i].ljust(widths[i]) for i in range(len(headers))))
     print("  ".join("-" * widths[i] for i in range(len(headers))))
     for row in data:
         print("  ".join(str(row[i]).ljust(widths[i]) for i in range(len(headers))))
 
 
-def _print_project_table(rows) -> None:
+def _print_project_table(rows: list[dict[str, object]]) -> None:
     if not rows:
         print("No working projects indexed.")
         return
-    headers = ("PROJECT", "CANONICAL REF", "PATH", "STAGE")
-    data = [(row.id, row.canonical_ref, row.path, row.stage_name) for row in rows]
-    widths = [max(len(headers[i]), *(len(str(row[i])) for row in data)) for i in range(len(headers))]
+    headers = ("PROJECT", "CANONICAL REF", "PATH", "STAGE", "STATUS")
+    data = [
+        (
+            row["id"],
+            row["canonical_ref"],
+            row["path"],
+            row["stage_name"],
+            str(row["status"]).upper(),
+        )
+        for row in rows
+    ]
+    widths = [
+        max(len(headers[i]), *(len(str(row[i])) for row in data))
+        for i in range(len(headers))
+    ]
     print("  ".join(headers[i].ljust(widths[i]) for i in range(len(headers))))
     print("  ".join("-" * widths[i] for i in range(len(headers))))
     for row in data:
         print("  ".join(str(row[i]).ljust(widths[i]) for i in range(len(headers))))
+    stale = [row for row in rows if row["status"] != "ok"]
+    if stale:
+        print("\nIndex warnings:")
+        for row in stale:
+            print(f"  {row['id']}: {row['problem']}")
 
 
 def print_list(repo_root: Path, *, as_json: bool) -> None:
-    rows = list_projects(repo_root)
+    rows = project_rows(repo_root)
     if as_json:
-        print(json.dumps([asdict(row) for row in rows], indent=2))
+        print(json.dumps(rows, indent=2))
         return
     _print_project_table(rows)
     print("\nSelect a project, then run:")
@@ -325,14 +419,21 @@ def print_show(repo_root: Path, query: str, *, as_json: bool) -> None:
 
 def print_status(repo_root: Path, *, as_json: bool) -> None:
     status = repo_status(repo_root)
+    unindexed = unindexed_cases(repo_root, status)
     if as_json:
-        print(json.dumps({
-            "branch": status.branch,
-            "commit": status.commit,
-            "dirty": status.dirty,
-            "current_cases": [asdict(row) for row in status.current_cases],
-            "other_cases": [asdict(row) for row in status.other_cases],
-        }, indent=2))
+        print(
+            json.dumps(
+                {
+                    "branch": status.branch,
+                    "commit": status.commit,
+                    "dirty": status.dirty,
+                    "current_cases": [asdict(row) for row in status.current_cases],
+                    "other_cases": [asdict(row) for row in status.other_cases],
+                    "unindexed_cases": unindexed,
+                },
+                indent=2,
+            )
+        )
         return
     print(
         f"Spec Workbench  branch={status.branch}  commit={status.commit}  "
@@ -343,6 +444,10 @@ def print_status(repo_root: Path, *, as_json: bool) -> None:
     if status.other_cases:
         print("\nCases available on other refs (exhaustive history view):")
         _print_case_table(status.other_cases)
+    if unindexed:
+        print("\nUnindexed cases (review PROJECT_INDEX.json):")
+        for case in unindexed:
+            print(f"  {case}")
     print("\nFor normal project discovery use:")
     print("  python tools/workbench.py list")
 
