@@ -2,16 +2,16 @@
 
 Date: 2026-08-25
 
-Status: **REOPENED — INVOICE NOTES AMBIGUITY**
+Status: **PASS — INVOICE CONFIRMATION CLOSED**
 
 ## Result
 
-The earlier PASS is no longer authoritative. Manual reading of the
-`invoice_workspace` generation packet showed that presence of classified
-`MUST` notes had been mistaken for semantic closure. The slice is reopened
-until its State 2–6 inputs and manually authored State 7 notes specify exact
-ordering, dependency calls, transaction boundaries, result fields, and error
-outcomes without invented model fields.
+The reopened `invoice_workspace` ambiguity is resolved. Its State 2–6 inputs
+and manually authored State 7 notes now specify exact authorization,
+dependency calls, transaction boundaries, source custody, result-field
+assignments, duplicate ordering, and error outcomes without invented model
+fields. Invoice confirmation commits its canonical Card revision, transfer
+manifest, and working-set record through the same caller-owned unit of work.
 
 The Cabinet Web Backend runtime boundary is implementation-ready for the accepted VPS architecture. The earlier Stage 8.1 ambiguities were returned to their owning design states, lowered, assembled, and re-reviewed rather than waived.
 
@@ -32,6 +32,18 @@ Final deterministic evidence:
 The mature local `cabinet-backend` was used only as an E2E-tested structural precedent for shared Factory mechanisms such as `persistence_backend/v3`, `postgres_sync_v1`, verifier-only credential storage, transaction ownership, and recoverable byte publication. No local-backend product ownership or Holded behavior was transferred into the server application.
 
 ## Resolution of prior findings
+
+### Invoice confirmation semantic re-review
+
+**Resolved.** The six Invoice mutations now carry actor provenance and have
+explicit security, orchestration, transaction, rollback, and return-shape
+requirements. Duplicate matching uses real `CardRevisionReference` fields and
+declares the source path for every candidate value. Card owns canonical
+revision preparation and exposes a transaction-aware commit helper, allowing
+Invoice confirmation to persist the Card revision, custody evidence, transfer
+manifest, and working-set record atomically without duplicating Card policy.
+The rebuilt `card_workspace` and `invoice_workspace` slices report zero
+findings.
 
 ### Finding 1 — durable backend lowering
 

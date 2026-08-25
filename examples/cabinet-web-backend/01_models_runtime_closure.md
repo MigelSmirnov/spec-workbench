@@ -98,7 +98,7 @@ Equal typed transport and application facts are interchangeable.
 
 ## Model M36 — ArchiveInvoiceCommand
 
-Fields: `invoice_id: str`, `expected_revision: CardRevisionReference`, `authorization: AuthorizationDecision`, `confirmation: ConfirmedEffectAuthorization`, `effect_id: str`.
+Fields: `invoice_id: str`, `expected_revision: CardRevisionReference`, `authorization: AuthorizationDecision`, `confirmation: ConfirmedEffectAuthorization`, `effect_id: str`, `actor: ActorReference`.
 
 ### Identity
 
@@ -110,7 +110,7 @@ Equal typed transport and application facts are interchangeable.
 
 ## Model M37 — AttachInvoiceSourceCommand
 
-Fields: `invoice_id: str`, `expected_revision: CardRevisionReference`, `source: CardSource`, `authorization: AuthorizationDecision`, `effect_id: str`.
+Fields: `invoice_id: str`, `expected_revision: CardRevisionReference`, `source: CardSource`, `authorization: AuthorizationDecision`, `effect_id: str`, `actor: ActorReference`.
 
 ### Identity
 
@@ -338,7 +338,7 @@ Equal typed transport and application facts are interchangeable.
 
 ## Model M56 — ConfirmInvoiceCommand
 
-Fields: `invoice_id: str`, `expected_revision: CardRevisionReference`, `authorization: AuthorizationDecision`, `confirmation: ConfirmedEffectAuthorization`, `effect_id: str`.
+Fields: `invoice_id: str`, `expected_revision: CardRevisionReference`, `authorization: AuthorizationDecision`, `confirmation: ConfirmedEffectAuthorization`, `effect_id: str`, `actor: ActorReference`.
 
 ### Identity
 
