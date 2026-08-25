@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   validate-promotion:
@@ -15,6 +15,9 @@ jobs:
     steps:
       - name: Check out Workbench
         uses: actions/checkout@v6
+        with:
+          ref: agent/cabinet-web-card-persistence
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -129,26 +132,17 @@ jobs:
                       check=False, stdout=handle, text=True,
                   )
                   assert result.returncode in (0, 1), (module, result.returncode)
+                  review = json.loads((root / "reviews" / f"{module}.json").read_text())
+                  assert review["summary"]["blocks"] == 0, review
+                  assert review["summary"]["reviews"] == 0, review
+                  assert review["findings"] == [], review
           bootstrap = json.loads((root / "slices" / "bootstrap.json").read_text())
           notes = bootstrap["generation_constraints"]["assembled_notes"]
           assert any(row["scope"] == "create_cabinet_web_app" for row in notes), bootstrap
           PY
 
-      - name: Capture canonical promotion files
-        run: |
-          project=examples/cabinet-web-backend
-          mkdir -p ci-artifacts/promotion-files/tools/spec_projection_workbench
-          cp "$project"/60_model_closure_domain.json ci-artifacts/promotion-files/
-          cp "$project"/60_contract_plan.json ci-artifacts/promotion-files/
-          cp "$project"/60_contracts.json ci-artifacts/promotion-files/
-          cp "$project"/60_data_closure.json ci-artifacts/promotion-files/
-          cp "$project"/70_persistence_closure.json ci-artifacts/promotion-files/
-          cp "$project"/70_runtime_closure.json ci-artifacts/promotion-files/
-          cp "$project"/80_notes.md ci-artifacts/promotion-files/
-          cp "$project"/global_spec.json ci-artifacts/promotion-files/
-          cp tools/spec_projection_workbench/service.py \
-            ci-artifacts/promotion-files/tools/spec_projection_workbench/service.py
-          git diff --check
+      - name: Finalize clean promotion commit
+        run: python tools/_finalize_cabinet_web_promotion.py
 
       - name: Upload promotion evidence
         if: always()
