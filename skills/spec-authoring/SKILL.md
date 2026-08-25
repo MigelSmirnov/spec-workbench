@@ -1,6 +1,6 @@
 ---
 name: spec-authoring
-description: Guide a human and an LLM through layered, semi-manual creation of global_spec.json according to SPEC_STANDARD.md, preventing placeholder architecture, premature contracts, vague notes, and top-down skeleton specifications.
+description: Guide layered creation and legacy migration of global_spec.json according to SPEC_STANDARD.md, including evidence-first recovery of hidden decisions, while preventing placeholder architecture, majority inference, premature contracts, vague notes, and top-down skeleton specifications.
 ---
 
 # Spec Authoring
@@ -67,6 +67,81 @@ Work in design layers. At each layer:
 
 The process may revisit earlier layers. Returning backward is expected and is not a failure.
 
+## Tool-assisted navigation
+
+When a case study is large enough that reading by filename or raw `grep` loses design context, use `tools/design_index.py` as a deterministic navigation aid.
+
+The tool has two deliberately separate views:
+
+- **structural relations** — indexed design items and only explicit `A*` / `OQ-*` references;
+- **lexical navigation** — name occurrences with their source line, enclosing decision, and heading path.
+
+A lexical occurrence is never architectural evidence by itself. Do not infer module ownership, responsibility clusters, or semantic relations from `--mentions` output alone.
+
+### Author addressable design items with canonical Markdown nesting
+
+Represent every addressable decision as one heading and place all content owned
+by that decision under strictly deeper headings:
+
+```markdown
+# State 2 — Rules
+
+## Accepted decision A10 — Preserve evidence
+
+### Normative rules
+
+### Formal invariants
+
+### Required tests
+
+### Consequence
+```
+
+Use `## Accepted decision` without an explicit ID for a legal supporting
+decision; the index assigns it a stable `source:*` key. Keep every owned section
+at `###` or deeper. A heading at the same or shallower level closes the decision
+and is not part of that item.
+
+Start every normative State 2 document with at least one accepted-decision item.
+A file with no indexed item is outside `design_lint`'s structural input and
+cannot be recovered by lint-side inference.
+
+Qualify repeated section titles so `ITEM + SECTION` remains unique. Additional
+headings such as `Payload rules`, `Retry safety`, or `Supplier behavior` are
+valid; do not flatten them or treat them as authoring errors.
+
+For State 2 decisions, include `Normative rules`, `Formal invariant` or `Formal
+invariants`, `Required tests`, and `Consequence` when the decision has evidence
+for those sections. Treat a missing canonical section as a review prompt, not a
+semantic-invalidity claim. Do not expand the parser to absorb flat legacy
+headings; normalize the document hierarchy instead.
+
+Useful commands:
+
+```bash
+python tools/design_index.py examples/<case> --list --state 2 --kind decision
+python tools/design_index.py examples/<case> --get A51
+python tools/design_index.py examples/<case> --references A51
+python tools/design_index.py examples/<case> --mentions Holded
+python tools/design_index.py examples/<case> --context 02_rules.md:240 --radius 5
+python tools/design_lint.py examples/<case> --state 2
+```
+
+Prefer these commands when they can answer the navigation question before falling back to raw `grep`. The tool is an authoring aid; source Markdown remains normative.
+
+## Legacy migration evidence
+
+When an existing implementation is being migrated, do not begin from notes or
+from a proposed target schema. Read and follow
+[LEGACY_MIGRATION_EVIDENCE.md](LEGACY_MIGRATION_EVIDENCE.md) before changing a
+design-state artifact or `global_spec.json`.
+
+Treat probe output as evidence only. Classify every finding as derivable,
+product/policy value, supported backend lowering, genuinely irregular
+responsibility, or unresolved. Only accepted product decisions and supported
+backend relations may become normative spec content. An unresolved finding is
+BLOCK; frequency in existing code never resolves it.
+
 ## Primary rule
 
 > Do not design the next layer while unresolved decisions in the current layer are being hidden with generic names, generic types, or vague prose.
@@ -110,6 +185,11 @@ Readiness questions:
 - Are important invalid or failure outcomes known?
 - Are unknowns written as unknowns rather than replaced with generic abstractions?
 
+Record applicable trust boundaries at this state and follow the mandatory route
+in [SECURITY_REVIEW_EVIDENCE.md](SECURITY_REVIEW_EVIDENCE.md). Do not defer
+unknown actors, ingress surfaces, credentials, or external-system trust to
+module design.
+
 ### State 1 — Domain models
 
 Design the concepts and data shapes that the application actually needs.
@@ -141,6 +221,15 @@ extra: dict
 ```
 
 unless the external contract is genuinely open-ended and that openness is itself explicitly required.
+
+For every runtime model, close identity as `value` or `entity`. If product
+requirements do not determine the classification, mark it `BLOCK` and do not
+enter State 2. Read and follow
+[MODEL_IDENTITY_EVIDENCE.md](MODEL_IDENTITY_EVIDENCE.md) for the procedure.
+
+Also record applicable security-relevant entity semantics without redefining
+the accepted identity decision. Use the State 1 route in
+[SECURITY_REVIEW_EVIDENCE.md](SECURITY_REVIEW_EVIDENCE.md).
 
 Readiness questions:
 
@@ -174,12 +263,52 @@ Capture:
 - limits, paths, timeouts, and feature switches;
 - stable domain catalogs and enum-like values.
 
+When a value describes an external system and is known only from official
+documentation or runtime observation, read
+[EXTERNAL_CONTRACT_EVIDENCE.md](EXTERNAL_CONTRACT_EVIDENCE.md). Keep the value
+in its ordinary `config`, `models`, or `rules` home, but bind it to a
+content-addressed Workbench evidence record. A typed external value without
+provenance is not closed merely because it passes structural validation.
+
+Before State 3, complete the mandatory security gate in
+[SECURITY_REVIEW_EVIDENCE.md](SECURITY_REVIEW_EVIDENCE.md). Every required
+category needs an explicit outcome; any `UNRESOLVED` outcome is BLOCK.
+
 Classify deliberately:
 
 - `config` — runtime or product knobs that may change independently;
 - `rules` — read-only domain or policy semantics;
 - `models` — schemas, domain taxonomies, and structured catalogs that form contracts;
 - `notes` — behavior that uses the above, not the data itself.
+
+#### Navigation while working in State 2
+
+When State 2 spans multiple documents or many accepted decisions, start by listing the indexed decisions instead of scanning files manually:
+
+```bash
+python tools/design_index.py examples/<case> --list --state 2 --kind decision
+```
+
+Before changing or evaluating one decision, inspect its exact structural record and explicit references:
+
+```bash
+python tools/design_index.py examples/<case> --get A51
+python tools/design_index.py examples/<case> --references A51
+```
+
+When a domain name, model name, external system, or policy term appears to connect several decisions, use lexical navigation to find all occurrences without asserting a relation:
+
+```bash
+python tools/design_index.py examples/<case> --mentions <name>
+```
+
+For an important occurrence, request source context by the returned file and line:
+
+```bash
+python tools/design_index.py examples/<case> --context <path>:<line> --radius 5
+```
+
+Use this sequence to decide what to read next. Do not convert shared names into ownership or responsibility links during State 2.
 
 Readiness questions:
 
@@ -193,6 +322,29 @@ Readiness questions:
 Derive modules from ownership of complexity, rules, and knowledge.
 
 Do not derive modules merely from screens, endpoints, or verbs in the product description.
+
+#### Bridge from State 2
+
+Use the State 2 decision index as evidence inventory, not as an architecture generator.
+
+For each candidate responsibility:
+
+1. inspect the relevant State 2 decision with `--get`;
+2. inspect explicit incoming and outgoing decision references with `--references`;
+3. use `--mentions` only to discover other places worth reading;
+4. open important source locations with `--context`;
+5. assign one primary enforcement owner only after reading the normative source.
+
+Example route:
+
+```bash
+python tools/design_index.py examples/<case> --get A51
+python tools/design_index.py examples/<case> --references A51
+python tools/design_index.py examples/<case> --mentions Holded
+python tools/design_index.py examples/<case> --context 02_rules.md:240 --radius 5
+```
+
+The index must not automatically create module names or responsibility clusters. A State 2 decision title may seed a candidate responsibility name, but State 3 must still justify the ownership boundary from the knowledge and rules the module owns.
 
 For every module define:
 
@@ -300,7 +452,8 @@ Expected specification output:
 
 - stable public entries in `imports.internal`;
 - stable top-level entries in `module_functions`;
-- preliminary adapter requirements.
+- explicit dependency-boundary decisions that can later be lowered into
+  `implementation_obligations`.
 
 ### State 6 — Contracts and internal functions
 
@@ -320,6 +473,13 @@ For each public operation:
 3. add internal functions to `module_functions`;
 4. add exact contracts for every public and private function;
 5. establish `function_order`.
+
+For every interface used as a dependency parameter, decide whether its runtime
+implementation is local or external. Record the decision structurally in
+`implementation_obligations`. A local concrete class must receive contracts for
+the complete interface method surface; a concrete `__init__` alone is never a
+complete implementation obligation. Do not infer the relation from class names
+or repeat it only in a composition note.
 
 Do not introduce new domain concepts silently at this stage.
 
@@ -342,7 +502,9 @@ Readiness questions:
 - Does every return value have a clear consumer?
 - Does each function belong to exactly one module?
 - Are public and private functions distinguishable by module API ownership?
-- Are adapters defined where caller and callee shapes differ?
+- Does every interface-typed dependency have an explicit local or external
+  implementation disposition?
+- Does each local concrete class contractually cover every port method?
 
 ### State 7 — Notes
 
@@ -401,7 +563,7 @@ Populate all sections required by `SPEC_STANDARD.md`:
 
 - `contracts`;
 - `notes`;
-- `adapters`;
+- `implementation_obligations`;
 - `config`;
 - `models`;
 - `rules`;
@@ -413,11 +575,51 @@ Populate all sections required by `SPEC_STANDARD.md`:
 - `module_paths`;
 - `default_module`.
 
+When an owned module needs a third-party or stdlib import, populate
+`imports.third_party_by_module` or `imports.stdlib_by_module`. Do not rely on
+the projector finding a library name in prose.
+
 Assembly should mostly serialize decisions already made. It must not become another creative design pass.
 
 If assembly exposes missing models, unclear ownership, generic contracts, or vague behavior, return to the appropriate earlier state.
 
 After assembly, use the existing factory validators and inspectors. Do not duplicate them inside this skill.
+
+Run the Workbench external-contract check before module review. An active
+verified binding changed without reciprocal supersession is a BLOCK; assembly
+must not infer or refresh its fingerprint automatically.
+
+### Stage 8.1 — Assembled module review
+
+Review every complete assembled module slice after Stage 8. A structural
+zero-block result is not a semantic verdict: record the human classification
+and exact slice hash, and mark a review stale whenever later assembly changes
+that hash.
+
+### Stage 9 — Factory admission and handoff
+
+Stage 9 is operational, not a new semantic State. Run the read-only admission
+gate against the exact target Factory checkout before copying any artifact:
+
+```bash
+python tools/design_factory_admission.py examples/<case> \
+  --project <factory-project> --update-existing
+```
+
+Proceed only from `READY_TO_EXPORT`. The gate requires a clean committed source,
+closed and current Stage 8.1 review when present, ready Workbench assembly,
+matching standards, a PASS from the real Factory canonical validator, a closed
+semantic-test handoff when declared, and explicit authorization to replace a
+different canonical target.
+
+Use `tools/export_to_factory.py` only after that result. Export records the
+source commit, source and target hashes, Factory tool fingerprints, validation
+evidence and semantic-test hashes. Route B, deploy, runtime verification and
+terminal OTK are Factory responsibilities after Stage 9.
+
+External-contract evidence is checked and fingerprinted by Workbench admission.
+Factory receives the already-closed spec IR and does not become an evidence
+authority.
 
 ## Placeholder taxonomy
 
@@ -577,6 +779,8 @@ A specification is ready for the existing factory when:
 - notes prevent trivial placeholder implementations;
 - `config`, `models`, and `rules` are cleanly separated;
 - assembly introduces no new product or architecture decisions;
+- every externally owned wire fact is covered by current content-addressed
+  evidence or is explicitly outside the project;
 - the complete file conforms to `SPEC_STANDARD.md`.
 
 The objective is not maximal detail. The objective is enough precision that the code-generation factory does not need to invent missing architecture or product semantics.

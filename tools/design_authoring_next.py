@@ -17,10 +17,16 @@ from pathlib import Path
 from typing import Any
 
 import design_lint
+import design_router_context
 import design_stage3
 import design_stage4
 import design_stage5
+import design_stage6_contracts
+import design_stage6_data
 import design_trace
+from notes_workbench import gate as notes_gate
+from persistence_workbench import authoring as persistence_authoring
+from router_workbench import authoring as router_authoring
 
 SCHEMA = "spec_workbench_authoring_next.v2"
 ROOT = Path(__file__).resolve().parents[1]
@@ -88,8 +94,9 @@ def _result(
     summary: dict[str, Any] | None = None,
     findings: list[dict[str, Any]] | None = None,
     use_next: bool = False,
+    **extra: Any,
 ) -> dict[str, Any]:
-    return {
+    payload = {
         "schema_version": SCHEMA,
         "sequence_schema_version": sequence["schema_version"],
         "project_root": project.resolve().name,
@@ -100,6 +107,8 @@ def _result(
         "summary": summary or {},
         "findings": findings or [],
     }
+    payload.update(extra)
+    return payload
 
 
 def _lint_findings(report: object) -> list[dict[str, Any]]:
@@ -130,7 +139,14 @@ def next_step(project: Path, *, display_path: str | None = None) -> dict[str, An
         raise AuthoringSequenceError(f"project directory not found: {project}")
     sequence = load_sequence()
     project_text = display_path or project.as_posix()
+    pending = _promoted_states_step(sequence, project, project_text)
+    if pending is not None:
+        return pending
+    return _post_state5_step(sequence, project, project_text)
 
+
+def _promoted_states_step(sequence: dict[str, Any], project: Path, project_text: str) -> dict[str, Any] | None:
+    """State 0-5 chain; returns None once every promoted state gate is ready."""
     if not _has_state_source(project, 0):
         return _result(
             sequence=sequence,
@@ -271,19 +287,82 @@ def next_step(project: Path, *, display_path: str | None = None) -> dict[str, An
                 reason="Complete the explicit State 5 operation plan.", summary=c5, use_next=True,
             )
 
-    pending = _phase(sequence, "post_state5_toolchain")
-    return {
-        "schema_version": SCHEMA,
-        "sequence_schema_version": sequence["schema_version"],
-        "project_root": project.name,
-        "phase": "post_state5_toolchain",
-        "blocked": True,
-        "reason": pending["reason"],
-        "action": None,
-        "summary": {"promoted_through_state": 5},
-        "findings": [],
-        "target_phases": pending["target_phases"],
-    }
+    return None
+
+
+def _post_state5_step(sequence: dict[str, Any], project: Path, project_text: str) -> dict[str, Any]:
+    """Post-State-5 chain: data closure -> contracts -> backend closures -> notes -> assembly."""
+    data = design_stage6_data.lint(project)
+    if data["summary"]["errors"]:
+        return _result(
+            sequence=sequence, project=project, project_text=project_text,
+            phase="pre_contract_structured_data_closure", blocked=True,
+            reason="Structured data closure has deterministic errors that must be repaired before State 6 contracts.",
+            summary=data["summary"],
+        )
+
+    contracts = design_stage6_contracts.handoff(project)
+    if not contracts["ready"]:
+        return _result(
+            sequence=sequence, project=project, project_text=project_text,
+            phase="state6_exact_contracts", blocked=False,
+            reason="State 6 owns canonical Python signatures and must close before deterministic backend closure.",
+            summary=contracts["summary"],
+            unresolved_functions=contracts["unresolved_functions"],
+            router_allowed=False, persistence_allowed=False,
+        )
+
+    persistence = persistence_authoring.coverage(project)
+    if not persistence["summary"]["handoff_ready"]:
+        return _result(
+            sequence=sequence, project=project, project_text=project_text,
+            phase="deterministic_persistence_closure", blocked=bool(persistence["summary"]["errors"]),
+            reason="Canonical contracts are ready; the enabled persistence_backend/v2 closure must bind repository ownership and methods to State 6 before Notes.",
+            summary=persistence["summary"], findings=persistence["findings"],
+            router_allowed=True, persistence_allowed=True,
+        )
+
+    router = router_authoring.coverage(project)
+    if not router["summary"]["handoff_ready"]:
+        return _result(
+            sequence=sequence, project=project, project_text=project_text,
+            phase="deterministic_http_router_closure", blocked=bool(router["summary"]["errors"]),
+            reason="Canonical contracts are ready; per-route Router Closure may now bind transport semantics and must validate them against State 6.",
+            summary=router["summary"],
+            unresolved_operations=router["unresolved_operations"],
+            router_allowed=True, persistence_allowed=True,
+        )
+
+    context = design_router_context.coverage(project)
+    if not context["summary"]["handoff_ready"]:
+        return _result(
+            sequence=sequence, project=project, project_text=project_text,
+            phase="deterministic_http_router_context_closure", blocked=bool(context["summary"]["errors"]),
+            reason="Per-route closure is ready, but global deterministic HTTP wiring/auth/error policy is not yet closed.",
+            summary=context["summary"],
+            unresolved_topics=context["unresolved_topics"],
+            router_allowed=True, persistence_allowed=True,
+        )
+
+    notes = notes_gate.coverage(project)
+    if not notes["summary"]["handoff_ready"]:
+        only_missing = notes["findings"] and all(item["code"] == "missing_notes_file" for item in notes["findings"])
+        return _result(
+            sequence=sequence, project=project, project_text=project_text,
+            phase="state7_notes",
+            blocked=False if only_missing else bool(notes["summary"]["blocks"] or notes["summary"]["reviews"]),
+            reason="Deterministic backend closures are closed; author State 7 notes and resolve all address/class/reference, cross-note consistency, and semantic-stub findings before handoff.",
+            summary=notes["summary"], findings=notes["findings"],
+            router_allowed=True, persistence_allowed=True,
+        )
+
+    return _result(
+        sequence=sequence, project=project, project_text=project_text,
+        phase="state8_assembly", blocked=False,
+        reason="State 6 contracts, enabled deterministic backend closures, and State 7 notes gate are ready; continue to final specification assembly.",
+        summary=notes["summary"],
+        router_allowed=True, persistence_allowed=True,
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -294,7 +373,13 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         payload = next_step(args.project, display_path=args.display_path)
-    except AuthoringSequenceError as exc:
+    except (
+        AuthoringSequenceError,
+        ValueError,
+        json.JSONDecodeError,
+        design_stage6_contracts.DesignStage6ContractsError,
+        design_router_context.RouterContextError,
+    ) as exc:
         print(f"design_authoring_next: error: {exc}", file=sys.stderr)
         return 2
     if args.json:

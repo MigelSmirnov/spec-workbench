@@ -1,0 +1,203 @@
+name: Spec Workbench CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  workbench:
+    name: Tests and assembly
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out Workbench
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Set up Node (TypeScript verification for frontend manifests)
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install TypeScript
+        run: npm install -g typescript@5
+
+      - name: Install test dependencies
+        run: >-
+          python -m pip install
+          pytest pyyaml pydantic Pillow pypdf "psycopg[binary]"
+
+      - name: Capture Cabinet Web closure sources
+        run: |
+          mkdir -p ../ci-artifacts
+          tar -czf ../ci-artifacts/cabinet-web-closure-sources.tar.gz \
+            examples/cabinet-web-backend/01_models_persistence_runtime.md \
+            examples/cabinet-web-backend/01_models_runtime_closure.md \
+            examples/cabinet-web-backend/02_rules_security_config.md \
+            examples/cabinet-web-backend/30_runtime_boundary_revision.md \
+            examples/cabinet-web-backend/60_model_closure_domain.json \
+            examples/cabinet-web-backend/60_model_closure_runtime.json \
+            examples/cabinet-web-backend/60_contract_plan.json \
+            examples/cabinet-web-backend/60_contracts.json \
+            examples/cabinet-web-backend/60_data_closure.json \
+            examples/cabinet-web-backend/70_persistence_closure.json \
+            examples/cabinet-web-backend/70_runtime_closure.json \
+            examples/cabinet-web-backend/80_notes.md \
+            examples/cabinet-web-backend/81_module_review_status.json \
+            examples/cabinet-web-backend/81_runtime_boundary_review.md
+
+      - name: Run complete Workbench test suite
+        run: python -m pytest -q --junitxml=../ci-artifacts/pytest.xml
+
+      - name: Verify Cabinet Web canonical projection
+        run: |
+          python tools/design_spec_projection.py examples/cabinet-web-backend --verify --json \
+            > ../ci-artifacts/cabinet-web-backend-projection.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          report = json.loads(Path("../ci-artifacts/cabinet-web-backend-projection.json").read_text())
+          assert report["ready"] is True
+          assert report["in_sync"] is True
+          PY
+
+      - name: Verify mature Cabinet assembly
+        run: >-
+          python tools/design_assembly.py examples/cabinet-backend --json
+          > ../ci-artifacts/cabinet-backend-assembly.json
+
+      - name: Verify Cabinet Web assembly
+        run: |
+          python tools/design_assembly.py examples/cabinet-web-backend --json \
+            > ../ci-artifacts/cabinet-web-backend-assembly.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          report = json.loads(Path("../ci-artifacts/cabinet-web-backend-assembly.json").read_text())
+          assert report["ready"] is True
+          assert report["summary"]["errors"] == 0
+          assert report["summary"]["ready_checks"] == report["summary"]["checks"]
+          PY
+
+      - name: Verify Cabinet Web Stage 8.1 ledger
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          ledger = json.loads(Path("examples/cabinet-web-backend/81_module_review_status.json").read_text())
+          assert ledger["status"] == "closed"
+          assert ledger["summary"] == {"module_count": 18, "reviewed": 18, "passed": 18, "ambiguities": 0, "pending": 0, "stale": 0}
+          PY
+
+      - name: Check patch integrity
+        run: git diff --check
+
+      - name: Stage Workbench evidence for upload
+        if: always()
+        run: |
+          rm -rf ci-artifacts
+          cp -R ../ci-artifacts ci-artifacts
+
+      - name: Upload Workbench evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: spec-workbench-ci-evidence
+          path: ci-artifacts/
+          if-no-files-found: error
+
+  factory-admission:
+    name: Cross-repository Factory admission
+    needs: workbench
+    runs-on: ubuntu-latest
+    env:
+      FACTORY_REPO_DEPLOY_KEY: ${{ secrets.FACTORY_REPO_DEPLOY_KEY }}
+    steps:
+      - name: Detect private Factory access
+        id: factory-access
+        shell: bash
+        run: |
+          if test -n "$FACTORY_REPO_DEPLOY_KEY"; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::FACTORY_REPO_DEPLOY_KEY is not configured; cross-repository admission is skipped."
+          fi
+
+      - name: Check out Workbench
+        if: steps.factory-access.outputs.available == 'true'
+        uses: actions/checkout@v6
+        with:
+          path: spec-workbench
+          persist-credentials: false
+
+      - name: Check out private Factory
+        if: steps.factory-access.outputs.available == 'true'
+        uses: actions/checkout@v6
+        with:
+          repository: MigelSmirnov/panelforge-sandbox
+          ref: agent/cabinet-web-route-b-official
+          ssh-key: ${{ secrets.FACTORY_REPO_DEPLOY_KEY }}
+          persist-credentials: false
+          path: code_factory
+
+      - name: Set up Python
+        if: steps.factory-access.outputs.available == 'true'
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install admission dependencies
+        if: steps.factory-access.outputs.available == 'true'
+        run: >-
+          python -m pip install
+          pytest pyyaml pydantic Pillow pypdf "psycopg[binary]"
+
+      - name: Admit mature Cabinet backend
+        if: steps.factory-access.outputs.available == 'true'
+        working-directory: spec-workbench
+        run: |
+          mkdir -p ../ci-artifacts
+          python tools/design_factory_admission.py examples/cabinet-backend \
+            --project cabinet_backend \
+            --factory-root ../code_factory \
+            --update-existing \
+            --json > ../ci-artifacts/cabinet-backend-admission.json
+
+      - name: Admit Cabinet Web backend
+        if: steps.factory-access.outputs.available == 'true'
+        working-directory: spec-workbench
+        run: |
+          python tools/design_factory_admission.py examples/cabinet-web-backend \
+            --project Cabinet_web \
+            --factory-root ../code_factory \
+            --update-existing \
+            --json > ../ci-artifacts/cabinet-web-backend-admission.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          report = json.loads(Path("../ci-artifacts/cabinet-web-backend-admission.json").read_text())
+          assert report["status"] == "READY_TO_EXPORT", report
+          assert report["ready"] is True, report
+          assert report["summary"]["blocks"] == 0, report
+          assert report["summary"]["warnings"] == 0, report
+          assert report["summary"]["passes"] == report["summary"]["checks"], report
+          checks = {item["id"]: item for item in report["checks"]}
+          for key in ("FA002", "FA003", "FA005", "FA013", "FA014"):
+              assert checks[key]["status"] == "PASS", (key, checks[key])
+          PY
+
+      - name: Upload Factory admission evidence
+        if: always() && steps.factory-access.outputs.available == 'true'
+        uses: actions/upload-artifact@v6
+        with:
+          name: factory-admission-evidence
+          path: ci-artifacts/
+          if-no-files-found: error

@@ -72,16 +72,33 @@ of truth for authoring order. `AUTHORING_SEQUENCE.md` explains the same contract
 Project branches own project design data and artifacts; they do not own a forked
 copy of the generic authoring sequence.
 
-The generic pipeline currently promoted to `main` covers State 0 through State
-5 plus the explicit State 2 -> State 3 ownership trace. It intentionally blocks
-at `post_state5_toolchain` until the mature State 6-9 tooling is refactored to
-remove Cabinet-specific policy and promoted as generic Workbench functionality.
-Never bypass that boundary by invoking Cabinet-specific late-stage tools for an
-unrelated project.
+The generic pipeline promoted to `main` covers State 0 through Stage 9: the
+explicit State 2 -> State 3 ownership trace, pre-contract structured data
+closure, State 6 exact contracts, the enabled deterministic persistence and
+HTTP router closures, State 7 notes, assembly, module review, and Factory
+admission. Project-specific policy belongs in project artifacts under
+`examples/<project>/`, never in `tools/`.
 
 The repository entry points are discovery/orchestration only. They do not
 replace the ordered design-state methodology or the requirement to read the
 resolved project context before changing architecture.
+
+## Tool ownership
+
+Generic tooling — `tools/`, `tests/`, `skills/`, `.github/`, the repository
+entry points and `PROJECT_INDEX.json` — changes only on `main`, through a
+short-lived `tools/<topic>` branch and a pull request. Project branches
+(`agent/<project>`) own only `examples/<project>/` and `experiments/`.
+
+Product-specific policy never enters `tools/`. A project that needs its own
+deterministic backend ships it under `examples/<project>/tools/` and declares
+it in `examples/<project>/workbench_extensions.json`; generic gates reach it
+through `tools/project_extensions.py` by protocol, never by module name.
+
+The rule is enforced, not assumed: `.github/workflows/tools-ownership.yml`
+runs `python tools/tools_ownership_check.py --base origin/main` on every pull
+request and fails when a non-`tools/*` branch touches a generic path. Run the
+same command before pushing.
 
 ## Read first
 
@@ -96,6 +113,84 @@ When working on a case study, read its design-state documents in numerical
 order before modifying its assembled `global_spec.json`.
 
 Later design-state documents may refine earlier conceptual decisions.
+
+## Design-state navigation tools
+
+When working on State 1:
+
+1. read `skills/spec-authoring/MODEL_IDENTITY_EVIDENCE.md`;
+2. list models with `python tools/design_index.py examples/<case> --list --state 1 --kind model`;
+3. patch a model section through `tools/design_editor.py`;
+4. run `python tools/design_lint.py examples/<case> --state 1`;
+5. when an assembled specification exists, run
+   `python tools/design_identity_closure.py examples/<case>`;
+6. do not enter State 2 or declare assembly validated until identity closure
+   passes.
+
+For agent or future MCP inspection, use the workbench's `--inventory` and
+`--get ModelName` operations. Transport wrappers must call
+`identity_workbench` and must not reimplement identity parsing or comparison.
+
+After assembly, run `python tools/design_assembly.py examples/<case>` for the
+aggregate readiness gate. Use `--check <name>` for a detailed owner report;
+future MCP wrappers must call `assembly_workbench` instead of reimplementing
+the orchestration.
+
+Before semantic closure, build one final packet per assembled module with
+`python tools/design_module_review.py examples/<case> --module <name> --slice
+--json`. Run `--review` for deterministic gaps, then perform the Stage 7.1
+adversarial review from the packet; note count alone is not completeness.
+
+Before moving from State 2 to State 3:
+
+1. read `skills/spec-authoring/SECURITY_REVIEW_EVIDENCE.md`;
+2. perform the security review across States 0–2;
+3. use `tools/design_index.py` to navigate affected models and decisions;
+4. use `tools/design_editor.py` for structural changes;
+5. run `python tools/design_lint.py examples/<case> --state 2`;
+6. do not enter State 3 while any security category is `UNRESOLVED`.
+
+Before composing a multi-tool design workflow, ask the deterministic router for
+the applicable plan:
+
+```bash
+python tools/design_router.py examples/<case> <intent> --json
+```
+
+Supported intents are `inventory`, `inspect-item`, `trace-term`,
+`diagnose-state2`, `edit-fragment`, and `verify`. Follow the returned step order,
+review checkpoints, and stop conditions. The router is advisory and read-only;
+it does not authorize semantic content or execute its command previews.
+
+When a case study has multiple decisions or supporting Markdown files, prefer
+`tools/design_index.py` over raw `grep` for design-state navigation.
+
+For State 2, begin with the indexed decision inventory when available:
+
+```bash
+python tools/design_index.py examples/<case> --list --state 2 --kind decision
+```
+
+Use `--get` and `--references` for explicit design structure. Shared words do
+not create architectural relations.
+
+When moving from State 2 to State 3, use the required expand -> narrow ->
+references loop documented in `tools/DESIGN_INDEX_WORKFLOW.md` before assigning
+a primary enforcement owner:
+
+```bash
+python tools/design_index.py examples/<case> --mentions <name>
+python tools/design_index.py examples/<case> --mentions-in-items <name> --state 2 --kind decision
+python tools/design_index.py examples/<case> --references <decision-id>
+```
+
+Use `--context` selectively for broad results that may change ownership,
+dependencies, forbidden responsibilities, or external constraints. The broad
+mention pass is intentionally wider than the normative state; the focused pass
+returns to indexed State 2 evidence.
+
+The tool may suggest where to read next; it must not invent module names,
+responsibility clusters, or ownership from lexical overlap.
 
 ## Decision hierarchy
 

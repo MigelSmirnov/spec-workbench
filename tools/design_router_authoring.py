@@ -1,0 +1,62 @@
+#!/usr/bin/env python3
+"""Official contract-aware Router Closure authoring CLI.
+
+This entrypoint is post-State-6 by construction. Resolved route rows contribute
+to readiness only when they validate both against the closed Router DSL and the
+canonical State 6 operation/handler contracts.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+from pathlib import Path
+
+from router_workbench import authoring
+from router_workbench.model import RouterClosureError
+
+
+def _human(action: str, payload: dict[str, object]) -> str:
+    summary = payload["summary"]
+    if action == "next":
+        operation = payload["next"]["operation"] if payload["next"] else "complete"
+        return f"Router authoring next: {operation}\n"
+    lines = [
+        f"Router authoring: {summary['resolved']}/{summary['external_operations']} resolved; "
+        f"{summary['unresolved']} unresolved; {summary['errors']} errors; "
+        f"handoff_ready={str(summary['handoff_ready']).lower()}"
+    ]
+    for finding in payload.get("findings", []):
+        operation = f" {finding['operation']}" if finding.get("operation") else ""
+        lines.append(f"{finding['severity'].upper()} {finding['code']}{operation} - {finding['message']}")
+    return "\n".join(lines) + "\n"
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("project", type=Path)
+    action = parser.add_mutually_exclusive_group(required=True)
+    action.add_argument("--coverage", action="store_true")
+    action.add_argument("--next", action="store_true")
+    action.add_argument("--lint", action="store_true")
+    parser.add_argument("--json", action="store_true")
+    args = parser.parse_args(argv)
+    if not args.project.is_dir():
+        print(f"design_router_authoring: error: project directory not found: {args.project}", file=sys.stderr)
+        return 2
+    selected = "coverage" if args.coverage else "next" if args.next else "lint"
+    try:
+        payload = getattr(authoring, selected if selected != "next" else "next_operation")(args.project)
+    except RouterClosureError as exc:
+        print(f"design_router_authoring: error: {exc}", file=sys.stderr)
+        return 2
+    print(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) if args.json else _human(selected, payload))
+    if selected == "lint":
+        return 1 if payload["summary"]["errors"] else 0
+    if selected == "coverage":
+        return 0 if payload["summary"]["handoff_ready"] else 1
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

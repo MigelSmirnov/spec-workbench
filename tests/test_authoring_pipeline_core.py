@@ -24,7 +24,16 @@ def test_machine_sequence_covers_promoted_state0_through_state5_tools():
         "state2_to_state3_trace",
         "state4_reviewed_flows",
         "state5_public_module_operations",
-        "post_state5_toolchain",
+        "pre_contract_structured_data_closure",
+        "state6_exact_contracts",
+        "deterministic_persistence_closure",
+        "deterministic_http_router_closure",
+        "deterministic_http_router_context_closure",
+        "deterministic_http_router_ir_assembly",
+        "state7_notes",
+        "state8_assembly",
+        "stage8_1_module_review",
+        "stage9_factory_admission",
     ]
     for phase in payload["phases"]:
         if phase["status"] != "available":
@@ -72,7 +81,7 @@ def test_started_state1_without_models_routes_to_state1(tmp_path: Path, monkeypa
     assert result["action"]["args"][:3] == ["examples/demo", "--state", "1"]
 
 
-def test_ready_promoted_states_stop_at_explicit_post_state5_boundary(
+def test_ready_states_continue_into_post_state5_chain(
     tmp_path: Path, monkeypatch
 ):
     (tmp_path / "00_product.md").write_text("# State 0 — Product frame\n", encoding="utf-8")
@@ -107,11 +116,16 @@ def test_ready_promoted_states_stop_at_explicit_post_state5_boundary(
         lambda project: {"summary": {"operations": 1, "errors": 0, "warnings": 0}, "findings": []},
     )
 
+    monkeypatch.setattr(
+        design_authoring_next.design_stage6_data,
+        "lint",
+        lambda project: {"summary": {"errors": 1, "warnings": 0}, "findings": []},
+    )
     result = design_authoring_next.next_step(tmp_path)
-    assert result["phase"] == "post_state5_toolchain"
+    assert result["phase"] == "pre_contract_structured_data_closure"
     assert result["blocked"] is True
-    assert result["summary"] == {"promoted_through_state": 5}
-    assert "Cabinet" in result["reason"]
+    assert result["action"]["tool"] == "tools/design_stage6_data.py"
+    assert "Cabinet" not in result["reason"]
 
 
 def test_transport_api_delegates_to_same_sequencer(tmp_path: Path, monkeypatch):

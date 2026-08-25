@@ -1,0 +1,257 @@
+{
+  "schema_version": "spec_workbench_design_routes.v1",
+  "purpose": "Route an agent through deterministic design navigation, diagnostics, structural editing, trace, handoff, and verification without semantic inference or command execution.",
+  "intents": {
+    "diagnose-state2": {
+      "description": "Review State 2 authoring diagnostics with structural context.",
+      "required_inputs": [],
+      "steps": ["lint_state2", "review_findings"]
+    },
+    "diagnose-state3": {
+      "description": "Review State 3 module structure and addressability diagnostics.",
+      "required_inputs": [],
+      "steps": ["state3_lint", "review_findings"]
+    },
+    "diagnose-state4": {
+      "description": "Review State 4 flow structure and explicit State 3 reference diagnostics.",
+      "required_inputs": [],
+      "steps": ["state4_lint", "review_findings"]
+    },
+    "edit-fragment": {
+      "description": "Apply one addressable Markdown fragment edit through dry-run, review, atomic apply, and verification.",
+      "required_inputs": ["operation", "item", "content_file"],
+      "steps": ["get_item", "editor_dry_run", "review_diff", "editor_apply", "rebuild_index", "lint_state2", "review_findings", "run_tests"]
+    },
+    "inspect-item": {
+      "description": "Inspect one indexed design item, its explicit references, and selective local context.",
+      "required_inputs": ["item"],
+      "steps": ["get_item", "item_references", "selective_context"]
+    },
+    "inspect-module": {
+      "description": "Inspect one stable State 3 module artifact by module:<name> key.",
+      "required_inputs": ["item"],
+      "steps": ["state3_get"]
+    },
+    "inspect-flow": {
+      "description": "Inspect one stable State 4 flow artifact by flow:<name> key.",
+      "required_inputs": ["item"],
+      "steps": ["state4_get"]
+    },
+    "inventory": {
+      "description": "Orient in one design state using the indexed decision inventory.",
+      "required_inputs": [],
+      "steps": ["list_items"]
+    },
+    "state3-handoff": {
+      "description": "Emit stable State 3 module/capability keys enriched with authoritative State 2 ownership trace.",
+      "required_inputs": [],
+      "steps": ["trace_2_3_handoff"]
+    },
+    "state4-handoff": {
+      "description": "Emit stable State 4 flow keys and explicit State 3 module/capability references for the next design state or future MCP wrapper.",
+      "required_inputs": [],
+      "steps": ["state4_handoff"]
+    },
+    "state4-coverage": {
+      "description": "Compare reviewed State 4 flows with the explicit operator-accepted flow plan without inventing missing flows.",
+      "required_inputs": [],
+      "steps": ["state4_coverage", "review_findings"]
+    },
+    "work-state4": {
+      "description": "Select the next incomplete flow from the explicit State 4 plan, then require semantic authoring before structural validation.",
+      "required_inputs": [],
+      "steps": ["state4_next", "operator_judgment"]
+    },
+    "trace-state2-to-state3": {
+      "description": "Validate explicit State 2 ownership/disposition coverage in the State 3 trace manifest.",
+      "required_inputs": [],
+      "steps": ["trace_2_3_check", "review_findings"]
+    },
+    "trace-term": {
+      "description": "Run the required broad-to-narrow navigation loop before proposing ownership or responsibility.",
+      "required_inputs": ["term"],
+      "steps": ["broad_mentions", "selective_context", "narrow_mentions", "candidate_references", "operator_judgment"]
+    },
+    "verify": {
+      "description": "Verify design structure, State 2 authoring diagnostics, and repository tests after an accepted edit.",
+      "required_inputs": [],
+      "steps": ["rebuild_index", "lint_state2", "review_findings", "run_tests"]
+    },
+    "verify-state3": {
+      "description": "Verify State 3 structure, State 2->3 trace closure, enriched handoff, and repository tests.",
+      "required_inputs": [],
+      "steps": ["rebuild_index", "state3_lint", "trace_2_3_check", "review_findings", "trace_2_3_handoff", "run_tests"]
+    },
+    "verify-state4": {
+      "description": "Verify State 3 prerequisites, State 4 flow structure and references, State 4 handoff, and repository tests. Coverage may remain incomplete while State 4 is being authored.",
+      "required_inputs": [],
+      "steps": ["rebuild_index", "state3_lint", "trace_2_3_check", "state4_lint", "review_findings", "state4_handoff", "run_tests"]
+    },
+    "ready-state4": {
+      "description": "Gate transition from State 4 to State 5 by requiring complete explicit flow-plan coverage in addition to structural verification.",
+      "required_inputs": [],
+      "steps": ["rebuild_index", "state3_lint", "trace_2_3_check", "state4_lint", "state4_coverage", "review_findings", "state4_handoff", "run_tests"]
+    }
+  },
+  "editor_operations": {
+    "append-section": {"section_input": "section", "cli_arguments": ["{item}", "{section}"]},
+    "insert-section": {"section_input": "after_section", "cli_arguments": ["{item}", "{after_section}"]},
+    "replace-item": {"section_input": null, "cli_arguments": ["{item}"]},
+    "replace-section": {"section_input": "section", "cli_arguments": ["{item}", "{section}"]}
+  },
+  "steps": {
+    "broad_mentions": {
+      "kind": "tool", "tool": "design_index", "action": "mentions",
+      "why": "Expand before narrowing so relevant evidence outside indexed State 2 items is not hidden.",
+      "requires": [], "stop_if": ["the term is empty", "the design index cannot be built"]
+    },
+    "candidate_references": {
+      "kind": "foreach", "tool": "design_index", "action": "references",
+      "why": "Explicit references are stronger navigation evidence than lexical overlap.",
+      "requires": ["candidate item keys from narrow_mentions"], "stop_if": ["an item key is ambiguous"]
+    },
+    "editor_apply": {
+      "kind": "tool", "tool": "design_editor", "action": "apply",
+      "why": "Apply the already reviewed byte-preserving plan atomically.",
+      "requires": ["editor dry-run succeeded", "operator reviewed the complete unified diff"],
+      "stop_if": ["the diff was not reviewed", "the addressed item or section changed since dry-run", "post-apply index validation fails"]
+    },
+    "editor_dry_run": {
+      "kind": "tool", "tool": "design_editor", "action": "dry-run",
+      "why": "Plan one structural splice and expose the complete unified diff without changing the document.",
+      "requires": ["exact item key", "supported editor operation", "complete content file"],
+      "stop_if": ["item or section addressing is unknown or ambiguous", "the design index contains duplicate keys", "the editor refuses the plan"]
+    },
+    "get_item": {
+      "kind": "tool", "tool": "design_index", "action": "get",
+      "why": "Resolve the item structurally before inspecting or editing it.",
+      "requires": [], "stop_if": ["the item is unknown or ambiguous"]
+    },
+    "item_references": {
+      "kind": "tool", "tool": "design_index", "action": "references",
+      "why": "Show explicit incoming and outgoing design relations without inferring new ones.",
+      "requires": ["resolved item"], "stop_if": ["the item is unknown or ambiguous"]
+    },
+    "lint_state2": {
+      "kind": "tool", "tool": "design_lint", "action": "lint",
+      "why": "Return deterministic State 2 authoring findings with structural blast context.",
+      "requires": ["valid design index"], "stop_if": ["lint analysis fails", "lint reports errors"]
+    },
+    "list_items": {
+      "kind": "tool", "tool": "design_index", "action": "list",
+      "why": "Start from the indexed inventory instead of broad repository search.",
+      "requires": [], "stop_if": ["the design index cannot be built", "duplicate item keys make addressing unsafe"]
+    },
+    "narrow_mentions": {
+      "kind": "tool", "tool": "design_index", "action": "mentions-in-items",
+      "why": "Return from broad discovery to normative indexed evidence.",
+      "requires": ["broad mention pass completed"], "stop_if": ["the design index cannot be built"]
+    },
+    "operator_judgment": {
+      "kind": "checkpoint",
+      "why": "Ownership, responsibility, and flow semantics are semantic decisions and must not be inferred by the router.",
+      "requires": ["applicable deterministic evidence reviewed"],
+      "stop_if": ["evidence is contradictory or the semantic decision remains uncertain"]
+    },
+    "rebuild_index": {
+      "kind": "tool", "tool": "design_index", "action": "build",
+      "why": "Prove that structural addressing remains valid after the edit.",
+      "requires": [], "stop_if": ["index construction fails", "duplicate item keys appear"]
+    },
+    "review_diff": {
+      "kind": "checkpoint",
+      "why": "The operator must accept the exact addressed mutation before --apply is allowed.",
+      "requires": ["complete dry-run unified diff"],
+      "stop_if": ["the diff changes text outside the intended fragment", "the content introduces an unreviewed semantic decision"]
+    },
+    "review_findings": {
+      "kind": "checkpoint",
+      "why": "Warnings and incomplete coverage are review prompts; the operator classifies them instead of the router inventing semantics.",
+      "requires": ["lint, trace, or coverage report with diagnostic context"],
+      "stop_if": ["an error exists", "a new warning indicates an unintended design change", "a readiness gate still reports incomplete required coverage"]
+    },
+    "run_tests": {
+      "kind": "command", "tool": "pytest", "action": "test",
+      "why": "Verify the repository toolchain after structural and authoring checks pass.",
+      "requires": ["index is valid", "lint/trace have no errors", "warnings have been reviewed"],
+      "stop_if": ["any test fails"]
+    },
+    "selective_context": {
+      "kind": "conditional", "tool": "design_index", "action": "context",
+      "why": "Inspect only source locations that may change ownership, dependencies, constraints, or the edit decision.",
+      "requires": ["a source path and line from a previous index result"], "stop_if": []
+    },
+    "state3_get": {
+      "kind": "tool", "tool": "design_stage3", "action": "get",
+      "why": "Resolve one State 3 module through its stable module:<name> address rather than reparsing prose.",
+      "requires": ["stable module key or module name"], "stop_if": ["the module is unknown or duplicated"]
+    },
+    "state3_inventory": {
+      "kind": "tool", "tool": "design_stage3", "action": "list",
+      "why": "List State 3 modules as stable addressable artifacts.",
+      "requires": [], "stop_if": ["module keys are duplicated"]
+    },
+    "state3_lint": {
+      "kind": "tool", "tool": "design_stage3", "action": "lint",
+      "why": "Check module addressability, required responsibility sections, and stable candidate capability extraction.",
+      "requires": ["State 3 Markdown exists"], "stop_if": ["State 3 lint reports errors"]
+    },
+    "trace_2_3_check": {
+      "kind": "tool", "tool": "design_trace", "action": "check",
+      "why": "Validate that every State 2 decision has exactly one State 3 primary owner or an explicit non-runtime disposition.",
+      "requires": ["valid design index", "stable State 3 module keys", "30_trace.json"],
+      "stop_if": ["a State 2 decision is unclaimed", "an owner/consumer key is unknown", "a disposition is invalid", "trace analysis reports errors"]
+    },
+    "trace_2_3_handoff": {
+      "kind": "tool", "tool": "design_trace", "action": "handoff",
+      "why": "Emit one authoritative machine-readable handoff containing module keys, capability keys, and backward State 2 ownership/disposition trace.",
+      "requires": ["State 3 lint passed", "State 2->3 trace check passed"],
+      "stop_if": ["trace analysis reports errors", "module keys are duplicated"]
+    },
+    "state4_get": {
+      "kind": "tool", "tool": "design_stage4", "action": "get",
+      "why": "Resolve one State 4 flow through its stable flow:<name> address and expose only explicit reviewed references.",
+      "requires": ["stable flow key or flow name"],
+      "stop_if": ["the flow is unknown or duplicated"]
+    },
+    "state4_inventory": {
+      "kind": "tool", "tool": "design_stage4", "action": "list",
+      "why": "List reviewed State 4 flows as stable addressable artifacts.",
+      "requires": ["State 3 handoff is structurally valid"],
+      "stop_if": ["flow keys are duplicated"]
+    },
+    "state4_lint": {
+      "kind": "tool", "tool": "design_stage4", "action": "lint",
+      "why": "Check flow addressability, required end-to-end sections, and explicit references against State 3 module/capability keys.",
+      "requires": ["State 3 module/capability handoff", "State 4 Markdown exists"],
+      "stop_if": ["State 4 lint reports errors", "a referenced State 3 module or capability is unknown"]
+    },
+    "state4_coverage": {
+      "kind": "tool", "tool": "design_stage4", "action": "coverage",
+      "why": "Compare authored flows with the explicit 40_flow_plan.json so missing work is visible without generating architecture from prose.",
+      "requires": ["valid State 3 handoff", "operator-accepted 40_flow_plan.json"],
+      "stop_if": ["the plan references an unknown State 3 module or capability", "a State 5 readiness check still has incomplete planned flows"]
+    },
+    "state4_next": {
+      "kind": "tool", "tool": "design_stage4", "action": "next",
+      "why": "Select the first incomplete flow from the explicit plan and expose its accepted purpose and candidate State 3 references without writing the flow.",
+      "requires": ["operator-accepted 40_flow_plan.json"],
+      "stop_if": ["the flow plan is invalid", "the suggested plan entry itself requires semantic revision"]
+    },
+    "state4_handoff": {
+      "kind": "tool", "tool": "design_stage4", "action": "handoff",
+      "why": "Emit stable reviewed flow artifacts and current explicit plan coverage for State 5 and future MCP exposure without freezing State 5 contracts.",
+      "requires": ["State 4 lint passed", "State 3 references resolve"],
+      "stop_if": ["State 4 lint reports errors", "flow keys are duplicated"]
+    }
+  },
+  "global_stop_conditions": [
+    "semantic content has not been supplied or accepted by the operator",
+    "the requested mutation is rename, move, delete, or another unsupported editor operation",
+    "item, module, flow, or section addressing is ambiguous",
+    "duplicate item keys exist",
+    "duplicate module keys exist",
+    "duplicate flow keys exist",
+    "a command would target files outside the selected project"
+  ]
+}

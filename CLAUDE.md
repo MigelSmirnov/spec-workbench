@@ -45,10 +45,9 @@ skills/spec-authoring/authoring_sequence.json
 The transport-neutral API is `tools/authoring_pipeline.py`. Future MCP wrappers
 must call that same API; they must not implement a second authoring sequence.
 
-The generic pipeline currently promoted to `main` covers State 0 through State
-5 and the explicit State 2 -> State 3 ownership trace. It intentionally stops at
-`post_state5_toolchain` until the mature Cabinet-derived State 6-9 tools have
-been stripped of project-specific policy and promoted safely.
+The generic pipeline promoted to `main` covers State 0 through Stage 9. Tools
+under `tools/` change only on `main`; project branches own only their
+`examples/<project>/` data.
 
 `python tools/workbench.py status` is only for explicit repository/index
 diagnostics. Do not use exhaustive branch scanning for normal project discovery.

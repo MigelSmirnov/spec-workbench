@@ -1,0 +1,136 @@
+name: Cabinet Web attach canary
+
+on:
+  push:
+    branches:
+      - agent/cabinet-vault-experiment
+  pull_request:
+    branches:
+      - agent/cabinet-vault-experiment
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  canary:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install canary dependencies
+        run: python -m pip install pytest pyyaml pydantic Pillow pypdf "psycopg[binary]"
+
+      - name: Run static Cabinet Web interop guards
+        run: python -m pytest -q experiments/cabinet-vault/tests/test_cabinet_web_*.py
+
+      - name: Execute Cabinet Web revision acceptance canary
+        env:
+          SPEC_WORKBENCH_TEST_POSTGRES_DSN: postgresql://postgres:postgres@127.0.0.1:5432/postgres
+        run: |
+          python experiments/cabinet-vault/tools/cabinet_web_revision_accept_runtime_probe.py > cabinet-web-revision-accept-canary.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          report = json.loads(Path("cabinet-web-revision-accept-canary.json").read_text())
+          assert report["status"] == "pass"
+          assert [item["probe_id"] for item in report["results"]] == [
+              "SYNC-RUNTIME-001",
+              "SYNC-RUNTIME-002",
+              "SYNC-RUNTIME-003",
+              "SYNC-RUNTIME-004",
+          ]
+          assert {item["status"] for item in report["results"]} == {"PASS"}
+          PY
+
+      - name: Execute no-MIME no-hash source attach canary
+        env:
+          SPEC_WORKBENCH_TEST_POSTGRES_DSN: postgresql://postgres:postgres@127.0.0.1:5432/postgres
+          SPEC_WORKBENCH_ATTACH_VAULT_ROOT: ${{ runner.temp }}/cabinet-web-attach-vault
+        run: |
+          python experiments/cabinet-vault/tools/cabinet_web_source_attach_canary_probe.py > cabinet-web-source-attach-canary.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          report = json.loads(Path("cabinet-web-source-attach-canary.json").read_text())
+          assert report["status"] == "pass"
+          assert [item["probe_id"] for item in report["results"]] == [
+              "WEB-ATTACH-001",
+              "WEB-ATTACH-002",
+              "WEB-ATTACH-003",
+              "WEB-ATTACH-004",
+          ]
+          assert {item["status"] for item in report["results"]} == {"PASS"}
+          PY
+
+      - name: Execute same-invoice revision-to-source E2E canary
+        env:
+          SPEC_WORKBENCH_TEST_POSTGRES_DSN: postgresql://postgres:postgres@127.0.0.1:5432/postgres
+          SPEC_WORKBENCH_ATTACH_VAULT_ROOT: ${{ runner.temp }}/cabinet-web-e2e-vault
+        run: |
+          python experiments/cabinet-vault/tools/cabinet_web_e2e_runtime_probe.py > cabinet-web-e2e-canary.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          report = json.loads(Path("cabinet-web-e2e-canary.json").read_text())
+          assert report["status"] == "pass"
+          assert report["results"] == [{
+              "probe_id": "WEB-E2E-001",
+              "status": "PASS",
+              "message": report["results"][0]["message"],
+          }]
+          PY
+
+      - name: Execute trusted local capability bridge probe
+        env:
+          SPEC_WORKBENCH_TEST_POSTGRES_DSN: postgresql://postgres:postgres@127.0.0.1:5432/postgres
+          SPEC_WORKBENCH_ATTACH_VAULT_ROOT: ${{ runner.temp }}/cabinet-bridge-vault
+          SPEC_WORKBENCH_CABINET_WEB_ROOT: ${{ github.workspace }}
+        run: |
+          python experiments/cabinet-vault/tools/local_capability_bridge_probe.py > local-capability-bridge-probe.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          report = json.loads(Path("local-capability-bridge-probe.json").read_text())
+          assert report["status"] == "pass"
+          assert [item["probe_id"] for item in report["results"]] == [
+              f"BRIDGE-{index:03d}" for index in range(1, 12)
+          ]
+          assert {item["status"] for item in report["results"]} == {"PASS"}
+          PY
+
+      - name: Upload canary evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: cabinet-web-interop-canary
+          path: |
+            cabinet-web-revision-accept-canary.json
+            cabinet-web-source-attach-canary.json
+            cabinet-web-e2e-canary.json
+            local-capability-bridge-probe.json
+          if-no-files-found: error

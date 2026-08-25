@@ -1,0 +1,505 @@
+manifest_version: cabinet_box.v0
+status: exploratory
+
+cabinet:
+  id: cabinet.local.archive
+  product: Cabinet
+  slice: archive_inspection_and_local_source_custody
+  locality: local
+  trust_boundary: local_cabinet_host
+  description: >-
+    First real box-oriented slice extracted from the accepted Cabinet Backend
+    design. It exposes archive truth and local source-custody operations without
+    embedding Registry, PresuPro, Holded, VPS, HTTP, ORM, repository, or service
+    dependencies in the semantic surface.
+
+source_baseline:
+  case: examples/cabinet-backend
+  classical_branch: agent/cabinet-backend-state-0
+  evidence:
+    - examples/cabinet-backend/01_models.md
+    - examples/cabinet-backend/02_rules.md
+    - examples/cabinet-backend/02_rules_security_files_concurrency.md
+    - examples/cabinet-backend/02_security_review.md
+    - examples/cabinet-backend/50_public_apis.md
+    - examples/cabinet-backend/60_archive_runtime_contracts.md
+    - examples/cabinet-backend/60_model_closure_core.json
+    - examples/cabinet-backend/60_model_closure_support.json
+    - examples/cabinet-backend/80_notes_archive_runtime.md
+    - examples/cabinet-backend/81_durable_archive_module_review.md
+
+external_dependencies: []
+
+host_requirements:
+  - principal_authentication
+  - bounded_capability_grants
+  - exact_resource_scope_authorization
+  - typed_input_output_validation
+  - effect_policy_enforcement
+  - disclosure_policy_enforcement
+  - transactional_record_store
+  - resource_locking
+  - opaque_source_byte_vault
+  - staged_byte_verification_and_atomic_publication
+  - committed_effect_recovery
+  - protected_configuration
+  - audit_and_provenance
+
+host_owned_fields:
+  description: >-
+    These values are derived or minted by the trusted host. They are never
+    accepted from an agent as proof of authority or storage ownership.
+  fields:
+    - authenticated_principal
+    - authorization_decision
+    - actor_from_authenticated_principal
+    - interaction_id
+    - evidence_id
+    - acceptance_id
+    - decision_id
+    - decided_at
+    - observed_at
+    - storage_reference
+    - staging_reference
+    - final_reference
+
+schemas:
+  InvoiceCardRevisionReference:
+    identity: value
+    fields:
+      invoice_id: str
+      card_version: int
+      content_hash: str
+      observed_status: str
+      observed_at: datetime
+
+  ActorReference:
+    identity: value
+    host_constructed: true
+    fields:
+      actor_type: str
+      actor_id: str
+      delegated_by: str?
+      interaction_id: str?
+      display_label: str?
+
+  ContentReference:
+    identity: value
+    fields:
+      content_kind: str
+      content_id: str
+      content_hash: str
+      size_bytes: int?
+      media_type: str?
+
+  StoredInvoiceCardRevision:
+    identity: entity
+    fields:
+      revision: InvoiceCardRevisionReference
+      canonical_card: dict[str, object]
+      received_at: datetime
+      received_from_node_id: str
+      received_by: ActorReference
+      validation_id: str?
+      predecessor_content_hash: str?
+      superseded_by_content_hash: str?
+
+  DurableAcceptanceVerification:
+    identity: value
+    fields:
+      invoice_id: str
+      content_hash: str?
+      accepted: bool
+      required_source_ids: tuple[str, ...]
+      verified_source_ids: tuple[str, ...]
+      evidence_id: str?
+      verified_at: datetime
+
+  LocalSourceFile:
+    identity: value
+    fields:
+      filename: str
+      media_type: str
+      content: bytes
+      expected_source_id: str?
+      expected_content_hash: str?
+
+  SourceAttachmentItemResult:
+    identity: value
+    fields:
+      filename: str
+      source_id: str?
+      content_hash: str
+      result: str
+      safe_error_code: str?
+
+  SourceStatus:
+    identity: value
+    fields:
+      invoice_id: str
+      available_source_ids: tuple[str, ...]
+      missing_source_ids: tuple[str, ...]
+      failed_source_ids: tuple[str, ...]
+      completeness: str
+      active_loss_decision_ids: tuple[str, ...]
+      complete: bool
+      observed_at: datetime
+
+  SourceAttachmentBatchResult:
+    identity: value
+    fields:
+      invoice_id: str
+      items: tuple[SourceAttachmentItemResult, ...]
+      source_status: SourceStatus
+
+  ArchiveLookupInput:
+    identity: value
+    fields:
+      invoice_id: str
+      content_hash: str?
+
+  DurableAcceptanceQuery:
+    identity: value
+    fields:
+      invoice_id: str
+      content_hash: str?
+
+  SourceStatusQuery:
+    identity: value
+    fields:
+      invoice_id: str
+
+  AttachLocalSourceInput:
+    identity: value
+    fields:
+      invoice_id: str
+      files: tuple[LocalSourceFile, ...]
+      expected_sources: tuple[ContentReference, ...]
+    host_binds:
+      authorization: exact_operation_grant
+      actor: authenticated_principal
+      interaction_id: current_interaction
+
+  AcceptIncompleteSourceInput:
+    identity: value
+    description: >-
+      Agent-visible intent for the accepted IncompleteSourceAcceptance business
+      decision. Durable identity, actor and decision timestamp are host-bound so
+      callers cannot manufacture authority evidence.
+    fields:
+      card_revision: InvoiceCardRevisionReference
+      missing_source_references: tuple[ContentReference, ...]
+      reason: str
+    host_constructs: IncompleteSourceAcceptance
+
+  RecordSourceLossInput:
+    identity: value
+    description: >-
+      Agent-visible intent for the accepted SourceLossDecision business
+      decision. Durable identity, actor and decision timestamp are host-bound.
+    fields:
+      invoice_id: str
+      source_references: tuple[ContentReference, ...]
+      explanation: str?
+    host_constructs: SourceLossDecision
+
+policies:
+  authority:
+    rules:
+      - possession_of_agent_process_or_endpoint_does_not_imply_access
+      - every_invocation_requires_authenticated_principal
+      - every_invocation_requires_exact_capability_grant
+      - resource_scope_must_include_exact_invoice_target
+      - authorization_decision_is_host_owned_and_not_agent_input
+
+  archive_truth:
+    rules:
+      - accepted_card_revisions_are_immutable
+      - content_hash_identifies_exact_revision_content
+      - transport_delivery_never_implies_durable_acceptance
+      - missing_or_unverified_required_source_never_becomes_positive_acceptance
+      - source_loss_and_incomplete_source_history_remain_auditable
+
+  source_security:
+    accepted_media_types:
+      - image/jpeg
+      - image/png
+      - application/pdf
+    max_file_size_bytes: 52428800
+    require_content_signature_verification: true
+    trust_filename_or_declared_media_type: false
+    bounded_parsing_required: true
+    rules:
+      - filename_is_metadata_not_a_path
+      - caller_cannot_supply_storage_reference
+      - caller_cannot_supply_staging_or_final_path
+      - store_references_are_opaque_host_values
+      - symlink_traversal_device_and_non_regular_file_escape_fail_closed
+
+  source_atomicity:
+    rules:
+      - validate_stage_flush_reopen_and_hash_verify_before_committed_availability
+      - lock_exact_invoice_before_mutable_source_transition
+      - one_metadata_transaction_owns_journal_and_archive_mutation
+      - final_publication_is_atomic_and_content_addressed
+      - equivalent_concurrent_input_converges_on_one_replica
+      - conflicting_bytes_for_one_source_identity_cannot_both_commit
+      - committed_pending_publication_is_recovered_before_host_becomes_available
+      - unresolved_recovery_failure_blocks_host_startup
+
+  runtime_input:
+    rules:
+      - runtime_values_are_data_not_code
+      - only_declared_typed_capabilities_may_execute
+      - no_runtime_value_selects_sql_command_module_tool_or_filesystem_path
+      - generated_code_is_not_authority
+
+  disclosure:
+    default: deny
+    never_disclose:
+      - database_credentials
+      - source_vault_root
+      - storage_reference
+      - staging_reference
+      - final_reference
+      - raw_filesystem_path
+      - unrelated_invoice_rows
+      - host_credential_material
+
+capabilities:
+  invoice.archive.get:
+    derived_from: durable_archive.get_archived_invoice
+    input: ArchiveLookupInput
+    output: StoredInvoiceCardRevision
+    effects: []
+    requires:
+      - authenticated_principal
+      - grant:invoice.archive.get
+      - scope:exact_invoice
+      - accepted_archive_target_exists
+    disclosure:
+      allow:
+        - exact_accepted_card_revision
+        - accepted_archive_provenance
+      deny:
+        - source_vault_storage_reference
+        - unrelated_invoice_data
+        - credentials
+    audit:
+      required: true
+      record:
+        - principal
+        - capability
+        - invoice_id
+        - selected_content_hash
+        - result_digest
+
+  invoice.archive.verify_acceptance:
+    derived_from: durable_archive.verify_durable_acceptance
+    input: DurableAcceptanceQuery
+    output: DurableAcceptanceVerification
+    effects: []
+    requires:
+      - authenticated_principal
+      - grant:invoice.archive.verify_acceptance
+      - scope:exact_invoice
+    disclosure:
+      allow:
+        - acceptance_boolean
+        - required_source_ids
+        - verified_source_ids
+        - safe_evidence_reference
+      deny:
+        - source_vault_storage_reference
+        - raw_source_bytes
+        - credentials
+    audit:
+      required: true
+      record:
+        - principal
+        - capability
+        - invoice_id
+        - content_hash
+        - verification_result
+
+  invoice.source.status:
+    derived_from: durable_archive.get_source_status
+    input: SourceStatusQuery
+    output: SourceStatus
+    effects: []
+    requires:
+      - authenticated_principal
+      - grant:invoice.source.status
+      - scope:exact_invoice
+      - accepted_archive_target_exists
+    disclosure:
+      allow:
+        - source_identity_sets
+        - completeness
+        - loss_decision_ids
+      deny:
+        - source_vault_storage_reference
+        - raw_source_bytes
+        - raw_filesystem_path
+    audit:
+      required: true
+      record:
+        - principal
+        - capability
+        - invoice_id
+        - result_digest
+
+  invoice.source.attach:
+    derived_from: durable_archive.attach_local_source
+    input: AttachLocalSourceInput
+    output: SourceAttachmentBatchResult
+    effects:
+      - source_byte_write
+      - archive_source_evidence_write
+    requires:
+      - authenticated_principal
+      - grant:invoice.source.attach
+      - scope:exact_invoice
+      - accepted_archive_target_exists
+      - finite_file_size_policy
+      - verified_content_signature
+    deterministic_lowering:
+      - validate_declared_input
+      - resolve_exact_invoice_under_grant
+      - verify_expected_source_binding
+      - stage_bytes_in_host_vault
+      - reopen_and_verify_hash_and_size
+      - lock_invoice
+      - persist_publication_journal_and_source_transition
+      - commit_metadata
+      - atomically_publish_bytes
+      - reopen_and_verify_final_bytes
+      - return_per_file_result_and_source_status
+    disclosure:
+      allow:
+        - per_file_safe_result
+        - source_ids
+        - content_hashes
+        - resulting_source_status
+      deny:
+        - source_vault_storage_reference
+        - raw_filesystem_path
+        - database_identity
+        - credentials
+    audit:
+      required: true
+      record:
+        - principal
+        - capability
+        - invoice_id
+        - interaction_id
+        - input_content_digests
+        - effect_evidence
+        - result_digest
+
+  invoice.source.accept_incomplete:
+    derived_from: durable_archive.accept_incomplete_source_evidence
+    input: AcceptIncompleteSourceInput
+    output: SourceStatus
+    effects:
+      - archive_source_evidence_write
+    requires:
+      - authenticated_principal
+      - grant:invoice.source.accept_incomplete
+      - scope:exact_invoice
+      - exact_card_revision_exists
+      - missing_source_set_is_non_empty_and_current
+      - explicit_user_or_delegated_intent
+    host_binding:
+      actor: authenticated_principal
+      authorization: exact_operation_grant
+      identity: host_minted_acceptance_id
+      decided_at: host_clock
+    disclosure:
+      allow:
+        - resulting_source_status
+        - safe_decision_evidence_reference
+      deny:
+        - source_vault_storage_reference
+        - credentials
+    audit:
+      required: true
+      record:
+        - principal
+        - capability
+        - exact_card_revision
+        - missing_source_ids
+        - reason_digest
+        - decision_evidence
+
+  invoice.source.record_loss:
+    derived_from: durable_archive.record_source_loss
+    input: RecordSourceLossInput
+    output: SourceStatus
+    effects:
+      - archive_source_evidence_write
+    requires:
+      - authenticated_principal
+      - grant:invoice.source.record_loss
+      - scope:exact_invoice
+      - accepted_archive_target_exists
+      - affected_sources_are_missing_and_exact
+      - explicit_user_or_delegated_intent
+    host_binding:
+      actor: authenticated_principal
+      authorization: exact_operation_grant
+      identity: host_minted_decision_id
+      decided_at: host_clock
+    disclosure:
+      allow:
+        - resulting_source_status
+        - safe_decision_evidence_reference
+      deny:
+        - source_vault_storage_reference
+        - credentials
+    audit:
+      required: true
+      record:
+        - principal
+        - capability
+        - invoice_id
+        - affected_source_ids
+        - decision_evidence
+
+lowering_constraints:
+  semantic_surface_must_not_require:
+    - DurableArchiveService
+    - ArchiveUnitOfWork
+    - PostgresArchiveUnitOfWork
+    - SourceByteStore
+    - LocalFilesystemSourceByteStore
+    - FastAPI
+    - app.state
+    - RegistryClient
+    - PresuProClient
+    - HoldedGateway
+    - HttpxHoldedHttpClient
+  permitted_first_lowerings:
+    record_store: PostgreSQL
+    byte_vault: local_private_filesystem
+    transport:
+      - MCP
+      - local_tool
+      - IPC
+      - HTTP
+  rule: >-
+    A lowering may choose these mechanisms, but mechanism names are not part of
+    capability identity and may not increase authority or disclosure.
+
+experiment_boundaries:
+  cross_box_clients_allowed_in_cabinet: false
+  arbitrary_agent_sql_allowed: false
+  arbitrary_agent_code_allowed: false
+  generated_code_is_authority: false
+  raw_storage_references_agent_visible: false
+  archive_transfer_ingest_in_this_slice: false
+  archive_transfer_ingest_note: >-
+    Cross-node transfer ingestion is intentionally deferred because the accepted
+    classical signature contains transport-era replica evidence. It must be
+    re-expressed only after the cross-box authority/effect protocol is classified,
+    rather than copied into the box as a permanent VPS integration contract.

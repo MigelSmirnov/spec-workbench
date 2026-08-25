@@ -52,6 +52,25 @@ open(a.out, 'w', encoding='utf-8').write(json.dumps(r))
 """,
     )
     _write(
+        factory / "tools/run_spec_inspector_preflight.py",
+        """import argparse, hashlib, json
+p = argparse.ArgumentParser()
+p.add_argument('--project', required=True)
+p.add_argument('--spec', required=True)
+p.add_argument('--out', required=True)
+a = p.parse_args()
+raw = open(a.spec, 'rb').read()
+r = {
+    'status': 'PASS',
+    'summary': {'BLOCK': 0, 'WARN': 0, 'INFO': 0},
+    'spec_sha': 'sha256:' + hashlib.sha256(raw).hexdigest(),
+    'findings': [],
+    'exit_policy': {'exit_code': 0},
+}
+open(a.out, 'w', encoding='utf-8').write(json.dumps(r))
+""",
+    )
+    _write(
         factory / "tools/bootstrap_project.py",
         """import argparse, json, pathlib, shutil
 p = argparse.ArgumentParser()
@@ -90,6 +109,7 @@ def test_export_creates_canonical_spec_and_bound_handoff(
     factory = _fake_factory(tmp_path, standard)
     source = workbench_root / "examples/demo/global_spec.json"
     spec = {
+        "standard_version": 2,
         "contracts": {"main": "() -> None"},
         "module_functions": {"app": ["main"]},
         "imports": {"stdlib": [], "third_party": [], "internal": {}},
@@ -115,11 +135,76 @@ def test_export_creates_canonical_spec_and_bound_handoff(
     assert export_to_factory.main() == 0
     canonical = factory / "projects/demo/specs/base/global_spec.json"
     manifest_path = factory / "projects/demo/specs/working/spec_workbench_handoff.json"
+    admission_path = factory / "projects/demo/specs/working/spec_workbench_factory_admission.json"
+    lineage_path = factory / "projects/demo/specs/working/spec_editor_manifest.json"
     assert json.loads(canonical.read_text(encoding="utf-8")) == spec
+    admission = json.loads(admission_path.read_text(encoding="utf-8"))
+    codec_coverage = admission["codec_coverage"]
+    assert codec_coverage["status"] == "not_applicable"
+    assert codec_coverage["complete"] is True
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     assert manifest["schema_version"] == "spec_workbench_handoff.v1"
     assert manifest["source"]["spec_sha256"] == export_to_factory.sha256_file(canonical)
+    assert manifest["source"]["standard_version"] == 2
+    assert manifest["factory"]["standard_version"] == 2
     assert manifest["factory"]["validation_status"] == "PASS"
+    assert manifest["codec_coverage"] == codec_coverage
+    lineage = json.loads(lineage_path.read_text(encoding="utf-8"))
+    assert lineage["accepted"] is True
+    assert lineage["status"] == "pass"
+    assert lineage["verdict"] == "PASS"
+    assert lineage["producer"]["route"] == "spec_workbench_stage9"
+    assert lineage["inputs"]["standard_version"] == 2
+    assert lineage["inputs"]["codec_coverage"] == codec_coverage
+    assert lineage["change_summary"]["changed_modules"] == ["global"]
+    assert lineage["outputs"]["base_spec_sha256_after"] == export_to_factory.sha256_file(canonical)
+
+
+def test_export_blocks_when_authored_notes_are_missing_from_canonical_spec(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    real_workbench_root = Path(export_to_factory.__file__).resolve().parents[1]
+    standard = (real_workbench_root / "skills/spec-authoring/SPEC_STANDARD.md").read_text(encoding="utf-8")
+    workbench_root = tmp_path / "spec-workbench"
+    _write(workbench_root / "skills/spec-authoring/SPEC_STANDARD.md", standard)
+    factory = _fake_factory(tmp_path, standard)
+    case_root = workbench_root / "examples/cabinet-web-backend"
+    source = case_root / "global_spec.json"
+    _write(case_root / "80_notes.md", "find_invoice_duplicates: [BEHAVIOR] MUST apply = rules.invoice_duplicate_matching.\n")
+    _write_json(
+        source,
+        {
+            "standard_version": 2,
+            "contracts": {"find_invoice_duplicates": "() -> None"},
+            "module_functions": {"invoice_workspace": ["find_invoice_duplicates"]},
+            "notes": ["find_invoice_duplicates: [BEHAVIOR] MUST compare legacy signals."],
+        },
+    )
+    monkeypatch.setattr(export_to_factory, "__file__", str(workbench_root / "tools/export_to_factory.py"))
+    monkeypatch.setattr(
+        export_to_factory.notes_propagation,
+        "propagate",
+        lambda *args, **kwargs: {
+            "ready": False,
+            "findings": [{"severity": "block", "message": "canonical note is missing"}],
+        },
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "export_to_factory.py",
+            "--case",
+            "cabinet-web-backend",
+            "--project",
+            "demo",
+            "--factory-root",
+            str(factory),
+        ],
+    )
+
+    with pytest.raises(SystemExit, match="note propagation blocked export"):
+        export_to_factory.main()
 
 
 def test_export_blocks_standard_drift_before_project_creation(
@@ -131,7 +216,7 @@ def test_export_blocks_standard_drift_before_project_creation(
     _write(workbench_root / "skills/spec-authoring/SPEC_STANDARD.md", standard)
     factory = _fake_factory(tmp_path, "# incompatible standard\n")
     source = workbench_root / "examples/demo/global_spec.json"
-    _write_json(source, {})
+    _write_json(source, {"standard_version": 2})
     monkeypatch.setattr(export_to_factory, "__file__", str(workbench_root / "tools/export_to_factory.py"))
     monkeypatch.setattr(export_to_factory, "git_metadata", _clean_git_metadata)
     monkeypatch.setattr(
@@ -151,3 +236,33 @@ def test_export_blocks_standard_drift_before_project_creation(
     with pytest.raises(SystemExit, match="SPEC_STANDARD mismatch"):
         export_to_factory.main()
     assert not (factory / "projects/demo").exists()
+
+
+def test_export_blocks_note_drift_before_factory_admission(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    real_workbench_root = Path(export_to_factory.__file__).resolve().parents[1]
+    standard = (real_workbench_root / "skills/spec-authoring/SPEC_STANDARD.md").read_text(encoding="utf-8")
+    workbench_root = tmp_path / "spec-workbench"
+    _write(workbench_root / "skills/spec-authoring/SPEC_STANDARD.md", standard)
+    factory = _fake_factory(tmp_path, standard)
+    case_root = workbench_root / "examples/cabinet-web-backend"
+    source = case_root / "global_spec.json"
+    _write(case_root / "80_notes.md", "find_invoice_duplicates: [BEHAVIOR] MUST apply = rules.invoice_duplicate_matching.\n")
+    _write_json(source, {"standard_version": 2, "notes": ["find_invoice_duplicates: [BEHAVIOR] legacy"]})
+    monkeypatch.setattr(export_to_factory, "__file__", str(workbench_root / "tools/export_to_factory.py"))
+    monkeypatch.setattr(
+        export_to_factory.notes_propagation,
+        "propagate",
+        lambda *args, **kwargs: {
+            "ready": False,
+            "findings": [{"severity": "block", "message": "canonical note is missing"}],
+        },
+    )
+    monkeypatch.setattr(sys, "argv", [
+        "export_to_factory.py", "--case", "cabinet-web-backend", "--project", "demo",
+        "--factory-root", str(factory),
+    ])
+
+    with pytest.raises(SystemExit, match="note propagation blocked export"):
+        export_to_factory.main()

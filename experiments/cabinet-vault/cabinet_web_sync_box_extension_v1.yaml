@@ -1,0 +1,125 @@
+extension_id: cabinet_web_sync_box_extension.v1
+status: executable_candidate
+extends:
+  box_manifest: experiments/cabinet-vault/cabinet_backend_box_v0.yaml
+  box_id: cabinet.local.archive
+
+purpose: >-
+  Add the transport-independent cabinet-web-sync-v1 ingress capability without
+  reintroducing the deferred classical InvoiceTransferManifest/VPS transport
+  contract into the Cabinet box semantic surface.
+
+source_contract:
+  machine: experiments/cabinet-vault/cabinet_web_sync_contract_v1.yaml
+  producer: MigelSmirnov/Cabinet_web
+  reviewed_contract_fingerprints:
+    invoice_validation_py: f2337466024fe64cda27f9170d42f9c1673466b5
+    invoice_card_v1_schema_json: 25042abe5d0387671d836f4e39601b1e5d63be2e
+    invoice_service_py: c7649351f4c5e833d7a49fd4738f47042b27e417
+
+schemas:
+  CabinetWebInvoiceRevisionDelivery:
+    identity: value
+    fields:
+      contract_version: str
+      delivery_id: str
+      emitted_at: str
+      producer_repository: str
+      invoice_id: str
+      card_contract_version: int
+      card_status: str
+      card_content_hash: str
+      source_git_commit_sha: str
+      card_repository_path: str
+      base_backend_content_hash: str?
+      card_document: dict[str, object]
+  CabinetBackendInvoiceRevisionReceipt:
+    identity: value
+    fields:
+      contract_version: str
+      delivery_id: str
+      invoice_id: str
+      card_content_hash: str
+      source_git_commit_sha: str
+      outcome: str
+      accepted_at: str?
+      backend_current_content_hash: str?
+      error_code: str?
+
+capabilities:
+  invoice.archive.accept_revision:
+    input: CabinetWebInvoiceRevisionDelivery
+    output: CabinetBackendInvoiceRevisionReceipt
+    effects:
+      - archive_revision_write
+      - archive_source_expectation_write
+    requires:
+      - authenticated_principal
+      - grant:invoice.archive.accept_revision
+      - scope:exact_invoice
+      - cabinet_web_contract_fingerprint_verified
+      - exact_confirmed_card_validation
+      - canonical_card_hash_matches_delivery
+    deterministic_lowering:
+      - validate_closed_delivery_shape
+      - authorize_exact_invoice_under_synchronization_boundary
+      - verify_reviewed_Cabinet_web_contract_fingerprint
+      - validate_exact_confirmed_Card_with_reviewed_Cabinet_web_validator
+      - recompute_canonical_Card_hash
+      - enforce_delivery_id_idempotency
+      - enforce_base_revision_reconciliation
+      - persist_immutable_revision
+      - update_current_invoice_source_expectation_without_deleting_prior_revision
+      - append_acceptance_audit
+      - return_bounded_receipt
+    disclosure:
+      allow:
+        - revision_acceptance_receipt
+        - consumer_current_revision_hash
+      deny:
+        - database_identity
+        - storage_reference
+        - credentials
+        - unrelated_invoice_data
+
+implementation:
+  typed_models: experiments/cabinet-vault/tools/cabinet_web_revision_accept_models.py
+  executor: experiments/cabinet-vault/tools/cabinet_web_revision_accept_runtime.py
+  local_checkout_adapter: experiments/cabinet-vault/tools/cabinet_web_checkout_sync_adapter.py
+  record_provider: experiments/cabinet-vault/tools/postgres_record_kernel.py
+  authority_provider: experiments/cabinet-vault/tools/authority_kernel.py
+  typed_schema_provider: experiments/cabinet-vault/tools/typed_schema_kernel.py
+
+storage_projection:
+  immutable_revision_namespace: cabinet.invoice_revision
+  delivery_namespace: cabinet.web_sync_delivery
+  current_invoice_namespace: cabinet.invoice_source_state
+  rules:
+    - each_invoice_id_plus_content_hash_revision_is_preserved_immutably
+    - accepting_new_revision_never_deletes_prior_revision
+    - current_invoice_state_points_to_latest_explicitly_accepted_revision
+    - source_expectation_uses_Cabinet_web_source_id
+    - missing_exact_binary_hash_remains_null_upstream_expectation
+    - missing_exact_media_type_remains_null_upstream_expectation
+
+classical_transfer_boundary:
+  InvoiceTransferManifest_ingest_reenabled: false
+  reason: >-
+    cabinet-web-sync-v1 is a new exact Card-revision relation between autonomous
+    applications. It does not import the deferred classical VPS transfer manifest
+    and replica-evidence contract.
+
+real_data_canary_gate:
+  requires:
+    - one_confirmed_invoice_in_Cabinet_web_main
+    - exact_source_id
+    - exact_card_file_commit_sha
+    - source_bytes_available_locally
+    - pinned_contract_fingerprint_still_matches
+    - local_box_sync_grant_for_exact_invoice
+  sequence:
+    - build_delivery_from_Cabinet_web_checkout
+    - accept_revision_and_obtain_receipt
+    - attach_source_bytes_through_verified_adapter
+    - verify_Card_revision_unchanged
+    - verify_local_source_evidence_and_audit

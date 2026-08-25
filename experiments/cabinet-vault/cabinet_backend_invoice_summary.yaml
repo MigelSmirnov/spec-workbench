@@ -1,0 +1,157 @@
+experiment: cabinet_backend_invoice_summary
+version: 0
+status: exploratory
+
+source_case:
+  path: examples/cabinet-backend
+  product_boundary: 00_product.md
+  access_control_evidence: 01_models_local_access_control.md
+
+cabinet:
+  id: cabinet.local.archive
+  locality: local
+  trust_boundary: local_cabinet_backend
+  data_authority:
+    invoices: cabinet
+    source_artifacts: cabinet
+    work_object_identity: registry
+
+principal:
+  model: LocalServicePrincipal
+  principal_id: agent:local-example
+  required_status: active
+
+# This grant is conceptual. CABINET_V0 intentionally does not yet choose a
+# production token format or signing scheme.
+grant:
+  capabilities:
+    - invoice.summary
+  resource_scope:
+    invoice_owner: current_user
+  disclosure_scope:
+    allow:
+      - project_id
+      - invoice_count
+      - confirmed_total
+      - currency
+    deny:
+      - source_artifact_bytes
+      - raw_filesystem_paths
+      - postgres_credentials
+      - external_service_credentials
+  lifetime:
+    short_lived: true
+    single_use: true
+
+schemas:
+  InvoiceSummaryRequest:
+    fields:
+      project_id:
+        type: WorkObjectId
+      date_from:
+        type: Date
+        optional: true
+      date_to:
+        type: Date
+        optional: true
+
+  InvoiceSummary:
+    fields:
+      project_id:
+        type: WorkObjectId
+      invoice_count:
+        type: int
+      confirmed_total:
+        type: Decimal
+      currency:
+        type: str
+      evidence:
+        type: ExecutionEvidenceRef
+
+capabilities:
+  invoice.summary:
+    input: InvoiceSummaryRequest
+    output: InvoiceSummary
+    reads:
+      - confirmed invoice facts
+      - Cabinet-owned invoice-to-object assignment
+    does_not_read:
+      - reusable credentials
+      - unrestricted filesystem
+      - raw database connection
+    effects: []
+    preconditions:
+      - principal status is active
+      - grant contains invoice.summary
+      - project_id is inside the principal resource scope
+    invariants:
+      - immutable source artifacts are never rewritten
+      - only confirmed Cabinet interpretation contributes to confirmed_total
+      - cached Registry identity remains traceable to its source snapshot
+    disclosure:
+      allow:
+        - aggregate count
+        - aggregate confirmed total
+        - project identity
+        - currency
+      deny:
+        - original invoice files
+        - extraction attempt internals
+        - credentials
+        - storage paths
+    audit:
+      required: true
+      record:
+        - principal_id
+        - capability
+        - resource_scope
+        - policy_version
+        - input_digest
+        - result_digest
+        - occurred_at
+
+execution_request:
+  intent: summarize_confirmed_invoices_for_project
+  invoke:
+    capability: invoice.summary
+    args:
+      project_id: $user_selected_project
+      date_from: $optional_date_from
+      date_to: $optional_date_to
+  expected_effects: []
+  output: InvoiceSummary
+
+validation:
+  fail_closed_on:
+    - unknown_capability
+    - inactive_or_revoked_principal
+    - expired_or_replayed_grant
+    - resource_scope_expansion
+    - disclosure_scope_expansion
+    - undeclared_effect
+    - unknown_schema_version
+
+possible_lowerings:
+  - kind: deterministic_sql
+    note: execute aggregate inside the local archive without returning raw rows
+  - kind: sandboxed_generated_code
+    note: generated code receives only a scoped read interface and result builder
+  - kind: future_wasm
+    note: portable bounded computation against a cabinet host ABI
+
+result_boundary:
+  raw_invoice_rows_leave_cabinet: false
+  generated_code_is_authority: false
+  normative_evidence:
+    - accepted_execution_request
+    - grant_reference
+    - policy_version
+    - input_digest
+    - result_digest
+
+questions_exposed_by_spike:
+  - Which current SPEC_STANDARD contract fields belong to stable capability semantics versus application lowering?
+  - Should disclosure policy be first-class schema or remain classified rule data?
+  - How should capabilities address resource subsets without embedding storage query syntax?
+  - Which existing identity/lifecycle declarations can be reused unchanged?
+  - What is the smallest trusted cabinet host ABI needed for ephemeral execution?

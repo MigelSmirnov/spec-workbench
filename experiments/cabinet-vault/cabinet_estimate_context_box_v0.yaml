@@ -1,0 +1,125 @@
+manifest_version: box_contract.v0
+status: exploratory
+
+cabinet:
+  id: cabinet.local.estimate_context
+  product: Cabinet
+  slice: estimate_observation_acceptance
+  locality: local
+  trust_boundary: local_cabinet_host
+  description: >-
+    Cabinet-owned provider-agnostic contract for accepting an immutable estimate
+    observation. Cabinet names only the estimate meanings needed to preserve the
+    source observation. It does not embed a PresuPro client, endpoint, DTO, or
+    adapter, and it does not force plan/actual monetary-comparability semantics
+    into this generic observation boundary.
+
+source_baseline:
+  case: examples/cabinet-backend
+  accepted_models:
+    - PresuProEstimateObservation
+    - EstimateSnapshot
+  evidence:
+    - examples/cabinet-backend/60_model_closure_core.json
+    - examples/cabinet-backend/60_model_closure_support.json
+    - examples/cabinet-backend/60_contracts.json
+
+external_dependencies: []
+
+host_owned_fields:
+  fields:
+    - snapshot_id
+    - content_hash
+    - captured_at
+    - source_contract_version
+
+schemas:
+  EstimateObservationInput:
+    identity: value
+    fields:
+      source_estimate_id:
+        type: str
+        semantic: estimate.identity
+        authority: estimate.source.authority
+        mapping: exact
+      project_id:
+        type: str
+        semantic: estimate.project_reference
+        authority: estimate.source.authority
+        mapping: exact
+      source_updated_at:
+        type: datetime
+        semantic: estimate.source.updated_at
+        authority: estimate.source.authority
+        mapping: exact
+      status:
+        type: str
+        semantic: estimate.status
+        authority: estimate.source.authority
+        mapping: exact
+      locked:
+        type: bool
+        semantic: estimate.locked
+        authority: estimate.source.authority
+        mapping: exact
+      canonical_content:
+        type: str
+        semantic: estimate.canonical_content
+        authority: estimate.source.authority
+        mapping: exact
+      currency:
+        type: str
+        semantic: money.currency
+        authority: estimate.source.authority
+        mapping: exact
+
+  EstimateSnapshotAcceptance:
+    identity: entity
+    fields:
+      snapshot_id: str
+      source_estimate_id: str
+      project_id: str
+      source_updated_at: datetime
+      status: str
+      locked: bool
+      canonical_content: str
+      currency: str
+      content_hash: str
+      captured_at: datetime
+      source_contract_version: str
+
+capabilities:
+  estimate.observation.accept:
+    input: EstimateObservationInput
+    output: EstimateSnapshotAcceptance
+    effects:
+      - estimate_snapshot_write
+    requires:
+      - authenticated_principal
+      - grant:estimate.observation.accept
+    host_binding:
+      snapshot_id: host_minted_snapshot_id
+      content_hash: deterministic_canonical_content_hash
+      captured_at: host_clock
+      source_contract_version: observed_source_manifest_version
+    invariants:
+      - accepted_snapshot_is_immutable
+      - source_estimate_identity_is_preserved_exactly
+      - source_lineage_is_never_inferred_from_project_timestamp_name_or_similarity
+      - canonical_content_is_preserved_for_reproducibility
+      - currency_is_not_inferred
+      - plan_actual_item_amount_semantics_are_not_invented_at_observation_acceptance
+
+experiment_boundaries:
+  permanent_presupro_client_in_cabinet: false
+  permanent_presupro_adapter_in_cabinet: false
+  field_name_inference_allowed: false
+  type_only_mapping_allowed: false
+  currency_inference_allowed: false
+  plan_actual_monetary_basis_inference_allowed: false
+  note: >-
+    PresuPro monetary reconnaissance established EUR as an authoritative product
+    contract constant. The same reconnaissance did not establish one canonical
+    item-total meaning or one monetary basis suitable for EstimateItemSnapshot.total.
+    That unresolved semantic belongs to the plan/actual amount boundary, not to
+    generic estimate-observation acceptance.

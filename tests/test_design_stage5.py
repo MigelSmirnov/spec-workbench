@@ -5,6 +5,10 @@ from pathlib import Path
 import design_stage5
 
 
+ROOT = Path(__file__).resolve().parents[1]
+CABINET = ROOT / "examples/cabinet-backend"
+
+
 def _write(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text, encoding="utf-8")
@@ -150,3 +154,20 @@ def test_next_reports_complete_when_plan_is_closed(tmp_path: Path) -> None:
     assert payload["complete"] is True
     assert payload["next"] is None
     assert payload["summary"]["remaining"] == 0
+
+
+def test_current_cabinet_uses_closed_caller_vocabulary() -> None:
+    report = design_stage5.coverage(CABINET)
+    assert report["summary"]["invalid_refs"] == 0
+    assert all(not operation["invalid_callers"] for operation in report["operations"])
+    callers = [
+        caller
+        for operation in report["operations"]
+        for caller in operation["callers"]
+    ]
+    assert callers
+    assert all(
+        caller.startswith("module:") or caller.startswith("boundary:")
+        for caller in callers
+    )
+    assert not any(caller.startswith("adapter:") for caller in callers)

@@ -1,0 +1,124 @@
+contract_id: cabinet_web_source_media_lowering.v1
+status: verified_by_runtime_canary
+purpose: >-
+  Derive one exact local-box media type from source bytes without treating
+  Cabinet_web source.kind, filename, extension or caller-declared MIME as proof.
+  The result is disposable integration lowering, not a new Cabinet_web fact.
+
+source_context:
+  authority: Cabinet_web
+  available_facts:
+    - source.source_id
+    - source.kind
+    - source.file_ref
+    - source.file_status
+    - source.note
+  stable_identity_pass_through: source.source_id
+  non_authoritative_for_exact_media_identity:
+    - source.kind
+    - source.file_ref
+    - filename
+    - extension
+    - caller_declared_mime
+
+integration_input:
+  required:
+    - source_id
+    - content_bytes
+  forbidden_as_required_media_proof:
+    - filename
+    - source_kind
+    - extension
+    - caller_media_type
+
+accepted_parser_relations:
+  source: experiments/cabinet-vault/cabinet_backend_box_v0.yaml#policies.source_security.accepted_media_types
+  values:
+    - image/jpeg
+    - image/png
+    - application/pdf
+
+lowering:
+  operation: identify_exact_media_type
+  input:
+    - content_bytes
+  source_id_behavior: pass_through_outside_detector
+  implementation:
+    path: experiments/cabinet-vault/tools/bounded_media_identification.py
+    blob_sha: 19d2c6c66d90984fae59b0658fbb30320a95bea2
+  verified_parser_provider:
+    path: experiments/cabinet-vault/tools/bounded_content_validation_kernel.py
+    blob_sha: 4d236d1332935577d81c78b332e5082fb1e6ae91
+  algorithm:
+    - enumerate_only_configured_accepted_media_types
+    - run_existing_bounded_validator_for_each_candidate
+    - collect_parser_validated_successes
+    - zero_successes_reject
+    - more_than_one_success_reject_as_ambiguous
+    - exactly_one_success_returns_that_parser_evidence
+  caller_values_do_not_select_parser: true
+
+output:
+  evidence:
+    media_type:
+      semantic: source.bytes.parser_validated_media_type
+      authority: local_box_validation_evidence
+    content_hash:
+      semantic: source.bytes.sha256
+      authority: local_box_validation_evidence
+    size_bytes:
+      semantic: source.bytes.size
+      authority: local_box_validation_evidence
+    parser:
+      semantic: source.bytes.validation_parser
+      authority: local_box_validation_evidence
+  Card_mutation: forbidden
+
+composition_target:
+  capability: invoice.source.attach
+  relation: >-
+    The derived evidence.media_type populates LocalSourceFile.media_type for a
+    later attach invocation. The attach runtime still revalidates the bytes;
+    identification evidence does not bypass capability validation or authority.
+  source_identity: >-
+    expected_source_id remains the Cabinet_web source.source_id. Media detection
+    never creates or replaces source identity.
+
+runtime_binding_resolution:
+  status: PASS
+  previous_gap: >-
+    The original verified invoice.source.attach lowering required durable
+    expected_sources[source_id].media_type to equal LocalSourceFile.media_type even
+    when Cabinet_web did not own exact JPEG-versus-PNG identity.
+  resolution: >-
+    A disposable Cabinet_web adapter performs parser-backed media identification
+    first, then supplies the detected exact media type only for the current attach
+    invocation when the durable expected media type is null. Non-null durable media
+    expectations are never overridden. The existing attach runtime remains
+    unchanged and revalidates the bytes before effects.
+  adapter: experiments/cabinet-vault/tools/cabinet_web_source_attach_adapter.py
+  existing_verified_runtime_unmodified: true
+  runtime_evidence:
+    record: experiments/cabinet-vault/CABINET_WEB_ATTACH_CANARY_RUNTIME_EVIDENCE.md
+    workflow_run_id: 32507028221
+    workflow_head_sha: ca542b9b3dd60112f8cdd20c532f8a6f02c17d64
+    artifact_id: 9455627318
+    artifact_digest: sha256:1f7bcc1cabd2e8d4f58cb8310b915fc47944385d6f53d20d27e81a726b11c33e
+    result: PASS
+
+interop_effect:
+  finding: CW-MEDIA-001
+  exact_identification_design: RESOLVED
+  exact_identification_focused_tests: PASS
+  end_to_end_attach_binding: PASS
+  real_Cabinet_web_data_canary_allowed: true
+  real_Cabinet_web_data_canary_executed: false
+
+forbidden_fallbacks:
+  - map_photo_to_JPEG
+  - map_scan_to_PDF
+  - trust_filename_extension
+  - trust_caller_MIME
+  - magic_prefix_only_as_complete_validation
+  - choose_first_parser_when_multiple_succeed
+  - write_detected_media_type_into_confirmed_Card
