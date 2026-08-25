@@ -552,7 +552,7 @@ value
 
 Equal typed transport and application facts are interchangeable.
 
-## Model M74 — InvoiceMutationResult
+## Model M121 — InvoiceMutationResult
 
 Fields: `effect_id: str`, `revision: CardRevisionReference | None`, `status: str`, `replayed: bool`, `issues: tuple[ValidationIssue, ...]`, `safe_error_code: str | None`.
 
@@ -564,7 +564,7 @@ value
 
 Equal typed transport and application facts are interchangeable.
 
-## Model M75 — InvoicePackagePullCommand
+## Model M122 — InvoicePackagePullCommand
 
 Fields: `manifest_id: str`, `idempotency_key: str`.
 
@@ -576,7 +576,7 @@ value
 
 Equal typed transport and application facts are interchangeable.
 
-## Model M76 — InvoiceSearchQuery
+## Model M123 — InvoiceSearchQuery
 
 Fields: `text: str | None`, `status: str | None`, `date_from: date | None`, `date_to: date | None`, `provider_id: str | None`, `limit: int`, `cursor: str | None`.
 
@@ -588,7 +588,7 @@ value
 
 Equal typed transport and application facts are interchangeable.
 
-## Model M77 — InvoiceTransferReceiptResult
+## Model M124 — InvoiceTransferReceiptResult
 
 Fields: `issuance: InvoiceTransferIssuance`, `receipt: InvoiceTransferReceipt`, `recorded: bool`.
 
@@ -600,7 +600,7 @@ value
 
 Equal typed transport and application facts are interchangeable.
 
-## Model M78 — InvoiceTransferReconciliation
+## Model M125 — InvoiceTransferReconciliation
 
 Fields: `issuance: InvoiceTransferIssuance`, `receipt: InvoiceTransferReceipt | None`, `conflict: SynchronizationConflict | None`, `status: str`, `safe_error_code: str | None`.
 
@@ -612,7 +612,7 @@ value
 
 Equal typed transport and application facts are interchangeable.
 
-## Model M79 — InvoiceTransferReconciliationRequest
+## Model M126 — InvoiceTransferReconciliationRequest
 
 Fields: `issuance_id: str`, `manifest_hash: str`.
 
@@ -624,7 +624,7 @@ value
 
 Equal typed transport and application facts are interchangeable.
 
-## Model M80 — InvoiceValidationInput
+## Model M127 — InvoiceValidationInput
 
 Fields: `invoice: InvoiceCardV1`, `expected_revision: CardRevisionReference | None`.
 

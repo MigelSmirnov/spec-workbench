@@ -28,6 +28,10 @@ Fields: `invoice_id: str`, `card_version: int`, `content_hash: str`,
 
 value
 
+### Identity evidence
+
+Substitution: equal invoice id, contract version, content hash, status, and observation values are interchangeable. Continuity: the reference does not change; a different revision produces another value. Reciprocal with the accepted `cabinet_backend` boundary model.
+
 ## Model M75 — StoredInvoiceCardRevision
 
 Fields: `revision_id: str`, `reference: InvoiceCardRevisionReference`,
@@ -40,6 +44,10 @@ Fields: `revision_id: str`, `reference: InvoiceCardRevisionReference`,
 
 entity
 
+### Identity evidence
+
+Substitution: records with different invoice id or content hash are distinct even if projected fields match. Continuity: the issued revision keeps stable identity and is linked into predecessor and supersession history without mutation. Reciprocal with the accepted `cabinet_backend` boundary model.
+
 ## Model M76 — SourceBinaryReplica
 
 Fields: `source_id: str`, `node_id: str`, `storage_zone: str`,
@@ -50,6 +58,10 @@ Fields: `source_id: str`, `node_id: str`, `storage_zone: str`,
 ### Identity
 
 entity
+
+### Identity evidence
+
+Substitution: replicas on different nodes or zones are operationally distinct. Continuity: one replica identity persists while verification, retention, and deletion state change. Reciprocal with the accepted `cabinet_backend` boundary model.
 
 ## Model M77 — InvoiceSynchronization
 
@@ -62,6 +74,10 @@ Fields: `synchronization_id: str`, `invoice_id: str`, `source_node_id: str`,
 
 entity
 
+### Identity evidence
+
+Substitution: synchronization ids remain distinct transport processes even for the same invoice. Continuity: one synchronization keeps identity through transfer, uncertainty, delivery, failure, or cancellation. Reciprocal with the accepted `cabinet_backend` boundary model.
+
 ## Model M78 — ContentReference
 
 Fields: `content_id: str`, `content_hash: str`, `size_bytes: int`,
@@ -71,6 +87,10 @@ Fields: `content_id: str`, `content_hash: str`, `size_bytes: int`,
 
 value
 
+### Identity evidence
+
+Substitution: equal kind, id, hash, size, and media type identify the same immutable content. Continuity: content changes create another reference rather than mutating this value. Reciprocal with the accepted `cabinet_backend` boundary model.
+
 ## Model M79 — SynchronizationWorkSelection
 
 Fields: `invoice_id: str`, `manifest_id: str`, `source_node_id: str`,
@@ -79,6 +99,10 @@ Fields: `invoice_id: str`, `manifest_id: str`, `source_node_id: str`,
 ### Identity
 
 value
+
+### Identity evidence
+
+Substitution: equal obligation and endpoint facts select the same work. Continuity: a changed request or manifest produces another selection; no selection lifecycle is tracked. Reciprocal with the accepted `cabinet_backend` boundary model.
 
 ## Model M80 — VpsInvoiceTransferPackage
 
@@ -91,6 +115,10 @@ Fields: `synchronization: InvoiceSynchronization`,
 ### Identity
 
 value
+
+### Identity evidence
+
+Substitution: equal exact synchronization, manifest, card revision, replica, and observation facts are interchangeable package observations. Continuity: any changed part is another package; the envelope itself never mutates. Reciprocal with the accepted `cabinet_backend` boundary model.
 
 ## Model M17 — CabinetNodeIdentity
 
