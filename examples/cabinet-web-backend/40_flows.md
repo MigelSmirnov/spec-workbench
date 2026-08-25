@@ -19,7 +19,7 @@ the last complete Registry catalogue.
 `module:chatgpt_interaction` receives the authenticated plugin request,
 `module:capability_policy` resolves the exact closed read capability, and
 `module:access_control` authorizes it. Reads are owned by
-`module:card_workspace`, `module:invoice_workspace`,
+`module:card_workspace`, `module:invoice_catalogue`,
 `module:project_workspace`, and `module:registry_replica` according to their
 data authority.
 
@@ -33,9 +33,9 @@ data authority.
    `capability:card_workspace.search_provider_cards` and
    `capability:card_workspace.list_project_cards`; a derived Project view uses
    `capability:project_workspace.get_project_summary`.
-3. Invoice reads use `capability:invoice_workspace.search_invoices`,
-   `capability:invoice_workspace.get_invoice`, or
-   `capability:invoice_workspace.find_invoice_duplicates` without accepting a
+3. Invoice reads use `capability:invoice_catalogue.search_invoices`,
+   `capability:invoice_catalogue.get_invoice`, or
+   `capability:invoice_catalogue.find_invoice_duplicates` without accepting a
    duplicate candidate as a merge decision.
 4. Offline Registry context uses
    `capability:registry_replica.get_current_registry_catalogue` and preserves
@@ -69,8 +69,8 @@ pay, attach metadata to, or archive one Invoice.
 `module:capability_policy` for an exact catalogue entry through
 `capability:capability_policy.resolve_capability`, then
 uses `capability:access_control.authenticate_request` and
-`capability:access_control.authorize_capability`. Invoice meaning remains in
-`module:invoice_workspace`; canonical commits remain in `module:card_workspace`;
+`capability:access_control.authorize_capability`. Invoice reads belong to `module:invoice_catalogue`; Invoice meaning remains in
+`module:invoice_validation` and `module:invoice_lifecycle`; canonical commits remain in `module:card_workspace`;
 effect identity remains in `module:effect_journal`.
 
 ### Steps
@@ -79,9 +79,9 @@ effect identity remains in `module:effect_journal`.
    an unknown name is rejected before dispatch.
 2. `capability:chatgpt_interaction.prepare_chatgpt_proposal` converts model
    output into a review object, retaining missing and uncertain facts.
-3. `capability:invoice_workspace.prepare_invoice_draft`,
-   `capability:invoice_workspace.validate_invoice`, and
-   `capability:invoice_workspace.find_invoice_duplicates` produce typed facts,
+3. `capability:invoice_validation.prepare_invoice_draft`,
+   `capability:invoice_validation.validate_invoice`, and
+   `capability:invoice_catalogue.find_invoice_duplicates` produce typed facts,
    warnings, and duplicate candidates without mutation.
 4. Reads return immediately. A draft write requires a clear save request; a
    consequential effect proceeds only through
@@ -89,12 +89,12 @@ effect identity remains in `module:effect_journal`.
    target revision and warnings.
 5. `capability:effect_journal.begin_effect` establishes the principal-scoped
    request identity. The exact selected operation is one of
-   `capability:invoice_workspace.create_invoice_draft`,
-   `capability:invoice_workspace.update_invoice_draft`,
-   `capability:invoice_workspace.confirm_invoice`,
-   `capability:invoice_workspace.record_invoice_payment`,
-   `capability:invoice_workspace.attach_invoice_source_metadata`, or
-   `capability:invoice_workspace.archive_invoice`. It constructs a validated revision and
+   `capability:invoice_lifecycle.create_invoice_draft`,
+   `capability:invoice_lifecycle.update_invoice_draft`,
+   `capability:invoice_lifecycle.confirm_invoice`,
+   `capability:invoice_lifecycle.record_invoice_payment`,
+   `capability:invoice_lifecycle.attach_invoice_source_metadata`, or
+   `capability:invoice_lifecycle.archive_invoice`. It constructs a validated revision and
    `capability:card_workspace.commit_card_revision` performs the atomic expected-
    revision commit.
 6. `capability:effect_journal.commit_effect` records the logical result. After
@@ -113,7 +113,7 @@ never becomes a stored or confirmed fact.
 ### Errors
 
 `module:access_control` owns authentication/authorization refusal;
-`module:invoice_workspace` owns Invoice validation and lifecycle errors;
+`module:invoice_validation` owns Invoice validation errors and `module:invoice_lifecycle` owns lifecycle errors;
 `module:card_workspace` owns stale revision/storage commit errors;
 `module:effect_journal` owns idempotency conflicts and ambiguous effect state;
 `module:chatgpt_interaction` translates only safe, bounded results for ChatGPT.
@@ -177,7 +177,7 @@ handoff. Authentication and exact authorization belong to
 `capability:access_control.authenticate_request` and
 `capability:access_control.authorize_capability`. Handoff and byte custody belong
 to `module:source_custody`; HTTP/CSRF/output safety belongs to
-`module:web_gateway`; Invoice metadata remains in `module:invoice_workspace`.
+`module:web_gateway`; Invoice metadata remains in `module:invoice_lifecycle`.
 
 ### Steps
 
@@ -191,7 +191,7 @@ to `module:source_custody`; HTTP/CSRF/output safety belongs to
    bytes while consuming the handoff.
 4. If metadata must be linked to an Invoice revision,
    `capability:effect_journal.begin_effect` surrounds
-   `capability:invoice_workspace.attach_invoice_source_metadata`, followed by
+   `capability:invoice_lifecycle.attach_invoice_source_metadata`, followed by
    `capability:effect_journal.commit_effect`.
 5. `capability:chatgpt_interaction.report_composite_outcome` can report Card and
    custody results independently.
@@ -207,7 +207,7 @@ produce no false stored state and never imply local Backend acceptance.
 
 `module:web_gateway` translates HTTP/CSRF/output errors;
 `module:source_custody` owns handoff, media, hash, storage, and retrieval policy;
-`module:invoice_workspace` owns metadata-link validation; and
+`module:invoice_lifecycle` owns metadata-link validation; and
 `module:effect_journal` owns ambiguous metadata effects. No error reveals a
 storage path, credential, bearer, or active uploaded content.
 
@@ -255,10 +255,21 @@ storage layout, bearer values, secrets, or unbounded external text.
 
 The owner confirms one Invoice Card through the normal ChatGPT or Web UI flow.
 
+### Boundary
+
+`module:invoice_lifecycle` owns the confirmation transition and the producer
+edge that derives the working-set item and manifest from the committed
+revision. Canonical Card commits belong to `module:card_workspace`; verified
+source custody evidence belongs to `module:source_custody`; effect identity and
+idempotent replay belong to `module:effect_journal`; local discovery and package
+issuance belong to `module:invoice_exchange`, which reads the producer output
+and never derives it.
+
 ### Steps
 
-1. `module:invoice_workspace.confirm_invoice` commits the exact successor
-   revision and verified source membership under its existing effect boundary.
+1. `capability:invoice_lifecycle.confirm_invoice` commits the exact successor
+   revision through `capability:card_workspace.commit_card_revision` and verified
+   source membership under its existing effect boundary.
 2. In the same durable transition it creates or idempotently retains one
    immutable `InvoiceWorkingSetItem` and `InvoiceTransferManifest` for that
    revision. The manifest has exactly one `card_revisions` entry and immutable
@@ -266,7 +277,8 @@ The owner confirms one Invoice Card through the normal ChatGPT or Web UI flow.
 3. Any available `CardObjectAssignmentObservation` is pinned to the revision
    and later carried unchanged by `module:invoice_exchange`; no project is
    inferred from an Invoice ID or label.
-4. `discover_invoice_work` reads this durable producer output in stable order;
+4. `capability:invoice_exchange.discover_invoice_work` reads this durable
+   producer output in stable order;
    an empty working set is truthful only when no confirmed eligible Invoice
    exists.
 
@@ -275,6 +287,23 @@ The owner confirms one Invoice Card through the normal ChatGPT or Web UI flow.
 `confirm_invoice` success -> durable discovery item and immutable manifest;
 changed revision/source set -> new manifest; repeated confirmation -> one
 logical producer item; failed confirmation -> no discoverable transfer item.
+
+### Outcomes
+
+Success leaves exactly one committed confirmed revision, one immutable
+`InvoiceTransferManifest`, and one `InvoiceWorkingSetItem` for that revision,
+discoverable in stable order. Repeated confirmation of the same revision is
+idempotent and creates no second manifest or item. Failure at any step leaves
+no confirmed revision, manifest, or working-set item and no discoverable
+transfer work.
+
+### Errors
+
+`module:invoice_lifecycle` owns confirmation-binding, stale-revision,
+validation, and custody rejections; `module:card_workspace` owns revision
+conflicts; `module:source_custody` owns missing or unverified custody;
+`module:effect_journal` owns idempotency conflicts and unknown outcomes. No
+error fabricates custody, manifest, or working-set evidence.
 
 ## `flow:pull_invoice_package_to_local_backend`
 

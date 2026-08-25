@@ -161,3 +161,29 @@ The exact current slice SHA-256 values and per-module results are recorded in `8
 ## Stage 9 handoff condition
 
 Stage 8.1 is closed. Factory admission may proceed only against the clean committed source and must independently re-check assembly, current slice hashes, persistence closure, closure-completeness fuses, target identity, Factory compatibility, and the remaining Stage 9 checks.
+
+## Invoice module split (2026-08-26)
+
+`invoice_workspace` was accepted as one module because every operation was
+"about Invoice". Its accepted implementation had no private helper, no
+dependency shared by all functions, and 11 of 12 owned functions public; the
+generator collapsed it to stubs on the largest generation packet of the case.
+The State 3 cohesion test now splits it along its mechanisms:
+
+- `invoice_catalogue` — the revision-exact read model (`load_invoice_revisions`,
+  `parse_invoice_revision`) behind `search_invoices`, `get_invoice`,
+  `find_invoice_duplicates`; owns `ValidationRejectedError` as the lowest
+  Invoice module in dependency order.
+- `invoice_validation` — declared-order rule evaluation
+  (`evaluate_validation_checks`) behind `prepare_invoice_draft` and
+  `validate_invoice`; duplicate reuse goes through the retained catalogue.
+- `invoice_lifecycle` — the lifecycle state machine
+  (`require_mutation_authorization`, `load_expected_draft`,
+  `commit_invoice_successor`, `derive_transfer_records`) behind the six
+  mutations; depends on `card_workspace`, the catalogue and the validator.
+
+Every public note keeps its accepted behaviour and now names the internal
+mechanism it goes through, so the depth is declared rather than assumed. The
+three slices report zero blocks; `api`, `chatgpt_interaction` and `bootstrap`
+consume the three modules directly, without a façade.
+

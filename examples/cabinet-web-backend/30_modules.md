@@ -68,31 +68,32 @@ A small revision-safe surface hides every storage and canonicalization choice.
 Invoice and Project behavior depends on this boundary rather than on tables or
 files.
 
-## `invoice_workspace`
+## `invoice_catalogue`
 
 ### Owns
 
-Invoice draft preparation, type validation, duplicate-candidate discovery,
-confirmation lifecycle, payment recording, source-metadata attachment, archive
-semantics, M29 assignment-observation production for the exact Invoice
-revision, and the producer edge that atomically creates or idempotently retains
-the exact `InvoiceWorkingSetItem` and `InvoiceTransferManifest` consumed by
-local-node discovery.
+Revision-exact Invoice reads: enumerating current Invoice Card references,
+loading and parsing each canonical revision as `InvoiceCardV1`, indexing
+working-set availability for the read views, and duplicate-candidate discovery
+under `rules.invoice_duplicate_matching`. It owns `ValidationRejectedError`, the
+rejection type every Invoice module raises, because it is the lowest Invoice
+module in the dependency order.
 
 ### Knows
 
-M05, M07–M11 and their existing Cabinet meanings, plus the revision-safe commit
-port exposed by `card_workspace`.
+M05, M07–M11 read projections, `rules.invoice_workspace.card_type` and the
+duplicate-matching policy, and the read-only CabinetUnitOfWork query surface.
 
 ### Must not own
 
-Generic Card persistence, raw source custody, ChatGPT confirmation binding,
-authorization, effect idempotency, or local transfer packaging.
+Card commits, validation checks, lifecycle transitions, authorization, effect
+idempotency, source custody, or transfer packaging.
 
 ### Hides
 
-Invoice field normalization, calculated totals, duplicate signals, lifecycle
-transition rules, warnings, and construction of validated Card revisions.
+Unit-of-work open/begin/rollback sequencing for reads, canonical-JSON parsing,
+working-set status indexing, search filtering and ordering, cursor derivation,
+and duplicate signal normalization and ordering.
 
 ### Candidate public capabilities
 
@@ -100,8 +101,85 @@ transition rules, warnings, and construction of validated Card revisions.
 search_invoices
 get_invoice
 find_invoice_duplicates
+```
+
+### Depth assessment
+
+kind: deep
+hidden mechanism: the revision-exact Invoice read model — one rolled-back
+CabinetUnitOfWork per read, canonical revision parsing, working-set indexing,
+and duplicate-signal matching shared by every read capability.
+
+## `invoice_validation`
+
+### Owns
+
+Draft-proposal parsing and provenance checks, and the declared-order evaluation
+of `rules.invoice_workspace.validation_checks` producing ordered
+`ValidationIssue` tuples and the exact duplicate result. It performs no write.
+
+### Knows
+
+`InvoiceCardV1` field semantics, `rules.invoice_workspace.validation_*`,
+`rules.invoice_workspace.rejection_codes.validation`, and the catalogue's
+duplicate discovery capability.
+
+### Must not own
+
+Card commits, lifecycle transitions, authorization, revision reads other than
+duplicate discovery, or any persistence.
+
+### Hides
+
+Rule evaluation order, indexed field-path construction, issue ordering, and the
+proposal-to-invoice consistency checks.
+
+### Candidate public capabilities
+
+```text
 prepare_invoice_draft
 validate_invoice
+```
+
+### Depth assessment
+
+kind: deep
+hidden mechanism: declared-order rule evaluation over a parsed InvoiceCardV1
+with indexed issue construction, shared by proposal preparation and validation.
+
+## `invoice_lifecycle`
+
+### Owns
+
+Invoice lifecycle transitions draft → confirmed → archived and their successor
+revisions for payment recording and source-metadata attachment: authorization
+and confirmation-binding checks, exact-revision read-modify-write through the
+catalogue and validator, `CardRevisionCommitCommand` construction, and the
+atomic confirmation producer edge that creates or idempotently retains the exact
+`InvoiceWorkingSetItem` and `InvoiceTransferManifest` consumed by local-node
+discovery, including M29 assignment-observation production.
+
+### Knows
+
+M05, M07–M11 mutation semantics, `rules.invoice_workspace.lifecycle`,
+`rules.invoice_workspace.rejection_codes`, the manifest and working-set policy,
+and the revision-safe commit port exposed by `card_workspace`.
+
+### Must not own
+
+Generic Card persistence, raw source custody, ChatGPT confirmation binding,
+authorization policy, effect idempotency, read projections, validation rules,
+or local transfer packaging.
+
+### Hides
+
+Transition rules, successor derivation, expected-revision enforcement,
+manifest and working-set hashing, and the single-transaction sequencing that
+keeps Card, manifest, and working set atomic.
+
+### Candidate public capabilities
+
+```text
 create_invoice_draft
 update_invoice_draft
 confirm_invoice
@@ -112,8 +190,10 @@ archive_invoice
 
 ### Depth assessment
 
-The surface follows meaningful Invoice use cases while hiding their validation
-and lifecycle machinery. It does not expose generic field mutation.
+kind: deep
+hidden mechanism: the Invoice lifecycle state machine — exact-revision
+read-modify-write, validation before commit, and atomic Card/manifest/working-set
+commitment shared by every mutation capability.
 
 ## `project_workspace`
 

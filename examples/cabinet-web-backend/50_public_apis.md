@@ -453,7 +453,7 @@ Read-only.
 
 ### Callers
 
-`module:invoice_workspace`, `module:project_workspace`.
+`module:invoice_lifecycle`, `module:project_workspace`.
 
 ### Inputs
 
@@ -479,11 +479,11 @@ ValidationRejected, RevisionConflict, CanonicalHashConflict, PersistenceUnavaila
 
 Mutates canonical Card history.
 
-## `public_op:invoice_workspace.search_invoices`
+## `public_op:invoice_catalogue.search_invoices`
 
 ### Owner
 
-`module:invoice_workspace`.
+`module:invoice_catalogue`.
 
 ### Callers
 
@@ -513,11 +513,11 @@ InvalidSearch, SearchLimitExceeded.
 
 Read-only.
 
-## `public_op:invoice_workspace.get_invoice`
+## `public_op:invoice_catalogue.get_invoice`
 
 ### Owner
 
-`module:invoice_workspace`.
+`module:invoice_catalogue`.
 
 ### Callers
 
@@ -547,11 +547,11 @@ InvoiceNotFound, RevisionNotFound.
 
 Read-only.
 
-## `public_op:invoice_workspace.find_invoice_duplicates`
+## `public_op:invoice_catalogue.find_invoice_duplicates`
 
 ### Owner
 
-`module:invoice_workspace`.
+`module:invoice_catalogue`.
 
 ### Callers
 
@@ -581,11 +581,11 @@ InvoiceNotFound, InvalidDuplicateQuery.
 
 Read-only.
 
-## `public_op:invoice_workspace.prepare_invoice_draft`
+## `public_op:invoice_validation.prepare_invoice_draft`
 
 ### Owner
 
-`module:invoice_workspace`.
+`module:invoice_validation`.
 
 ### Callers
 
@@ -615,11 +615,11 @@ DraftPreparationRejected, UnsupportedInvoiceShape.
 
 Read-only proposal.
 
-## `public_op:invoice_workspace.validate_invoice`
+## `public_op:invoice_validation.validate_invoice`
 
 ### Owner
 
-`module:invoice_workspace`.
+`module:invoice_validation`.
 
 ### Callers
 
@@ -649,11 +649,11 @@ UnsupportedInvoiceVersion.
 
 Read-only.
 
-## `public_op:invoice_workspace.create_invoice_draft`
+## `public_op:invoice_lifecycle.create_invoice_draft`
 
 ### Owner
 
-`module:invoice_workspace`.
+`module:invoice_lifecycle`.
 
 ### Callers
 
@@ -683,11 +683,11 @@ ValidationRejected, IdempotencyConflict, PersistenceUnavailable.
 
 Creates canonical Invoice state.
 
-## `public_op:invoice_workspace.update_invoice_draft`
+## `public_op:invoice_lifecycle.update_invoice_draft`
 
 ### Owner
 
-`module:invoice_workspace`.
+`module:invoice_lifecycle`.
 
 ### Callers
 
@@ -717,11 +717,11 @@ InvoiceNotFound, NotDraft, RevisionConflict, ValidationRejected.
 
 Mutates canonical Invoice history.
 
-## `public_op:invoice_workspace.confirm_invoice`
+## `public_op:invoice_lifecycle.confirm_invoice`
 
 ### Owner
 
-`module:invoice_workspace`.
+`module:invoice_lifecycle`.
 
 ### Callers
 
@@ -751,11 +751,11 @@ RevisionConflict, ValidationRejected, ConfirmationRequired, WarningNotAcknowledg
 
 Mutates Invoice lifecycle.
 
-## `public_op:invoice_workspace.record_invoice_payment`
+## `public_op:invoice_lifecycle.record_invoice_payment`
 
 ### Owner
 
-`module:invoice_workspace`.
+`module:invoice_lifecycle`.
 
 ### Callers
 
@@ -785,11 +785,11 @@ InvoiceNotFound, RevisionConflict, InvalidPaymentEvidence.
 
 Mutates canonical Invoice history.
 
-## `public_op:invoice_workspace.attach_invoice_source_metadata`
+## `public_op:invoice_lifecycle.attach_invoice_source_metadata`
 
 ### Owner
 
-`module:invoice_workspace`.
+`module:invoice_lifecycle`.
 
 ### Callers
 
@@ -819,11 +819,11 @@ InvoiceNotFound, RevisionConflict, SourceIdentityConflict.
 
 Mutates Invoice metadata history.
 
-## `public_op:invoice_workspace.archive_invoice`
+## `public_op:invoice_lifecycle.archive_invoice`
 
 ### Owner
 
-`module:invoice_workspace`.
+`module:invoice_lifecycle`.
 
 ### Callers
 
@@ -1031,7 +1031,7 @@ Creates Project artifact state.
 
 ### Callers
 
-`module:chatgpt_interaction`, `module:invoice_workspace`, `module:project_workspace`, `module:source_custody`.
+`module:chatgpt_interaction`, `module:invoice_lifecycle`, `module:project_workspace`, `module:source_custody`.
 
 ### Inputs
 
@@ -1065,7 +1065,7 @@ Mutates effect journal only.
 
 ### Callers
 
-`module:chatgpt_interaction`, `module:invoice_workspace`, `module:project_workspace`, `module:source_custody`.
+`module:chatgpt_interaction`, `module:invoice_lifecycle`, `module:project_workspace`, `module:source_custody`.
 
 ### Inputs
 
