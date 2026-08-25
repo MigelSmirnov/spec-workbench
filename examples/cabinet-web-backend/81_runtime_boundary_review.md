@@ -103,6 +103,18 @@ also marked deterministic. The rebuilt `capability_policy` slice has two
 notes, zero blocks, and no remaining semantic ambiguity: representation of the
 immutable catalogue may vary, but additional lifecycle state may not.
 
+### Access-control temporal semantics re-review
+
+**Resolved.** Factory generation exposed a previously implicit temporal
+boundary: access control legitimately observes time for credential lifecycle
+timestamps and abuse throttling, but the specification did not distinguish
+wall-clock values from elapsed-time measurements. State 3 now assigns
+timezone-aware UTC lifecycle observations and monotonic throttle intervals to
+the module, while State 7 forbids naive datetimes and wall-clock-derived
+elapsed intervals. The rebuilt `access_control` slice retains ten contracts
+and thirteen notes with zero blocks; implementations may vary internally but
+cannot mix naive timestamps, aware persistence values, and throttle timing.
+
 ## Stage 8.1 semantic re-review
 
 All **18 assembled modules** were rebuilt from the final specification. Every structural module review reports **0 blocks and 0 review findings**. Deterministic modules (`models`, `cabinet_persistence`, `source_byte_store`, `api`) are `PASS`; behavioral modules are `PASS_INTERNAL_VARIATION` where their observable behavior is closed but internal algorithms/construction details may vary.

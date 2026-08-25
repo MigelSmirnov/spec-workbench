@@ -235,7 +235,8 @@ separation, abuse throttling, and bounded security audit events under A11.
 ### Knows
 
 M02 and M17 identities, fixed capability classes, credential status, channel,
-entity scope, current lifecycle state, and configured throttle limits.
+entity scope, current lifecycle state, configured throttle limits,
+timezone-aware UTC lifecycle timestamps, and monotonic throttle intervals.
 
 ### Must not own
 
@@ -246,7 +247,9 @@ secret recovery through public channels, or domain-specific decisions.
 
 One-way verifiers, timing-safe comparison, exact grant identity and idempotent
 provisioning, credential lifecycle transitions, authorization matrix
-evaluation, throttle counters, and secret-free audit details.
+evaluation, timezone-aware UTC observations for persisted or compared lifecycle
+timestamps, monotonic elapsed-time observations for throttle windows, throttle
+counters, and secret-free audit details.
 
 ### Candidate public capabilities
 
