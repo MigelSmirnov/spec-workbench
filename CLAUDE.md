@@ -18,12 +18,40 @@ If the user has already named a project, resolve it with:
 python tools/workbench.py show <project>
 ```
 
-Use the returned `canonical_ref`, `path`, and `read_order`. Only then inspect project files or switch branches.
-
 `PROJECT_INDEX.json` is the curated source of Spec Workbench project identity.
+Never substitute external plugin operations such as Cabinet/Registry/Factory
+`list_projects` for this repository command.
 
-`python tools/workbench.py status` is only for explicit repository/index diagnostics. Do not use exhaustive branch scanning for normal project discovery.
+## STOP: ask the common authoring pipeline what comes next
 
-Never substitute external plugin operations such as Cabinet/Registry/Factory `list_projects` for this repository command.
+After the project is resolved, do **not** reconstruct the design-state workflow
+from filenames, search for project-local tooling, or choose a gate from memory.
+Run:
 
-After project resolution, follow `AGENTS.md` and any project-local `AGENTS.md` for design methodology and change rules.
+```bash
+python tools/authoring.py next <project> --json
+```
+
+The authoring CLI resolves the project's canonical ref, materializes it for
+read-only deterministic inspection, and returns the first not-ready authoring
+phase plus its gate/findings.
+
+The machine source of truth for ordering is:
+
+```text
+skills/spec-authoring/authoring_sequence.json
+```
+
+The transport-neutral API is `tools/authoring_pipeline.py`. Future MCP wrappers
+must call that same API; they must not implement a second authoring sequence.
+
+The generic pipeline currently promoted to `main` covers State 0 through State
+5 and the explicit State 2 -> State 3 ownership trace. It intentionally stops at
+`post_state5_toolchain` until the mature Cabinet-derived State 6-9 tools have
+been stripped of project-specific policy and promoted safely.
+
+`python tools/workbench.py status` is only for explicit repository/index
+diagnostics. Do not use exhaustive branch scanning for normal project discovery.
+
+After pipeline resolution, follow `AGENTS.md` and any project-local `AGENTS.md`
+for semantic design and change rules.
