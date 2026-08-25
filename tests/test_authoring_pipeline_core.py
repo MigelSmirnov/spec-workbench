@@ -39,10 +39,26 @@ def test_empty_case_routes_to_state0(tmp_path: Path):
     result = design_authoring_next.next_step(tmp_path)
     assert result["phase"] == "state0_product_frame"
     assert result["blocked"] is False
+    assert "--json" not in result["action"]["args"]  # design_index emits JSON by default
 
 
-def test_state0_then_missing_models_routes_to_state1(tmp_path: Path, monkeypatch):
+def test_product_frame_without_state1_remains_manual_state0(tmp_path: Path, monkeypatch):
     (tmp_path / "00_product.md").write_text("# State 0 — Product frame\n", encoding="utf-8")
+    monkeypatch.setattr(
+        design_authoring_next.design_lint,
+        "lint_project",
+        lambda project, state: SimpleNamespace(
+            summary=SimpleNamespace(models=0, decisions=0, errors=0, warnings=0)
+        ),
+    )
+    result = design_authoring_next.next_step(tmp_path)
+    assert result["phase"] == "state0_product_frame"
+    assert result["summary"] == {"manual_review_required": True}
+
+
+def test_started_state1_without_models_routes_to_state1(tmp_path: Path, monkeypatch):
+    (tmp_path / "00_product.md").write_text("# State 0 — Product frame\n", encoding="utf-8")
+    (tmp_path / "10_models.md").write_text("# State 1 — Models\n", encoding="utf-8")
     monkeypatch.setattr(
         design_authoring_next.design_lint,
         "lint_project",
