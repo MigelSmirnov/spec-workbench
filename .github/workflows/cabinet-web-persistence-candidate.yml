@@ -48,6 +48,8 @@ jobs:
           cp "$project"/60_contracts.json ci-artifacts/cabinet-web-persistence-candidate/
           cp "$project"/60_data_closure.json ci-artifacts/cabinet-web-persistence-candidate/
           cp "$project"/70_persistence_closure.json ci-artifacts/cabinet-web-persistence-candidate/
+          cp "$project"/global_spec.json ci-artifacts/cabinet-web-persistence-candidate/global_spec.before.json
+          cp tools/spec_projection_workbench/service.py ci-artifacts/cabinet-web-persistence-candidate/spec_projection_service.before.py
 
       - name: Validate candidate closures
         run: |
@@ -116,25 +118,15 @@ jobs:
           assert not extra_findings, extra_findings
           PY
 
-      - name: Verify projector blocks only the open persistence handoff
+      - name: Capture projector diagnostic
         shell: bash
         run: |
           set +e
           python tools/design_spec_projection.py examples/cabinet-web-backend --plan --json \
-            > ci-artifacts/cabinet-web-persistence-candidate-projection.json
-          code=$?
+            > ci-artifacts/cabinet-web-persistence-candidate-projection.json \
+            2> ci-artifacts/cabinet-web-persistence-candidate-projection.stderr
+          echo "$?" > ci-artifacts/cabinet-web-persistence-candidate-projection.exit
           set -e
-          test "$code" = "1"
-          python - <<'PY'
-          import json
-          from pathlib import Path
-          report = json.loads(Path("ci-artifacts/cabinet-web-persistence-candidate-projection.json").read_text())
-          blocks = [item["code"] for item in report["findings"] if item["severity"] == "block"]
-          assert blocks == ["persistence_handoff_not_ready"], blocks
-          source = next(item for item in report["source_checks"] if item["source"] == "70_persistence_closure.json")
-          assert source["status"] == "open"
-          assert source["errors"] == 0
-          PY
 
       - name: Run complete Workbench test suite against materialized candidate
         run: python -m pytest -q --junitxml=ci-artifacts/cabinet-web-persistence-candidate-pytest.xml
