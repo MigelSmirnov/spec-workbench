@@ -42,6 +42,17 @@ The mature local `cabinet-backend` was used only as an E2E-tested structural pre
 
 **Resolved.** `bootstrap` is now a first-class assembled module with the exact `create_cabinet_web_app() -> FastAPI` contract and a State 7 orchestration constraint. It is the only boundary allowed to read protected deployment configuration and construct the concrete PostgreSQL/filesystem/runtime graph.
 
+### Factory emitter ownership re-review
+
+**Resolved.** `PostgresCabinetUnitOfWorkFactory` is owned by `bootstrap`, which
+already owns protected configuration and construction of the operation-scoped
+PostgreSQL adapter. The deterministic `cabinet_persistence` emitter target owns
+only `create_cabinet_schema` and `PostgresCabinetUnitOfWork`, so regeneration
+cannot erase composition-root callables. Structural review reports zero
+findings for both changed slices. `cabinet_persistence` remains `PASS` and
+`bootstrap` remains `PASS_INTERNAL_VARIATION` because only private construction
+details vary.
+
 ## Stage 8.1 semantic re-review
 
 All **18 assembled modules** were rebuilt from the final specification. Every structural module review reports **0 blocks and 0 review findings**. Deterministic modules (`models`, `cabinet_persistence`, `source_byte_store`, `api`) are `PASS`; behavioral modules are `PASS_INTERNAL_VARIATION` where their observable behavior is closed but internal algorithms/construction details may vary.
