@@ -55,6 +55,7 @@ def _project(tmp_path):
             "alpha": ["old", "OldType", "KeepError"],
             "models": [],
         },
+        "imports": {"stdlib": [], "third_party": [], "internal": {"models": []}},
         "function_order": ["old", "OldType.run"],
     }
     (project / "global_spec.json").write_text(
@@ -156,6 +157,41 @@ def test_plan_projects_registered_surfaces_and_preserves_unowned_rules(
     }
     assert projected["function_order"] == ["new", "Thing.__init__", "Thing.run"]
     assert projected["module_functions"]["alpha"] == ["KeepError", "new", "Thing"]
+
+
+def test_model_closure_projects_new_model_ownership(tmp_path, monkeypatch) -> None:
+    project = _project(tmp_path)
+    current = json.loads((project / "global_spec.json").read_text(encoding="utf-8"))
+    current["models"] = {"ExistingRecord": {"fields": {"id": "str"}}}
+    current["module_functions"]["models"] = ["ExistingRecord"]
+    current["imports"]["internal"]["models"] = ["ExistingRecord"]
+    (project / "global_spec.json").write_text(
+        json.dumps(current, indent=2) + "\n", encoding="utf-8"
+    )
+    (project / "60_model_closure_runtime.json").write_text(
+        json.dumps(
+            {
+                "schema_version": "spec_workbench_model_closure.v1",
+                "status": "closed",
+                "models": {"NewRecord": {"fields": {"value": "str"}}},
+            }
+        ),
+        encoding="utf-8",
+    )
+    _patch_ready_sources(monkeypatch)
+
+    _, projected, findings, _ = service._project(project)
+
+    assert findings == []
+    assert projected["models"]["NewRecord"] == {"fields": {"value": "str"}}
+    assert projected["module_functions"]["models"] == [
+        "ExistingRecord",
+        "NewRecord",
+    ]
+    assert projected["imports"]["internal"]["models"] == [
+        "ExistingRecord",
+        "NewRecord",
+    ]
 
 
 def test_open_persistence_handoff_blocks_projection(tmp_path, monkeypatch) -> None:

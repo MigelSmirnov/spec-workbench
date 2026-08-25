@@ -64,6 +64,14 @@ ownership boundary, or business behavior changed. Rebuilt structural reviews
 for all six affected slices report zero findings. Their current hashes are
 recorded in `81_module_review_status.json`.
 
+### Deterministic model ownership re-review
+
+**Resolved.** The 13 persistence/runtime records introduced by the closed model
+closure are now projected into both `module_functions.models` and
+`imports.internal.models`. This assigns their unique generation owner and
+exports the complete deterministic model surface without changing any model
+shape. The rebuilt `models` slice reports zero findings and remains `PASS`.
+
 ## Stage 8.1 semantic re-review
 
 All **18 assembled modules** were rebuilt from the final specification. Every structural module review reports **0 blocks and 0 review findings**. Deterministic modules (`models`, `cabinet_persistence`, `source_byte_store`, `api`) are `PASS`; behavioral modules are `PASS_INTERNAL_VARIATION` where their observable behavior is closed but internal algorithms/construction details may vary.

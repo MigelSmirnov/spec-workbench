@@ -231,6 +231,41 @@ def _sync_module_functions(
     return result
 
 
+def _sync_model_ownership(
+    module_functions: dict[str, list[str]], models: Any
+) -> dict[str, list[str]]:
+    if not isinstance(models, dict):
+        raise SpecProjectionError("global_spec.models must be an object")
+    result = copy.deepcopy(module_functions)
+    owned = result.setdefault("models", [])
+    for name in models:
+        if not isinstance(name, str) or not name:
+            raise SpecProjectionError("global_spec.models contains an invalid model name")
+        if name not in owned:
+            owned.append(name)
+    return result
+
+
+def _sync_model_exports(imports: Any, models: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(imports, dict):
+        raise SpecProjectionError("global_spec.imports must be an object")
+    result = copy.deepcopy(imports)
+    internal = result.get("internal")
+    if not isinstance(internal, dict):
+        raise SpecProjectionError("global_spec.imports.internal must be an object")
+    exports = internal.setdefault("models", [])
+    if not isinstance(exports, list) or not all(
+        isinstance(symbol, str) for symbol in exports
+    ):
+        raise SpecProjectionError(
+            "global_spec.imports.internal.models must be a string list"
+        )
+    for name in models:
+        if name not in exports:
+            exports.append(name)
+    return result
+
+
 def _finding(
     severity: str,
     code: str,
@@ -470,6 +505,14 @@ def _project(project: Path) -> tuple[dict[str, Any], dict[str, Any], list[dict[s
             current_contracts,
             handoff_contracts,
         )
+        projected_models = projected.get("models")
+        if projected_models is not None:
+            projected["module_functions"] = _sync_model_ownership(
+                projected["module_functions"], projected_models
+            )
+            projected["imports"] = _sync_model_exports(
+                current.get("imports"), projected_models
+            )
 
     persistence_artifacts = _phase_artifacts(
         sequence, "deterministic_persistence_backend_closure"
@@ -584,6 +627,7 @@ def build_plan(project: Path) -> dict[str, Any]:
         "config",
         "contracts",
         "function_order",
+        "imports.internal",
         "module_functions",
         "module_order",
         "module_paths",
