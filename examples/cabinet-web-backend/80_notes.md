@@ -144,7 +144,7 @@ resolve_local_node_principal: [RETURN_SHAPE] MUST return one CabinetNodeIdentity
 
 ## Runtime service and stream type closure
 
-CapabilityPolicy.__init__: [DEPENDENCY_BOUNDARY] MUST initialize only the immutable closed capability catalogue and MUST NOT load credentials, persistence, or dynamic operation names.
+CapabilityPolicy.__init__: [DEPENDENCY_BOUNDARY] MUST initialize only the immutable closed capability catalogue and MUST NOT load credentials, persistence, dynamic operation names, read a wall clock, or retain an initialization timestamp or any other clock-derived state.
 AccessControlService.__init__: [SECURITY_BOUNDARY] MUST retain the supplied per-operation CabinetUnitOfWork factory and protected credential pepper without retaining plaintext presented credentials; MUST NOT receive a database URL, share an active transaction, construct adapters, or read environment variables.
 CardWorkspace.__init__: [DEPENDENCY_BOUNDARY] MUST retain the supplied per-operation CabinetUnitOfWork factory for durable Card revision state and initialize no transport, credential policy, database connection, or environment reader.
 ChatGptInteractionService.__init__: [DEPENDENCY_BOUNDARY] MUST retain only the five explicit application services required for proposal, confirmation, and composite outcomes, with no generic dispatcher.

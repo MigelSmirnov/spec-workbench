@@ -91,6 +91,18 @@ closure are now projected into both `module_functions.models` and
 exports the complete deterministic model surface without changing any model
 shape. The rebuilt `models` slice reports zero findings and remains `PASS`.
 
+### Capability policy construction re-review
+
+**Resolved.** Factory generation exposed an impermissible internal variation:
+`CapabilityPolicy.__init__` invented an initialization timestamp after
+`datetime` entered its type context through `CabinetPrincipal`. State 3 now
+forbids wall-clock access and clock-derived state for this module, State 6
+names catalogue-only construction as the constructor purpose, and State 7
+contains an explicit forbidden-action constraint. The assembled contract is
+also marked deterministic. The rebuilt `capability_policy` slice has two
+notes, zero blocks, and no remaining semantic ambiguity: representation of the
+immutable catalogue may vary, but additional lifecycle state may not.
+
 ## Stage 8.1 semantic re-review
 
 All **18 assembled modules** were rebuilt from the final specification. Every structural module review reports **0 blocks and 0 review findings**. Deterministic modules (`models`, `cabinet_persistence`, `source_byte_store`, `api`) are `PASS`; behavioral modules are `PASS_INTERNAL_VARIATION` where their observable behavior is closed but internal algorithms/construction details may vary.

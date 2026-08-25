@@ -167,7 +167,8 @@ idempotency, and confirmation.
 ### Must not own
 
 Business operation implementations, dynamic routing, arbitrary operation
-names, credentials, transport parsing, or Card state.
+names, credentials, transport parsing, Card state, wall-clock access,
+initialization timestamps, or any other clock-derived state.
 
 ### Hides
 
