@@ -422,7 +422,7 @@
     "derive_transfer_records: [ORCHESTRATION] MUST call load_source_custody on unit_of_work for invoice.source and require custody_status = rules.invoice_workspace.stored_custody_status with non-null content, construct SourceContentReference from custody.content and ContentReference with content_id=source_id, construct the single InvoiceCardRevisionReference from committed, set generated_at to committed.observed_at, hash canonical JSON of exactly = rules.invoice_workspace.manifest_hash_fields with = rules.invoice_workspace.manifest_hash_algorithm, and derive manifest_id and working_set_id from = rules.invoice_workspace.manifest_id_prefix and = rules.invoice_workspace.working_set_id_prefix plus that hash.",
     "derive_transfer_records: [RETURN_SHAPE] MUST return the constructed InvoiceTransferManifest with = rules.invoice_workspace.manifest_version and the InvoiceWorkingSetRecord with status = rules.invoice_workspace.working_set_status and released_at=None; custody failure raises ValidationRejectedError with = rules.invoice_workspace.rejection_codes.source_custody and nothing is inserted here.",
     "search_invoices: [ORCHESTRATION] MUST open, begin, and finally roll back one CabinetUnitOfWork; call list_current_card_references_by_type with = rules.invoice_workspace.card_type, load and parse every returned reference through load_invoice_revisions, and separately index list_available_working_set_records for = rules.invoice_workspace.working_set_status by revision before building views; it MUST NOT call a mutation.",
-    "search_invoices: [DETERMINISM_OR_ORDERING] MUST filter parsed Cards by exact query.status, inclusive issue_date bounds, supplier tax_id for query.provider_id, and casefolded substring query.text over invoice_number and supplier values; order by issue_date descending with missing last, then reference.card_id and reference.content_hash, resume strictly after the item whose content_hash equals query.cursor, and emit at most query.limit items.",
+    "search_invoices: [DETERMINISM_OR_ORDERING] MUST filter parsed Cards by exact query.status, inclusive issue_date bounds, supplier.tax_id for query.provider_id, and casefolded substring query.text over invoice_number and the supplier name, tax_id, email, phone and address; order by issue_date descending with missing last, then reference.card_id and reference.content_hash, resume strictly after the item whose content_hash equals query.cursor, and emit at most query.limit items.",
     "search_invoices: [RETURN_SHAPE] MUST construct each InvoiceCardView with the loaded reference, parsed Card, source_status = invoice.source.file_status, and synchronization_status = the matching working-set status or = rules.invoice_workspace.synchronization_unavailable_status; next_cursor is the final emitted content_hash only when more filtered items remain, otherwise None.",
     "get_invoice: [ORCHESTRATION] MUST open, begin, and finally roll back one CabinetUnitOfWork; use load_current_card_reference(invoice_id) only when content_hash is None, then load_card_revision with the resolved card_id and content_hash, parse it through parse_invoice_revision, require the reference card_type and the parsed id to match = rules.invoice_workspace.card_type and invoice_id, and never substitute another revision.",
     "get_invoice: [RETURN_SHAPE] MUST construct InvoiceCardView from the exact stored reference and parsed Card, set source_status from invoice.source.file_status, and derive synchronization_status only from a list_available_working_set_records result whose revision equals the reference, falling back to = rules.invoice_workspace.synchronization_unavailable_status; any missing or malformed record raises ValidationRejectedError with = rules.invoice_workspace.rejection_codes.not_found.",
@@ -772,11 +772,11 @@
         "issue_date": "date | None",
         "due_date": "date | None",
         "currency": "str",
-        "supplier": "dict[str, str | None]",
-        "buyer": "dict[str, str | None]",
-        "object_context": "dict[str, str | None]",
+        "supplier": "InvoiceParty",
+        "buyer": "InvoiceParty",
+        "object_context": "InvoiceObjectContext",
         "lines": "tuple[InvoiceCardLine, ...]",
-        "totals": "dict[str, Decimal]",
+        "totals": "InvoiceTotals",
         "payment": "InvoicePayment",
         "source": "CardSource",
         "created_by": "ActorReference",
@@ -2070,6 +2070,31 @@
         "status": "str",
         "released_at": "datetime"
       }
+    },
+    "InvoiceParty": {
+      "identity": "value",
+      "fields": {
+        "name": "str",
+        "tax_id": "str | None",
+        "email": "str | None",
+        "phone": "str | None",
+        "address": "str | None"
+      }
+    },
+    "InvoiceTotals": {
+      "identity": "value",
+      "fields": {
+        "net_total": "Decimal",
+        "tax_total": "Decimal",
+        "gross_total": "Decimal"
+      }
+    },
+    "InvoiceObjectContext": {
+      "identity": "value",
+      "fields": {
+        "object_card_id": "str | None",
+        "label": "str | None"
+      }
     }
   },
   "imports": {
@@ -2237,7 +2262,10 @@
         "RegistryCataloguePublicationRecord",
         "RegistryCatalogueCurrentSelector",
         "BackupRestoreDrillRecord",
-        "VpsReleaseEvidence"
+        "VpsReleaseEvidence",
+        "InvoiceParty",
+        "InvoiceTotals",
+        "InvoiceObjectContext"
       ],
       "capability_policy": [
         "resolve_capability",
@@ -3051,7 +3079,10 @@
       "RegistryCataloguePublicationRecord",
       "RegistryCatalogueCurrentSelector",
       "BackupRestoreDrillRecord",
-      "VpsReleaseEvidence"
+      "VpsReleaseEvidence",
+      "InvoiceParty",
+      "InvoiceTotals",
+      "InvoiceObjectContext"
     ],
     "capability_policy": [
       "resolve_capability",
