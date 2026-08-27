@@ -98,7 +98,7 @@ Equal typed transport and application facts are interchangeable.
 
 ## Model M36 — ArchiveInvoiceCommand
 
-Fields: `invoice_id: str`, `expected_revision: CardRevisionReference`, `authorization: AuthorizationDecision`, `confirmation: ConfirmedEffectAuthorization`, `effect_id: str`, `actor: ActorReference`.
+Fields: `invoice_id: str`, `expected_revision: CardRevisionReference`, `confirmation: ConfirmedEffectAuthorization`, `effect_id: str`, `actor: ActorReference`.
 
 ### Identity
 
@@ -110,7 +110,7 @@ Equal typed transport and application facts are interchangeable.
 
 ## Model M37 — AttachInvoiceSourceCommand
 
-Fields: `invoice_id: str`, `expected_revision: CardRevisionReference`, `source: CardSource`, `authorization: AuthorizationDecision`, `effect_id: str`, `actor: ActorReference`.
+Fields: `invoice_id: str`, `expected_revision: CardRevisionReference`, `source: CardSource`, `effect_id: str`, `actor: ActorReference`.
 
 ### Identity
 
@@ -338,7 +338,7 @@ Equal typed transport and application facts are interchangeable.
 
 ## Model M56 — ConfirmInvoiceCommand
 
-Fields: `invoice_id: str`, `expected_revision: CardRevisionReference`, `authorization: AuthorizationDecision`, `confirmation: ConfirmedEffectAuthorization`, `effect_id: str`, `actor: ActorReference`.
+Fields: `invoice_id: str`, `expected_revision: CardRevisionReference`, `confirmation: ConfirmedEffectAuthorization`, `effect_id: str`, `actor: ActorReference`.
 
 ### Identity
 
@@ -362,7 +362,7 @@ Equal typed transport and application facts are interchangeable.
 
 ## Model M58 — CreateInvoiceDraftCommand
 
-Fields: `draft: InvoiceDraftProposal`, `authorization: AuthorizationDecision`, `effect_id: str`, `idempotency_key: str`, `actor: ActorReference`.
+Fields: `draft: InvoiceDraftProposal`, `effect_id: str`, `idempotency_key: str`, `actor: ActorReference`.
 
 ### Identity
 
@@ -794,7 +794,7 @@ Equal typed transport and application facts are interchangeable.
 
 ## Model M94 — RecordInvoicePaymentCommand
 
-Fields: `invoice_id: str`, `expected_revision: CardRevisionReference`, `payment_json: str`, `authorization: AuthorizationDecision`, `effect_id: str`, `actor: ActorReference`.
+Fields: `invoice_id: str`, `expected_revision: CardRevisionReference`, `payment_json: str`, `effect_id: str`, `actor: ActorReference`.
 
 ### Identity
 
@@ -890,7 +890,7 @@ Equal typed transport and application facts are interchangeable.
 
 ## Model M102 — UpdateInvoiceDraftCommand
 
-Fields: `invoice_id: str`, `expected_revision: CardRevisionReference`, `proposal: InvoiceDraftProposal`, `authorization: AuthorizationDecision`, `effect_id: str`, `actor: ActorReference`.
+Fields: `invoice_id: str`, `expected_revision: CardRevisionReference`, `proposal: InvoiceDraftProposal`, `effect_id: str`, `actor: ActorReference`.
 
 ### Identity
 
