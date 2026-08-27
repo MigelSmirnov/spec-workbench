@@ -10,6 +10,8 @@ from pathlib import Path
 from typing import Any
 
 from assembly_workbench import verify as verify_assembly
+from spec_projection_workbench import verify as verify_projection
+from spec_projection_workbench.model import SpecProjectionError
 from module_review_workbench import build_slice
 from external_contract_workbench import coverage as external_contract_coverage
 from notes_workbench.language import signature_parameters
@@ -410,6 +412,62 @@ def _closure_gaps_check(case_root: Path | None) -> AdmissionCheck:
         CHECK_PASS,
         "Closure-gap fuses are clean" + (f" ({waived_count} waived with reasons)." if waived_count else "."),
         evidence,
+    )
+
+
+def _projection_drift_check(case_root: Path | None) -> AdmissionCheck:
+    """Require global_spec.json to equal its deterministic projection.
+
+    The stage handoffs are the authoring source of truth and
+    ``design_spec_projection --apply`` is the only sanctioned writer of
+    ``global_spec.json``.  A hand edit that drifts from the projection ships a
+    value no gate ever compared: the notes gate resolves address existence,
+    the Stage 6 lint pairs placements with values, but nothing else proves the
+    exported literal equals the authored one.
+    """
+    if case_root is None:
+        return AdmissionCheck(
+            "FA016",
+            CHECK_NOT_APPLICABLE,
+            "Explicit --spec admission has no Workbench projection sources.",
+            {},
+        )
+    try:
+        report = verify_projection(case_root)
+    except SpecProjectionError as error:
+        return AdmissionCheck(
+            "FA016",
+            CHECK_BLOCK,
+            f"Spec projection cannot be built: {error}",
+            {"error": str(error)},
+        )
+    summary = report.get("summary") if isinstance(report, dict) else None
+    summary = summary if isinstance(summary, dict) else {}
+    in_sync = report.get("in_sync") is True if isinstance(report, dict) else False
+    ready = report.get("ready") is True if isinstance(report, dict) else False
+    if not ready:
+        return AdmissionCheck(
+            "FA016",
+            CHECK_BLOCK,
+            "Spec projection sources are not ready; close the authoring handoffs first.",
+            {"summary": summary},
+        )
+    if not in_sync:
+        return AdmissionCheck(
+            "FA016",
+            CHECK_BLOCK,
+            (
+                "global_spec.json drifts from its deterministic projection; "
+                "author the stage files and run design_spec_projection --apply "
+                "instead of editing global_spec.json by hand."
+            ),
+            {"summary": summary},
+        )
+    return AdmissionCheck(
+        "FA016",
+        CHECK_PASS,
+        "global_spec.json equals its deterministic projection.",
+        {"summary": summary},
     )
 
 
@@ -925,6 +983,7 @@ def check(
         _runtime_persistence_check(source_spec, case_root),
         _external_contract_check(case_root),
         _closure_gaps_check(case_root),
+        _projection_drift_check(case_root),
     ]
     validation_check, validation_report = _factory_validation_check(factory_root, source)
     inspector_check, inspector_report = _factory_inspector_check(

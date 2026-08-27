@@ -526,3 +526,78 @@ def test_dirty_source_is_blocked_unless_explicitly_allowed(tmp_path: Path) -> No
     source_check = next(item for item in allowed["checks"] if item["id"] == "FA001")
     assert allowed["ready"] is True
     assert source_check["status"] == "WARNING"
+
+
+def test_projection_drift_check_not_applicable_without_case() -> None:
+    from factory_admission_workbench.service import _projection_drift_check
+
+    result = _projection_drift_check(None)
+    assert result.check_id == "FA016"
+    assert result.status == "NOT_APPLICABLE"
+
+
+def test_projection_drift_blocks_when_out_of_sync(monkeypatch, tmp_path: Path) -> None:
+    from factory_admission_workbench import service
+
+    monkeypatch.setattr(
+        service,
+        "verify_projection",
+        lambda project: {
+            "ready": True,
+            "in_sync": False,
+            "summary": {"changes": 1, "blocks": 0},
+        },
+    )
+    result = service._projection_drift_check(tmp_path)
+    assert result.check_id == "FA016"
+    assert result.status == "BLOCK"
+    assert "drifts" in result.summary
+
+
+def test_projection_drift_blocks_when_sources_not_ready(monkeypatch, tmp_path: Path) -> None:
+    from factory_admission_workbench import service
+
+    monkeypatch.setattr(
+        service,
+        "verify_projection",
+        lambda project: {
+            "ready": False,
+            "in_sync": False,
+            "summary": {"changes": 0, "blocks": 2},
+        },
+    )
+    result = service._projection_drift_check(tmp_path)
+    assert result.check_id == "FA016"
+    assert result.status == "BLOCK"
+    assert "not ready" in result.summary
+
+
+def test_projection_drift_blocks_on_unbuildable_projection(monkeypatch, tmp_path: Path) -> None:
+    from factory_admission_workbench import service
+    from spec_projection_workbench.model import SpecProjectionError
+
+    def raise_error(project):
+        raise SpecProjectionError("missing authoring handoff")
+
+    monkeypatch.setattr(service, "verify_projection", raise_error)
+    result = service._projection_drift_check(tmp_path)
+    assert result.check_id == "FA016"
+    assert result.status == "BLOCK"
+    assert "cannot be built" in result.summary
+
+
+def test_projection_drift_passes_when_in_sync(monkeypatch, tmp_path: Path) -> None:
+    from factory_admission_workbench import service
+
+    monkeypatch.setattr(
+        service,
+        "verify_projection",
+        lambda project: {
+            "ready": True,
+            "in_sync": True,
+            "summary": {"changes": 0, "blocks": 0},
+        },
+    )
+    result = service._projection_drift_check(tmp_path)
+    assert result.check_id == "FA016"
+    assert result.status == "PASS"
