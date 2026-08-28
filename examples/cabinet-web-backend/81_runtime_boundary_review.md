@@ -210,3 +210,15 @@ generic parse (no enumerated card_type subset), the id/type identity check,
 and the sha256-over-canonical-JSON hash closed as
 `rules.card_workspace.revision_hash_algorithm`. Only the `card_workspace`
 slice hash is recomputed; review statuses are unchanged.
+
+## Re-slice 2026-08-28 (3): the byte store gains its read port
+
+`open_verified_source` demanded re-reading published bytes, but the
+SourceByteStore port had no read operation — an obligation without a
+surface. Generation therefore alternated between stubbing the function and
+faking custody with a module-private in-memory byte dict (the currently
+promoted closure does the latter, so stored bytes do not survive a process
+restart). The port now declares `read_stored` (verified read of published
+final bytes), the custody notes route every byte through the port and forbid
+byte retention in module state. Slice hashes recomputed for the changed
+modules; statuses unchanged.
