@@ -62,3 +62,11 @@ def test_transfer_membership_uses_record_collection_json_codecs() -> None:
     assert manifests["card_revisions"] == ("json", "InvoiceCardRevisionReference")
     assert manifests["source_references"] == ("json", "ContentReference")
     assert working_sets["required_sources"] == ("json", "SourceContentReference")
+
+
+def test_revision_lookup_returns_the_exact_persisted_reference() -> None:
+    notes = _notes_for("get_invoice")
+
+    assert "replace the lookup reference with `revision.reference`" in notes
+    assert "never synthesize a CardRevisionReference" in notes
+    assert "with `revision.reference` exactly as persisted" in notes
