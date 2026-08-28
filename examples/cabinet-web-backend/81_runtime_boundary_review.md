@@ -187,3 +187,15 @@ mechanism it goes through, so the depth is declared rather than assumed. The
 three slices report zero blocks; `api`, `chatgpt_interaction` and `bootstrap`
 consume the three modules directly, without a façade.
 
+
+## Re-slice 2026-08-28: measured invoice arithmetic
+
+`rules.invoice_workspace.validation_checks` now mirrors the live-data
+contract (`LIVE_INVOICE_DATA_EVIDENCE_20260828.md`): `line_net` gains
+explicit `round_half_up`, while `line_tax`, `total_net` and `total_tax`
+leave the blocking set — no formula over the 109 observed lines supports
+them, and the live validator does not enforce them. Slice hashes for
+`models`, `invoice_validation` and `invoice_lifecycle` are recomputed;
+review statuses are unchanged because no note, contract, or model shape
+moved — only the declared rule data the notes already reference
+generically.
