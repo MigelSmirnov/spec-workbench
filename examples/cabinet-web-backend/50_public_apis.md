@@ -741,7 +741,9 @@ Commits confirmation lifecycle transition.
 
 ### Enforces
 
-Confirmation for revision A cannot authorize revision B.
+Confirmation for revision A cannot authorize revision B. Missing source bytes
+do not block confirmation when the Card truthfully retains a validator-accepted
+non-stored source status; a stored-source claim requires exact verified custody.
 
 ### Errors
 

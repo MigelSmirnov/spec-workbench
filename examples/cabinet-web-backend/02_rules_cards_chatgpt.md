@@ -22,7 +22,11 @@
 7. M05 logical source identity, M06 byte identity, and storage location remain
    distinct. Storage movement or later byte availability does not mint a new
    logical source.
-
+8. An Invoice Card whose source status is accepted by its existing validator
+   may be confirmed without source-byte custody. Only a source whose
+   `file_status` equals the stored-custody status requires verified M06 content
+   at confirmation; every other accepted status remains truthful and produces
+   no required byte member until bytes are attached later.
 ### Formal invariants
 
 ```text
@@ -32,10 +36,16 @@ same_card_revision
 draft_update_committed
 -> expected_revision = current_revision AND validation_errors = empty
 
+confirmed_invoice AND source.file_status != stored_custody_status
+-> required_source_references = empty
+
+confirmed_invoice AND source.file_status = stored_custody_status
+-> verified_source_custody
+
 derived_projection -/> canonical_fact_authority
 duplicate_candidate -/> automatic_merge_or_confirmation
+source_bytes_absent -/> confirmation_rejected
 ```
-
 ### Required tests
 
 1. Stale revision updates fail without changing the current Card.
@@ -44,7 +54,10 @@ duplicate_candidate -/> automatic_merge_or_confirmation
 3. Confirmed Invoice facts cannot be edited through the draft operation.
 4. Missing or uncertain extracted values remain visible and are not fabricated.
 5. Rebuilding summaries and catalogues does not mutate source Cards.
-
+6. A validator-accepted Invoice with no stored source bytes confirms with an
+   empty required-source set and retains its truthful source status.
+7. An Invoice claiming stored source bytes cannot confirm when exact verified
+   custody is absent or inconsistent.
 ### Consequence
 
 The new backend may change persistence and transport, but not existing Cabinet

@@ -52,16 +52,19 @@ discovery or packaging.
    connection. Cabinet Web never calls into the local network.
 2. Work discovery returns only exact available M03 Invoice revisions and source
    membership observed through M27. Every item contains `invoice_id`, exact Card
-   revision/content hash, `manifest_id`/hash, ordered source
-   IDs/hashes/sizes/media types, and a bounded continuation cursor; it never
-   exports Provider, Client, Project, shopping-list, estimate, or unrelated
+   revision/content hash, `manifest_id`/hash, an ordered zero-or-more set of
+   source IDs/hashes/sizes/media types, and a bounded continuation cursor; it
+   never exports Provider, Client, Project, shopping-list, estimate, or unrelated
    project data. The local Backend pulls by the returned `manifest_id`.
 3. M21 binds exactly one complete canonical Invoice Card revision, manifest
-   version/hash, required source identities, and every included byte
-   hash/size/media type. `len(card_revisions) = 1` is a first-release reciprocal
-   invariant even if the local representation remains tuple-shaped.
+   version/hash, and the exact verified source-byte membership available for
+   that revision. `len(card_revisions) = 1` is a first-release reciprocal
+   invariant even if the local representation remains tuple-shaped. A
+   validator-accepted Card without stored source custody has an empty
+   `source_references` tuple; absence of bytes does not omit the Card.
 4. One changed Card revision or source content set requires another manifest;
-   an issued manifest never mutates.
+   an issued manifest never mutates. Later local source attachment is owned by
+   the local Backend and does not rewrite an issued VPS manifest.
 5. M22 records issue to the exact node and idempotency scope before bytes are
    exposed. Delivery or HTTP success never means local durable acceptance.
 6. Only an exact M23 receipt issued by local `cabinet_backend` for the same
@@ -72,11 +75,12 @@ discovery or packaging.
    by arrival time or overwrites the other revision.
 9. Contract/version incompatibility fails before package issue and exposes a
    bounded upgrade-required outcome.
-10. JSON metadata is bounded separately from byte content. Source bytes are
-    streamed as bounded binary parts, never base64-encoded inside JSON. The
-    local consumer writes each part to private temporary staging, verifies its
-    declared hash before acceptance, and only then creates its own local
-    `storage_reference`; no VPS path or storage credential crosses the wire.
+10. JSON metadata is bounded separately from byte content. Source bytes that
+    are present are streamed as bounded binary parts, never base64-encoded
+    inside JSON. The local consumer writes each part to private temporary
+    staging, verifies its declared hash before acceptance, and only then creates
+    its own local `storage_reference`; no VPS path or storage credential crosses
+    the wire. An empty source membership streams no binary part.
 11. The request timeout is 120 seconds. Compatibility, discovery, and status
     reads may use shorter operation-specific budgets, but a timeout after
     issuance is `outcome_unknown` and permits only read-only reconciliation—no
@@ -87,7 +91,6 @@ discovery or packaging.
     the observation stays `label_only`, `unassigned`, or `needs_review`. Neither
     transport nor local acceptance derives a project mapping from Card ID or
     label.
-
 ### Formal invariants
 
 ```text
@@ -96,6 +99,12 @@ invoice_package_issued
    AND manifest_hash_verified
    AND len(manifest.card_revisions) = 1
    AND exact_card_revision_available
+
+manifest.source_references
+= exact_verified_source_membership_for_revision
+
+source.file_status != stored_custody_status
+-> len(manifest.source_references) = 0
 
 local_acceptance_visible
 -> receipt.manifest_hash = issuance.manifest_hash
@@ -106,8 +115,8 @@ revision_disagreement -/> last_write_wins
 wire_source_part -/> storage_reference_or_vps_path_or_storage_credential
 timeout_after_issuance -/> automatic_retry
 card_id_or_label -/> registry_project_assignment
+missing_source_bytes -/> missing_invoice_revision
 ```
-
 ### Required tests
 
 1. Non-Invoice Card data never appears in discovery or transfer packages.
@@ -123,7 +132,10 @@ card_id_or_label -/> registry_project_assignment
    and JSON contains no base64 bytes or storage reference.
 9. Assignment observation round-trips unchanged; missing explicit Registry
    provenance never becomes an assigned `project_id`.
-
+10. A confirmed Invoice without stored source custody is discoverable and pulls
+    as the exact Card revision with empty source membership and no binary part.
+11. A stored-source claim without matching verified custody rejects confirmation
+    and exposes no manifest.
 ### Consequence
 
 Cabinet Web remains the authoritative daytime source while local Backend alone

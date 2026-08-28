@@ -268,12 +268,15 @@ and never derives it.
 ### Steps
 
 1. `capability:invoice_lifecycle.confirm_invoice` commits the exact successor
-   revision through `capability:card_workspace.commit_card_revision` and verified
-   source membership under its existing effect boundary.
+   revision through `capability:card_workspace.commit_card_revision`. When the
+   Card claims stored source bytes, the same effect also requires exact verified
+   custody; any other validator-accepted source status remains unchanged and
+   does not block confirmation.
 2. In the same durable transition it creates or idempotently retains one
    immutable `InvoiceWorkingSetItem` and `InvoiceTransferManifest` for that
    revision. The manifest has exactly one `card_revisions` entry and immutable
-   source references.
+   source references equal to the verified source-byte membership; the tuple is
+   empty when no stored source bytes are available.
 3. Any available `CardObjectAssignmentObservation` is pinned to the revision
    and later carried unchanged by `module:invoice_exchange`; no project is
    inferred from an Invoice ID or label.
@@ -284,7 +287,8 @@ and never derives it.
 
 ### Invariants
 
-`confirm_invoice` success -> durable discovery item and immutable manifest;
+`confirm_invoice` success -> durable discovery item and immutable manifest,
+including when source membership is empty;
 changed revision/source set -> new manifest; repeated confirmation -> one
 logical producer item; failed confirmation -> no discoverable transfer item.
 
@@ -300,8 +304,9 @@ transfer work.
 ### Errors
 
 `module:invoice_lifecycle` owns confirmation-binding, stale-revision,
-validation, and custody rejections; `module:card_workspace` owns revision
-conflicts; `module:source_custody` owns missing or unverified custody;
+validation, and stored-source custody rejections; `module:card_workspace` owns
+revision conflicts; `module:source_custody` owns missing or unverified custody
+only when the Card claims stored bytes;
 `module:effect_journal` owns idempotency conflicts and unknown outcomes. No
 error fabricates custody, manifest, or working-set evidence.
 
