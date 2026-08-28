@@ -44,3 +44,21 @@ def test_state2_keeps_invoice_only_sync_and_allows_empty_source_membership() -> 
     assert "never exports Provider, Client, Project" in rules
     assert "without stored source custody has an empty" in rules
     assert "absence of bytes does not omit the Card" in rules
+
+
+def test_transfer_membership_uses_record_collection_json_codecs() -> None:
+    backend = _spec()["rules"]["persistence_backend"]
+    tables = {table["table"]: table for table in backend["tables"]}
+
+    manifests = {
+        column["field"]: (column["storage"], column["element_model"])
+        for column in tables["invoice_transfer_manifests"]["columns"]
+    }
+    working_sets = {
+        column["field"]: (column["storage"], column["element_model"])
+        for column in tables["invoice_working_sets"]["columns"]
+    }
+
+    assert manifests["card_revisions"] == ("json", "InvoiceCardRevisionReference")
+    assert manifests["source_references"] == ("json", "ContentReference")
+    assert working_sets["required_sources"] == ("json", "SourceContentReference")
