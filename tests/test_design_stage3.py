@@ -112,7 +112,9 @@ def test_lint_requires_module_responsibility_sections(
 
     report = design_stage3.lint(project)
 
-    assert report["summary"]["errors"] == 1
+    # The fixture never declares structured depth, so the depth invariant
+    # contributes its own error alongside the missing section.
+    assert report["summary"]["errors"] == 2
     assert any(
         finding["code"] == "missing_module_section"
         and section in finding["message"]
@@ -175,11 +177,14 @@ def _codes(report: dict) -> list[tuple[str, str]]:
     return sorted((f["severity"], f["code"]) for f in report["findings"])
 
 
-def test_undeclared_depth_is_a_warning_on_a_narrow_surface(tmp_path: Path) -> None:
+def test_undeclared_depth_is_an_error_even_on_a_narrow_surface(tmp_path: Path) -> None:
     project = _project(tmp_path)
     report = design_stage3.lint(project)
-    assert report["summary"]["errors"] == 0
-    assert ("warning", "depth_undeclared") in _codes(report)
+    assert ("error", "depth_undeclared") in _codes(report)
+    assert report["summary"]["errors"] >= 1
+    assert "invariant" in next(
+        f["message"] for f in report["findings"] if f["code"] == "depth_undeclared"
+    )
 
 
 def test_wide_surface_without_depth_declaration_is_an_error(tmp_path: Path) -> None:

@@ -283,10 +283,14 @@ def _depth_findings(module: ModuleItem, known_modules: set[str]) -> list[Finding
                 module.source,
             )]
         return [Finding(
-            "warning",
+            "error",
             "depth_undeclared",
             module.key,
-            "Depth assessment does not declare 'kind: deep|facade'; name the hidden mechanism or the delegates.",
+            (
+                "Depth is an assembly invariant, not a choice: declare 'kind: deep' plus the one hidden "
+                "mechanism, or 'kind: facade' plus the deep modules it delegates to. Prose without the "
+                "structured fields does not count."
+            ),
             module.source,
         )]
     if kind not in DEPTH_KINDS:
