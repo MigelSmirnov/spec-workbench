@@ -199,3 +199,14 @@ them, and the live validator does not enforce them. Slice hashes for
 review statuses are unchanged because no note, contract, or model shape
 moved — only the declared rule data the notes already reference
 generically.
+
+## Re-slice 2026-08-28 (2): prepare_card_revision pinned against drift
+
+Route B regeneration drifted on `prepare_card_revision`: one closure parsed
+canonically with a sorted-JSON content hash (the OTK-verified behaviour), the
+next narrowed the function to a project/provider whitelist and a raw-string
+hash, breaking every invoice commit at runtime smoke. The note now pins the
+generic parse (no enumerated card_type subset), the id/type identity check,
+and the sha256-over-canonical-JSON hash closed as
+`rules.card_workspace.revision_hash_algorithm`. Only the `card_workspace`
+slice hash is recomputed; review statuses are unchanged.
