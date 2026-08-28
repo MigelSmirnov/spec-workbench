@@ -222,3 +222,26 @@ restart). The port now declares `read_stored` (verified read of published
 final bytes), the custody notes route every byte through the port and forbid
 byte retention in module state. Slice hashes recomputed for the changed
 modules; statuses unchanged.
+
+## Re-slice 2026-08-28 (4): access_control is cut along its named mechanisms
+
+The depth invariant (PR #26) exposed `access_control` as a bucket: nine
+responsibilities enumerated in Owns, 695 generated lines, and the evening's
+Route B failures all clustered on it. The cut follows the mechanisms the
+declaration could not name as one: `credential_vault` (peppered bearer-secret
+custody: mint, timing-safe verification, retirement) and `abuse_throttle`
+(the failure-window throttle state machine). Both operate over the
+caller-owned UoW, own no transaction and no transport, and the public
+admission surface of `access_control` is unchanged — its notes now name the
+delegate mechanisms instead of describing their internals.
+
+Reviewed finding recorded on the way: the promoted closure's throttle latch
+set `blocked_until` to the observation instant, so no throttle ever became
+active after the same instant — the smoke never restarts or replays, so OTK
+missed it. The `register_authentication_failure` note now closes the
+thresholds over `config.authentication` (block after
+`failures_before_throttle` failures for `throttle_seconds`).
+
+Every module now carries a structured Depth assessment (`kind: deep` with one
+hidden mechanism, or `kind: facade` with delegates); `api` remains outside
+State 3 — a declared gap for a follow-up, not silently waived.

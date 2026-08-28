@@ -26,6 +26,9 @@ transport serialization, configuration loading, or clock-dependent policy.
 
 ### Depth assessment
 
+kind: deep
+hidden mechanism: frozen typed value forms (extra=forbid) that make every cross-module payload valid by construction
+
 This is a deliberately dependency-free type kernel. It keeps the same language
 across all runtime modules without becoming an anemic policy dumping ground.
 
@@ -63,6 +66,9 @@ list_project_cards
 ```
 
 ### Depth assessment
+
+kind: deep
+hidden mechanism: canonical Card revision custody: content-hash identity with optimistic current-selector movement
 
 A small revision-safe surface hides every storage and canonicalization choice.
 Invoice and Project behavior depends on this boundary rather than on tables or
@@ -106,6 +112,9 @@ find_invoice_duplicates
 ### Depth assessment
 
 kind: deep
+hidden mechanism: the invoice read model: canonical revision parsing with deterministic search and duplicate projection
+
+kind: deep
 hidden mechanism: the revision-exact Invoice read model — one rolled-back
 CabinetUnitOfWork per read, canonical revision parsing, working-set indexing,
 and duplicate-signal matching shared by every read capability.
@@ -142,6 +151,9 @@ validate_invoice
 ```
 
 ### Depth assessment
+
+kind: deep
+hidden mechanism: ordered evaluation of the declared invoice validation rules over one candidate
 
 kind: deep
 hidden mechanism: declared-order rule evaluation over a parsed InvoiceCardV1
@@ -191,6 +203,9 @@ archive_invoice
 ### Depth assessment
 
 kind: deep
+hidden mechanism: guarded invoice lifecycle transitions that commit successors together with transfer evidence
+
+kind: deep
 hidden mechanism: the Invoice lifecycle state machine — exact-revision
 read-modify-write, validation before commit, and atomic Card/manifest/working-set
 commitment shared by every mutation capability.
@@ -228,6 +243,9 @@ save_shopping_list
 
 ### Depth assessment
 
+kind: deep
+hidden mechanism: project Card mutation with estimate and shopping-list snapshot reconciliation
+
 Five project use cases hide the dependency graph between estimates, lists, and
 Project revisions without pretending Registry snapshots are Project facts.
 
@@ -263,6 +281,9 @@ list_channel_capabilities
 ```
 
 ### Depth assessment
+
+kind: deep
+hidden mechanism: closed capability-catalogue resolution: exact channel/name matching with protected-operator exclusion
 
 The tiny immutable API hides a security-sensitive matrix used by every ingress
 boundary. It is policy, not a generic dispatcher.
@@ -301,6 +322,9 @@ report_composite_outcome
 
 ### Depth assessment
 
+kind: deep
+hidden mechanism: two-step effect confirmation: proposal digest issuance and exact matching before any mutation
+
 Three interaction operations hide the full safety protocol between a
 probabilistic conversational UI and deterministic Cabinet capabilities.
 
@@ -308,9 +332,11 @@ probabilistic conversational UI and deterministic Cabinet capabilities.
 
 ### Owns
 
-Principal and credential enrollment, protected A03 capability-grant
-provisioning, authentication, authorization, rotation, revocation, channel
-separation, abuse throttling, and bounded security audit events under A11.
+Channel-bound admission: principal enrollment, protected A03 capability-grant
+provisioning, authentication and authorization decisions, credential rotation
+and revocation orchestration, channel separation, and bounded security audit
+events under A11. Secret custody mechanics live in `credential_vault`; the
+failure-throttle state machine lives in `abuse_throttle`.
 
 ### Knows
 
@@ -327,11 +353,11 @@ secret recovery through public channels, or domain-specific decisions.
 
 ### Hides
 
-One-way verifiers, timing-safe comparison, exact grant identity and idempotent
-provisioning, credential lifecycle transitions, authorization matrix
+Exact grant identity and idempotent provisioning, authorization matrix
 evaluation, timezone-aware UTC observations for persisted or compared lifecycle
-timestamps, monotonic elapsed-time observations for throttle windows, throttle
-counters, and secret-free audit details.
+timestamps, and secret-free audit details. Verifier derivation and timing-safe
+comparison are delegated to `credential_vault`; throttle windows and counters
+are delegated to `abuse_throttle`.
 
 ### Candidate public capabilities
 
@@ -346,8 +372,96 @@ revoke_credential
 
 ### Depth assessment
 
-The module exposes identity and authorization decisions while hiding all secret
-material and credential mechanics. It remains independent of HTTP and MCP.
+kind: deep
+hidden mechanism: channel-bound admission: credential and challenge orchestration over the persisted capability-grant matrix
+
+The module exposes identity and authorization decisions. Secret material
+mechanics and throttle state belong to `credential_vault` and `abuse_throttle`;
+this module owns the admission decision that composes them. It remains
+independent of HTTP and MCP.
+
+## `credential_vault`
+
+### Owns
+
+The peppered bearer-secret custody mechanics (`module:credential_vault`) for A11: bearer parsing of the
+`<credential_id>.<secret_material>` shape, verifier derivation with the
+configured pepper, cryptographically random credential minting, timing-safe
+verification of a presented bearer against the persisted record, and the
+idempotent retirement transition of a credential record.
+
+### Knows
+
+The bearer shape, the configured pepper, `AccessCredentialRecord` identity and
+status vocabulary, the operation-scoped `CabinetUnitOfWork` port for credential
+records, and timezone-aware UTC issuance timestamps.
+
+### Hides
+
+Secret generation entropy, verifier derivation, and timing-safe comparison; no
+plaintext secret is ever persisted, logged, or retained after return.
+
+### Must not own
+
+Principal or node subject resolution, authorization decisions, throttle state,
+audit emission, transactions (the caller owns the UoW), or any transport
+surface.
+
+### Candidate public capabilities
+
+```text
+parse_bearer_credential
+derive_credential_verifier
+mint_credential
+verify_bearer_credential
+retire_credential
+```
+
+### Depth assessment
+
+kind: deep
+hidden mechanism: peppered bearer-secret custody: minting, timing-safe verification, and retirement of credential records
+
+## `abuse_throttle`
+
+### Owns
+
+The authentication failure-throttle state machine (`module:abuse_throttle`) for A11: abuse-context hash
+derivation, locked acquisition of `AuthenticationThrottleState`, the active
+throttle decision, and the failure and success transitions with their delay and
+block latches.
+
+### Knows
+
+`AuthenticationThrottleState` identity and counters, the configured pepper for
+context hashing, the operation-scoped `CabinetUnitOfWork` port for throttle
+records, timezone-aware UTC observation timestamps, and the declared failure
+thresholds.
+
+### Hides
+
+Threshold arithmetic, delay and block latch derivation, and context hashing;
+callers see only acquire, decide, and transition operations.
+
+### Must not own
+
+Credential verification, principal resolution, audit emission, transactions
+(the caller owns the UoW), or any transport surface.
+
+### Candidate public capabilities
+
+```text
+derive_abuse_context_hash
+acquire_throttle_state
+throttle_active
+register_authentication_failure
+register_authentication_success
+```
+
+### Depth assessment
+
+kind: deep
+hidden mechanism: the monotonic failure-window throttle state machine over locked per-context state
 
 ## `effect_journal`
 
@@ -381,6 +495,9 @@ reconcile_effect
 ```
 
 ### Depth assessment
+
+kind: deep
+hidden mechanism: the principal-scoped idempotency journal: canonical request binding with commit, replay, and conflict outcomes
 
 The three operations hide difficult concurrency and retry behavior shared by
 otherwise independent domain effects.
@@ -420,6 +537,9 @@ release_vps_working_set
 
 ### Depth assessment
 
+kind: deep
+hidden mechanism: the verified byte-custody chain: staged upload, atomic commit, and verified re-read through the byte-store port
+
 Four custody operations hide file-system safety, concurrent handoff use, byte
 identity, and conservative release without becoming a document processor.
 
@@ -457,6 +577,9 @@ serve_source_download
 
 ### Depth assessment
 
+kind: deep
+hidden mechanism: bounded browser ingress: CSRF and handoff verification with bounded streaming into custody
+
 This is intentionally a thin but security-critical adapter. Its public surface
 is transport-shaped and all business decisions remain behind typed ports.
 
@@ -491,6 +614,9 @@ serve_sync_request
 ```
 
 ### Depth assessment
+
+kind: facade
+delegates to: `access_control`, `invoice_exchange`, `registry_replica`
 
 This is an intentionally thin trust-boundary adapter. Protocol state belongs to
 the exchange modules, so transport replacement cannot rewrite sync policy.
@@ -532,6 +658,9 @@ reconcile_invoice_transfer
 
 ### Depth assessment
 
+kind: deep
+hidden mechanism: manifest-driven invoice transfer: issuance, package streaming, and receipt/reconciliation state
+
 Four protocol operations hide immutable package construction and distributed
 delivery ambiguity while keeping the local Backend authoritative for import.
 
@@ -568,6 +697,9 @@ get_current_registry_catalogue
 
 ### Depth assessment
 
+kind: deep
+hidden mechanism: registry catalogue replication: published snapshot acceptance with a current-selector latch
+
 Two operations hide the entire atomic replica protocol and preserve the
 external ownership boundary even while the local system is offline.
 
@@ -603,6 +735,9 @@ verify_backup_restore
 ```
 
 ### Depth assessment
+
+kind: deep
+hidden mechanism: readiness and recovery proof over one unit-of-work probe and byte-store verification
 
 The runtime exposes a narrow readiness/operator surface while hiding startup and
 recovery coordination across all durable modules. Dependency release gating

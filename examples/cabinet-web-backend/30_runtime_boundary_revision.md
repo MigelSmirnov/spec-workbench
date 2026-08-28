@@ -38,6 +38,9 @@ create_cabinet_schema
 
 ### Depth assessment
 
+kind: deep
+hidden mechanism: one SQL unit-of-work over the closed table registry
+
 One deep persistence module supplies a shared transaction authority for effects
 that cross Card, journal, custody, and synchronization records. Its methods are
 mechanical storage operations; application modules retain every transition and
@@ -75,6 +78,9 @@ recover_source_publications
 
 ### Depth assessment
 
+kind: deep
+hidden mechanism: confined content-addressed filesystem custody with atomic publication
+
 The byte store is a narrow mechanism. PostgreSQL journal state and
 `source_custody` decide when a verified candidate may become logically
 available; a filesystem observation alone is never authority.
@@ -111,6 +117,9 @@ create_cabinet_web_app
 ```
 
 ### Depth assessment
+
+kind: deep
+hidden mechanism: protected composition of the service graph from closed deployment settings
 
 One composition root makes the runtime graph reviewable and prevents domain
 modules from inventing adapters or silently coupling Web availability to the
