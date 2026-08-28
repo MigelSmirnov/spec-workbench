@@ -245,3 +245,14 @@ thresholds over `config.authentication` (block after
 Every module now carries a structured Depth assessment (`kind: deep` with one
 hidden mechanism, or `kind: facade` with delegates); `api` remains outside
 State 3 — a declared gap for a follow-up, not silently waived.
+
+## Re-slice 2026-08-28 (5): unscoped grants carry unscoped authority
+
+The router rules never build an EntityScope for effect authorizations while
+require_mutation_authorization demanded a scoped decision for every
+revision-bearing mutation — confirm, update, payment, source attach, and
+archive were unreachable through the transport (the smoke stops at
+create-draft, which needs no scope, so no gate saw it; the live-data replay
+did). The note now states the Q1 semantics explicitly: an absent entity_scope
+carries unscoped capability authority; a present scope must match its target.
+Slice hashes recomputed; statuses unchanged.
