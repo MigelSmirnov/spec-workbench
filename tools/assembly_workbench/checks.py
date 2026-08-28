@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Callable
 
+import design_stage3
 import design_stage6_contracts
 import design_stage6_data
 from external_contract_workbench import coverage as external_contract_coverage
@@ -28,6 +29,10 @@ def _normalize(name: str, report: dict[str, Any]) -> CheckResult:
         errors = int(summary.get("errors", len(findings)))
         warnings = 0
         ready = bool(report.get("ready")) and errors == 0
+    elif name == "modules":
+        errors = int(summary.get("errors", 0))
+        warnings = int(summary.get("warnings", 0))
+        ready = errors == 0
     elif name == "identity":
         errors = int(summary.get("errors", len(findings)))
         warnings = 0
@@ -70,6 +75,7 @@ def _normalize(name: str, report: dict[str, Any]) -> CheckResult:
 
 CHECKS: dict[str, ReportFunction] = {
     "language": verify_language,
+    "modules": design_stage3.lint,
     "identity": verify_identity,
     "data": design_stage6_data.lint,
     "contracts": design_stage6_contracts.lint,
