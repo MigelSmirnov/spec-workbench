@@ -70,3 +70,9 @@ def test_revision_lookup_returns_the_exact_persisted_reference() -> None:
     assert "replace the lookup reference with `revision.reference`" in notes
     assert "never synthesize a CardRevisionReference" in notes
     assert "with `revision.reference` exactly as persisted" in notes
+
+
+def test_repeat_supplier_is_not_an_invoice_duplicate_by_itself() -> None:
+    matching = _spec()["rules"]["invoice_duplicate_matching"]
+
+    assert matching["minimum_match_fields"] == 3

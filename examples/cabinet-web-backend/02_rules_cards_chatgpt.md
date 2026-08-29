@@ -15,8 +15,10 @@
 4. Draft changes require the exact expected M03 revision. Confirmed Invoice
    content cannot be changed through a draft update; correction creates an
    explicit later revision under the same Invoice ID.
-5. Duplicate candidates never merge, replace, archive, or confirm a Card
-   automatically.
+5. Duplicate candidates require at least three equal non-null fields among
+   invoice number, supplier tax ID, issue date, and gross total; a shared
+   supplier or shared supplier plus date is not sufficient. Candidates never
+   merge, replace, archive, or confirm a Card automatically.
 6. Derived catalogues, summaries, analytics, M12 shopping lists, Registry
    replicas, and local Backend receipts never replace canonical Card facts.
 7. M05 logical source identity, M06 byte identity, and storage location remain
