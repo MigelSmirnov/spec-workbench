@@ -16,6 +16,7 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
+import design_emitter_binding
 import design_lint
 import design_router_context
 import design_stage3
@@ -341,6 +342,16 @@ def _post_state5_step(sequence: dict[str, Any], project: Path, project_text: str
             reason="Per-route closure is ready, but global deterministic HTTP wiring/auth/error policy is not yet closed.",
             summary=context["summary"],
             unresolved_topics=context["unresolved_topics"],
+            router_allowed=True, persistence_allowed=True,
+        )
+
+    binding = design_emitter_binding.coverage(project)
+    if not binding["summary"]["handoff_ready"]:
+        return _result(
+            sequence=sequence, project=project, project_text=project_text,
+            phase="deterministic_backend_binding", blocked=True,
+            reason="A local port implementation has no registered deterministic backend; each finding carries the factory catalog card with the exact IR form to author (or directs to building the capability first).",
+            summary=binding["summary"], findings=binding["findings"],
             router_allowed=True, persistence_allowed=True,
         )
 
