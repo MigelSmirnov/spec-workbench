@@ -85,13 +85,48 @@ The byte store is a narrow mechanism. PostgreSQL journal state and
 `source_custody` decide when a verified candidate may become logically
 available; a filesystem observation alone is never authority.
 
+## `system_clock`
+
+### Owns
+
+Exactly the concrete `SystemClock` implementation of the `Clock` port.
+
+### Knows
+
+Only the `Clock` interface and the host timezone-aware UTC wall clock.
+
+### Must not own
+
+Business policy, persistence, configuration loading, scheduling, cached time,
+or service construction.
+
+### Hides
+
+The per-call `datetime.now(timezone.utc)` wall-clock read behind the narrow
+`Clock.now` interface.
+
+### Candidate public capabilities
+
+```text
+SystemClock
+```
+
+### Depth assessment
+
+kind: deep
+hidden mechanism: deterministic binding of the process UTC wall clock to Clock
+
+The adapter is deliberately separate from the composition root so services
+depend only on `Clock`, while `bootstrap` constructs and shares one concrete
+instance.
+
 ## `bootstrap`
 
 ### Owns
 
 The only environment/configuration read, construction of
-`PostgresCabinetUnitOfWork`, `LocalFilesystemSourceByteStore`, and the single
-`SystemClock` implementation of the `Clock` port, migration and
+`PostgresCabinetUnitOfWork`, `LocalFilesystemSourceByteStore`, and one shared
+`SystemClock` supplied by `system_clock`, migration and
 startup recovery before traffic, construction of all application services and
 gateways, and delivery of the complete graph to `create_app`.
 
@@ -109,7 +144,7 @@ missing protected configuration.
 ### Hides
 
 Deployment configuration loading, adapter construction order, health startup
-ordering, one shared timezone-aware UTC system wall-clock source, and teardown.
+ordering, wiring of one shared timezone-aware UTC clock, and teardown.
 
 ### Candidate public capabilities
 
@@ -132,7 +167,7 @@ intermittent local backend.
 bootstrap
   -> cabinet_persistence -> models
   -> source_byte_store -> models
-  -> SystemClock -> models.Clock
+  -> system_clock -> models.Clock
   -> application services -> models + CabinetUnitOfWork + Clock
   -> source_custody -> CabinetUnitOfWork + SourceByteStore
   -> gateways -> application services

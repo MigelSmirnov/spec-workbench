@@ -216,6 +216,7 @@ SourceByteStore.verify: [DEPENDENCY_BOUNDARY] MUST expose one confined exact byt
 SourceByteStore.publish: [DEPENDENCY_BOUNDARY] MUST expose one verified same-filesystem atomic publication operation and no custody policy.
 SourceByteStore.remove_staging: [DEPENDENCY_BOUNDARY] MUST expose only bounded compensation of an uncommitted staging reference.
 Clock.now: [PROVENANCE] MUST return one timezone-aware UTC datetime from the clock implementation.
+SystemClock.__init__: [DEPENDENCY_BOUNDARY] MUST bind no configuration, dependency, cached timestamp, or alternate time source; construction is side-effect free.
 SystemClock.now: [PROVENANCE] MUST return the current system wall-clock time using datetime.now(timezone.utc).
 CabinetUnitOfWork.begin: [DEPENDENCY_BOUNDARY] MUST start one explicit operation-scoped metadata transaction and reject a nested active transaction.
 CabinetUnitOfWork.commit: [DEPENDENCY_BOUNDARY] MUST commit exactly the active metadata transaction once and release its connection.
