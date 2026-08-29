@@ -47,7 +47,11 @@ def test_intermediate_closures_do_not_consume_state_numbers() -> None:
     assert persistence["next"] == "deterministic_http_router_closure"
     assert routes["next"] == "deterministic_http_router_context_closure"
     assert context["next"] == "deterministic_http_router_ir_assembly"
-    assert assembly["next"] == "state7_notes"
+    binding = phases["deterministic_backend_binding"]
+    assert assembly["next"] == "deterministic_backend_binding"
+    assert "semantic_state" not in binding
+    assert binding["gate_tool"] == "tools/design_emitter_binding.py"
+    assert binding["next"] == "state7_notes"
     assert phases["state7_notes"]["semantic_state"] == 7
     assert all("semantic_state" not in phases[p] for p in (
         "deterministic_persistence_closure", "deterministic_http_router_closure",

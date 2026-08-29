@@ -30,6 +30,7 @@ def test_machine_sequence_covers_promoted_state0_through_state5_tools():
         "deterministic_http_router_closure",
         "deterministic_http_router_context_closure",
         "deterministic_http_router_ir_assembly",
+        "deterministic_backend_binding",
         "state7_notes",
         "state8_assembly",
         "stage8_1_module_review",
