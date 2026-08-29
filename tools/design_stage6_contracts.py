@@ -19,6 +19,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+import design_closure_gaps
 import design_stage3
 import design_stage5
 import design_stage5_exposure
@@ -195,6 +196,9 @@ def coverage(project: Path) -> dict[str, Any]:
                 ),
             })
 
+    for item in _time_source_findings(project, rows):
+        findings.append({"severity": "warning", "code": item["code"], "message": item["message"]})
+
     plan_closed = plan["status"] == "closed"
     if not plan_closed:
         findings.append({
@@ -262,6 +266,26 @@ def _module_surface(project: Path, rows: list[dict[str, Any]]) -> list[dict[str,
             "shallow": shallow,
         })
     return result
+
+
+def _time_source_findings(project: Path, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """A mutating public operation that must produce a timestamp needs a declared time source.
+
+    Runs the same fuse the assembly-level closure gaps enforce, but at the
+    moment the signature is authored — while a datetime parameter or a clock
+    port in __init__ is still a State 6 decision, not a regeneration."""
+    models: dict[str, Any] = {}
+    for path in sorted(project.glob("60_model_closure*.json")):
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if isinstance(payload, dict) and isinstance(payload.get("models"), dict):
+            models.update(payload["models"])
+    contracts = {row["function"]: row["signature"] for row in rows if row["resolved"]}
+    func_module = {row["function"]: str(row["module"] or "").removeprefix("module:") for row in rows}
+    impacts = design_closure_gaps.parse_state_impacts(project)
+    return design_closure_gaps.fresh_timestamp_findings(models, contracts, func_module, impacts)
 
 
 def lint(project: Path) -> dict[str, Any]:

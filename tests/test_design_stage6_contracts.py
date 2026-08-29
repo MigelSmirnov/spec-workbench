@@ -42,7 +42,30 @@ def test_cabinet_state6_contracts_are_closed_and_ready() -> None:
         "handoff_ready": True,
     }
     assert report["unresolved_functions"] == []
-    assert report["findings"] == []
+    # Recorded latent debt of the reference case: two mutating operations must
+    # produce timestamps and no time source is declared. The warnings do not
+    # block handoff; closing them is a specification decision, not a lint fix.
+    assert [(f["severity"], f["code"]) for f in report["findings"]] == [
+        ("warning", "fresh_timestamp_without_source"),
+        ("warning", "fresh_timestamp_without_source"),
+    ]
+    assert sorted(f["message"].split(":")[0] for f in report["findings"]) == [
+        "lookup_holded_purchase",
+        "validate_card_assignment",
+    ]
+
+
+def test_declared_datetime_parameter_clears_time_source_warning(tmp_path: Path) -> None:
+    project = _project(tmp_path)
+    catalog_path = project / CATALOG
+    catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
+    signature = catalog["contracts"]["validate_card_assignment"]
+    params, arrow, ret = signature.partition("->")
+    catalog["contracts"]["validate_card_assignment"] = f"{params.rstrip().removesuffix(')')}, observed_at: datetime){arrow}{ret}"
+    catalog_path.write_text(json.dumps(catalog), encoding="utf-8")
+    report = design_stage6_contracts.coverage(project)
+    flagged = [f["message"].split(":")[0] for f in report["findings"] if f["code"] == "fresh_timestamp_without_source"]
+    assert flagged == ["lookup_holded_purchase"]
 
 
 def test_next_function_is_complete_after_state6_handoff() -> None:
