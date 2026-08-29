@@ -16,6 +16,7 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
+import design_decision_witness
 import design_emitter_binding
 import design_lint
 import design_router_context
@@ -364,6 +365,16 @@ def _post_state5_step(sequence: dict[str, Any], project: Path, project_text: str
             blocked=False if only_missing else bool(notes["summary"]["blocks"] or notes["summary"]["reviews"]),
             reason="Deterministic backend closures are closed; author State 7 notes and resolve all address/class/reference, cross-note consistency, and semantic-stub findings before handoff.",
             summary=notes["summary"], findings=notes["findings"],
+            router_allowed=True, persistence_allowed=True,
+        )
+
+    witnesses = design_decision_witness.coverage(project)
+    if not witnesses["summary"]["handoff_ready"]:
+        return _result(
+            sequence=sequence, project=project, project_text=project_text,
+            phase="decision_witness_resolution", blocked=True,
+            reason="A required-tests witness tag claims a verification check or [TEST_EVIDENCE] note that does not exist; a claimed witness that is absent is worse than no claim.",
+            summary=witnesses["summary"], findings=witnesses["findings"],
             router_allowed=True, persistence_allowed=True,
         )
 
