@@ -324,9 +324,11 @@ and `module:source_custody`.
 1. `capability:sync_gateway.observe_sync_compatibility` rejects incompatible
    contract revisions before package issue.
 2. `capability:access_control.authenticate_request` and
-   `capability:access_control.authorize_capability` establish the exact active
-   M17 node and sync-only scope; `capability:sync_gateway.serve_sync_request`
-   dispatches only a closed sync operation.
+   `capability:access_control.authorize_capability` establish one M39 containing
+   the exact active M02 machine principal and its bound active compatible M17
+   node plus sync-only scope; `capability:sync_gateway.serve_sync_request`
+   dispatches only a closed sync operation and passes only `context.node` to
+   Invoice domain operations.
 3. `capability:invoice_exchange.discover_invoice_work` returns a bounded M27
    page containing only exact available Invoice IDs, Card revision/content
    hashes, immutable manifest IDs/hashes, ordered source metadata, and an opaque
@@ -375,8 +377,9 @@ owns catalogue validation and current-replica selection.
 1. `capability:sync_gateway.serve_sync_request` admits only the exact publication
    operation and bounded payload.
 2. `capability:access_control.authenticate_request` and
-   `capability:access_control.authorize_capability` enforce node and installation
-   scope.
+   `capability:access_control.authorize_capability` enforce the M39 principal,
+   bound node, reciprocal contract, and installation scope; Registry receives
+   only the verified `context.node`.
 3. `capability:registry_replica.publish_registry_catalogue` verifies delivery,
    identity, count, order, version, hash, replay identity, and observation time.
 4. The complete replica and current selector commit atomically. Exact replay
@@ -468,8 +471,11 @@ authentication, authorization, and credential lifecycle.
    context without accepting another channel's credential.
 2. `capability:access_control.authorize_capability` binds the exact lifecycle
    action and target identity.
-3. Initial enrollment uses `capability:access_control.enroll_principal` at the
-   protected boundary. The issued credential is authenticated before
+3. Initial owner enrollment uses `capability:access_control.enroll_principal`
+   with no actor only at the protected empty-installation boundary. Every later
+   enrollment, rotation, and revocation supplies the separately authenticated
+   active owner/operator M39; an M01 inside a command is never authority. The
+   issued credential is authenticated before
    `capability:access_control.provision_capability_grant` may idempotently bind
    one exact target, channel, A16 capability, and optional entity scope; no
    private grant store is part of composition. Rotation uses

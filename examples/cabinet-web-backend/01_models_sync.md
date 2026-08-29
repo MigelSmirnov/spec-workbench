@@ -131,6 +131,8 @@ node.
 Candidate fields:
 
 - `node_id`;
+- `principal_id`: the exact M02 `local_backend_node` machine principal bound to
+  this installation;
 - `node_kind`: `vps_cabinet` or `local_backend`;
 - `status`: `active` or `revoked`;
 - supported contract version;
@@ -146,7 +148,9 @@ entity
 
 Substitution: different node IDs are not interchangeable even when deployed
 software and capability sets match. Continuity: the same enrolled node remains
-identifiable while contract support or active/revoked status changes.
+identifiable while contract support or active/revoked status changes. One M17
+is bound to exactly one M02 machine principal; changing `principal_id` is
+re-enrollment as another node, never an update of the existing node.
 
 ### Source of truth
 

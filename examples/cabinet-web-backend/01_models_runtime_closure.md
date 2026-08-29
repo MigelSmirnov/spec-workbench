@@ -134,7 +134,14 @@ Equal typed transport and application facts are interchangeable.
 
 ## Model M39 — AuthenticatedPrincipal
 
-Fields: `principal: CabinetPrincipal`, `actor: ActorReference`, `channel: str`, `authenticated_at: datetime`.
+Fields: `principal: CabinetPrincipal`, `actor: ActorReference`, `channel: str`, `authenticated_at: datetime`, `node: CabinetNodeIdentity | None`.
+
+The value is the complete channel-bound authentication proof consumed by
+authorization. `node` is required exactly for channel `local_node`, where it
+is the active M17 bound by `principal_id` to the active M02 machine principal;
+it is `None` for plugin, browser, and operator contexts. The embedded
+`ActorReference` is derived provenance and is never accepted on its own as
+authentication evidence.
 
 ### Identity
 
@@ -374,7 +381,7 @@ Equal typed transport and application facts are interchangeable.
 
 ## Model M59 — CredentialRevocationCommand
 
-Fields: `principal_id: str`, `credential_id: str`, `actor: ActorReference`.
+Fields: `principal_id: str`, `credential_id: str`.
 
 ### Identity
 
@@ -398,7 +405,7 @@ Equal typed transport and application facts are interchangeable.
 
 ## Model M61 — CredentialRotationCommand
 
-Fields: `principal_id: str`, `credential_id: str`, `channel: str`, `actor: ActorReference`.
+Fields: `principal_id: str`, `credential_id: str`, `channel: str`.
 
 ### Identity
 
@@ -686,7 +693,7 @@ Equal typed transport and application facts are interchangeable.
 
 ## Model M85 — PrincipalEnrollmentCommand
 
-Fields: `principal_kind: str`, `channel: str`, `display_label: str | None`, `actor: ActorReference`.
+Fields: `principal_kind: str`, `channel: str`, `display_label: str | None`.
 
 ### Identity
 

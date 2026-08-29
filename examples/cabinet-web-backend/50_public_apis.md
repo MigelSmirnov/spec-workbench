@@ -150,11 +150,13 @@ Read-only.
 
 ### Inputs
 
-Channel, presented credential evidence and bounded abuse context.
+Channel and presented credential evidence. The bounded abuse context is an
+internal access-control classification and cannot be supplied by a caller.
 
 ### Outputs
 
-Active M02/M17 principal context or bounded refusal.
+One active M39 containing the authenticated M02 principal and, exactly for the
+local-node channel, its bound active compatible M17; otherwise bounded refusal.
 
 ### Observable effect
 
@@ -184,7 +186,8 @@ Credential evidence only; no domain mutation.
 
 ### Inputs
 
-Principal context, resolved capability, target identity and current lifecycle state.
+Complete M39 principal context, resolved capability, target identity and
+current lifecycle state.
 
 ### Outputs
 
@@ -218,7 +221,9 @@ No domain mutation.
 
 ### Inputs
 
-Operator authorization, business identity, channel and credential enrollment material.
+Separately authenticated active owner/operator M39, business identity, channel
+and credential enrollment material. The M39 may be absent only for the first
+owner at the protected empty-installation bootstrap.
 
 ### Outputs
 
@@ -287,7 +292,8 @@ Mutates authorization grant state only; no credential or domain Card mutation.
 
 ### Inputs
 
-Operator authorization, principal identity and replacement credential material.
+Separately authenticated active owner/operator M39, principal identity and
+replacement credential material.
 
 ### Outputs
 
@@ -321,7 +327,8 @@ Mutates credential lifecycle only.
 
 ### Inputs
 
-Operator authorization, principal and credential identity.
+Separately authenticated active owner/operator M39, principal and credential
+identity.
 
 ### Outputs
 

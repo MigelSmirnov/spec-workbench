@@ -346,7 +346,8 @@ M02 and M17 identities, fixed capability classes, credential status, channel,
 entity scope, current lifecycle state, configured throttle limits, the
 operation-scoped `CabinetUnitOfWork` port and its access credential, capability
 grant, throttle, and security-audit records, the retained `Clock` port for
-timezone-aware UTC lifecycle timestamps, and monotonic throttle intervals.
+timezone-aware UTC lifecycle and throttle timestamps, the reciprocal
+`cabinet-web-sync-v1` contract, and the M17-to-M02 machine-principal binding.
 
 ### Must not own
 
@@ -357,9 +358,11 @@ secret recovery through public channels, or domain-specific decisions.
 
 Exact grant identity and idempotent provisioning, authorization matrix
 evaluation, timezone-aware UTC observations for persisted or compared lifecycle
-timestamps, and secret-free audit details. Verifier derivation and timing-safe
-comparison are delegated to `credential_vault`; throttle windows and counters
-are delegated to `abuse_throttle`.
+timestamps, internal classification of bounded authentication-abuse contexts,
+complete collision-resistant entity-scope keys, fresh audit-event identity,
+and secret-free audit details. Verifier derivation and timing-safe comparison
+are delegated to `credential_vault`; throttle windows and counters are
+delegated to `abuse_throttle`.
 
 ### Candidate public capabilities
 
@@ -375,7 +378,7 @@ revoke_credential
 ### Depth assessment
 
 kind: deep
-hidden mechanism: channel-bound admission: credential and challenge orchestration over the persisted capability-grant matrix
+hidden mechanism: channel-bound admission: complete authenticated M02/M17 context, internally bounded abuse classification, and exact persisted capability-grant evaluation
 
 The module exposes identity and authorization decisions. Secret material
 mechanics and throttle state belong to `credential_vault` and `abuse_throttle`;
@@ -463,7 +466,7 @@ register_authentication_success
 ### Depth assessment
 
 kind: deep
-hidden mechanism: the monotonic failure-window throttle state machine over locked per-context state
+hidden mechanism: the configured wall-clock failure-window throttle state machine over locked per-context state
 
 ## `effect_journal`
 

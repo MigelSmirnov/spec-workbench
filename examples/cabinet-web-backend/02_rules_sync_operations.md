@@ -275,6 +275,25 @@ The first release favors recoverability over automatic storage cleanup.
    durable state, TLS expectations, or contract compatibility are unavailable.
 10. Authentication/authorization failures are auditable with principal/channel,
    operation class, time, and bounded code, never secret material.
+11. Authentication derives its bounded abuse context inside access control.
+    A credential identity that exists for the exact channel receives its own
+    channel/credential context; malformed, unknown, and cross-channel evidence
+    shares one fixed unknown context per channel. The context is encoded as
+    canonical compact sorted-key UTF-8 JSON before peppered hashing. Callers
+    cannot supply, widen, or choose throttle buckets, and no bearer secret is
+    included.
+12. A local-node credential has `subject_kind = "node"`; it resolves the exact
+    M17, the exact active M02 machine principal bound by `node.principal_id`,
+    and the reciprocal `cabinet-web-sync-v1` contract before producing M39.
+    Principal credentials require `subject_kind = "principal"`; subject kinds
+    never substitute.
+13. Every appended M111 record receives a newly generated collision-resistant
+    `evidence_id`. Credential, principal, node, grant, request, or timestamp
+    identities are never reused as audit-event primary keys.
+14. Each access-control operation owns one explicit transaction. Expected
+    authentication refusal commits only its bounded throttle and audit evidence;
+    every unexpected exception and every authorization or lifecycle refusal
+    rolls back before re-raising, so no partial security mutation survives.
 
 ### Formal invariants
 
@@ -282,11 +301,20 @@ The first release favors recoverability over automatic storage cleanup.
 authenticated_request
 -> active_credential AND active_principal
 
+authenticated_local_request
+-> credential.subject_kind = "node"
+AND active_node
+AND active_machine_principal
+AND node.principal_id = principal.principal_id
+AND node.contract_version = "cabinet-web-sync-v1"
+
 credential_rotation
 -> replacement_active AND prior_credential_revoked
 
 reusable_secret -/> business_data_or_log_or_prompt_or_export
 startup_dependency_missing -> not_ready
+security_audit_append -> fresh_evidence_id
+unexpected_security_failure -> transaction_rolled_back
 ```
 
 ### Required tests
@@ -299,6 +327,13 @@ startup_dependency_missing -> not_ready
 4. Secret scanning of source, logs, errors, artifacts, and responses finds no
    reusable credential.
 5. Missing protected configuration prevents readiness and protected actions.
+6. Ten independent audit events always produce ten distinct evidence IDs even
+   when their projected fields and timestamps are equal.
+7. Malformed, unknown, and cross-channel evidence cannot create attacker-chosen
+   throttle buckets; two known credentials remain independently throttled.
+8. Injected repository, clock, and hashing failures roll back every partial
+   security write; expected authentication denial commits only bounded refusal
+   evidence.
 
 ### Consequence
 
