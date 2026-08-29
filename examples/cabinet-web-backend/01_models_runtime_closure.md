@@ -196,6 +196,11 @@ Equal typed transport and application facts are interchangeable.
 
 Fields: `handoff_id: str`, `handoff_secret: str`, `csrf_token: str`, `display_filename: str | None`, `declared_media_type: str | None`.
 
+This is a transient application request assembled only after the edge has
+resolved an authenticated browser owner and extracted both secrets from
+dedicated request headers. It is never persisted or logged and contains no
+filesystem path, cookie, Basic credential, or trusted-edge assertion.
+
 ### Identity
 
 value
@@ -215,6 +220,27 @@ value
 ### Identity evidence
 
 Equal typed transport and application facts are interchangeable.
+
+## Model M131 — IssuedSourceUploadHandoff
+
+Fields: `handoff: SourceUploadHandoff`, `handoff_secret: str`, `csrf_token: str`, `issued_at: datetime`.
+
+Transient issuance result returned exactly once by the protected handoff
+issuer. It carries the secret-free M15 identity together with two independent
+plaintext values: the upload bearer and the CSRF token bound by the durable
+M112 verifiers to the same handoff and intended principal. It is never a Card,
+snapshot, persistence record, audit payload, synchronization payload, or log
+value.
+
+### Identity
+
+value
+
+### Identity evidence
+
+Equal complete issuance facts are interchangeable only at the immediate
+protected return boundary. No later operation can reconstruct either plaintext
+secret from M15 or M112.
 
 ## Model M46 — CapabilityResolution
 

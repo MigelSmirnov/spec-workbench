@@ -64,8 +64,10 @@ Candidate fields:
 - issued and expiry times;
 - consumed/revoked time optional.
 
-The bearer secret used to present the handoff is protected credential material
-and is not stored or returned as a domain field after issuance.
+The bearer and CSRF secrets used to present the handoff are protected transient
+credential material. They are not M15 domain fields and are never stored in
+plaintext. At issuance only, M131 carries M15 plus both plaintext values to the
+protected caller; every later durable or business projection remains secret-free.
 
 ### Identity
 
@@ -143,4 +145,3 @@ change; retained as bounded audit/idempotency evidence.
 ### Open questions
 
 None.
-

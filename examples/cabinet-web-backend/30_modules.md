@@ -516,8 +516,9 @@ explicit evidence-backed release of eligible VPS working bytes.
 ### Knows
 
 Exact Card/source/revision targets, approved media catalogue, A13 limits,
-receipt/hash verification needed by A10, authorized human context, and the
-retained `Clock` port for custody evidence timestamps.
+receipt/hash verification needed by A10, authenticated browser principal
+identity supplied through the typed gateway boundary, and the retained `Clock`
+port for custody evidence timestamps.
 
 ### Must not own
 
@@ -527,8 +528,9 @@ public static serving, or automatic cleanup from inactivity or Registry status.
 ### Hides
 
 Content identification, hashing, server-chosen storage keys, immutable blob
-publication, handoff bearer verification, release eligibility, and retained
-custody evidence.
+publication, purpose-separated handoff/CSRF verifier derivation and comparison,
+principal/target/revision/expiry/status binding, atomic single-use consumption,
+release eligibility, and retained custody evidence.
 
 ### Candidate public capabilities
 
@@ -551,9 +553,10 @@ identity, and conservative release without becoming a document processor.
 
 ### Owns
 
-The A07 private-listener browser boundary: same-origin mutation enforcement,
-CSRF context, inert output encoding, security headers, bounded upload/download
-HTTP handling, and safe response projection.
+The A07 private-listener browser boundary: trusted-edge owner assertion,
+same-origin mutation enforcement, secret-header extraction, inert output
+encoding, security headers, bounded upload/download HTTP handling, and safe
+response projection.
 
 ### Knows
 
@@ -568,9 +571,10 @@ credential lifecycle, or plugin/local-node authentication.
 
 ### Hides
 
-HTTP parsing, request size enforcement at the application edge, CSRF tokens,
-content disposition, response headers, template escaping, and stable error
-mapping.
+HTTP parsing, request size enforcement at the application edge, rejection of
+query/cookie/path secret transport, content disposition, response headers,
+template escaping, and stable non-5xx security-error mapping. It never persists
+or verifies handoff/CSRF secrets itself.
 
 ### Candidate public capabilities
 

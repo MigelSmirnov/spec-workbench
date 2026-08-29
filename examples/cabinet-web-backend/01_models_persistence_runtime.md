@@ -66,9 +66,11 @@ Every `evidence_id` names one immutable security event. Equal projected fields a
 
 ## Model M112 — SourceUploadHandoffRecord
 
-Fields: `handoff_id: str`, `card_id: str`, `source_id: str`, `expected_revision: CardRevisionReference`, `principal_id: str`, `actor: ActorReference`, `secret_hash: str`, `status: str`, `issued_at: datetime`, `expires_at: datetime`, `consumed_at: datetime | None`, `revoked_at: datetime | None`.
+Fields: `handoff_id: str`, `card_id: str`, `source_id: str`, `expected_revision: CardRevisionReference`, `principal_id: str`, `actor: ActorReference`, `secret_hash: str`, `csrf_hash: str`, `status: str`, `issued_at: datetime`, `expires_at: datetime`, `consumed_at: datetime | None`, `revoked_at: datetime | None`.
 
-Durable upload-handoff row containing the public M15 facts plus the protected verifier; the returned `SourceUploadHandoff` remains verifier-free.
+Durable upload-handoff row containing the public M15 facts plus independent,
+purpose-separated verifiers for the handoff bearer and CSRF token. M15 and all
+durable projections remain plaintext-secret-free.
 
 ### Identity
 
@@ -76,7 +78,7 @@ entity
 
 ### Identity evidence
 
-The stable `handoff_id` preserves one single-use handoff identity through issued, consumed, expired, or revoked state. The reusable bearer secret is not part of persistence identity.
+The stable `handoff_id` preserves one single-use handoff identity through issued, consumed, expired, or revoked state. Reusable bearer and CSRF secrets are not part of persistence identity.
 
 ## Model M113 — SourceBytePublication
 

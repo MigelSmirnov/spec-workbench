@@ -182,26 +182,35 @@ to `module:source_custody`; HTTP/CSRF/output safety belongs to
 ### Steps
 
 1. `capability:source_custody.issue_upload_handoff` creates one short-lived,
-   single-use handoff for the exact target after authorization. The bearer is
-   shown only to the protected upload context.
-2. `capability:web_gateway.accept_source_upload` enforces private-listener,
-   same-origin, CSRF, and bounded HTTP rules and passes data, never a caller path.
-3. `capability:source_custody.store_original_source` verifies handoff state,
-   size, identified media type and hash, then atomically publishes immutable
-   bytes while consuming the handoff.
-4. If metadata must be linked to an Invoice revision,
+   single-use handoff for the exact target after authorization, persists only
+   purpose-separated bearer/CSRF verifiers in M112, and returns M131 exactly
+   once to the protected caller.
+2. The TLS/Basic edge overwrites the trusted-owner assertion, strips Basic
+   Authorization before proxying, and keeps the application listener private.
+3. `capability:web_gateway.accept_source_upload` resolves that trusted owner,
+   enforces same-origin, accepts the M131 bearer and CSRF token only through
+   dedicated headers, and passes typed data plus a bounded body, never a caller
+   path or raw edge credential.
+4. `capability:source_custody.store_original_source` locks and loads the exact
+   M112 row; timing-safely verifies principal, both purpose-separated verifiers,
+   exact Card/source/revision, issued status and expiry; validates size,
+   identified media type and hash; then atomically publishes immutable bytes
+   and changes `issued -> consumed`.
+5. If metadata must be linked to an Invoice revision,
    `capability:effect_journal.begin_effect` surrounds
    `capability:invoice_lifecycle.attach_invoice_source_metadata`, followed by
    `capability:effect_journal.commit_effect`.
-5. `capability:chatgpt_interaction.report_composite_outcome` can report Card and
+6. `capability:chatgpt_interaction.report_composite_outcome` can report Card and
    custody results independently.
 
 ### Outcomes
 
 Success proves only Cabinet Web custody of exact bytes and their logical source
-link. Replayed equal bytes are idempotent. Invalid, expired, consumed,
-unsupported, oversized, malformed, mismatched, or unauthorized submissions
-produce no false stored state and never imply local Backend acceptance.
+link. A new valid handoff for equal already accepted bytes is idempotent; a
+consumed handoff never re-authorizes upload. Invalid, expired, consumed,
+principal/revision/target-mismatched, unsupported, oversized, malformed, or
+unauthorized submissions produce no false stored state and never imply local
+Backend acceptance. Security-boundary failures return bounded non-5xx results.
 
 ### Errors
 

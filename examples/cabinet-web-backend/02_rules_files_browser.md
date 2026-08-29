@@ -63,16 +63,20 @@ into a document-processing service.
 
 1. M15 is issued only after the authorized owner selects the exact Card/source
    and current revision through ChatGPT or the protected Web application.
-2. A handoff is usable only before its configured expiry, by the intended human
+2. Issuance returns M131 exactly once. Its handoff bearer and CSRF token are
+   independent cryptographically random values bound to the same M15 identity
+   and intended principal; only purpose-separated one-way verifiers enter M112.
+3. A handoff is usable only before its configured expiry, by the intended human
    boundary, for its exact target and one payload.
-3. Successful custody commit atomically changes `issued -> consumed`. Concurrent
+4. Successful custody commit atomically changes `issued -> consumed`. Concurrent
    submissions cannot consume the same handoff twice.
-4. Expired, revoked, consumed, malformed, or target-mismatched handoffs fail
-   closed and cannot be refreshed implicitly.
-5. The presented bearer value is returned only for use in the protected upload
-   URL/form, is never stored in plaintext, and is absent from logs, analytics,
-   referrers, Card data, filenames, and synchronization packages.
-6. Issuing another handoff creates another M15 entity and does not mutate an
+5. Expired, revoked, consumed, malformed, principal-mismatched,
+   revision-mismatched, or target-mismatched handoffs fail closed and cannot be
+   refreshed implicitly.
+6. Neither plaintext value from M131 is stored, reconstructed, or placed in
+   Card data, persistence records, audit records, synchronization packages,
+   URLs, query strings, logs, analytics, referrers, filenames, or errors.
+7. Issuing another handoff creates another M15 entity and does not mutate an
    expired or revoked handoff.
 
 ### Formal invariants
@@ -85,11 +89,15 @@ expired_or_revoked_or_consumed -/> upload_authority
 
 ### Required tests
 
-1. Expired, consumed, revoked, and wrong-target handoffs are rejected.
-2. Concurrent submissions produce at most one successful consumption.
-3. A failed payload validation does not falsely consume the handoff unless the
+1. Expired, consumed, revoked, wrong-principal, wrong-revision, and wrong-target
+   handoffs are rejected.
+2. Wrong bearer and wrong CSRF token are indistinguishable failures and neither
+   plaintext value appears in persisted or logged evidence.
+3. Concurrent submissions produce at most one successful consumption.
+4. A failed payload validation does not falsely consume the handoff unless the
    explicit abuse policy revokes it.
-4. Reusable bearer material never appears in durable business data or logs.
+5. Exact issuance returns both transient plaintext values once while M15, M112,
+   Cards, snapshots, audits, URLs, and later reads remain plaintext-secret-free.
 
 ### Consequence
 
@@ -103,19 +111,25 @@ broad authenticated file-manager session.
 1. Public TLS terminates at the existing VPS edge; the application listener is
    private behind it. No unrestricted backend port is public.
 2. The first release retains one nginx Basic Auth human boundary for secondary
-   Web pages. Basic Auth is not plugin or local-node authentication.
-3. State-changing browser requests require accepted same-origin enforcement and
-   an unguessable CSRF value bound to the current protected browser context.
-4. Cross-origin credentialed requests are denied. The accepted Web application
+   Web pages. Basic Auth is not plugin or local-node authentication. The edge
+   overwrites a fixed trusted-owner assertion for the private application and
+   never forwards the client-supplied assertion or Basic Authorization value.
+3. State-changing browser requests require the exact trusted owner assertion,
+   accepted same-origin enforcement, and the unguessable M131 CSRF value whose
+   verifier is bound to the same handoff and principal in M112.
+4. The upload bearer and CSRF value are accepted only in dedicated request
+   headers. They are forbidden in the path, query string, cookie, filename,
+   response redirect, or any logged request projection.
+5. Cross-origin credentialed requests are denied. The accepted Web application
    needs no permissive CORS mode.
-5. All Card/source/user strings are encoded as text in HTML. No stored value may
+6. All Card/source/user strings are encoded as text in HTML. No stored value may
    become raw markup, script, style, event handler, URL scheme, or template
    structure.
-6. Security headers restrict framing, active content, referrer disclosure, MIME
+7. Security headers restrict framing, active content, referrer disclosure, MIME
    sniffing, and transport downgrade. Source downloads use non-executable
    disposition and the verified media type.
-7. Browser state and hidden controls never authorize an entity or capability.
-8. Authentication failures are bounded by A11 abuse controls and reveal no
+8. Browser state and hidden controls never authorize an entity or capability.
+9. Authentication failures are bounded by A11 abuse controls and reveal no
    distinction between unknown and disabled principals.
 
 ### Formal invariants
@@ -130,11 +144,17 @@ browser_state -/> authorization_authority
 
 ### Required tests
 
-1. Cross-origin and missing/invalid CSRF mutation requests fail.
-2. Stored script/markup strings render inertly in every Cabinet page.
-3. Framing and permissive cross-origin credential use are blocked.
-4. Direct access to the private application listener is unavailable externally.
-5. Download filenames and media types cannot create inline active content.
+1. Cross-origin, missing/invalid trusted owner assertion, missing/invalid CSRF,
+   and missing/invalid handoff bearer mutation requests fail with bounded
+   non-5xx responses.
+2. Client-supplied trusted-edge assertions are overwritten and Basic
+   Authorization is not forwarded to the private application.
+3. Handoff and CSRF plaintext values never appear in URL, access log, referrer,
+   persistence, audit, or error output.
+4. Stored script/markup strings render inertly in every Cabinet page.
+5. Framing and permissive cross-origin credential use are blocked.
+6. Direct access to the private application listener is unavailable externally.
+7. Download filenames and media types cannot create inline active content.
 
 ### Consequence
 

@@ -1137,19 +1137,23 @@ Read/recovery of effect journal.
 
 ### Inputs
 
-Authorized human, exact target, expected revision and configured expiry.
+Authorized human, exact target and expected revision. Expiry comes from the
+accepted configuration.
 
 ### Outputs
 
-M15 handoff identity plus one-time bearer presentation.
+M131 containing secret-free M15 plus independent one-time handoff bearer and
+CSRF presentation.
 
 ### Observable effect
 
-Persists issued handoff verifier.
+Persists M112 with purpose-separated bearer and CSRF verifiers in one
+transaction; neither plaintext value is persisted.
 
 ### Enforces
 
-The bearer is not business data and cannot target arbitrary files.
+Neither secret is business data. The handoff is bound to the authorized
+principal and exact existing Card/source/current revision.
 
 ### Errors
 
@@ -1171,7 +1175,8 @@ Creates handoff state only.
 
 ### Inputs
 
-Presented handoff, bounded bytes and caller media declaration.
+Authenticated browser principal ID, presented handoff ID, bearer and CSRF
+token, bounded bytes and caller media declaration.
 
 ### Outputs
 
@@ -1183,7 +1188,9 @@ Consumes handoff and publishes immutable bytes atomically.
 
 ### Enforces
 
-Filename/content cannot choose path or executable structure; no server OCR.
+Both secrets, intended principal, exact target/revision, issued status and
+expiry are verified under the handoff lock. Filename/content cannot choose path
+or executable structure; no server OCR.
 
 ### Errors
 
@@ -1277,7 +1284,9 @@ Mutates working-byte availability; preserves all logical history.
 
 ### Inputs
 
-Authenticated browser context, CSRF proof, handoff bearer and bounded body.
+Trusted-edge authenticated browser-owner context, same-origin evidence,
+dedicated handoff/CSRF headers and bounded multipart body. No secret is accepted
+from path, query, cookie, filename, redirect, or logged projection.
 
 ### Outputs
 
@@ -1289,7 +1298,9 @@ Transport parsing only; downstream custody may store bytes.
 
 ### Enforces
 
-Cross-origin, invalid CSRF and active content fail closed.
+Missing/invalid trusted owner, cross-origin, missing/invalid secret headers and
+active content fail closed with bounded non-5xx responses. Custody owns secret
+verification and business mutation.
 
 ### Errors
 

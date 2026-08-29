@@ -114,11 +114,11 @@
     "begin_effect": "(journal: EffectJournal, request: BeginEffectRequest) -> EffectReservation",
     "commit_effect": "(journal: EffectJournal, effect_id: str, result: EffectResult) -> CabinetEffect",
     "reconcile_effect": "(journal: EffectJournal, effect_id: str, principal_id: str) -> EffectReconciliation",
-    "issue_upload_handoff": "(custody: SourceCustodyService, command: UploadHandoffCommand, authorization: AuthorizationDecision) -> SourceUploadHandoff",
-    "store_original_source": "(custody: SourceCustodyService, handoff_id: str, presented_handoff_secret: str, display_filename: str | None, declared_media_type: str | None, upload: BinaryUpload) -> SourceCustodyResult",
+    "issue_upload_handoff": "(custody: SourceCustodyService, command: UploadHandoffCommand, authorization: AuthorizationDecision) -> IssuedSourceUploadHandoff",
+    "store_original_source": "(custody: SourceCustodyService, principal_id: str, handoff_id: str, presented_handoff_secret: str, presented_csrf_token: str, display_filename: str | None, declared_media_type: str | None, upload: BinaryUpload) -> SourceCustodyResult",
     "retrieve_original_source": "(custody: SourceCustodyService, request: SourceRetrievalRequest, authorization: AuthorizationDecision) -> SourceDownload",
     "release_vps_working_set": "(custody: SourceCustodyService, command: VpsWorkingSetReleaseCommand, authorization: AuthorizationDecision) -> VpsWorkingSetReleaseResult",
-    "accept_source_upload": "(gateway: WebGateway, request: BrowserUploadRequest, upload: BinaryUpload) -> SourceCustodyResult",
+    "accept_source_upload": "(gateway: WebGateway, principal: AuthenticatedPrincipal, request: BrowserUploadRequest, upload: BinaryUpload) -> SourceCustodyResult",
     "serve_source_download": "(gateway: WebGateway, card_id: str, source_id: str, authorization: AuthorizationDecision) -> SourceDownload",
     "observe_sync_compatibility": "(gateway: SyncGateway, request: SyncCompatibilityRequest) -> LocalBackendConnectionObservation",
     "serve_sync_request": "(gateway: SyncGateway, request: ClosedSyncRequest) -> ClosedSyncResponse",
@@ -148,9 +148,9 @@
     "derive_shopping_list_handler": "(request: Request, payload: ShoppingListDerivationRequest) -> ShoppingListProposal",
     "attach_project_estimate_handler": "(request: Request, command: AttachProjectEstimateCommand) -> ProjectMutationResult",
     "save_shopping_list_handler": "(request: Request, command: SaveShoppingListCommand) -> ProjectMutationResult",
-    "issue_upload_handoff_handler": "(request: Request, command: UploadHandoffCommand) -> SourceUploadHandoff",
+    "issue_upload_handoff_handler": "(request: Request, command: UploadHandoffCommand) -> IssuedSourceUploadHandoff",
     "release_vps_working_set_handler": "(request: Request, command: VpsWorkingSetReleaseCommand) -> VpsWorkingSetReleaseResult",
-    "accept_source_upload_handler": "(request: Request, handoff_id: str, handoff_secret: str, csrf_token: str, file: UploadFile) -> SourceCustodyResult",
+    "accept_source_upload_handler": "(request: Request, handoff_id: str, file: UploadFile) -> SourceCustodyResult",
     "serve_source_download_handler": "(request: Request, card_id: str, source_id: str) -> StreamingResponse",
     "observe_sync_compatibility_handler": "(request: Request, payload: SyncCompatibilityRequest) -> LocalBackendConnectionObservation",
     "discover_invoice_work_handler": "(request: Request, query: InvoiceWorkDiscoveryQuery) -> InvoiceWorkPage",
@@ -177,6 +177,8 @@
     "InvoiceExchange.__init__": "(self, unit_of_work_factory: CabinetUnitOfWorkFactory, card_workspace: CardWorkspace, source_custody: SourceCustodyService, clock: Clock) -> None",
     "resolve_pull_working_set": "(exchange: InvoiceExchange, unit_of_work: CabinetUnitOfWork, manifest_id: str) -> tuple[InvoiceTransferManifest, InvoiceWorkingSetRecord]",
     "issue_transfer_package": "(exchange: InvoiceExchange, unit_of_work: CabinetUnitOfWork, node: CabinetNodeIdentity, command: InvoicePackagePullCommand, manifest: InvoiceTransferManifest) -> InvoiceTransferIssuance",
+    "derive_handoff_secret_verifier": "(handoff_pepper: str, handoff_id: str, secret: str) -> str",
+    "derive_handoff_csrf_verifier": "(handoff_pepper: str, handoff_id: str, csrf_token: str) -> str",
     "open_verified_source": "(custody: SourceCustodyService, reference: SourceContentReference) -> SourceDownload",
     "InvoiceCatalogue.__init__": "(self, unit_of_work_factory: CabinetUnitOfWorkFactory) -> None",
     "load_invoice_revisions": "(catalogue: InvoiceCatalogue, unit_of_work: CabinetUnitOfWork) -> tuple[tuple[CardRevisionReference, InvoiceCardV1], ...]",
@@ -191,7 +193,7 @@
     "ProjectWorkspace.__init__": "(self, unit_of_work_factory: CabinetUnitOfWorkFactory, card_workspace: CardWorkspace) -> None",
     "RegistryReplicaService.__init__": "(self, unit_of_work_factory: CabinetUnitOfWorkFactory) -> None",
     "RuntimeControl.__init__": "(self, unit_of_work_factory: CabinetUnitOfWorkFactory, source_byte_store: SourceByteStore) -> None",
-    "SourceCustodyService.__init__": "(self, unit_of_work_factory: CabinetUnitOfWorkFactory, source_byte_store: SourceByteStore, clock: Clock) -> None",
+    "SourceCustodyService.__init__": "(self, unit_of_work_factory: CabinetUnitOfWorkFactory, source_byte_store: SourceByteStore, handoff_pepper: str, clock: Clock) -> None",
     "SyncGateway.__init__": "(self, access_control: AccessControlService, invoice_exchange: InvoiceExchange, registry_replica: RegistryReplicaService) -> None",
     "WebGateway.__init__": "(self, access_control: AccessControlService, source_custody: SourceCustodyService, clock: Clock) -> None",
     "BinaryUpload.read_chunk": "(self, max_bytes: int) -> bytes",
@@ -389,10 +391,13 @@
     "PostgresCabinetUnitOfWork.insert_release_evidence": "(self, evidence: VpsReleaseEvidence) -> None"
   },
   "notes": [
-    "accept_source_upload: [SECURITY_BOUNDARY] MUST accept only the authenticated browser-owner context with valid same-origin and CSRF evidence, then call store_original_source with request.handoff_id, request.handoff_secret, request.display_filename, request.declared_media_type and the still-bounded BinaryUpload stream; never treat a filename, media declaration, handoff identifier, or browser control as storage-path or authorization evidence.",
-    "accept_source_upload_handler: [ORCHESTRATION] MUST enforce same-origin and CSRF before consumption, derive one safe display filename from the multipart UploadFile filename, construct BrowserUploadRequest with that filename and file.content_type, and delegate one module-owned concrete BinaryUpload adapter whose synchronous read_chunk(max_bytes) reads at most max_bytes from file.file and enforces = config.upload.max_file_bytes across the complete stream without pre-buffering or interpreting the document; MUST NOT call UploadFile.read, buffer the complete upload, or instantiate the BinaryUpload interface itself.",
-    "issue_upload_handoff: [BEHAVIOR] MUST under one authorization decision, verify the exact Card, logical source, and expected current revision before issuing a new 900-second single-use handoff; persist only the verifier and return the bearer value once without placing it in Card data or logs; constructs the one-time SourceUploadHandoff value at the protected source-custody boundary.",
-    "store_original_source: [PROVENANCE] MUST lock the exact handoff with `lock_handoff`, read bytes only through upload.read_chunk, identify an accepted content format from bounded bytes, require declared_media_type to be absent or agree with that identified type, preserve display_filename only as display/provenance metadata, stream to private candidate storage while calculating size and content hash, atomically commit immutable custody and consume the handoff, and make equal replay idempotent while rejecting conflicting bytes; neither display_filename nor declared_media_type is storage-path or authorization evidence.",
+    "accept_source_upload: [SECURITY_BOUNDARY] MUST accept the separately resolved AuthenticatedPrincipal and BrowserUploadRequest, pass principal.principal.principal_id plus request.handoff_id, request.handoff_secret, request.csrf_token, request.display_filename, request.declared_media_type and the still-bounded BinaryUpload stream to store_original_source exactly once, and return that custody result unchanged; it MUST NOT authenticate from request data, compare secrets, persist transport values, or treat a filename, media declaration, handoff identifier, CSRF token, or browser control as storage-path or authorization evidence.",
+    "accept_source_upload_handler: [ORCHESTRATION] MUST require one Origin exactly equal to the request scheme and Host, extract the trusted owner assertion only from = rules.source_ingress.trusted_owner_header and require its scheme/value to equal = rules.source_ingress.trusted_owner_scheme and = rules.source_ingress.trusted_owner_value before resolving the owner through resolve_browser_principal; extract one non-empty handoff bearer and CSRF token only from = rules.source_ingress.handoff_secret_header and = rules.source_ingress.csrf_header, reject missing or duplicate values with AuthenticationRequiredError or AuthorizationDeniedError, and never accept either secret from path, query, cookie, filename, redirect, logged projection, or exception as required by = rules.source_ingress.secret_transport; then derive one safe display filename from the multipart UploadFile filename, construct BrowserUploadRequest with the path handoff_id, both extracted secrets, that filename and file.content_type, and delegate accept_source_upload with the resolved principal and one module-owned concrete BinaryUpload adapter whose synchronous read_chunk(max_bytes) reads at most max_bytes from file.file and enforces = config.upload.max_file_bytes across the complete stream without pre-buffering or interpreting the document; MUST NOT call UploadFile.read, buffer the complete upload, or instantiate the BinaryUpload interface itself.",
+    "derive_handoff_secret_verifier: [DETERMINISM_OR_ORDERING] MUST derive the lowercase hexadecimal verifier using = rules.source_ingress.verifier_algorithm with handoff_pepper as key and a UTF-8 message composed from = rules.source_ingress.handoff_verifier_domain, handoff_id and secret in that order; it performs no persistence, logging, random generation, or secret retention.",
+    "derive_handoff_csrf_verifier: [DETERMINISM_OR_ORDERING] MUST derive the lowercase hexadecimal verifier using = rules.source_ingress.verifier_algorithm with handoff_pepper as key and a UTF-8 message composed from = rules.source_ingress.csrf_verifier_domain, handoff_id and csrf_token in that order; it performs no persistence, logging, random generation, or secret retention.",
+    "issue_upload_handoff: [ORCHESTRATION] MUST open and begin one UoW, require authorization.allowed and command.actor.principal_id equal authorization.principal_id, lock command.card_id, load its current reference and require exact equality with command.expected_revision, load that exact canonical revision and prove command.source_id is its existing logical source, then mint independent cryptographically random handoff and CSRF plaintext values, derive their purpose-separated verifiers only through derive_handoff_secret_verifier and derive_handoff_csrf_verifier, insert one issued SourceUploadHandoffRecord carrying only those verifiers with expiry derived from = config.upload.handoff_ttl_seconds, commit exactly once, and return one IssuedSourceUploadHandoff carrying the secret-free SourceUploadHandoff plus both plaintext values exactly once; every mismatch or exception MUST rollback and expose neither plaintext value.",
+    "store_original_source: [SECURITY_BOUNDARY] MUST open and begin one UoW, call lock_handoff then load_handoff for handoff_id, and before reading upload bytes require an existing issued record with no consumed_at or revoked_at, current time before expires_at, principal_id equal the authenticated principal_id, current Card reference equal expected_revision, the same logical source still present, and timing-safe equality of both stored hashes with values derived only through derive_handoff_secret_verifier and derive_handoff_csrf_verifier; missing, malformed, expired, consumed, revoked, wrong-principal, wrong-target, wrong-revision, bearer-mismatched, or CSRF-mismatched evidence MUST rollback and raise AuthorizationDeniedError without logging or distinguishing either secret.",
+    "store_original_source: [PROVENANCE] MUST after successful handoff verification read bytes only through upload.read_chunk, enforce = config.upload.max_file_bytes, identify a format in = rules.source_ingress.accepted_content_formats from bounded content, require declared_media_type to be absent or agree with that identified type, preserve display_filename only as display/provenance metadata, stream to private candidate storage while calculating size and content hash, lock the exact Card/source custody identity, reject conflicting accepted bytes, insert or reuse equal immutable custody, update the exact handoff to consumed with consumed_at from the retained Clock, and commit custody plus `issued -> consumed` exactly once; every exception rolls back, removes uncommitted staging, and leaves the handoff issued unless the accepted abuse policy explicitly revokes it. A new valid handoff for already accepted equal bytes returns replayed true; a consumed handoff never re-authorizes upload.",
     "retrieve_original_source: [SECURITY_BOUNDARY] MUST resolve only the authorized Card/source pair to its immutable verified content reference, reopen a private regular file beneath the configured store, recheck integrity, and return a module-owned concrete SourceDownload stream over that verified file, whose describe() returns the exact ContentReference of the verified custody content with content_id=request.source_id, with no filesystem path or credential; the module constructs SourceDownload; MUST NOT instantiate the SourceDownload interface itself.",
     "serve_source_download: [PATH_OR_ARTIFACT_POLICY] MUST return the concrete SourceDownload implementation obtained from source custody as a non-inline attachment source using an encoded safe display filename and verified media type, disable active-content interpretation, and never expose the internal storage reference in headers, body, logs, or errors; MUST NOT instantiate the SourceDownload interface itself.",
     "authenticate_request: [SECURITY_BOUNDARY] MUST open one UoW through `CabinetUnitOfWorkFactory.open` and `begin` and inside one commit-or-rollback transaction: derive the context hash through derive_abuse_context_hash, acquire the state through acquire_throttle_state, and when throttle_active is true persist the refreshed state, record denied secret-free audit through `insert_security_audit`, commit, and raise AuthenticationThrottledError; otherwise verify the presented bearer through verify_bearer_credential with the exact channel and resolve its subject with `load_principal`. Every failure — malformed bearer, unknown or mismatched credential, or an inactive or revoked principal — MUST take one indistinguishable path: register_authentication_failure, denied audit, commit, AuthenticationRequiredError. Success MUST update `last_authenticated_at` through `update_credential`, call register_authentication_success, record allowed audit, commit, and return the AuthenticatedPrincipal; the presented bearer is never retained or persisted.",
@@ -552,7 +557,7 @@
     "ProjectWorkspace.__init__: [DEPENDENCY_BOUNDARY] MUST retain the per-operation CabinetUnitOfWork factory and canonical Card workspace without receiving a database URL or importing Registry master authority. Across the module, every persisted, emitted, or compared wall-clock timestamp MUST be timezone-aware UTC and MUST NOT be a naive datetime. Reflective attribute access over models, dependencies, or self (getattr, hasattr, setattr, delattr, vars) is forbidden across the module; every declared field and operation is addressed directly by name.",
     "RegistryReplicaService.__init__: [DEPENDENCY_BOUNDARY] MUST retain the per-operation CabinetUnitOfWork factory for received Registry replica state and never receive a database URL or mutable Registry master connection. Across the module, every persisted, emitted, or compared wall-clock timestamp MUST be timezone-aware UTC and MUST NOT be a naive datetime. Reflective attribute access over models, dependencies, or self (getattr, hasattr, setattr, delattr, vars) is forbidden across the module; every declared field and operation is addressed directly by name.",
     "RuntimeControl.__init__: [DEPENDENCY_BOUNDARY] MUST retain the per-operation CabinetUnitOfWork factory and SourceByteStore port for readiness and recovery verification without receiving or exposing database URLs or filesystem roots. Across the module, every persisted, emitted, or compared wall-clock timestamp MUST be timezone-aware UTC and MUST NOT be a naive datetime. Every owned callable MUST call the declared CabinetUnitOfWork and SourceByteStore operations directly by name — open, begin, commit, rollback and the declared methods; reflective or conditional probing of retained dependencies for attributes, methods, or context-manager support is forbidden.",
-    "SourceCustodyService.__init__: [SECURITY_BOUNDARY] MUST retain the exact supplied CabinetUnitOfWorkFactory, SourceByteStore port, and Clock; MUST NOT receive a database URL or filesystem root, construct adapters, read environment variables, or construct an alternate time source. Source bytes MUST NOT be retained in module, class, or instance state: every byte written or read goes through the retained SourceByteStore port (stage, publish, verify, read_stored). Across the module, every persisted, emitted, or compared wall-clock timestamp MUST come from the retained clock and be timezone-aware UTC. Every owned callable MUST implement its complete specified verification, custody, and streaming behavior; an unconditional rejection, empty result, fixed success, or other fail-closed placeholder body is forbidden. Reflective attribute access over models, dependencies, or self (getattr, hasattr, setattr, delattr, vars) is forbidden across the module; every declared field and operation is addressed directly by name.",
+    "SourceCustodyService.__init__: [SECURITY_BOUNDARY] MUST retain the exact supplied CabinetUnitOfWorkFactory, SourceByteStore port, non-empty handoff_pepper, and Clock; MUST NOT receive a database URL or filesystem root, construct adapters, read environment variables, log or expose the pepper, or construct an alternate time source. Source bytes MUST NOT be retained in module, class, or instance state: every byte written or read goes through the retained SourceByteStore port (stage, publish, verify, read_stored). Across the module, every persisted, emitted, or compared wall-clock timestamp MUST come from the retained clock and be timezone-aware UTC. Every owned callable MUST implement its complete specified verification, custody, and streaming behavior; an unconditional rejection, empty result, fixed success, or other fail-closed placeholder body is forbidden. Reflective attribute access over models, dependencies, or self (getattr, hasattr, setattr, delattr, vars) is forbidden across the module; every declared field and operation is addressed directly by name.",
     "SyncGateway.__init__: [DEPENDENCY_BOUNDARY] MUST retain only access control, invoice exchange, and Registry replica services for the six closed local-initiated synchronization capabilities. Across the module, every emitted or compared wall-clock timestamp MUST be timezone-aware UTC and MUST NOT be a naive datetime. Reflective attribute access over models, dependencies, or self (getattr, hasattr, setattr, delattr, vars) is forbidden across the module; every declared field and operation is addressed directly by name.",
     "WebGateway.__init__: [DEPENDENCY_BOUNDARY] MUST retain only the exact supplied AccessControlService, SourceCustodyService, and Clock for the protected browser upload and download boundary and MUST NOT construct an alternate time source. Across the module, every emitted or compared wall-clock timestamp MUST come from the retained clock and be timezone-aware UTC. Reflective attribute access over models, dependencies, or self (getattr, hasattr, setattr, delattr, vars) is forbidden across the module; every declared field and operation is addressed directly by name.",
     "BinaryUpload.read_chunk: [SECURITY_BOUNDARY] MUST return at most max_bytes from the presented upload stream, return empty bytes only at exhaustion, and never expose a filesystem path.",
@@ -674,7 +679,7 @@
     "CabinetUnitOfWork.insert_release_evidence: [PROVENANCE] MUST insert the exact supplied VpsReleaseEvidence projection into vps_release_evidence inside the active operation UoW and let uniqueness/constraint conflicts remain visible to the caller; MUST NOT upsert, replace prior evidence, or commit independently.",
     "PostgresCabinetUnitOfWorkFactory.__init__: [CONFIG_REFERENCE] MUST bind only the protected PostgreSQL connection setting required by = config.runtime_storage.database_url_required; MUST NOT open a transaction, read domain state, or provide a fallback database.",
     "PostgresCabinetUnitOfWorkFactory.open: [DEPENDENCY_BOUNDARY] MUST construct and return one fresh PostgresCabinetUnitOfWork for one application operation so singleton services never share an active transaction; connection/UoW construction MUST remain outside domain services.",
-    "create_cabinet_web_app: [ORCHESTRATION] MUST be the sole Cabinet Web composition root: resolve protected deployment configuration, run PostgreSQL migration/connectivity checks and source-publication recovery before traffic, construct the PostgreSQL UoW factory, protected filesystem byte store, and exactly one SystemClock, supply that same Clock instance to CardWorkspace, AccessControlService, InvoiceLifecycle, InvoiceExchange, EffectJournal, SourceCustodyService, and WebGateway, wire every other accepted service/gateway dependency, then delegate the completed graph to create_app; MUST fail closed instead of inventing adapters, defaults, alternate clocks, or local-backend reachability.",
+    "create_cabinet_web_app: [ORCHESTRATION] MUST be the sole Cabinet Web composition root: resolve protected deployment configuration including the credential pepper, run PostgreSQL migration/connectivity checks and source-publication recovery before traffic, construct the PostgreSQL UoW factory, protected filesystem byte store, and exactly one SystemClock, supply that same Clock instance to CardWorkspace, AccessControlService, InvoiceLifecycle, InvoiceExchange, EffectJournal, SourceCustodyService, and WebGateway, supply the protected credential pepper as SourceCustodyService.handoff_pepper for purpose-separated handoff verification, wire every other accepted service/gateway dependency, then delegate the completed graph to create_app; MUST fail closed instead of inventing adapters, defaults, alternate clocks, secrets, or local-backend reachability.",
     "create_cabinet_web_app: [DEPENDENCY_BOUNDARY] MUST import Clock and CabinetUnitOfWork interfaces only from models, PostgresCabinetUnitOfWork and create_cabinet_schema only from cabinet_persistence, LocalFilesystemSourceByteStore only from source_byte_store, every service and gateway class only from the module that owns it, and create_app only from api; SystemClock is the composition-root implementation of Clock. It MUST NOT import from any other internal path, invent a persistence or adapter module, construct a unit of work outside PostgresCabinetUnitOfWorkFactory, or construct service-local clocks."
   ],
   "models": {
@@ -1998,6 +2003,7 @@
         "principal_id": "str",
         "actor": "ActorReference",
         "secret_hash": "str",
+        "csrf_hash": "str",
         "status": "str",
         "issued_at": "datetime",
         "expires_at": "datetime",
@@ -2129,6 +2135,15 @@
     },
     "Clock": {
       "kind": "interface"
+    },
+    "IssuedSourceUploadHandoff": {
+      "identity": "value",
+      "fields": {
+        "handoff": "SourceUploadHandoff",
+        "handoff_secret": "str",
+        "csrf_token": "str",
+        "issued_at": "datetime"
+      }
     }
   },
   "imports": {
@@ -2301,7 +2316,8 @@
         "InvoiceParty",
         "InvoiceTotals",
         "InvoiceObjectContext",
-        "Clock"
+        "Clock",
+        "IssuedSourceUploadHandoff"
       ],
       "capability_policy": [
         "resolve_capability",
@@ -3149,7 +3165,8 @@
       "InvoiceParty",
       "InvoiceTotals",
       "InvoiceObjectContext",
-      "Clock"
+      "Clock",
+      "IssuedSourceUploadHandoff"
     ],
     "capability_policy": [
       "resolve_capability",
@@ -3234,7 +3251,9 @@
       "SourceCustodyService",
       "RequestTooLargeError",
       "UnsupportedMediaTypeError",
-      "IntegrityMismatchError"
+      "IntegrityMismatchError",
+      "derive_handoff_secret_verifier",
+      "derive_handoff_csrf_verifier"
     ],
     "invoice_exchange": [
       "discover_invoice_work",
@@ -3500,6 +3519,8 @@
     "InvoiceExchange.__init__",
     "resolve_pull_working_set",
     "issue_transfer_package",
+    "derive_handoff_secret_verifier",
+    "derive_handoff_csrf_verifier",
     "open_verified_source",
     "InvoiceCatalogue.__init__",
     "load_invoice_revisions",
@@ -4088,7 +4109,16 @@
       "originals_per_handoff": 1,
       "server_ocr_enabled": false,
       "filename_selects_storage_path": false,
-      "delivery_implies_local_acceptance": false
+      "delivery_implies_local_acceptance": false,
+      "handoff_secret_header": "X-Cabinet-Upload-Handoff",
+      "csrf_header": "X-CSRF-Token",
+      "trusted_owner_header": "X-Cabinet-Authenticated-Owner",
+      "trusted_owner_scheme": "TrustedEdge",
+      "trusted_owner_value": "owner",
+      "secret_transport": "headers_only",
+      "verifier_algorithm": "hmac_sha256",
+      "handoff_verifier_domain": "cabinet.source_handoff.bearer.v1",
+      "csrf_verifier_domain": "cabinet.source_handoff.csrf.v1"
     },
     "synchronization": {
       "connection_initiator": "local_backend",
@@ -6528,6 +6558,14 @@
               "element_model": null
             },
             {
+              "column": "csrf_hash",
+              "field": "csrf_hash",
+              "storage": "text",
+              "nullable": false,
+              "check": null,
+              "element_model": null
+            },
+            {
               "column": "status",
               "field": "status",
               "storage": "text",
@@ -8452,6 +8490,7 @@
                 "principal_id",
                 "actor",
                 "secret_hash",
+                "csrf_hash",
                 "status",
                 "issued_at",
                 "expires_at",
@@ -8471,6 +8510,7 @@
                 "principal_id",
                 "actor",
                 "secret_hash",
+                "csrf_hash",
                 "status",
                 "issued_at",
                 "expires_at",
