@@ -14,6 +14,19 @@ This tool reports them:
   prose_closure_leak     a State 1 field line enumerating closed values whose
                          field type is not an enum
 
+A fifth class surfaced on 2026-08-29: an ambient effect. A note demands "record
+UTC observation evidence" while no contract parameter, rule address, or module
+dependency names a time source, so every generation run invents its own clock.
+Two fuses close it from opposite sides:
+
+  ambient_time_note              a note uses ambient current-time language and
+                                 the covered contract has neither a datetime
+                                 parameter nor a clock-port dependency
+  fresh_timestamp_without_source a public mutating operation (State impact in
+                                 50_public_apis.md) returns models carrying
+                                 datetime fields while its inputs carry none
+                                 and its module declares no clock port
+
 Report-only by default; --strict exits 1 when anything is found.
 
     python tools/design_closure_gaps.py examples/<case> [--json] [--strict]
@@ -153,12 +166,167 @@ def check_prose(case: Path, spec: dict[str, Any]) -> list[dict[str, Any]]:
     return findings
 
 
+NOTE_SCOPE_RE = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)?)\s*:")
+# Ambient current-time language only. Bare "UTC"/"wall-clock" stays out: the
+# timezone-awareness boilerplate in dependency-boundary notes constrains stored
+# values and names no effect.
+AMBIENT_TIME_RE = re.compile(
+    r"\b(?:operation utc time|current (?:utc )?time|utc observation|observation evidence|current wall[- ]?clock)\b",
+    re.IGNORECASE,
+)
+DATETIME_PARAM_RE = re.compile(r":\s*datetime\b")
+PUBLIC_OP_HEADING_RE = re.compile(r"^## `public_op:([a-z_][a-z0-9_]*)\.([a-z_][a-z0-9_]*)`")
+READ_ONLY_IMPACT_RE = re.compile(r"^\s*(?:read[- ]only|none)\b", re.IGNORECASE)
+
+
+def _type_closure_has_datetime(type_str: object, models: dict[str, Any], seen: set[str] | None = None) -> bool:
+    if seen is None:
+        seen = set()
+    names = re.findall(r"[A-Za-z_][A-Za-z0-9_]*", str(type_str))
+    if "datetime" in names:
+        return True
+    for name in names:
+        decl = models.get(name)
+        if isinstance(decl, dict) and name not in seen:
+            seen.add(name)
+            for field_type in (decl.get("fields") or {}).values():
+                if _type_closure_has_datetime(field_type, models, seen):
+                    return True
+    return False
+
+
+def _module_of(name: str, func_module: dict[str, str]) -> str | None:
+    # "Class.__init__" is owned by the module that owns "Class"
+    return func_module.get(name) or func_module.get(name.rsplit(".", 1)[0])
+
+
+def clock_interfaces(models: dict[str, Any], contracts: dict[str, Any]) -> set[str]:
+    """Interface models exposing an operation that returns bare datetime."""
+    found: set[str] = set()
+    for name, signature in contracts.items():
+        owner, dot, _ = str(name).partition(".")
+        if not dot:
+            continue
+        decl = models.get(owner)
+        if not (isinstance(decl, dict) and decl.get("kind") in {"interface", "protocol"}):
+            continue
+        _, _, ret = str(signature).partition("->")
+        if ret.strip() == "datetime":
+            found.add(owner)
+    return found
+
+
+def modules_with_clock(models: dict[str, Any], contracts: dict[str, Any], func_module: dict[str, str]) -> set[str]:
+    """Modules whose __init__ retains a clock-port interface."""
+    interfaces = clock_interfaces(models, contracts)
+    if not interfaces:
+        return set()
+    modules: set[str] = set()
+    for name, signature in contracts.items():
+        if not str(name).endswith(".__init__"):
+            continue
+        params, _, _ = str(signature).partition("->")
+        if any(re.search(rf"\b{re.escape(iface)}\b", params) for iface in interfaces):
+            module = _module_of(str(name), func_module)
+            if module:
+                modules.add(module)
+    return modules
+
+
+def parse_state_impacts(case: Path) -> dict[str, dict[str, Any]]:
+    """Public operations and their State impact from 50_public_apis.md."""
+    path = case / "50_public_apis.md"
+    if not path.is_file():
+        return {}
+    impacts: dict[str, dict[str, Any]] = {}
+    current: str | None = None
+    in_impact = False
+    for line in path.read_text(encoding="utf-8").splitlines():
+        heading = PUBLIC_OP_HEADING_RE.match(line)
+        if heading:
+            current = heading.group(2)
+            impacts[current] = {"module": heading.group(1), "read_only": False, "impact": ""}
+            in_impact = False
+            continue
+        if line.startswith("### "):
+            in_impact = current is not None and line[4:].strip().casefold() == "state impact"
+            continue
+        if in_impact and current and line.strip() and not impacts[current]["impact"]:
+            impacts[current]["impact"] = line.strip()
+            impacts[current]["read_only"] = bool(READ_ONLY_IMPACT_RE.match(line.strip()))
+    return impacts
+
+
+def ambient_time_findings(models: dict[str, Any], contracts: dict[str, Any],
+                          func_module: dict[str, str], notes: list[Any]) -> list[dict[str, Any]]:
+    clocked = modules_with_clock(models, contracts, func_module)
+    findings = []
+    for note in notes:
+        text = str(note)
+        phrase = AMBIENT_TIME_RE.search(text)
+        if not phrase:
+            continue
+        scope_match = NOTE_SCOPE_RE.match(text)
+        scope = scope_match.group(1) if scope_match else ""
+        params, _, _ = str(contracts.get(scope, "")).partition("->")
+        if DATETIME_PARAM_RE.search(params):
+            continue
+        if _module_of(scope, func_module) in clocked:
+            continue
+        findings.append({
+            "code": "ambient_time_note", "contract": scope, "phrase": phrase.group(0),
+            "message": (f"{scope or 'unscoped note'}: note requires '{phrase.group(0)}' but the contract has no "
+                        "datetime parameter and the module retains no clock port; an unnamed time source is "
+                        "reinvented by every generation run"),
+        })
+    return findings
+
+
+def fresh_timestamp_findings(models: dict[str, Any], contracts: dict[str, Any],
+                             func_module: dict[str, str],
+                             impacts: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+    clocked = modules_with_clock(models, contracts, func_module)
+    findings = []
+    for function in sorted(impacts):
+        if impacts[function]["read_only"]:
+            continue
+        signature = contracts.get(function)
+        if not isinstance(signature, str) or "->" not in signature:
+            continue
+        params, _, ret = signature.partition("->")
+        if not _type_closure_has_datetime(ret, models):
+            continue
+        if _type_closure_has_datetime(params, models):
+            continue
+        module = impacts[function].get("module") or _module_of(function, func_module)
+        if module in clocked:
+            continue
+        findings.append({
+            "code": "fresh_timestamp_without_source", "contract": function,
+            "message": (f"{function}: public mutating operation returns datetime field(s) while its inputs carry "
+                        f"none and module {module} retains no clock port; name the time source — a datetime "
+                        "parameter or a clock dependency in __init__"),
+        })
+    return findings
+
+
+def check_time_sources(case: Path, spec: dict[str, Any]) -> list[dict[str, Any]]:
+    models = spec.get("models") or {}
+    contracts = spec.get("contracts") or {}
+    func_module = {f: module for module, funcs in (spec.get("module_functions") or {}).items()
+                   for f in (funcs or [])}
+    return (ambient_time_findings(models, contracts, func_module, spec.get("notes") or [])
+            + fresh_timestamp_findings(models, contracts, func_module, parse_state_impacts(case)))
+
+
 def run(case: Path) -> dict[str, Any]:
     spec = load_spec(case)
-    findings = check_models(spec) + check_orphan_reads(spec) + check_external_returns(spec) + check_tables(spec) + check_prose(case, spec)
+    findings = (check_models(spec) + check_orphan_reads(spec) + check_external_returns(spec)
+                + check_tables(spec) + check_prose(case, spec) + check_time_sources(case, spec))
     return {"schema_version": "design_closure_gaps.v1", "case": str(case), "findings": findings,
             "summary": {f: sum(1 for x in findings if x["code"] == f) for f in
-                        ("model_without_fields", "orphan_read_entity", "external_interface_returned", "table_without_writer", "prose_closure_leak")}}
+                        ("model_without_fields", "orphan_read_entity", "external_interface_returned", "table_without_writer", "prose_closure_leak",
+                         "ambient_time_note", "fresh_timestamp_without_source")}}
 
 
 def main() -> int:
