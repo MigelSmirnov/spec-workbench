@@ -902,7 +902,7 @@ Equal typed transport and application facts are interchangeable.
 
 ## Model M103 — UploadHandoffCommand
 
-Fields: `card_id: str`, `source_id: str`, `expected_revision: CardRevisionReference`, `authorization: AuthorizationDecision`, `actor: ActorReference`.
+Fields: `card_id: str`, `source_id: str`, `expected_revision: CardRevisionReference`, `actor: ActorReference`.
 
 ### Identity
 
