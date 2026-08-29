@@ -330,61 +330,6 @@ hidden mechanism: two-step effect confirmation: proposal digest issuance and exa
 Three interaction operations hide the full safety protocol between a
 probabilistic conversational UI and deterministic Cabinet capabilities.
 
-## `access_control`
-
-### Owns
-
-Channel-bound admission: principal enrollment, protected A03 capability-grant
-provisioning, authentication and authorization decisions, credential rotation
-and revocation orchestration, channel separation, and bounded security audit
-events under A11. Secret custody mechanics live in `credential_vault`; the
-failure-throttle state machine lives in `abuse_throttle`.
-
-### Knows
-
-M02 and M17 identities, fixed capability classes, credential status, channel,
-entity scope, current lifecycle state, configured throttle limits, the
-operation-scoped `CabinetUnitOfWork` port and its access credential, capability
-grant, throttle, and security-audit records, the retained `Clock` port for
-timezone-aware UTC lifecycle and throttle timestamps, the reciprocal
-`cabinet-web-sync-v1` contract, and the M17-to-M02 machine-principal binding.
-
-### Must not own
-
-Business identity, Card mutations, effect idempotency, transport sessions,
-secret recovery through public channels, or domain-specific decisions.
-
-### Hides
-
-Exact grant identity and idempotent provisioning, authorization matrix
-evaluation, timezone-aware UTC observations for persisted or compared lifecycle
-timestamps, internal classification of bounded authentication-abuse contexts,
-complete collision-resistant entity-scope keys, fresh audit-event identity,
-and secret-free audit details. Verifier derivation and timing-safe comparison
-are delegated to `credential_vault`; throttle windows and counters are
-delegated to `abuse_throttle`.
-
-### Candidate public capabilities
-
-```text
-authenticate_request
-authorize_capability
-enroll_principal
-provision_capability_grant
-rotate_credential
-revoke_credential
-```
-
-### Depth assessment
-
-kind: deep
-hidden mechanism: channel-bound admission: complete authenticated M02/M17 context, internally bounded abuse classification, and exact persisted capability-grant evaluation
-
-The module exposes identity and authorization decisions. Secret material
-mechanics and throttle state belong to `credential_vault` and `abuse_throttle`;
-this module owns the admission decision that composes them. It remains
-independent of HTTP and MCP.
-
 ## `credential_vault`
 
 ### Owns
@@ -467,6 +412,232 @@ register_authentication_success
 
 kind: deep
 hidden mechanism: the configured wall-clock failure-window throttle state machine over locked per-context state
+
+## `access_control_errors`
+
+### Owns
+
+The closed public refusal taxonomy shared by the access-control engines,
+facade, router error policy, and callers: AuthenticationRequiredError,
+AuthenticationThrottledError, and AuthorizationDeniedError.
+
+### Knows
+
+Only the three stable exception identities and their boundary meanings.
+
+### Hides
+
+One cycle-free exception boundary so deep engines never import their facade and
+the facade may re-export the same exact types without redefining them.
+
+### Must not own
+
+Authentication, authorization, lifecycle policy, persistence, transactions,
+status codes, response bodies, or recovery behavior.
+
+### Candidate public capabilities
+
+```text
+AuthenticationRequiredError
+AuthenticationThrottledError
+AuthorizationDeniedError
+```
+
+### Depth assessment
+
+kind: deep
+hidden mechanism: stable cycle-free refusal type identity across engines, facade, and transport
+
+## `security_evidence`
+
+### Owns
+
+Fresh collision-resistant identity issuance for append-only M111 security audit
+events shared by the access-control engines.
+
+### Knows
+
+The M111 evidence identity rule and UUID4 generation primitive.
+
+### Hides
+
+Audit-event identity entropy and the prohibition on reusing stable domain or
+credential identities as security-event primary keys.
+
+### Must not own
+
+Audit policy, event classification, persistence, transactions, credentials,
+principal resolution, authorization, or transport.
+
+### Candidate public capabilities
+
+```text
+issue_security_audit_id
+```
+
+### Depth assessment
+
+kind: deep
+hidden mechanism: collision-resistant append-only security-event identity issuance
+
+## `authentication_admission`
+
+### Owns
+
+The A11 channel-authentication transaction: caller-independent bounded abuse
+classification, credential verification, throttle transitions, exact
+M02/M17 subject resolution, reciprocal local-node contract validation, and
+secret-free authentication audit evidence.
+
+### Knows
+
+M02, M17, M39, M108, M110 and M111; `credential_vault`, `abuse_throttle`, and
+`security_evidence`; the UoW factory, pepper, Clock, channel vocabulary, and
+`cabinet-web-sync-v1`.
+
+### Hides
+
+The complete commit-on-bounded-refusal versus rollback-on-unexpected-failure
+protocol and construction of one complete authenticated M39.
+
+### Must not own
+
+Capability grants, principal enrollment, credential rotation/revocation,
+transport extraction, Card policy, or caller-supplied abuse buckets.
+
+### Candidate public capabilities
+
+```text
+derive_authentication_abuse_context
+authenticate_channel_request
+resolve_trusted_browser_owner
+```
+
+### Depth assessment
+
+kind: deep
+hidden mechanism: channel authentication transaction joining credential, throttle, M02/M17 binding, and audit evidence
+
+## `capability_grants`
+
+### Owns
+
+The A03 exact capability-grant mechanism: complete scope canonicalization,
+current principal/node lifecycle revalidation, exact grant evaluation, and
+idempotent protected grant provisioning with audit evidence.
+
+### Knows
+
+M02, M17, M39, M65, M109 and M111; the closed A16 catalogue, UoW factory,
+Clock, `security_evidence`, and the canonical `cabinet-scope-v1` encoding.
+
+### Hides
+
+Collision-resistant scope identity, exact grant lookup, lifecycle revalidation,
+provisioning idempotency, and transaction rollback boundaries.
+
+### Must not own
+
+Credential verification, throttling, principal enrollment, credential
+lifecycle, transport, or business mutations.
+
+### Candidate public capabilities
+
+```text
+derive_entity_scope_key
+evaluate_capability_grant
+persist_capability_grant
+```
+
+### Depth assessment
+
+kind: deep
+hidden mechanism: exact persisted capability matrix over canonical complete entity scope
+
+## `principal_lifecycle`
+
+### Owns
+
+Protected initial-owner bootstrap, later principal enrollment, atomic credential
+rotation, and credential revocation with separately authenticated M39 operator
+proof and append-only audit evidence.
+
+### Knows
+
+M02, M39, M59, M61, M85, M108 and M111; UoW factory, pepper, Clock,
+`credential_vault`, and `security_evidence`.
+
+### Hides
+
+The one-time empty-installation bootstrap exception, owner/operator proof,
+credential locking, atomic replacement/retirement, one-time bearer return, and
+rollback on every refusal or unexpected failure.
+
+### Must not own
+
+Request authentication, abuse throttling, capability evaluation/provisioning,
+transport, node synchronization, or Card policy.
+
+### Candidate public capabilities
+
+```text
+bootstrap_or_enroll_principal
+rotate_principal_credential
+revoke_principal_credential
+```
+
+### Depth assessment
+
+kind: deep
+hidden mechanism: protected principal and credential lifecycle transaction with one-time secret return
+
+## `access_control`
+
+### Owns
+
+The stable A03/A11 public access-control facade and its retained dependency
+bundle. It exposes authentication, authorization, principal enrollment, grant
+provisioning, credential rotation/revocation, and principal resolvers while
+delegating each hidden mechanism to its named deep module.
+
+### Knows
+
+The retained `CabinetUnitOfWorkFactory`, credential pepper and `Clock`, M39
+shape, channel labels, owner/local-node resolver postconditions, and the exact
+call signatures of `authentication_admission`, `capability_grants`, and
+`principal_lifecycle`.
+
+### Must not own
+
+Credential verification, throttle transitions, transactions, grant storage,
+scope canonicalization, lifecycle mutation, audit identity generation,
+business identity, Card mutations, transport sessions, or domain policy.
+
+### Hides
+
+The stable public surface, dependency projection into the three deep engines,
+and fail-closed resolver postconditions. It does not reproduce or partially
+inline any delegated transaction.
+
+### Candidate public capabilities
+
+```text
+authenticate_request
+authorize_capability
+enroll_principal
+provision_capability_grant
+rotate_credential
+revoke_credential
+```
+
+### Depth assessment
+
+kind: facade
+delegates to: `authentication_admission`, `capability_grants`, `principal_lifecycle`
+
+The module remains the accepted public A03 access-control boundary, but each
+operation is now a typed delegation or resolver projection. It remains
+independent of HTTP and MCP and contains no second copy of a deep mechanism.
 
 ## `effect_journal`
 

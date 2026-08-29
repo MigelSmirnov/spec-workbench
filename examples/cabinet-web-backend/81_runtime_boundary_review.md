@@ -283,3 +283,25 @@ closure participate in downstream packets. `design_module_review --review`
 reported zero blocks and zero review findings for every slice; access_control
 retains `PASS_INTERNAL_VARIATION` because its observable behavior is now closed
 while local implementation structure may still vary behind the named seams.
+
+## Re-slice 2026-08-30: access control becomes a facade over deep mechanisms
+
+The next official Route B run still produced stubs in all ten Microscope
+samples. The earlier `credential_vault` and `abuse_throttle` extraction was
+correct but insufficient: the residual module still owned three independent
+stateful mechanisms — authentication admission, capability-grant evaluation
+and provisioning, and principal/credential lifecycle. This correlated directly
+with the generator's repeated stub and missing-contract failures.
+
+The accepted A03/A11 boundary is retained as the public `access_control`
+facade, while its mechanisms are now closed in `authentication_admission`,
+`capability_grants`, and `principal_lifecycle`. `security_evidence` owns fresh
+M111 identity issuance, and contract-only `access_control_errors` preserves one
+cycle-free refusal taxonomy. The facade performs typed delegation only; it may
+not open a UoW, reproduce transaction policy, use reflection, or invent a
+fallback implementation.
+
+All 28 assembled module slices were recomputed. Structural review reports zero
+blocks and zero review findings for every slice. The four behavioral mechanism
+modules and the facade remain `PASS_INTERNAL_VARIATION`; the contract-only error
+module is `PASS` because it owns no behavior that may vary.
