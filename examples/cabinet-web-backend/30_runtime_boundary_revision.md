@@ -90,7 +90,8 @@ available; a filesystem observation alone is never authority.
 ### Owns
 
 The only environment/configuration read, construction of
-`PostgresCabinetUnitOfWork` and `LocalFilesystemSourceByteStore`, migration and
+`PostgresCabinetUnitOfWork`, `LocalFilesystemSourceByteStore`, and the single
+`SystemClock` implementation of the `Clock` port, migration and
 startup recovery before traffic, construction of all application services and
 gateways, and delivery of the complete graph to `create_app`.
 
@@ -108,7 +109,7 @@ missing protected configuration.
 ### Hides
 
 Deployment configuration loading, adapter construction order, health startup
-ordering, and teardown.
+ordering, one shared timezone-aware UTC system wall-clock source, and teardown.
 
 ### Candidate public capabilities
 
@@ -131,7 +132,8 @@ intermittent local backend.
 bootstrap
   -> cabinet_persistence -> models
   -> source_byte_store -> models
-  -> application services -> models + CabinetUnitOfWork
+  -> SystemClock -> models.Clock
+  -> application services -> models + CabinetUnitOfWork + Clock
   -> source_custody -> CabinetUnitOfWork + SourceByteStore
   -> gateways -> application services
   -> api.create_app
@@ -140,4 +142,3 @@ local backend (intermittent)
   -> sync_gateway only
   -/> bootstrap, PostgreSQL, filesystem, or ordinary Web operations
 ```
-

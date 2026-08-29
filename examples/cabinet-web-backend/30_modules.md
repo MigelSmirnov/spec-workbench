@@ -43,8 +43,9 @@ owner of A01.
 
 ### Knows
 
-M03 and M07–M10, the distinction between canonical and derived facts, and the
-validation interfaces supplied by Invoice and Project specialists.
+M03 and M07–M10, the distinction between canonical and derived facts, the
+validation interfaces supplied by Invoice and Project specialists, and the
+retained `Clock` port that supplies each revision observation.
 
 ### Must not own
 
@@ -175,7 +176,8 @@ discovery, including M29 assignment-observation production.
 
 M05, M07–M11 mutation semantics, `rules.invoice_workspace.lifecycle`,
 `rules.invoice_workspace.rejection_codes`, the manifest and working-set policy,
-and the revision-safe commit port exposed by `card_workspace`.
+and the revision-safe commit port exposed by `card_workspace`, plus the retained
+`Clock` port used once for each operation-level expiry comparison.
 
 ### Must not own
 
@@ -343,8 +345,8 @@ failure-throttle state machine lives in `abuse_throttle`.
 M02 and M17 identities, fixed capability classes, credential status, channel,
 entity scope, current lifecycle state, configured throttle limits, the
 operation-scoped `CabinetUnitOfWork` port and its access credential, capability
-grant, throttle, and security-audit records, timezone-aware UTC lifecycle
-timestamps, and monotonic throttle intervals.
+grant, throttle, and security-audit records, the retained `Clock` port for
+timezone-aware UTC lifecycle timestamps, and monotonic throttle intervals.
 
 ### Must not own
 
@@ -473,8 +475,9 @@ reuse rejection, and unknown-outcome reconciliation state.
 
 ### Knows
 
-M03 and M16, operation class, exact target, request hash, principal scope, and
-an injected mutation transaction.
+M03 and M16, operation class, exact target, request hash, principal scope, an
+injected mutation transaction, and the retained `Clock` port for effect
+evidence timestamps.
 
 ### Must not own
 
@@ -513,7 +516,8 @@ explicit evidence-backed release of eligible VPS working bytes.
 ### Knows
 
 Exact Card/source/revision targets, approved media catalogue, A13 limits,
-receipt/hash verification needed by A10, and authorized human context.
+receipt/hash verification needed by A10, authorized human context, and the
+retained `Clock` port for custody evidence timestamps.
 
 ### Must not own
 
@@ -553,8 +557,9 @@ HTTP handling, and safe response projection.
 
 ### Knows
 
-Authenticated browser context and typed ports for application capabilities and
-source custody. It knows no persistence representation.
+Authenticated browser context, typed ports for application capabilities and
+source custody, and the retained `Clock` port for upload-boundary observations.
+It knows no persistence representation.
 
 ### Must not own
 
@@ -634,7 +639,8 @@ M28 conflict outcomes.
 ### Knows
 
 Available exact Invoice revisions and source membership, active node identity,
-content hashes, contract compatibility, and immutable source retrieval ports.
+content hashes, contract compatibility, immutable source retrieval ports, and
+the retained `Clock` port for discovery and issuance observations.
 
 ### Must not own
 
