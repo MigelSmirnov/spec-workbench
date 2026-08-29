@@ -256,3 +256,30 @@ create-draft, which needs no scope, so no gate saw it; the live-data replay
 did). The note now states the Q1 semantics explicitly: an absent entity_scope
 carries unscoped capability authority; a present scope must match its target.
 Slice hashes recomputed; statuses unchanged.
+
+## Re-slice 2026-08-29: access_control closes the authenticated node boundary
+
+Ten independent Microscope samples exposed one deterministic type break and
+several correlated depth leaks: the local resolver returned raw M17 while
+authorization required M39; caller-supplied or constant abuse contexts leaked
+the throttle mechanism; lifecycle commands carried asserted M01 provenance as
+if it were authentication; scope keys could omit fields or collide; audit
+primary keys could reuse stable domain identities; and unexpected exception
+rollback was not closed.
+
+The accepted A03/A11 design is now lowered as one complete admission mechanism.
+M17 has an exact `principal_id` binding to its M02 machine principal. M39 carries
+that bound M17 only for `local_node`; authorization consumes M39, and the typed
+`require_authenticated_local_node` seam projects M17 into Invoice/Registry
+domain calls without reflection or cross-module auth leakage. Access control
+internally derives bounded known/unknown abuse contexts, canonical complete M65
+scope hashes, and fresh audit UUIDs. Enrollment bootstrap is closed to the sole
+empty-installation owner case; later enrollment, rotation, revocation, and grant
+provisioning require a separately authenticated owner/operator M39. Every
+unexpected failure and lifecycle/authorization refusal rolls back explicitly.
+
+All 23 final module slices were recomputed because M39 and router/persistence
+closure participate in downstream packets. `design_module_review --review`
+reported zero blocks and zero review findings for every slice; access_control
+retains `PASS_INTERNAL_VARIATION` because its observable behavior is now closed
+while local implementation structure may still vary behind the named seams.
