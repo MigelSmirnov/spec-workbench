@@ -10,6 +10,8 @@ contracts; see ROUTER_IR_GUIDE.
 """
 from __future__ import annotations
 
+import fence
+
 import argparse
 import json
 import re
@@ -339,14 +341,15 @@ def lint(project: Path) -> dict[str, object]:
                 findings.append(Finding("warning", "unplanned_public_op", key,
                                         "Public operation exists but is not declared in the explicit State 5 plan.", item.source))
 
+    fenced_findings = fence.enforce([asdict(f) for f in findings])
     return {
         "schema_version": LINT_SCHEMA,
         "summary": {
             "operations": len(items),
-            "errors": sum(f.severity == "error" for f in findings),
-            "warnings": sum(f.severity == "warning" for f in findings),
+            "errors": fence.stops(fenced_findings),
+            "warnings": 0,
         },
-        "findings": [asdict(f) for f in findings],
+        "findings": fenced_findings,
     }
 
 

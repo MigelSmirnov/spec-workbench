@@ -7,7 +7,7 @@ REPORT_SCHEMA = "spec_workbench_assembly_verification.v1"
 INSPECTION_SCHEMA = "spec_workbench_assembly_check.v1"
 CHECK_ORDER = (
     "language", "modules", "identity", "data", "contracts", "external_contracts",
-    "notes", "router", "persistence",
+    "notes", "router", "persistence", "witness", "flows",
 )
 
 class AssemblyWorkbenchError(ValueError):

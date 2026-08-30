@@ -8,6 +8,8 @@ The tool then reports coverage and the next missing flow without authoring it.
 """
 from __future__ import annotations
 
+import fence
+
 import argparse
 import json
 import re
@@ -277,14 +279,15 @@ def lint(project: Path) -> dict[str, object]:
             flow = next((item for item in flows if item.key == key), None)
             if flow is not None:
                 findings.append(Finding("warning", "unplanned_flow", key, "Flow exists but is not declared in the explicit State 4 flow plan.", flow.source))
+    fenced_findings = fence.enforce([asdict(f) for f in findings])
     return {
         "schema_version": LINT_SCHEMA,
         "summary": {
             "flows": len(flows),
-            "errors": sum(f.severity == "error" for f in findings),
-            "warnings": sum(f.severity == "warning" for f in findings),
+            "errors": fence.stops(fenced_findings),
+            "warnings": 0,
         },
-        "findings": [asdict(f) for f in findings],
+        "findings": fenced_findings,
     }
 
 

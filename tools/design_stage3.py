@@ -8,6 +8,8 @@ owned by ``design_trace.py`` and its explicit trace manifest.
 """
 from __future__ import annotations
 
+import fence
+
 import argparse
 import json
 import re
@@ -398,14 +400,15 @@ def lint(project: Path) -> dict[str, object]:
             )
         findings.extend(_depth_findings(module, known_modules))
 
+    fenced_findings = fence.enforce([asdict(finding) for finding in findings])
     return {
         "schema_version": LINT_SCHEMA,
         "summary": {
             "modules": len(modules),
-            "errors": sum(finding.severity == "error" for finding in findings),
-            "warnings": sum(finding.severity == "warning" for finding in findings),
+            "errors": fence.stops(fenced_findings),
+            "warnings": 0,
         },
-        "findings": [asdict(finding) for finding in findings],
+        "findings": fenced_findings,
     }
 
 

@@ -314,7 +314,8 @@ Cases that have a stable Factory destination should pin it in
 
 Admission prints and records the exact `case -> Factory project` pair. A
 different `--project` is blocked before export; a case without this manifest
-remains admissible but receives an explicit warning.
+is blocked as well — the workbench has no warnings (see "The fence" in
+`skills/spec-authoring/SKILL.md`).
 
 ## GitHub Actions CI
 

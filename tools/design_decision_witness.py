@@ -29,6 +29,7 @@ to its invariant stays a human judgement.
 from __future__ import annotations
 
 import argparse
+import fence
 import json
 import os
 import re
@@ -182,6 +183,8 @@ def coverage(case: Path, factory: Path | None = None) -> dict[str, Any]:
             witnessed += 1
 
     errors = sum(1 for f in findings if f["severity"] == "error")
+    findings = fence.enforce(findings)
+    errors = fence.stops(findings)
     return {
         "schema_version": SCHEMA_VERSION,
         "project_root": case.name,
