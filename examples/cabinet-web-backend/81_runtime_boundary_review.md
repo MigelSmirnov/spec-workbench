@@ -305,3 +305,26 @@ All 28 assembled module slices were recomputed. Structural review reports zero
 blocks and zero review findings for every slice. The four behavioral mechanism
 modules and the facade remain `PASS_INTERNAL_VARIATION`; the contract-only error
 module is `PASS` because it owns no behavior that may vary.
+
+## Re-hash 2026-08-30: design labels leave the notes, the principal kind gets a catalogue
+
+The split's own route reached verification and the runtime smoke rejected a
+freshly enrolled owner: the generated `authentication_admission` compared
+`principal_kind == 'M02'` and `capability_grants` required
+`contract_version == "M02"`. The notes named subjects by their design labels
+("exact M02/M17 subject", "complete M39") and the generator turned a label
+into vocabulary the specification never declared; the pre-split
+`access_control` never compared the kind at all, which is why it passed.
+
+`rules.principal_catalogue` is now the single machine-readable home of the
+principal-kind vocabulary (`cabinet_owner`, `operator`, `local_backend_node`,
+the owner/operator set, and the `cabinet-web-sync-v1` node contract version),
+placed under A03/A11 in the data closure. Fifteen notes name
+`CabinetPrincipal`, `CabinetNodeIdentity`, `AuthenticatedPrincipal`,
+`InvoiceWorkPage` and the catalogue values instead of labels; the State 1
+vocabulary `cabinet_owner` replaces the prose kind `owner`.
+
+The changed module slices were re-hashed. Structural review reports zero
+blocks and zero findings for every re-hashed slice; review statuses are
+unchanged because no contract, ownership or mechanism moved — only the words
+the generator reads.
