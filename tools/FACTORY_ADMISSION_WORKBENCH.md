@@ -28,9 +28,11 @@ python tools/export_to_factory.py --case <case> \
   --project <factory-project> --update-existing
 ```
 
-`--check` and `design_factory_admission.py` never write to Factory. Do not use
-`--allow-dirty-source` for an accepted handoff; that flag exists only for
-diagnostic and migration work and produces an explicit warning.
+`--check` and `design_factory_admission.py` never write to Factory.
+`--allow-dirty-source` admits nothing: under the fence a dirty checkout blocks
+even when the flag is given; the flag only labels a run as diagnostic. A
+`closure_gap_waivers.json` blocks admission outright — a waiver is a decision
+nobody made.
 
 ## Checks
 

@@ -150,6 +150,30 @@ A useful operational version:
 
 > If contracts require inventing new models, return to models. If notes require inventing new behavior, return to product rules or module design. If a module needs `utils` to hold unclear responsibilities, return to responsibility design.
 
+## The fence
+
+The workbench has no warnings and accepts no waivers. A finding that is not
+an error is an undecided fact wearing a softer label, and a specification is
+not assembled on undecided facts. Every tool passes its findings through
+`tools/fence.py` before counting them:
+
+- a `warning` or `review` finding is raised to a stop, and every stop carries
+  a `hint` that names what to decide — `not decided — decide: …`;
+- `closure_gap_waivers.json` is not read as permission: its presence blocks
+  Stage 9 until each waived gap is recorded as a decision with an owner and
+  carried by a contract;
+- a module review result is `PASS` or `AMBIGUITY`; `PASS_INTERNAL_VARIATION`
+  no longer exists, because a mechanism that may vary is an undecided
+  mechanism;
+- assembly runs two more checks: `witness` (every accepted decision with
+  formal invariants names a verified witness) and `flows` (every capability a
+  State 4 flow names is planned, contracted, and reached from a route through
+  the calls the notes oblige);
+- a dirty Workbench or Factory checkout blocks admission; no flag softens it.
+
+The rule for the author is short: **not decided → decide.** The tool tells
+you what; it never tells you it is fine.
+
 ## Design states
 
 The states below are ordered by dependency, not by the order of sections in `global_spec.json`.
@@ -407,7 +431,8 @@ delegates to: `module_a`, `module_b`
 ```
 
 A module with a wide candidate surface (`WIDE_SURFACE_CAPABILITIES` or more)
-without this declaration is a State 3 error; narrower modules get a warning.
+without this declaration is a State 3 error; a narrower module without it stops
+the case just the same — the workbench has no warnings.
 "Substantial hidden responsibility" is not enough: many mechanisms in one file
 make the module big, not deep.
 

@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import json
 import shutil
+import tempfile
 from pathlib import Path
+
+from decided_reference import decided_reference
 
 import design_authoring_next
 import design_stage6_contracts
@@ -22,6 +25,10 @@ def _project(tmp_path: Path) -> Path:
     return project
 
 
+def _ready(tmp_path: Path) -> Path:
+    return decided_reference(tmp_path)
+
+
 def _make_unresolved(project: Path, function: str = "attach_local_source") -> None:
     catalog_path = project / CATALOG
     catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
@@ -29,7 +36,7 @@ def _make_unresolved(project: Path, function: str = "attach_local_source") -> No
     catalog_path.write_text(json.dumps(catalog), encoding="utf-8")
 
 
-def test_cabinet_state6_contracts_are_closed_and_ready() -> None:
+def test_cabinet_state6_contracts_stop_on_the_undeclared_time_sources() -> None:
     report = design_stage6_contracts.coverage(CABINET)
     assert report["summary"] == {
         "planned_functions": 192,
@@ -37,18 +44,21 @@ def test_cabinet_state6_contracts_are_closed_and_ready() -> None:
         "internal_functions": 161,
         "resolved": 192,
         "unresolved": 0,
-        "errors": 0,
+        "errors": 2,
         "plan_closed": True,
-        "handoff_ready": True,
+        "handoff_ready": False,
     }
     assert report["unresolved_functions"] == []
-    # Recorded latent debt of the reference case: two mutating operations must
-    # produce timestamps and no time source is declared. The warnings do not
-    # block handoff; closing them is a specification decision, not a lint fix.
+    # The fence: two mutating operations must produce timestamps and declare
+    # no time source. That is a specification decision nobody made, so the
+    # reference case stops here until an author decides it (see _ready).
     assert [(f["severity"], f["code"]) for f in report["findings"]] == [
-        ("warning", "fresh_timestamp_without_source"),
-        ("warning", "fresh_timestamp_without_source"),
+        ("error", "fresh_timestamp_without_source"),
+        ("error", "fresh_timestamp_without_source"),
     ]
+    assert all(f["hint"].startswith("not decided — decide:") for f in report["findings"])
+    ready = design_stage6_contracts.coverage(_ready(Path(tempfile.mkdtemp())))
+    assert ready["summary"]["errors"] == 0 and ready["summary"]["handoff_ready"] is True
     assert sorted(f["message"].split(":")[0] for f in report["findings"]) == [
         "lookup_holded_purchase",
         "validate_card_assignment",
@@ -68,8 +78,8 @@ def test_declared_datetime_parameter_clears_time_source_warning(tmp_path: Path) 
     assert flagged == ["lookup_holded_purchase"]
 
 
-def test_next_function_is_complete_after_state6_handoff() -> None:
-    report = design_stage6_contracts.next_function(CABINET)
+def test_next_function_is_complete_after_state6_handoff(tmp_path: Path) -> None:
+    report = design_stage6_contracts.next_function(_ready(tmp_path))
     assert report["complete"] is True
     assert report["next"] is None
     assert report["summary"]["handoff_ready"] is True
@@ -124,10 +134,10 @@ def test_missing_router_handler_mapping_is_fail_closed(tmp_path: Path) -> None:
     assert any(item["code"] == "missing_router_handler_contract" for item in report["findings"])
 
 
-def test_ready_handoff_contains_operation_and_handler_contracts() -> None:
-    handoff = design_stage6_contracts.handoff(CABINET)
+def test_ready_handoff_contains_operation_and_handler_contracts(tmp_path: Path) -> None:
+    handoff = design_stage6_contracts.handoff(_ready(tmp_path))
     assert handoff["ready"] is True
-    assert handoff["summary"]["resolved"] == 192
+    assert handoff["summary"]["resolved"] == 195  # 192 + the decided Clock port and its two retainers
     domain = handoff["contracts"]["attach_local_source"]
     handler = handoff["contracts"]["attach_local_source_handler"]
     assert domain["public_operation"] == FIRST_EXTERNAL
@@ -136,14 +146,19 @@ def test_ready_handoff_contains_operation_and_handler_contracts() -> None:
     assert handler["router_operation"] == FIRST_EXTERNAL
 
 
-def test_authoring_gate_advances_to_assembly_after_notes_are_closed(monkeypatch) -> None:
+def test_authoring_gate_advances_past_contracts_and_notes_to_the_witness_stop(tmp_path: Path, monkeypatch) -> None:
+    # The fence: with the time sources decided, State 6 and State 7 no longer
+    # stop the case; the next undecided fact is that 21 accepted decisions
+    # declare invariants nobody witnesses. The pipeline stops there, with a
+    # hint on every finding, instead of advancing to assembly.
     monkeypatch.setattr(design_authoring_next, "_promoted_states_step", lambda sequence, project, text: None)
-    report = design_authoring_next.next_step(CABINET)
-    assert report["phase"] == "state8_assembly"
-    assert report["blocked"] is False
-    assert report["router_allowed"] is True
-    assert report["action"]["tool"] == "tools/design_assembly.py"
-    assert report["summary"]["handoff_ready"] is True
+    report = design_authoring_next.next_step(_ready(tmp_path))
+    assert report["phase"] == "decision_witness_resolution"
+    assert report["blocked"] is True
+    assert report["router_allowed"] is False
+    findings = report["findings"]
+    assert findings and {f["code"] for f in findings} == {"decision_without_witness"}
+    assert all(f["severity"] == "error" and f["hint"].startswith("not decided — decide:") for f in findings)
 
 
 def test_authoring_gate_returns_to_state6_when_contract_is_unresolved(tmp_path: Path, monkeypatch) -> None:
@@ -156,8 +171,8 @@ def test_authoring_gate_returns_to_state6_when_contract_is_unresolved(tmp_path: 
     assert "attach_local_source" in report["unresolved_functions"]
 
 
-def test_router_semantic_slice_contains_both_canonical_contracts() -> None:
-    payload = contract_aware_operation_slice(CABINET, FIRST_EXTERNAL)
+def test_router_semantic_slice_contains_both_canonical_contracts(tmp_path: Path) -> None:
+    payload = contract_aware_operation_slice(_ready(tmp_path), FIRST_EXTERNAL)
     assert payload["canonical_contract"]["public_operation"] == FIRST_EXTERNAL
     assert payload["canonical_contract"]["signature"].startswith(
         "(archive: DurableArchiveService, invoice_id: str, files:"

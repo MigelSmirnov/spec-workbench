@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Any
 
 import design_closure_gaps
+import fence
 import design_stage3
 import design_stage5
 import design_stage5_exposure
@@ -208,7 +209,8 @@ def coverage(project: Path) -> dict[str, Any]:
             "code":"contract_plan_open",
             "message":"State 6 function inventory remains open; review and add required internal functions before handoff.",
         })
-    errors = sum(item["severity"] == "error" for item in findings)
+    findings = fence.enforce(findings)
+    errors = fence.stops(findings)
     ready = plan_closed and not unresolved and errors == 0
     return {
         "schema_version": COVERAGE_SCHEMA,
@@ -408,7 +410,7 @@ def lint(project: Path) -> dict[str, Any]:
     return {
         "schema_version": LINT_SCHEMA,
         "project_root": report["project_root"],
-        "summary": {**report["summary"], "warnings": sum(item["severity"] == "warning" for item in report["findings"])},
+        "summary": {**report["summary"], "warnings": 0},
         "findings": report["findings"],
     }
 

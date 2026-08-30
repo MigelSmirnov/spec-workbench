@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import fence
+
 import json
 import re
 from collections import Counter, defaultdict
@@ -208,8 +210,15 @@ def coverage(project: Path) -> dict[str, Any]:
         else:
             seen_text[key] = note["line"]
 
+    # the fence: a note that needs review is an undecided note; it blocks
+    for item in findings:
+        if item.get("severity") == "review":
+            item["severity"] = "block"
+            item["raised_from"] = "review"
+        if item.get("severity") == "block" and "hint" not in item:
+            item["hint"] = fence.hint_for(item.get("code"), item.get("message"))
     blocks = sum(item["severity"] == "block" for item in findings)
-    reviews = sum(item["severity"] == "review" for item in findings)
+    reviews = 0
     return {
         "schema_version": "spec_workbench_state7_notes_gate.v1",
         "project_root": project.resolve().name,
