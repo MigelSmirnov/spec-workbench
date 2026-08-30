@@ -25,6 +25,10 @@ MODULE_RE = re.compile(r"^`(?P<name>[a-z][a-z0-9_]*)`$")
 HEADING_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*$")
 STATE3_RE = re.compile(r"\bState\s+3\b", re.IGNORECASE)
 IDENT_RE = re.compile(r"^[a-z][a-z0-9_]*$")
+TYPE_IDENT_RE = re.compile(r"^[A-Z][A-Za-z0-9_]*$")
+# The models substrate has no capabilities and hides nothing but type validity; it is
+# the vocabulary every other module speaks, not a runtime responsibility.
+SUBSTRATE_MODULE_NAMES = frozenset({"domain_models", "models"})
 REQUIRED_SECTIONS = ("Owns", "Knows", "Must not own", "Depth assessment")
 DEPTH_SECTION = "Depth assessment"
 DEPTH_KINDS = ("deep", "facade")
@@ -133,6 +137,31 @@ def _extract_capabilities(
             candidate = stripped.strip("`*- ")
             if IDENT_RE.fullmatch(candidate):
                 result.add(candidate)
+    return tuple(sorted(result))
+
+
+def _extract_surface_types(
+    lines: list[str],
+    headings: list[tuple[int, int, str]],
+    start: int,
+    end: int,
+) -> tuple[str, ...]:
+    """Type identifiers declared in the surface sections: a public surface made of
+    types (an exception taxonomy, a port implementation) is decided, not missing."""
+    result: set[str] = set()
+    for title in CAPABILITY_SECTIONS:
+        section = _section_range(headings, module_start=start, module_end=end, title=title)
+        if section is None:
+            continue
+        section_start, section_end = section
+        in_fence = False
+        for raw in lines[section_start:section_end]:
+            stripped = raw.strip()
+            if stripped.startswith("```"):
+                in_fence = not in_fence
+                continue
+            if in_fence and TYPE_IDENT_RE.fullmatch(stripped.strip("`*- ")):
+                result.add(stripped.strip("`*- "))
     return tuple(sorted(result))
 
 
@@ -343,6 +372,16 @@ def _depth_findings(module: ModuleItem, known_modules: set[str]) -> list[Finding
     return findings
 
 
+def _surface_types_of(project: Path, module: ModuleItem) -> tuple[str, ...]:
+    path = project / module.source.path
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return ()
+    headings = _headings(lines)
+    return _extract_surface_types(lines, headings, module.source.start_line - 1, module.source.end_line)
+
+
 def lint(project: Path) -> dict[str, object]:
     modules = parse_modules(project)
     known_modules = {module.name for module in modules}
@@ -368,7 +407,7 @@ def lint(project: Path) -> dict[str, object]:
                         module.source,
                     )
                 )
-        if "hides" not in normalized_sections and module.name != "domain_models":
+        if "hides" not in normalized_sections and module.name not in SUBSTRATE_MODULE_NAMES:
             findings.append(
                 Finding(
                     "warning",
@@ -378,7 +417,11 @@ def lint(project: Path) -> dict[str, object]:
                     module.source,
                 )
             )
-        if not module.capabilities and module.name != "domain_models":
+        if (
+            not module.capabilities
+            and module.name not in SUBSTRATE_MODULE_NAMES
+            and not _surface_types_of(project, module)
+        ):
             findings.append(
                 Finding(
                     "warning",

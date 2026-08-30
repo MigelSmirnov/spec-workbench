@@ -5,6 +5,7 @@ import shutil
 from pathlib import Path
 
 from assembly_workbench import inspect_check, verify
+from assembly_workbench.checks import _factory_storage_resolver
 from assembly_workbench.model import AssemblyWorkbenchError
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -33,6 +34,9 @@ def test_cabinet_assembly_stops_on_every_undecided_fact() -> None:
     by_name = {check["name"]: check for check in report["checks"]}
     assert all(check["warnings"] == 0 for check in report["checks"])
     for name in ("modules", "contracts", "persistence", "witness", "flows"):
+        if name == "persistence" and _factory_storage_resolver() is not None:
+            assert by_name[name]["ready"] is True, name  # the factory registry proved the codec coverage
+            continue
         assert by_name[name]["ready"] is False and by_name[name]["errors"] > 0, name
     for name in ("language", "identity", "data", "external_contracts", "notes", "router"):
         assert by_name[name]["ready"] is True and by_name[name]["errors"] == 0, name
@@ -54,10 +58,14 @@ def test_persistence_check_covers_seven_deterministic_repositories() -> None:
     assert report["schema_version"] == "spec_workbench_assembly_check.v1"
     assert report["check"]["schema_version"] == "spec_workbench_persistence_backend_coverage.v1"
     # one codec registry the closure cannot reach is an undecided fact: it stops
-    assert report["check"]["ready"] is False
+    if _factory_storage_resolver() is not None:
+        assert report["check"]["ready"] is True  # the factory registry proved the codec coverage
+    else:
+        assert report["check"]["ready"] is False
     assert report["check"]["summary"]["repositories"] == 8
     assert report["check"]["warnings"] == 0
-    assert [f["code"] for f in report["check"]["findings"] if f["severity"] == "error"] == ["codec_registry_unavailable"]
+    expected_errors = [] if _factory_storage_resolver() is not None else ["codec_registry_unavailable"]
+    assert [f["code"] for f in report["check"]["findings"] if f["severity"] == "error"] == expected_errors
 
 
 def test_external_contract_check_preserves_content_addressed_evidence() -> None:

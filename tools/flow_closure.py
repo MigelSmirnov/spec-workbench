@@ -55,6 +55,9 @@ def _route_callees(project: Path) -> set[str]:
         delegate = route.get("delegate") or {}
         if isinstance(delegate.get("function"), str):
             callees.add(delegate["function"])
+        # an irregular route has no lowered delegate: its companion-module handler is the entry the route reaches
+        if route.get("emission") == "irregular" and isinstance(route.get("handler"), str):
+            callees.add(route["handler"])
         for step in route.get("authorize") or []:
             if isinstance(step, dict) and isinstance(step.get("function"), str):
                 callees.add(step["function"])
@@ -83,6 +86,39 @@ def _note_calls(project: Path, owners: dict[str, str]) -> dict[str, set[str]]:
     return calls
 
 
+def _non_http_ingress_roots(project: Path) -> set[str]:
+    """Public operations a boundary calls that State 5 deliberately keeps off HTTP.
+
+    A boundary caller plus an ``internal-only`` exposure is a recorded pair of
+    decisions: the boundary exists (State 5) and it is not a route (exposure).
+    The only consistent reading is a non-HTTP ingress — the protected
+    composition root, an operator command on the host — so these operations
+    are reachability roots exactly like route delegates.
+    """
+    try:
+        import design_stage5
+        import design_stage5_exposure
+    except ImportError:  # pragma: no cover
+        return set()
+    exposure_path = project / design_stage5_exposure.DEFAULT_FILE if hasattr(design_stage5_exposure, "DEFAULT_FILE") else project / "50_exposure_plan.json"
+    internal_only: set[str] = set()
+    try:
+        ops = (json.loads(exposure_path.read_text(encoding="utf-8")).get("operations") or {})
+        internal_only = {key for key, value in ops.items() if value == "internal-only"}
+    except (OSError, ValueError):
+        return set()
+    roots: set[str] = set()
+    try:
+        rows = design_stage5.coverage(project).get("operations", [])
+    except Exception:  # pragma: no cover - the State 5 lint reports its own errors
+        return roots
+    for row in rows:
+        callers = row.get("callers") or []
+        if callers and all(str(c).startswith("boundary:") for c in callers) and row["key"] in internal_only:
+            roots.add(row["key"].split(".", 1)[1])
+    return roots
+
+
 def _reachable(route_callees: set[str], note_calls: dict[str, set[str]]) -> set[str]:
     """Everything a route reaches through the calls the notes oblige, transitively."""
     reached = set(route_callees)
@@ -101,7 +137,7 @@ def coverage(project: Path) -> dict[str, Any]:
     flows = design_stage4.parse_flows(project)
     owners = _plan_functions(project)
     contracts = _contracts(project)
-    route_callees = _route_callees(project)
+    route_callees = _route_callees(project) | _non_http_ingress_roots(project)
     reached = _reachable(route_callees, _note_calls(project, owners))
     findings: list[dict[str, Any]] = []
     seen: set[tuple[str, str]] = set()

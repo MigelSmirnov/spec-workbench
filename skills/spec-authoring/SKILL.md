@@ -174,6 +174,25 @@ not assembled on undecided facts. Every tool passes its findings through
 The rule for the author is short: **not decided → decide.** The tool tells
 you what; it never tells you it is fine.
 
+## The frontier
+
+Beside the ladder there is a read-only frontier:
+
+    python tools/obligations examples/<case> next
+    python tools/obligations examples/<case> focus module:<m>
+
+It rebuilds, on every run, the graph of what the decided artifacts oblige the
+corpus to decide next — nothing is stored, nothing is design truth. Every
+obligation is typed by the closed registry in `tools/obligations/registry.py`;
+the type, not the message, decides scheduling: only `defining` obligations
+block dependents, `convergence` ones never do. A node reads on two axes —
+LOCAL complete/open and SYSTEM settled/blocked — so a finished contract whose
+parameter type has no design source says "go close the interface", not
+"rewrite the contract". `authoring.py next` still names the State; use the
+frontier to choose *which* obligation to close, and `focus` to close one deep
+module in both directions (what it owes, and who owes it a call). See
+`tools/OBLIGATIONS.md`.
+
 ## Design states
 
 The states below are ordered by dependency, not by the order of sections in `global_spec.json`.
