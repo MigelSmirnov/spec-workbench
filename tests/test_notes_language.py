@@ -190,11 +190,20 @@ def test_note_surface_gate_blocks_unknown_attribute_and_undeclared_callable(tmp_
     case = tmp_path / "cabinet-backend"
     shutil.copytree(ROOT / "examples" / "cabinet-backend", case)
     spec = json.loads((case / "global_spec.json").read_text(encoding="utf-8"))
-    scope = "validate_card_assignment"
-    signature = spec["contracts"][scope]
-    parameter = next(name for name, typ in language.signature_parameters(signature)
-                     if isinstance(spec["models"].get(typ.split("|")[0].strip()), dict) and spec["models"][typ.split("|")[0].strip()].get("fields"))
-    foreign = next(f for m, fs in spec["module_functions"].items() if m != "registry_context" for f in fs if f in spec["contracts"] and "." not in f)
+    owner = {f: m for m, fs in spec["module_functions"].items() for f in fs}
+
+    def model_typed(sig):
+        for name, typ in language.signature_parameters(sig):
+            model = spec["models"].get(typ.split("|")[0].strip())
+            if isinstance(model, dict) and model.get("fields"):
+                return name
+        return None
+
+    scope, parameter = next(
+        (name, model_typed(sig)) for name, sig in spec["contracts"].items()
+        if "." not in name and owner.get(name) and model_typed(sig)
+    )
+    foreign = next(f for m, fs in spec["module_functions"].items() if m != owner[scope] for f in fs if f in spec["contracts"] and "." not in f)
     notes = case / "80_notes.md"
     notes.write_text(
         notes.read_text(encoding="utf-8").rstrip("\n")
