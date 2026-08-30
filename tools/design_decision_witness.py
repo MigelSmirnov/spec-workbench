@@ -48,13 +48,19 @@ SCHEMA_VERSION = "spec_workbench_decision_witness.v1"
 FACTORY_ROOT_ENV = "SPEC_WORKBENCH_FACTORY_ROOT"
 FACTORY_TARGET_FILE = "90_factory_target.json"
 ASSEMBLED_SPEC_FILE = "global_spec.json"
-WITNESS_RE = re.compile(r"\[witness:\s*(verification|note):([A-Za-z0-9_.\-]+)\]")
+WITNESS_RE = re.compile(r"\[witness:\s*(verification|note|workbench):([A-Za-z0-9_.\-]+)\]")
 NOTE_SCOPE_RE = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)?)\s*:")
 
 
 def factory_root(workbench_root: Path) -> Path:
     override = os.environ.get(FACTORY_ROOT_ENV)
-    return Path(override) if override else workbench_root.parent / "code_factory"
+    if override:
+        return Path(override)
+    # the canonical checkout sits beside the workbench; a worktree sits one level deeper
+    for candidate in (workbench_root.parent / "code_factory", workbench_root.parent.parent / "code_factory"):
+        if (candidate / "verification").is_dir():
+            return candidate
+    return workbench_root.parent / "code_factory"
 
 
 def _load_json(path: Path) -> dict[str, Any]:
@@ -142,6 +148,23 @@ def coverage(case: Path, factory: Path | None = None) -> dict[str, Any]:
             continue
         resolved_any = False
         for kind, name in tags:
+            if kind == "workbench":
+                # a decision the workbench itself enforces on every assembly (State 2 lint, identity, flows …)
+                try:
+                    from assembly_workbench.model import CHECK_ORDER
+                    workbench_checks = set(CHECK_ORDER)
+                except ImportError:  # pragma: no cover
+                    workbench_checks = set()
+                if name in workbench_checks:
+                    resolved_any = True
+                else:
+                    findings.append({
+                        "severity": "error", "code": "witness_unresolved",
+                        "decision": item.get("key"), "witness": f"{kind}:{name}", "location": location,
+                        "message": (f"{item.get('key')}: claims workbench check {name!r} that the assembly "
+                                    "does not run — a claimed witness that is absent is worse than no claim"),
+                    })
+                continue
             if kind == "verification":
                 if check_names is None:
                     findings.append({
