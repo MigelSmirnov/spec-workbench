@@ -328,3 +328,19 @@ The changed module slices were re-hashed. Structural review reports zero
 blocks and zero findings for every re-hashed slice; review statuses are
 unchanged because no contract, ownership or mechanism moved — only the words
 the generator reads.
+
+## Re-hash 2026-08-30: the ports get their declared providers
+
+`pull_invoice_package` and `open_verified_source` returned ports whose
+concrete implementation existed nowhere in the design; fifteen generated
+candidates invented a private stream class and the rest left the function a
+stub. The State 6 lint `interface_without_provider` (spec-workbench PR #31)
+now names that gap and its repair. `InvoiceExchangeInvoicePackageStream`
+(parts in manifest order, read in order until exhausted) and
+`SourceCustodySourceDownload` (retained ContentReference and verified payload)
+are planned, contracted and noted method by method; the notes name them
+instead of "module-owned concrete". The manifest source reference is a
+ContentReference whose content_id is the source identity, matching the local
+Backend wire model; the SourceContentReference for custody lookup comes from
+the resolved working set. Structural review reports zero blocks and zero
+findings; statuses unchanged.
