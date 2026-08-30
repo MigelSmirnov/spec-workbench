@@ -203,7 +203,11 @@ def test_note_surface_gate_blocks_unknown_attribute_and_undeclared_callable(tmp_
         (name, model_typed(sig)) for name, sig in spec["contracts"].items()
         if "." not in name and owner.get(name) and model_typed(sig)
     )
-    foreign = next(f for m, fs in spec["module_functions"].items() if m != owner[scope] for f in fs if f in spec["contracts"] and "." not in f)
+    declared = spec["imports"].get("module_internal", {}).get(owner[scope], {})
+    foreign = next(
+        f for m, fs in spec["module_functions"].items() if m != owner[scope]
+        for f in fs if f in spec["contracts"] and "." not in f and f not in declared.get(m, [])
+    )
     notes = case / "80_notes.md"
     notes.write_text(
         notes.read_text(encoding="utf-8").rstrip("\n")
