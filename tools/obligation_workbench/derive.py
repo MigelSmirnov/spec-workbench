@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from .model import EvidenceGraph, EvidenceRef, NodeState, Obligation, stable_obligation_id
+from .ownership import find_ownership_conflicts
 from .registry import RULES, ObligationRule, classify, is_defining
 from .reports import finding_addresses, finding_evidence
 
@@ -29,6 +30,10 @@ class ObligationAccumulator:
         evidence: tuple[EvidenceRef, ...] = (),
         required_from: tuple[str, ...] = (),
         originating_nodes: tuple[str, ...] = (),
+        semantic_owner: str | None = None,
+        implementation_mode: str | None = None,
+        irregular_reason: str | None = None,
+        ownership_status: str | None = None,
         detail: str = "",
     ) -> None:
         key = (rule.kind, caused_by)
@@ -37,12 +42,29 @@ class ObligationAccumulator:
             "evidence": set(),
             "required_from": set(),
             "originating_nodes": set(),
+            "semantic_owner": None,
+            "implementation_mode": None,
+            "irregular_reason": None,
+            "ownership_status": None,
             "detail": [],
         })
         current["addressed_to"].update(addressed_to)
         current["evidence"].update(evidence)
         current["required_from"].update(required_from)
         current["originating_nodes"].update(originating_nodes)
+        for field, value in (
+            ("semantic_owner", semantic_owner),
+            ("implementation_mode", implementation_mode),
+            ("irregular_reason", irregular_reason),
+            ("ownership_status", ownership_status),
+        ):
+            if value is None:
+                continue
+            if current[field] not in {None, value}:
+                raise ValueError(
+                    f"{kind}/{caused_by}: conflicting {field}: {current[field]!r}, {value!r}"
+                )
+            current[field] = value
         if detail and detail not in current["detail"]:
             current["detail"].append(detail)
 
@@ -60,6 +82,10 @@ class ObligationAccumulator:
                 resolution_owner=rule.resolution_owner,
                 required_from=tuple(sorted(item["required_from"])),
                 originating_nodes=tuple(sorted(item["originating_nodes"])),
+                semantic_owner=item["semantic_owner"],
+                implementation_mode=item["implementation_mode"],
+                irregular_reason=item["irregular_reason"],
+                ownership_status=item["ownership_status"],
                 detail=" | ".join(item["detail"]),
                 category=rule.category,
             ))
@@ -216,6 +242,36 @@ def _derived_obligations(
     factory_parity: dict[str, Any],
     accumulator: ObligationAccumulator,
 ) -> None:
+    for conflict in find_ownership_conflicts(tuple(graph.metadata.get("semantic_claims", ()))):
+        owner_label = conflict.canonical_owner or "unresolved"
+        ownership_status = "wrong_owner" if conflict.canonical_owner is not None else "ambiguous_owner"
+        if conflict.canonical_owner is not None:
+            detail = (
+                f"{conflict.semantic_key} is canonically owned by {conflict.canonical_owner}; "
+                f"downstream owners are {', '.join(conflict.conflicting_owners)}. "
+                f"Return the decision to {conflict.canonical_owner}; "
+                "this does not prescribe deleting the downstream expression."
+            )
+        else:
+            detail = (
+                f"{conflict.semantic_key} has conflicting canonical owners: "
+                f"{', '.join(conflict.conflicting_owners)}. Canonical evidence does not identify "
+                "one owner; resolve that ambiguity before downstream repair."
+            )
+        accumulator.add(
+            RULES["duplicate_semantic_ownership"],
+            caused_by=f"semantic:{conflict.semantic_key}:owned_by:{owner_label}",
+            addressed_to=conflict.conflicting_expressions,
+            evidence=conflict.evidence,
+            required_from=(conflict.canonical_owner,) if conflict.canonical_owner is not None else (),
+            originating_nodes=conflict.conflicting_expressions,
+            semantic_owner=conflict.canonical_owner,
+            implementation_mode=conflict.implementation_mode,
+            irregular_reason=conflict.irregular_reason,
+            ownership_status=ownership_status,
+            detail=detail,
+        )
+
     for key, row in graph.metadata["decisions"].items():
         if not row.get("primary_owner") and not row.get("disposition"):
             accumulator.add(

@@ -38,12 +38,21 @@ def _render_focus(payload: dict) -> None:
         f"FOCUS {payload['focus']}  locally_complete={str(state['locally_complete']).lower()} "
         f"globally_settled={str(state['globally_settled']).lower()}"
     )
-    for section in ("OWNED", "INCOMING", "OUTGOING"):
+    for section in ("OWNED", "INCOMING", "OUTGOING", "NOT_OWNED"):
         print(f"\n{section}")
         for item in payload[section]["obligations"]:
             print(f"  {item['kind']}  {item['id']}")
+            if item.get("semantic_owner"):
+                print(f"    semantic_owner {item['semantic_owner']}")
         for edge in payload[section].get("evidence_edges", []):
             print(f"  {edge['source']} -> {edge['target']}  [{edge['kind']}]")
+        for claim in payload[section].get("semantic_claims", []):
+            print(
+                f"  {claim['semantic_key']}  owner={claim['semantic_owner']} "
+                f"mode={claim['implementation_mode'] or 'unresolved'}"
+            )
+            if claim.get("irregular_reason"):
+                print(f"    irregular_reason {claim['irregular_reason']}")
     print("\nBLOCKERS")
     for item in payload["BLOCKERS"]:
         print(f"  {item['kind']}  {item['id']}")

@@ -20,6 +20,7 @@ NODE_KINDS = frozenset({
     "function",
     "contract",
 })
+IMPLEMENTATION_MODES = frozenset({"deterministic", "irregular", "llm"})
 
 
 @dataclass(frozen=True, order=True)
@@ -71,6 +72,40 @@ class Edge:
 
 
 @dataclass(frozen=True)
+class SemanticClaim:
+    id: str
+    semantic_key: str
+    expressed_by: str
+    semantic_owner: str
+    evidence: tuple[EvidenceRef, ...]
+    canonical: bool
+    implementation_mode: str | None = None
+    irregular_reason: str | None = None
+    applies_to: tuple[str, ...] = ()
+    shared_owner_group: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.implementation_mode not in IMPLEMENTATION_MODES | {None}:
+            raise ValueError(f"unsupported implementation mode: {self.implementation_mode!r}")
+        if self.implementation_mode != "irregular" and self.irregular_reason is not None:
+            raise ValueError("irregular_reason requires implementation_mode='irregular'")
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "semantic_key": self.semantic_key,
+            "expressed_by": self.expressed_by,
+            "semantic_owner": self.semantic_owner,
+            "canonical": self.canonical,
+            "implementation_mode": self.implementation_mode,
+            "irregular_reason": self.irregular_reason,
+            "applies_to": list(self.applies_to),
+            "shared_owner_group": self.shared_owner_group,
+            "source": [item.to_dict() for item in self.evidence],
+        }
+
+
+@dataclass(frozen=True)
 class Obligation:
     id: str
     kind: str
@@ -83,8 +118,18 @@ class Obligation:
     blocked_by: tuple[str, ...] = ()
     required_from: tuple[str, ...] = ()
     originating_nodes: tuple[str, ...] = ()
+    semantic_owner: str | None = None
+    implementation_mode: str | None = None
+    irregular_reason: str | None = None
+    ownership_status: str | None = None
     detail: str = ""
     category: str = "engineering"
+
+    def __post_init__(self) -> None:
+        if self.implementation_mode not in IMPLEMENTATION_MODES | {None}:
+            raise ValueError(f"unsupported implementation mode: {self.implementation_mode!r}")
+        if self.implementation_mode != "irregular" and self.irregular_reason is not None:
+            raise ValueError("irregular_reason requires implementation_mode='irregular'")
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -95,6 +140,10 @@ class Obligation:
             "source": [item.to_dict() for item in self.evidence],
             "precedence_class": self.precedence_class,
             "resolution_owner": self.resolution_owner,
+            "semantic_owner": self.semantic_owner,
+            "implementation_mode": self.implementation_mode,
+            "irregular_reason": self.irregular_reason,
+            "ownership_status": self.ownership_status,
             "status": self.status,
             "blocked_by": list(self.blocked_by),
             "required_from": list(self.required_from),
@@ -191,6 +240,7 @@ class Projection:
     graph: EvidenceGraph
     obligations: tuple[Obligation, ...]
     states: dict[str, NodeState]
+    semantic_claims: tuple[SemanticClaim, ...]
     factory_parity: dict[str, Any]
     diagnostics: tuple[dict[str, Any], ...]
     elapsed_seconds: float

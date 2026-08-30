@@ -24,6 +24,9 @@ def list_obligations(projection: Projection) -> dict[str, Any]:
         "schema_version": "spec_workbench_obligations_list.v1",
         "project_root": projection.graph.project.name,
         "obligations": [_obligation_payload(item) for item in obligations],
+        "semantic_claims": [
+            item.to_dict() for item in sorted(projection.semantic_claims, key=lambda value: value.id)
+        ],
         "diagnostics": list(projection.diagnostics),
     }
 
@@ -109,10 +112,30 @@ def focus(projection: Projection, node: str) -> dict[str, Any]:
     graph = projection.graph
     owned_nodes = graph.owned_nodes(node) if graph.nodes[node].kind == "module" else set()
     local_scope = {node, *owned_nodes}
+    semantic_scope = set(local_scope)
+    if node.startswith("module:"):
+        semantic_scope.add(f"boundary:{node.removeprefix('module:')}")
+    not_owned_obligations = [
+        obligation
+        for obligation in projection.obligations
+        if local_scope.intersection(obligation.addressed_to)
+        and obligation.semantic_owner is not None
+        and obligation.semantic_owner not in semantic_scope
+    ]
     owned_obligations = [
         obligation
         for obligation in projection.obligations
         if local_scope.intersection(obligation.addressed_to)
+        and obligation not in not_owned_obligations
+    ]
+    owned_claims = [
+        claim for claim in projection.semantic_claims if claim.semantic_owner in semantic_scope
+    ]
+    external_claims = [
+        claim
+        for claim in projection.semantic_claims
+        if local_scope.intersection(claim.applies_to)
+        and claim.semantic_owner not in semantic_scope
     ]
     incoming_edges = [
         edge
@@ -172,6 +195,7 @@ def focus(projection: Projection, node: str) -> dict[str, Any]:
         "OWNED": {
             "nodes": [projection.states[item].to_dict() for item in sorted(owned_nodes)],
             "obligations": [_obligation_payload(item) for item in sorted(owned_obligations, key=lambda value: value.id)],
+            "semantic_claims": [item.to_dict() for item in sorted(owned_claims, key=lambda value: value.id)],
         },
         "INCOMING": {
             "evidence_edges": [_edge_payload(projection, item) for item in sorted(incoming_edges, key=lambda value: value.id)],
@@ -180,6 +204,15 @@ def focus(projection: Projection, node: str) -> dict[str, Any]:
         "OUTGOING": {
             "evidence_edges": [_edge_payload(projection, item) for item in sorted(outgoing_edges, key=lambda value: value.id)],
             "obligations": [_obligation_payload(item) for item in sorted(outgoing_obligations, key=lambda value: value.id)],
+        },
+        "NOT_OWNED": {
+            "obligations": [
+                _obligation_payload(item)
+                for item in sorted(not_owned_obligations, key=lambda value: value.id)
+            ],
+            "semantic_claims": [
+                item.to_dict() for item in sorted(external_claims, key=lambda value: value.id)
+            ],
         },
         "BLOCKERS": [_obligation_payload(by_id[item]) for item in blocker_ids if item in by_id],
     }
@@ -210,6 +243,20 @@ def metrics(projection: Projection) -> dict[str, Any]:
             "by_precedence": dict(Counter(item.precedence_class for item in projection.obligations)),
             "with_caused_by": sum(bool(item.caused_by) for item in projection.obligations),
             "without_caused_by": sum(not item.caused_by for item in projection.obligations),
+            "with_semantic_owner": sum(item.semantic_owner is not None for item in engineering),
+            "without_semantic_owner": sum(item.semantic_owner is None for item in engineering),
+            "wrong_owner": sum(item.ownership_status == "wrong_owner" for item in engineering),
+        },
+        "semantic_claims": {
+            "total": len(projection.semantic_claims),
+            "by_implementation_mode": dict(Counter(
+                item.implementation_mode or "unresolved" for item in projection.semantic_claims
+            )),
+            "irregular": [
+                item.to_dict()
+                for item in projection.semantic_claims
+                if item.implementation_mode == "irregular"
+            ],
         },
         "frontier": {
             "READY": states["READY"],

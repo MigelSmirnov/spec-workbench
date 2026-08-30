@@ -9,8 +9,10 @@ from pathlib import Path
 import pytest
 
 import design_stage6_contracts
-from obligation_workbench import build_graph, focus, frontier, list_obligations, metrics
+from obligation_workbench import SemanticClaim, build_graph, focus, frontier, list_obligations, metrics
 from obligation_workbench.factory_parity import classify_edge_sets
+from obligation_workbench.model import EvidenceRef
+from obligation_workbench.ownership import find_ownership_conflicts
 from obligation_workbench.registry import RULES
 
 
@@ -38,6 +40,33 @@ def backend_projection():
     return build_graph(BACKEND_CASE, factory_root=FACTORY_ROOT)
 
 
+@pytest.fixture(scope="module")
+def ownership_projection():
+    reason = "Multipart streaming and bounded content identification remain an irregular boundary transformation."
+    claims = (
+        SemanticClaim(
+            id="fixture:bounded_content_identification:canonical",
+            semantic_key="bounded_content_identification",
+            expressed_by="public_op:web_gateway.accept_source_upload",
+            semantic_owner="boundary:web_gateway",
+            evidence=(EvidenceRef("fixture:router", "accept_source_upload"),),
+            canonical=True,
+            implementation_mode="irregular",
+            irregular_reason=reason,
+            applies_to=("module:source_custody",),
+        ),
+        SemanticClaim(
+            id="fixture:bounded_content_identification:downstream",
+            semantic_key="bounded_content_identification",
+            expressed_by="function:source_custody.store_original_source",
+            semantic_owner="module:source_custody",
+            evidence=(EvidenceRef("fixture:downstream", "store_original_source"),),
+            canonical=False,
+        ),
+    )
+    return build_graph(CASE, factory_root=FACTORY_ROOT, semantic_claims=claims)
+
+
 def test_projection_is_read_only():
     before = _snapshot(CASE)
     build_graph(CASE)
@@ -59,6 +88,17 @@ def test_obligations_have_stable_identity_cause_and_addressability(projection):
         if item.category == "engineering":
             assert item.addressed_to
             assert set(item.addressed_to) <= set(projection.graph.nodes)
+        assert set(item.to_dict()) >= {
+            "kind",
+            "addressed_to",
+            "semantic_owner",
+            "resolution_owner",
+            "caused_by",
+            "precedence_class",
+            "implementation_mode",
+            "source",
+            "blocked_by",
+        }
 
 
 def test_one_reachability_cause_keeps_many_addressees(projection):
@@ -76,7 +116,7 @@ def test_focus_looks_both_directions_and_does_not_hide_incoming_work(projection)
     incoming = payload["INCOMING"]["evidence_edges"]
     assert incoming
     assert any(item["target"].startswith("capability:effect_journal.") for item in incoming)
-    assert "OUTGOING" in payload and "BLOCKERS" in payload and "OWNED" in payload
+    assert set(payload) >= {"OWNED", "INCOMING", "OUTGOING", "NOT_OWNED", "BLOCKERS"}
     assert payload["state"]["globally_settled"] is False
     assert payload["state"]["status"] in {"READY", "BLOCKED"}
     with pytest.raises(KeyError):
@@ -137,6 +177,74 @@ def test_factory_parity_filters_only_consumer_to_models_context():
         ("api", "synchronization"),
     } <= undesigned
     assert not missing
+
+
+def test_irregular_router_decision_is_projected_without_becoming_a_defect(projection):
+    irregular = [
+        claim for claim in projection.semantic_claims if claim.implementation_mode == "irregular"
+    ]
+    assert len(irregular) == 1
+    claim = irregular[0]
+    assert claim.semantic_owner == "boundary:web_gateway"
+    assert "bounded content identification" in (claim.irregular_reason or "")
+    assert "module:source_custody" in claim.applies_to
+    assert not [item for item in projection.obligations if item.kind == "structured_lowering_candidate"]
+    assert not [item for item in projection.obligations if item.kind == "duplicate_semantic_ownership"]
+
+
+def test_source_custody_focus_sees_irregular_transport_as_not_owned(projection):
+    payload = focus(projection, "module:source_custody")
+    claims = payload["NOT_OWNED"]["semantic_claims"]
+    assert any(
+        item["semantic_owner"] == "boundary:web_gateway"
+        and item["implementation_mode"] == "irregular"
+        and "bounded content identification" in item["irregular_reason"]
+        for item in claims
+    )
+
+
+def test_structured_duplicate_ownership_becomes_one_wrong_owner_obligation(ownership_projection):
+    conflicts = [
+        item
+        for item in ownership_projection.obligations
+        if item.kind == "duplicate_semantic_ownership"
+    ]
+    assert len(conflicts) == 1
+    conflict = conflicts[0]
+    assert conflict.semantic_owner == "boundary:web_gateway"
+    assert conflict.ownership_status == "wrong_owner"
+    assert conflict.implementation_mode == "irregular"
+    assert conflict.addressed_to == ("function:source_custody.store_original_source",)
+    payload = focus(ownership_projection, "module:source_custody")
+    assert conflict.id in {item["id"] for item in payload["NOT_OWNED"]["obligations"]}
+    assert conflict.id not in {item["id"] for item in payload["OWNED"]["obligations"]}
+
+
+def test_explicit_shared_ownership_is_not_reported_as_a_conflict():
+    claims = tuple(
+        SemanticClaim(
+            id=f"shared:{owner}",
+            semantic_key="joint_transaction_boundary",
+            expressed_by=owner,
+            semantic_owner=owner,
+            evidence=(EvidenceRef("fixture", owner),),
+            canonical=True,
+            shared_owner_group="joint_transaction_boundary:v1",
+        )
+        for owner in ("module:source_custody", "module:effect_journal")
+    )
+    assert find_ownership_conflicts(claims) == ()
+
+
+def test_recovery_regression_classes_fit_the_obligation_registry():
+    assert {
+        "cross_call_identity_undefined",
+        "derived_identifier_semantics_undefined",
+        "downstream_semantic_conflict",
+        "runtime_config_binding_missing",
+        "protocol_assumption_not_backed_by_contract",
+        "production_entrypoint_not_exercised",
+    } <= set(RULES)
 
 
 def test_cabinet_regression_corpus_preserves_semantic_relations(projection, backend_projection):

@@ -13,7 +13,7 @@ import design_stage5
 import design_stage6_contracts
 import design_trace
 
-from .model import EvidenceGraph, EvidenceRef
+from .model import EvidenceGraph, EvidenceRef, SemanticClaim
 
 
 HEADING_RE = re.compile(r"^(?P<marks>#{2,4})\s+(?P<title>.+?)\s*$")
@@ -114,6 +114,72 @@ def _flow_text(project: Path, item: Any) -> str:
         return ""
     lines = path.read_text(encoding="utf-8").splitlines()
     return "\n".join(lines[item.source.start_line - 1:item.source.end_line])
+
+
+def _router_semantic_claims(
+    graph: EvidenceGraph,
+    routes: dict[str, dict[str, Any]],
+) -> tuple[SemanticClaim, ...]:
+    claims: list[SemanticClaim] = []
+    for operation, route in sorted(routes.items()):
+        if not operation.startswith("public_op:") or "." not in operation:
+            continue
+        module_name = operation.removeprefix("public_op:").split(".", 1)[0]
+        semantic_owner = graph.add_node(
+            f"boundary:{module_name}",
+            "boundary",
+            evidence=[EvidenceRef("router_closure", f"70_router_closure.json:{operation}")],
+        )
+        emission = route.get("emission")
+        implementation_mode = {
+            "table": "deterministic",
+            "irregular": "irregular",
+        }.get(emission)
+        reason = route.get("irregular_reason") if implementation_mode == "irregular" else None
+        if not isinstance(reason, str) or not reason.strip():
+            reason = None
+
+        downstream: set[str] = set()
+        if implementation_mode == "irregular":
+            owner_module = f"module:{module_name}"
+            flows = {
+                edge.target
+                for edge in graph.edges
+                if edge.source == operation and edge.kind == "proven_by_flow"
+            }
+            for candidate in graph.nodes:
+                if candidate == operation or not candidate.startswith("public_op:"):
+                    continue
+                shares_flow = any(
+                    edge.source == candidate
+                    and edge.kind == "proven_by_flow"
+                    and edge.target in flows
+                    for edge in graph.edges
+                )
+                called_by_owner = any(
+                    edge.source == candidate
+                    and edge.kind == "called_by"
+                    and edge.target == owner_module
+                    for edge in graph.edges
+                )
+                if shares_flow and called_by_owner:
+                    downstream.add(candidate)
+                    module = graph.owner_module(candidate)
+                    if module is not None:
+                        downstream.add(module)
+        evidence = (EvidenceRef("router_closure", f"70_router_closure.json:{operation}"),)
+        claims.append(SemanticClaim(
+            id=f"semantic_claim:router_implementation:{operation}",
+            semantic_key=f"router_implementation:{operation}",
+            expressed_by=operation,
+            semantic_owner=semantic_owner,
+            evidence=evidence,
+            canonical=True,
+            implementation_mode=implementation_mode,
+            irregular_reason=reason,
+            applies_to=tuple(sorted(downstream)),
+        ))
+    return tuple(claims)
 
 
 def build_evidence_graph(project: Path) -> EvidenceGraph:
@@ -281,6 +347,8 @@ def build_evidence_graph(project: Path) -> EvidenceGraph:
     if exposure_path.is_file():
         exposure = dict(_read_json(exposure_path).get("operations") or {})
 
+    semantic_claims = _router_semantic_claims(graph, routes)
+
     graph.metadata.update({
         "state3_modules": state3_modules,
         "decisions": decisions,
@@ -292,5 +360,6 @@ def build_evidence_graph(project: Path) -> EvidenceGraph:
         "spec": spec,
         "state1_model_sources": state1_sources,
         "explicit_outcome_edges": explicit_outcome_edges,
+        "semantic_claims": semantic_claims,
     })
     return graph
