@@ -189,6 +189,7 @@ def coverage(project: Path) -> dict[str, Any]:
             findings.append({
                 "severity": "warning",
                 "code": "module_surface_not_deep",
+                "module": item["module"],
                 "message": (
                     f"{item['module']}: {item['public']} of {item['functions']} owned functions are public "
                     f"(ratio {item['public_ratio']}); the module hides almost nothing behind its surface. "
@@ -197,7 +198,7 @@ def coverage(project: Path) -> dict[str, Any]:
             })
 
     for item in _time_source_findings(project, rows):
-        findings.append({"severity": "warning", "code": item["code"], "message": item["message"]})
+        findings.append({**item, "severity": "warning"})
 
     plan_closed = plan["status"] == "closed"
     if not plan_closed:
