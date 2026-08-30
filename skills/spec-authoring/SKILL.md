@@ -572,7 +572,15 @@ For every interface used as a dependency parameter, decide whether its runtime
 implementation is local or external. Record the decision structurally in
 `implementation_obligations`. A local concrete class must receive contracts for
 the complete interface method surface; a concrete `__init__` alone is never a
-complete implementation obligation. Do not infer the relation from class names
+complete implementation obligation. The State 6 lint enforces the producing side of
+this: when a planned function returns an interface (a class whose methods are
+planned only under `module:models`) and no planned class outside `models`
+carries that interface's operations, it reports `interface_without_provider`
+as an error. The finding names the returning functions and carries the exact
+plan entries and contract signatures to add (`prescription`), because every
+generation of such a module otherwise invents a private class or leaves the
+function a stub. A note saying the implementation is module-owned pins the
+prescription to that module. Do not infer the relation from class names
 or repeat it only in a composition note.
 
 Do not introduce new domain concepts silently at this stage.

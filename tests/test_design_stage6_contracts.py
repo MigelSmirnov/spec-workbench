@@ -227,3 +227,63 @@ delegates to: `wide`
 def test_cabinet_state6_surface_has_no_shallow_module() -> None:
     report = design_stage6_contracts.coverage(CABINET)
     assert [item["module"] for item in report["module_surface"] if item["shallow"]] == []
+
+
+def _add_returner(project: Path, function: str, module: str, signature: str) -> None:
+    plan_path = project / PLAN
+    plan = json.loads(plan_path.read_text(encoding="utf-8"))
+    plan["functions"].append({
+        "function": function, "module": module, "visibility": "internal",
+        "purpose": "hands the port to a caller", "public_operation": None, "router_operation": None,
+    })
+    plan_path.write_text(json.dumps(plan), encoding="utf-8")
+    catalog_path = project / CATALOG
+    catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
+    catalog["contracts"][function] = signature
+    catalog_path.write_text(json.dumps(catalog), encoding="utf-8")
+
+
+def test_interface_returned_without_a_declared_provider_is_an_error_with_a_prescription(tmp_path: Path) -> None:
+    project = _project(tmp_path)
+    modules = sorted({e["module"] for e in json.loads((project / PLAN).read_text())["functions"] if e["module"] != "module:models"})
+    first, second = modules[0], modules[1]
+    _add_returner(project, "WirePort.read_chunk", "module:models", "(self, max_bytes: int) -> bytes")
+    _add_returner(project, "hand_out_backend", first, "(self) -> WirePort")
+    _add_returner(project, "relay_backend", second, "(self) -> WirePort | None")
+
+    report = design_stage6_contracts.coverage(project)
+    findings = [f for f in report["findings"] if f["code"] == "interface_without_provider"]
+    assert len(findings) == 1 and findings[0]["severity"] == "error"
+    finding = findings[0]
+    assert finding["interface"] == "WirePort"
+    assert finding["operations"] == ["read_chunk"]
+    assert finding["returned_by"] == [f"{first.removeprefix('module:')}.hand_out_backend", f"{second.removeprefix('module:')}.relay_backend"]
+    assert finding["modules"] == sorted(m.removeprefix("module:") for m in (first, second))
+    assert "Declare the provider in 60_contract_plan.json" in finding["message"]
+    plan_entries = finding["prescription"]["plan_entries"]
+    assert {e["module"] for e in plan_entries} == {first, second}
+    assert [e["function"].split(".", 1)[1] for e in plan_entries if e["module"] == first] == ["__init__", "read_chunk"]
+    assert finding["prescription"]["contract_entries"][plan_entries[1]["function"]] == "(self, max_bytes: int) -> bytes"
+    assert all(e["visibility"] == "internal" for e in plan_entries)
+    assert report["summary"]["handoff_ready"] is False
+
+    # a note that claims the module-owned implementation pins the prescription to that module
+    (project / "80_notes.md").write_text(
+        "hand_out_backend: [DEPENDENCY_BOUNDARY] MUST construct the module-owned concrete WirePort.\n",
+        encoding="utf-8",
+    )
+    finding = next(f for f in design_stage6_contracts.coverage(project)["findings"] if f["code"] == "interface_without_provider")
+    assert finding["modules"] == [first.removeprefix("module:")]
+    assert "module-owned" in finding["message"]
+
+    # declaring the provider, method by method, clears the finding
+    provider = "OwnedWirePort"
+    _add_returner(project, f"{provider}.__init__", first, "(self, payload: bytes) -> None")
+    _add_returner(project, f"{provider}.read_chunk", first, "(self, max_bytes: int) -> bytes")
+    report = design_stage6_contracts.coverage(project)
+    assert [f for f in report["findings"] if f["code"] == "interface_without_provider"] == []
+
+
+def test_cabinet_state6_interfaces_all_have_providers() -> None:
+    report = design_stage6_contracts.coverage(CABINET)
+    assert [f for f in report["findings"] if f["code"] == "interface_without_provider"] == []
