@@ -3,7 +3,10 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Callable
 
+import design_decision_witness
 import design_stage3
+import fence
+import flow_closure
 import design_stage6_contracts
 import design_stage6_data
 from external_contract_workbench import coverage as external_contract_coverage
@@ -61,8 +64,18 @@ def _normalize(name: str, report: dict[str, Any]) -> CheckResult:
         errors = int(summary.get("errors", 0))
         warnings = _severity_count(findings, {"warning", "review"})
         ready = bool(summary.get("handoff_ready"))
+    elif name in {"witness", "flows"}:
+        errors = int(summary.get("errors", len(findings)))
+        warnings = 0
+        ready = errors == 0
     else:
         raise AssemblyWorkbenchError(f"Unknown assembly check: {name}")
+    # the fence: a warning is an undecided fact; it stops the assembly
+    findings = fence.enforce(findings)
+    if warnings:
+        errors += warnings
+        warnings = 0
+        ready = False
     return CheckResult(
         name=name,
         ready=ready,
@@ -73,6 +86,32 @@ def _normalize(name: str, report: dict[str, Any]) -> CheckResult:
         findings=findings,
     )
 
+def _factory_storage_resolver():
+    """The deterministic backend's version-bound storage registry, when the factory is reachable.
+
+    Codec coverage is proven against the emitter that will lower the closure;
+    without the factory the check reports the registry unavailable, truthfully.
+    """
+    import os
+    import sys as _sys
+    root = Path(__file__).resolve().parents[2]
+    candidates = []
+    if os.environ.get("SPEC_WORKBENCH_FACTORY_ROOT"):
+        candidates.append(Path(os.environ["SPEC_WORKBENCH_FACTORY_ROOT"]))
+    candidates += [root.parent / "code_factory", root.parent.parent / "code_factory"]
+    for candidate in candidates:
+        emitter = candidate / "tools" / "generate_postgres_repository_draft.py"
+        if emitter.is_file():
+            if str(emitter.parent) not in _sys.path:
+                _sys.path.append(str(emitter.parent))
+            try:
+                import generate_postgres_repository_draft as backend  # type: ignore
+            except Exception:  # pragma: no cover - environment dependent
+                return None
+            return getattr(backend, "resolve_storage", None)
+    return None
+
+
 CHECKS: dict[str, ReportFunction] = {
     "language": verify_language,
     "modules": design_stage3.lint,
@@ -82,7 +121,9 @@ CHECKS: dict[str, ReportFunction] = {
     "external_contracts": external_contract_coverage,
     "notes": notes_gate.coverage,
     "router": router_service.coverage,
-    "persistence": persistence_coverage,
+    "persistence": lambda project: persistence_coverage(project, storage_resolver=_factory_storage_resolver()),
+    "witness": design_decision_witness.coverage,
+    "flows": flow_closure.coverage,
 }
 
 def run(project: Path, name: str) -> CheckResult:
