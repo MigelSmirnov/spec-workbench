@@ -188,8 +188,9 @@ scope_key = sha256("cabinet-scope-v1" || canonical_complete_M65_json)
 
 The machine-readable single home for the principal-kind vocabulary is
 `rules.principal_catalogue`: the owner, operator and local-node kinds, the
-set of kinds that may act as owner/operator, and the synchronization contract
-version an active node must carry. Notes name those values through the
+set of kinds that may act as owner/operator, the synchronization contract
+version an active node must carry, and the credential subject kinds
+(`principal`, `node`). Notes name those values through the
 catalogue, never through a model label or a prose kind.
 
 ### Required tests
