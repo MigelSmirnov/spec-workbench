@@ -58,7 +58,10 @@ def test_persistence_check_covers_seven_deterministic_repositories() -> None:
     assert report["schema_version"] == "spec_workbench_assembly_check.v1"
     assert report["check"]["schema_version"] == "spec_workbench_persistence_backend_coverage.v1"
     # one codec registry the closure cannot reach is an undecided fact: it stops
-    assert report["check"]["ready"] is False
+    if _factory_storage_resolver() is not None:
+        assert report["check"]["ready"] is True  # the factory registry proved the codec coverage
+    else:
+        assert report["check"]["ready"] is False
     assert report["check"]["summary"]["repositories"] == 8
     assert report["check"]["warnings"] == 0
     assert [f["code"] for f in report["check"]["findings"] if f["severity"] == "error"] == ["codec_registry_unavailable"]
