@@ -1,4 +1,3 @@
-from assembly_workbench.checks import _factory_storage_resolver
 from __future__ import annotations
 
 import json
@@ -6,6 +5,7 @@ import shutil
 from pathlib import Path
 
 from assembly_workbench import inspect_check, verify
+from assembly_workbench.checks import _factory_storage_resolver
 from assembly_workbench.model import AssemblyWorkbenchError
 
 ROOT = Path(__file__).resolve().parents[1]
