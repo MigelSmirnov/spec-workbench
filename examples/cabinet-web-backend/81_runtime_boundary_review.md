@@ -200,6 +200,16 @@ review statuses are unchanged because no note, contract, or model shape
 moved — only the declared rule data the notes already reference
 generically.
 
+## Re-slice 2026-08-31: prepare_invoice_draft reference scope
+
+The `prepare_invoice_draft` orchestration note now addresses
+`rules.invoice_workspace.card_type` and
+`rules.invoice_workspace.card_version` directly instead of dereferencing the
+whole `rules.invoice_workspace` block. The `invoice_validation` slice was
+rebuilt and re-reviewed with 4 contracts, 8 assembled notes, and no structural
+findings. This is a reference-scope repair only; accepted behavior and review
+status are unchanged.
+
 ## Re-slice 2026-08-28 (2): prepare_card_revision pinned against drift
 
 Route B regeneration drifted on `prepare_card_revision`: one closure parsed
