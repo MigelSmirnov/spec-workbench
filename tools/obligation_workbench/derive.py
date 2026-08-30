@@ -62,7 +62,7 @@ class ObligationAccumulator:
                 continue
             if current[field] not in {None, value}:
                 raise ValueError(
-                    f"{kind}/{caused_by}: conflicting {field}: {current[field]!r}, {value!r}"
+                    f"{rule.kind}/{caused_by}: conflicting {field}: {current[field]!r}, {value!r}"
                 )
             current[field] = value
         if detail and detail not in current["detail"]:

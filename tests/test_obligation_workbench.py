@@ -10,6 +10,7 @@ import pytest
 
 import design_stage6_contracts
 from obligation_workbench import SemanticClaim, build_graph, focus, frontier, list_obligations, metrics
+from obligation_workbench.derive import ObligationAccumulator
 from obligation_workbench.factory_parity import classify_edge_sets
 from obligation_workbench.model import EvidenceRef
 from obligation_workbench.ownership import find_ownership_conflicts
@@ -99,6 +100,25 @@ def test_obligations_have_stable_identity_cause_and_addressability(projection):
             "source",
             "blocked_by",
         }
+
+
+@pytest.mark.parametrize(
+    ("first", "second", "field"),
+    (
+        ({"semantic_owner": "module:first"}, {"semantic_owner": "module:second"}, "semantic_owner"),
+        ({"implementation_mode": "deterministic"}, {"implementation_mode": "llm"}, "implementation_mode"),
+    ),
+)
+def test_accumulator_conflicting_metadata_fails_closed_without_name_error(first, second, field):
+    accumulator = ObligationAccumulator()
+    rule = RULES["runtime_config_binding_missing"]
+    accumulator.add(rule, caused_by="fixture:same-cause", **first)
+
+    with pytest.raises(
+        ValueError,
+        match=rf"^{rule.kind}/fixture:same-cause: conflicting {field}:",
+    ):
+        accumulator.add(rule, caused_by="fixture:same-cause", **second)
 
 
 def test_one_reachability_cause_keeps_many_addressees(projection):
