@@ -115,6 +115,7 @@ archive_invoice: [RETURN_SHAPE] MUST construct InvoiceMutationResult from comman
 ## Project artifacts
 
 get_project_summary: [BEHAVIOR] MUST derive the summary from the exact Project Card revision, accepted estimate, shopping-list snapshots, and explicit ProjectInvoiceLinks, marking gaps and unmatched facts without mutating any source artifact.
+get_project_summary: [ORCHESTRATION] MUST, when content_hash is None, open one CabinetUnitOfWork through unit_of_work_factory.open, begin, call load_current_card_reference for project_id inside that transaction, and finally call `rollback`; this read path never commits, and every Card revision, estimate and shopping-list read goes through the retained card_workspace operations.
 validate_estimate: [RETURN_SHAPE] MUST return the normalized estimate proposal, deterministic net, tax, and gross totals, exact Project revision context, and structured issues; invalid or missing monetary facts remain visible and are never defaulted into acceptance.
 derive_shopping_list: [DETERMINISM_OR_ORDERING] MUST from one pinned accepted estimate, derive stable item identities and ordered planned quantities and totals, preserve estimate provenance, and return a proposal without saving or merging it.
 attach_project_estimate: [PROVENANCE] MUST require the exact Project revision and authorized reviewed estimate, append the immutable AcceptedEstimateSnapshot and successor Project revision atomically, and reject stale or conflicting attachment without replacing earlier snapshots.
@@ -143,6 +144,7 @@ record_invoice_transfer_receipt: [PROVENANCE] MUST accept only the authenticated
 reconcile_invoice_transfer: [BEHAVIOR] MUST open, begin, and finally call `rollback` on one CabinetUnitOfWork; read the exact node-scoped issuance with `load_transfer_issuance`, the matching receipt with `load_transfer_receipt`, and the conflict state with `load_synchronization_conflict`, together with local durable-verification evidence, returning exactly one = rules.synchronization.reconciliation_status value without issuing another package or choosing a revision winner.
 publish_registry_catalogue: [DETERMINISM_OR_ORDERING] MUST verify cabinet-web-sync-v1, nodes, idempotency, declared count, project_id ordering, monotonic observation, and SHA-256 canonical UTF-8 JSON before atomically committing the complete replica and current selector; partial or older delivery leaves current unchanged.
 get_current_registry_catalogue: [RETURN_SHAPE] MUST return the last complete accepted Registry replica, exact catalogue identity and hash, ordered project snapshots, freshness and last-publication evidence; stale or offline is explicit and never rewrites Project Cards.
+get_current_registry_catalogue: [ORCHESTRATION] MUST open one CabinetUnitOfWork through unit_of_work_factory.open, begin, call load_registry_current_selector with the self node label and, when a selector exists, load_registry_replica and load_registry_snapshot for the selected catalogue inside that same transaction, and finally call `rollback`; this read path never commits or mutates replica state.
 
 ## VPS release and runtime recovery
 
