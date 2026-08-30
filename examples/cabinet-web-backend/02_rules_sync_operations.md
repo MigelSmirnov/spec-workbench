@@ -111,6 +111,7 @@ card_id_or_label -/> registry_project_assignment
 ### Required tests
 
 1. Non-Invoice Card data never appears in discovery or transfer packages.
+   [witness: verification:witness_A08]
 2. Changed source/Card content cannot reuse an incompatible manifest identity.
 3. Repeated package pull returns the same logical issuance and exact bytes.
 4. Mismatched, malformed, or wrong-node receipts cannot acknowledge issuance.
@@ -168,6 +169,7 @@ registry_status -/> automatic_release_or_deletion
 ### Required tests
 
 1. Partial, malformed, hash-mismatched, and incompatible catalogues cannot
+   [witness: verification:witness_A09]
    become current.
 2. Exact replay returns the prior acknowledgement without duplicate replica.
 3. Conflicting replay and older publication are rejected.
@@ -229,6 +231,7 @@ registry_status -/> automatic_deletion
 ### Required tests
 
 1. Successful synchronization leaves all VPS working copies present.
+   [witness: verification:witness_A10]
 2. Release without exact local durable verification is blocked.
 3. Registry closed/archived status alone changes no custody state.
 4. Release preserves Card, source identity, hashes, receipts, and audit evidence.
@@ -320,6 +323,7 @@ unexpected_security_failure -> transaction_rolled_back
 ### Required tests
 
 1. Unknown, malformed, disabled, rotated, and revoked credentials fail with
+   [witness: verification:witness_A11]
    equivalent bounded disclosure and throttling.
 2. Channel credentials cannot authenticate across boundaries.
 3. Rotation immediately rejects the prior credential without changing

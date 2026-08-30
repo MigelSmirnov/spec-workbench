@@ -404,10 +404,15 @@ Candidate fields aligned with the existing local Backend contract:
 
 - synchronization and optional import identity;
 - idempotency identity, Invoice ID, and manifest hash;
-- result: `accepted`, `already_accepted`, `quarantined`, `rejected`, or
-  `unknown`;
+- result: the closed `TransferReceiptResult` set shared with `cabinet_backend`:
+  `accepted`, `already_accepted`, `quarantined`, `rejected`, `conflicting`,
+  `duplicate_review`, `incomplete`, or `unknown`;
 - accepted Card/source hashes when applicable;
-- receipt time and safe error code optional.
+- receipt time and safe error code optional; the safe error code is the closed
+  `TransferReceiptErrorCode` set shared with `cabinet_backend`:
+  `unsupported_contract_version`, `integrity_invalid_revision`,
+  `conflicting_manifest`, `duplicate_review`, `incomplete_sources`, or
+  `quarantine_required`.
 
 ### Identity
 
@@ -676,11 +681,13 @@ Candidate fields aligned with the existing local Backend consumer:
 - explicit Registry `project_id` optional;
 - object label optional;
 - catalogue ID and Registry snapshot ID optional;
-- bounded decision context and observation time.
+- bounded decision context — the closed `AssignmentDecisionContext` set shared
+  with `cabinet_backend`: `online_current`, `offline_cached`, `label_only`, or
+  `unassigned` — and observation time.
 
 An explicit `project_id` is valid only with the catalogue/snapshot provenance
 from which the owner selected it. Without that exact selection, the observation
-remains `label_only`, `unassigned`, or `needs_review` according to its supplied
+remains `offline_cached`, `label_only`, or `unassigned` according to its supplied
 facts; an opaque Card ID or matching label is never mapping evidence.
 
 ### Identity

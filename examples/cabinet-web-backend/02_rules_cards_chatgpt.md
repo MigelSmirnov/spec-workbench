@@ -39,6 +39,7 @@ duplicate_candidate -/> automatic_merge_or_confirmation
 ### Required tests
 
 1. Stale revision updates fail without changing the current Card.
+   [witness: verification:witness_A01]
 2. Equal titles, contacts, invoice numbers, or totals do not collapse distinct
    Card IDs.
 3. Confirmed Invoice facts cannot be edited through the draft operation.
@@ -90,6 +91,7 @@ confirmation_absent_or_declined -> no_effect
 ### Required tests
 
 1. Extraction uncertainty is returned for review and does not get filled by a
+   [witness: verification:witness_A02]
    backend default.
 2. Read-only searches leave all durable state unchanged.
 3. Confirmation of revision A cannot authorize revision B after a concurrent
@@ -196,6 +198,7 @@ catalogue, never through a model label or a prose kind.
 ### Required tests
 
 1. Each channel is rejected when presenting another channel's credential.
+   [witness: verification:witness_A03]
 2. A valid ID without exact capability authorization cannot read or mutate the
    entity.
 3. Revoked principals and node credentials cannot start new operations.
@@ -260,6 +263,7 @@ unknown_outcome -> reconcile_same_identity_before_mutation_retry
 ### Required tests
 
 1. Concurrent identical effects yield one logical result.
+   [witness: verification:witness_A04]
 2. Concurrent updates from the same expected revision cannot both commit.
 3. Conflicting idempotency reuse is rejected before mutation.
 4. Failure between preparation and commit exposes no false success.

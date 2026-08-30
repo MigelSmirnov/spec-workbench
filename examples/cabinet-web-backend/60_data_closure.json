@@ -67,17 +67,20 @@
         "vps_release_evidence_table_name": "vps_release_evidence"
       },
       "role": "data",
-      "schema_version": 1
+      "schema_version": 1,
+      "chatgpt": {
+        "proposal_ttl_seconds": 900
+      }
     },
     "rules": {
       "card_workspace": {
         "revision_observed_status": "committed",
-      "project_card_type": "project",
-      "provider_card_type": "provider",
-      "revision_hash_algorithm": "sha256_canonical_json_v1"
+        "project_card_type": "project",
+        "provider_card_type": "provider",
+        "revision_hash_algorithm": "sha256_canonical_json_v1"
       },
       "capability_catalogue": {
-        "catalogue_version": 1,
+        "catalogue_version": 2,
         "grantable": [
           {
             "channel": "plugin",
@@ -218,6 +221,21 @@
             "channel": "local_node",
             "capability": "registry_catalogue.publish",
             "operation": "publish_registry_catalogue"
+          },
+          {
+            "channel": "plugin",
+            "capability": "proposal.prepare",
+            "operation": "prepare_chatgpt_proposal"
+          },
+          {
+            "channel": "plugin",
+            "capability": "effect.confirm",
+            "operation": "confirm_chatgpt_effect"
+          },
+          {
+            "channel": "plugin",
+            "capability": "effect.outcome",
+            "operation": "report_composite_outcome"
           }
         ],
         "protected_operator": [
@@ -240,6 +258,10 @@
           {
             "capability": "backup.verify_restore",
             "operation": "verify_backup_restore"
+          },
+          {
+            "capability": "readiness.evaluate",
+            "operation": "evaluate_readiness"
           }
         ]
       },
@@ -378,7 +400,8 @@
           "invoice.line_gross",
           "invoice.total_gross",
           "invoice.payment_balance"
-        ]
+        ],
+        "source_not_stored_status": "not_stored"
       },
       "source_ingress": {
         "accepted_content_formats": [
@@ -774,22 +797,134 @@
       ],
       "reason": "Executable Invoice lifecycle, validation, custody, manifest, working-set, and rejection policy."
     },
-    {"address": "rules.invoice_workspace.card_type", "source_refs": ["decision:A01", "model:M04"], "reason": "Canonical Invoice Card discriminator."},
-    {"address": "rules.invoice_workspace.card_version", "source_refs": ["decision:A01", "model:M04"], "reason": "Accepted Invoice Card format version."},
-    {"address": "rules.invoice_workspace.lifecycle.archived", "source_refs": ["decision:A01", "model:M04"], "reason": "Archived Invoice lifecycle value."},
-    {"address": "rules.invoice_workspace.lifecycle.confirmed", "source_refs": ["decision:A01", "model:M04"], "reason": "Confirmed Invoice lifecycle value."},
-    {"address": "rules.invoice_workspace.lifecycle.draft", "source_refs": ["decision:A01", "model:M04"], "reason": "Draft Invoice lifecycle value."},
-    {"address": "rules.invoice_workspace.manifest_hash_algorithm", "source_refs": ["decision:A08", "decision:A09"], "reason": "Deterministic transfer-manifest content identity algorithm."},
-    {"address": "rules.invoice_workspace.manifest_hash_fields", "source_refs": ["decision:A08", "decision:A09"], "reason": "Complete ordered transfer-manifest hash input."},
-    {"address": "rules.invoice_workspace.manifest_id_prefix", "source_refs": ["decision:A08", "decision:A09"], "reason": "Deterministic transfer-manifest identity namespace."},
-    {"address": "rules.invoice_workspace.manifest_version", "source_refs": ["decision:A08", "decision:A09"], "reason": "Invoice transfer-manifest format version."},
-    {"address": "rules.invoice_workspace.rejection_codes.access_denied", "source_refs": ["decision:A01", "decision:A03"], "reason": "Safe Invoice authorization rejection code."},
-    {"address": "rules.invoice_workspace.rejection_codes.confirmation", "source_refs": ["decision:A01", "decision:A03"], "reason": "Safe Invoice confirmation rejection code."},
-    {"address": "rules.invoice_workspace.rejection_codes.not_found", "source_refs": ["decision:A01", "model:M04"], "reason": "Safe Invoice absence code."},
-    {"address": "rules.invoice_workspace.rejection_codes.revision", "source_refs": ["decision:A01", "model:M04"], "reason": "Safe Invoice revision-conflict code."},
-    {"address": "rules.invoice_workspace.rejection_codes.source_custody", "source_refs": ["decision:A07", "decision:A08"], "reason": "Safe source-custody rejection code."},
-    {"address": "rules.invoice_workspace.rejection_codes.validation", "source_refs": ["decision:A01", "model:M04"], "reason": "Safe Invoice validation rejection code."},
-    {"address": "rules.invoice_workspace.source_provenance_key", "source_refs": ["decision:A01", "model:M04"], "reason": "Canonical source provenance metadata key."},
+    {
+      "address": "rules.invoice_workspace.card_type",
+      "source_refs": [
+        "decision:A01",
+        "model:M04"
+      ],
+      "reason": "Canonical Invoice Card discriminator."
+    },
+    {
+      "address": "rules.invoice_workspace.card_version",
+      "source_refs": [
+        "decision:A01",
+        "model:M04"
+      ],
+      "reason": "Accepted Invoice Card format version."
+    },
+    {
+      "address": "rules.invoice_workspace.lifecycle.archived",
+      "source_refs": [
+        "decision:A01",
+        "model:M04"
+      ],
+      "reason": "Archived Invoice lifecycle value."
+    },
+    {
+      "address": "rules.invoice_workspace.lifecycle.confirmed",
+      "source_refs": [
+        "decision:A01",
+        "model:M04"
+      ],
+      "reason": "Confirmed Invoice lifecycle value."
+    },
+    {
+      "address": "rules.invoice_workspace.lifecycle.draft",
+      "source_refs": [
+        "decision:A01",
+        "model:M04"
+      ],
+      "reason": "Draft Invoice lifecycle value."
+    },
+    {
+      "address": "rules.invoice_workspace.manifest_hash_algorithm",
+      "source_refs": [
+        "decision:A08",
+        "decision:A09"
+      ],
+      "reason": "Deterministic transfer-manifest content identity algorithm."
+    },
+    {
+      "address": "rules.invoice_workspace.manifest_hash_fields",
+      "source_refs": [
+        "decision:A08",
+        "decision:A09"
+      ],
+      "reason": "Complete ordered transfer-manifest hash input."
+    },
+    {
+      "address": "rules.invoice_workspace.manifest_id_prefix",
+      "source_refs": [
+        "decision:A08",
+        "decision:A09"
+      ],
+      "reason": "Deterministic transfer-manifest identity namespace."
+    },
+    {
+      "address": "rules.invoice_workspace.manifest_version",
+      "source_refs": [
+        "decision:A08",
+        "decision:A09"
+      ],
+      "reason": "Invoice transfer-manifest format version."
+    },
+    {
+      "address": "rules.invoice_workspace.rejection_codes.access_denied",
+      "source_refs": [
+        "decision:A01",
+        "decision:A03"
+      ],
+      "reason": "Safe Invoice authorization rejection code."
+    },
+    {
+      "address": "rules.invoice_workspace.rejection_codes.confirmation",
+      "source_refs": [
+        "decision:A01",
+        "decision:A03"
+      ],
+      "reason": "Safe Invoice confirmation rejection code."
+    },
+    {
+      "address": "rules.invoice_workspace.rejection_codes.not_found",
+      "source_refs": [
+        "decision:A01",
+        "model:M04"
+      ],
+      "reason": "Safe Invoice absence code."
+    },
+    {
+      "address": "rules.invoice_workspace.rejection_codes.revision",
+      "source_refs": [
+        "decision:A01",
+        "model:M04"
+      ],
+      "reason": "Safe Invoice revision-conflict code."
+    },
+    {
+      "address": "rules.invoice_workspace.rejection_codes.source_custody",
+      "source_refs": [
+        "decision:A07",
+        "decision:A08"
+      ],
+      "reason": "Safe source-custody rejection code."
+    },
+    {
+      "address": "rules.invoice_workspace.rejection_codes.validation",
+      "source_refs": [
+        "decision:A01",
+        "model:M04"
+      ],
+      "reason": "Safe Invoice validation rejection code."
+    },
+    {
+      "address": "rules.invoice_workspace.source_provenance_key",
+      "source_refs": [
+        "decision:A01",
+        "model:M04"
+      ],
+      "reason": "Canonical source provenance metadata key."
+    },
     {
       "address": "rules.synchronization.issuance_id_prefix",
       "source_refs": [
@@ -874,14 +1009,72 @@
       ],
       "reason": "Closed content-hash canonicalization for Card revisions; a prose hash let regeneration drift between generic and per-type serializations."
     },
-    {"address": "rules.invoice_workspace.stored_custody_status", "source_refs": ["decision:A07", "decision:A08"], "reason": "Custody state required for confirmation."},
-    {"address": "rules.invoice_workspace.synchronization_unavailable_status", "source_refs": ["decision:A08", "decision:A09"], "reason": "View status when no working-set evidence exists."},
-    {"address": "rules.invoice_workspace.validation_checks", "source_refs": ["decision:A01", "model:M04", "model:M10"], "reason": "Closed ordered Invoice validation rule catalogue."},
-    {"address": "rules.invoice_workspace.validation_issue_message", "source_refs": ["decision:A01", "model:M04"], "reason": "Stable safe Invoice validation message."},
-    {"address": "rules.invoice_workspace.validation_issue_order", "source_refs": ["decision:A01", "model:M04", "model:M10"], "reason": "Deterministic Invoice validation result ordering."},
-    {"address": "rules.invoice_workspace.validation_issue_severity", "source_refs": ["decision:A01", "model:M04"], "reason": "Blocking Invoice validation severity."},
-    {"address": "rules.invoice_workspace.working_set_id_prefix", "source_refs": ["decision:A08", "decision:A09"], "reason": "Deterministic immutable working-set identity namespace."},
-    {"address": "rules.invoice_workspace.working_set_status", "source_refs": ["decision:A08", "decision:A09"], "reason": "Initial confirmed Invoice working-set state."},
+    {
+      "address": "rules.invoice_workspace.stored_custody_status",
+      "source_refs": [
+        "decision:A07",
+        "decision:A08"
+      ],
+      "reason": "Custody state required for confirmation."
+    },
+    {
+      "address": "rules.invoice_workspace.synchronization_unavailable_status",
+      "source_refs": [
+        "decision:A08",
+        "decision:A09"
+      ],
+      "reason": "View status when no working-set evidence exists."
+    },
+    {
+      "address": "rules.invoice_workspace.validation_checks",
+      "source_refs": [
+        "decision:A01",
+        "model:M04",
+        "model:M10"
+      ],
+      "reason": "Closed ordered Invoice validation rule catalogue."
+    },
+    {
+      "address": "rules.invoice_workspace.validation_issue_message",
+      "source_refs": [
+        "decision:A01",
+        "model:M04"
+      ],
+      "reason": "Stable safe Invoice validation message."
+    },
+    {
+      "address": "rules.invoice_workspace.validation_issue_order",
+      "source_refs": [
+        "decision:A01",
+        "model:M04",
+        "model:M10"
+      ],
+      "reason": "Deterministic Invoice validation result ordering."
+    },
+    {
+      "address": "rules.invoice_workspace.validation_issue_severity",
+      "source_refs": [
+        "decision:A01",
+        "model:M04"
+      ],
+      "reason": "Blocking Invoice validation severity."
+    },
+    {
+      "address": "rules.invoice_workspace.working_set_id_prefix",
+      "source_refs": [
+        "decision:A08",
+        "decision:A09"
+      ],
+      "reason": "Deterministic immutable working-set identity namespace."
+    },
+    {
+      "address": "rules.invoice_workspace.working_set_status",
+      "source_refs": [
+        "decision:A08",
+        "decision:A09"
+      ],
+      "reason": "Initial confirmed Invoice working-set state."
+    },
     {
       "address": "rules.synchronization.connection_initiator",
       "source_refs": [
@@ -1946,6 +2139,21 @@
         "decision:A17"
       ],
       "reason": "Runtime storage record required to lower accepted durable state without persisting reusable bearer secrets."
+    },
+    {
+      "address": "config.chatgpt.proposal_ttl_seconds",
+      "source_refs": [
+        "decision:A02",
+        "decision:A13"
+      ],
+      "reason": "Bounded lifetime of one prepared ChatGPT proposal before confirmation."
+    },
+    {
+      "address": "rules.invoice_workspace.source_not_stored_status",
+      "source_refs": [
+        "decision:A02"
+      ],
+      "reason": "Closed custody status reported when no original bytes are stored for a revision."
     }
   ],
   "unresolved": []

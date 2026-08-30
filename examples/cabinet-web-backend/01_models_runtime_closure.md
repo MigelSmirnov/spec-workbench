@@ -307,30 +307,6 @@ value
 
 Equal typed transport and application facts are interchangeable.
 
-## Model M53 — ClosedSyncRequest
-
-Fields: `operation: str`, `request_id: str`, `contract_version: str`, `metadata_json: str`.
-
-### Identity
-
-value
-
-### Identity evidence
-
-Equal typed transport and application facts are interchangeable.
-
-## Model M54 — ClosedSyncResponse
-
-Fields: `request_id: str`, `operation: str`, `status: str`, `metadata_json: str`, `safe_error_code: str | None`.
-
-### Identity
-
-value
-
-### Identity evidence
-
-Equal typed transport and application facts are interchangeable.
-
 ## Model M55 — CompositeOutcome
 
 Fields: `card_status: str`, `card_revision: CardRevisionReference | None`, `source_status: str`, `synchronization_status: str`, `safe_codes: tuple[str, ...]`.
@@ -942,3 +918,36 @@ value
 ### Identity evidence
 
 Equal typed transport and application facts are interchangeable.
+
+## Model M131 — ChatGptOutcomeRequest
+
+Fields: `effect_id: str`.
+
+The plugin's request for the separate Card, source-custody, and local
+synchronization outcomes of one exact effect it previously confirmed.
+
+### Identity
+
+value
+
+### Identity evidence
+
+Equal effect identities request the same composite outcome.
+
+## Model M132 — InvoiceTransferStatus
+
+Fields: `invoice_id: str`, `card_revision: CardRevisionReference`, `source_custody_status: str`, `issuance_status: str | None`, `receipt_result: TransferReceiptResult | None`, `safe_error_code: TransferReceiptErrorCode | None`, `observed_at: datetime`.
+
+The transfer-side synchronization status of one exact Invoice Card revision as
+Cabinet Web truthfully knows it: no issuance yet, an issued or acknowledged
+package, or the local Backend's receipt result. It never claims local durable
+acceptance without a receipt.
+
+### Identity
+
+value
+
+### Identity evidence
+
+Equal revision, issuance status, receipt result, code, and observation time are
+interchangeable.

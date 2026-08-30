@@ -767,13 +767,14 @@ is transport-shaped and all business decisions remain behind typed ports.
 ### Owns
 
 The local-node transport boundary: bounded request parsing, compatibility
-observation, machine authentication handoff, typed synchronization dispatch,
-and bounded response/error serialization.
+observation, machine authentication handoff, and bounded response/error
+serialization; each synchronization capability enters through its own typed
+route, never through a generic dispatch envelope.
 
 ### Knows
 
-M17 and M26, the sync-only A16 catalogue, A13 request limits, and typed ports
-for Invoice exchange and Registry publication.
+M17 and M26, the sync-only A16 catalogue, A13 request limits, and the
+access-control port that proves the active local node.
 
 ### Must not own
 
@@ -789,13 +790,12 @@ safe error projection, and rejection of unknown sync operations.
 
 ```text
 observe_sync_compatibility
-serve_sync_request
 ```
 
 ### Depth assessment
 
 kind: facade
-delegates to: `access_control`, `invoice_exchange`, `registry_replica`
+delegates to: `access_control`
 
 This is an intentionally thin trust-boundary adapter. Protocol state belongs to
 the exchange modules, so transport replacement cannot rewrite sync policy.
@@ -834,6 +834,7 @@ discover_invoice_work
 pull_invoice_package
 record_invoice_transfer_receipt
 reconcile_invoice_transfer
+get_invoice_transfer_status
 ```
 
 ### Depth assessment
