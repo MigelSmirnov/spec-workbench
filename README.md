@@ -348,6 +348,12 @@ the canonical spec identity and its `standard_version`. Stage 9 ends after the
 exact canonical spec and handoff receipts are present in Factory; Route B
 generation and terminal OTK belong to Factory.
 
+## Engineering obligation projection
+
+`python tools/obligations.py examples/<case> --next` builds a read-only
+engineering frontier beside the normative authoring ladder. It does not change
+authoring state or persist graph data. See [tools/OBLIGATIONS.md](tools/OBLIGATIONS.md).
+
 ## Tool ownership
 
 `tools/`, `tests/`, `skills/` and `.github/` change only on `main` via
