@@ -39,6 +39,7 @@ class Graph:
     operations: list[dict[str, Any]] = field(default_factory=list)
     functions: list[dict[str, Any]] = field(default_factory=list)
     routes: dict[str, dict[str, Any]] = field(default_factory=dict)
+    exposure: dict[str, str] = field(default_factory=dict)  # public_op → "external" | "internal-only"
     closure_models: dict[str, dict[str, Any]] = field(default_factory=dict)
     spec_models: dict[str, dict[str, Any]] = field(default_factory=dict)
     flow_outcomes_text: dict[str, str] = field(default_factory=dict)
@@ -196,5 +197,8 @@ def build(project: Path) -> Graph:
         for item in json.loads(router_path.read_text(encoding="utf-8")).get("items", []):
             if item.get("operation"):
                 graph.routes[item["operation"]] = item
+    exposure_path = project / "50_exposure_plan.json"
+    if exposure_path.exists():
+        graph.exposure = dict((json.loads(exposure_path.read_text(encoding="utf-8")).get("operations") or {}))
     _state0_roots(graph)
     return graph

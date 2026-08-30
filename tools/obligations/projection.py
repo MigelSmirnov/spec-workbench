@@ -195,7 +195,8 @@ def project(project_dir: Path, *, factory_root: Path | None = None, factory_proj
             add(kind, address, f"check:{name}", hint, source=f"check:{name}")
     # 2. graph-derived obligations
     for decision_key, row in graph.decisions.items():
-        if not row.get("primary_owner"):
+        # a recorded disposition (cross_cutting, deployment_process, evidence_record …) is a decided ownership
+        if not row.get("primary_owner") and not row.get("disposition"):
             add(TYPES["decision_without_owner"], f"decision:{decision_key}", "State 2 acceptance")
     for name, declaration in graph.spec_models.items():
         if name not in graph.closure_models:
@@ -214,7 +215,8 @@ def project(project_dir: Path, *, factory_root: Path | None = None, factory_proj
             prefix_to_boundary.setdefault(prefix, boundaries[0])
     for row in graph.operations:
         boundaries = [c for c in row.get("callers", []) if c.startswith("boundary:")]
-        if boundaries and row["key"] not in graph.routes:
+        # a boundary caller with an internal-only exposure is a designed non-HTTP ingress (composition root)
+        if boundaries and row["key"] not in graph.routes and graph.exposure.get(row["key"]) != "internal-only":
             for boundary in boundaries:
                 add(TYPES["boundary_without_ingress"], boundary, row["key"],
                     f"no route carries {row['key']} for {boundary}", about=row["key"])

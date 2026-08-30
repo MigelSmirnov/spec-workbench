@@ -48,7 +48,7 @@ TYPES: dict[str, ObligationType] = {
         _t("module_cut_undecided", "defining", "module",
            "decide the State 3 cut: sections, hidden mechanism, capability names", "check:modules"),
         _t("decision_without_owner", "defining", "decision",
-           "assign the primary owner module in 30_trace.json", "projection"),
+           "assign the primary owner module, or record a disposition with its reason, in 30_trace.json", "projection"),
         _t("model_without_design_source", "defining", "model interface",
            "declare in State 1 and 60_model_closure_*.json; it lives only in global_spec.json", "projection"),
         _t("model_identity_unresolved", "defining", "model interface",
