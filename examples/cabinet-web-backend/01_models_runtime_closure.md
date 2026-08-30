@@ -122,7 +122,7 @@ Equal typed transport and application facts are interchangeable.
 
 ## Model M38 — AttachProjectEstimateCommand
 
-Fields: `project_id: str`, `expected_revision: CardRevisionReference`, `estimate: EstimateValidationResult`, `authorization: AuthorizationDecision`, `effect_id: str`.
+Fields: `project_id: str`, `expected_revision: CardRevisionReference`, `estimate: EstimateValidationResult`, `authorization: AuthorizationDecision`, `effect_id: str`, `actor: ActorReference`.
 
 ### Identity
 
