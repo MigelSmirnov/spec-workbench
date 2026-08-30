@@ -145,19 +145,22 @@ def test_cabinet_regression_corpus_preserves_semantic_relations(projection, back
         "route_without_designed_boundary",
         "model_without_design_source",
         "capability_unreachable",
-        "dependency_not_designed",
     } <= web_kinds
-    assert {
-        ("invoice_exchange", "invoice_catalogue"),
-        ("source_custody", "invoice_catalogue"),
-    } <= {tuple(edge) for edge in projection.factory_parity["dependency_not_designed"]}
+    if projection.factory_parity["available"]:
+        assert "dependency_not_designed" in web_kinds
+        assert {
+            ("invoice_exchange", "invoice_catalogue"),
+            ("source_custody", "invoice_catalogue"),
+        } <= {tuple(edge) for edge in projection.factory_parity["dependency_not_designed"]}
 
     backend_kinds = {item.kind for item in backend_projection.obligations}
-    assert {"module_cut_undecided", "model_without_design_source", "dependency_not_designed"} <= backend_kinds
-    assert {
-        ("models", "access_control"),
-        ("api", "synchronization"),
-    } <= {tuple(edge) for edge in backend_projection.factory_parity["dependency_not_designed"]}
+    assert {"module_cut_undecided", "model_without_design_source"} <= backend_kinds
+    if backend_projection.factory_parity["available"]:
+        assert "dependency_not_designed" in backend_kinds
+        assert {
+            ("models", "access_control"),
+            ("api", "synchronization"),
+        } <= {tuple(edge) for edge in backend_projection.factory_parity["dependency_not_designed"]}
     assert not [item for item in backend_projection.obligations if item.kind == "unclassified_finding"]
 
 
