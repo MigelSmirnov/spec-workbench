@@ -334,6 +334,8 @@ def stage9_lineage_manifest(
             "changed_contracts": change_scope.get("changed_contracts", []),
             "changed_addresses": change_scope.get("changed_addresses", []),
             "changed_symbols_by_module": change_scope.get("changed_symbols_by_module", {}),
+            "unresolved_addresses": change_scope.get("unresolved_addresses", []),
+            "retired_unconsumed_addresses": change_scope.get("retired_unconsumed_addresses", []),
             "applied_count": 1,
             "no_op_count": 0,
             "errors_count": 0,

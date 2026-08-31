@@ -136,6 +136,37 @@ def test_change_scope_uses_factory_delta_and_keeps_model_symbols_narrow(tmp_path
     assert scope["projection"] == "factory_spec_delta"
 
 
+def test_lineage_manifest_carries_address_classification(tmp_path: Path) -> None:
+    base_spec_path = tmp_path / "global_spec.json"
+    _write_json(base_spec_path, {"standard_version": 2})
+
+    manifest = export_to_factory.stage9_lineage_manifest(
+        project="demo",
+        source_sha="s" * 64,
+        source_commit="c" * 40,
+        standard_version=2,
+        codec_coverage={},
+        started_at="2026-08-31T00:00:00Z",
+        base_spec_path=base_spec_path,
+        base_spec_sha_before="b" * 64,
+        base_spec_sha_after="a" * 64,
+        admission_path=tmp_path / "admission.json",
+        validation_path=tmp_path / "validation.json",
+        handoff_path=tmp_path / "handoff.json",
+        change_scope={
+            "changed_modules": ["provider"],
+            "changed_addresses": ["rules.legacy_catalogue.version"],
+            "unresolved_addresses": [],
+            "retired_unconsumed_addresses": ["rules.legacy_catalogue.version"],
+            "projection": "factory_spec_delta",
+        },
+    )
+
+    summary = manifest["change_summary"]
+    assert summary["unresolved_addresses"] == []
+    assert summary["retired_unconsumed_addresses"] == ["rules.legacy_catalogue.version"]
+
+
 def _clean_git_metadata(root: Path) -> dict[str, object]:
     return {
         "commit": "a" * 40,
