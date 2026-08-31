@@ -29,8 +29,14 @@ def test_identity_taxonomy_has_one_models_home() -> None:
         "values": ["vps_cabinet", "local_backend"],
     }
 
-    assert spec["rules"]["principal_catalogue"] == {
-        "node_contract_version": "cabinet-web-sync-v1"
+    # A03 kept node_contract_version as rules policy only until a
+    # deterministic policy provider owned it; the data_provider module now
+    # does, so the old catalogue namespace is fully retired.
+    assert "principal_catalogue" not in spec["rules"]
+    constants = spec["rules"]["data_provider_backend"]["constants"]
+    assert constants["NODE_CONTRACT_VERSION"] == {
+        "value_type": "string",
+        "value": "cabinet-web-sync-v1",
     }
     assert "connection_initiator" not in spec["rules"]["synchronization"]
 
@@ -69,4 +75,5 @@ def test_notes_use_typed_symbols_and_keep_contract_policy_external() -> None:
     assert "CredentialSubjectKind.principal from = models.CredentialSubjectKind" in notes
     assert "PrincipalKind.local_backend_node from = models.PrincipalKind" in notes
     assert "CabinetNodeKind.local_backend from = models.CabinetNodeKind" in notes
-    assert "= rules.principal_catalogue.node_contract_version" in notes
+    assert "= rules.principal_catalogue" not in notes
+    assert "the imported NODE_CONTRACT_VERSION constant" in notes
