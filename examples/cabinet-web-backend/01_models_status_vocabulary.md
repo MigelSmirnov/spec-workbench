@@ -207,3 +207,17 @@ value
 
 Rows are compared by their complete field quadruple; a format with several
 signatures owns several rows.
+
+## Model M153 — CabinetChannel
+
+Values: `plugin`, `browser`, `local_node`.
+
+### Identity
+
+value
+
+### Identity evidence
+
+The value classifies the closed A03/A16 access channel a credential and a
+grant are bound to. Equal members are interchangeable; the protected
+operator boundary is not a wire channel and has no member.

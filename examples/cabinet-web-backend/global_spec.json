@@ -615,7 +615,7 @@
     "derive_authentication_abuse_context: [DETERMINISM_OR_ORDERING] MUST return canonical compact sorted-key JSON with channel and the closed known-or-unknown classification, adding credential_id only when the supplied credential is non-null and exactly matches both channel and credential_id; otherwise it returns the unknown classification without attacker-chosen identity material. It MUST NOT include secret material, accept caller context, or create separate unknown buckets.",
     "derive_entity_scope_key: [DETERMINISM_OR_ORDERING] MUST return lowercase SHA-256 over the versioned scope-domain prefix followed by compact sorted-key UTF-8 canonical JSON. The unscoped form carries one null scope; the scoped form carries entity_id, entity_kind, and the complete optional revision, including every nested CardRevisionReference field with timezone-aware datetimes normalized to UTC. It MUST NOT use delimiter concatenation, omit revision constituents, inline a computed JSON template, or use str, repr, reflection, or object identity.",
     "issue_security_audit_id: [PROVENANCE] MUST return a newly generated UUID4 string on every call. Every SecurityAuditRecord construction MUST call it once and MUST NOT reuse a credential, principal, node, grant, request, or timestamp identity as `evidence_id`.",
-    "require_authenticated_local_node: [RETURN_SHAPE] MUST return principal.node only when principal.channel is the channel declared for closed synchronization capabilities in the imported CAPABILITY_GRANTS rows, principal.principal.principal_kind equals PrincipalKind.LOCAL_BACKEND_NODE from = models.PrincipalKind, node is non-null and active with node_kind CabinetNodeKind.LOCAL_BACKEND from = models.CabinetNodeKind, and node.principal_id equals principal.principal.principal_id; otherwise it raises AuthorizationDeniedError. It performs no I/O, reflection, fallback, or mutation and never constructs or substitutes another node.",
+    "require_authenticated_local_node: [RETURN_SHAPE] MUST return principal.node only when principal.channel is CabinetChannel.LOCAL_NODE from = models.CabinetChannel, principal.principal.principal_kind equals PrincipalKind.LOCAL_BACKEND_NODE from = models.PrincipalKind, node is non-null and active with node_kind CabinetNodeKind.LOCAL_BACKEND from = models.CabinetNodeKind, and node.principal_id equals principal.principal.principal_id; otherwise it raises AuthorizationDeniedError. It performs no I/O, reflection, fallback, or mutation and never constructs or substitutes another node.",
     "authenticate_request: [ORCHESTRATION] MUST return exactly authenticate_channel_request(service.unit_of_work_factory, service.credential_pepper, service.clock, service.settings, channel, presented_credential). It opens no UoW, catches no delegated exception, and contains no credential, throttle, subject-resolution, audit, or fallback implementation.",
     "authorize_capability: [ORCHESTRATION] MUST return exactly evaluate_capability_grant(service.unit_of_work_factory, service.clock, principal, capability, entity_scope). It opens no UoW, catches no delegated exception, and contains no grant lookup, scope-key, audit, or fallback implementation.",
     "enroll_principal: [ORCHESTRATION] MUST return exactly bootstrap_or_enroll_principal(service.unit_of_work_factory, service.credential_pepper, service.clock, operator, command). It opens no UoW, catches no delegated exception, and never treats command data as authentication proof.",
@@ -644,9 +644,9 @@
     "extract_plugin_credential: [SECURITY_BOUNDARY] MUST accept only one well-formed Bearer value on the private ChatGPT route namespace, reject missing, duplicated, oversized, or wrong-scheme headers uniformly, and never log or echo the value.",
     "extract_local_node_credential: [SECURITY_BOUNDARY] MUST accept only one well-formed Bearer value on the synchronization route namespace, reject missing, duplicated, oversized, or wrong-scheme headers uniformly, and keep it distinct from the ChatGPT credential scope.",
     "extract_browser_principal: [SECURITY_BOUNDARY] MUST accept only the TrustedEdge owner assertion injected by the private nginx hop after Basic Auth; reject direct or duplicated assertions, and rely on deployment enforcement that strips the client-supplied header before injection.",
-    "resolve_plugin_principal: [SECURITY_BOUNDARY] MUST delegate the single ChatGPT Bearer to authenticate_request with the channel declared for the handler's closed capability in the imported CAPABILITY_GRANTS rows, let that operation finish its owned transaction, and accept only when the returned active non-revoked principal has principal_kind equal to PrincipalKind.CABINET_OWNER from = models.PrincipalKind. It MUST NOT open another UoW or wrap the transaction-owning authentication call; it MUST reject machine, browser, revoked, absent, or ambiguous identities without an anonymous fallback and raise AuthenticationRequiredError for every failed resolution.",
+    "resolve_plugin_principal: [SECURITY_BOUNDARY] MUST delegate the single ChatGPT Bearer to authenticate_request with CabinetChannel.PLUGIN from = models.CabinetChannel, let that operation finish its owned transaction, and accept only when the returned active non-revoked principal has principal_kind equal to PrincipalKind.CABINET_OWNER from = models.PrincipalKind. It MUST NOT open another UoW or wrap the transaction-owning authentication call; it MUST reject machine, browser, revoked, absent, or ambiguous identities without an anonymous fallback and raise AuthenticationRequiredError for every failed resolution.",
     "resolve_browser_principal: [ORCHESTRATION] MUST return exactly resolve_trusted_browser_owner(access_control.unit_of_work_factory, access_control.clock, principal_assertion). It opens no UoW, catches no delegated exception, and contains no Basic Auth, principal query, or fallback implementation.",
-    "resolve_local_node_principal: [SECURITY_BOUNDARY] MUST delegate the single synchronization Bearer to authenticate_request with the channel declared for the exact synchronization capability in the imported CAPABILITY_GRANTS rows, open no second UoW, and return only an AuthenticatedPrincipal whose principal is active with principal_kind PrincipalKind.LOCAL_BACKEND_NODE from = models.PrincipalKind, whose node is non-null active with node_kind CabinetNodeKind.LOCAL_BACKEND from = models.CabinetNodeKind, whose node.principal_id equals principal.principal_id, and whose node.contract_version equals the imported NODE_CONTRACT_VERSION constant. Every other result raises AuthenticationRequiredError without fallback.",
+    "resolve_local_node_principal: [SECURITY_BOUNDARY] MUST delegate the single synchronization Bearer to authenticate_request with CabinetChannel.LOCAL_NODE from = models.CabinetChannel, open no second UoW, and return only an AuthenticatedPrincipal whose principal is active with principal_kind PrincipalKind.LOCAL_BACKEND_NODE from = models.PrincipalKind, whose node is non-null active with node_kind CabinetNodeKind.LOCAL_BACKEND from = models.CabinetNodeKind, whose node.principal_id equals principal.principal_id, and whose node.contract_version equals the imported NODE_CONTRACT_VERSION constant. Every other result raises AuthenticationRequiredError without fallback.",
     "resolve_capability: [DETERMINISM_OR_ORDERING] MUST allow only when one imported CAPABILITY_GRANTS row has capability equal to the requested dotted value and channel equal to the requested channel, returning that row's operation as the single semantic operation in catalogue order, and MUST refuse any requested capability that appears in the imported PROTECTED_OPERATOR_CAPABILITIES rows for every principal — those rows carry only capability and operation and have no channel field, and reject unknown, affix-confused, or cross-channel names without dynamic dispatch.",
     "create_app: [DEPENDENCY_BOUNDARY] MUST preserve the application composition boundary and require all thirteen explicit module services, bind them to private application state, install only the accepted ChatGPT, browser, and synchronization routers plus empty-body exception mappings, and fail startup when protected configuration or any required service is unavailable.",
     "prepare_chatgpt_proposal: [BEHAVIOR] MUST treat conversational fields as untrusted suggestions, normalize them into the requested typed proposal whose normalized_request is the canonical JSON string (sorted keys, compact separators) of an object holding the parsed request.suggested_content JSON object, the resolved capability string and request.target_revision.model_dump(mode='json') when present, preserve missing and uncertain facts, attach exact revision and duplicate warnings, and perform no durable Card, source, effect, or synchronization mutation.",
@@ -2593,6 +2593,14 @@
         "offset": "int",
         "bytes_hex": "str"
       }
+    },
+    "CabinetChannel": {
+      "kind": "enum",
+      "values": [
+        "plugin",
+        "browser",
+        "local_node"
+      ]
     }
   },
   "imports": {
@@ -2785,7 +2793,8 @@
         "ProtectedOperatorRule",
         "InvoiceValidationCheckRule",
         "EstimateCheckRule",
-        "ContentFormatSignatureRule"
+        "ContentFormatSignatureRule",
+        "CabinetChannel"
       ],
       "capability_policy": [
         "resolve_capability",
@@ -4039,7 +4048,8 @@
       "ProtectedOperatorRule",
       "InvoiceValidationCheckRule",
       "EstimateCheckRule",
-      "ContentFormatSignatureRule"
+      "ContentFormatSignatureRule",
+      "CabinetChannel"
     ],
     "capability_policy": [
       "resolve_capability",
