@@ -5,6 +5,7 @@ import shutil
 from pathlib import Path
 
 from assembly_workbench import inspect_check, verify
+from assembly_workbench.checks import _factory_storage_resolver
 from assembly_workbench.model import AssemblyWorkbenchError
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -17,28 +18,31 @@ def _copy_project(tmp_path: Path) -> Path:
     return project
 
 
-def test_cabinet_assembly_is_blocked_on_the_depth_invariant() -> None:
-    # Depth is an assembly invariant: cabinet-backend's State 3 predates the
-    # structured depth declarations, so its assembly is truthfully blocked
-    # until that migration lands. Every other check stays ready.
+def test_cabinet_assembly_stops_on_every_undecided_fact() -> None:
+    # The fence: the reference case is truthfully blocked wherever a fact is
+    # undecided — undeclared depth (State 3), two undeclared time sources
+    # (State 6), a codec registry the persistence closure cannot reach,
+    # decisions without a witness, and flow steps nothing reaches. No check
+    # reports a warning; every stop carries a hint.
     report = verify(CABINET)
     assert report["schema_version"] == "spec_workbench_assembly_verification.v1"
     assert report["ready"] is False
     assert [check["name"] for check in report["checks"]] == [
         "language", "modules", "identity", "data", "contracts", "external_contracts",
-        "notes", "router", "persistence"
+        "notes", "router", "persistence", "witness", "flows",
     ]
-    modules = report["checks"][1]
-    assert modules["ready"] is False
-    assert modules["errors"] > 0
-    for check in report["checks"]:
-        if check["name"] == "modules":
+    by_name = {check["name"]: check for check in report["checks"]}
+    assert all(check["warnings"] == 0 for check in report["checks"])
+    for name in ("modules", "contracts", "persistence", "witness", "flows"):
+        if name == "persistence" and _factory_storage_resolver() is not None:
+            assert by_name[name]["ready"] is True, name  # the factory registry proved the codec coverage
             continue
-        assert check["ready"] is True, check["name"]
-    language = report["checks"][0]
-    assert language["errors"] == 0
-    persistence = report["checks"][-1]
-    assert persistence["summary"]["handoff_ready"] is True
+        assert by_name[name]["ready"] is False and by_name[name]["errors"] > 0, name
+    for name in ("language", "identity", "data", "external_contracts", "notes", "router"):
+        assert by_name[name]["ready"] is True and by_name[name]["errors"] == 0, name
+    assert by_name["contracts"]["errors"] == 2
+    for check in inspect_check(CABINET, "contracts")["check"]["findings"]:
+        assert check["severity"] == "error" and check["hint"].startswith("not decided — decide:")
 
 
 def test_language_check_inspection_preserves_ready_owner_report() -> None:
@@ -53,9 +57,15 @@ def test_persistence_check_covers_seven_deterministic_repositories() -> None:
     report = inspect_check(CABINET, "persistence")
     assert report["schema_version"] == "spec_workbench_assembly_check.v1"
     assert report["check"]["schema_version"] == "spec_workbench_persistence_backend_coverage.v1"
-    assert report["check"]["ready"] is True
+    # one codec registry the closure cannot reach is an undecided fact: it stops
+    if _factory_storage_resolver() is not None:
+        assert report["check"]["ready"] is True  # the factory registry proved the codec coverage
+    else:
+        assert report["check"]["ready"] is False
     assert report["check"]["summary"]["repositories"] == 8
-    assert report["check"]["summary"]["errors"] == 0
+    assert report["check"]["warnings"] == 0
+    expected_errors = [] if _factory_storage_resolver() is not None else ["codec_registry_unavailable"]
+    assert [f["code"] for f in report["check"]["findings"] if f["severity"] == "error"] == expected_errors
 
 
 def test_external_contract_check_preserves_content_addressed_evidence() -> None:

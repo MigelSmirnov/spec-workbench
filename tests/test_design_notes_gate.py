@@ -79,7 +79,9 @@ def test_gate_requires_review_for_competing_failure_outcomes(tmp_path):
     )
     report = gate.coverage(project)
     assert "suspicious_note_class_pair" in _codes(report)
-    assert report["summary"]["reviews"] == 1
+    # the fence: a note that needs review blocks
+    assert report["summary"]["reviews"] == 0
+    assert report["summary"]["blocks"] >= 1
     assert report["summary"]["handoff_ready"] is False
 
 

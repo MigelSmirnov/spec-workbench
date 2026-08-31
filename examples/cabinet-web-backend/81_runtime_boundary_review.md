@@ -266,3 +266,91 @@ create-draft, which needs no scope, so no gate saw it; the live-data replay
 did). The note now states the Q1 semantics explicitly: an absent entity_scope
 carries unscoped capability authority; a present scope must match its target.
 Slice hashes recomputed; statuses unchanged.
+
+## Re-slice 2026-08-29: access_control closes the authenticated node boundary
+
+Ten independent Microscope samples exposed one deterministic type break and
+several correlated depth leaks: the local resolver returned raw M17 while
+authorization required M39; caller-supplied or constant abuse contexts leaked
+the throttle mechanism; lifecycle commands carried asserted M01 provenance as
+if it were authentication; scope keys could omit fields or collide; audit
+primary keys could reuse stable domain identities; and unexpected exception
+rollback was not closed.
+
+The accepted A03/A11 design is now lowered as one complete admission mechanism.
+M17 has an exact `principal_id` binding to its M02 machine principal. M39 carries
+that bound M17 only for `local_node`; authorization consumes M39, and the typed
+`require_authenticated_local_node` seam projects M17 into Invoice/Registry
+domain calls without reflection or cross-module auth leakage. Access control
+internally derives bounded known/unknown abuse contexts, canonical complete M65
+scope hashes, and fresh audit UUIDs. Enrollment bootstrap is closed to the sole
+empty-installation owner case; later enrollment, rotation, revocation, and grant
+provisioning require a separately authenticated owner/operator M39. Every
+unexpected failure and lifecycle/authorization refusal rolls back explicitly.
+
+All 23 final module slices were recomputed because M39 and router/persistence
+closure participate in downstream packets. `design_module_review --review`
+reported zero blocks and zero review findings for every slice; access_control
+retains `PASS_INTERNAL_VARIATION` because its observable behavior is now closed
+while local implementation structure may still vary behind the named seams.
+
+## Re-slice 2026-08-30: access control becomes a facade over deep mechanisms
+
+The next official Route B run still produced stubs in all ten Microscope
+samples. The earlier `credential_vault` and `abuse_throttle` extraction was
+correct but insufficient: the residual module still owned three independent
+stateful mechanisms — authentication admission, capability-grant evaluation
+and provisioning, and principal/credential lifecycle. This correlated directly
+with the generator's repeated stub and missing-contract failures.
+
+The accepted A03/A11 boundary is retained as the public `access_control`
+facade, while its mechanisms are now closed in `authentication_admission`,
+`capability_grants`, and `principal_lifecycle`. `security_evidence` owns fresh
+M111 identity issuance, and contract-only `access_control_errors` preserves one
+cycle-free refusal taxonomy. The facade performs typed delegation only; it may
+not open a UoW, reproduce transaction policy, use reflection, or invent a
+fallback implementation.
+
+All 28 assembled module slices were recomputed. Structural review reports zero
+blocks and zero review findings for every slice. The four behavioral mechanism
+modules and the facade remain `PASS_INTERNAL_VARIATION`; the contract-only error
+module is `PASS` because it owns no behavior that may vary.
+
+## Re-hash 2026-08-30: design labels leave the notes, the principal kind gets a catalogue
+
+The split's own route reached verification and the runtime smoke rejected a
+freshly enrolled owner: the generated `authentication_admission` compared
+`principal_kind == 'M02'` and `capability_grants` required
+`contract_version == "M02"`. The notes named subjects by their design labels
+("exact M02/M17 subject", "complete M39") and the generator turned a label
+into vocabulary the specification never declared; the pre-split
+`access_control` never compared the kind at all, which is why it passed.
+
+`rules.principal_catalogue` is now the single machine-readable home of the
+principal-kind vocabulary (`cabinet_owner`, `operator`, `local_backend_node`,
+the owner/operator set, and the `cabinet-web-sync-v1` node contract version),
+placed under A03/A11 in the data closure. Fifteen notes name
+`CabinetPrincipal`, `CabinetNodeIdentity`, `AuthenticatedPrincipal`,
+`InvoiceWorkPage` and the catalogue values instead of labels; the State 1
+vocabulary `cabinet_owner` replaces the prose kind `owner`.
+
+The changed module slices were re-hashed. Structural review reports zero
+blocks and zero findings for every re-hashed slice; review statuses are
+unchanged because no contract, ownership or mechanism moved — only the words
+the generator reads.
+
+## Re-hash 2026-08-30: the ports get their declared providers
+
+`pull_invoice_package` and `open_verified_source` returned ports whose
+concrete implementation existed nowhere in the design; fifteen generated
+candidates invented a private stream class and the rest left the function a
+stub. The State 6 lint `interface_without_provider` (spec-workbench PR #31)
+now names that gap and its repair. `InvoiceExchangeInvoicePackageStream`
+(parts in manifest order, read in order until exhausted) and
+`SourceCustodySourceDownload` (retained ContentReference and verified payload)
+are planned, contracted and noted method by method; the notes name them
+instead of "module-owned concrete". The manifest source reference is a
+ContentReference whose content_id is the source identity, matching the local
+Backend wire model; the SourceContentReference for custody lookup comes from
+the resolved working set. Structural review reports zero blocks and zero
+findings; statuses unchanged.

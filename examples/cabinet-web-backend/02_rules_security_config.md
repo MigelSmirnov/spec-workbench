@@ -30,6 +30,7 @@ external_error -/> active_browser_content
 ### Required tests
 
 1. Injection strings in every text/identifier field remain inert data.
+   [witness: verification:witness_A12]
 2. Unknown operation, transition, sort, filter, media, and redirect values fail
    closed.
 3. ChatGPT-supplied hash/identity/confirmation is not trusted without server
@@ -97,6 +98,7 @@ backup_recoverable -> isolated_restore_verified
 ### Required tests
 
 1. Boundary values pass and values beyond each size/count limit fail.
+   [witness: verification:witness_A13]
 2. Search limits cannot exceed 100 through plugin or browser input.
 3. Authentication throttle activates after five failures in the configured
    context and recovers after the configured interval without authenticating a
@@ -169,6 +171,7 @@ elapsed_interval -> monotonic_clock
 ### Required tests
 
 1. Concurrent revision, idempotency, issuance, receipt, and catalogue writes
+   [witness: verification:witness_A17]
    produce one accepted transition or an explicit conflict without lost update.
 2. Process termination before file commit, after metadata commit, and around
    atomic rename is recovered without exposing truncated or unverified bytes.
@@ -221,6 +224,7 @@ exception -> approver AND expiry AND containment AND recovery_plan
 ### Required tests
 
 1. Missing/unpinned direct dependency and unsupported runtime block release.
+   [witness: verification:deployed_tree_inventory]
 2. Reachable critical/high advisory blocks without a valid exception.
 3. Expired exception blocks release.
 4. Updated dependencies must pass the full Cabinet verification and rollback
@@ -252,6 +256,7 @@ State_2_security_gate_pass
 ### Required tests
 
 1. The deterministic State 2 lint accepts exactly one complete review record.
+   [witness: workbench:language]
 2. Every reference resolves to an indexed State 2 decision.
 3. No required category is silent or unresolved.
 

@@ -66,7 +66,7 @@ Every `evidence_id` names one immutable security event. Equal projected fields a
 
 ## Model M112 — SourceUploadHandoffRecord
 
-Fields: `handoff_id: str`, `card_id: str`, `source_id: str`, `expected_revision: CardRevisionReference`, `principal_id: str`, `actor: ActorReference`, `secret_hash: str`, `status: str`, `issued_at: datetime`, `expires_at: datetime`, `consumed_at: datetime | None`, `revoked_at: datetime | None`.
+Fields: `handoff_id: str`, `card_id: str`, `source_id: str`, `expected_revision: CardRevisionReference`, `principal_id: str`, `actor: ActorReference`, `secret_verifier: str`, `status: str`, `issued_at: datetime`, `expires_at: datetime`, `consumed_at: datetime | None`, `revoked_at: datetime | None`.
 
 Durable upload-handoff row containing the public M15 facts plus the protected verifier; the returned `SourceUploadHandoff` remains verifier-free.
 
