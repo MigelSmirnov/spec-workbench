@@ -50,6 +50,8 @@ discovery or packaging.
 
 1. Only an authenticated active M17 local Backend node initiates the evening
    connection. Cabinet Web never calls into the local network.
+   The participant kind is the `local_backend` member of the closed M139
+   `CabinetNodeKind`; it is type vocabulary, not synchronization policy data.
 2. Work discovery returns only exact available M03 Invoice revisions and source
    membership observed through M27. Every item contains `invoice_id`, exact Card
    revision/content hash, `manifest_id`/hash, ordered source

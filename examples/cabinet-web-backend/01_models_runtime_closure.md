@@ -669,7 +669,7 @@ Equal typed transport and application facts are interchangeable.
 
 ## Model M85 — PrincipalEnrollmentCommand
 
-Fields: `principal_kind: str`, `channel: str`, `display_label: str | None`.
+Fields: `principal_kind: PrincipalKind`, `channel: str`, `display_label: str | None`.
 
 ### Identity
 

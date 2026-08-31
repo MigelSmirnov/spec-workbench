@@ -188,12 +188,20 @@ authenticated_lifecycle_actor = M39 -/> asserted_M01
 scope_key = sha256("cabinet-scope-v1" || canonical_complete_M65_json)
 ```
 
-The machine-readable single home for the principal-kind vocabulary is
-`rules.principal_catalogue`: the owner, operator and local-node kinds, the
-set of kinds that may act as owner/operator, the synchronization contract
-version an active node must carry, and the credential subject kinds
-(`principal`, `node`). Notes name those values through the
-catalogue, never through a model label or a prose kind.
+The machine-readable single home for the closed identity form is the State 1
+model vocabulary: M136 `ActorType`, M137 `PrincipalKind`, M138
+`CredentialSubjectKind`, and M139 `CabinetNodeKind`. Notes and runtime code use
+only the generated typed symbols. Owner/operator membership is the exact pair
+of corresponding `PrincipalKind` members; it is not copied into a second
+catalogue. The synchronization contract version remains policy in
+`rules.principal_catalogue.node_contract_version` until a deterministic policy
+provider owns it.
+
+This paragraph deliberately supersedes A03's earlier placement of the closed
+kind vocabulary in `rules.principal_catalogue`; the authorization invariants and
+the contract-version rule are unchanged. The revision applies the accepted
+State 1 taxonomy and removes product values from LLM context rather than
+changing who may authenticate or authorize an operation.
 
 ### Required tests
 

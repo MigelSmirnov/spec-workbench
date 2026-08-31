@@ -133,7 +133,7 @@ Candidate fields:
 - `node_id`;
 - `principal_id`: the exact M02 `local_backend_node` machine principal bound to
   this installation;
-- `node_kind`: `vps_cabinet` or `local_backend`;
+- `node_kind`: the closed M139 `CabinetNodeKind`;
 - `status`: `active` or `revoked`;
 - supported contract version;
 - created and revoked times.

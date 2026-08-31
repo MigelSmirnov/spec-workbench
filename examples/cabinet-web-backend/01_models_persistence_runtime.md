@@ -10,7 +10,7 @@ Plaintext bearer material remains one-time output/input data and is never a tabl
 
 ## Model M108 — AccessCredentialRecord
 
-Fields: `credential_id: str`, `subject_kind: str`, `subject_id: str`, `channel: str`, `secret_hash: str`, `status: str`, `issued_at: datetime`, `rotated_from_credential_id: str | None`, `revoked_at: datetime | None`, `last_authenticated_at: datetime | None`.
+Fields: `credential_id: str`, `subject_kind: CredentialSubjectKind`, `subject_id: str`, `channel: str`, `secret_hash: str`, `status: str`, `issued_at: datetime`, `rotated_from_credential_id: str | None`, `revoked_at: datetime | None`, `last_authenticated_at: datetime | None`.
 
 Stores one credential verifier without the reusable bearer secret. `subject_kind` separates human/plugin principals from local-node credentials without changing M02/M17 identity.
 
@@ -52,7 +52,7 @@ The stable `abuse_context_hash` identifies one bounded failure context across at
 
 ## Model M111 — SecurityAuditRecord
 
-Fields: `evidence_id: str`, `event_type: str`, `subject_kind: str | None`, `subject_id: str | None`, `credential_id: str | None`, `channel: str | None`, `operation: str | None`, `result: str`, `reason_code: str | None`, `occurred_at: datetime`.
+Fields: `evidence_id: str`, `event_type: str`, `subject_kind: PrincipalKind | CredentialSubjectKind | None`, `subject_id: str | None`, `credential_id: str | None`, `channel: str | None`, `operation: str | None`, `result: str`, `reason_code: str | None`, `occurred_at: datetime`.
 
 Append-only secret-free authentication, authorization, enrollment, rotation, revocation, throttling, and refusal evidence.
 
