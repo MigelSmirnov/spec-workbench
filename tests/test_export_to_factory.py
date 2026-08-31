@@ -87,7 +87,53 @@ for rel in s['dirs'].values():
 shutil.copyfile(a.spec, project / s['files']['global_spec'])
 """,
     )
+    _write(
+        factory / "tools/project_spec_delta.py",
+        """import argparse, json
+p = argparse.ArgumentParser()
+p.add_argument('--project', required=True)
+p.add_argument('--old-spec', required=True)
+p.add_argument('--new-spec', required=True)
+a = p.parse_args()
+old, new = json.load(open(a.old_spec)), json.load(open(a.new_spec))
+modules = sorted(m for m in set(old.get('module_functions', {})) | set(new.get('module_functions', {})) if old.get('module_functions', {}).get(m) != new.get('module_functions', {}).get(m))
+model_symbols = sorted(name for name in set(old.get('models', {})) | set(new.get('models', {})) if old.get('models', {}).get(name) != new.get('models', {}).get(name))
+if model_symbols and 'models' not in modules: modules.append('models')
+print(json.dumps({'status': 'pass', 'changed_modules': sorted(modules), 'changed_functions': [], 'changed_notes': [], 'changed_contracts': [], 'changed_addresses': ['models.' + name for name in model_symbols], 'changed_symbols_by_module': {'models': model_symbols} if model_symbols else {}, 'unresolved_addresses': [], 'removed_modules': []}))
+""",
+    )
     return factory
+
+
+def test_change_scope_uses_factory_delta_and_keeps_model_symbols_narrow(tmp_path: Path) -> None:
+    factory = _fake_factory(tmp_path, "standard")
+    old_path = factory / "projects/demo/specs/base/global_spec.json"
+    new_path = tmp_path / "new.json"
+    old = {
+        "module_functions": {"models": ["Invoice"], "billing": ["total"]},
+        "models": {"Invoice": {"identity": "entity"}},
+    }
+    new = {
+        "module_functions": {"models": ["Invoice", "RuntimeSettings"], "billing": ["total"]},
+        "models": {
+            "Invoice": {"identity": "entity"},
+            "RuntimeSettings": {"identity": "value"},
+        },
+    }
+    _write_json(old_path, old)
+    _write_json(new_path, new)
+
+    scope = export_to_factory.project_change_scope(
+        delta_tool=factory / "tools/project_spec_delta.py",
+        project="demo",
+        previous=old_path,
+        source=new_path,
+    )
+
+    assert scope["changed_modules"] == ["models"]
+    assert scope["changed_addresses"] == ["models.RuntimeSettings"]
+    assert scope["changed_symbols_by_module"] == {"models": ["RuntimeSettings"]}
+    assert scope["projection"] == "factory_spec_delta"
 
 
 def _clean_git_metadata(root: Path) -> dict[str, object]:
