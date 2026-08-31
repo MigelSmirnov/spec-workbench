@@ -52,7 +52,7 @@ The stable `abuse_context_hash` identifies one bounded failure context across at
 
 ## Model M111 — SecurityAuditRecord
 
-Fields: `evidence_id: str`, `event_type: str`, `subject_kind: PrincipalKind | CredentialSubjectKind | None`, `subject_id: str | None`, `credential_id: str | None`, `channel: str | None`, `operation: str | None`, `result: str`, `reason_code: str | None`, `occurred_at: datetime`.
+Fields: `evidence_id: str`, `event_type: str`, `subject_kind: str | None`, `subject_id: str | None`, `credential_id: str | None`, `channel: str | None`, `operation: str | None`, `result: str`, `reason_code: str | None`, `occurred_at: datetime`.
 
 Append-only secret-free authentication, authorization, enrollment, rotation, revocation, throttling, and refusal evidence.
 

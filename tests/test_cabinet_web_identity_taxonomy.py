@@ -44,9 +44,7 @@ def test_identity_taxonomy_is_the_typed_runtime_surface() -> None:
     assert models["CabinetNodeIdentity"]["fields"]["node_kind"] == "CabinetNodeKind"
     assert models["PrincipalEnrollmentCommand"]["fields"]["principal_kind"] == "PrincipalKind"
     assert models["AccessCredentialRecord"]["fields"]["subject_kind"] == "CredentialSubjectKind"
-    assert models["SecurityAuditRecord"]["fields"]["subject_kind"] == (
-        "PrincipalKind | CredentialSubjectKind | None"
-    )
+    assert models["SecurityAuditRecord"]["fields"]["subject_kind"] == "str | None"
 
     imports = spec["imports"]["module_internal"]
     assert "ActorType" in imports["source_custody"]["models"]
