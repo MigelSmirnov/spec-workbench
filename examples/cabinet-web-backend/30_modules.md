@@ -884,18 +884,56 @@ hidden mechanism: registry catalogue replication: published snapshot acceptance 
 Two operations hide the entire atomic replica protocol and preserve the
 external ownership boundary even while the local system is offline.
 
+## `runtime_settings`
+
+### Owns
+
+The one deterministic conversion of declared deployment inputs into the
+immutable M135 `RuntimeSettings` snapshot accepted by A18.
+
+### Knows
+
+M134–M135 and only the closed runtime-settings data IR: declared input names,
+types, requiredness, defaults, normalization, targets, and project-declared
+cross-setting constraints.
+
+### Must not own
+
+Business policy, readiness checks, service construction, storage access,
+request handling, product-specific implicit constraints, or a second settings
+provider.
+
+### Hides
+
+Environment lookup, normalization, positive-integer parsing, default
+selection, typed construction, and fail-closed validation ordering.
+
+### Candidate public capabilities
+
+```text
+load_runtime_settings
+```
+
+### Depth assessment
+
+kind: deep
+hidden mechanism: deterministic runtime-input compilation into one validated immutable settings snapshot
+
+The module deliberately has one narrow entrypoint. Its implementation is
+compiler-owned; project differences live entirely in accepted structured IR.
+
 ## `runtime_control`
 
 ### Owns
 
-Loading and validating the finite A13 configuration, readiness gating,
-composition of runtime modules, backup execution metadata, and isolated restore
-verification exposed only at the protected operator boundary.
+Readiness gating, backup execution metadata, and isolated restore verification
+exposed only at the protected operator boundary.
 
 ### Knows
 
-Required credential/configuration presence, durable-store health, edge/runtime
-limit agreement, contract compatibility, backup coverage, and restore cadence.
+The already validated M135 runtime settings snapshot, durable-store health,
+edge/runtime limit agreement, contract compatibility, backup coverage, and
+restore cadence.
 
 ### Must not own
 
@@ -905,8 +943,8 @@ approval.
 
 ### Hides
 
-Configuration provenance, startup dependency checks, health aggregation,
-backup-set enumeration, restore drill orchestration, and readiness reasons.
+Startup dependency checks, health aggregation, backup-set enumeration, restore
+drill orchestration, and readiness reasons.
 
 ### Candidate public capabilities
 

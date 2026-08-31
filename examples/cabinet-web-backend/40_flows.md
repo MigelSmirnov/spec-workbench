@@ -17,7 +17,8 @@ the last complete Registry catalogue.
 ### Boundary
 
 The plugin reaches each read through its own typed route of the closed A16
-catalogue; `module:access_control` authenticates the tunnel identity and
+catalogue; `module:capability_policy` resolves the exact closed capability,
+and `module:access_control` authenticates the tunnel identity and
 authorizes the exact read capability. `module:chatgpt_interaction` owns only
 proposal, confirmation, and composite-outcome reporting. Reads are owned by
 `module:card_workspace`, `module:invoice_catalogue`,
@@ -27,7 +28,8 @@ data authority.
 ### Steps
 
 1. `capability:access_control.authenticate_request` establishes the tunnel-bound
-   owner; the typed route table admits only catalogue capability names, and
+   owner; `capability:capability_policy.resolve_capability` resolves the exact
+   closed catalogue entry, and
    `capability:access_control.authorize_capability` checks the exact read scope.
 2. Provider and Project catalogue reads use
    `capability:card_workspace.search_provider_cards` and
@@ -74,12 +76,15 @@ and composite-outcome reporting, and asks `module:capability_policy` through
 `capability:capability_policy.resolve_capability` for the exact catalogue entry
 a proposal names. Invoice reads belong to `module:invoice_catalogue`; Invoice meaning remains in
 `module:invoice_validation` and `module:invoice_lifecycle`; canonical commits remain in `module:card_workspace`;
-effect identity remains in `module:effect_journal`.
+effect identity remains in `module:effect_journal`; transfer-side outcome truth
+remains in `module:invoice_exchange`.
 
 ### Steps
 
-1. The tunnel identity is authenticated and the typed route admits only a
-   catalogue capability; a proposal naming an unknown capability is rejected by
+1. The tunnel identity is authenticated through
+   `capability:access_control.authenticate_request`, the exact operation is
+   checked through `capability:access_control.authorize_capability`, and the
+   typed route admits only a catalogue capability; a proposal naming an unknown capability is rejected by
    `capability:capability_policy.resolve_capability` before any effect exists.
 2. `capability:chatgpt_interaction.prepare_chatgpt_proposal` converts model
    output into a review object, retaining missing and uncertain facts.
@@ -344,9 +349,9 @@ and `module:source_custody`.
    page containing only exact available Invoice IDs, Card revision/content
    hashes, immutable manifest IDs/hashes, ordered source metadata, and an opaque
    continuation cursor.
-4. The exchange reads exact content from the resolved working-set record and
-   opens each required source through source custody's verified byte path
-   (`open_verified_source`), resolves the exact
+4. The exchange reads exact Card content through
+   `capability:card_workspace.get_card_revision` and opens each required source
+   through `capability:source_custody.retrieve_original_source`, resolves the exact
    discovered immutable manifest, durably records issuance, then
    `capability:invoice_exchange.pull_invoice_package` streams the exact Card,
    M29 assignment observation, and bounded source byte parts. It never emits
@@ -556,3 +561,42 @@ produce not-ready rather than a degraded anonymous/public fallback.
 backup integrity, relationship mismatch, missing coverage, isolated cleanup,
 configuration, and readiness errors. Drill failure preserves production state
 and produces actionable protected evidence without secrets.
+
+## `flow:compose_runtime_from_typed_settings`
+
+### Trigger
+
+The Cabinet Web process starts and must construct its single application graph
+before accepting traffic or running recovery.
+
+### Boundary
+
+`module:runtime_settings` alone reads and validates declared deployment inputs.
+`module:bootstrap` owns composition and injects the resulting immutable M135
+snapshot into runtime consumers.
+
+### Steps
+
+1. `module:bootstrap` calls
+   `capability:runtime_settings.load_runtime_settings` exactly once.
+2. The provider resolves the required environment selector, parses only the
+   declared inputs, applies declared defaults and project constraints, and
+   constructs M135 without consulting product policy implicitly.
+3. Any missing required input, invalid value, or violated declared relation
+   aborts startup before a database connection, recovery action, service, or
+   HTTP application is constructed.
+4. `module:bootstrap` passes the same M135 value to behavioral consumers and
+   passes its typed database URL to the PostgreSQL UoW factory.
+5. Consumers read only their required M135 fields. They do not read env,
+   dereference config data, copy defaults, or create another provider.
+
+### Outcomes
+
+Exactly one validated configuration snapshot supplies the complete runtime
+graph, or startup fails closed without a partially constructed application.
+
+### Errors
+
+`module:runtime_settings` owns missing, malformed, out-of-domain, and
+cross-setting validation failure. `module:bootstrap` owns construction and
+dependency-startup failure after settings have been accepted.

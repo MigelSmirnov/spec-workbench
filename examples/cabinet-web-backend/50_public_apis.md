@@ -1690,3 +1690,39 @@ BackupNotFound, RestoreFailed, IntegrityMismatch, CoverageIncomplete, IsolationC
 ### State impact
 
 No production business mutation.
+
+## `public_op:runtime_settings.load_runtime_settings`
+
+### Owner
+
+`module:runtime_settings`.
+
+### Callers
+
+`module:bootstrap`.
+
+### Inputs
+
+The closed structured runtime-settings declaration and current process
+environment.
+
+### Outputs
+
+One immutable M135 `RuntimeSettings` snapshot.
+
+### Observable effect
+
+Reads declared process environment values only.
+
+### Enforces
+
+Requiredness, normalization, positive-integer parsing, declared defaults,
+closed environment identity, exact targets, and project-declared constraints.
+
+### Errors
+
+MissingSetting, InvalidSetting, RuntimeSettingConstraintViolation.
+
+### State impact
+
+No durable state; fail-closed startup input only.

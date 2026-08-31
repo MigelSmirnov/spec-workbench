@@ -111,6 +111,84 @@ backup_recoverable -> isolated_restore_verified
 Later deployment can tune documented values deliberately, while the generated
 runtime cannot substitute unbounded or client-controlled defaults.
 
+## Accepted decision A18 — runtime configuration has one typed fail-closed provider
+
+### Normative rules
+
+1. `module:runtime_settings` is the sole semantic and implementation owner of
+   environment-variable parsing. It exposes one deterministic
+   `load_runtime_settings` entrypoint and returns one immutable M135
+   `RuntimeSettings` snapshot.
+2. `ENVIRONMENT` is required, has no default, is normalized by trimming and
+   lowercasing, and must resolve to M134 `RuntimeEnvironment`. Missing or
+   invalid input aborts startup before application composition.
+3. `DATABASE_URL` supplies `RuntimeSettings.database_url`. It is required in
+   every environment, has no default, is not trimmed or rewritten, and an
+   absent or empty value aborts startup. This is the runtime realization of
+   `config.runtime_storage.database_url_required`.
+4. The authentication threshold and duration inputs supply
+   `RuntimeSettings.auth_failures_before_throttle` and
+   `RuntimeSettings.auth_throttle_seconds`. Each is an optional positive
+   base-10 integer whose absent value is taken from its accepted A13 config
+   address. Invalid, zero, or negative input aborts startup.
+5. The ChatGPT proposal TTL input supplies
+   `RuntimeSettings.chatgpt_proposal_ttl_seconds`. It is an optional positive
+   base-10 integer whose absent value is taken from
+   `config.chatgpt.proposal_ttl_seconds`; invalid input aborts startup.
+6. The search default and maximum inputs supply
+   `RuntimeSettings.search_default_limit` and
+   `RuntimeSettings.search_max_limit`. Each is an optional positive base-10
+   integer whose absent value is taken from its accepted A13 config address.
+   Startup also requires `search_default_limit <= search_max_limit`.
+7. The upload handoff lifetime and byte-limit inputs supply
+   `RuntimeSettings.upload_handoff_ttl_seconds` and
+   `RuntimeSettings.upload_max_file_bytes`. Each is an optional positive
+   base-10 integer whose absent value is taken from its accepted A13 config
+   address. Invalid input aborts startup.
+8. The exact environment-variable names, targets, defaults, parsing kinds, and
+   the search relation are emitted only from the structured runtime-settings
+   data closure. Notes and LLM module slices receive M135 fields, never those
+   values or the runtime-settings table.
+9. `bootstrap` calls `load_runtime_settings` exactly once before constructing
+   any service. It injects that one M135 snapshot into every behavioral
+   consumer and passes only `settings.database_url` to the PostgreSQL UoW
+   factory. No consumer reads environment variables, dereferences the original
+   config addresses, invents a fallback, or constructs another provider.
+10. Product-specific cross-setting constraints are declared in project data.
+    The generic runtime-settings backend has no unconditional dependency on
+    `rules.binary_delivery_policy` or any other project's policy block.
+
+### Formal invariants
+
+```text
+count(runtime_settings_provider) = 1
+count(load_runtime_settings per application composition) = 1
+runtime_consumer -> typed RuntimeSettings input
+missing_or_invalid_required_setting -> startup_aborted
+search_default_limit <= search_max_limit
+runtime_settings_backend -/> implicit product_policy_dependency
+```
+
+### Required tests
+
+1. Missing or invalid `ENVIRONMENT` and missing or empty `DATABASE_URL` fail
+   before the application graph is constructed.
+2. Each optional positive-integer input uses its accepted config default when
+   absent and rejects malformed, zero, and negative values.
+3. A search default greater than the search maximum fails startup.
+4. Composition loads one snapshot and every affected consumer uses only its
+   typed M135 fields.
+5. Cabinet Web runtime-settings emission succeeds without a
+   `rules.binary_delivery_policy` block.
+6. Client Portal retains its explicitly declared startup-consistency check
+   through the same backend.
+
+### Consequence
+
+Runtime configuration is loaded once as typed data. Behavioral generation no
+longer receives product values or freedom to reinterpret their runtime source,
+and project-specific constraints remain outside the generic emitter.
+
 ## Accepted decision A17 — PostgreSQL metadata and protected VPS byte custody
 
 ### Normative rules
