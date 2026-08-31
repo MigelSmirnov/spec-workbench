@@ -46,6 +46,28 @@ def test_gate_accepts_addressed_classified_notes(tmp_path):
     assert report["summary"]["handoff_ready"] is True
 
 
+def test_gate_resolves_model_construct_from_model_closure(tmp_path):
+    project = _project(
+        tmp_path,
+        "parse: [RETURN_SHAPE] MUST return the selected member from = models.ParseKind.\n",
+    )
+    (tmp_path / "60_model_closure_domain.json").write_text(
+        json.dumps({
+            "schema_version": "spec_workbench_model_closure.v1",
+            "status": "closed",
+            "models": {
+                "ParseKind": {"kind": "enum", "values": ["known", "unknown"]}
+            },
+        }),
+        encoding="utf-8",
+    )
+
+    report = gate.coverage(project)
+
+    assert "unresolved_structured_reference" not in _codes(report)
+    assert report["summary"]["handoff_ready"] is True
+
+
 def test_gate_blocks_unknown_scope_class_and_dangling_reference(tmp_path):
     project = _project(
         tmp_path,

@@ -61,6 +61,19 @@ def _load_structured_addresses(project: Path) -> set[str]:
             address = placement.get("address")
             if isinstance(address, str) and address:
                 result.add(address)
+    # Model closures are the normative home of closed data form (§15.2), so a
+    # note may address a model construct without copying its members into the
+    # note or into 60_data_closure.json. Index roots only: the model schema is
+    # still emitted deterministically by the models backend.
+    for model_path in sorted(project.glob("60_model_closure*.json")):
+        model_payload = json.loads(model_path.read_text(encoding="utf-8"))
+        models = model_payload.get("models")
+        if isinstance(models, dict):
+            result.update(
+                f"models.{name}"
+                for name in models
+                if isinstance(name, str) and name
+            )
     for backend in deterministic_backends(project):
         result |= backend.structured_addresses(project)
     return result
