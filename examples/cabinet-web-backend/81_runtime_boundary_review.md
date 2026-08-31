@@ -354,3 +354,18 @@ ContentReference whose content_id is the source identity, matching the local
 Backend wire model; the SourceContentReference for custody lookup comes from
 the resolved working set. Structural review reports zero blocks and zero
 findings; statuses unchanged.
+
+## Re-slice 2026-08-31: runtime settings become a typed startup boundary
+
+A18 is closed by one deterministic `runtime_settings` provider. The provider
+compiles only the project-declared runtime-settings IR into one typed
+`RuntimeSettings` snapshot. `bootstrap` is the sole caller of
+`load_runtime_settings`; behavioral modules receive typed fields and do not
+receive environment names, defaults, configuration tables, or configuration
+values in their notes or local LLM slices.
+
+All 29 module slices were recomputed after the A18 model, provider, startup
+boundary, consumer wiring, and prompt-data cleanup. Structural review reports
+zero blocks and zero findings for the refreshed slices. The accepted product
+constraints remain project data: they are not prerequisites baked into the
+generic producer.
