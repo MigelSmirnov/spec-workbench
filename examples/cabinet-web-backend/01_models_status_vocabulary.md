@@ -236,3 +236,19 @@ value
 The member names one A11/A13 readiness aspect; declaration order is the
 accepted reporting order. Equal members are interchangeable, and the
 matching M147 safe code carries the same member name.
+
+## Model M155 — InvoiceLifecycleUnitOfWork
+
+The narrow A17-rule-2 unit-of-work port of the Invoice lifecycle module: the
+exact ten transaction, card-reference, custody-read, and manifest/working-set
+operations its atomic confirmation edge uses. The wide persistence port
+satisfies it structurally; the lifecycle module receives only this surface.
+
+### Identity
+
+value
+
+### Identity evidence
+
+An interface carries no instance identity; the composition passes the one
+operation-scoped unit of work opened by the factory.
