@@ -71,9 +71,9 @@ def test_notes_use_typed_symbols_and_keep_contract_policy_external() -> None:
     )
 
     assert not any(address in notes for address in removed_addresses)
-    assert "ActorType.human from = models.ActorType" in notes
-    assert "CredentialSubjectKind.principal from = models.CredentialSubjectKind" in notes
-    assert "PrincipalKind.local_backend_node from = models.PrincipalKind" in notes
-    assert "CabinetNodeKind.local_backend from = models.CabinetNodeKind" in notes
+    assert "ActorType.HUMAN from = models.ActorType" in notes
+    assert "CredentialSubjectKind.PRINCIPAL from = models.CredentialSubjectKind" in notes
+    assert "PrincipalKind.LOCAL_BACKEND_NODE from = models.PrincipalKind" in notes
+    assert "CabinetNodeKind.LOCAL_BACKEND from = models.CabinetNodeKind" in notes
     assert "= rules.principal_catalogue" not in notes
     assert "the imported NODE_CONTRACT_VERSION constant" in notes
