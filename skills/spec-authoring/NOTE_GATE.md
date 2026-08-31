@@ -25,10 +25,33 @@ The gate checks all non-heading, non-empty lines in `80_notes.md` and blocks whe
 3. the marker is not in the closed registry from `note_gate.json`;
 4. a reference class omits its required address namespace;
 5. an address of the form `= config.*`, `= models.*`, or `= rules.*` does not resolve to closed structured data;
-6. the prose is an explicit semantic stub such as `TODO`, `TBD`, `implement ...`, `handle errors appropriately`, `validate input correctly`, or equivalent registered placeholder form;
-7. a State 6 callable has neither a State 7 note nor a deterministic implementation owner.
+6. a note names a declared data-provider record table (a `record_tuple`
+   constant of `rules.data_provider_backend`) without naming its access: the
+   same note must contain at least one declared field of the table's row
+   model — the match is then spelled in the row vocabulary, e.g.
+   `one imported CAPABILITY_GRANTS row whose channel equals command.channel
+   and capability equals command.capability` — or must name a delegate
+   contract whose own notes spell that access (delegation is resolved as a
+   fixpoint over the naming graph). See "Table access must be named" below;
+7. the prose is an explicit semantic stub such as `TODO`, `TBD`, `implement ...`, `handle errors appropriately`, `validate input correctly`, or equivalent registered placeholder form;
+8. a State 6 callable has neither a State 7 note nor a deterministic implementation owner.
 
 Malformed or unknown notes are never silently skipped.
+
+## Table access must be named
+
+`SPEC_STANDARD` §15.9 hides data values from the generator and hands it the
+access signature instead. For a record table the signature includes the
+match: a note that names the table but not the predicate leaves the access
+to invention — measured failures produced filters on cells that do not
+exist. The rule is closed, not lexical guessing: the note either names at
+least one declared row-model field (any field naming counts — the author is
+trusted to spell the whole predicate once forced into the row vocabulary),
+or names the contract that owns the access. The finding always prescribes
+the fill: the declared field list and the predicate template.
+
+Scalar, tuple, and mapping constants are exempt: their access is the import
+itself, and their values may legitimately double as structural vocabulary.
 
 ## Callable completeness
 

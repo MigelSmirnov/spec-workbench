@@ -30,6 +30,7 @@ HINTS: dict[str, str] = {
     "flow_capability_unreached": "the flow step is not wired: a route delegate or a note of the calling module must name this operation",
     "waiver_not_accepted": "a waiver is a decision nobody made: record the decision in State 2 and carry it in a contract, then delete the waiver",
     "review_not_passed": "read the module slice and record PASS, or split the mechanism that may vary",
+    "table_access_unnamed": "a note naming a record table names its access: spell the match in the row model's field vocabulary, or name the contract that owns it (NOTE_GATE.md 'Table access must be named')",
 }
 
 
