@@ -157,6 +157,17 @@ runtime cannot substitute unbounded or client-controlled defaults.
 10. Product-specific cross-setting constraints are declared in project data.
     The generic runtime-settings backend has no unconditional dependency on
     `rules.binary_delivery_policy` or any other project's policy block.
+11. The protected byte-store root input supplies
+    `RuntimeSettings.source_store_root_path`. It is required in every
+    environment, has no default, and is passed by the composition root to the
+    filesystem byte store exactly once; an absent or empty value aborts
+    startup. This closes the last legacy composition-root environment read
+    that rule 9 forbids.
+12. The credential pepper input supplies `RuntimeSettings.credential_pepper`.
+    It is required in every environment, has no default, is passed by the
+    composition root to the access-control service exactly once, and is never
+    logged or exposed by any other consumer; an absent or empty value aborts
+    startup.
 
 ### Formal invariants
 
