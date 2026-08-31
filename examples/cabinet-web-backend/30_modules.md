@@ -884,6 +884,47 @@ hidden mechanism: registry catalogue replication: published snapshot acceptance 
 Two operations hide the entire atomic replica protocol and preserve the
 external ownership boundary even while the local system is offline.
 
+## `data_provider`
+
+### Owns
+
+The single deterministic home of declared scalar policy constants and closed
+policy tables — identifier prefixes, hash-algorithm identifiers, protocol
+versions, reported status scalars, the A16 capability catalogue rows, the A01
+validation check tables, and the A05 byte-signature catalogue — emitted as
+typed module constants from the closed `rules.data_provider_backend` IR.
+
+### Knows
+
+Only the closed data-provider IR: constant names, their declared value types,
+their declared values, and the State 1 row models the record tables
+instantiate.
+
+### Must not own
+
+Behavior of any kind: no lookups, no validation, no interpretation, no
+authorization, no defaults beyond the declared values, and no second home for
+a value already owned by `models` or `config`.
+
+### Hides
+
+The literal values themselves. Consumers import symbols and receive the
+access signature; the values never enter an LLM prompt (SPEC_STANDARD §15.9).
+
+### Candidate public capabilities
+
+```text
+(none — the module exposes declared constants, not operations)
+```
+
+### Depth assessment
+
+kind: deep
+hidden mechanism: deterministic compilation of declared policy data into typed importable constants
+
+The module deliberately has no callable surface. Its implementation is
+compiler-owned; project differences live entirely in accepted structured IR.
+
 ## `runtime_settings`
 
 ### Owns
