@@ -1699,7 +1699,8 @@ No production business mutation.
 
 ### Callers
 
-`module:bootstrap`.
+`boundary:process_startup`; `module:bootstrap` is the composition owner that
+invokes the imported provider exactly once.
 
 ### Inputs
 

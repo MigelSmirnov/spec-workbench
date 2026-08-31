@@ -182,6 +182,7 @@ runtime_settings_backend -/> implicit product_policy_dependency
    `rules.binary_delivery_policy` block.
 6. Client Portal retains its explicitly declared startup-consistency check
    through the same backend.
+   [witness: verification:witness_A18]
 
 ### Consequence
 

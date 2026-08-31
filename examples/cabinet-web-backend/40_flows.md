@@ -571,6 +571,7 @@ before accepting traffic or running recovery.
 
 ### Boundary
 
+`boundary:process_startup` initiates the one internal-only settings load.
 `module:runtime_settings` alone reads and validates declared deployment inputs.
 `module:bootstrap` owns composition and injects the resulting immutable M135
 snapshot into runtime consumers.
