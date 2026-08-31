@@ -192,6 +192,64 @@ def project_change_scope(
     return report
 
 
+def carry_pending_scope(
+    change_scope: dict[str, Any], working_dir: Path, previous_canonical_sha: str | None
+) -> dict[str, Any]:
+    """Union the scope of an accepted manifest no passing route has carried.
+
+    One handoff records one delta. When the previous accepted specification
+    never rode a passing Route B, its regeneration scope is still owed, and a
+    narrow new manifest would silently drop it; the union holds until a
+    passing route has carried the previous spec (the same rule the factory's
+    own spec-ops manifests follow).
+    """
+    manifest_path = working_dir / "spec_editor_manifest.json"
+    if not manifest_path.is_file() or not previous_canonical_sha:
+        return change_scope
+    try:
+        previous = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return change_scope
+    if not previous.get("accepted") or previous.get("status") != "pass":
+        return change_scope
+    previous_after = (previous.get("outputs") or {}).get("base_spec_sha256_after")
+    if previous_after != previous_canonical_sha:
+        return change_scope
+    route_path = working_dir / "route_b_run_manifest.json"
+    if route_path.is_file():
+        try:
+            route = json.loads(route_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            route = {}
+        if route.get("status") == "pass" and route.get("accepted_spec_sha256") == previous_after:
+            return change_scope
+    summary = previous.get("change_summary") or {}
+    carried = dict(change_scope)
+    for key in (
+        "changed_modules", "changed_addresses", "changed_functions",
+        "changed_notes", "changed_contracts", "retired_unconsumed_addresses",
+        "removed_modules",
+    ):
+        mine = [str(item) for item in (change_scope.get(key) or [])]
+        theirs = [str(item) for item in (summary.get(key) or [])]
+        united = sorted(set(mine) | set(theirs))
+        if key == "changed_modules" and "global" in united:
+            united = ["global"]
+        carried[key] = united
+    symbols = {
+        str(module): sorted({str(sym) for sym in syms})
+        for module, syms in (change_scope.get("changed_symbols_by_module") or {}).items()
+        if isinstance(syms, list)
+    }
+    for module, syms in (summary.get("changed_symbols_by_module") or {}).items():
+        if not isinstance(syms, list):
+            continue
+        merged = set(symbols.get(str(module), [])) | {str(sym) for sym in syms}
+        symbols[str(module)] = sorted(merged)
+    carried["changed_symbols_by_module"] = symbols
+    return carried
+
+
 def semantic_export_plan(source: Path, case: str | None) -> tuple[Path, dict[str, Any]] | None:
     if not case:
         return None
@@ -415,6 +473,11 @@ def main() -> int:
         project=args.project,
         previous=paths["canonical"] if paths["canonical"].is_file() else None,
         source=source,
+    )
+    change_scope = carry_pending_scope(
+        change_scope,
+        paths["working"],
+        sha256_file(paths["canonical"]) if paths["canonical"].is_file() else None,
     )
     admission["projected_change_scope"] = change_scope
     if args.check:

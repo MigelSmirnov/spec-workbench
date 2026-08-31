@@ -136,6 +136,44 @@ def test_change_scope_uses_factory_delta_and_keeps_model_symbols_narrow(tmp_path
     assert scope["projection"] == "factory_spec_delta"
 
 
+def test_carry_unions_pending_manifest_scope(tmp_path: Path) -> None:
+    working = tmp_path / "working"
+    working.mkdir()
+    _write_json(working / "spec_editor_manifest.json", {
+        "accepted": True,
+        "status": "pass",
+        "outputs": {"base_spec_sha256_after": "a" * 64},
+        "change_summary": {
+            "changed_modules": ["principal_lifecycle"],
+            "changed_addresses": ["models.PrincipalKind"],
+            "changed_symbols_by_module": {"models": ["PrincipalKind"]},
+            "retired_unconsumed_addresses": ["rules.legacy.version"],
+        },
+    })
+    scope = {
+        "changed_modules": ["invoice_validation"],
+        "changed_addresses": ["rules.data_provider_backend"],
+        "changed_symbols_by_module": {"models": ["EffectStatus"]},
+    }
+
+    carried = export_to_factory.carry_pending_scope(scope, working, "a" * 64)
+    assert carried["changed_modules"] == ["invoice_validation", "principal_lifecycle"]
+    assert carried["changed_symbols_by_module"]["models"] == ["EffectStatus", "PrincipalKind"]
+    assert carried["retired_unconsumed_addresses"] == ["rules.legacy.version"]
+
+    # a passing route for the previous spec ends the carry
+    _write_json(working / "route_b_run_manifest.json", {
+        "status": "pass", "accepted_spec_sha256": "a" * 64,
+    })
+    uncarried = export_to_factory.carry_pending_scope(scope, working, "a" * 64)
+    assert uncarried["changed_modules"] == ["invoice_validation"]
+
+    # a broken lineage never carries
+    assert export_to_factory.carry_pending_scope(scope, working, "b" * 64)[
+        "changed_modules"
+    ] == ["invoice_validation"]
+
+
 def test_lineage_manifest_carries_address_classification(tmp_path: Path) -> None:
     base_spec_path = tmp_path / "global_spec.json"
     _write_json(base_spec_path, {"standard_version": 2})
