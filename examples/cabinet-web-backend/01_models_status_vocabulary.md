@@ -221,3 +221,18 @@ value
 The value classifies the closed A03/A16 access channel a credential and a
 grant are bound to. Equal members are interchangeable; the protected
 operator boundary is not a wire channel and has no member.
+
+## Model M154 — ReadinessComponent
+
+Values: `protected_configuration`, `durable_state`, `credential_verifiers`,
+`private_listener_assumptions`, `contract_compatibility`, `backup_evidence`.
+
+### Identity
+
+value
+
+### Identity evidence
+
+The member names one A11/A13 readiness aspect; declaration order is the
+accepted reporting order. Equal members are interchangeable, and the
+matching M147 safe code carries the same member name.
