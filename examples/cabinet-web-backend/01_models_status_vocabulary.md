@@ -240,9 +240,12 @@ matching M147 safe code carries the same member name.
 ## Model M155 — InvoiceLifecycleUnitOfWork
 
 The narrow A17-rule-2 unit-of-work port of the Invoice lifecycle module: the
-exact ten transaction, card-reference, custody-read, and manifest/working-set
-operations its atomic confirmation edge uses. The wide persistence port
-satisfies it structurally; the lifecycle module receives only this surface.
+ten transaction, card-reference, custody-read, and manifest/working-set
+operations its atomic confirmation edge uses, plus the M156 effect-journal,
+M157 card-commit, and M158 revision-read sub-surfaces its retained
+collaborators exercise inside the same transaction. The wide persistence port
+satisfies it structurally; the lifecycle module receives only this surface,
+and no collaborator it calls requires more.
 
 ### Identity
 
@@ -252,3 +255,69 @@ value
 
 An interface carries no instance identity; the composition passes the one
 operation-scoped unit of work opened by the factory.
+
+## Model M156 — EffectJournalUnitOfWork
+
+The narrow A17-rule-2 unit-of-work port the effect journal requires from its
+caller's already active transaction: reservation lock, effect and idempotency
+reads, reservation insert, and result binding — the exact five operations the
+A04 begin/commit mechanics name. The wide persistence port and M155 satisfy
+it structurally; the journal never begins, commits, or rolls back.
+
+### Identity
+
+value
+
+### Identity evidence
+
+An interface carries no instance identity; the caller passes its one active
+operation-scoped unit of work.
+
+## Model M157 — CardRevisionCommitUnitOfWork
+
+The narrow A17-rule-2 unit-of-work port the caller-owned Card commit
+requires: card lock, current-selector read, immutable revision append, and
+current-selector insert/move — the exact five operations the A01 revision
+mechanics name. The wide persistence port and M155 satisfy it structurally;
+the commit helper never begins, commits, or rolls back.
+
+### Identity
+
+value
+
+### Identity evidence
+
+An interface carries no instance identity; the caller passes its one active
+operation-scoped unit of work.
+
+## Model M158 — InvoiceRevisionReadUnitOfWork
+
+The narrow A17-rule-2 unit-of-work port of the catalogue's exact-revision
+read: current-selector read, stored revision read, and available working-set
+listing — the three operations one Invoice view assembly uses. The wide
+persistence port and M155 satisfy it structurally; the read never mutates or
+closes the transaction.
+
+### Identity
+
+value
+
+### Identity evidence
+
+An interface carries no instance identity; the caller passes its one active
+operation-scoped unit of work.
+
+## Model M159 — InvoiceLifecycleUnitOfWorkFactory
+
+The narrow factory the lifecycle composition retains: one operation opens one
+fresh inactive M155 unit of work. The wide persistence factory satisfies it
+structurally; no second implementation exists.
+
+### Identity
+
+value
+
+### Identity evidence
+
+An interface carries no instance identity; the composition passes the one
+persistence factory.

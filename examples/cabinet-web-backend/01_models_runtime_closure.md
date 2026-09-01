@@ -345,7 +345,11 @@ Equal typed transport and application facts are interchangeable.
 
 ## Model M58 — CreateInvoiceDraftCommand
 
-Fields: `draft: InvoiceDraftProposal`, `effect_id: str`, `idempotency_key: str`, `actor: ActorReference`.
+Fields: `draft: InvoiceDraftProposal`, `effect_id: str`, `actor: ActorReference`.
+
+Under A04 the effect identity is the idempotency identity: `effect_id` is the
+one key the operation presents to the effect journal, so the command carries
+no separate idempotency field.
 
 ### Identity
 
