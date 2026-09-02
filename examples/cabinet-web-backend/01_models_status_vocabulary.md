@@ -171,8 +171,11 @@ Fields: `code` (str), `field_path` (str), `formula` (str).
 A `field_path` is a dot-separated segment path over the declared invoice
 fields. The literal segment `*` iterates the owning tuple — one row targets
 every element — and a reported concrete path replaces `*` with the bracketed
-element index. The grammar is form; the row values remain data served by the
-`data_provider` module.
+element index. A `formula` is one production of the closed check grammar the
+consuming note declares — constant/path equality, non_empty, enum membership,
+sibling sums, asterisk-path aggregation, and half-up-quantized line
+arithmetic — dispatched by production and never executed as code. The grammar
+is form; the row values remain data served by the `data_provider` module.
 
 ### Identity
 
@@ -191,7 +194,9 @@ Fields: `code` (str), `field_path` (str), `formula` (str).
 
 A `field_path` follows the same grammar as M150: a dot-separated segment path
 whose literal `*` segment iterates the owning list — for estimates, the
-parsed sections.
+parsed sections. A `formula` follows the same closed check grammar, plus the
+estimate-only productions the consuming note declares (section presence and
+Project Card currency equality).
 
 ### Identity
 
