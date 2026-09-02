@@ -1085,6 +1085,42 @@ reads, appends, field updates, and one keyed upsert.
 
 ---
 
+## `system_clock`
+
+### Owns
+
+Exactly the concrete `SystemClock` implementation of the `Clock` port.
+
+### Knows
+
+Only the `Clock` interface and the host timezone-aware UTC wall clock.
+
+### Must not own
+
+Business policy, persistence, configuration loading, scheduling, cached time,
+or service construction.
+
+### Hides
+
+The per-call `datetime.now(timezone.utc)` wall-clock read behind the narrow
+`Clock.now` interface.
+
+### Candidate public capabilities
+
+```text
+now
+```
+
+### Depth assessment
+
+kind: deep
+hidden mechanism: per-call timezone-aware UTC wall-clock read behind the narrow Clock.now interface
+
+Emitted deterministically from `system_clock_backend/v1`; one shared instance
+is constructed by bootstrap and handed to every evidence-stamping service.
+
+---
+
 # 2. Boundary adapters are not policy modules
 
 The following are expected adapters or deployment surfaces, not primary owners of Cabinet rules:

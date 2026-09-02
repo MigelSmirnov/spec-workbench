@@ -56,7 +56,7 @@ revoke_local_agent
 ### Depth assessment
 
 kind: facade
-delegates to: `access_control`, `durable_archive`, `synchronization`, `catalogue_publication`, `registry_context`, `plan_actual`, `holded_publication`, `holded_gateway`
+delegates to: `access_control`, `durable_archive`, `synchronization`, `catalogue_publication`, `registry_context`, `plan_actual`, `holded_publication`, `holded_gateway`, `system_clock`
 
 Composition/boundary module. It is intentionally shallow in business semantics:
 its value is one fail-closed runtime construction point and one explicit offline
