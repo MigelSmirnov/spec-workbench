@@ -26,6 +26,7 @@ The flow may use the candidate State 3 needs `capability:synchronization.synchro
 4. `module:durable_archive` validates the exact immutable Invoice Card revision and required source evidence, then either accepts the required set atomically, recognizes an already accepted idempotent transfer, or records the accepted failure/quarantine outcome.
 5. Only after `module:durable_archive` proves durable acceptance may synchronization record or transmit the corresponding acceptance receipt. A successful network delivery by itself never creates an accepted archive fact.
 6. If the transport outcome is unknown, `module:synchronization` reconciles by read/status evidence through `capability:synchronization.reconcile_transfer_outcome` and must not create a second logical transfer merely because the previous network result was ambiguous.
+7. A caller may read the exact recorded synchronization state through `capability:synchronization.get_sync_status` at any point; the read never mutates transfer state.
 
 ### Outcomes
 

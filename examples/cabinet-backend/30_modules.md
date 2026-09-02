@@ -1085,6 +1085,45 @@ reads, appends, field updates, and one keyed upsert.
 
 ---
 
+## `api`
+
+### Owns
+
+Exactly the HTTP assembly emitted by `http_router_backend/v1`: route table,
+typed request/response projection, and dependency storage on the application
+object.
+
+### Knows
+
+The accepted protected routes, the emitted handler signatures, and the
+`api_irregular` transport helpers the deterministic table calls.
+
+### Must not own
+
+Authorization policy, archive acceptance, matching, publication, retention,
+or synchronization policy; no business rule lives in transport assembly.
+
+### Hides
+
+FastAPI wiring, route registration order, request parsing, and response
+serialization behind the emitted typed handlers.
+
+### Candidate public capabilities
+
+```text
+create_app
+```
+
+### Depth assessment
+
+kind: facade
+delegates to: `access_control`, `durable_archive`, `synchronization`, `catalogue_publication`, `registry_context`, `plan_actual`, `holded_publication`
+
+Deterministically emitted transport shell: every operation is a typed
+delegation to one accepted application capability.
+
+---
+
 ## `system_clock`
 
 ### Owns
