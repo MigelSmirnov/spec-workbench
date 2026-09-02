@@ -16,9 +16,28 @@ Locks/reloads an unresolved publication, resolves its exact archived revision,
 uses only read-only gateway recovery, and persists the verified or still-unresolved
 result without repeating create.
 
-## Refined — `public_op:holded_publication.get_holded_publication_status`
+## `public_op:holded_publication.get_holded_publication_status`
 
-Owner: `module:holded_publication`.
+### Owner
+`module:holded_publication`
 
-Returns the exact PostgreSQL-authoritative logical publication. Absence raises a
-typed not-found error; technical gateway evidence cannot be substituted.
+### Callers
+Authorized local protected-operation adapters.
+
+### Inputs
+Exact `publication_id`.
+
+### Outputs
+The exact PostgreSQL-authoritative logical `HoldedPublication`.
+
+### Observable effect
+Read-only status observation of the logical publication.
+
+### Enforces
+PostgreSQL-authoritative truth: technical gateway evidence cannot substitute for the persisted logical publication state.
+
+### Errors
+`HoldedPublicationNotFoundError` for an unknown `publication_id`.
+
+### State impact
+None.
