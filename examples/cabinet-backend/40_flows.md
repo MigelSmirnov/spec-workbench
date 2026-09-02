@@ -107,14 +107,14 @@ Cabinet Backend refreshes Registry project context, or an existing Invoice Card 
 
 ### Boundary
 
-All Registry-derived project observation and Cabinet WorkObject projection belong to `module:registry_context`. The flow uses `capability:registry_context.refresh_registry_context`, `capability:registry_context.validate_card_assignment`, and `capability:registry_context.get_assignment_validation`. When the refreshed exact catalogue is delivered to VPS Cabinet, transport ownership remains in `module:synchronization` through `capability:synchronization.publish_registry_catalogue`; synchronization does not choose or filter Registry truth.
+All Registry-derived project observation and Cabinet WorkObject projection belong to `module:registry_context`. The flow uses `capability:registry_context.refresh_registry_context`, `capability:registry_context.validate_card_assignment`, and `capability:registry_context.get_assignment_validation`. When the refreshed exact catalogue is delivered to VPS Cabinet, transport ownership remains in `module:synchronization` through `capability:catalogue_publication.publish_registry_catalogue`; synchronization does not choose or filter Registry truth.
 
 Registry remains authoritative for Registry-owned project facts. Cabinet Backend never writes WorkObject or assignment changes back into Registry.
 
 ### Steps
 
 1. `module:registry_context` performs the accepted full Registry project observation and constructs the compact project context from the verified fields only.
-2. Registry-derived fields are projected into Cabinet WorkObjects keyed by stable Registry `project_id`; existing Cabinet-owned local fields remain untouched. When catalogue publication is requested, the exact already-produced catalogue delivery is passed to `capability:synchronization.publish_registry_catalogue` without moving catalogue-content policy into synchronization.
+2. Registry-derived fields are projected into Cabinet WorkObjects keyed by stable Registry `project_id`; existing Cabinet-owned local fields remain untouched. When catalogue publication is requested, the exact already-produced catalogue delivery is passed to `capability:catalogue_publication.publish_registry_catalogue` without moving catalogue-content policy into synchronization.
 3. Existing WorkObjects absent from a later catalogue response are preserved. Absence is treated as unresolved source availability rather than confirmed deletion.
 4. For an Invoice Card assignment under review, `module:registry_context` validates the exact Card/project context against the refreshed observation through `capability:registry_context.validate_card_assignment`.
 5. Active Registry context may validate normal availability. Archived or currently missing project context requires review and must not be interpreted as authoritative project completion.
