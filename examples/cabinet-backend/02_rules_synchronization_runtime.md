@@ -5,6 +5,8 @@
 The first implementation uses one Backend-initiated HTTPS client and the shared
 Cabinet PostgreSQL deployment for synchronization state and evidence.
 
+### Normative rules
+
 - Bootstrap reads the dedicated node credential only from
   `CABINET_SYNC_NODE_CREDENTIAL` and supplies it directly to the transport.
 - Bootstrap reads `CABINET_VPS_BASE_URL`; startup requires an absolute HTTPS URL
@@ -30,8 +32,36 @@ Cabinet PostgreSQL deployment for synchronization state and evidence.
   database failure, or adapter construction. There is no anonymous, in-memory,
   or service-locator fallback.
 
+### Formal invariants
+
+```text
+network_mutation -> durable_reservation_first
+equivalent_retry -> same_durable_identity
+issued_without_conclusive_response -> unknown_outcome AND read_only_reconciliation
+connection_observation -/> synchronized_or_accepted_state
+secret_material -/> logs_or_business_evidence
+```
+
+### Required tests
+
+1. A network mutation without a prior durable reservation is impossible.
+2. Equivalent retries reuse the reserved identity; conflicting reuse is
+   rejected before transport.
+3. An issued request without a conclusive response becomes unknown_outcome and
+   proceeds only through read-only reconciliation.
+4. Catalogue publication follows the same reserve, issue, and reconcile
+   discipline over an exact ordered snapshot.
+5. Startup fails closed on a missing credential, an invalid HTTPS URL, or
+   database failure.
+
 ### Ownership
 
 `synchronization` owns transport state, idempotency, reconciliation, catalogue
 delivery, and connection observations. `durable_archive` alone owns local
 acceptance; `registry_context` alone owns catalogue contents.
+
+### Consequence
+
+The local node can crash, retry, and reconnect without ever duplicating a
+logical transfer or fabricating acceptance; every mutation is anchored to a
+durable identity before it touches the wire.

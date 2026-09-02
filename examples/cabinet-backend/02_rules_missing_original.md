@@ -9,6 +9,12 @@ A source may be temporarily missing and expected later, or it may be explicitly
 recorded as permanently lost. Loss of the original does not delete the accepted
 Card or erase the working decisions already made from it.
 
+### Normative rules
+
+The sections below are the normative rules of this decision: the user-visible
+source states, the allowed internal use of incomplete invoices, the Holded
+restriction, and the Client Portal rule.
+
 ### User-visible states
 
 For source completeness, an invoice is presented as one of:
@@ -62,7 +68,7 @@ The portal publication must carry or derive the source-completeness state so tha
 `source_lost` is not presented as if documentary evidence were available. The
 exact visual presentation belongs to the Client Portal contract.
 
-### Invariants
+### Formal invariants
 
 For every successful Holded publication:
 
@@ -101,3 +107,10 @@ Marking a source as lost cannot remove:
    `awaiting_source` to `complete`.
 7. A `source_lost` invoice may return to `complete` if the original is later found
    and verified; the earlier loss decision remains in history.
+
+### Consequence
+
+A missing or lost original never blocks internal work or Client Portal
+visibility, but Holded publication demands complete verified custody; every
+loss is an explicit auditable human decision that later recovery does not
+erase.

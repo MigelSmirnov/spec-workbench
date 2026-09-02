@@ -6,6 +6,34 @@ A75 (durable release authorization boundary) is withdrawn. It placed the VPS
 working-set composition and the release allow/block policy inside the local
 `cabinet_backend`, which is the wrong owner.
 
+### Normative rules
+
+1. Cabinet Web owns the VPS working-set composition and the release
+   allow/block policy; `cabinet_backend` never defines the working set,
+   decides a release, or deletes data on the VPS.
+2. `cabinet_backend` stores and exposes only its own durable-acceptance
+   evidence through `durable_archive.verify_durable_acceptance` and
+   `durable_archive.get_transfer_receipt`.
+3. The two sides link by manifest, issuance, and receipt identity plus the
+   exact Card and source hashes; the reciprocal wire fields are frozen jointly
+   before Cabinet Web State 6.
+4. The removals listed under the consequence are part of this decision.
+
+### Formal invariants
+
+```text
+working_set_composition_owner = cabinet_web
+local_release_policy = removed
+durable_acceptance_evidence_owner = cabinet_backend
+```
+
+### Required tests
+
+1. No local module persists a working-set membership model.
+2. verify_durable_acceptance and get_transfer_receipt answer the reciprocal
+   verification for exact manifest, Card, and source identities.
+3. No local operation can produce a VPS release decision.
+
 ### Ownership
 
 - The canonical owner of the VPS working-set composition and of release policy
@@ -25,7 +53,7 @@ working-set composition and the release allow/block policy inside the local
   verification operation are frozen jointly before State 6 of Cabinet Web
   (`STATE2_EVIDENCE_CHECKPOINT_2026-08-23.md`). No endpoint is invented here.
 
-### Consequence for this specification
+### Consequence
 
 Removed from `cabinet_backend`: `module:retention_release`,
 `module:retention_release_persistence`, models M52 `VpsReleaseEvaluation`,

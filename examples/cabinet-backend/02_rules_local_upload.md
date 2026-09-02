@@ -62,6 +62,16 @@ and must not modify any invoice before that choice.
 10. A successfully attached and verified file removes the corresponding visible
     missing-source warning when no other required source remains missing.
 
+### Formal invariants
+
+```text
+uploader_binding -> private_interface_only
+agent_attachment_path = html_attachment_path
+same_bytes_same_target_replayed -> same_stored_replica
+hash_mismatch_or_ambiguous_match -/> source_replacement
+mutation_by_invoice_number_alone = forbidden
+```
+
 ### Required tests
 
 1. A local user can find an invoice, select it, upload a photograph, and receive a

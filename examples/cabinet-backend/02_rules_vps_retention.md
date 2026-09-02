@@ -28,6 +28,15 @@ Archive or release VPS copies for project <project_id>
 
 The system must show what will be affected and whether all required originals are safely stored in Local Backend before proceeding.
 
+### Formal invariants
+
+```text
+successful_synchronization -/> vps_evidence_deletion
+vps_release -> explicit_manual_action AND verified_durable_local_replicas
+registry_status_change -/> vps_deletion
+same_release_request_replayed -> same_release_record
+```
+
 ### Required tests
 
 1. Successful synchronization leaves the VPS working copy intact.
@@ -35,6 +44,12 @@ The system must show what will be affected and whether all required originals ar
 3. A manual release is blocked when required local source replicas are missing or unverified.
 4. A manual release may proceed after durable local verification.
 5. Repeating the same release request does not recreate or duplicate deletion records.
+
+### Consequence
+
+VPS evidence outlives synchronization until a human explicitly releases it
+against verified durable local custody; no cached Registry state can silently
+destroy originals.
 
 ### Open question — Registry completion signal
 

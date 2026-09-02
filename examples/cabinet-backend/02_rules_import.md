@@ -27,6 +27,25 @@ transport delivery
 
 ---
 
+### Normative rules
+
+The lettered sections below are the normative rules of this decision: core
+invariants (A), accepted Card lifecycle policy (B), manifest completeness and
+atomic acceptance (C), validation outcomes (D), quarantine rules (E),
+duplicate handling (F), state transitions (G), reconciliation and retention
+consequences (H), archive visibility and downstream eligibility (I), and the
+primary enforcement ownership for later State 3 (J).
+
+### Formal invariants
+
+```text
+invoice_id AND content_hash <-> one_accepted_revision
+accepted_revision = immutable
+same_manifest_replayed -> same_import
+business_acceptance = atomic(card, required_sources)
+transport_outcome -/> business_acceptance
+```
+
 ### A. Core invariants
 
 #### A.1 Card identity
@@ -441,6 +460,13 @@ state machine has several records.
 12. VPS source bytes remain ineligible for retention release until the exact Card
     revisions and required sources have durable accepted evidence and no blocking
     quarantine remains.
+
+### Consequence
+
+Import is a deterministic, idempotent, and atomic acceptance boundary: the
+archive holds exactly what Cabinet published, quarantine absorbs everything
+questionable without loss, and downstream eligibility flows only from durable
+verified custody.
 
 ### K. Remaining import-policy questions
 

@@ -2,6 +2,8 @@
 
 ## Accepted decision A75 — durable release authorization boundary
 
+### Normative rules
+
 - Synchronization supplies one typed, read-only exact working-set membership.
 - Retention resolves every member through synchronization observation and archive
   durable verification; missing or changed membership blocks authorization.
@@ -19,3 +21,20 @@
 
 Repository and synchronization adapters provide evidence mechanisms only;
 retention_release owns allow/block policy.
+
+### Formal invariants
+
+Withdrawn by A76: the release-authorization invariants of this design moved to
+Cabinet Web together with Flow 6 ownership; no local fenced invariant remains
+to enforce.
+
+### Required tests
+
+Withdrawn by A76: the flow and its semantic tests moved to Cabinet Web; no
+local test remains for this decision.
+
+### Consequence
+
+Superseded by A76. Flow 6 ownership moved to Cabinet Web, and this local
+release-authorization design is withdrawn; the sections above remain the
+record of the withdrawn shape.
