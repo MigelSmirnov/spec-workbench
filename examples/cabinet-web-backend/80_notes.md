@@ -119,7 +119,7 @@ archive_invoice: [RETURN_SHAPE] MUST construct InvoiceMutationResult from comman
 
 ## Project artifacts
 
-get_project_summary: [BEHAVIOR] MUST derive the summary from the exact Project Card revision, accepted estimate, shopping-list snapshots, and explicit ProjectInvoiceLinks, marking gaps and unmatched facts without mutating any source artifact.
+get_project_summary: [BEHAVIOR] MUST derive the summary from the exact Project Card revision, accepted estimate, shopping-list snapshots, and explicit ProjectInvoiceLinks, marking gaps and unmatched facts without mutating any source artifact; an absent project raises ResourceNotFoundError before any derivation — gap_codes mark missing derived artifacts of an existing revision and never substitute for the Project Card.
 get_project_summary: [ORCHESTRATION] MUST, when content_hash is None, open one CabinetUnitOfWork through unit_of_work_factory.open, begin, call load_current_card_reference for project_id inside that transaction, and finally call `rollback`; this read path never commits, and every Card revision, estimate and shopping-list read goes through the retained card_workspace operations.
 validate_estimate: [RETURN_SHAPE] MUST return the normalized estimate proposal, deterministic net, tax, and gross totals, exact Project revision context, and structured issues; invalid or missing monetary facts remain visible and are never defaulted into acceptance.
 derive_shopping_list: [DETERMINISM_OR_ORDERING] MUST from one pinned accepted estimate, derive stable item identities and ordered planned quantities and totals, preserve estimate provenance, and return a proposal without saving or merging it.
