@@ -435,6 +435,7 @@ state machine has several records.
 ### Required tests
 
 1. Replaying the same idempotency key with the same manifest returns the same
+   [witness: verification:witness_A20]
    logical outcome and creates no duplicate records.
 2. Reusing an idempotency key with a different manifest is rejected as an
    idempotency conflict.

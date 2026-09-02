@@ -38,6 +38,7 @@ rejected_decision -> auditable_forever
 ### Required tests
 
 1. Concurrent confirmations of one invoice line yield exactly one active match.
+   [witness: verification:witness_A73]
 2. Identical snapshot content is idempotent.
 3. Proposals never change analysis results.
 4. Unmatched computation is reproducible in stable identifier order for pinned

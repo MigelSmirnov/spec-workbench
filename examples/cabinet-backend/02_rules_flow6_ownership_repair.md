@@ -30,6 +30,7 @@ durable_acceptance_evidence_owner = cabinet_backend
 ### Required tests
 
 1. No local module persists a working-set membership model.
+   [witness: verification:semantic_flow6_synchronization]
 2. verify_durable_acceptance and get_transfer_receipt answer the reciprocal
    verification for exact manifest, Card, and source identities.
 3. No local operation can produce a VPS release decision.

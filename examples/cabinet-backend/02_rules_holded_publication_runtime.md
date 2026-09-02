@@ -36,6 +36,7 @@ status_read -> exact_persisted_state_or_failure
 ### Required tests
 
 1. Concurrent publish requests for one revision yield one logical publication.
+   [witness: verification:semantic_flow5_holded_publication]
 2. The gateway create is impossible without a committed binding.
 3. Persisted ambiguous read-back blocks any further automatic create.
 4. Reconciliation appends transitions and never rewrites history.

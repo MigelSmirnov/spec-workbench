@@ -75,6 +75,7 @@ mutation_by_invoice_number_alone = forbidden
 ### Required tests
 
 1. A local user can find an invoice, select it, upload a photograph, and receive a
+   [witness: verification:semantic_flow2_source_attachment]
    success result.
 2. Several invoices with the same invoice number are displayed as separate
    choices and no file is attached before one is selected.

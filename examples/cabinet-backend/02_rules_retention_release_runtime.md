@@ -31,6 +31,7 @@ to enforce.
 ### Required tests
 
 Withdrawn by A76: the flow and its semantic tests moved to Cabinet Web; no
+   [witness: workbench:modules]
 local test remains for this decision.
 
 ### Consequence

@@ -40,6 +40,7 @@ same_release_request_replayed -> same_release_record
 ### Required tests
 
 1. Successful synchronization leaves the VPS working copy intact.
+   [witness: verification:semantic_flow6_synchronization]
 2. Registry status changes alone do not delete VPS files.
 3. A manual release is blocked when required local source replicas are missing or unverified.
 4. A manual release may proceed after durable local verification.

@@ -35,6 +35,7 @@ interpreted_input
 ### Required tests
 
 1. Search and identifier inputs cannot alter query structure or select fields,
+   [witness: verification:witness_A62]
    operators, or commands outside the accepted closed vocabulary.
 2. Filenames, OCR text, and document content cannot invoke Cabinet tools or
    privileged operations.
@@ -138,6 +139,7 @@ stable_entity_id_known
 ### Required tests
 
 1. `design_lint.py --state 2` resolves every reference in this review.
+   [witness: workbench:language]
 2. Each `UNRESOLVED` line produces a blocking error.
 3. Removing a category or its outcome fails the structural gate.
 4. `NOT_APPLICABLE` cannot be introduced without a rationale.

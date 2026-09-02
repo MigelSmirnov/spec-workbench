@@ -33,6 +33,7 @@ secret_material -/> logs_persistence_or_returns
 ### Required tests
 
 1. A reserved attempt issues at most one automatic POST across concurrent
+   [witness: verification:semantic_flow5_holded_publication]
    processes.
 2. An interrupted issued attempt is ambiguous on restart and never posts again.
 3. Equivalent create requests reuse the reserved attempt; conflicting reuse is

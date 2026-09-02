@@ -263,6 +263,7 @@ Invoice number alone cannot satisfy that invariant.
 ### Required tests
 
 1. A confirmed Card with all required source bytes is accepted without an
+   [witness: verification:witness_A3]
    override.
 2. A confirmed Card missing expected bytes is rejected or quarantined when the
    explicit flag is absent.
@@ -331,6 +332,7 @@ suspected_semantic_duplicate -/> automatic_merge_delete_or_rewrite
 ### Required tests
 
 1. Repeating one manifest does not create a second import.
+   [witness: verification:witness_A4]
 2. Repeating one Card content hash does not create a second revision.
 3. Reattaching identical bytes to the same source target is idempotent.
 4. A different confirmed content hash for the same `invoice_id` is accepted as a
@@ -613,6 +615,7 @@ identical_attachment_replayed -> same_binary_record
 ### Required tests
 
 1. Three ordered photographs can form one complete source package.
+   [witness: verification:witness_A12]
 2. Absence of one declared photograph produces an incomplete package.
 3. Adding the missing verified photograph completes the package.
 4. Adding a later PDF preserves the original photographs and provenance.
@@ -705,6 +708,7 @@ source_package_status = complete
 ### Required tests
 
 1. One failed file leaves the Source Package incomplete.
+   [witness: verification:semantic_flow2_source_attachment]
 2. A failed file is never represented as available.
 3. Without explicit acceptance, the incomplete invoice cannot enter workflows
    that require complete source evidence.
@@ -769,6 +773,7 @@ automatic_project_creation = forbidden
 ### Required tests
 
 1. A Card with no resolved project is preserved and marked for review.
+   [witness: verification:semantic_status_vocabularies]
 2. Its source evidence remains accessible.
 3. It does not enter project-specific analysis before resolution.
 4. It does not become Holded-eligible solely through archival acceptance.
@@ -812,6 +817,7 @@ project_closure -/> object_context_erasure
 ### Required tests
 
 1. A valid confirmed Card for a closed existing project is accepted.
+   [witness: verification:semantic_status_vocabularies]
 2. The validation record preserves `project_closed` context.
 3. The Card's object block remains unchanged.
 4. Existing project-linked history remains queryable after closure.
@@ -939,6 +945,7 @@ backend_may_change_registry_status = false
 ### Required tests
 
 1. An invoice for an active project enters normal processing.
+   [witness: verification:semantic_status_vocabularies]
 2. An invoice for a completed project is accepted and marked
    `late_project_cost`.
 3. A completed project is not reopened automatically.
@@ -1152,6 +1159,7 @@ archived_means_completed = true
 ### Required tests
 
 1. A full Registry list is projected into the five accepted catalogue fields.
+   [witness: workbench:data]
 2. Registry `id` is preserved unchanged as `project_id`.
 3. An active project is available for normal assignment.
 4. An archived project requires manual review.
@@ -1336,6 +1344,7 @@ missing catalogue entry -> WorkObject remains stored
 ### Required tests
 
 1. A new Registry project creates one corresponding `WorkObject`.
+   [witness: verification:semantic_flow3_registry_refresh]
 2. Repeating the same catalogue refresh does not create a duplicate
    `WorkObject`.
 3. A Registry name or address change updates the Registry-derived fields.
@@ -1437,6 +1446,7 @@ match_removed -> line_explicitly_unmatched
 ### Required tests
 
 1. An invoice containing unmatched lines is accepted normally.
+   [witness: verification:semantic_flow4_plan_actual]
 2. An unmatched line does not create a placeholder estimate item.
 3. Backend rejects attempts to create two simultaneous active confirmed matches
    for one line.
@@ -1501,6 +1511,7 @@ accepted matching calculation
 ### Required tests
 
 1. A similarity suggestion without Cabinet confirmation remains unconfirmed.
+   [witness: verification:semantic_status_vocabularies]
 2. Similar descriptions, prices, suppliers, or quantities do not cause Backend
    to create a confirmed match automatically.
 3. A confirmed decision referencing an existing invoice revision, line, estimate
@@ -1795,6 +1806,7 @@ confirmed match -> exact immutable snapshot_id
 ### Required tests
 
 1. First import of an estimate creates one immutable snapshot.
+   [witness: verification:witness_A43]
 2. Re-import of identical content does not create a duplicate snapshot.
 3. Editing PresuPro content under the same `Estimate.id` creates a new snapshot.
 4. The previous snapshot remains unchanged and queryable.
@@ -2045,6 +2057,7 @@ numeric Holded status -> stored raw, not interpreted
 ### Required tests
 
 1. A valid Invoice Card creates exactly one purchase.
+   [witness: verification:semantic_flow5_holded_publication]
 2. The returned `documentId` is stored.
 3. GET of the created document succeeds.
 4. `docNumber` matches the supplier invoice number.
@@ -2441,6 +2454,7 @@ marker match + payload mismatch
 ### Required tests
 
 1. Attempt state is persisted before POST.
+   [witness: verification:semantic_flow5_holded_publication]
 2. Exactly one automatic POST is issued per publication attempt.
 3. A successful POST-created purchase can be recovered using only list and GET.
 4. Recovery does not use the saved POST response.
@@ -2921,6 +2935,7 @@ Failures must not disclose secret material or unnecessary identity details.
 ### Required tests
 
 1. A valid active node credential permits Backend-initiated synchronization.
+   [witness: verification:semantic_local_access_control]
 2. A revoked node credential is rejected.
 3. One installation cannot use another installation's credential.
 4. A sync credential cannot authorize a local mutation.

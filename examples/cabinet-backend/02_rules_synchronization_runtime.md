@@ -45,6 +45,7 @@ secret_material -/> logs_or_business_evidence
 ### Required tests
 
 1. A network mutation without a prior durable reservation is impossible.
+   [witness: verification:semantic_flow6_synchronization]
 2. Equivalent retries reuse the reserved identity; conflicting reuse is
    rejected before transport.
 3. An issued request without a conclusive response becomes unknown_outcome and

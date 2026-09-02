@@ -98,6 +98,7 @@ Marking a source as lost cannot remove:
 ### Required tests
 
 1. A complete confirmed invoice may be published to Holded.
+   [witness: verification:witness_A50]
 2. An invoice awaiting an original cannot be published to Holded.
 3. An invoice whose original is declared lost cannot be published to Holded.
 4. Both incomplete states remain usable in internal analytics with a warning.
