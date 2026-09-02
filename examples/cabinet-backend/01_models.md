@@ -34,7 +34,11 @@ Cabinet Backend must:
 
 ### Identity
 
-enum (no runtime identity).
+value
+
+### Identity evidence
+
+The value is a closed classification without runtime identity; equal members are interchangeable.
 
 ---
 
@@ -145,7 +149,11 @@ None for identity closure.
 
 ### Identity
 
-enum (no runtime identity).
+value
+
+### Identity evidence
+
+The value is a closed classification without runtime identity; equal members are interchangeable.
 
 ---
 
@@ -204,7 +212,11 @@ delegation identifiers are sensitive audit data; the value contains no secret.
 
 ### Identity
 
-enum (no runtime identity).
+value
+
+### Identity evidence
+
+The value is a closed classification without runtime identity; equal members are interchangeable.
 
 ---
 
@@ -214,7 +226,11 @@ enum (no runtime identity).
 
 ### Identity
 
-enum (no runtime identity).
+value
+
+### Identity evidence
+
+The value is a closed classification without runtime identity; equal members are interchangeable.
 
 ---
 
@@ -322,7 +338,11 @@ None for identity closure.
 
 ### Identity
 
-enum (no runtime identity).
+value
+
+### Identity evidence
+
+The value is a closed classification without runtime identity; equal members are interchangeable.
 
 ---
 
@@ -432,7 +452,11 @@ None for identity closure.
 
 ### Identity
 
-enum (no runtime identity).
+value
+
+### Identity evidence
+
+The value is a closed classification without runtime identity; equal members are interchangeable.
 
 ---
 
@@ -487,7 +511,11 @@ None for identity closure.
 
 ### Identity
 
-enum (no runtime identity).
+value
+
+### Identity evidence
+
+The value is a closed classification without runtime identity; equal members are interchangeable.
 
 ---
 
@@ -600,7 +628,11 @@ the accepted transfer workflow.
 
 ### Identity
 
-enum (no runtime identity).
+value
+
+### Identity evidence
+
+The value is a closed classification without runtime identity; equal members are interchangeable.
 
 ---
 
@@ -610,7 +642,11 @@ enum (no runtime identity).
 
 ### Identity
 
-enum (no runtime identity).
+value
+
+### Identity evidence
+
+The value is a closed classification without runtime identity; equal members are interchangeable.
 
 ---
 
@@ -770,7 +806,11 @@ None for identity closure.
 
 ### Identity
 
-enum (no runtime identity).
+value
+
+### Identity evidence
+
+The value is a closed classification without runtime identity; equal members are interchangeable.
 
 ---
 
@@ -911,7 +951,11 @@ None for identity closure.
 
 ### Identity
 
-enum (no runtime identity).
+value
+
+### Identity evidence
+
+The value is a closed classification without runtime identity; equal members are interchangeable.
 
 ---
 
@@ -972,7 +1016,11 @@ None for identity closure.
 
 ### Identity
 
-enum (no runtime identity).
+value
+
+### Identity evidence
+
+The value is a closed classification without runtime identity; equal members are interchangeable.
 
 ---
 
@@ -1083,7 +1131,11 @@ does not authenticate its sender or authorize an import transition.
 
 ### Identity
 
-enum (no runtime identity).
+value
+
+### Identity evidence
+
+The value is a closed classification without runtime identity; equal members are interchangeable.
 
 ---
 
@@ -1093,7 +1145,11 @@ enum (no runtime identity).
 
 ### Identity
 
-enum (no runtime identity).
+value
+
+### Identity evidence
+
+The value is a closed classification without runtime identity; equal members are interchangeable.
 
 ---
 
@@ -1150,7 +1206,11 @@ None for identity closure.
 
 ### Identity
 
-enum (no runtime identity).
+value
+
+### Identity evidence
+
+The value is a closed classification without runtime identity; equal members are interchangeable.
 
 ---
 
@@ -1210,7 +1270,11 @@ None for identity closure.
 
 ### Identity
 
-enum (no runtime identity).
+value
+
+### Identity evidence
+
+The value is a closed classification without runtime identity; equal members are interchangeable.
 
 ---
 
@@ -1220,7 +1284,11 @@ enum (no runtime identity).
 
 ### Identity
 
-enum (no runtime identity).
+value
+
+### Identity evidence
+
+The value is a closed classification without runtime identity; equal members are interchangeable.
 
 ---
 
@@ -1277,7 +1345,11 @@ None for identity closure.
 
 ### Identity
 
-enum (no runtime identity).
+value
+
+### Identity evidence
+
+The value is a closed classification without runtime identity; equal members are interchangeable.
 
 ---
 
@@ -1287,7 +1359,11 @@ enum (no runtime identity).
 
 ### Identity
 
-enum (no runtime identity).
+value
+
+### Identity evidence
+
+The value is a closed classification without runtime identity; equal members are interchangeable.
 
 ---
 
@@ -1345,7 +1421,11 @@ None for identity closure.
 
 ### Identity
 
-enum (no runtime identity).
+value
+
+### Identity evidence
+
+The value is a closed classification without runtime identity; equal members are interchangeable.
 
 ---
 
@@ -1398,7 +1478,11 @@ None for identity closure.
 
 ### Identity
 
-enum (no runtime identity).
+value
+
+### Identity evidence
+
+The value is a closed classification without runtime identity; equal members are interchangeable.
 
 ---
 
@@ -1583,7 +1667,11 @@ None for identity closure.
 
 ### Identity
 
-enum (no runtime identity).
+value
+
+### Identity evidence
+
+The value is a closed classification without runtime identity; equal members are interchangeable.
 
 ---
 
@@ -1660,7 +1748,11 @@ None for identity closure.
 
 ### Identity
 
-enum (no runtime identity).
+value
+
+### Identity evidence
+
+The value is a closed classification without runtime identity; equal members are interchangeable.
 
 ---
 
@@ -1773,7 +1865,11 @@ None for identity closure.
 
 ### Identity
 
-enum (no runtime identity).
+value
+
+### Identity evidence
+
+The value is a closed classification without runtime identity; equal members are interchangeable.
 
 ---
 

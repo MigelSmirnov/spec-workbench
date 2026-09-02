@@ -13,7 +13,11 @@ Closed status of a local principal or credential (`kind: enum`): `active`, `revo
 
 ### Identity
 
-enum (no runtime identity).
+value
+
+### Identity evidence
+
+The value is a closed classification without runtime identity; equal members are interchangeable.
 
 ---
 
@@ -28,7 +32,11 @@ no string prefix or message is ever inspected.
 
 ### Identity
 
-enum (no runtime identity).
+value
+
+### Identity evidence
+
+The value is a closed classification without runtime identity; equal members are interchangeable.
 
 ---
 
@@ -38,7 +46,11 @@ enum (no runtime identity).
 
 ### Identity
 
-enum (no runtime identity).
+value
+
+### Identity evidence
+
+The value is a closed classification without runtime identity; equal members are interchangeable.
 
 ---
 
@@ -48,7 +60,11 @@ enum (no runtime identity).
 
 ### Identity
 
-enum (no runtime identity).
+value
+
+### Identity evidence
+
+The value is a closed classification without runtime identity; equal members are interchangeable.
 
 ---
 
