@@ -67,7 +67,7 @@ An authenticated local user or authorised local service/agent supplies one or mo
 
 ### Boundary
 
-Authentication and exact-operation authorization enter through `module:access_control` using `capability:access_control.authorize_operation`. Source attachment policy and durable evidence transitions belong to `module:durable_archive` through `capability:durable_archive.attach_local_source` and may be observed through `capability:durable_archive.get_source_status`.
+Authentication and exact-operation authorization enter through `module:access_control` using `capability:access_control.authorize_operation`. Source attachment policy and durable evidence transitions belong to `module:durable_archive` through `capability:durable_archive.attach_local_source` and may be observed through `capability:durable_archive.get_source_status`. Explicit user decisions about missing evidence stay in the same module: an intentionally incomplete source set is admitted through `capability:durable_archive.accept_incomplete_source_evidence`, and a confirmed loss is recorded through `capability:durable_archive.record_source_loss`.
 
 The local HTML uploader and local agent are adapters over the same Backend operation. Neither adapter owns matching, hash, provenance, idempotency, or archive policy.
 
