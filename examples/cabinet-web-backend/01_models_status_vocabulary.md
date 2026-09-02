@@ -168,6 +168,12 @@ One row of the closed A01 Invoice validation check table.
 
 Fields: `code` (str), `field_path` (str), `formula` (str).
 
+A `field_path` is a dot-separated segment path over the declared invoice
+fields. The literal segment `*` iterates the owning tuple — one row targets
+every element — and a reported concrete path replaces `*` with the bracketed
+element index. The grammar is form; the row values remain data served by the
+`data_provider` module.
+
 ### Identity
 
 value
@@ -182,6 +188,10 @@ declared validation issue order.
 One row of the closed A01/A04 estimate validation check table.
 
 Fields: `code` (str), `field_path` (str), `formula` (str).
+
+A `field_path` follows the same grammar as M150: a dot-separated segment path
+whose literal `*` segment iterates the owning list — for estimates, the
+parsed sections.
 
 ### Identity
 
