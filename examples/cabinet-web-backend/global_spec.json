@@ -702,7 +702,7 @@
     "parse_invoice_revision: [ORCHESTRATION] MUST call InvoiceCardV1.model_validate_json on revision.canonical_json and require the parsed card_type and card_version to equal the imported INVOICE_CARD_TYPE constant and the imported INVOICE_CARD_VERSION constant.",
     "parse_invoice_revision: [VALIDATION_ERROR] MUST raise ValidationRejectedError with InvoiceRejectionCode.NOT_FOUND from = models.InvoiceRejectionCode for malformed JSON or a card type/version mismatch, and MUST NOT repair, default, or partially construct the Card.",
     "evaluate_validation_checks: [ORCHESTRATION] MUST evaluate every entry of the imported INVOICE_VALIDATION_CHECKS rows in its declared order against invoice, including every indexed line — a rule field_path is a dot-separated segment path over the declared invoice fields whose asterisk segment iterates the lines tuple, and the concrete indexed field_path replaces the asterisk segment with the bracketed line index — and construct a ValidationIssue for each failure with severity and message from the imported VALIDATION_ISSUE_SEVERITY constant and the imported VALIDATION_ISSUE_MESSAGE constant, the rule code, the concrete indexed field_path, expected = the rule formula, and actual = the offending value.",
-    "evaluate_validation_checks: [BEHAVIOR] MUST evaluate each rule formula as the closed grammar of the check table, dispatching on its production and never executing formula text as code: equals followed by an imported constant name compares the resolved value to that constant; equals followed by a field path compares it to the value at that invoice path, where a path may begin with the invoice root segment naming the card itself; non_empty requires a non-empty string or tuple; one_of followed by an enum name and the word members requires membership among the members of that enum, the name resolving among the imported runtime model enums; a plus expression over sibling line fields requires the resolved value to equal their sum; sum over an asterisk path requires equality with the sum of the iterated values; round_half_up written as the call form round_half_up(expression, 2) requires equality with the parenthesized arithmetic expression over the owning row fields, quantized to two decimal places by the half-up rule; a plus expression compared by the word equals to a path requires the two sides to match; Decimal comparison is exact after quantization; arithmetic and comparison operands that name bare fields resolve against the resolved value itself when that value is a model row (the payment rule) and against the owning row for scalar leaves (the line rules), while dotted paths resolve from the invoice root.",
+    "evaluate_validation_checks: [BEHAVIOR] MUST evaluate each rule formula as exactly one call-form production op(arguments) of the closed check vocabulary, dispatching on the operation name and never executing formula text as code: equals_constant compares the resolved value to the imported constant named by its argument; equals_path compares it to the value at the dotted path from the invoice root, where the leading invoice segment names the card itself; equals_expr compares it to the arithmetic expression over fields of the owning row — the resolved value itself when that value is a model row; expr_equals_path compares the arithmetic expression over fields of the resolved value to the value at the dotted root path of its second argument; equals_sum_over compares it to the sum of the values iterated by the asterisk segment of its argument; round_half_up compares it to the expression of its first argument over the owning row fields, quantized to two decimal places by the half-up rule; non_empty requires a non-empty string or non-empty tuple; one_of_enum requires membership among the members of the imported runtime enum named by its argument; Decimal comparison is exact.",
     "evaluate_validation_checks: [RETURN_SHAPE] MUST return the complete issue tuple sorted by the imported VALIDATION_ISSUE_ORDER constant and line index; it performs no write, no duplicate lookup, and never suppresses a failed declared check.",
     "require_mutation_authorization: [SECURITY_BOUNDARY] MUST require authorization.allowed, authorization.capability == capability with that capability present in the imported CAPABILITY_GRANTS rows, and authorization.principal_id == actor.principal_id. An absent authorization.entity_scope carries unscoped capability authority and passes for any target; when entity_scope is present it MUST identify invoice_id, with revision equal to expected_revision when expected_revision is not None and with no revision otherwise. Any failure raises ValidationRejectedError with InvoiceRejectionCode.ACCESS_DENIED from = models.InvoiceRejectionCode before any read or write.",
     "require_mutation_authorization: [RETURN_SHAPE] MUST return None on success and MUST NOT mutate, log secrets, or fabricate an authorization decision.",
@@ -1010,7 +1010,7 @@
     "confirm_chatgpt_effect_handler: [ORCHESTRATION] MUST resolve the ChatGPT principal, authorize the exact capability fixed for this handler by http_router_backend, and delegate to confirm_chatgpt_effect with the chatgpt_interaction service, that principal and the typed confirmation request, returning its ConfirmedEffectAuthorization unchanged.",
     "report_composite_outcome_handler: [ORCHESTRATION] MUST resolve the ChatGPT principal, authorize the exact capability fixed for this handler by http_router_backend, and delegate to report_composite_outcome with the chatgpt_interaction service, that principal and the typed outcome request, returning its ChatGptOutcomeReport unchanged.",
     "validate_estimate: [ORCHESTRATION] MUST parse proposal.canonical_json as a JSON object whose sections list holds EstimateSection values, evaluate every row of the imported ESTIMATE_CHECKS table — a row field_path is a dot-separated segment path over the parsed estimate whose asterisk segment iterates the sections list — and record each failed formula as a ValidationIssue(severity= the imported ESTIMATE_VALIDATION_ISSUE_SEVERITY constant, code=the entry code, field_path=the entry field_path, message=the entry formula, expected=the computed value, actual=the supplied value), read the Project currency through get_card_revision on the retained card_workspace with proposal.expected_project_revision and parse ProjectCard from its canonical_json, and return EstimateValidationResult(normalized_estimate=AcceptedEstimateSnapshot(estimate_id=proposal.estimate_id, version=proposal.version, project_id=proposal.project_id, status= the imported ESTIMATE_STATUS_ACCEPTED constant, currency=proposal.currency, sections=the parsed sections, net_total=the sum of section net totals, tax_total=the sum of section tax totals, gross_total=the sum of section gross totals, issued_at=the retained clock's now(), accepted_at=the retained clock's now()) only when no issue exists and None otherwise, net_total, tax_total and gross_total=those sums, issues=the recorded issues, project_revision=proposal.expected_project_revision); it mutates nothing.",
-    "validate_estimate: [BEHAVIOR] MUST evaluate each row formula as the same closed grammar over the parsed estimate, dispatching on the production and never executing formula text as code: sum over an asterisk path aggregates the sections list; a plus expression over sibling section fields requires their sum; at least one followed by a segment name requires that list to be non-empty; equals the Project Card currency compares the estimate currency to the currency of the Project Card read for the proposal.",
+    "validate_estimate: [BEHAVIOR] MUST evaluate each row formula as the same closed call-form vocabulary over the parsed estimate — equals_sum_over aggregates by the asterisk segment over the sections list, equals_expr resolves against the owning section row, non_empty accepts the sections list itself, and equals_project_currency compares the estimate currency to the currency of the Project Card read for the proposal — dispatching on the operation name and never executing formula text as code.",
     "attach_project_estimate: [ORCHESTRATION] MUST, inside the transaction the bracket opens, require command.estimate.issues empty and command.estimate.normalized_estimate present (otherwise ValidationRejectedError with InvoiceRejectionCode.VALIDATION from = models.InvoiceRejectionCode), read the exact Project revision through get_card_revision on the retained card_workspace with command.expected_revision and parse ProjectCard from its canonical_json, derive the successor as project.model_copy(update={accepted_estimate: command.estimate.normalized_estimate}), commit it through commit_card_revision_in_unit_of_work with that unit_of_work and CardRevisionCommitCommand(card_id=command.project_id, card_type= the imported PROJECT_CARD_TYPE constant, expected_content_hash=command.expected_revision.content_hash, canonical_json=successor.model_dump_json(), validation_issues=(), actor=command.actor), and return ProjectMutationResult(effect_id=command.effect_id, project_revision=commit_result.revision, artifact_id=command.estimate.normalized_estimate.estimate_id, status=commit_result.revision.observed_status, issues=()).",
     "save_shopping_list: [ORCHESTRATION] MUST, inside the transaction the bracket opens, read the exact Project revision through get_card_revision on the retained card_workspace with command.proposal.project_revision and parse ProjectCard from its canonical_json, require project.accepted_estimate present with estimate_id == command.proposal.estimate.estimate_id (otherwise ValidationRejectedError with InvoiceRejectionCode.VALIDATION from = models.InvoiceRejectionCode), parse command.proposal.items_json as a JSON list of ShoppingListItem values, set version to one more than the count of project.shopping_lists whose estimate_id equals that estimate_id, build ShoppingListSnapshot(id= the imported SHOPPING_LIST_ID_PREFIX constant followed by command.proposal.project_revision.card_id, the imported SHOPPING_LIST_ID_SEPARATOR constant, the estimate_id, the imported SHOPPING_LIST_ID_SEPARATOR constant and the version, version, project_id=command.proposal.project_revision.card_id, estimate_id, status= the imported SHOPPING_LIST_STATUS_ISSUED constant, currency=project.currency, created_at=the retained clock's now(), source_status=command.proposal.estimate.status, items=the parsed items, net_total=command.proposal.net_total, tax_total=command.proposal.tax_total, gross_total=command.proposal.gross_total), derive the successor as project.model_copy(update={shopping_lists: project.shopping_lists + (snapshot,)}), commit it through commit_card_revision_in_unit_of_work with that unit_of_work and CardRevisionCommitCommand(card_id=command.proposal.project_revision.card_id, card_type= the imported PROJECT_CARD_TYPE constant, expected_content_hash=command.proposal.project_revision.content_hash, canonical_json=successor.model_dump_json(), validation_issues=(), actor=command.actor), and return ProjectMutationResult(effect_id=command.effect_id, project_revision=commit_result.revision, artifact_id=snapshot.id, status=commit_result.revision.observed_status, issues=()).",
     "search_invoices: [SECURITY_BOUNDARY] MUST reject query.limit below 1 or above catalogue.settings.search_max_limit with ValidationRejectedError with InvoiceRejectionCode.VALIDATION from = models.InvoiceRejectionCode before opening a transaction; the caller supplies limit explicitly and catalogue.settings.search_default_limit is the documented client default.",
@@ -10694,32 +10694,32 @@
             {
               "code": "invoice.card_type",
               "field_path": "card_type",
-              "formula": "equals INVOICE_CARD_TYPE"
+              "formula": "equals_constant(INVOICE_CARD_TYPE)"
             },
             {
               "code": "invoice.card_version",
               "field_path": "card_version",
-              "formula": "equals INVOICE_CARD_VERSION"
+              "formula": "equals_constant(INVOICE_CARD_VERSION)"
             },
             {
               "code": "invoice.id",
               "field_path": "id",
-              "formula": "non_empty"
+              "formula": "non_empty()"
             },
             {
               "code": "invoice.lifecycle",
               "field_path": "status",
-              "formula": "one_of InvoiceLifecycleState members"
+              "formula": "one_of_enum(InvoiceLifecycleState)"
             },
             {
               "code": "invoice.currency",
               "field_path": "currency",
-              "formula": "non_empty"
+              "formula": "non_empty()"
             },
             {
               "code": "invoice.source_identity",
               "field_path": "source.card_id",
-              "formula": "equals invoice.id"
+              "formula": "equals_path(invoice.id)"
             },
             {
               "code": "invoice.line_net",
@@ -10729,17 +10729,17 @@
             {
               "code": "invoice.line_gross",
               "field_path": "lines.*.gross_amount",
-              "formula": "net_amount + tax_amount"
+              "formula": "equals_expr(net_amount + tax_amount)"
             },
             {
               "code": "invoice.total_gross",
               "field_path": "totals.gross_total",
-              "formula": "sum lines.*.gross_amount"
+              "formula": "equals_sum_over(lines.*.gross_amount)"
             },
             {
               "code": "invoice.payment_balance",
               "field_path": "payment",
-              "formula": "paid_total + outstanding_total equals totals.gross_total"
+              "formula": "expr_equals_path(paid_total + outstanding_total, totals.gross_total)"
             }
           ]
         },
@@ -10827,32 +10827,32 @@
             {
               "code": "estimate.sections_missing",
               "field_path": "sections",
-              "formula": "at least one section"
+              "formula": "non_empty()"
             },
             {
               "code": "estimate.section_gross",
               "field_path": "sections.*.gross_total",
-              "formula": "net_total + tax_total"
+              "formula": "equals_expr(net_total + tax_total)"
             },
             {
               "code": "estimate.total_net",
               "field_path": "net_total",
-              "formula": "sum sections.*.net_total"
+              "formula": "equals_sum_over(sections.*.net_total)"
             },
             {
               "code": "estimate.total_tax",
               "field_path": "tax_total",
-              "formula": "sum sections.*.tax_total"
+              "formula": "equals_sum_over(sections.*.tax_total)"
             },
             {
               "code": "estimate.total_gross",
               "field_path": "gross_total",
-              "formula": "sum sections.*.gross_total"
+              "formula": "equals_sum_over(sections.*.gross_total)"
             },
             {
               "code": "estimate.currency",
               "field_path": "currency",
-              "formula": "equals the Project Card currency"
+              "formula": "equals_project_currency()"
             }
           ]
         },
