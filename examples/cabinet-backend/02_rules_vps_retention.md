@@ -1,6 +1,6 @@
 # State 2 decision — manual VPS retention release
 
-## Accepted decision
+## Accepted decision A11 — manual VPS retention release
 
 Cabinet VPS keeps working copies of Invoice Cards, photographs, PDFs, and related project evidence after successful synchronization to Local Backend.
 

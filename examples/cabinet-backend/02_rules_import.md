@@ -1,6 +1,6 @@
 # State 2 — Cabinet Backend import and durable-acceptance rules
 
-## Accepted decision
+## Accepted decision A20 — VPS-to-local import and durable acceptance
 
 ### Status
 

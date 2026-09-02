@@ -1,6 +1,6 @@
 # State 2 decision — missing original invoice source
 
-## Accepted decision
+## Accepted decision A50 — missing original invoice source
 
 Local Cabinet Backend distinguishes a usable confirmed Invoice Card from a Card
 whose original photograph or PDF is durably available.

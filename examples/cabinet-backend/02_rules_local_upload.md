@@ -1,6 +1,6 @@
 # State 2 decision — local invoice source upload
 
-## Accepted decision
+## Accepted decision A10 — local invoice source upload
 
 Accepted supporting decision for `02_rules.md`.
 

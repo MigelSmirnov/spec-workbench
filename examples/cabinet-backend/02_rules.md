@@ -318,6 +318,16 @@ other business signals.
    downstream views, but both accepted histories and their evidence remain
    auditable.
 
+### Formal invariants
+
+```text
+same_transfer_manifest_replayed -> same_import
+same_card_content_hash_replayed -> same_revision
+same_source_bytes_replayed -> same_source_replica
+new_content_hash_same_invoice_id -> new_revision
+suspected_semantic_duplicate -/> automatic_merge_delete_or_rewrite
+```
+
 ### Required tests
 
 1. Repeating one manifest does not create a second import.
@@ -376,6 +386,12 @@ Card bytes or content hash.
 3. A later corrected Cabinet revision is stored as a new revision.
 4. Removing a local decision restores unresolved interpretation without mutating
    the Card.
+
+### Consequence
+
+Local interpretation evolves as auditable Backend decisions while the accepted
+Card bytes and content hash stay exactly as Cabinet published them; no
+downstream consumer can mistake a local assignment for a Card fact.
 
 ---
 
@@ -585,6 +601,15 @@ produce or support the Card.
 10. If source metadata inside the Card must change, Cabinet must produce a new
     confirmed Card revision.
 
+### Formal invariants
+
+```text
+count(logical_source_package per invoice_card) = 1
+package_complete <-> every_expected_part_verified_or_declared_not_stored
+late_attachment -/> accepted_card_change
+identical_attachment_replayed -> same_binary_record
+```
+
 ### Required tests
 
 1. Three ordered photographs can form one complete source package.
@@ -592,6 +617,11 @@ produce or support the Card.
 3. Adding the missing verified photograph completes the package.
 4. Adding a later PDF preserves the original photographs and provenance.
 5. Repeating an identical attachment does not create a duplicate binary record.
+
+### Consequence
+
+One Card carries one logical evidence package that may complete over time:
+source custody grows monotonically and never rewrites the accepted Card.
 
 ---
 
@@ -727,6 +757,15 @@ with stale or incorrect context.
 7. No arbitrary project is created automatically to satisfy the missing link.
 8. The original object context from the Card is always preserved for audit.
 
+### Formal invariants
+
+```text
+unresolved_project -/> card_or_source_loss
+unresolved_project -> excluded_from_project_analytics
+unresolved_project -> not_holded_eligible
+automatic_project_creation = forbidden
+```
+
 ### Required tests
 
 1. A Card with no resolved project is preserved and marked for review.
@@ -735,6 +774,12 @@ with stale or incorrect context.
 4. It does not become Holded-eligible solely through archival acceptance.
 5. A later explicit assignment makes it eligible for the downstream operations
    whose other requirements are satisfied.
+
+### Consequence
+
+An invoice is never lost to a missing project link: it waits in explicit
+review with its full evidence, and only a human assignment unlocks the
+project-scoped downstream paths.
 
 ---
 
@@ -756,12 +801,25 @@ after the related project has been closed in Registry.
 6. Any separate restriction on Holded publication or project reporting must be
    specified explicitly and must not be inferred merely from project closure.
 
+### Formal invariants
+
+```text
+project_closed -/> card_rejection
+validation_record -> preserves_project_status_observed_at_validation
+project_closure -/> object_context_erasure
+```
+
 ### Required tests
 
 1. A valid confirmed Card for a closed existing project is accepted.
 2. The validation record preserves `project_closed` context.
 3. The Card's object block remains unchanged.
 4. Existing project-linked history remains queryable after closure.
+
+### Consequence
+
+Closure is context, not a gate: late and corrective invoices keep entering the
+archive while the observed project status stays visible for policy and audit.
 
 ---
 
@@ -928,6 +986,16 @@ Cabinet synchronization and project-assignment workflows.
 
 The catalogue contains only fields already available from the current Registry
 project list.
+
+### Normative rules
+
+1. The catalogue is a compact read-only projection of the current Registry
+   project list and never extends the Registry contract.
+2. Each entry carries exactly the declared catalogue fields, mapped one-to-one
+   from the Registry source fields listed below.
+3. The Registry `id` value is preserved unchanged as `project_id`.
+4. The catalogue serves Cabinet synchronization and project-assignment
+   workflows only; it is never an authority over Registry facts.
 
 ### Catalogue fields
 
@@ -1330,6 +1398,12 @@ existing one.
 3. Existing matches continue to reference their original snapshot.
 4. A new snapshot receives no copied confirmed matches by default.
 
+### Consequence
+
+History stays reproducible: every match points at the exact estimate content it
+was decided against, and a new estimate state earns a new snapshot and new
+decisions instead of silently inheriting old ones.
+
 ---
 
 ## Accepted decision A41 — unmatched purchases are normal analytical facts
@@ -1351,6 +1425,15 @@ Card validation error and does not block invoice acceptance.
    provenance; it does not invent a category.
 7. Unmatched lines remain available to coverage and variance analytics.
 
+### Formal invariants
+
+```text
+count(active_confirmed_match per invoice_line) <= 1
+unmatched_line -/> acceptance_failure
+unmatched_line -/> placeholder_estimate_item
+match_removed -> line_explicitly_unmatched
+```
+
 ### Required tests
 
 1. An invoice containing unmatched lines is accepted normally.
@@ -1359,6 +1442,12 @@ Card validation error and does not block invoice acceptance.
    for one line.
 4. Rejecting or removing a match returns the line to explicit unmatched status
    without changing the Invoice Card.
+
+### Consequence
+
+Coverage analytics rest on explicit facts: every line is either matched to one
+exact estimate item or explicitly unmatched, and Backend never manufactures a
+category to close the gap.
 
 ---
 
@@ -1456,6 +1545,13 @@ The current PresuPro contract behaves as follows:
     PresuPro contract.
 
 ---
+
+### Normative rules
+
+The snapshot semantics below are the normative rules of this decision:
+Cabinet-owned immutable snapshots, snapshot identity and creation, idempotency,
+no inferred lineage, distinct PresuPro identities, snapshot sequence, matching
+behavior, locked and converted estimates, and status handling.
 
 ### Cabinet-owned immutable snapshots
 
@@ -1755,7 +1851,7 @@ The experiment confirmed:
   behavior;
 - a numeric Holded status whose business meaning remains unverified.
 
-### Normative sequence
+### Normative rules
 
 1. Validate the immutable Invoice Card revision.
 2. Build the Holded purchase payload.
@@ -2006,6 +2102,14 @@ The completed discovery established:
 10. Automatic retry after an ambiguous create outcome is unsafe.
 
 ---
+
+### Normative rules
+
+The recovery semantics below are the normative rules of this decision:
+marker-based create recovery, the publication attempt record, the first-POST
+rule, ambiguous outcome handling, the recovery sequence and its deterministic
+outcomes, required business verification, marker semantics, bounded polling,
+retry policy, and audit requirements.
 
 ### Marker-based create recovery
 
@@ -2405,6 +2509,14 @@ local Backend.
 
 ---
 
+### Normative rules
+
+The identity semantics below are the normative rules of this decision: the
+trust boundary, the sync node credential and its lifecycle, local user
+identity, the local-only HTML uploader, agent-assisted operations and
+delegation, roles and the permission matrix, high-risk operations, the audit
+record, secret handling, session behavior, and failure behavior.
+
 ### Trust boundary
 
 The synchronization direction remains:
@@ -2699,7 +2811,7 @@ A failed authorization attempt must also be auditable without storing secrets.
 
 ---
 
-### Authorization invariants
+### Formal invariants
 
 Machine and user identity separation:
 
