@@ -102,6 +102,9 @@ VPS human login/recovery is owned by VPS Cabinet, not by Local Cabinet Backend. 
 
 ### Depth assessment
 
+kind: deep
+hidden mechanism: identity-separated credential lifecycle — peppered verification, throttle, and audit — behind one authorization surface
+
 Deep security-policy module. It hides identity separation, capability policy, credential lifecycle, and audit behavior behind a small authorization surface.
 
 ---
@@ -194,6 +197,9 @@ Archive records, source durability, duplicate handling, import, and quarantine r
 
 ### Depth assessment
 
+kind: deep
+hidden mechanism: atomic manifest acceptance — card, required sources, and receipt commit as one exact custody transition
+
 Primary deep persistence/domain module for local durable Cabinet custody.
 
 ---
@@ -250,6 +256,9 @@ get_working_set_membership
 
 ### Depth assessment
 
+kind: deep
+hidden mechanism: durable reserve-issue-reconcile discipline over the authenticated node transport
+
 Deep boundary module. It hides authenticated transport, retries, reconciliation, and node protocol while remaining ignorant of archive acceptance policy.
 
 ---
@@ -302,6 +311,9 @@ get_assignment_validation
 
 ### Depth assessment
 
+kind: deep
+hidden mechanism: keyed Registry observation merge with offline assignment validation against exact pinned context
+
 Deep project-context module. It hides Registry observation/versioning and offline-assignment reconciliation behind Cabinet project semantics.
 
 ---
@@ -352,6 +364,9 @@ get_unmatched_items
 
 ### Depth assessment
 
+kind: deep
+hidden mechanism: pinned-snapshot semantic join — one active confirmed match per line over immutable evidence
+
 Deep analytical module. It owns the semantic join between Cabinet purchase facts and PresuPro plan data while keeping both sources of truth unchanged.
 
 ---
@@ -398,6 +413,9 @@ reconcile_holded_publication
 
 ### Depth assessment
 
+kind: deep
+hidden mechanism: one logical publication lifecycle per exact revision with read-back settlement
+
 Deep business-control module. It owns whether Cabinet is allowed to publish and how that business obligation settles, not the external HTTP mechanism.
 
 ---
@@ -410,6 +428,10 @@ Deep business-control module. It owns whether Cabinet is allowed to publish and 
 - the `key` credential-header codec;
 - purchase payload and response field mappings;
 - bounded HTTP execution with TLS verification and no redirect/retry replay.
+
+### Knows
+
+The verified Holded v1 wire contract closed by `rules.holded_transport_backend`; nothing of Cabinet publication meaning.
 
 ### Hides
 
@@ -424,7 +446,16 @@ Deep business-control module. It owns whether Cabinet is allowed to publish and 
 - environment reads;
 - Holded update, attachment, approval, payment, deletion, or refund operations.
 
+### Candidate public capabilities
+
+```text
+holded_wire_date
+```
+
 ### Depth assessment
+
+kind: deep
+hidden mechanism: bounded verified-TLS execution of the closed Holded v1 purchase wire
 
 Deterministic infrastructure deep module. Its entire implementation is emitted
 from `rules.holded_transport_backend`; it exposes only
@@ -477,6 +508,9 @@ get_holded_attempt_result
 - A71
 
 ### Depth assessment
+
+kind: deep
+hidden mechanism: single-create attempt authority — durable reservation, one POST, bounded read-only recovery
 
 Deep external-integration adapter. It is separate because credentials, remote protocol knowledge, retry behavior, and technical reconciliation change independently from Cabinet publication policy.
 
@@ -573,6 +607,10 @@ whether a stored decision may be reused. See
 - plain append of a new logical publication and plain update of its
   lifecycle fields.
 
+### Knows
+
+The closed logical-publication projection and the `HoldedPublicationRepository` Protocol; no business meaning beyond exact typed facts.
+
 ### Hides
 
 - psycopg connection handling;
@@ -586,7 +624,16 @@ whether a stored decision may be reused. See
 - gateway calls or Holded evidence interpretation;
 - environment reads.
 
+### Candidate public capabilities
+
+```text
+create_holded_publication_schema
+```
+
 ### Depth assessment
+
+kind: deep
+hidden mechanism: one SQL transaction with exact publication and revision locks
 
 Deterministic persistence module. It implements the `HoldedPublicationRepository`
 Protocol from `models` as plain reads, one append, and one field update;
@@ -605,6 +652,10 @@ Protocol from `models` as plain reads, one append, and one field update;
 - listing of all WorkObjects, keyed upsert of WorkObjects, append and exact
   lookup of validations.
 
+### Knows
+
+The closed WorkObject and validation projections and the `RegistryContextRepository` Protocol; no business meaning beyond exact typed facts.
+
 ### Hides
 
 - psycopg connection handling;
@@ -618,7 +669,16 @@ Protocol from `models` as plain reads, one append, and one field update;
   outcomes;
 - environment reads.
 
+### Candidate public capabilities
+
+```text
+create_registry_context_schema
+```
+
 ### Depth assessment
+
+kind: deep
+hidden mechanism: one SQL transaction with the catalogue lock and keyed WorkObject upserts
 
 Deterministic persistence module. It implements the `RegistryContextRepository`
 Protocol from `models` as plain reads, one keyed upsert, and one append;
@@ -637,6 +697,10 @@ Protocol from `models` as plain reads, one keyed upsert, and one append;
 - plain append of an attempt, plain update of its outcome fields, plain
   append of lookup evidence, exact reads by attempt id and unique marker.
 
+### Knows
+
+The closed attempt and lookup-observation projections and the `HoldedAttemptRepository` Protocol; no business meaning beyond exact typed facts.
+
 ### Hides
 
 - psycopg connection handling;
@@ -650,7 +714,16 @@ Protocol from `models` as plain reads, one keyed upsert, and one append;
 - outcome classification or transition validity;
 - environment reads or Holded HTTP.
 
+### Candidate public capabilities
+
+```text
+create_holded_gateway_schema
+```
+
 ### Depth assessment
+
+kind: deep
+hidden mechanism: one SQL transaction with the exact attempt lock and unique-marker reads
 
 Deterministic persistence module. It implements the `HoldedAttemptRepository`
 Protocol from `models` as plain reads, appends, and one field update;
@@ -697,6 +770,9 @@ publish_registry_catalogue
 
 ### Depth assessment
 
+kind: deep
+hidden mechanism: idempotency-bound catalogue publication lifecycle over an exact ordered snapshot
+
 Split out of `synchronization` (decision 2026-08-23): invoice transfer and
 catalogue publication share only the transport; each has its own state machine,
 repository methods and wire models, and regenerations of the merged module
@@ -714,6 +790,10 @@ lifecycle; `synchronization` keeps the invoice transfer path only.
 - one transaction per lifecycle transition; plain appends, field updates and
   the exact read by idempotency binding.
 
+### Knows
+
+The closed projection of `registry_catalogue_publications` and the `CataloguePublicationRepository` Protocol; no business meaning beyond exact typed facts.
+
 ### Hides
 
 - psycopg connection handling, table, column and index names, codecs.
@@ -723,7 +803,16 @@ lifecycle; `synchronization` keeps the invoice transfer path only.
 - equivalence, conflict or transition decisions;
 - VPS transport; environment reads.
 
+### Candidate public capabilities
+
+```text
+create_catalogue_publication_schema
+```
+
 ### Depth assessment
+
+kind: deep
+hidden mechanism: one SQL transaction over the idempotency-bound publication row lifecycle
 
 Deterministic persistence module emitted from `rules.persistence_backend`; it
 implements the `CataloguePublicationRepository` Protocol from `models`.
@@ -741,6 +830,10 @@ implements the `CataloguePublicationRepository` Protocol from `models`.
 - plain appends, plain field updates, and exact reads by id or idempotency
   binding.
 
+### Knows
+
+The closed synchronization-attempt and connection-observation projections and the `SynchronizationRepository` Protocol; no business meaning beyond exact typed facts.
+
 ### Hides
 
 - psycopg connection handling;
@@ -753,7 +846,16 @@ implements the `CataloguePublicationRepository` Protocol from `models`.
 - VPS transport;
 - environment reads.
 
+### Candidate public capabilities
+
+```text
+create_synchronization_schema
+```
+
 ### Depth assessment
+
+kind: deep
+hidden mechanism: one SQL transaction with the exact synchronization lock and idempotency-bound reads
 
 Deterministic persistence module. It implements the `SynchronizationRepository`
 Protocol from `models` as plain reads, appends, and field updates;
@@ -773,6 +875,10 @@ stays on the port until the working-set/replica storage decision is taken
   operation;
 - plain appends, one status update, exact and set reads in stable order.
 
+### Knows
+
+The closed snapshot, proposal, and decision projections and the `PlanActualRepository` Protocol; no business meaning beyond exact typed facts.
+
 ### Hides
 
 - psycopg connection handling;
@@ -787,7 +893,16 @@ stays on the port until the working-set/replica storage decision is taken
 - plan/actual formulas;
 - environment reads.
 
+### Candidate public capabilities
+
+```text
+create_plan_actual_schema
+```
+
 ### Depth assessment
+
+kind: deep
+hidden mechanism: one SQL transaction with exact estimate and invoice-line locks in stable order
 
 Deterministic persistence module. It implements the `PlanActualRepository`
 Protocol from `models` as plain reads, appends, and one field update;
@@ -807,6 +922,10 @@ Protocol from `models` as plain reads, appends, and one field update;
 - one metadata transaction and the exact invoice lock per archive operation;
 - plain appends, keyed upserts/field updates, and exact or ordered reads.
 
+### Knows
+
+The closed archive table projections — card head, revisions, sources, replicas, manifests, receipts, journal, decisions — and the `ArchiveUnitOfWork` Protocol; no business meaning beyond exact typed facts.
+
 ### Hides
 
 - psycopg connection handling;
@@ -820,7 +939,16 @@ Protocol from `models` as plain reads, appends, and one field update;
 - byte custody (`SourceByteStore`);
 - environment reads.
 
+### Candidate public capabilities
+
+```text
+create_durable_archive_schema
+```
+
 ### Depth assessment
+
+kind: deep
+hidden mechanism: one SQL unit-of-work with the exact invoice lock over the archive table registry
 
 Deterministic persistence module. It implements the `ArchiveUnitOfWork`
 Protocol from `models` as plain reads, appends, and field updates;
@@ -838,6 +966,10 @@ Protocol from `models` as plain reads, appends, and field updates;
   same-filesystem atomic rename;
 - the opaque reference scheme beneath the configured root.
 
+### Knows
+
+The configured storage root, the two-phase write discipline, and the opaque reference scheme; nothing about which bytes matter.
+
 ### Hides
 
 - directory layout, file modes, fsync discipline;
@@ -851,7 +983,20 @@ Protocol from `models` as plain reads, appends, and field updates;
 - archive metadata or PostgreSQL;
 - environment reads.
 
+### Candidate public capabilities
+
+```text
+stage
+publish
+verify
+final_reference_for
+remove_staging
+```
+
 ### Depth assessment
+
+kind: deep
+hidden mechanism: two-phase content-addressed byte custody with atomic same-filesystem rename
 
 Deterministic infrastructure deep module. Its entire implementation is emitted
 from `rules.source_byte_store_backend` (SPEC_STANDARD §6.5); it exposes only
@@ -867,13 +1012,32 @@ from `rules.source_byte_store_backend` (SPEC_STANDARD §6.5); it exposes only
 - the Argon2id verifier of the peppered secret and its constant-time check;
 - token parsing into selector and secret.
 
+### Knows
+
+The token envelope format and Argon2id parameters closed by `rules.credential_security_backend`; no principal or policy state.
+
+### Hides
+
+Argon2id parameterization, pepper application, entropy sourcing, and the token envelope encoding.
+
 ### Must not own
 
 - principals, credentials, throttle, or audit storage;
 - authentication or authorization policy;
 - environment reads (the pepper is supplied by the caller).
 
+### Candidate public capabilities
+
+```text
+issue_service_credential
+parse_service_token
+verify_service_secret
+```
+
 ### Depth assessment
+
+kind: deep
+hidden mechanism: peppered Argon2id verification with constant-time comparison behind a fixed token envelope
 
 Deterministic infrastructure deep module emitted from
 `rules.credential_security_backend` (SPEC_STANDARD §6.6); exposes three pure
@@ -890,13 +1054,30 @@ functions to `access_control`.
 - one transaction and the exact principal / abuse-context locks per
   operation.
 
+### Knows
+
+The closed table projections and identity keys of principals, credential verifiers, throttle state, and audit rows, and the `AccessControlRepository` Protocol; no business meaning beyond exact typed facts.
+
+### Hides
+
+psycopg connection handling; table, column, and index names; row/model codecs for principals, verifiers, throttle state, and audit rows.
+
 ### Must not own
 
 - throttle thresholds, capability evaluation, or lifecycle transitions;
 - cryptography;
 - environment reads.
 
+### Candidate public capabilities
+
+```text
+create_access_control_schema
+```
+
 ### Depth assessment
+
+kind: deep
+hidden mechanism: one SQL transaction with exact principal and abuse-context locks over the access-control tables
 
 Deterministic persistence module emitted from `persistence_backend/v3`; it
 implements the `AccessControlRepository` Protocol from `models` as plain
