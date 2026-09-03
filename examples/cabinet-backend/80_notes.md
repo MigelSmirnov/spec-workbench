@@ -61,12 +61,10 @@ synchronize_invoice_work: [BEHAVIOR] Return authentication, compatibility, trans
 get_sync_status: [BEHAVIOR] MUST return the currently observed synchronization or replica state without making any durable-archive acceptance claim.
 get_sync_status: [BEHAVIOR] Preserve unknown, unavailable, stale, or insufficient observations explicitly instead of fabricating a default synchronized state.
 reconcile_transfer_outcome: [DEPENDENCY_BOUNDARY] MUST delegate read-only reconciliation through the exact supplied SynchronizationService.
-publish_registry_catalogue: [DEPENDENCY_BOUNDARY] MUST delegate exact catalogue delivery through the supplied SynchronizationService.
 observe_vps_connection: [DEPENDENCY_BOUNDARY] MUST delegate observation through the supplied SynchronizationService.
 
 # durable_archive
 
-accept_transfer_manifest: [BEHAVIOR] Accept a manifest only as one durable archive transition over the exact immutable card revision and supplied source replicas; repeated equivalent acceptance must not create a second logical acceptance.
 accept_transfer_manifest: [VALIDATION_ERROR] Represent unsupported, integrity-invalid, conflicting, duplicate-review, incomplete, or quarantine-required evidence as the corresponding classified acceptance outcome instead of partially exposing an accepted manifest set.
 accept_transfer_manifest: [VALIDATION_ERROR] A delivered card revision whose reference card_version is not 1, the accepted Invoice Card V1 version, is quarantined and never parsed as V1: the receipt result is quarantined with safe_error_code quarantine_required, nothing is inserted, and no invoice card head is created or advanced.
 accept_transfer_manifest: [BEHAVIOR] Import never gates on or changes lifecycle status: a delivered draft revision is archived truthfully with observed_status draft and advances the head exactly like a confirmed one; draft exclusion is enforced at publication and analytics eligibility, not at the import border.
@@ -105,7 +103,6 @@ validate_card_assignment: [RULE_REFERENCE] Validation may change review evidence
 validate_card_assignment: [BEHAVIOR] Produce explicit assignment-validation evidence against the exact Card revision and current Registry context, preserving unresolved or review-required status when observable evidence does not validate the earlier choice.
 validate_card_assignment: [VALIDATION_ERROR] Raise RegistryContextUnavailableError when the current Registry context required to perform the validation cannot be resolved safely.
 record_card_assignment_observation: [ORCHESTRATION] MUST delegate to RegistryContextService.record_card_assignment_observation on the supplied registry and return its result.
-record_card_assignment_observation: [PROVENANCE] MUST be the only write path for CardObjectAssignmentObservation: the observation is produced at capture or acceptance time from the Card object block and the catalogue provenance of that capture, never derived inside validation.
 get_assignment_validation: [BEHAVIOR] Return the current recorded validation evidence for the exact assignment identity without guessing a result from current Registry state.
 get_assignment_validation: [VALIDATION_ERROR] Raise AssignmentValidationNotFoundError when no accepted validation evidence exists for the exact requested Card revision context.
 get_work_object: [BEHAVIOR] Return the current WorkObject for the exact Registry project identity with Registry-derived and Cabinet-owned context remaining distinguishable.
@@ -169,8 +166,6 @@ create_holded_gateway_schema: [CONFIG_REFERENCE] MUST idempotently create only t
 PostgresHoldedAttemptRepository.__init__: [SECURITY_BOUNDARY] Bind to the supplied PostgreSQL URL, validate connectivity, treat the URL as secret, and never read environment variables or log credentials.
 holded_wire_date: [BEHAVIOR] MUST return the Holded v1 document date for a calendar date: the Unix timestamp in seconds of 00:00:00 UTC on that day, computed with an explicit UTC tzinfo; this is the only date projection used toward or from Holded.
 HttpxHoldedHttpClient.__init__: [VALIDATION_ERROR] Require the verified Holded v1 HTTPS origin, a non-empty API key, and positive finite timeout and response-size bounds according to = rules.holded_transport_backend.
-HttpxHoldedHttpClient.__init__: [SECURITY_BOUNDARY] Keep the credential only in the outbound `key` header defined by = rules.holded_transport_backend, enable TLS verification, and never log or return reusable credential material.
-create_synchronization_schema: [CONFIG_REFERENCE] MUST idempotently create only the tables named by = config.persistence.synchronization_table_name and = config.persistence.catalogue_publication_table_name and = config.persistence.connection_observation_table_name on a connection it opens from database_url and closes; MUST NOT read environment variables or log the URL.
 PostgresSynchronizationRepository.__init__: [SECURITY_BOUNDARY] Bind to the supplied PostgreSQL URL, validate connectivity, treat the URL as secret, and never read environment variables.
 create_plan_actual_schema: [CONFIG_REFERENCE] MUST idempotently create only the tables named by = config.persistence.estimate_snapshot_table_name and = config.persistence.match_proposal_table_name and = config.persistence.estimate_match_table_name on a connection it opens from database_url and closes; MUST NOT read environment variables or log the URL.
 PostgresPlanActualRepository.__init__: [SECURITY_BOUNDARY] Validate the supplied PostgreSQL connection, treat the URL as secret, and read no environment variables.
@@ -269,7 +264,6 @@ PostgresRegistryContextRepository.load_work_object: [BEHAVIOR] MUST return the e
 PostgresRegistryContextRepository.load_assignment_observation: [BEHAVIOR] MUST return the exact stored CardObjectAssignmentObservation for the invoice_id and content_hash or None and MUST NOT derive one from the card or the catalogue.
 PostgresRegistryContextRepository.insert_assignment_observation: [PROVENANCE] MUST append one immutable observation row for the exact observation_id inside the active transaction; a second observation for the same card revision fails on uniqueness.
 PostgresRegistryContextRepository.save_assignment_validation: [PROVENANCE] MUST append immutable validation evidence and MUST NOT replace a different decision.
-PostgresRegistryContextRepository.list_assignment_validations: [DETERMINISM_OR_ORDERING] MUST return every validation stored for the exact invoice_id and content_hash in validated_at descending and validation_id descending order (newest first) inside the active transaction.
 PostgresRegistryContextRepository.upsert_work_objects: [BEHAVIOR] MUST insert each supplied WorkObject by stable project_id or, when the row exists, update only registry_snapshot_id, registry_status, last_seen_at, and attention_status from the supplied object inside the active locked transaction; MUST NOT delete rows or change first_seen_at.
 
 create_local_app: [ORCHESTRATION] Construct PostgresCataloguePublicationRepository from the same database URL and CataloguePublicationService with the supplied transport, and bind the service as app.state.catalogue_publication on the application returned by create_app; the catalogue publication has no HTTP route and is driven by the local scheduler.
