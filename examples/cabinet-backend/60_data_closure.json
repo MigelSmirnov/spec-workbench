@@ -1,6 +1,6 @@
 {
   "schema_version": "spec_workbench_state6_data_closure.v1",
-  "status": "in_progress",
+  "status": "accepted",
   "sections": {
     "config": {
       "source_upload": {
@@ -40,6 +40,17 @@
         "credential_table_name": "local_service_credentials",
         "throttle_state_table_name": "authentication_throttle_states",
         "security_audit_table_name": "security_audit_records"
+      },
+      "role": "data",
+      "schema_version": 1,
+      "archive_runtime": {
+        "byte_store_root_env": "CABINET_SOURCE_STORE_ROOT"
+      },
+      "synchronization_runtime": {
+        "base_url_env": "CABINET_VPS_BASE_URL",
+        "node_credential_env": "CABINET_SYNC_NODE_CREDENTIAL",
+        "request_timeout_seconds": 30,
+        "max_response_bytes": 8388608
       }
     },
     "rules": {
@@ -113,7 +124,20 @@
           "score_desc",
           "invoice_line_id_asc",
           "estimate_item_id_asc"
-        ]
+        ],
+        "analysis_grain": "estimate_item",
+        "planned_quantity_source": "EstimateItemSnapshot.quantity",
+        "planned_amount_source": "EstimateItemSnapshot.total",
+        "actual_quantity_source": "confirmed_matched_invoice_line.quantity",
+        "matched_line_aggregation": "sum",
+        "quantity_variance": "actual_minus_planned",
+        "amount_variance": "actual_minus_planned",
+        "remaining_quantity": "planned_minus_actual_unclamped",
+        "unmatched_actual_contributes_to_project_actual": true,
+        "unmatched_actual_contributes_to_item_actual": false,
+        "implicit_unit_conversion_allowed": false,
+        "implicit_currency_conversion_allowed": false,
+        "implicit_tax_basis_conversion_allowed": false
       },
       "source_security": {
         "accepted_media_types": [
@@ -1201,6 +1225,146 @@
         "flow:publish_invoice_to_holded"
       ],
       "reason": "Holded v1 returns currency codes in lower case (\"eur\")."
+    },
+    {
+      "address": "config.role",
+      "source_refs": [
+        "decision:A63"
+      ],
+      "reason": "SPEC_STANDARD v2 marker: config is a data section."
+    },
+    {
+      "address": "config.schema_version",
+      "source_refs": [
+        "decision:A63"
+      ],
+      "reason": "SPEC_STANDARD v2 config schema marker."
+    },
+    {
+      "address": "config.archive_runtime.byte_store_root_env",
+      "source_refs": [
+        "decision:A70"
+      ],
+      "reason": "Deployment-owned absolute root of the local byte store; A70 requires the configured root, not a module-owned path."
+    },
+    {
+      "address": "config.synchronization_runtime.base_url_env",
+      "source_refs": [
+        "decision:A72"
+      ],
+      "reason": "Deployment-owned VPS endpoint for the synchronization transport."
+    },
+    {
+      "address": "config.synchronization_runtime.node_credential_env",
+      "source_refs": [
+        "decision:A72"
+      ],
+      "reason": "Deployment-owned node credential for authenticated synchronization (A61)."
+    },
+    {
+      "address": "config.synchronization_runtime.request_timeout_seconds",
+      "source_refs": [
+        "decision:A72"
+      ],
+      "reason": "Bounded transport request time; unbounded waits are forbidden by the synchronization runtime design (A72)."
+    },
+    {
+      "address": "config.synchronization_runtime.max_response_bytes",
+      "source_refs": [
+        "decision:A72"
+      ],
+      "reason": "Bounded transport response size; resource exhaustion is refused at the boundary (A72)."
+    },
+    {
+      "address": "rules.plan_actual.analysis_grain",
+      "source_refs": [
+        "flow:calculate_plan_actual"
+      ],
+      "reason": "Plan/actual is computed per estimate item within one project and snapshot."
+    },
+    {
+      "address": "rules.plan_actual.planned_quantity_source",
+      "source_refs": [
+        "flow:calculate_plan_actual"
+      ],
+      "reason": "Planned quantity comes from the pinned immutable EstimateItemSnapshot."
+    },
+    {
+      "address": "rules.plan_actual.planned_amount_source",
+      "source_refs": [
+        "flow:calculate_plan_actual"
+      ],
+      "reason": "Planned amount comes from the pinned immutable EstimateItemSnapshot total."
+    },
+    {
+      "address": "rules.plan_actual.actual_quantity_source",
+      "source_refs": [
+        "flow:calculate_plan_actual"
+      ],
+      "reason": "Actual quantity comes from matched InvoiceCardLine quantities."
+    },
+    {
+      "address": "rules.plan_actual.matched_line_aggregation",
+      "source_refs": [
+        "flow:calculate_plan_actual"
+      ],
+      "reason": "Several matched lines aggregate by sum onto one estimate item."
+    },
+    {
+      "address": "rules.plan_actual.quantity_variance",
+      "source_refs": [
+        "flow:calculate_plan_actual"
+      ],
+      "reason": "Variance is actual minus planned; overspend is positive (A73/A41 oracle)."
+    },
+    {
+      "address": "rules.plan_actual.amount_variance",
+      "source_refs": [
+        "flow:calculate_plan_actual"
+      ],
+      "reason": "Amount variance is actual minus planned in the accepted basis."
+    },
+    {
+      "address": "rules.plan_actual.remaining_quantity",
+      "source_refs": [
+        "flow:calculate_plan_actual"
+      ],
+      "reason": "Remaining quantity is planned minus actual and may be negative."
+    },
+    {
+      "address": "rules.plan_actual.unmatched_actual_contributes_to_project_actual",
+      "source_refs": [
+        "flow:calculate_plan_actual"
+      ],
+      "reason": "An unmatched actual contributes to the project total, never to an item (A41)."
+    },
+    {
+      "address": "rules.plan_actual.unmatched_actual_contributes_to_item_actual",
+      "source_refs": [
+        "flow:calculate_plan_actual"
+      ],
+      "reason": "An unmatched actual never contributes to a matched item's actual (A41)."
+    },
+    {
+      "address": "rules.plan_actual.implicit_unit_conversion_allowed",
+      "source_refs": [
+        "flow:calculate_plan_actual"
+      ],
+      "reason": "Incompatible units without a pinned conversion are a precondition failure (A73)."
+    },
+    {
+      "address": "rules.plan_actual.implicit_currency_conversion_allowed",
+      "source_refs": [
+        "flow:calculate_plan_actual"
+      ],
+      "reason": "Currency mismatch without a pinned assumption is a precondition failure (A73)."
+    },
+    {
+      "address": "rules.plan_actual.implicit_tax_basis_conversion_allowed",
+      "source_refs": [
+        "flow:calculate_plan_actual"
+      ],
+      "reason": "Monetary-basis mismatch without a pinned assumption is a precondition failure (A73)."
     }
   ],
   "unresolved": [
