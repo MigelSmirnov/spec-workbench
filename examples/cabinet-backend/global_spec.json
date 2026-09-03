@@ -327,7 +327,9 @@
     "HoldedPublicationRepository.load_publication": "(self, publication_id: str) -> HoldedPublication | None",
     "HoldedPublicationRepository.load_by_invoice_revision": "(self, invoice_id: str, content_hash: str) -> HoldedPublication | None",
     "HoldedPublicationRepository.insert_publication": "(self, publication: HoldedPublication) -> None",
-    "HoldedPublicationRepository.update_publication": "(self, publication: HoldedPublication) -> None"
+    "HoldedPublicationRepository.update_publication": "(self, publication: HoldedPublication) -> None",
+    "ArchiveUnitOfWork.update_source_binary": "(self, source: SourceBinary) -> None",
+    "PostgresArchiveUnitOfWork.update_source_binary": "(self, source: SourceBinary) -> None"
   },
   "notes": [
     "Clock.now: [PROVENANCE] MUST return one timezone-aware UTC datetime from the clock implementation.",
@@ -523,7 +525,7 @@
     "attach_local_source: [BEHAVIOR] Accept only source media listed in the imported ACCEPTED_SOURCE_MEDIA_TYPES and enforce the accompanying content-signature, bounded-parsing, metadata-trust, and finite-size-limit requirements in the same source_security policy.",
     "attach_local_source: [DEPENDENCY_BOUNDARY] Reject each source file whose byte length exceeds the imported MAX_SOURCE_FILE_SIZE_BYTES before content parsing or persistence; the accepted limit is not module-owned state.",
     "attach_local_source: [BEHAVIOR] Commit each accepted source identity, verified replica, provenance, and recomputed SourceStatus as one atomic transition; concurrent identical requests have one logical result, conflicting bytes for one source identity cannot both commit, and no check-then-insert path may expose duplicate identity, partial success, or prematurely cleared missing-source state.",
-    "attach_local_source: [ORCHESTRATION] Under the invoice lock read load_source_binaries(invoice_id) once before any file is evaluated; a file whose content_hash is already stored for the invoice with an available verified replica is already_attached and writes nothing, while a stored identity whose byte_status is missing is filled by this file: the verified bytes are staged and published, the replica row is inserted, the identity row advances to available, and the item result is attached. For each newly accepted file insert the source identity, its replica, and a staged ArchiveBytePublication, then advance that publication only from its reloaded state along the ArchivePublicationState recovery chain from = models.ArchivePublicationState (staged → metadata_committed → published, or → failed; never published → failed) through update_publication_state; a stale or skipped transition writes nothing.",
+    "attach_local_source: [ORCHESTRATION] Under the invoice lock read load_source_binaries(invoice_id) once before any file is evaluated; a file whose content_hash is already stored for the invoice with an available verified replica is already_attached and writes nothing, while a stored identity whose byte_status is missing is filled by this file: the verified bytes are staged and published, the replica row is inserted, the identity row is advanced to available through ArchiveUnitOfWork.update_source_binary (never a second insert), and the item result is attached. For each newly accepted file insert the source identity, its replica, and a staged ArchiveBytePublication, then advance that publication only from its reloaded state along the ArchivePublicationState recovery chain from = models.ArchivePublicationState (staged → metadata_committed → published, or → failed; never published → failed) through update_publication_state; a stale or skipped transition writes nothing.",
     "attach_local_source: [DEPENDENCY_BOUNDARY] MUST obtain the final storage reference of an ArchiveBytePublication only from SourceByteStore.final_reference_for(content_hash); callers never compose store paths.",
     "accept_incomplete_source_evidence: [SECURITY_BOUNDARY] Require authorization for the exact incomplete-source acceptance operation; possession of an invoice or decision identifier is not authority.",
     "accept_incomplete_source_evidence: [BEHAVIOR] Record immutable auditable evidence for the exact Card revision and exact missing source references, then return awaiting_source status without claiming absent bytes are stored.",
@@ -623,6 +625,7 @@
     "ArchiveUnitOfWork.insert_source_replicas: [PROVENANCE] MUST append every supplied replica row keyed by source_id and node_id inside the active invoice-locked transaction; duplicates fail on uniqueness and no row is replaced.",
     "ArchiveUnitOfWork.insert_transfer_receipt: [PROVENANCE] MUST append one immutable receipt row for the exact synchronization_id inside the active invoice-locked transaction; duplicates fail on uniqueness.",
     "ArchiveUnitOfWork.insert_source_binary: [PROVENANCE] MUST append one source identity row for the exact source_id inside the active invoice-locked transaction; a second row for the same source_id or the same invoice_id and content_hash fails on uniqueness so that conflicting bytes for one identity cannot both commit.",
+    "ArchiveUnitOfWork.update_source_binary: [DEPENDENCY_BOUNDARY] MUST update only the exact existing source_binaries row addressed by source_id with the supplied content_hash, media_type, size_bytes, original_filename, and byte_status; an absent row surfaces as a storage failure.",
     "ArchiveUnitOfWork.load_invoice_card: [BEHAVIOR] MUST return the exact StoredInvoiceCard head selected by invoice_id or None and MUST NOT synthesize a card.",
     "ArchiveUnitOfWork.upsert_invoice_card: [PROVENANCE] MUST insert the StoredInvoiceCard head by invoice_id or, when it exists, update only card_version, current_content_hash, current_status, last_received_at, durable_at, and archive_status inside the active invoice-locked transaction; MUST NOT change first_received_at or delete the row.",
     "ArchiveUnitOfWork.insert_incomplete_source_acceptance: [PROVENANCE] MUST append the exact immutable acceptance evidence and MUST NOT replace prior decisions.",
@@ -5727,6 +5730,26 @@
               ]
             },
             {
+              "method": "update_source_binary",
+              "query": "update_fields",
+              "table": "source_binaries",
+              "filter": [
+                {
+                  "column": "source_id",
+                  "bind": "argument",
+                  "argument": "source_id"
+                }
+              ],
+              "updates": [
+                "content_hash",
+                "media_type",
+                "size_bytes",
+                "original_filename",
+                "byte_status"
+              ],
+              "require_existing": true
+            },
+            {
               "method": "load_invoice_card",
               "query": "get_by_key",
               "table": "invoice_cards",
@@ -8597,10 +8620,13 @@
     "HoldedPublicationRepository.load_publication",
     "HoldedPublicationRepository.load_by_invoice_revision",
     "HoldedPublicationRepository.insert_publication",
-    "HoldedPublicationRepository.update_publication"
+    "HoldedPublicationRepository.update_publication",
+    "ArchiveUnitOfWork.update_source_binary",
+    "PostgresArchiveUnitOfWork.update_source_binary"
   ],
   "module_paths": {
     "models": "cabinet_backend/models",
+    "data_provider": "cabinet_backend/data_provider",
     "credential_security": "cabinet_backend/credential_security",
     "access_control_persistence": "cabinet_backend/access_control_persistence",
     "access_control": "cabinet_backend/access_control",
@@ -8623,8 +8649,7 @@
     "api_irregular": "cabinet_backend/api_irregular",
     "api": "cabinet_backend/api",
     "system_clock": "cabinet_backend/system_clock",
-    "bootstrap": "cabinet_backend/bootstrap",
-    "data_provider": "cabinet_backend/data_provider"
+    "bootstrap": "cabinet_backend/bootstrap"
   },
   "default_module": "api"
 }
