@@ -395,3 +395,43 @@ Durable separate artifact when instantiated; analytics are calculated from it.
 
 None for identity closure.
 
+
+## Model M128 — InvoiceParty
+
+Fields: `name: str`, `tax_id: str | None`, `email: str | None`, `phone: str | None`, `address: str | None`.
+
+### Identity
+
+value
+
+### Identity evidence
+
+Equal typed party facts are interchangeable. The party form was previously an
+open string dictionary; its field names lived in prose and in dotted rule
+paths (`supplier.tax_id`), which the type could not honour.
+
+## Model M129 — InvoiceTotals
+
+Fields: `net_total: Decimal`, `tax_total: Decimal`, `gross_total: Decimal`.
+
+### Identity
+
+value
+
+### Identity evidence
+
+Equal typed monetary totals are interchangeable; `totals.gross_total` is a
+declared field, not a dictionary key named in prose.
+
+## Model M130 — InvoiceObjectContext
+
+Fields: `object_card_id: str | None`, `label: str | None`.
+
+### Identity
+
+value
+
+### Identity evidence
+
+Equal typed object-context facts are interchangeable; the object block is the
+declared optional Card binding and label, not an open dictionary.

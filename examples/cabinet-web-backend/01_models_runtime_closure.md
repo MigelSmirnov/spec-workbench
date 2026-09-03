@@ -98,7 +98,7 @@ Equal typed transport and application facts are interchangeable.
 
 ## Model M36 — ArchiveInvoiceCommand
 
-Fields: `invoice_id: str`, `expected_revision: CardRevisionReference`, `authorization: AuthorizationDecision`, `confirmation: ConfirmedEffectAuthorization`, `effect_id: str`.
+Fields: `invoice_id: str`, `expected_revision: CardRevisionReference`, `confirmation: ConfirmedEffectAuthorization`, `effect_id: str`, `actor: ActorReference`.
 
 ### Identity
 
@@ -110,7 +110,7 @@ Equal typed transport and application facts are interchangeable.
 
 ## Model M37 — AttachInvoiceSourceCommand
 
-Fields: `invoice_id: str`, `expected_revision: CardRevisionReference`, `source: CardSource`, `authorization: AuthorizationDecision`, `effect_id: str`.
+Fields: `invoice_id: str`, `expected_revision: CardRevisionReference`, `source: CardSource`, `effect_id: str`, `actor: ActorReference`.
 
 ### Identity
 
@@ -122,7 +122,7 @@ Equal typed transport and application facts are interchangeable.
 
 ## Model M38 — AttachProjectEstimateCommand
 
-Fields: `project_id: str`, `expected_revision: CardRevisionReference`, `estimate: EstimateValidationResult`, `authorization: AuthorizationDecision`, `effect_id: str`.
+Fields: `project_id: str`, `expected_revision: CardRevisionReference`, `estimate: EstimateValidationResult`, `authorization: AuthorizationDecision`, `effect_id: str`, `actor: ActorReference`.
 
 ### Identity
 
@@ -134,7 +134,14 @@ Equal typed transport and application facts are interchangeable.
 
 ## Model M39 — AuthenticatedPrincipal
 
-Fields: `principal: CabinetPrincipal`, `actor: ActorReference`, `channel: str`, `authenticated_at: datetime`.
+Fields: `principal: CabinetPrincipal`, `actor: ActorReference`, `channel: str`, `authenticated_at: datetime`, `node: CabinetNodeIdentity | None`.
+
+The value is the complete channel-bound authentication proof consumed by
+authorization. `node` is required exactly for channel `local_node`, where it
+is the active M17 bound by `principal_id` to the active M02 machine principal;
+it is `None` for plugin, browser, and operator contexts. The embedded
+`ActorReference` is derived provenance and is never accepted on its own as
+authentication evidence.
 
 ### Identity
 
@@ -300,30 +307,6 @@ value
 
 Equal typed transport and application facts are interchangeable.
 
-## Model M53 — ClosedSyncRequest
-
-Fields: `operation: str`, `request_id: str`, `contract_version: str`, `metadata_json: str`.
-
-### Identity
-
-value
-
-### Identity evidence
-
-Equal typed transport and application facts are interchangeable.
-
-## Model M54 — ClosedSyncResponse
-
-Fields: `request_id: str`, `operation: str`, `status: str`, `metadata_json: str`, `safe_error_code: str | None`.
-
-### Identity
-
-value
-
-### Identity evidence
-
-Equal typed transport and application facts are interchangeable.
-
 ## Model M55 — CompositeOutcome
 
 Fields: `card_status: str`, `card_revision: CardRevisionReference | None`, `source_status: str`, `synchronization_status: str`, `safe_codes: tuple[str, ...]`.
@@ -338,7 +321,7 @@ Equal typed transport and application facts are interchangeable.
 
 ## Model M56 — ConfirmInvoiceCommand
 
-Fields: `invoice_id: str`, `expected_revision: CardRevisionReference`, `authorization: AuthorizationDecision`, `confirmation: ConfirmedEffectAuthorization`, `effect_id: str`.
+Fields: `invoice_id: str`, `expected_revision: CardRevisionReference`, `confirmation: ConfirmedEffectAuthorization`, `effect_id: str`, `actor: ActorReference`.
 
 ### Identity
 
@@ -362,7 +345,11 @@ Equal typed transport and application facts are interchangeable.
 
 ## Model M58 — CreateInvoiceDraftCommand
 
-Fields: `draft: InvoiceDraftProposal`, `authorization: AuthorizationDecision`, `effect_id: str`, `idempotency_key: str`, `actor: ActorReference`.
+Fields: `draft: InvoiceDraftProposal`, `effect_id: str`, `actor: ActorReference`.
+
+Under A04 the effect identity is the idempotency identity: `effect_id` is the
+one key the operation presents to the effect journal, so the command carries
+no separate idempotency field.
 
 ### Identity
 
@@ -374,7 +361,7 @@ Equal typed transport and application facts are interchangeable.
 
 ## Model M59 — CredentialRevocationCommand
 
-Fields: `principal_id: str`, `credential_id: str`, `actor: ActorReference`.
+Fields: `principal_id: str`, `credential_id: str`.
 
 ### Identity
 
@@ -398,7 +385,7 @@ Equal typed transport and application facts are interchangeable.
 
 ## Model M61 — CredentialRotationCommand
 
-Fields: `principal_id: str`, `credential_id: str`, `channel: str`, `actor: ActorReference`.
+Fields: `principal_id: str`, `credential_id: str`, `channel: str`.
 
 ### Identity
 
@@ -552,7 +539,7 @@ value
 
 Equal typed transport and application facts are interchangeable.
 
-## Model M74 — InvoiceMutationResult
+## Model M121 — InvoiceMutationResult
 
 Fields: `effect_id: str`, `revision: CardRevisionReference | None`, `status: str`, `replayed: bool`, `issues: tuple[ValidationIssue, ...]`, `safe_error_code: str | None`.
 
@@ -564,7 +551,7 @@ value
 
 Equal typed transport and application facts are interchangeable.
 
-## Model M75 — InvoicePackagePullCommand
+## Model M122 — InvoicePackagePullCommand
 
 Fields: `manifest_id: str`, `idempotency_key: str`.
 
@@ -576,7 +563,7 @@ value
 
 Equal typed transport and application facts are interchangeable.
 
-## Model M76 — InvoiceSearchQuery
+## Model M123 — InvoiceSearchQuery
 
 Fields: `text: str | None`, `status: str | None`, `date_from: date | None`, `date_to: date | None`, `provider_id: str | None`, `limit: int`, `cursor: str | None`.
 
@@ -588,7 +575,7 @@ value
 
 Equal typed transport and application facts are interchangeable.
 
-## Model M77 — InvoiceTransferReceiptResult
+## Model M124 — InvoiceTransferReceiptResult
 
 Fields: `issuance: InvoiceTransferIssuance`, `receipt: InvoiceTransferReceipt`, `recorded: bool`.
 
@@ -600,7 +587,7 @@ value
 
 Equal typed transport and application facts are interchangeable.
 
-## Model M78 — InvoiceTransferReconciliation
+## Model M125 — InvoiceTransferReconciliation
 
 Fields: `issuance: InvoiceTransferIssuance`, `receipt: InvoiceTransferReceipt | None`, `conflict: SynchronizationConflict | None`, `status: str`, `safe_error_code: str | None`.
 
@@ -612,7 +599,7 @@ value
 
 Equal typed transport and application facts are interchangeable.
 
-## Model M79 — InvoiceTransferReconciliationRequest
+## Model M126 — InvoiceTransferReconciliationRequest
 
 Fields: `issuance_id: str`, `manifest_hash: str`.
 
@@ -624,7 +611,7 @@ value
 
 Equal typed transport and application facts are interchangeable.
 
-## Model M80 — InvoiceValidationInput
+## Model M127 — InvoiceValidationInput
 
 Fields: `invoice: InvoiceCardV1`, `expected_revision: CardRevisionReference | None`.
 
@@ -686,7 +673,7 @@ Equal typed transport and application facts are interchangeable.
 
 ## Model M85 — PrincipalEnrollmentCommand
 
-Fields: `principal_kind: str`, `channel: str`, `display_label: str | None`, `actor: ActorReference`.
+Fields: `principal_kind: PrincipalKind`, `channel: str`, `display_label: str | None`.
 
 ### Identity
 
@@ -794,7 +781,7 @@ Equal typed transport and application facts are interchangeable.
 
 ## Model M94 — RecordInvoicePaymentCommand
 
-Fields: `invoice_id: str`, `expected_revision: CardRevisionReference`, `payment_json: str`, `authorization: AuthorizationDecision`, `effect_id: str`, `actor: ActorReference`.
+Fields: `invoice_id: str`, `expected_revision: CardRevisionReference`, `payment_json: str`, `effect_id: str`, `actor: ActorReference`.
 
 ### Identity
 
@@ -890,7 +877,7 @@ Equal typed transport and application facts are interchangeable.
 
 ## Model M102 — UpdateInvoiceDraftCommand
 
-Fields: `invoice_id: str`, `expected_revision: CardRevisionReference`, `proposal: InvoiceDraftProposal`, `authorization: AuthorizationDecision`, `effect_id: str`, `actor: ActorReference`.
+Fields: `invoice_id: str`, `expected_revision: CardRevisionReference`, `proposal: InvoiceDraftProposal`, `effect_id: str`, `actor: ActorReference`.
 
 ### Identity
 
@@ -902,7 +889,7 @@ Equal typed transport and application facts are interchangeable.
 
 ## Model M103 — UploadHandoffCommand
 
-Fields: `card_id: str`, `source_id: str`, `expected_revision: CardRevisionReference`, `authorization: AuthorizationDecision`, `actor: ActorReference`.
+Fields: `card_id: str`, `source_id: str`, `expected_revision: CardRevisionReference`, `actor: ActorReference`.
 
 ### Identity
 
@@ -935,3 +922,36 @@ value
 ### Identity evidence
 
 Equal typed transport and application facts are interchangeable.
+
+## Model M131 — ChatGptOutcomeRequest
+
+Fields: `effect_id: str`.
+
+The plugin's request for the separate Card, source-custody, and local
+synchronization outcomes of one exact effect it previously confirmed.
+
+### Identity
+
+value
+
+### Identity evidence
+
+Equal effect identities request the same composite outcome.
+
+## Model M132 — InvoiceTransferStatus
+
+Fields: `invoice_id: str`, `card_revision: CardRevisionReference`, `source_custody_status: str`, `issuance_status: str | None`, `receipt_result: TransferReceiptResult | None`, `safe_error_code: TransferReceiptErrorCode | None`, `observed_at: datetime`.
+
+The transfer-side synchronization status of one exact Invoice Card revision as
+Cabinet Web truthfully knows it: no issuance yet, an issued or acknowledged
+package, or the local Backend's receipt result. It never claims local durable
+acceptance without a receipt.
+
+### Identity
+
+value
+
+### Identity evidence
+
+Equal revision, issuance status, receipt result, code, and observation time are
+interchangeable.

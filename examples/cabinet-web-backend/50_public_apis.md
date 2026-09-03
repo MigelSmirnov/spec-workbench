@@ -150,11 +150,13 @@ Read-only.
 
 ### Inputs
 
-Channel, presented credential evidence and bounded abuse context.
+Channel and presented credential evidence. The bounded abuse context is an
+internal access-control classification and cannot be supplied by a caller.
 
 ### Outputs
 
-Active M02/M17 principal context or bounded refusal.
+One active M39 containing the authenticated M02 principal and, exactly for the
+local-node channel, its bound active compatible M17; otherwise bounded refusal.
 
 ### Observable effect
 
@@ -184,7 +186,8 @@ Credential evidence only; no domain mutation.
 
 ### Inputs
 
-Principal context, resolved capability, target identity and current lifecycle state.
+Complete M39 principal context, resolved capability, target identity and
+current lifecycle state.
 
 ### Outputs
 
@@ -218,7 +221,9 @@ No domain mutation.
 
 ### Inputs
 
-Operator authorization, business identity, channel and credential enrollment material.
+Separately authenticated active owner/operator M39, business identity, channel
+and credential enrollment material. The M39 may be absent only for the first
+owner at the protected empty-installation bootstrap.
 
 ### Outputs
 
@@ -248,7 +253,7 @@ Creates credential state, not business Card identity.
 
 ### Callers
 
-`boundary:protected_operator` and the protected application composition bootstrap.
+`boundary:protected_operator`.
 
 ### Inputs
 
@@ -287,7 +292,8 @@ Mutates authorization grant state only; no credential or domain Card mutation.
 
 ### Inputs
 
-Operator authorization, principal identity and replacement credential material.
+Separately authenticated active owner/operator M39, principal identity and
+replacement credential material.
 
 ### Outputs
 
@@ -321,7 +327,8 @@ Mutates credential lifecycle only.
 
 ### Inputs
 
-Operator authorization, principal and credential identity.
+Separately authenticated active owner/operator M39, principal and credential
+identity.
 
 ### Outputs
 
@@ -351,7 +358,7 @@ Mutates credential lifecycle only.
 
 ### Callers
 
-`module:chatgpt_interaction`.
+`boundary:chatgpt_plugin`.
 
 ### Inputs
 
@@ -385,7 +392,7 @@ Read-only.
 
 ### Callers
 
-`module:chatgpt_interaction`.
+`boundary:chatgpt_plugin`.
 
 ### Inputs
 
@@ -453,7 +460,7 @@ Read-only.
 
 ### Callers
 
-`module:invoice_workspace`, `module:project_workspace`.
+`module:invoice_lifecycle`, `module:project_workspace`.
 
 ### Inputs
 
@@ -479,15 +486,15 @@ ValidationRejected, RevisionConflict, CanonicalHashConflict, PersistenceUnavaila
 
 Mutates canonical Card history.
 
-## `public_op:invoice_workspace.search_invoices`
+## `public_op:invoice_catalogue.search_invoices`
 
 ### Owner
 
-`module:invoice_workspace`.
+`module:invoice_catalogue`.
 
 ### Callers
 
-`module:chatgpt_interaction`.
+`boundary:chatgpt_plugin`.
 
 ### Inputs
 
@@ -513,15 +520,15 @@ InvalidSearch, SearchLimitExceeded.
 
 Read-only.
 
-## `public_op:invoice_workspace.get_invoice`
+## `public_op:invoice_catalogue.get_invoice`
 
 ### Owner
 
-`module:invoice_workspace`.
+`module:invoice_catalogue`.
 
 ### Callers
 
-`module:chatgpt_interaction`.
+`boundary:chatgpt_plugin`, `module:invoice_lifecycle`, `module:chatgpt_interaction`.
 
 ### Inputs
 
@@ -547,15 +554,15 @@ InvoiceNotFound, RevisionNotFound.
 
 Read-only.
 
-## `public_op:invoice_workspace.find_invoice_duplicates`
+## `public_op:invoice_catalogue.find_invoice_duplicates`
 
 ### Owner
 
-`module:invoice_workspace`.
+`module:invoice_catalogue`.
 
 ### Callers
 
-`module:chatgpt_interaction`.
+`boundary:chatgpt_plugin`, `module:invoice_validation`, `module:chatgpt_interaction`.
 
 ### Inputs
 
@@ -581,15 +588,15 @@ InvoiceNotFound, InvalidDuplicateQuery.
 
 Read-only.
 
-## `public_op:invoice_workspace.prepare_invoice_draft`
+## `public_op:invoice_validation.prepare_invoice_draft`
 
 ### Owner
 
-`module:invoice_workspace`.
+`module:invoice_validation`.
 
 ### Callers
 
-`module:chatgpt_interaction`.
+`boundary:chatgpt_plugin`, `module:chatgpt_interaction`.
 
 ### Inputs
 
@@ -615,15 +622,15 @@ DraftPreparationRejected, UnsupportedInvoiceShape.
 
 Read-only proposal.
 
-## `public_op:invoice_workspace.validate_invoice`
+## `public_op:invoice_validation.validate_invoice`
 
 ### Owner
 
-`module:invoice_workspace`.
+`module:invoice_validation`.
 
 ### Callers
 
-`module:chatgpt_interaction`.
+`boundary:chatgpt_plugin`, `module:invoice_lifecycle`, `module:chatgpt_interaction`.
 
 ### Inputs
 
@@ -649,15 +656,15 @@ UnsupportedInvoiceVersion.
 
 Read-only.
 
-## `public_op:invoice_workspace.create_invoice_draft`
+## `public_op:invoice_lifecycle.create_invoice_draft`
 
 ### Owner
 
-`module:invoice_workspace`.
+`module:invoice_lifecycle`.
 
 ### Callers
 
-`module:chatgpt_interaction`.
+`boundary:chatgpt_plugin`.
 
 ### Inputs
 
@@ -683,15 +690,15 @@ ValidationRejected, IdempotencyConflict, PersistenceUnavailable.
 
 Creates canonical Invoice state.
 
-## `public_op:invoice_workspace.update_invoice_draft`
+## `public_op:invoice_lifecycle.update_invoice_draft`
 
 ### Owner
 
-`module:invoice_workspace`.
+`module:invoice_lifecycle`.
 
 ### Callers
 
-`module:chatgpt_interaction`.
+`boundary:chatgpt_plugin`.
 
 ### Inputs
 
@@ -717,15 +724,15 @@ InvoiceNotFound, NotDraft, RevisionConflict, ValidationRejected.
 
 Mutates canonical Invoice history.
 
-## `public_op:invoice_workspace.confirm_invoice`
+## `public_op:invoice_lifecycle.confirm_invoice`
 
 ### Owner
 
-`module:invoice_workspace`.
+`module:invoice_lifecycle`.
 
 ### Callers
 
-`module:chatgpt_interaction`.
+`boundary:chatgpt_plugin`.
 
 ### Inputs
 
@@ -751,15 +758,15 @@ RevisionConflict, ValidationRejected, ConfirmationRequired, WarningNotAcknowledg
 
 Mutates Invoice lifecycle.
 
-## `public_op:invoice_workspace.record_invoice_payment`
+## `public_op:invoice_lifecycle.record_invoice_payment`
 
 ### Owner
 
-`module:invoice_workspace`.
+`module:invoice_lifecycle`.
 
 ### Callers
 
-`module:chatgpt_interaction`.
+`boundary:chatgpt_plugin`.
 
 ### Inputs
 
@@ -785,15 +792,15 @@ InvoiceNotFound, RevisionConflict, InvalidPaymentEvidence.
 
 Mutates canonical Invoice history.
 
-## `public_op:invoice_workspace.attach_invoice_source_metadata`
+## `public_op:invoice_lifecycle.attach_invoice_source_metadata`
 
 ### Owner
 
-`module:invoice_workspace`.
+`module:invoice_lifecycle`.
 
 ### Callers
 
-`module:chatgpt_interaction`, `module:source_custody`.
+`boundary:chatgpt_plugin`, `module:source_custody`.
 
 ### Inputs
 
@@ -819,15 +826,15 @@ InvoiceNotFound, RevisionConflict, SourceIdentityConflict.
 
 Mutates Invoice metadata history.
 
-## `public_op:invoice_workspace.archive_invoice`
+## `public_op:invoice_lifecycle.archive_invoice`
 
 ### Owner
 
-`module:invoice_workspace`.
+`module:invoice_lifecycle`.
 
 ### Callers
 
-`module:chatgpt_interaction`.
+`boundary:chatgpt_plugin`.
 
 ### Inputs
 
@@ -861,7 +868,7 @@ Mutates Invoice lifecycle.
 
 ### Callers
 
-`module:chatgpt_interaction`.
+`boundary:chatgpt_plugin`.
 
 ### Inputs
 
@@ -895,7 +902,7 @@ Read-only.
 
 ### Callers
 
-`module:chatgpt_interaction`.
+`boundary:chatgpt_plugin`, `module:chatgpt_interaction`.
 
 ### Inputs
 
@@ -929,7 +936,7 @@ Read-only proposal.
 
 ### Callers
 
-`module:chatgpt_interaction`.
+`boundary:chatgpt_plugin`, `module:chatgpt_interaction`.
 
 ### Inputs
 
@@ -963,7 +970,7 @@ Read-only proposal.
 
 ### Callers
 
-`module:chatgpt_interaction`.
+`boundary:chatgpt_plugin`.
 
 ### Inputs
 
@@ -997,7 +1004,7 @@ Mutates Project artifact state.
 
 ### Callers
 
-`module:chatgpt_interaction`.
+`boundary:chatgpt_plugin`.
 
 ### Inputs
 
@@ -1031,7 +1038,7 @@ Creates Project artifact state.
 
 ### Callers
 
-`module:chatgpt_interaction`, `module:invoice_workspace`, `module:project_workspace`, `module:source_custody`.
+`module:chatgpt_interaction`, `module:invoice_lifecycle`, `module:project_workspace`, `module:source_custody`.
 
 ### Inputs
 
@@ -1065,7 +1072,7 @@ Mutates effect journal only.
 
 ### Callers
 
-`module:chatgpt_interaction`, `module:invoice_workspace`, `module:project_workspace`, `module:source_custody`.
+`module:chatgpt_interaction`, `module:invoice_lifecycle`, `module:project_workspace`, `module:source_custody`.
 
 ### Inputs
 
@@ -1133,7 +1140,7 @@ Read/recovery of effect journal.
 
 ### Callers
 
-`module:chatgpt_interaction`, `module:web_gateway`.
+`boundary:chatgpt_plugin`, `module:web_gateway`, `module:chatgpt_interaction`.
 
 ### Inputs
 
@@ -1235,7 +1242,7 @@ Read-only.
 
 ### Callers
 
-`module:chatgpt_interaction`.
+`boundary:chatgpt_plugin`.
 
 ### Inputs
 
@@ -1367,40 +1374,6 @@ NodeAuthenticationFailed, ContractIncompatible, ServiceNotReady.
 
 Observation only.
 
-## `public_op:sync_gateway.serve_sync_request`
-
-### Owner
-
-`module:sync_gateway`.
-
-### Callers
-
-`boundary:local_backend`.
-
-### Inputs
-
-Bounded local-node request, exact capability and typed payload.
-
-### Outputs
-
-Typed Invoice exchange or Registry acknowledgement response.
-
-### Observable effect
-
-No independent domain effect; delegated owner may mutate protocol state.
-
-### Enforces
-
-No human capability, generic proxy, arbitrary operation or dynamic tool.
-
-### Errors
-
-NodeAuthenticationFailed, UnknownSyncCapability, RequestTooLarge, SafeSerializationError.
-
-### State impact
-
-Gateway state only.
-
 ## `public_op:invoice_exchange.discover_invoice_work`
 
 ### Owner
@@ -1409,7 +1382,7 @@ Gateway state only.
 
 ### Callers
 
-`module:sync_gateway`.
+`boundary:local_backend`.
 
 ### Inputs
 
@@ -1446,7 +1419,7 @@ Read plus optional immutable observation.
 
 ### Callers
 
-`module:sync_gateway`.
+`boundary:local_backend`.
 
 ### Inputs
 
@@ -1484,7 +1457,7 @@ Creates immutable issuance/protocol state.
 
 ### Callers
 
-`module:sync_gateway`.
+`boundary:local_backend`.
 
 ### Inputs
 
@@ -1518,7 +1491,7 @@ Mutates transfer evidence only.
 
 ### Callers
 
-`module:sync_gateway`, `module:source_custody`, `module:chatgpt_interaction`.
+`boundary:local_backend`, `module:source_custody`.
 
 ### Inputs
 
@@ -1544,6 +1517,40 @@ IssuanceNotFound, ReconciliationUnavailable, ReceiptConflict, RevisionConflict.
 
 Read/recovery of protocol evidence.
 
+## `public_op:invoice_exchange.get_invoice_transfer_status`
+
+### Owner
+
+`module:invoice_exchange`.
+
+### Callers
+
+`module:chatgpt_interaction`.
+
+### Inputs
+
+Exact Invoice ID and Card revision reference.
+
+### Outputs
+
+M132 transfer status: source custody status, issuance status when a package was issued, and the local Backend receipt result and safe code when a receipt exists.
+
+### Observable effect
+
+None.
+
+### Enforces
+
+Transport success never becomes local durable acceptance; without a receipt the status stays issued, acknowledged, or not issued.
+
+### Errors
+
+ResourceNotFoundError for an unknown revision.
+
+### State impact
+
+Read-only.
+
 ## `public_op:registry_replica.publish_registry_catalogue`
 
 ### Owner
@@ -1552,7 +1559,7 @@ Read/recovery of protocol evidence.
 
 ### Callers
 
-`module:sync_gateway`.
+`boundary:local_backend`.
 
 ### Inputs
 
@@ -1590,7 +1597,7 @@ Mutates Registry replica protocol state.
 
 ### Callers
 
-`module:chatgpt_interaction`, `module:sync_gateway`.
+`boundary:chatgpt_plugin`.
 
 ### Inputs
 
@@ -1683,3 +1690,40 @@ BackupNotFound, RestoreFailed, IntegrityMismatch, CoverageIncomplete, IsolationC
 ### State impact
 
 No production business mutation.
+
+## `public_op:runtime_settings.load_runtime_settings`
+
+### Owner
+
+`module:runtime_settings`.
+
+### Callers
+
+`boundary:process_startup`; `module:bootstrap` is the composition owner that
+invokes the imported provider exactly once.
+
+### Inputs
+
+The closed structured runtime-settings declaration and current process
+environment.
+
+### Outputs
+
+One immutable M135 `RuntimeSettings` snapshot.
+
+### Observable effect
+
+Reads declared process environment values only.
+
+### Enforces
+
+Requiredness, normalization, positive-integer parsing, declared defaults,
+closed environment identity, exact targets, and project-declared constraints.
+
+### Errors
+
+MissingSetting, InvalidSetting, RuntimeSettingConstraintViolation.
+
+### State impact
+
+No durable state; fail-closed startup input only.

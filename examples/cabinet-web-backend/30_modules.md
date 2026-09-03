@@ -26,6 +26,9 @@ transport serialization, configuration loading, or clock-dependent policy.
 
 ### Depth assessment
 
+kind: deep
+hidden mechanism: frozen typed value forms (extra=forbid) that make every cross-module payload valid by construction
+
 This is a deliberately dependency-free type kernel. It keeps the same language
 across all runtime modules without becoming an anemic policy dumping ground.
 
@@ -40,8 +43,9 @@ owner of A01.
 
 ### Knows
 
-M03 and M07–M10, the distinction between canonical and derived facts, and the
-validation interfaces supplied by Invoice and Project specialists.
+M03 and M07–M10, the distinction between canonical and derived facts, the
+validation interfaces supplied by Invoice and Project specialists, and the
+retained `Clock` port that supplies each revision observation.
 
 ### Must not own
 
@@ -64,35 +68,39 @@ list_project_cards
 
 ### Depth assessment
 
+kind: deep
+hidden mechanism: canonical Card revision custody: content-hash identity with optimistic current-selector movement
+
 A small revision-safe surface hides every storage and canonicalization choice.
 Invoice and Project behavior depends on this boundary rather than on tables or
 files.
 
-## `invoice_workspace`
+## `invoice_catalogue`
 
 ### Owns
 
-Invoice draft preparation, type validation, duplicate-candidate discovery,
-confirmation lifecycle, payment recording, source-metadata attachment, archive
-semantics, M29 assignment-observation production for the exact Invoice
-revision, and the producer edge that atomically creates or idempotently retains
-the exact `InvoiceWorkingSetItem` and `InvoiceTransferManifest` consumed by
-local-node discovery.
+Revision-exact Invoice reads: enumerating current Invoice Card references,
+loading and parsing each canonical revision as `InvoiceCardV1`, indexing
+working-set availability for the read views, and duplicate-candidate discovery
+under `rules.invoice_duplicate_matching`. It owns `ValidationRejectedError`, the
+rejection type every Invoice module raises, because it is the lowest Invoice
+module in the dependency order.
 
 ### Knows
 
-M05, M07–M11 and their existing Cabinet meanings, plus the revision-safe commit
-port exposed by `card_workspace`.
+M05, M07–M11 read projections, `rules.invoice_workspace.card_type` and the
+duplicate-matching policy, and the read-only CabinetUnitOfWork query surface.
 
 ### Must not own
 
-Generic Card persistence, raw source custody, ChatGPT confirmation binding,
-authorization, effect idempotency, or local transfer packaging.
+Card commits, validation checks, lifecycle transitions, authorization, effect
+idempotency, source custody, or transfer packaging.
 
 ### Hides
 
-Invoice field normalization, calculated totals, duplicate signals, lifecycle
-transition rules, warnings, and construction of validated Card revisions.
+Unit-of-work open/begin/rollback sequencing for reads, canonical-JSON parsing,
+working-set status indexing, search filtering and ordering, cursor derivation,
+and duplicate signal normalization and ordering.
 
 ### Candidate public capabilities
 
@@ -100,8 +108,92 @@ transition rules, warnings, and construction of validated Card revisions.
 search_invoices
 get_invoice
 find_invoice_duplicates
+```
+
+### Depth assessment
+
+kind: deep
+hidden mechanism: the invoice read model: canonical revision parsing with deterministic search and duplicate projection
+
+kind: deep
+hidden mechanism: the revision-exact Invoice read model — one rolled-back
+CabinetUnitOfWork per read, canonical revision parsing, working-set indexing,
+and duplicate-signal matching shared by every read capability.
+
+## `invoice_validation`
+
+### Owns
+
+Draft-proposal parsing and provenance checks, and the declared-order evaluation
+of `rules.invoice_workspace.validation_checks` producing ordered
+`ValidationIssue` tuples and the exact duplicate result. It performs no write.
+
+### Knows
+
+`InvoiceCardV1` field semantics, `rules.invoice_workspace.validation_*`,
+`rules.invoice_workspace.rejection_codes.validation`, and the catalogue's
+duplicate discovery capability.
+
+### Must not own
+
+Card commits, lifecycle transitions, authorization, revision reads other than
+duplicate discovery, or any persistence.
+
+### Hides
+
+Rule evaluation order, indexed field-path construction, issue ordering, and the
+proposal-to-invoice consistency checks.
+
+### Candidate public capabilities
+
+```text
 prepare_invoice_draft
 validate_invoice
+```
+
+### Depth assessment
+
+kind: deep
+hidden mechanism: ordered evaluation of the declared invoice validation rules over one candidate
+
+kind: deep
+hidden mechanism: declared-order rule evaluation over a parsed InvoiceCardV1
+with indexed issue construction, shared by proposal preparation and validation.
+
+## `invoice_lifecycle`
+
+### Owns
+
+Invoice lifecycle transitions draft → confirmed → archived and their successor
+revisions for payment recording and source-metadata attachment: authorization
+and confirmation-binding checks, exact-revision read-modify-write through the
+catalogue and validator, `CardRevisionCommitCommand` construction, and the
+atomic confirmation producer edge that creates or idempotently retains the exact
+`InvoiceWorkingSetItem` and `InvoiceTransferManifest` consumed by local-node
+discovery, including M29 assignment-observation production.
+
+### Knows
+
+M05, M07–M11 mutation semantics, `rules.invoice_workspace.lifecycle`,
+`rules.invoice_workspace.rejection_codes`, the manifest and working-set policy,
+and the revision-safe commit port exposed by `card_workspace`, plus the retained
+`Clock` port used once for each operation-level expiry comparison.
+
+### Must not own
+
+Generic Card persistence, raw source custody, ChatGPT confirmation binding,
+authorization policy, effect idempotency, read projections, validation rules,
+or local transfer packaging.
+
+### Hides
+
+Transition rules, successor derivation, expected-revision enforcement,
+manifest and working-set hashing, and the single-transaction sequencing that
+keeps Card, manifest, and working set atomic.
+
+### Candidate public capabilities
+
+```text
 create_invoice_draft
 update_invoice_draft
 confirm_invoice
@@ -112,8 +204,13 @@ archive_invoice
 
 ### Depth assessment
 
-The surface follows meaningful Invoice use cases while hiding their validation
-and lifecycle machinery. It does not expose generic field mutation.
+kind: deep
+hidden mechanism: guarded invoice lifecycle transitions that commit successors together with transfer evidence
+
+kind: deep
+hidden mechanism: the Invoice lifecycle state machine — exact-revision
+read-modify-write, validation before commit, and atomic Card/manifest/working-set
+commitment shared by every mutation capability.
 
 ## `project_workspace`
 
@@ -148,6 +245,9 @@ save_shopping_list
 
 ### Depth assessment
 
+kind: deep
+hidden mechanism: project Card mutation with estimate and shopping-list snapshot reconciliation
+
 Five project use cases hide the dependency graph between estimates, lists, and
 Project revisions without pretending Registry snapshots are Project facts.
 
@@ -167,7 +267,8 @@ idempotency, and confirmation.
 ### Must not own
 
 Business operation implementations, dynamic routing, arbitrary operation
-names, credentials, transport parsing, or Card state.
+names, credentials, transport parsing, Card state, wall-clock access,
+initialization timestamps, or any other clock-derived state.
 
 ### Hides
 
@@ -182,6 +283,9 @@ list_channel_capabilities
 ```
 
 ### Depth assessment
+
+kind: deep
+hidden mechanism: closed capability-catalogue resolution: exact channel/name matching with protected-operator exclusion
 
 The tiny immutable API hides a security-sensitive matrix used by every ingress
 boundary. It is policy, not a generic dispatcher.
@@ -220,32 +324,300 @@ report_composite_outcome
 
 ### Depth assessment
 
+kind: deep
+hidden mechanism: two-step effect confirmation: proposal digest issuance and exact matching before any mutation
+
 Three interaction operations hide the full safety protocol between a
 probabilistic conversational UI and deterministic Cabinet capabilities.
+
+## `credential_vault`
+
+### Owns
+
+The peppered bearer-secret custody mechanics (`module:credential_vault`) for A11: bearer parsing of the
+`<credential_id>.<secret_material>` shape, verifier derivation with the
+configured pepper, cryptographically random credential minting, timing-safe
+verification of a presented bearer against the persisted record, and the
+idempotent retirement transition of a credential record.
+
+### Knows
+
+The bearer shape, the configured pepper, `AccessCredentialRecord` identity and
+status vocabulary, the operation-scoped `CabinetUnitOfWork` port for credential
+records, and timezone-aware UTC issuance timestamps.
+
+### Hides
+
+Secret generation entropy, verifier derivation, and timing-safe comparison; no
+plaintext secret is ever persisted, logged, or retained after return.
+
+### Must not own
+
+Principal or node subject resolution, authorization decisions, throttle state,
+audit emission, transactions (the caller owns the UoW), or any transport
+surface.
+
+### Candidate public capabilities
+
+```text
+parse_bearer_credential
+derive_credential_verifier
+mint_credential
+verify_bearer_credential
+retire_credential
+```
+
+### Depth assessment
+
+kind: deep
+hidden mechanism: peppered bearer-secret custody: minting, timing-safe verification, and retirement of credential records
+
+## `abuse_throttle`
+
+### Owns
+
+The authentication failure-throttle state machine (`module:abuse_throttle`) for A11: abuse-context hash
+derivation, locked acquisition of `AuthenticationThrottleState`, the active
+throttle decision, and the failure and success transitions with their delay and
+block latches.
+
+### Knows
+
+`AuthenticationThrottleState` identity and counters, the configured pepper for
+context hashing, the operation-scoped `CabinetUnitOfWork` port for throttle
+records, timezone-aware UTC observation timestamps, and the declared failure
+thresholds.
+
+### Hides
+
+Threshold arithmetic, delay and block latch derivation, and context hashing;
+callers see only acquire, decide, and transition operations.
+
+### Must not own
+
+Credential verification, principal resolution, audit emission, transactions
+(the caller owns the UoW), or any transport surface.
+
+### Candidate public capabilities
+
+```text
+derive_abuse_context_hash
+acquire_throttle_state
+throttle_active
+register_authentication_failure
+register_authentication_success
+```
+
+### Depth assessment
+
+kind: deep
+hidden mechanism: the configured wall-clock failure-window throttle state machine over locked per-context state
+
+## `access_control_errors`
+
+### Owns
+
+The closed public refusal taxonomy shared by the access-control engines,
+facade, router error policy, and callers: AuthenticationRequiredError,
+AuthenticationThrottledError, and AuthorizationDeniedError.
+
+### Knows
+
+Only the three stable exception identities and their boundary meanings.
+
+### Hides
+
+One cycle-free exception boundary so deep engines never import their facade and
+the facade may re-export the same exact types without redefining them.
+
+### Must not own
+
+Authentication, authorization, lifecycle policy, persistence, transactions,
+status codes, response bodies, or recovery behavior.
+
+### Candidate public capabilities
+
+```text
+AuthenticationRequiredError
+AuthenticationThrottledError
+AuthorizationDeniedError
+```
+
+### Depth assessment
+
+kind: deep
+hidden mechanism: stable cycle-free refusal type identity across engines, facade, and transport
+
+## `security_evidence`
+
+### Owns
+
+Fresh collision-resistant identity issuance for append-only M111 security audit
+events shared by the access-control engines.
+
+### Knows
+
+The M111 evidence identity rule and UUID4 generation primitive.
+
+### Hides
+
+Audit-event identity entropy and the prohibition on reusing stable domain or
+credential identities as security-event primary keys.
+
+### Must not own
+
+Audit policy, event classification, persistence, transactions, credentials,
+principal resolution, authorization, or transport.
+
+### Candidate public capabilities
+
+```text
+issue_security_audit_id
+```
+
+### Depth assessment
+
+kind: deep
+hidden mechanism: collision-resistant append-only security-event identity issuance
+
+## `authentication_admission`
+
+### Owns
+
+The A11 channel-authentication transaction: caller-independent bounded abuse
+classification, credential verification, throttle transitions, exact
+M02/M17 subject resolution, reciprocal local-node contract validation, and
+secret-free authentication audit evidence.
+
+### Knows
+
+M02, M17, M39, M108, M110 and M111; `credential_vault`, `abuse_throttle`, and
+`security_evidence`; the UoW factory, pepper, Clock, channel vocabulary, and
+`cabinet-web-sync-v1`.
+
+### Hides
+
+The complete commit-on-bounded-refusal versus rollback-on-unexpected-failure
+protocol and construction of one complete authenticated M39.
+
+### Must not own
+
+Capability grants, principal enrollment, credential rotation/revocation,
+transport extraction, Card policy, or caller-supplied abuse buckets.
+
+### Candidate public capabilities
+
+```text
+derive_authentication_abuse_context
+authenticate_channel_request
+resolve_trusted_browser_owner
+```
+
+### Depth assessment
+
+kind: deep
+hidden mechanism: channel authentication transaction joining credential, throttle, M02/M17 binding, and audit evidence
+
+## `capability_grants`
+
+### Owns
+
+The A03 exact capability-grant mechanism: complete scope canonicalization,
+current principal/node lifecycle revalidation, exact grant evaluation, and
+idempotent protected grant provisioning with audit evidence.
+
+### Knows
+
+M02, M17, M39, M65, M109 and M111; the closed A16 catalogue, UoW factory,
+Clock, `security_evidence`, and the canonical `cabinet-scope-v1` encoding.
+
+### Hides
+
+Collision-resistant scope identity, exact grant lookup, lifecycle revalidation,
+provisioning idempotency, and transaction rollback boundaries.
+
+### Must not own
+
+Credential verification, throttling, principal enrollment, credential
+lifecycle, transport, or business mutations.
+
+### Candidate public capabilities
+
+```text
+derive_entity_scope_key
+evaluate_capability_grant
+persist_capability_grant
+```
+
+### Depth assessment
+
+kind: deep
+hidden mechanism: exact persisted capability matrix over canonical complete entity scope
+
+## `principal_lifecycle`
+
+### Owns
+
+Protected initial-owner bootstrap, later principal enrollment, atomic credential
+rotation, and credential revocation with separately authenticated M39 operator
+proof and append-only audit evidence.
+
+### Knows
+
+M02, M39, M59, M61, M85, M108 and M111; UoW factory, pepper, Clock,
+`credential_vault`, and `security_evidence`.
+
+### Hides
+
+The one-time empty-installation bootstrap exception, owner/operator proof,
+credential locking, atomic replacement/retirement, one-time bearer return, and
+rollback on every refusal or unexpected failure.
+
+### Must not own
+
+Request authentication, abuse throttling, capability evaluation/provisioning,
+transport, node synchronization, or Card policy.
+
+### Candidate public capabilities
+
+```text
+bootstrap_or_enroll_principal
+rotate_principal_credential
+revoke_principal_credential
+```
+
+### Depth assessment
+
+kind: deep
+hidden mechanism: protected principal and credential lifecycle transaction with one-time secret return
 
 ## `access_control`
 
 ### Owns
 
-Principal and credential enrollment, protected A03 capability-grant
-provisioning, authentication, authorization, rotation, revocation, channel
-separation, abuse throttling, and bounded security audit events under A11.
+The stable A03/A11 public access-control facade and its retained dependency
+bundle. It exposes authentication, authorization, principal enrollment, grant
+provisioning, credential rotation/revocation, and principal resolvers while
+delegating each hidden mechanism to its named deep module.
 
 ### Knows
 
-M02 and M17 identities, fixed capability classes, credential status, channel,
-entity scope, current lifecycle state, and configured throttle limits.
+The retained `CabinetUnitOfWorkFactory`, credential pepper and `Clock`, M39
+shape, channel labels, owner/local-node resolver postconditions, and the exact
+call signatures of `authentication_admission`, `capability_grants`, and
+`principal_lifecycle`.
 
 ### Must not own
 
-Business identity, Card mutations, effect idempotency, transport sessions,
-secret recovery through public channels, or domain-specific decisions.
+Credential verification, throttle transitions, transactions, grant storage,
+scope canonicalization, lifecycle mutation, audit identity generation,
+business identity, Card mutations, transport sessions, or domain policy.
 
 ### Hides
 
-One-way verifiers, timing-safe comparison, exact grant identity and idempotent
-provisioning, credential lifecycle transitions, authorization matrix
-evaluation, throttle counters, and secret-free audit details.
+The stable public surface, dependency projection into the three deep engines,
+and fail-closed resolver postconditions. It does not reproduce or partially
+inline any delegated transaction.
 
 ### Candidate public capabilities
 
@@ -260,8 +632,12 @@ revoke_credential
 
 ### Depth assessment
 
-The module exposes identity and authorization decisions while hiding all secret
-material and credential mechanics. It remains independent of HTTP and MCP.
+kind: facade
+delegates to: `authentication_admission`, `capability_grants`, `principal_lifecycle`
+
+The module remains the accepted public A03 access-control boundary, but each
+operation is now a typed delegation or resolver projection. It remains
+independent of HTTP and MCP and contains no second copy of a deep mechanism.
 
 ## `effect_journal`
 
@@ -273,8 +649,9 @@ reuse rejection, and unknown-outcome reconciliation state.
 
 ### Knows
 
-M03 and M16, operation class, exact target, request hash, principal scope, and
-an injected mutation transaction.
+M03 and M16, operation class, exact target, request hash, principal scope, an
+injected mutation transaction, and the retained `Clock` port for effect
+evidence timestamps.
 
 ### Must not own
 
@@ -296,6 +673,9 @@ reconcile_effect
 
 ### Depth assessment
 
+kind: deep
+hidden mechanism: the principal-scoped idempotency journal: canonical request binding with commit, replay, and conflict outcomes
+
 The three operations hide difficult concurrency and retry behavior shared by
 otherwise independent domain effects.
 
@@ -310,7 +690,8 @@ explicit evidence-backed release of eligible VPS working bytes.
 ### Knows
 
 Exact Card/source/revision targets, approved media catalogue, A13 limits,
-receipt/hash verification needed by A10, and authorized human context.
+receipt/hash verification needed by A10, authorized human context, and the
+retained `Clock` port for custody evidence timestamps.
 
 ### Must not own
 
@@ -334,6 +715,9 @@ release_vps_working_set
 
 ### Depth assessment
 
+kind: deep
+hidden mechanism: the verified byte-custody chain: staged upload, atomic commit, and verified re-read through the byte-store port
+
 Four custody operations hide file-system safety, concurrent handoff use, byte
 identity, and conservative release without becoming a document processor.
 
@@ -347,8 +731,9 @@ HTTP handling, and safe response projection.
 
 ### Knows
 
-Authenticated browser context and typed ports for application capabilities and
-source custody. It knows no persistence representation.
+Authenticated browser context, typed ports for application capabilities and
+source custody, and the retained `Clock` port for upload-boundary observations.
+It knows no persistence representation.
 
 ### Must not own
 
@@ -371,6 +756,9 @@ serve_source_download
 
 ### Depth assessment
 
+kind: deep
+hidden mechanism: bounded browser ingress: CSRF and handoff verification with bounded streaming into custody
+
 This is intentionally a thin but security-critical adapter. Its public surface
 is transport-shaped and all business decisions remain behind typed ports.
 
@@ -379,13 +767,14 @@ is transport-shaped and all business decisions remain behind typed ports.
 ### Owns
 
 The local-node transport boundary: bounded request parsing, compatibility
-observation, machine authentication handoff, typed synchronization dispatch,
-and bounded response/error serialization.
+observation, machine authentication handoff, and bounded response/error
+serialization; each synchronization capability enters through its own typed
+route, never through a generic dispatch envelope.
 
 ### Knows
 
-M17 and M26, the sync-only A16 catalogue, A13 request limits, and typed ports
-for Invoice exchange and Registry publication.
+M17 and M26, the sync-only A16 catalogue, A13 request limits, and the
+access-control port that proves the active local node.
 
 ### Must not own
 
@@ -401,10 +790,12 @@ safe error projection, and rejection of unknown sync operations.
 
 ```text
 observe_sync_compatibility
-serve_sync_request
 ```
 
 ### Depth assessment
+
+kind: facade
+delegates to: `access_control`
 
 This is an intentionally thin trust-boundary adapter. Protocol state belongs to
 the exchange modules, so transport replacement cannot rewrite sync policy.
@@ -422,7 +813,8 @@ M28 conflict outcomes.
 ### Knows
 
 Available exact Invoice revisions and source membership, active node identity,
-content hashes, contract compatibility, and immutable source retrieval ports.
+content hashes, contract compatibility, immutable source retrieval ports, and
+the retained `Clock` port for discovery and issuance observations.
 
 ### Must not own
 
@@ -442,9 +834,13 @@ discover_invoice_work
 pull_invoice_package
 record_invoice_transfer_receipt
 reconcile_invoice_transfer
+get_invoice_transfer_status
 ```
 
 ### Depth assessment
+
+kind: deep
+hidden mechanism: manifest-driven invoice transfer: issuance, package streaming, and receipt/reconciliation state
 
 Four protocol operations hide immutable package construction and distributed
 delivery ambiguity while keeping the local Backend authoritative for import.
@@ -482,21 +878,146 @@ get_current_registry_catalogue
 
 ### Depth assessment
 
+kind: deep
+hidden mechanism: registry catalogue replication: published snapshot acceptance with a current-selector latch
+
 Two operations hide the entire atomic replica protocol and preserve the
 external ownership boundary even while the local system is offline.
+
+## `data_provider`
+
+### Owns
+
+The single deterministic home of declared scalar policy constants and closed
+policy tables — identifier prefixes, hash-algorithm identifiers, protocol
+versions, reported status scalars, the A16 capability catalogue rows, the A01
+validation check tables, and the A05 byte-signature catalogue — emitted as
+typed module constants from the closed `rules.data_provider_backend` IR.
+
+### Knows
+
+Only the closed data-provider IR: constant names, their declared value types,
+their declared values, and the State 1 row models the record tables
+instantiate.
+
+### Must not own
+
+Behavior of any kind: no lookups, no validation, no interpretation, no
+authorization, no defaults beyond the declared values, and no second home for
+a value already owned by `models` or `config`.
+
+### Hides
+
+The literal values themselves. Consumers import symbols and receive the
+access signature; the values never enter an LLM prompt (SPEC_STANDARD §15.9).
+
+### Public surface
+
+```text
+CAPABILITY_GRANTS
+COMPONENT_STATUS_SEPARATOR
+CONTENT_FORMAT_SIGNATURES
+CUSTODY_OPERATION_KIND
+DUPLICATE_CANDIDATE_FIELD_ORDER
+DUPLICATE_CANDIDATE_FIELD_SOURCES
+DUPLICATE_INVOICE_ID_MATCH_REQUIRES_EXACT_IDENTITY
+DUPLICATE_MINIMUM_MATCH_FIELDS
+DUPLICATE_NO_COMPARABLE_FIELDS_RESULT
+DUPLICATE_POLICY_VERSION
+DUPLICATE_REASON_CODE_PREFIX
+DUPLICATE_STABLE_ORDER
+ESTIMATE_CHECKS
+ESTIMATE_STATUS_ACCEPTED
+ESTIMATE_VALIDATION_ISSUE_SEVERITY
+INVOICE_CARD_TYPE
+INVOICE_CARD_VERSION
+INVOICE_VALIDATION_CHECKS
+ISSUANCE_ID_PREFIX
+MANIFEST_CARD_REVISION_COUNT
+MANIFEST_HASH_ALGORITHM
+MANIFEST_HASH_FIELDS
+MANIFEST_ID_PREFIX
+MANIFEST_VERSION
+NODE_CONTRACT_VERSION
+PENDING_CUSTODY_STATUS
+PROJECT_CARD_TYPE
+PROTECTED_OPERATOR_CAPABILITIES
+PROVIDER_CARD_TYPE
+REQUEST_HASH_ALGORITHM
+REVISION_HASH_ALGORITHM
+REVISION_OBSERVED_STATUS
+SHOPPING_LIST_ID_PREFIX
+SHOPPING_LIST_ID_SEPARATOR
+SHOPPING_LIST_STATUS_ISSUED
+SOURCE_NOT_STORED_STATUS
+SOURCE_PROVENANCE_KEY
+STORED_CUSTODY_STATUS
+SYNCHRONIZATION_UNAVAILABLE_STATUS
+VALIDATION_ISSUE_MESSAGE
+VALIDATION_ISSUE_ORDER
+VALIDATION_ISSUE_SEVERITY
+WORKING_SET_AVAILABLE_STATUS
+WORKING_SET_ID_PREFIX
+```
+
+### Depth assessment
+
+kind: deep
+hidden mechanism: deterministic compilation of declared policy data into typed importable constants
+
+The module deliberately has no callable surface. Its implementation is
+compiler-owned; project differences live entirely in accepted structured IR.
+
+## `runtime_settings`
+
+### Owns
+
+The one deterministic conversion of declared deployment inputs into the
+immutable M135 `RuntimeSettings` snapshot accepted by A18.
+
+### Knows
+
+M134–M135 and only the closed runtime-settings data IR: declared input names,
+types, requiredness, defaults, normalization, targets, and project-declared
+cross-setting constraints.
+
+### Must not own
+
+Business policy, readiness checks, service construction, storage access,
+request handling, product-specific implicit constraints, or a second settings
+provider.
+
+### Hides
+
+Environment lookup, normalization, positive-integer parsing, default
+selection, typed construction, and fail-closed validation ordering.
+
+### Candidate public capabilities
+
+```text
+load_runtime_settings
+```
+
+### Depth assessment
+
+kind: deep
+hidden mechanism: deterministic runtime-input compilation into one validated immutable settings snapshot
+
+The module deliberately has one narrow entrypoint. Its implementation is
+compiler-owned; project differences live entirely in accepted structured IR.
 
 ## `runtime_control`
 
 ### Owns
 
-Loading and validating the finite A13 configuration, readiness gating,
-composition of runtime modules, backup execution metadata, and isolated restore
-verification exposed only at the protected operator boundary.
+Readiness gating, backup execution metadata, and isolated restore verification
+exposed only at the protected operator boundary.
 
 ### Knows
 
-Required credential/configuration presence, durable-store health, edge/runtime
-limit agreement, contract compatibility, backup coverage, and restore cadence.
+The already validated M135 runtime settings snapshot, durable-store health,
+edge/runtime limit agreement, contract compatibility, backup coverage, and
+restore cadence.
 
 ### Must not own
 
@@ -506,8 +1027,8 @@ approval.
 
 ### Hides
 
-Configuration provenance, startup dependency checks, health aggregation,
-backup-set enumeration, restore drill orchestration, and readiness reasons.
+Startup dependency checks, health aggregation, backup-set enumeration, restore
+drill orchestration, and readiness reasons.
 
 ### Candidate public capabilities
 
@@ -517,6 +1038,9 @@ verify_backup_restore
 ```
 
 ### Depth assessment
+
+kind: deep
+hidden mechanism: readiness and recovery proof over one unit-of-work probe and byte-store verification
 
 The runtime exposes a narrow readiness/operator surface while hiding startup and
 recovery coordination across all durable modules. Dependency release gating

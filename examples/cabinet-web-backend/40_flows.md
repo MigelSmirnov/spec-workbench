@@ -16,34 +16,38 @@ the last complete Registry catalogue.
 
 ### Boundary
 
-`module:chatgpt_interaction` receives the authenticated plugin request,
-`module:capability_policy` resolves the exact closed read capability, and
-`module:access_control` authorizes it. Reads are owned by
-`module:card_workspace`, `module:invoice_workspace`,
+The plugin reaches each read through its own typed route of the closed A16
+catalogue; `module:capability_policy` resolves the exact closed capability,
+and `module:access_control` authenticates the tunnel identity and
+authorizes the exact read capability. `module:chatgpt_interaction` owns only
+proposal, confirmation, and composite-outcome reporting. Reads are owned by
+`module:card_workspace`, `module:invoice_catalogue`,
 `module:project_workspace`, and `module:registry_replica` according to their
 data authority.
 
 ### Steps
 
 1. `capability:access_control.authenticate_request` establishes the tunnel-bound
-   owner, `capability:capability_policy.resolve_capability` rejects unknown tool
-   names, and `capability:access_control.authorize_capability` checks the exact
-   read scope.
+   owner; `capability:capability_policy.resolve_capability` resolves the exact
+   closed catalogue entry, and
+   `capability:access_control.authorize_capability` checks the exact read scope.
 2. Provider and Project catalogue reads use
    `capability:card_workspace.search_provider_cards` and
    `capability:card_workspace.list_project_cards`; a derived Project view uses
    `capability:project_workspace.get_project_summary`.
-3. Invoice reads use `capability:invoice_workspace.search_invoices`,
-   `capability:invoice_workspace.get_invoice`, or
-   `capability:invoice_workspace.find_invoice_duplicates` without accepting a
+3. Invoice reads use `capability:invoice_catalogue.search_invoices`,
+   `capability:invoice_catalogue.get_invoice`, or
+   `capability:invoice_catalogue.find_invoice_duplicates` without accepting a
    duplicate candidate as a merge decision.
 4. Offline Registry context uses
    `capability:registry_replica.get_current_registry_catalogue` and preserves
    freshness/staleness explicitly.
-5. `capability:chatgpt_interaction.report_composite_outcome` projects the typed
-   result and bounded safe errors without creating an effect.
+5. The route returns the typed result and bounded safe errors directly; no
+   effect is created.
 
 ### Outcomes
+
+State 0 outcome proven here: "Existing ChatGPT and Card behavior preserved".
 
 The owner receives a typed bounded result, an explicit not-found/ambiguous or
 stale-catalogue result, or an authorization/availability refusal. All durable
@@ -65,23 +69,28 @@ pay, attach metadata to, or archive one Invoice.
 
 ### Boundary
 
-`module:chatgpt_interaction` is the primary UI boundary. It asks
-`module:capability_policy` for an exact catalogue entry through
-`capability:capability_policy.resolve_capability`, then
-uses `capability:access_control.authenticate_request` and
-`capability:access_control.authorize_capability`. Invoice meaning remains in
-`module:invoice_workspace`; canonical commits remain in `module:card_workspace`;
-effect identity remains in `module:effect_journal`.
+Each plugin capability enters through its own typed route; `module:access_control`
+authenticates the tunnel identity and authorizes the exact capability.
+`module:chatgpt_interaction` owns proposal preparation, explicit confirmation,
+and composite-outcome reporting, and asks `module:capability_policy` through
+`capability:capability_policy.resolve_capability` for the exact catalogue entry
+a proposal names. Invoice reads belong to `module:invoice_catalogue`; Invoice meaning remains in
+`module:invoice_validation` and `module:invoice_lifecycle`; canonical commits remain in `module:card_workspace`;
+effect identity remains in `module:effect_journal`; transfer-side outcome truth
+remains in `module:invoice_exchange`.
 
 ### Steps
 
-1. The tunnel identity is authenticated and the exact capability is resolved;
-   an unknown name is rejected before dispatch.
+1. The tunnel identity is authenticated through
+   `capability:access_control.authenticate_request`, the exact operation is
+   checked through `capability:access_control.authorize_capability`, and the
+   typed route admits only a catalogue capability; a proposal naming an unknown capability is rejected by
+   `capability:capability_policy.resolve_capability` before any effect exists.
 2. `capability:chatgpt_interaction.prepare_chatgpt_proposal` converts model
    output into a review object, retaining missing and uncertain facts.
-3. `capability:invoice_workspace.prepare_invoice_draft`,
-   `capability:invoice_workspace.validate_invoice`, and
-   `capability:invoice_workspace.find_invoice_duplicates` produce typed facts,
+3. `capability:invoice_validation.prepare_invoice_draft`,
+   `capability:invoice_validation.validate_invoice`, and
+   `capability:invoice_catalogue.find_invoice_duplicates` produce typed facts,
    warnings, and duplicate candidates without mutation.
 4. Reads return immediately. A draft write requires a clear save request; a
    consequential effect proceeds only through
@@ -89,21 +98,24 @@ effect identity remains in `module:effect_journal`.
    target revision and warnings.
 5. `capability:effect_journal.begin_effect` establishes the principal-scoped
    request identity. The exact selected operation is one of
-   `capability:invoice_workspace.create_invoice_draft`,
-   `capability:invoice_workspace.update_invoice_draft`,
-   `capability:invoice_workspace.confirm_invoice`,
-   `capability:invoice_workspace.record_invoice_payment`,
-   `capability:invoice_workspace.attach_invoice_source_metadata`, or
-   `capability:invoice_workspace.archive_invoice`. It constructs a validated revision and
+   `capability:invoice_lifecycle.create_invoice_draft`,
+   `capability:invoice_lifecycle.update_invoice_draft`,
+   `capability:invoice_lifecycle.confirm_invoice`,
+   `capability:invoice_lifecycle.record_invoice_payment`,
+   `capability:invoice_lifecycle.attach_invoice_source_metadata`, or
+   `capability:invoice_lifecycle.archive_invoice`. It constructs a validated revision and
    `capability:card_workspace.commit_card_revision` performs the atomic expected-
    revision commit.
 6. `capability:effect_journal.commit_effect` records the logical result. After
    an ambiguous timeout, `capability:effect_journal.reconcile_effect` is called
    before any retry.
 7. `capability:chatgpt_interaction.report_composite_outcome` reports Card,
-   source-custody, and synchronization results separately.
+   source-custody, and synchronization results separately, reading the
+   transfer side through `capability:invoice_exchange.get_invoice_transfer_status`.
 
 ### Outcomes
+
+State 0 outcomes proven here: "Existing ChatGPT and Card behavior preserved", "Card rejected", "Reconciliation required", and "Duplicate submission or uncertain response".
 
 The result is either a non-mutating review proposal, one committed Invoice
 revision, an idempotent prior result, an explicit validation/duplicate/revision
@@ -113,7 +125,7 @@ never becomes a stored or confirmed fact.
 ### Errors
 
 `module:access_control` owns authentication/authorization refusal;
-`module:invoice_workspace` owns Invoice validation and lifecycle errors;
+`module:invoice_validation` owns Invoice validation errors and `module:invoice_lifecycle` owns lifecycle errors;
 `module:card_workspace` owns stale revision/storage commit errors;
 `module:effect_journal` owns idempotency conflicts and ambiguous effect state;
 `module:chatgpt_interaction` translates only safe, bounded results for ChatGPT.
@@ -177,7 +189,7 @@ handoff. Authentication and exact authorization belong to
 `capability:access_control.authenticate_request` and
 `capability:access_control.authorize_capability`. Handoff and byte custody belong
 to `module:source_custody`; HTTP/CSRF/output safety belongs to
-`module:web_gateway`; Invoice metadata remains in `module:invoice_workspace`.
+`module:web_gateway`; Invoice metadata remains in `module:invoice_lifecycle`.
 
 ### Steps
 
@@ -191,12 +203,14 @@ to `module:source_custody`; HTTP/CSRF/output safety belongs to
    bytes while consuming the handoff.
 4. If metadata must be linked to an Invoice revision,
    `capability:effect_journal.begin_effect` surrounds
-   `capability:invoice_workspace.attach_invoice_source_metadata`, followed by
+   `capability:invoice_lifecycle.attach_invoice_source_metadata`, followed by
    `capability:effect_journal.commit_effect`.
 5. `capability:chatgpt_interaction.report_composite_outcome` can report Card and
    custody results independently.
 
 ### Outcomes
+
+State 0 outcomes proven here: "Card accepted, source attachment incomplete" and "Invalid or mismatched source".
 
 Success proves only Cabinet Web custody of exact bytes and their logical source
 link. Replayed equal bytes are idempotent. Invalid, expired, consumed,
@@ -207,7 +221,7 @@ produce no false stored state and never imply local Backend acceptance.
 
 `module:web_gateway` translates HTTP/CSRF/output errors;
 `module:source_custody` owns handoff, media, hash, storage, and retrieval policy;
-`module:invoice_workspace` owns metadata-link validation; and
+`module:invoice_lifecycle` owns metadata-link validation; and
 `module:effect_journal` owns ambiguous metadata effects. No error reveals a
 storage path, credential, bearer, or active uploaded content.
 
@@ -255,10 +269,21 @@ storage layout, bearer values, secrets, or unbounded external text.
 
 The owner confirms one Invoice Card through the normal ChatGPT or Web UI flow.
 
+### Boundary
+
+`module:invoice_lifecycle` owns the confirmation transition and the producer
+edge that derives the working-set item and manifest from the committed
+revision. Canonical Card commits belong to `module:card_workspace`; verified
+source custody evidence belongs to `module:source_custody`; effect identity and
+idempotent replay belong to `module:effect_journal`; local discovery and package
+issuance belong to `module:invoice_exchange`, which reads the producer output
+and never derives it.
+
 ### Steps
 
-1. `module:invoice_workspace.confirm_invoice` commits the exact successor
-   revision and verified source membership under its existing effect boundary.
+1. `capability:invoice_lifecycle.confirm_invoice` commits the exact successor
+   revision through `capability:card_workspace.commit_card_revision` and verified
+   source membership under its existing effect boundary.
 2. In the same durable transition it creates or idempotently retains one
    immutable `InvoiceWorkingSetItem` and `InvoiceTransferManifest` for that
    revision. The manifest has exactly one `card_revisions` entry and immutable
@@ -266,7 +291,8 @@ The owner confirms one Invoice Card through the normal ChatGPT or Web UI flow.
 3. Any available `CardObjectAssignmentObservation` is pinned to the revision
    and later carried unchanged by `module:invoice_exchange`; no project is
    inferred from an Invoice ID or label.
-4. `discover_invoice_work` reads this durable producer output in stable order;
+4. `capability:invoice_exchange.discover_invoice_work` reads this durable
+   producer output in stable order;
    an empty working set is truthful only when no confirmed eligible Invoice
    exists.
 
@@ -275,6 +301,25 @@ The owner confirms one Invoice Card through the normal ChatGPT or Web UI flow.
 `confirm_invoice` success -> durable discovery item and immutable manifest;
 changed revision/source set -> new manifest; repeated confirmation -> one
 logical producer item; failed confirmation -> no discoverable transfer item.
+
+### Outcomes
+
+State 0 outcome proven here: "Backend temporarily unavailable" — the confirmed revision and its bytes wait for the next local session without claiming acceptance.
+
+Success leaves exactly one committed confirmed revision, one immutable
+`InvoiceTransferManifest`, and one `InvoiceWorkingSetItem` for that revision,
+discoverable in stable order. Repeated confirmation of the same revision is
+idempotent and creates no second manifest or item. Failure at any step leaves
+no confirmed revision, manifest, or working-set item and no discoverable
+transfer work.
+
+### Errors
+
+`module:invoice_lifecycle` owns confirmation-binding, stale-revision,
+validation, and custody rejections; `module:card_workspace` owns revision
+conflicts; `module:source_custody` owns missing or unverified custody;
+`module:effect_journal` owns idempotency conflicts and unknown outcomes. No
+error fabricates custody, manifest, or working-set evidence.
 
 ## `flow:pull_invoice_package_to_local_backend`
 
@@ -295,16 +340,18 @@ and `module:source_custody`.
 1. `capability:sync_gateway.observe_sync_compatibility` rejects incompatible
    contract revisions before package issue.
 2. `capability:access_control.authenticate_request` and
-   `capability:access_control.authorize_capability` establish the exact active
-   M17 node and sync-only scope; `capability:sync_gateway.serve_sync_request`
-   dispatches only a closed sync operation.
+   `capability:access_control.authorize_capability` establish one M39 containing
+   the exact active M02 machine principal and its bound active compatible M17
+   node plus sync-only scope; each closed sync operation enters through its
+   own typed route, which passes only `context.node` to Invoice domain
+   operations.
 3. `capability:invoice_exchange.discover_invoice_work` returns a bounded M27
    page containing only exact available Invoice IDs, Card revision/content
    hashes, immutable manifest IDs/hashes, ordered source metadata, and an opaque
    continuation cursor.
-4. The exchange reads exact content through
-   `capability:card_workspace.get_card_revision` and
-   `capability:source_custody.retrieve_original_source`, resolves the exact
+4. The exchange reads exact Card content through
+   `capability:card_workspace.get_card_revision` and opens each required source
+   through `capability:source_custody.retrieve_original_source`, resolves the exact
    discovered immutable manifest, durably records issuance, then
    `capability:invoice_exchange.pull_invoice_package` streams the exact Card,
    M29 assignment observation, and bounded source byte parts. It never emits
@@ -315,6 +362,8 @@ and `module:source_custody`.
    without issuing a second logical package.
 
 ### Outcomes
+
+State 0 outcomes proven here: "Complete success", "Reconciliation required", and "Duplicate submission or uncertain response".
 
 Outcomes distinguish available work, exact package issuance, accepted or
 already-accepted local custody, quarantine/rejection, incompatibility, conflict,
@@ -343,11 +392,12 @@ owns catalogue validation and current-replica selection.
 
 ### Steps
 
-1. `capability:sync_gateway.serve_sync_request` admits only the exact publication
-   operation and bounded payload.
+1. The typed publication route admits only the exact publication operation
+   and bounded payload.
 2. `capability:access_control.authenticate_request` and
-   `capability:access_control.authorize_capability` enforce node and installation
-   scope.
+   `capability:access_control.authorize_capability` enforce the M39 principal,
+   bound node, reciprocal contract, and installation scope; Registry receives
+   only the verified `context.node`.
 3. `capability:registry_replica.publish_registry_catalogue` verifies delivery,
    identity, count, order, version, hash, replay identity, and observation time.
 4. The complete replica and current selector commit atomically. Exact replay
@@ -439,8 +489,11 @@ authentication, authorization, and credential lifecycle.
    context without accepting another channel's credential.
 2. `capability:access_control.authorize_capability` binds the exact lifecycle
    action and target identity.
-3. Initial enrollment uses `capability:access_control.enroll_principal` at the
-   protected boundary. The issued credential is authenticated before
+3. Initial owner enrollment uses `capability:access_control.enroll_principal`
+   with no actor only at the protected empty-installation boundary. Every later
+   enrollment, rotation, and revocation supplies the separately authenticated
+   active owner/operator M39; an M01 inside a command is never authority. The
+   issued credential is authenticated before
    `capability:access_control.provision_capability_grant` may idempotently bind
    one exact target, channel, A16 capability, and optional entity scope; no
    private grant store is part of composition. Rotation uses
@@ -508,3 +561,43 @@ produce not-ready rather than a degraded anonymous/public fallback.
 backup integrity, relationship mismatch, missing coverage, isolated cleanup,
 configuration, and readiness errors. Drill failure preserves production state
 and produces actionable protected evidence without secrets.
+
+## `flow:compose_runtime_from_typed_settings`
+
+### Trigger
+
+The Cabinet Web process starts and must construct its single application graph
+before accepting traffic or running recovery.
+
+### Boundary
+
+`boundary:process_startup` initiates the one internal-only settings load.
+`module:runtime_settings` alone reads and validates declared deployment inputs.
+`module:bootstrap` owns composition and injects the resulting immutable M135
+snapshot into runtime consumers.
+
+### Steps
+
+1. `module:bootstrap` calls
+   `capability:runtime_settings.load_runtime_settings` exactly once.
+2. The provider resolves the required environment selector, parses only the
+   declared inputs, applies declared defaults and project constraints, and
+   constructs M135 without consulting product policy implicitly.
+3. Any missing required input, invalid value, or violated declared relation
+   aborts startup before a database connection, recovery action, service, or
+   HTTP application is constructed.
+4. `module:bootstrap` passes the same M135 value to behavioral consumers and
+   passes its typed database URL to the PostgreSQL UoW factory.
+5. Consumers read only their required M135 fields. They do not read env,
+   dereference config data, copy defaults, or create another provider.
+
+### Outcomes
+
+Exactly one validated configuration snapshot supplies the complete runtime
+graph, or startup fails closed without a partially constructed application.
+
+### Errors
+
+`module:runtime_settings` owns missing, malformed, out-of-domain, and
+cross-setting validation failure. `module:bootstrap` owns construction and
+dependency-startup failure after settings have been accepted.

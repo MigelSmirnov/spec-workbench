@@ -50,6 +50,8 @@ discovery or packaging.
 
 1. Only an authenticated active M17 local Backend node initiates the evening
    connection. Cabinet Web never calls into the local network.
+   The participant kind is the `local_backend` member of the closed M139
+   `CabinetNodeKind`; it is type vocabulary, not synchronization policy data.
 2. Work discovery returns only exact available M03 Invoice revisions and source
    membership observed through M27. Every item contains `invoice_id`, exact Card
    revision/content hash, `manifest_id`/hash, ordered source
@@ -111,6 +113,7 @@ card_id_or_label -/> registry_project_assignment
 ### Required tests
 
 1. Non-Invoice Card data never appears in discovery or transfer packages.
+   [witness: verification:witness_A08]
 2. Changed source/Card content cannot reuse an incompatible manifest identity.
 3. Repeated package pull returns the same logical issuance and exact bytes.
 4. Mismatched, malformed, or wrong-node receipts cannot acknowledge issuance.
@@ -168,6 +171,7 @@ registry_status -/> automatic_release_or_deletion
 ### Required tests
 
 1. Partial, malformed, hash-mismatched, and incompatible catalogues cannot
+   [witness: verification:witness_A09]
    become current.
 2. Exact replay returns the prior acknowledgement without duplicate replica.
 3. Conflicting replay and older publication are rejected.
@@ -229,6 +233,7 @@ registry_status -/> automatic_deletion
 ### Required tests
 
 1. Successful synchronization leaves all VPS working copies present.
+   [witness: verification:witness_A10]
 2. Release without exact local durable verification is blocked.
 3. Registry closed/archived status alone changes no custody state.
 4. Release preserves Card, source identity, hashes, receipts, and audit evidence.
@@ -275,6 +280,25 @@ The first release favors recoverability over automatic storage cleanup.
    durable state, TLS expectations, or contract compatibility are unavailable.
 10. Authentication/authorization failures are auditable with principal/channel,
    operation class, time, and bounded code, never secret material.
+11. Authentication derives its bounded abuse context inside access control.
+    A credential identity that exists for the exact channel receives its own
+    channel/credential context; malformed, unknown, and cross-channel evidence
+    shares one fixed unknown context per channel. The context is encoded as
+    canonical compact sorted-key UTF-8 JSON before peppered hashing. Callers
+    cannot supply, widen, or choose throttle buckets, and no bearer secret is
+    included.
+12. A local-node credential has `subject_kind = "node"`; it resolves the exact
+    M17, the exact active M02 machine principal bound by `node.principal_id`,
+    and the reciprocal `cabinet-web-sync-v1` contract before producing M39.
+    Principal credentials require `subject_kind = "principal"`; subject kinds
+    never substitute.
+13. Every appended M111 record receives a newly generated collision-resistant
+    `evidence_id`. Credential, principal, node, grant, request, or timestamp
+    identities are never reused as audit-event primary keys.
+14. Each access-control operation owns one explicit transaction. Expected
+    authentication refusal commits only its bounded throttle and audit evidence;
+    every unexpected exception and every authorization or lifecycle refusal
+    rolls back before re-raising, so no partial security mutation survives.
 
 ### Formal invariants
 
@@ -282,16 +306,26 @@ The first release favors recoverability over automatic storage cleanup.
 authenticated_request
 -> active_credential AND active_principal
 
+authenticated_local_request
+-> credential.subject_kind = "node"
+AND active_node
+AND active_machine_principal
+AND node.principal_id = principal.principal_id
+AND node.contract_version = "cabinet-web-sync-v1"
+
 credential_rotation
 -> replacement_active AND prior_credential_revoked
 
 reusable_secret -/> business_data_or_log_or_prompt_or_export
 startup_dependency_missing -> not_ready
+security_audit_append -> fresh_evidence_id
+unexpected_security_failure -> transaction_rolled_back
 ```
 
 ### Required tests
 
 1. Unknown, malformed, disabled, rotated, and revoked credentials fail with
+   [witness: verification:witness_A11]
    equivalent bounded disclosure and throttling.
 2. Channel credentials cannot authenticate across boundaries.
 3. Rotation immediately rejects the prior credential without changing
@@ -299,6 +333,13 @@ startup_dependency_missing -> not_ready
 4. Secret scanning of source, logs, errors, artifacts, and responses finds no
    reusable credential.
 5. Missing protected configuration prevents readiness and protected actions.
+6. Ten independent audit events always produce ten distinct evidence IDs even
+   when their projected fields and timestamps are equal.
+7. Malformed, unknown, and cross-channel evidence cannot create attacker-chosen
+   throttle buckets; two known credentials remain independently throttled.
+8. Injected repository, clock, and hashing failures roll back every partial
+   security write; expected authentication denial commits only bounded refusal
+   evidence.
 
 ### Consequence
 

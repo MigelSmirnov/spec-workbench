@@ -19,6 +19,8 @@ human read/proposal
   estimate.validate
   shopping_list.derive
   registry_catalogue.current
+  proposal.prepare
+  effect.outcome
 
 browser source retrieval
   source.download
@@ -34,6 +36,7 @@ human effects
   shopping_list.save
   source_upload_handoff.issue
   vps_working_set.release
+  effect.confirm
 
 local Backend synchronization
   synchronization.observe_compatibility
@@ -49,13 +52,15 @@ protected operator
   credential.rotate
   credential.revoke
   backup.verify_restore
+  readiness.evaluate
 ```
 
 1. Each capability has one fixed semantic operation and typed input/output in
    later states. Dotted names are stable catalogue values, not module or
    function names.
-2. `invoice.prepare_draft`, `invoice.validate`, `estimate.validate`, and
-   `shopping_list.derive` create proposals/projections only and are read-like
+2. `invoice.prepare_draft`, `invoice.validate`, `estimate.validate`,
+   `shopping_list.derive`, `proposal.prepare`, and `effect.outcome` create
+   proposals/projections only and are read-like
    for authorization/audit; they do not persist a Card or artifact.
 3. Human effects require A03 authorization and A04 idempotency. Exact
    confirmation requirements remain governed by A02.
@@ -98,6 +103,7 @@ provisioned to plugin, browser, or local-node credentials.
 ### Required tests
 
 1. Every listed capability maps to exactly one semantic operation class.
+   [witness: verification:witness_A16]
 2. Unknown and prefix/suffix-confused capability names are rejected.
 3. Proposal capabilities cause no durable Card/artifact mutation.
 4. Human, local-node, and operator capability sets cannot be substituted.

@@ -28,6 +28,10 @@ Fields: `invoice_id: str`, `card_version: int`, `content_hash: str`,
 
 value
 
+### Identity evidence
+
+Substitution: equal invoice id, contract version, content hash, status, and observation values are interchangeable. Continuity: the reference does not change; a different revision produces another value. Reciprocal with the accepted `cabinet_backend` boundary model.
+
 ## Model M75 — StoredInvoiceCardRevision
 
 Fields: `revision_id: str`, `reference: InvoiceCardRevisionReference`,
@@ -40,6 +44,10 @@ Fields: `revision_id: str`, `reference: InvoiceCardRevisionReference`,
 
 entity
 
+### Identity evidence
+
+Substitution: records with different invoice id or content hash are distinct even if projected fields match. Continuity: the issued revision keeps stable identity and is linked into predecessor and supersession history without mutation. Reciprocal with the accepted `cabinet_backend` boundary model.
+
 ## Model M76 — SourceBinaryReplica
 
 Fields: `source_id: str`, `node_id: str`, `storage_zone: str`,
@@ -50,6 +58,10 @@ Fields: `source_id: str`, `node_id: str`, `storage_zone: str`,
 ### Identity
 
 entity
+
+### Identity evidence
+
+Substitution: replicas on different nodes or zones are operationally distinct. Continuity: one replica identity persists while verification, retention, and deletion state change. Reciprocal with the accepted `cabinet_backend` boundary model.
 
 ## Model M77 — InvoiceSynchronization
 
@@ -62,6 +74,10 @@ Fields: `synchronization_id: str`, `invoice_id: str`, `source_node_id: str`,
 
 entity
 
+### Identity evidence
+
+Substitution: synchronization ids remain distinct transport processes even for the same invoice. Continuity: one synchronization keeps identity through transfer, uncertainty, delivery, failure, or cancellation. Reciprocal with the accepted `cabinet_backend` boundary model.
+
 ## Model M78 — ContentReference
 
 Fields: `content_id: str`, `content_hash: str`, `size_bytes: int`,
@@ -71,6 +87,10 @@ Fields: `content_id: str`, `content_hash: str`, `size_bytes: int`,
 
 value
 
+### Identity evidence
+
+Substitution: equal kind, id, hash, size, and media type identify the same immutable content. Continuity: content changes create another reference rather than mutating this value. Reciprocal with the accepted `cabinet_backend` boundary model.
+
 ## Model M79 — SynchronizationWorkSelection
 
 Fields: `invoice_id: str`, `manifest_id: str`, `source_node_id: str`,
@@ -79,6 +99,10 @@ Fields: `invoice_id: str`, `manifest_id: str`, `source_node_id: str`,
 ### Identity
 
 value
+
+### Identity evidence
+
+Substitution: equal obligation and endpoint facts select the same work. Continuity: a changed request or manifest produces another selection; no selection lifecycle is tracked. Reciprocal with the accepted `cabinet_backend` boundary model.
 
 ## Model M80 — VpsInvoiceTransferPackage
 
@@ -92,6 +116,10 @@ Fields: `synchronization: InvoiceSynchronization`,
 
 value
 
+### Identity evidence
+
+Substitution: equal exact synchronization, manifest, card revision, replica, and observation facts are interchangeable package observations. Continuity: any changed part is another package; the envelope itself never mutates. Reciprocal with the accepted `cabinet_backend` boundary model.
+
 ## Model M17 — CabinetNodeIdentity
 
 ### Meaning
@@ -103,7 +131,9 @@ node.
 Candidate fields:
 
 - `node_id`;
-- `node_kind`: `vps_cabinet` or `local_backend`;
+- `principal_id`: the exact M02 `local_backend_node` machine principal bound to
+  this installation;
+- `node_kind`: the closed M139 `CabinetNodeKind`;
 - `status`: `active` or `revoked`;
 - supported contract version;
 - created and revoked times.
@@ -118,7 +148,9 @@ entity
 
 Substitution: different node IDs are not interchangeable even when deployed
 software and capability sets match. Continuity: the same enrolled node remains
-identifiable while contract support or active/revoked status changes.
+identifiable while contract support or active/revoked status changes. One M17
+is bound to exactly one M02 machine principal; changing `principal_id` is
+re-enrollment as another node, never an update of the existing node.
 
 ### Source of truth
 
@@ -372,10 +404,15 @@ Candidate fields aligned with the existing local Backend contract:
 
 - synchronization and optional import identity;
 - idempotency identity, Invoice ID, and manifest hash;
-- result: `accepted`, `already_accepted`, `quarantined`, `rejected`, or
-  `unknown`;
+- result: the closed `TransferReceiptResult` set shared with `cabinet_backend`:
+  `accepted`, `already_accepted`, `quarantined`, `rejected`, `conflicting`,
+  `duplicate_review`, `incomplete`, or `unknown`;
 - accepted Card/source hashes when applicable;
-- receipt time and safe error code optional.
+- receipt time and safe error code optional; the safe error code is the closed
+  `TransferReceiptErrorCode` set shared with `cabinet_backend`:
+  `unsupported_contract_version`, `integrity_invalid_revision`,
+  `conflicting_manifest`, `duplicate_review`, `incomplete_sources`, or
+  `quarantine_required`.
 
 ### Identity
 
@@ -644,11 +681,13 @@ Candidate fields aligned with the existing local Backend consumer:
 - explicit Registry `project_id` optional;
 - object label optional;
 - catalogue ID and Registry snapshot ID optional;
-- bounded decision context and observation time.
+- bounded decision context — the closed `AssignmentDecisionContext` set shared
+  with `cabinet_backend`: `online_current`, `offline_cached`, `label_only`, or
+  `unassigned` — and observation time.
 
 An explicit `project_id` is valid only with the catalogue/snapshot provenance
 from which the owner selected it. Without that exact selection, the observation
-remains `label_only`, `unassigned`, or `needs_review` according to its supplied
+remains `offline_cached`, `label_only`, or `unassigned` according to its supplied
 facts; an opaque Card ID or matching label is never mapping evidence.
 
 ### Identity

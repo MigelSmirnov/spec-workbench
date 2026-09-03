@@ -53,6 +53,7 @@ localhost reachability
 ### Required tests
 
 1. A local agent request without an enrolled service/peer identity is rejected before protected state changes.
+   [witness: verification:semantic_local_access_control]
 2. A valid local service identity cannot perform an operation outside its allowed capability set.
 3. `SyncNodeCredential` is rejected at the local agent/application boundary.
 4. A local agent credential is rejected as synchronization authority.

@@ -4,6 +4,8 @@
 
 The first implementation uses one Backend-owned HTTPS client and the shared Cabinet PostgreSQL deployment for durable technical attempt evidence.
 
+### Normative rules
+
 - The dedicated Holded Invoicing v1 key is read only by bootstrap from
   `HOLDED_V1_API_KEY` and supplied directly to the concrete HTTP client.
 - The verified origin, credential header, purchase paths and codecs are closed
@@ -19,6 +21,26 @@ The first implementation uses one Backend-owned HTTPS client and the shared Cabi
 - PostgreSQL stores immutable technical attempts and lookup observations. It does not own publication eligibility or accounting-status meaning.
 - Bootstrap fails closed when configuration, URL/TLS validation, database connectivity, or adapter construction fails. There is no in-memory or anonymous fallback.
 
+### Formal invariants
+
+```text
+one_reserved_attempt -> at_most_one_issued_post
+ambiguous_result -> read_only_recovery_only
+equivalent_reservation_replayed -> same_attempt
+secret_material -/> logs_persistence_or_returns
+```
+
+### Required tests
+
+1. A reserved attempt issues at most one automatic POST across concurrent
+   [witness: verification:semantic_flow5_holded_publication]
+   processes.
+2. An interrupted issued attempt is ambiguous on restart and never posts again.
+3. Equivalent create requests reuse the reserved attempt; conflicting reuse is
+   rejected before mutation.
+4. Oversized and malformed responses become typed secret-free evidence.
+5. Startup fails closed without configuration or database connectivity.
+
 ### Concurrency and crash recovery
 
 PostgreSQL uniqueness and row locking on `publication_attempt_id` authorize the single-create transition. Process memory and check-then-POST observations are not authority.
@@ -28,3 +50,9 @@ A process interruption after the issued transition but before a response is reco
 ### Ownership
 
 `module:holded_gateway` owns protocol and technical evidence. `module:holded_publication` owns eligibility, complete A51 comparison, logical settlement, and manual decisions.
+
+### Consequence
+
+Holded sees at most one automatic create per reserved attempt under any crash
+or race; everything the gateway learns is bounded, typed, secret-free technical
+evidence, and business meaning stays with holded_publication.

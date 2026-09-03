@@ -46,7 +46,7 @@ This was classified as an implementation compatibility defect, not a Cabinet sem
 Repair:
 
 ```text
-remove postponed annotations from tools/invoice_source_attach_models.py
+remove postponed annotations from experiments/cabinet-vault/tools/invoice_source_attach_models.py
 bind the new model blob fingerprint
 add a regression guard that validates nested input/output models through TypedSchemaKernel
 ```

@@ -4,6 +4,51 @@
 
 Unlike the factory, which generates code from an existing specification, Spec Workbench helps design the specification itself.
 
+## Start here
+
+Spec Workbench uses two related terms:
+
+- a **project** is a logical working product selected through `PROJECT_INDEX.json`, such as `room-planner` or `cabinet-backend`;
+- a **case** or **reference case** is specification-design content under `examples/`, used by the methodology and diagnostic/history tooling.
+
+For normal repository navigation, do not search branches or `examples/` manually. Start with:
+
+```bash
+python tools/workbench.py
+```
+
+With no arguments the command runs `list`. It shows only the curated working projects and resolves their canonical refs, paths, and current design stages.
+
+Equivalent explicit command:
+
+```bash
+python tools/workbench.py list
+```
+
+If a canonical project branch is missing from a single-branch or agent sandbox checkout, `list` attempts to fetch only that indexed branch from `origin`. It does not fetch or scan arbitrary branches for normal discovery.
+
+After choosing a project, resolve its working context with:
+
+```bash
+python tools/workbench.py show <project>
+```
+
+`show` returns the canonical ref, project path, current stage, next stage, and a minimal read order. Both `list` and `show` support `--json` for agents and other tooling:
+
+```bash
+python tools/workbench.py list --json
+python tools/workbench.py show room-planner --json
+```
+
+Use the exhaustive case/ref view only for repository or index diagnostics:
+
+```bash
+python tools/workbench.py status
+python tools/workbench.py status --json
+```
+
+`status` may report historical case snapshots and unindexed cases. It is not the normal project-selection mechanism.
+
 ## Goal
 
 Create specifications that:
@@ -79,15 +124,18 @@ python tools/design_router.py examples/cabinet-backend verify-state3
 
 Use `--json` for agent and future MCP integration. The router is read-only: it returns ordered tool arguments, command previews, review checkpoints, and stop conditions, but never executes a command or infers design semantics.
 
-For the post-State-5 authoring order, use the deterministic sequencer rather
-than inferring semantic state from `60_*` / `70_*` filenames:
+For the authoring order, use the deterministic sequencer rather than inferring
+semantic state from `60_*` / `70_*` filenames:
 
 ```bash
+python tools/authoring.py next <project> --json
 python tools/design_authoring_next.py examples/<case> --json
 ```
 
-It routes through pre-contract data closure, State 6 exact contracts, optional
-deterministic backend closures, State 7 Notes, and then final assembly.
+One sequencer routes through State 0-5, pre-contract data closure, State 6
+exact contracts, optional deterministic backend closures, State 7 Notes, and
+then final assembly; `skills/spec-authoring/authoring_sequence.json` is its
+machine-readable source of truth.
 
 ### SPEC_STANDARD v2 language gate
 
@@ -266,7 +314,8 @@ Cases that have a stable Factory destination should pin it in
 
 Admission prints and records the exact `case -> Factory project` pair. A
 different `--project` is blocked before export; a case without this manifest
-remains admissible but receives an explicit warning.
+is blocked as well — the workbench has no warnings (see "The fence" in
+`skills/spec-authoring/SKILL.md`).
 
 ## GitHub Actions CI
 
@@ -299,3 +348,12 @@ normative human-facing gate. Stage 9 lineage and handoff receipts record both
 the canonical spec identity and its `standard_version`. Stage 9 ends after the
 exact canonical spec and handoff receipts are present in Factory; Route B
 generation and terminal OTK belong to Factory.
+
+## Tool ownership
+
+`tools/`, `tests/`, `skills/` and `.github/` change only on `main` via
+`tools/<topic>` branches. `agent/<project>` branches own `examples/<project>/`
+and `experiments/` only; `python tools/tools_ownership_check.py --base origin/main`
+is the pre-push check and the CI gate. Project-owned deterministic backends are
+declared in `examples/<project>/workbench_extensions.json` and loaded through
+`tools/project_extensions.py`.

@@ -45,6 +45,8 @@ web_custody -/> local_durable_acceptance
 ### Required tests
 
 1. Every unsupported, oversized, empty, malformed, and content/type-mismatched
+   [witness: verification:witness_A05]
+   [witness: verification:streaming_source_download_behavior]
    upload fails without visible stored custody.
 2. Absolute/traversal-like filenames cannot influence storage placement.
 3. Equal retry returns one custody result; conflicting bytes do not overwrite.
@@ -86,6 +88,7 @@ expired_or_revoked_or_consumed -/> upload_authority
 ### Required tests
 
 1. Expired, consumed, revoked, and wrong-target handoffs are rejected.
+   [witness: verification:witness_A06]
 2. Concurrent submissions produce at most one successful consumption.
 3. A failed payload validation does not falsely consume the handoff unless the
    explicit abuse policy revokes it.
@@ -131,6 +134,7 @@ browser_state -/> authorization_authority
 ### Required tests
 
 1. Cross-origin and missing/invalid CSRF mutation requests fail.
+   [witness: verification:witness_A07]
 2. Stored script/markup strings render inertly in every Cabinet page.
 3. Framing and permissive cross-origin credential use are blocked.
 4. Direct access to the private application listener is unavailable externally.

@@ -38,7 +38,7 @@ The canary may start only when all of the following are true:
 - Card `status` is `confirmed`;
 - Card has `source.source_id`;
 - the real original source bytes corresponding to that source identity are locally accessible;
-- `verify_reviewed_contract()` from `tools/cabinet_web_checkout_sync_adapter.py` succeeds;
+- `verify_reviewed_contract()` from `experiments/cabinet-vault/tools/cabinet_web_checkout_sync_adapter.py` succeeds;
 - the local agent has an authorized connection to the running Cabinet local box for the exact invoice target.
 
 Stop if any condition fails. Do not repair contract drift inside an adapter.

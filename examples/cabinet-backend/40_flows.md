@@ -26,6 +26,7 @@ The flow may use the candidate State 3 needs `capability:synchronization.synchro
 4. `module:durable_archive` validates the exact immutable Invoice Card revision and required source evidence, then either accepts the required set atomically, recognizes an already accepted idempotent transfer, or records the accepted failure/quarantine outcome.
 5. Only after `module:durable_archive` proves durable acceptance may synchronization record or transmit the corresponding acceptance receipt. A successful network delivery by itself never creates an accepted archive fact.
 6. If the transport outcome is unknown, `module:synchronization` reconciles by read/status evidence through `capability:synchronization.reconcile_transfer_outcome` and must not create a second logical transfer merely because the previous network result was ambiguous.
+7. A caller may read the exact recorded synchronization state through `capability:synchronization.get_sync_status` at any point; the read never mutates transfer state.
 
 ### Outcomes
 
@@ -66,7 +67,7 @@ An authenticated local user or authorised local service/agent supplies one or mo
 
 ### Boundary
 
-Authentication and exact-operation authorization enter through `module:access_control` using `capability:access_control.authorize_operation`. Source attachment policy and durable evidence transitions belong to `module:durable_archive` through `capability:durable_archive.attach_local_source` and may be observed through `capability:durable_archive.get_source_status`.
+Authentication and exact-operation authorization enter through `module:access_control` using `capability:access_control.authorize_operation`. Source attachment policy and durable evidence transitions belong to `module:durable_archive` through `capability:durable_archive.attach_local_source` and may be observed through `capability:durable_archive.get_source_status`. Explicit user decisions about missing evidence stay in the same module: an intentionally incomplete source set is admitted through `capability:durable_archive.accept_incomplete_source_evidence`, and a confirmed loss is recorded through `capability:durable_archive.record_source_loss`.
 
 The local HTML uploader and local agent are adapters over the same Backend operation. Neither adapter owns matching, hash, provenance, idempotency, or archive policy.
 
@@ -107,14 +108,14 @@ Cabinet Backend refreshes Registry project context, or an existing Invoice Card 
 
 ### Boundary
 
-All Registry-derived project observation and Cabinet WorkObject projection belong to `module:registry_context`. The flow uses `capability:registry_context.refresh_registry_context`, `capability:registry_context.validate_card_assignment`, and `capability:registry_context.get_assignment_validation`. When the refreshed exact catalogue is delivered to VPS Cabinet, transport ownership remains in `module:synchronization` through `capability:synchronization.publish_registry_catalogue`; synchronization does not choose or filter Registry truth.
+All Registry-derived project observation and Cabinet WorkObject projection belong to `module:registry_context`. The flow uses `capability:registry_context.refresh_registry_context`, `capability:registry_context.validate_card_assignment`, and `capability:registry_context.get_assignment_validation`. When the refreshed exact catalogue is delivered to VPS Cabinet, transport ownership remains in `module:synchronization` through `capability:catalogue_publication.publish_registry_catalogue`; synchronization does not choose or filter Registry truth.
 
 Registry remains authoritative for Registry-owned project facts. Cabinet Backend never writes WorkObject or assignment changes back into Registry.
 
 ### Steps
 
 1. `module:registry_context` performs the accepted full Registry project observation and constructs the compact project context from the verified fields only.
-2. Registry-derived fields are projected into Cabinet WorkObjects keyed by stable Registry `project_id`; existing Cabinet-owned local fields remain untouched. When catalogue publication is requested, the exact already-produced catalogue delivery is passed to `capability:synchronization.publish_registry_catalogue` without moving catalogue-content policy into synchronization.
+2. Registry-derived fields are projected into Cabinet WorkObjects keyed by stable Registry `project_id`; existing Cabinet-owned local fields remain untouched. When catalogue publication is requested, the exact already-produced catalogue delivery is passed to `capability:catalogue_publication.publish_registry_catalogue` without moving catalogue-content policy into synchronization.
 3. Existing WorkObjects absent from a later catalogue response are preserved. Absence is treated as unresolved source availability rather than confirmed deletion.
 4. For an Invoice Card assignment under review, `module:registry_context` validates the exact Card/project context against the refreshed observation through `capability:registry_context.validate_card_assignment`.
 5. Active Registry context may validate normal availability. Archived or currently missing project context requires review and must not be interpreted as authoritative project completion.
