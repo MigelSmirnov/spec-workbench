@@ -17,7 +17,7 @@ For machine-readable State 2 → State 3 ownership coverage and handoff, `30_tra
 | ID | Decision | Primary document |
 |----|----------|------------------|
 | A1 | Supported Invoice Card contract | 02_rules.md |
-| A2 | Backend accepts only confirmed Invoice Cards | 02_rules.md |
+| A2 | Draft exclusion at eligibility gates (border rejection superseded by A77) | 02_rules.md |
 | A3 | Explicit acceptance without source bytes | 02_rules.md |
 | A4 | Cabinet owns semantic duplicate detection | 02_rules.md |
 | A5 | Backend never edits Invoice Card | 02_rules.md |
@@ -37,6 +37,7 @@ For machine-readable State 2 → State 3 ownership coverage and handoff, `30_tra
 | ID | Decision | Primary document |
 |----|----------|------------------|
 | A20 | Local-initiated pull synchronization | 01_models.md |
+| A77 | A20 governs import admission; A2 border rejection superseded | 02_rules_import_admission.md |
 
 ### Registry
 

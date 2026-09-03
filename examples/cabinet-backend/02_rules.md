@@ -71,6 +71,7 @@ evidence, but it cannot create or replace:
 ### Required tests
 
 1. A valid Invoice Card V1 is evaluated by the accepted V1 validator.
+   [witness: verification:witness_A77]
 2. A payload declaring an unknown Card version returns
    `unsupported_card_version`.
 3. An unknown version does not create an accepted Card revision.
@@ -120,36 +121,24 @@ cycle and marked the Card `confirmed`.
 
 ### Formal invariants
 
-For every `StoredInvoiceCardRevision` in the accepted Local Backend archive:
+The border invariants `revision.observed_status = confirmed` and the draft
+rejection rules are superseded by A77 together with A20 B.1: a `draft`
+revision is archived truthfully as `draft`. The surviving exclusions remain
+normative and are owned by A77:
 
 ```text
-revision.observed_status = confirmed
+draft_revision -/> holded_eligible
+draft_revision -/> confirmed_actual_totals_input
 ```
-
-For every `InvoiceImport` with status `accepted` or `already_accepted`:
-
-```text
-all imported Card revisions have status = confirmed
-```
-
-A Card revision with status `draft` cannot create or replace:
-
-- `StoredInvoiceCard`;
-- `StoredInvoiceCardRevision`;
-- `current_content_hash`;
-- an accepted `InvoiceWorkingReplica` entry;
-- PresuPro matching input;
-- PlanActualAnalysis input;
-- Holded publication eligibility.
 
 ### Required tests
 
-1. A valid confirmed Invoice Card V1 may proceed to normal Backend validation.
-2. A valid but `draft` Invoice Card V1 returns `card_not_confirmed`.
-3. A rejected draft does not appear in durable archive queries.
-4. Re-photographing and repeated extraction on the VPS do not create Backend Card
-   revisions until a confirmed Card is synchronized.
-5. A later corrected and confirmed payload for an existing `invoice_id` is
+1. A `draft` Invoice Card V1 revision is archived with truthful `draft` status
+   and is refused Holded publication with reason `card_not_confirmed`.
+   [witness: verification:witness_A77]
+2. Re-photographing and repeated extraction on the VPS do not create Backend Card
+   revisions until a Card revision is synchronized.
+3. A later corrected and confirmed payload for an existing `invoice_id` is
    evaluated as a new Card content revision.
 
 ### Consequence
@@ -551,6 +540,7 @@ new Card support
 ### Required tests
 
 1. A valid confirmed Invoice Card V1 enters normal Backend validation.
+   [witness: verification:witness_A77]
 2. An unknown Card type returns `unsupported_card_type`.
 3. A known but unsupported Cabinet Card type returns
    `unsupported_card_type`.
