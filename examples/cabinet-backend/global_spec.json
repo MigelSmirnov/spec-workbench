@@ -393,8 +393,8 @@
     "issue_service_credential: [SECURITY_BOUNDARY] Generate entropy_bytes of cryptographically random secret, return the token as credential_id plus separator plus secret, and return only the Argon2id verifier of the peppered secret; never log the secret or pepper.",
     "parse_service_token: [VALIDATION_ERROR] Raise ValueError for a token without the separator, an unsafe credential id, or an empty secret; never touch storage.",
     "verify_service_secret: [SECURITY_BOUNDARY] Compare the peppered secret against the Argon2id verifier in constant time and return False on any malformed input instead of raising.",
-    "create_local_app: [CONFIG_REFERENCE] Read the PostgreSQL URL only from the environment variable named by = config.access_control.database_url_env.",
-    "create_local_app: [CONFIG_REFERENCE] Read the credential pepper only from the environment variable named by = config.access_control.credential_pepper_env and use = config.access_control.deployment_owner_uid_env for the offline-owner boundary.",
+    "create_local_app: [DEPENDENCY_BOUNDARY] Read the PostgreSQL URL only from the environment variable named by the imported DATABASE_URL_ENV.",
+    "create_local_app: [DEPENDENCY_BOUNDARY] Read the credential pepper only from the environment variable named by the imported CREDENTIAL_PEPPER_ENV and use the environment variable named by the imported DEPLOYMENT_OWNER_UID_ENV for the offline-owner boundary.",
     "create_local_app: [ORCHESTRATION] Construct PostgresAccessControlRepository from the Cabinet PostgreSQL URL and LocalAccessControlService from that repository and the credential pepper, and pass the service to create_app as the AccessControlBackend; enroll, rotate, and revoke delegate to the same service.",
     "create_local_app: [VALIDATION_ERROR] Fail startup when required environment values are absent or backend initialization fails; never substitute an in-memory, anonymous, or allow-all backend.",
     "enroll_local_agent: [SECURITY_BOUNDARY] MUST permit enrollment only from the offline local administration entry point running as the configured Linux deployment owner; never expose this operation through HTTP or MCP.",
@@ -479,7 +479,7 @@
     "synchronize_invoice_work: [BEHAVIOR] A delivered exact package may return without positive durable acceptance only when durable_archive produced a classified non-accepted receipt or authoritative verification is negative/not-verifiable; omission of the archive acceptance or verification step is not a valid terminal behavior.",
     "attach_local_source: [ORCHESTRATION] Evaluate every submitted file independently after resolving the exact accepted invoice target; a file-local rejection must be represented in SourceAttachmentBatchResult.items and must not by itself prevent valid sibling files from being attached.",
     "attach_local_source: [VALIDATION_ERROR] A ValueError raised by SourceByteStore.stage or SourceByteStore.publish for one file (size or hash mismatch, unsafe token, failed reopen verification) is that file's local rejection: record it as a rejected item with a safe error code, leave no source, replica, or publication row for that file, and continue with its siblings; it never aborts the batch or the transaction of already accepted siblings.",
-    "attach_local_source: [FIELD_ASSIGNMENT] A rejected SourceAttachmentItemResult carries safe_error_code as one SourceAttachmentErrorCode: authorization_denied when the actor lacks the attach capability, unsupported_media_type for a file outside the imported ACCEPTED_SOURCE_MEDIA_TYPES, file_too_large above = config.source_upload.max_file_size_bytes, unreadable for content that cannot be parsed as its declared media, wrong_target for a file bound to another invoice, store_rejected for a ValueError from SourceByteStore.stage or SourceByteStore.publish; attached and already_attached items carry None.",
+    "attach_local_source: [FIELD_ASSIGNMENT] A rejected SourceAttachmentItemResult carries safe_error_code as one SourceAttachmentErrorCode: authorization_denied when the actor lacks the attach capability, unsupported_media_type for a file outside the imported ACCEPTED_SOURCE_MEDIA_TYPES, file_too_large above the imported MAX_SOURCE_FILE_SIZE_BYTES, unreadable for content that cannot be parsed as its declared media, wrong_target for a file bound to another invoice, store_rejected for a ValueError from SourceByteStore.stage or SourceByteStore.publish; attached and already_attached items carry None.",
     "attach_local_source: [FIELD_ASSIGNMENT] Derive publication_id and the staging publication token only from characters in [A-Za-z0-9._-] (for example invoice id, source id, and content hash joined by \"-\" after replacing any other character with \"_\"); the byte store rejects any other token.",
     "attach_local_source: [BEHAVIOR] After classifiable per-file outcomes are applied, return one SourceAttachmentBatchResult containing every submitted file's attached, already_attached, or rejected outcome plus source_status recomputed from accepted archive truth.",
     "attach_local_source: [VALIDATION_ERROR] Raise InvoiceNotFoundError when the exact accepted invoice target cannot be resolved. Raise SourceAttachmentRejectedError only when a request-level source-attachment condition prevents trustworthy independent per-file classification; do not use it for an ordinary file-local rejection that can be represented as SourceAttachmentItemResult(result=\"rejected\").",
@@ -519,7 +519,7 @@
     "request_holded_publication: [BEHAVIOR] A clear successful create response must still undergo read-back verification before logical success.",
     "accept_transfer_manifest: [BEHAVIOR] Preserve a valid confirmed Card separately from source completeness: an incomplete source set is quarantined or remains awaiting explicit acceptance, while an accepted IncompleteSourceAcceptance may admit the exact Card revision with truthful awaiting_source status; never represent missing bytes as stored.",
     "attach_local_source: [BEHAVIOR] Accept only source media listed in the imported ACCEPTED_SOURCE_MEDIA_TYPES and enforce the accompanying content-signature, bounded-parsing, metadata-trust, and finite-size-limit requirements in the same source_security policy.",
-    "attach_local_source: [CONFIG_REFERENCE] Reject each source file whose byte length exceeds = config.source_upload.max_file_size_bytes before content parsing or persistence; the configured deployment value is not module-owned state.",
+    "attach_local_source: [DEPENDENCY_BOUNDARY] Reject each source file whose byte length exceeds the imported MAX_SOURCE_FILE_SIZE_BYTES before content parsing or persistence; the accepted limit is not module-owned state.",
     "attach_local_source: [BEHAVIOR] Commit each accepted source identity, verified replica, provenance, and recomputed SourceStatus as one atomic transition; concurrent identical requests have one logical result, conflicting bytes for one source identity cannot both commit, and no check-then-insert path may expose duplicate identity, partial success, or prematurely cleared missing-source state.",
     "attach_local_source: [ORCHESTRATION] Under the invoice lock read load_source_binaries(invoice_id) once before any file is evaluated; a file whose content_hash is already stored for the invoice is already_attached and writes nothing. For each newly accepted file insert the source identity, its replica, and a staged ArchiveBytePublication, then advance that publication only from its reloaded state along the ArchivePublicationState recovery chain from = models.ArchivePublicationState (staged → metadata_committed → published, or → failed; never published → failed) through update_publication_state; a stale or skipped transition writes nothing.",
     "attach_local_source: [DEPENDENCY_BOUNDARY] MUST obtain the final storage reference of an ArchiveBytePublication only from SourceByteStore.final_reference_for(content_hash); callers never compose store paths.",
@@ -550,7 +550,7 @@
     "LocalFilesystemSourceByteStore.publish: [PATH_OR_ARTIFACT_POLICY] MUST use same-filesystem atomic rename to a content-addressed final reference; an existing final file may be reused only after exact verification and different bytes MUST NOT be overwritten.",
     "LocalFilesystemSourceByteStore.remove_staging: [FORBIDDEN_ACTION] MUST remove only the exact staging candidate and MUST NOT remove final or previously published content.",
     "LocalFilesystemSourceByteStore.read_stored: [SECURITY_BOUNDARY] MUST resolve only a canonical opaque final reference beneath the configured root, reject symlinks and non-regular files, reopen the confined regular file, read its exact bytes, verify expected_size and the exact SHA-256 of the bytes read, and return those bytes without exposing a path; absence or any mismatch raises ValueError without returning partial data.",
-    "create_local_app: [CONFIG_REFERENCE] MUST read the source-byte root only from the environment variable named by = config.archive_runtime.byte_store_root_env.",
+    "create_local_app: [DEPENDENCY_BOUNDARY] MUST read the source-byte root only from the environment variable named by the imported SOURCE_BYTE_STORE_ROOT_ENV.",
     "create_local_app: [ORCHESTRATION] MUST construct PostgresArchiveUnitOfWork, LocalFilesystemSourceByteStore, and DurableArchiveService, complete publication recovery, then pass the service to create_app before exposing FastAPI.",
     "create_local_app: [VALIDATION_ERROR] MUST fail closed on missing archive configuration, unusable storage, database initialization failure, or incomplete publication recovery; an in-memory or allow-start fallback is forbidden.",
     "accept_transfer_manifest: [DEPENDENCY_BOUNDARY] MUST perform persistence only through the supplied DurableArchiveService and its ArchiveUnitOfWork; direct database connections and implicit module state are forbidden.",
@@ -726,7 +726,7 @@
     "request_holded_publication: [DEPENDENCY_BOUNDARY] MUST use the supplied HoldedGatewayService for the sole create and all Holded reads; direct HTTP and credentials are forbidden.",
     "reconcile_holded_publication: [DEPENDENCY_BOUNDARY] MUST use the supplied HoldedGatewayService for bounded read-only recovery; it cannot construct a client or repeat POST.",
     "create_app: [DEPENDENCY_BOUNDARY] Bind the supplied HoldedGatewayService into application state for Holded publication handlers without exposing credentials.",
-    "create_local_app: [CONFIG_REFERENCE] Read the Holded v1 API key only from the environment variable named by = config.holded_runtime.credential_env; use the verified origin at = rules.holded_transport_backend.protocol.origin.",
+    "create_local_app: [DEPENDENCY_BOUNDARY] Read the Holded v1 API key only from the environment variable named by the imported HOLDED_CREDENTIAL_ENV; use the verified origin at = rules.holded_transport_backend.protocol.origin.",
     "create_local_app: [ORCHESTRATION] Reuse the Cabinet database URL, construct PostgresHoldedAttemptRepository, HttpxHoldedHttpClient, and HoldedGatewayService, then supply the service to create_app before exposing FastAPI.",
     "create_local_app: [ORCHESTRATION] Construct PostgresCataloguePublicationRepository from the same database URL and CataloguePublicationService with the supplied transport, and bind the service as app.state.catalogue_publication on the application returned by create_app; the catalogue publication has no HTTP route and is driven by the local scheduler.",
     "create_local_app: [VALIDATION_ERROR] Fail startup on missing or invalid Holded configuration or adapter construction; never substitute a disabled, anonymous, or in-memory gateway.",
@@ -6987,6 +6987,30 @@
             "invoice_line_id_asc",
             "estimate_item_id_asc"
           ]
+        },
+        "DATABASE_URL_ENV": {
+          "value_type": "string",
+          "value": "CABINET_DATABASE_URL"
+        },
+        "CREDENTIAL_PEPPER_ENV": {
+          "value_type": "string",
+          "value": "CABINET_CREDENTIAL_PEPPER"
+        },
+        "DEPLOYMENT_OWNER_UID_ENV": {
+          "value_type": "string",
+          "value": "CABINET_DEPLOYMENT_OWNER_UID"
+        },
+        "SOURCE_BYTE_STORE_ROOT_ENV": {
+          "value_type": "string",
+          "value": "CABINET_SOURCE_STORE_ROOT"
+        },
+        "HOLDED_CREDENTIAL_ENV": {
+          "value_type": "string",
+          "value": "HOLDED_V1_API_KEY"
+        },
+        "MAX_SOURCE_FILE_SIZE_BYTES": {
+          "value_type": "positive_integer",
+          "value": 52428800
         }
       }
     }
@@ -7373,10 +7397,15 @@
       "data_provider": [
         "ACCEPTED_SOURCE_MEDIA_TYPES",
         "CREDENTIAL_HASH_ALGORITHM",
+        "CREDENTIAL_PEPPER_ENV",
+        "DATABASE_URL_ENV",
+        "DEPLOYMENT_OWNER_UID_ENV",
+        "HOLDED_CREDENTIAL_ENV",
         "HOLDED_DOCUMENT_PROJECTION",
         "HOLDED_MAX_AUTOMATIC_CREATE_ATTEMPTS",
         "HOLDED_READBACK_DATE_TOLERANCE_SECONDS",
         "HOLDED_STATUS_TRANSITIONS",
+        "MAX_SOURCE_FILE_SIZE_BYTES",
         "PROGRESSIVE_DELAY_AFTER_FAILURES",
         "PROPOSAL_ORDERING",
         "PROPOSAL_QUANTITY_EQUAL_WEIGHT",
@@ -7384,6 +7413,7 @@
         "PROPOSAL_SCORE_PLACES",
         "PROPOSAL_UNIT_PRICE_CLOSE_THRESHOLD",
         "PROPOSAL_UNIT_PRICE_PROXIMITY_WEIGHT",
+        "SOURCE_BYTE_STORE_ROOT_ENV",
         "SUPPORTED_MANIFEST_VERSIONS",
         "SYNCHRONIZATION_STATUS_TRANSITIONS",
         "TEMPORARY_BLOCK_AFTER_FAILURES",
@@ -7682,6 +7712,13 @@
         ],
         "catalogue_publication": [
           "CataloguePublicationService"
+        ],
+        "data_provider": [
+          "CREDENTIAL_PEPPER_ENV",
+          "DATABASE_URL_ENV",
+          "DEPLOYMENT_OWNER_UID_ENV",
+          "HOLDED_CREDENTIAL_ENV",
+          "SOURCE_BYTE_STORE_ROOT_ENV"
         ]
       },
       "durable_archive": {
@@ -7695,6 +7732,7 @@
         ],
         "data_provider": [
           "ACCEPTED_SOURCE_MEDIA_TYPES",
+          "MAX_SOURCE_FILE_SIZE_BYTES",
           "SUPPORTED_MANIFEST_VERSIONS"
         ]
       },
@@ -8169,10 +8207,15 @@
     "data_provider": [
       "ACCEPTED_SOURCE_MEDIA_TYPES",
       "CREDENTIAL_HASH_ALGORITHM",
+      "CREDENTIAL_PEPPER_ENV",
+      "DATABASE_URL_ENV",
+      "DEPLOYMENT_OWNER_UID_ENV",
+      "HOLDED_CREDENTIAL_ENV",
       "HOLDED_DOCUMENT_PROJECTION",
       "HOLDED_MAX_AUTOMATIC_CREATE_ATTEMPTS",
       "HOLDED_READBACK_DATE_TOLERANCE_SECONDS",
       "HOLDED_STATUS_TRANSITIONS",
+      "MAX_SOURCE_FILE_SIZE_BYTES",
       "PROGRESSIVE_DELAY_AFTER_FAILURES",
       "PROPOSAL_ORDERING",
       "PROPOSAL_QUANTITY_EQUAL_WEIGHT",
@@ -8180,6 +8223,7 @@
       "PROPOSAL_SCORE_PLACES",
       "PROPOSAL_UNIT_PRICE_CLOSE_THRESHOLD",
       "PROPOSAL_UNIT_PRICE_PROXIMITY_WEIGHT",
+      "SOURCE_BYTE_STORE_ROOT_ENV",
       "SUPPORTED_MANIFEST_VERSIONS",
       "SYNCHRONIZATION_STATUS_TRANSITIONS",
       "TEMPORARY_BLOCK_AFTER_FAILURES",
