@@ -341,10 +341,10 @@
     "AccessControlBackend.authorize: [VALIDATION_ERROR] Raise OperationForbiddenError when the authenticated principal is not authorized for the exact requested operation.",
     "LocalAccessControlService: [ORCHESTRATION] AccessControlRepository owns its transaction: every port method, reads included, runs only between begin() and commit() and raises without an active transaction; each public operation that touches the port opens it with begin() first, commits on success, rolls back on any failure, and never calls another public operation of this module that opens one (nested begin is rejected).",
     "LocalAccessControlService.__init__: [DEPENDENCY_BOUNDARY] Retain the exact supplied AccessControlRepository and credential pepper; fail construction when the pepper is empty, never log it, and never open connections or read environment variables.",
-    "LocalAccessControlService.__init__: [RULE_REFERENCE] Every timestamp the service produces is read from = rules.runtime_clock.timestamp_source (timezone-aware UTC, comparable with the values the persistence backend returns); naive datetimes are never constructed, per = rules.runtime_clock.naive_datetimes_allowed.",
+    "LocalAccessControlService.__init__: [DEPENDENCY_BOUNDARY] Every timestamp the service produces is timezone-aware UTC and comparable with the values the persistence backend returns; naive datetimes are never constructed.",
     "LocalAccessControlService.authenticate: [ORCHESTRATION] Parse the presented token through parse_service_token, begin one repository transaction, lock the abuse context derived from the credential id, load the throttle state, credential, and principal, verify the secret through verify_service_secret with the retained pepper, and commit exactly once; malformed tokens are refused before any state is read.",
-    "LocalAccessControlService.authenticate: [RULE_REFERENCE] Begin progressive delay at = rules.access_control.progressive_delay_after_failures and temporary blocking at = rules.access_control.temporary_block_after_failures.",
-    "LocalAccessControlService.authenticate: [RULE_REFERENCE] Keep temporary refusal active for = rules.access_control.temporary_block_seconds; the verifier algorithm is = rules.access_control.credential_hash_algorithm and is applied only through credential_security.",
+    "LocalAccessControlService.authenticate: [BEHAVIOR] Begin progressive delay at the imported PROGRESSIVE_DELAY_AFTER_FAILURES consecutive failures and temporary blocking at the imported TEMPORARY_BLOCK_AFTER_FAILURES.",
+    "LocalAccessControlService.authenticate: [BEHAVIOR] Keep temporary refusal active for the imported TEMPORARY_BLOCK_SECONDS; the verifier algorithm is the imported CREDENTIAL_HASH_ALGORITHM and is applied only through credential_security.",
     "LocalAccessControlService.authenticate: [SECURITY_BOUNDARY] Accept only an active credential of an active principal whose verifier matches; return a context containing identifiers and the authentication time but no reusable secret.",
     "LocalAccessControlService.authenticate: [VALIDATION_ERROR] Reject a malformed token, signalled by ValueError from parse_service_token, with AuthenticationRequiredError before any transaction begins and without throttle or audit rows because no credential id exists; reject unknown, revoked, delayed, or temporarily blocked credentials with AuthenticationRequiredError, and such a refusal still upserts the throttle state and inserts secret-free audit evidence before rollback-free commit of those rows.",
     "LocalAccessControlService.authenticate: [BEHAVIOR] On failure increment the consecutive-failure counter and compute delay_until or blocked_until from the rules; on success reset the counter to zero, update the credential last_authenticated_at, and insert audit evidence; audit history is never deleted.",
@@ -401,7 +401,7 @@
     "enroll_local_agent: [RETURN_SHAPE] Return IssuedServiceCredential exactly once to the invoking owner and never persist or log its credential field.",
     "rotate_local_agent_credential: [SECURITY_BOUNDARY] MUST require the offline Linux-owner boundary and delegate one exact active principal to PostgreSQL rotation.",
     "revoke_local_agent: [SECURITY_BOUNDARY] MUST require the offline Linux-owner boundary and delegate one exact active principal to terminal revocation.",
-    "synchronize_invoice_work: [RULE_REFERENCE] Preserve delivery as a transport fact and never promote it to durable acceptance; use = rules.synchronization.delivery_implies_durable_acceptance.",
+    "synchronize_invoice_work: [DEPENDENCY_BOUNDARY] Preserve delivery as a transport fact and never promote it to durable acceptance.",
     "synchronize_invoice_work: [ORCHESTRATION] Correlate transfer attempts and reconciliation with the supplied work selection and node identity so an ambiguous transport outcome remains explicitly reconcilable.",
     "synchronize_invoice_work: [BEHAVIOR] Return authentication, compatibility, transport, remote-unavailability, and unresolved-delivery conditions as explicit synchronization outcome states rather than manufacturing an accepted result.",
     "get_sync_status: [BEHAVIOR] MUST return the currently observed synchronization or replica state without making any durable-archive acceptance claim.",
@@ -411,7 +411,7 @@
     "accept_transfer_manifest: [VALIDATION_ERROR] A delivered card revision whose reference card_version is not 1, the accepted Invoice Card V1 version, is quarantined and never parsed as V1: the receipt result is quarantined with safe_error_code quarantine_required, nothing is inserted, and no invoice card head is created or advanced.",
     "accept_transfer_manifest: [BEHAVIOR] Import never gates on or changes lifecycle status: a delivered draft revision is archived truthfully with observed_status draft and advances the head exactly like a confirmed one; draft exclusion is enforced at publication and analytics eligibility, not at the import border.",
     "accept_transfer_manifest: [VALIDATION_ERROR] A delivered card revision is integrity-invalid when its revision reference (invoice_id, card_version, content_hash) is not listed in manifest.card_revisions or its invoice_id differs from manifest.invoice_id; the receipt result is then \"rejected\" with a safe error code, nothing is inserted, and no card head is created or advanced.",
-    "accept_transfer_manifest: [RULE_REFERENCE] A manifest is unsupported, and the receipt is rejected with unsupported_contract_version, exactly when manifest.manifest_version is not listed in = rules.synchronization.supported_manifest_versions.",
+    "accept_transfer_manifest: [BEHAVIOR] A manifest is unsupported, and the receipt is rejected with unsupported_contract_version, exactly when manifest.manifest_version is not listed in the imported SUPPORTED_MANIFEST_VERSIONS.",
     "accept_transfer_manifest: [FIELD_ASSIGNMENT] InvoiceTransferReceipt.safe_error_code is one TransferReceiptErrorCode bound to result: rejected carries unsupported_contract_version or integrity_invalid_revision, conflicting carries conflicting_manifest, duplicate_review carries duplicate_review, incomplete carries incomplete_sources, quarantined carries quarantine_required; accepted and already_accepted carry None.",
     "accept_transfer_manifest: [FIELD_ASSIGNMENT] Every returned InvoiceTransferReceipt carries synchronization_id = manifest.manifest_id, idempotency_key = manifest.manifest_id, manifest_hash = manifest.manifest_hash, invoice_id = manifest.invoice_id, import_id None, receipt_at the acceptance time; accepted_card_hashes and accepted_source_hashes are empty unless the result is accepted or already_accepted.",
     "accept_transfer_manifest: [ORCHESTRATION] The manifest version check and the revision integrity check run inside the transaction after lock_invoice(manifest.invoice_id) and after the stored receipts are read, so that an equivalent earlier acceptance is returned before any rejection is classified; a rejected receipt is returned after commit and is not persisted.",
@@ -427,11 +427,11 @@
     "get_archived_invoice: [BEHAVIOR] Return only an accepted immutable archived revision matching the requested invoice and optional content hash.",
     "get_archived_invoice: [ORCHESTRATION] Resolve the invoice card head first; an absent content hash means the head's current_content_hash, and the exact revision is then loaded by invoice_id and content_hash.",
     "get_archived_invoice: [VALIDATION_ERROR] Raise InvoiceNotFoundError when the requested accepted revision cannot be resolved; quarantined-only, missing, or unaccepted revisions are not normal archive truth.",
-    "refresh_registry_context: [RULE_REFERENCE] Treat Registry as an upstream read-only authority and never write back through this operation; use = rules.registry_context.registry_is_read_only_from_cabinet.",
+    "refresh_registry_context: [BEHAVIOR] Treat Registry as an upstream read-only authority and never write back through this operation.",
     "refresh_registry_context: [BEHAVIOR] Refresh Registry-derived WorkObject context from the supplied complete observation while preserving Cabinet-owned fields and without inferring deletion merely because an earlier object is absent from a later response.",
     "refresh_registry_context: [VALIDATION_ERROR] Raise RegistryContextUnavailableError when the supplied Registry observation is unavailable, invalid, or cannot be translated and accepted safely; do not partially apply an unverifiable refresh.",
     "refresh_registry_context: [BEHAVIOR] An empty projects tuple is a complete observation of zero projects and is valid input: existing WorkObjects are preserved unchanged and the result lists no snapshots; unavailability is reported by the caller through an exception, never inferred from emptiness.",
-    "validate_card_assignment: [RULE_REFERENCE] Validation may change review evidence but must never rewrite the immutable Card assignment; use = rules.registry_context.registry_status_rewrites_immutable_card.",
+    "validate_card_assignment: [BEHAVIOR] Validation may change review evidence but must never rewrite the immutable Card assignment.",
     "validate_card_assignment: [BEHAVIOR] Produce explicit assignment-validation evidence against the exact Card revision and current Registry context, preserving unresolved or review-required status when observable evidence does not validate the earlier choice.",
     "validate_card_assignment: [VALIDATION_ERROR] Raise RegistryContextUnavailableError when the current Registry context required to perform the validation cannot be resolved safely.",
     "get_assignment_validation: [BEHAVIOR] Return the current recorded validation evidence for the exact assignment identity without guessing a result from current Registry state.",
@@ -443,17 +443,17 @@
     "refresh_estimate_snapshot: [FIELD_PROJECTION] EstimateSnapshot.items are PresuProEstimateObservation.items verbatim; each EstimateItemSnapshot carries its own currency and monetary_basis (one MonetaryBasis member) as observed from PresuPro, and the snapshot currency is the observation currency.",
     "refresh_estimate_snapshot: [FIELD_ASSIGNMENT] EstimateSnapshot.content_hash = sha256 hex digest of observation.canonical_content encoded as UTF-8; snapshot_id is observation.presupro_estimate_id and that content_hash joined by one colon; an observation whose presupro_estimate_id and content_hash already exist returns the stored snapshot unchanged, so equal content never produces a second snapshot_id.",
     "refresh_estimate_snapshot: [VALIDATION_ERROR] Raise EstimateObservationRejectedError when the PresuPro observation lacks stable source identity or contains unsupported or unprocessable content; never accept a partial snapshot.",
-    "calculate_plan_actual: [RULE_REFERENCE] Consume only confirmed matching decisions when calculating plan versus actual; use = rules.plan_actual.confirmed_matches_only.",
-    "calculate_plan_actual: [RULE_REFERENCE] Treat source invoice, Registry, and estimate records as immutable inputs; use = rules.plan_actual.source_records_are_immutable.",
+    "calculate_plan_actual: [BEHAVIOR] Consume only confirmed matching decisions when calculating plan versus actual.",
+    "calculate_plan_actual: [BEHAVIOR] Treat source invoice, Registry, and estimate records as immutable inputs.",
     "calculate_plan_actual: [BEHAVIOR] Produce a reproducible analysis pinned to the exact supplied evidence identities and retain explicit unmatched facts and non-blocking warnings instead of silently coercing incomparable inputs.",
     "calculate_plan_actual: [VALIDATION_ERROR] Raise PlanActualPreconditionError when required pinned evidence, assignment context, match references, or unit comparability preconditions are not satisfied.",
-    "calculate_plan_actual: [RULE_REFERENCE] The assignment-context precondition holds when the ObjectAssignmentValidation obtained through RegistryContextService.get_assignment_validation for the exact pinned revision has project_id equal to the request project_id and result equal to = rules.registry_context.active_exact_match_result; any other result is a PlanActualPreconditionError.",
-    "request_holded_publication: [RULE_REFERENCE] Permit only the configured single automatic create attempt for one logical publication attempt; use = rules.holded_publication.max_automatic_create_attempts_per_logical_attempt.",
-    "request_holded_publication: [RULE_REFERENCE] An ambiguous create outcome must enter reconciliation and must not trigger another automatic create; use = rules.holded_publication.ambiguous_create_allows_automatic_retry.",
+    "calculate_plan_actual: [MODEL_REFERENCE] The assignment-context precondition holds when the ObjectAssignmentValidation obtained through RegistryContextService.get_assignment_validation for the exact pinned revision has project_id equal to the request project_id and result equal to AssignmentValidationResult.valid from = models.AssignmentValidationResult; any other result is a PlanActualPreconditionError.",
+    "request_holded_publication: [BEHAVIOR] Permit only the imported HOLDED_MAX_AUTOMATIC_CREATE_ATTEMPTS automatic create attempts for one logical publication attempt.",
+    "request_holded_publication: [BEHAVIOR] An ambiguous create outcome must enter reconciliation and must not trigger another automatic create.",
     "request_holded_publication: [BEHAVIOR] Bind the logical publication to the exact confirmed Invoice Card revision and preserve an existing equivalent logical publication instead of creating a duplicate obligation; an ambiguous technical create remains reconciliation-pending.",
     "request_holded_publication: [VALIDATION_ERROR] Raise HoldedPublicationIneligibleError when the exact revision fails accepted eligibility, duplicate-prevention, authorization, or required-source preconditions; never manufacture a successful logical publication for an ineligible request.",
     "request_holded_publication: [VALIDATION_ERROR] A revision whose observed_status is not confirmed fails eligibility before any gateway interaction: raise HoldedPublicationIneligibleError(\"card_not_confirmed\").",
-    "reconcile_holded_publication: [RULE_REFERENCE] A recovered remote candidate may settle the publication only after full verification; use = rules.holded_publication.recovered_candidate_requires_full_verification.",
+    "reconcile_holded_publication: [BEHAVIOR] A recovered remote candidate may settle the publication only after full verification.",
     "reconcile_holded_publication: [BEHAVIOR] Reconcile an ambiguous logical attempt using read-only remote evidence and return a settled publication only when the evidence identifies exactly one fully verified matching remote purchase.",
     "reconcile_holded_publication: [RETURN_SHAPE] MUST return the publication in its settled state: verified for one exact candidate that passes complete A51 verification, outcome_unknown for zero matches or lookup failure, duplicate_conflict for multiple exact matches, payload_mismatch for one candidate that fails verification, reconciliation_required for inconsistent attempt evidence; an unresolved result is returned, never raised. HoldedReconciliationRequiredError is raised only for a stale or conflicting status transition.",
     "create_holded_purchase: [ORCHESTRATION] MUST perform the one technical remote create for the supplied already-authorized payload and the supplied reservation (a HoldedPublicationAttempt built by the caller with outcome reserved, whose publication_attempt_id, publication_id, invoice_id, invoice_revision_hash, canonical_holded_payload_hash, and attempt_marker are the stable attempt identity), then persist immutable technical outcome evidence.",
@@ -479,23 +479,23 @@
     "synchronize_invoice_work: [BEHAVIOR] A delivered exact package may return without positive durable acceptance only when durable_archive produced a classified non-accepted receipt or authoritative verification is negative/not-verifiable; omission of the archive acceptance or verification step is not a valid terminal behavior.",
     "attach_local_source: [ORCHESTRATION] Evaluate every submitted file independently after resolving the exact accepted invoice target; a file-local rejection must be represented in SourceAttachmentBatchResult.items and must not by itself prevent valid sibling files from being attached.",
     "attach_local_source: [VALIDATION_ERROR] A ValueError raised by SourceByteStore.stage or SourceByteStore.publish for one file (size or hash mismatch, unsafe token, failed reopen verification) is that file's local rejection: record it as a rejected item with a safe error code, leave no source, replica, or publication row for that file, and continue with its siblings; it never aborts the batch or the transaction of already accepted siblings.",
-    "attach_local_source: [FIELD_ASSIGNMENT] A rejected SourceAttachmentItemResult carries safe_error_code as one SourceAttachmentErrorCode: authorization_denied when the actor lacks the attach capability, unsupported_media_type for a file outside = rules.source_security.accepted_media_types, file_too_large above = config.source_upload.max_file_size_bytes, unreadable for content that cannot be parsed as its declared media, wrong_target for a file bound to another invoice, store_rejected for a ValueError from SourceByteStore.stage or SourceByteStore.publish; attached and already_attached items carry None.",
+    "attach_local_source: [FIELD_ASSIGNMENT] A rejected SourceAttachmentItemResult carries safe_error_code as one SourceAttachmentErrorCode: authorization_denied when the actor lacks the attach capability, unsupported_media_type for a file outside the imported ACCEPTED_SOURCE_MEDIA_TYPES, file_too_large above = config.source_upload.max_file_size_bytes, unreadable for content that cannot be parsed as its declared media, wrong_target for a file bound to another invoice, store_rejected for a ValueError from SourceByteStore.stage or SourceByteStore.publish; attached and already_attached items carry None.",
     "attach_local_source: [FIELD_ASSIGNMENT] Derive publication_id and the staging publication token only from characters in [A-Za-z0-9._-] (for example invoice id, source id, and content hash joined by \"-\" after replacing any other character with \"_\"); the byte store rejects any other token.",
     "attach_local_source: [BEHAVIOR] After classifiable per-file outcomes are applied, return one SourceAttachmentBatchResult containing every submitted file's attached, already_attached, or rejected outcome plus source_status recomputed from accepted archive truth.",
     "attach_local_source: [VALIDATION_ERROR] Raise InvoiceNotFoundError when the exact accepted invoice target cannot be resolved. Raise SourceAttachmentRejectedError only when a request-level source-attachment condition prevents trustworthy independent per-file classification; do not use it for an ordinary file-local rejection that can be represented as SourceAttachmentItemResult(result=\"rejected\").",
     "attach_local_source: [FIELD_ASSIGNMENT] MUST assign the source identity of a local file as file.expected_source_id when supplied, otherwise the fixed prefix local: followed by the sha256 hex of file.content; a SourceBinary already stored for the same invoice_id and content_hash is the same source: the item result is attached with that stored source_id, no second identity row is inserted, no new ArchiveBytePublication is staged when load_publication already returns a published row for the derived publication_id, and a replica row is added only when this node has none for it.",
     "attach_local_source: [FIELD_ASSIGNMENT] A SourceBinary written for verified bytes has byte_status available (SourceByteStatus); missing names an identity whose bytes are absent, quarantined a replica that failed verification after storage, corrupt a stored replica whose hash no longer matches, deleted a loss decision.",
     "attach_local_source: [PROVENANCE] Preserve previously accepted provenance when equivalent bytes are reattached; repeated attempts may add attempt evidence but must not silently replace the provenance of already accepted source evidence.",
-    "validate_card_assignment: [RULE_REFERENCE] An exact current active project match with no material conflict must use the accepted positive result from = rules.registry_context.active_exact_match_result.",
-    "validate_card_assignment: [RULE_REFERENCE] An archived current project must remain review-required according to = rules.registry_context.archived_requires_review and must record the result = rules.registry_context.archived_project_result.",
-    "validate_card_assignment: [RULE_REFERENCE] Missing current project evidence must remain review-required according to = rules.registry_context.missing_requires_review and must record the result = rules.registry_context.missing_project_result.",
-    "validate_card_assignment: [RULE_REFERENCE] Archived Registry status must not be reinterpreted as completion; use = rules.registry_context.archived_means_completed.",
+    "validate_card_assignment: [MODEL_REFERENCE] An exact current active project match with no material conflict must use AssignmentValidationResult.valid from = models.AssignmentValidationResult.",
+    "validate_card_assignment: [BEHAVIOR] An archived current project must remain review-required and must record the result AssignmentValidationResult.project_closed.",
+    "validate_card_assignment: [BEHAVIOR] Missing current project evidence must remain review-required and must record the result AssignmentValidationResult.project_missing.",
+    "validate_card_assignment: [BEHAVIOR] Archived Registry status must not be reinterpreted as completion.",
     "validate_card_assignment: [BEHAVIOR] Do not use inconclusive or another review result as a universal fallback when accepted current Registry evidence deterministically establishes an exact active project match.",
     "validate_card_assignment: [BEHAVIOR] Preserve the exact immutable Card assignment while recording current validation evidence separately; a later Registry observation may change validation evidence but never rewrite the Card object block.",
     "validate_card_assignment: [VALIDATION_ERROR] Raise RegistryContextUnavailableError when current Registry context cannot be resolved or accepted safely enough to classify the assignment; do not fabricate a current project or positive validation.",
     "refresh_registry_context: [BEHAVIOR] A complete refresh updates Registry-derived fields by stable project_id, preserves Cabinet-owned WorkObject fields, and does not delete or complete an existing WorkObject merely because the project is absent from a later observation.",
     "get_assignment_validation: [BEHAVIOR] Return only recorded validation evidence for the exact Card revision and raise AssignmentValidationNotFoundError when none exists; do not synthesize validation from current Registry state on a read.",
-    "calculate_plan_actual: [RULE_REFERENCE] Use the accepted plan/actual arithmetic and result semantics from State 2; do not choose an alternate variance sign, planned/actual amount basis, aggregation grain, remaining convention, or unmatched contribution.",
+    "calculate_plan_actual: [BEHAVIOR] Use the accepted plan/actual arithmetic and result semantics from State 2; do not choose an alternate variance sign, planned/actual amount basis, aggregation grain, remaining convention, or unmatched contribution.",
     "calculate_plan_actual: [BEHAVIOR] Build one deterministic result for each analysed Estimate Item: planned quantity is the pinned Estimate Item quantity; actual quantity is the sum of confirmed matched Invoice Line quantities; quantity variance is actual minus planned; remaining quantity is planned minus actual and may be negative.",
     "calculate_plan_actual: [BEHAVIOR] Planned item amount is the pinned Estimate Item total and actual item amount is the sum of confirmed matched Invoice Line totals; amount variance is actual minus planned. Do not re-run PresuPro arithmetic or reconstruct Invoice Card totals.",
     "calculate_plan_actual: [BEHAVIOR] Keep unmatched invoice lines explicit. Their amounts contribute to the unmatched/project actual bucket only and must never create a placeholder Estimate Item or silently attach to a similar item.",
@@ -504,24 +504,24 @@
     "calculate_plan_actual: [RETURN_SHAPE] A successful PlanActualAnalysis must contain the mandatory per-item and project calculation fields accepted by State 1/2. Do not return an empty, provenance-only, warning-only, zero-filled, or TODO-shaped analysis as success.",
     "calculate_plan_actual: [DETERMINISM_OR_ORDERING] Identical pinned invoice revisions, project context, EstimateSnapshot, confirmed match IDs and accepted assumption IDs must produce equal semantic calculation fields; runtime timestamps, cache IDs and execution order must not alter business values.",
     "calculate_plan_actual: [BEHAVIOR] Do not synthesize forecast output when the request contains no separately accepted forecast assumption identity.",
-    "calculate_plan_actual: [RULE_REFERENCE] Build the baseline at the accepted item grain from = rules.plan_actual.analysis_grain; planned quantity and amount use = rules.plan_actual.planned_quantity_source and = rules.plan_actual.planned_amount_source; actual quantity and amount use = rules.plan_actual.actual_quantity_source and = rules.plan_actual.actual_amount_source.",
-    "calculate_plan_actual: [RULE_REFERENCE] Aggregate confirmed matched lines according to = rules.plan_actual.matched_line_aggregation; quantity variance uses = rules.plan_actual.quantity_variance; amount variance uses = rules.plan_actual.amount_variance; remaining quantity uses = rules.plan_actual.remaining_quantity.",
-    "calculate_plan_actual: [RULE_REFERENCE] Keep unmatched actual spend in the project bucket according to = rules.plan_actual.unmatched_actual_contributes_to_project_actual and out of item actual according to = rules.plan_actual.unmatched_actual_contributes_to_item_actual.",
-    "calculate_plan_actual: [RULE_REFERENCE] Unit comparison must obey = rules.plan_actual.implicit_unit_conversion_allowed; currency comparison must obey = rules.plan_actual.implicit_currency_conversion_allowed; monetary and tax-basis comparison must obey = rules.plan_actual.implicit_tax_basis_conversion_allowed.",
+    "calculate_plan_actual: [BEHAVIOR] Build the baseline per estimate item: planned quantity is EstimateItemSnapshot.quantity and planned amount is EstimateItemSnapshot.total; actual quantity and amount come from confirmed matched invoice lines (InvoiceCardLine.quantity and InvoiceCardLine.gross_amount).",
+    "calculate_plan_actual: [BEHAVIOR] Aggregate confirmed matched lines by sum; quantity variance and amount variance are actual minus planned (overspend is positive); remaining quantity is planned minus actual and may be negative.",
+    "calculate_plan_actual: [BEHAVIOR] Keep unmatched actual spend in the project bucket and out of every item actual.",
+    "calculate_plan_actual: [BEHAVIOR] Unit, currency, and monetary/tax-basis comparison permit no implicit conversion; a mismatch without a pinned accepted assumption is a precondition failure.",
     "request_holded_publication: [ORCHESTRATION] Persist the logical publication attempt and exact immutable Invoice Card revision binding before the one permitted create mutation; a technical create response never by itself settles Cabinet publication success.",
     "request_holded_publication: [ORCHESTRATION] When capability:holded_gateway.create_holded_purchase returns a clear canonical documentId, obtain read-only evidence for that exact Holded document through capability:holded_gateway.lookup_holded_purchase and perform complete A51 business verification before returning a successful logical publication.",
     "request_holded_publication: [BEHAVIOR] Complete A51 verification must preserve and compare exactly the fields the read-back carries (= rules.holded_transport_backend.responses): supplier name (contactName) against supplier.name, supplier invoice number (docNumber) against invoice_number, document_date against holded_wire_date(issue_date), currency, line count and order, line names against description_original, quantities against quantity, tax rates against tax_rate, and final gross total (total) against totals.gross within accepted currency precision — and MUST NOT compare any other field: not supplier code, not item subtotal, discount, sku or description, not raw status; Holded intermediate rounding differences may be preserved without failure only under the accepted A51 rules.",
-    "request_holded_publication: [RULE_REFERENCE] Read-back comparison semantics observed on the live Holded v1 account (2026-08-23): document_date is accepted when |read-back date - holded_wire_date(issue_date)| <= = rules.holded_publication.readback_date_tolerance_seconds, because Holded normalises the document date to the account's calendar day; currency is compared case-insensitively when = rules.holded_publication.readback_currency_case_insensitive is true (Holded returns \"eur\"); all other compared fields are exact.",
+    "request_holded_publication: [BEHAVIOR] Read-back comparison semantics observed on the live Holded v1 account (2026-08-23): document_date is accepted when |read-back date - holded_wire_date(issue_date)| <= the imported HOLDED_READBACK_DATE_TOLERANCE_SECONDS, because Holded normalises the document date to the account's calendar day; currency is compared case-insensitively (Holded returns \"eur\"); all other compared fields are exact.",
     "request_holded_publication: [RETURN_SHAPE] A clear create followed by GET/read failure returns the publication in reconciliation_required, a business-field mismatch returns it in payload_mismatch, an ambiguous create returns it in outcome_unknown, a rejected create returns it in failed, and a verified read-back returns it in verified with external_document_id; none of these raise, none authorize another automatic POST, and none rewrite Invoice Card facts.",
     "request_holded_publication: [BEHAVIOR] Store Holded numeric status as raw external evidence only; do not infer draft, approved, paid, posted, cancelled, or other accounting meaning.",
     "reconcile_holded_publication: [ORCHESTRATION] After an ambiguous create outcome, perform only read-only marker recovery; zero matches remain outcome-unknown, multiple exact matches remain duplicate conflict, and one exact marker candidate must be GET-read and completely A51-verified before settlement.",
     "reconcile_holded_publication: [BEHAVIOR] An exact attempt-marker match is correlation evidence only and must never settle a publication without complete business verification against the stored exact attempt and Invoice Card revision.",
-    "request_holded_publication: [RULE_REFERENCE] A clear successful create response must still undergo read-back verification before logical success; use = rules.holded_publication.clear_create_requires_readback_verification.",
+    "request_holded_publication: [BEHAVIOR] A clear successful create response must still undergo read-back verification before logical success.",
     "accept_transfer_manifest: [BEHAVIOR] Preserve a valid confirmed Card separately from source completeness: an incomplete source set is quarantined or remains awaiting explicit acceptance, while an accepted IncompleteSourceAcceptance may admit the exact Card revision with truthful awaiting_source status; never represent missing bytes as stored.",
-    "attach_local_source: [RULE_REFERENCE] Accept only configured source media using = rules.source_security.accepted_media_types and enforce the accompanying content-signature, bounded-parsing, metadata-trust, and finite-size-limit requirements in the same source_security policy.",
+    "attach_local_source: [BEHAVIOR] Accept only source media listed in the imported ACCEPTED_SOURCE_MEDIA_TYPES and enforce the accompanying content-signature, bounded-parsing, metadata-trust, and finite-size-limit requirements in the same source_security policy.",
     "attach_local_source: [CONFIG_REFERENCE] Reject each source file whose byte length exceeds = config.source_upload.max_file_size_bytes before content parsing or persistence; the configured deployment value is not module-owned state.",
     "attach_local_source: [BEHAVIOR] Commit each accepted source identity, verified replica, provenance, and recomputed SourceStatus as one atomic transition; concurrent identical requests have one logical result, conflicting bytes for one source identity cannot both commit, and no check-then-insert path may expose duplicate identity, partial success, or prematurely cleared missing-source state.",
-    "attach_local_source: [ORCHESTRATION] Under the invoice lock read load_source_binaries(invoice_id) once before any file is evaluated; a file whose content_hash is already stored for the invoice is already_attached and writes nothing. For each newly accepted file insert the source identity, its replica, and a staged ArchiveBytePublication, then advance that publication only from its reloaded state along = rules.archive_byte_publication.recovery_states (staged → metadata_committed → published, or → failed; never published → failed) through update_publication_state; a stale or skipped transition writes nothing.",
+    "attach_local_source: [ORCHESTRATION] Under the invoice lock read load_source_binaries(invoice_id) once before any file is evaluated; a file whose content_hash is already stored for the invoice is already_attached and writes nothing. For each newly accepted file insert the source identity, its replica, and a staged ArchiveBytePublication, then advance that publication only from its reloaded state along the ArchivePublicationState recovery chain from = models.ArchivePublicationState (staged → metadata_committed → published, or → failed; never published → failed) through update_publication_state; a stale or skipped transition writes nothing.",
     "attach_local_source: [DEPENDENCY_BOUNDARY] MUST obtain the final storage reference of an ArchiveBytePublication only from SourceByteStore.final_reference_for(content_hash); callers never compose store paths.",
     "accept_incomplete_source_evidence: [SECURITY_BOUNDARY] Require authorization for the exact incomplete-source acceptance operation; possession of an invoice or decision identifier is not authority.",
     "accept_incomplete_source_evidence: [BEHAVIOR] Record immutable auditable evidence for the exact Card revision and exact missing source references, then return awaiting_source status without claiming absent bytes are stored.",
@@ -532,12 +532,12 @@
     "attach_local_source: [BEHAVIOR] A later verified attachment that satisfies every remaining required source changes awaiting_source or source_lost to complete while preserving all earlier incomplete-acceptance and loss-decision history.",
     "DurableArchiveService: [ORCHESTRATION] ArchiveUnitOfWork owns its transaction: every port method, reads included, runs only between begin() and commit() and raises without an active transaction; each public operation that touches the port opens it with begin() first, commits on success, rolls back on any failure, and never calls another public operation of this module that opens one (nested begin is rejected).",
     "DurableArchiveService.__init__: [DEPENDENCY_BOUNDARY] MUST retain the exact supplied ArchiveUnitOfWork and SourceByteStore; missing dependencies, adapter construction, environment reads, and module-global fallbacks are forbidden.",
-    "DurableArchiveService.__init__: [RULE_REFERENCE] Every timestamp the service produces is read from = rules.runtime_clock.timestamp_source (timezone-aware UTC, comparable with the values the persistence backend returns); naive datetimes are never constructed, per = rules.runtime_clock.naive_datetimes_allowed.",
+    "DurableArchiveService.__init__: [DEPENDENCY_BOUNDARY] Every timestamp the service produces is timezone-aware UTC and comparable with the values the persistence backend returns; naive datetimes are never constructed.",
     "DurableArchiveService.recover_pending_publications: [BEHAVIOR] MUST lock and inspect every committed pending ArchiveBytePublication, verify candidate or final bytes, finalize an equivalent candidate exactly once, and persist published or safe failed state before application exposure.",
     "DurableArchiveService.recover_pending_publications: [VALIDATION_ERROR] MUST raise a startup-blocking error when recovery cannot establish truthful recoverable or terminal state; MUST NOT mark unverifiable bytes available.",
-    "DurableArchiveService.recover_pending_publications: [ORCHESTRATION] Advance each pending publication only from its reloaded state along = rules.archive_byte_publication.recovery_states through update_publication_state; never move published to failed and never skip metadata_committed.",
+    "DurableArchiveService.recover_pending_publications: [ORCHESTRATION] Advance each pending publication only from its reloaded state along the ArchivePublicationState recovery chain (staged → metadata_committed → published, or → failed) through update_publication_state; never move published to failed and never skip metadata_committed.",
     "DurableArchiveService.recover_pending_publications: [ORCHESTRATION] List publications in the staged and metadata_committed states, then for each one in a transaction of its own: lock_invoice(publication.invoice_id), reload it through load_publication, verify bytes through SourceByteStore.verify against the stored final_reference first and the stored staging_reference second (both references are stored values, never recomposed through final_reference_for), publish a verified candidate through SourceByteStore.publish, and write the resulting state; a publication whose bytes verify nowhere becomes failed with failure_code set, and remove_staging runs only after published or failed is committed.",
-    "DurableArchiveService.recover_pending_publications: [RULE_REFERENCE] Select pending publications by listing the staged and metadata_committed states from = rules.archive_byte_publication.recovery_states; never treat published or failed as pending.",
+    "DurableArchiveService.recover_pending_publications: [MODEL_REFERENCE] Select pending publications by listing the staged and metadata_committed states of = models.ArchivePublicationState; never treat published or failed as pending.",
     "create_durable_archive_schema: [CONFIG_REFERENCE] MUST idempotently create only the tables named by = config.persistence.invoice_card_table_name and = config.persistence.invoice_card_revision_table_name and = config.persistence.source_binary_table_name and = config.persistence.source_replica_table_name and = config.persistence.transfer_manifest_table_name and = config.persistence.transfer_receipt_table_name and = config.persistence.byte_publication_table_name and = config.persistence.incomplete_source_acceptance_table_name and = config.persistence.source_loss_decision_table_name on a connection it opens from database_url and closes; MUST NOT read environment variables or log the URL.",
     "PostgresArchiveUnitOfWork.__init__: [SECURITY_BOUNDARY] MUST treat database_url as secret configuration and MUST NOT log it or include it in safe errors.",
     "PostgresArchiveUnitOfWork.lock_invoice: [BEHAVIOR] MUST acquire PostgreSQL serialization for the exact invoice before mutable acceptance or source state is read.",
@@ -563,7 +563,7 @@
     "get_source_status: [ORCHESTRATION] Open one transaction, lock nothing, call derive_source_status, commit, and return its result; the derivation itself lives in derive_source_status.",
     "derive_source_status: [BEHAVIOR] MUST derive SourceStatus from rows read through ArchiveUnitOfWork in the transaction the caller already opened: load_source_binaries gives the required source ids, list_source_replicas the verified available ids, list_incomplete_source_acceptances the active_acceptance_ids (acceptances whose card_revision is the current head revision), list_source_loss_decisions the active_loss_decision_ids, and completeness from those together; missing = required minus available; raise InvoiceNotFoundError when load_invoice_card returns None; MUST NOT call begin(), commit(), rollback(), or another public operation of this module — every caller (get_source_status, accept_incomplete_source_evidence, record_source_loss, attach_local_source, verify_durable_acceptance) holds the open transaction and calls derive_source_status after its own writes.",
     "accept_transfer_manifest: [FIELD_PROJECTION] Required sources of the delivered revision are manifest.source_references (content_id as source_id, content_hash as expected hash); completeness compares them with the verified replicas in the package and in the archive; canonical_card.source carries no source identity.",
-    "accept_transfer_manifest: [FIELD_PROJECTION] A newly created StoredInvoiceCard head carries archive_status = rules.durable_archive.accepted_head_archive_status and current_status equal to the delivered revision observed_status; an existing head keeps its archive_status and only advances the current revision fields.",
+    "accept_transfer_manifest: [FIELD_PROJECTION] A newly created StoredInvoiceCard head carries archive_status ArchiveStatus.active from = models.ArchiveStatus and current_status equal to the delivered revision observed_status; an existing head keeps its archive_status and only advances the current revision fields.",
     "accept_transfer_manifest: [ORCHESTRATION] MUST perform the idempotency lookup inside its own transaction through ArchiveUnitOfWork.list_transfer_receipts (a receipt with the same manifest_hash yields already_accepted) and MUST NOT call get_transfer_receipt, get_source_status, or verify_durable_acceptance, which open transactions of their own; completeness is computed with derive_source_status.",
     "get_archived_invoice: [DEPENDENCY_BOUNDARY] MUST read accepted immutable revisions only through the supplied DurableArchiveService.",
     "accept_incomplete_source_evidence: [DEPENDENCY_BOUNDARY] MUST persist the decision only through the supplied DurableArchiveService under the invoice lock.",
@@ -662,7 +662,7 @@
     "RegistryContextService.refresh_registry_context: [FIELD_ASSIGNMENT] WorkObject.registry_status is the status of the RegistryProjectObservation that last mentioned the project (active or archived) and is rewritten on every refresh that mentions it; attention_status stays Cabinet-owned and is never derived from Registry status.",
     "RegistryContextService.refresh_registry_context: [FIELD_ASSIGNMENT] RegistryRefreshResult.projects are RegistryProjectSnapshot values built from each observation, never the observations themselves: snapshot_id is project_id, a colon, and registry_updated_at in ISO-8601; project_id, display_name, address, status, and registry_updated_at are copied; captured_at is the refresh observed_at; source_contract_version is the observation's source_contract_version. Each new or refreshed WorkObject.registry_snapshot_id is that snapshot_id.",
     "RegistryContextService.validate_card_assignment: [BEHAVIOR] MUST apply accepted assignment rules to exact invoice and WorkObject evidence and persist one immutable validation outcome.",
-    "RegistryContextService.validate_card_assignment: [FIELD_ASSIGNMENT] validation_id is invoice_id, content_hash, and validated_at.isoformat() joined by colons, with validated_at read from = rules.runtime_clock.timestamp_source; actor is the service actor (actor_type system, actor_id \"registry_context_service\", delegated_by, interaction_id and display_label None) because the contract carries no caller principal.",
+    "RegistryContextService.validate_card_assignment: [FIELD_ASSIGNMENT] validation_id is invoice_id, content_hash, and validated_at.isoformat() joined by colons, with validated_at a timezone-aware UTC read; actor is the service actor (actor_type system, actor_id \"registry_context_service\", delegated_by, interaction_id and display_label None) because the contract carries no caller principal.",
     "RegistryContextService.get_assignment_validation: [VALIDATION_ERROR] MUST raise AssignmentValidationNotFoundError when the exact persisted validation is absent and MUST NOT fabricate a default.",
     "RegistryContextService.get_assignment_validation: [RETURN_SHAPE] MUST return the first element of list_assignment_validations (the newest validation) and raise AssignmentValidationNotFoundError when the list is empty; validations are append-only evidence and are never updated in place.",
     "RegistryContextService.get_work_object: [VALIDATION_ERROR] MUST raise RegistryContextUnavailableError when the exact committed WorkObject is absent and MUST NOT fabricate context.",
@@ -673,7 +673,7 @@
     "get_assignment_validation: [DEPENDENCY_BOUNDARY] MUST delegate through the exact supplied RegistryContextService and MUST NOT access PostgreSQL directly.",
     "get_work_object: [DEPENDENCY_BOUNDARY] MUST delegate through the exact supplied RegistryContextService and MUST NOT access PostgreSQL directly.",
     "calculate_plan_actual: [DEPENDENCY_BOUNDARY] MUST resolve WorkObject context through the exact supplied RegistryContextService — capability:registry_context.get_work_object — and MUST NOT read Registry persistence directly.",
-    "calculate_plan_actual: [FIELD_PROJECTION] Invoice lines are canonical_card.lines of the pinned revision, identified by line_id; line quantity is InvoiceCardLine.quantity with InvoiceCardLine.unit; line currency is canonical_card.currency; the actual amount of every line, matched or unmatched, is InvoiceCardLine.gross_amount (= rules.plan_actual.actual_amount_source, basis = rules.plan_actual.actual_amount_basis); a matched Estimate Item whose monetary_basis is not = rules.plan_actual.actual_amount_basis or whose currency differs from the card currency is a basis mismatch that raises PlanActualPreconditionError unless an accepted assumption is pinned for that match.",
+    "calculate_plan_actual: [FIELD_PROJECTION] Invoice lines are canonical_card.lines of the pinned revision, identified by line_id; line quantity is InvoiceCardLine.quantity with InvoiceCardLine.unit; line currency is canonical_card.currency; the actual amount of every line, matched or unmatched, is InvoiceCardLine.gross_amount (gross basis); a matched Estimate Item whose monetary_basis is not MonetaryBasis.gross from = models.MonetaryBasis or whose currency differs from the card currency is a basis mismatch that raises PlanActualPreconditionError unless an accepted assumption is pinned for that match.",
     "calculate_plan_actual: [FIELD_ASSIGNMENT] PlanActualAnalysis.unmatched_invoice_line_ids are the bare InvoiceCardLine.line_id values of lines without a confirmed match, in card order per pinned revision; no invoice_id or content_hash prefix is composed into them, and PlanActualItemResult.matched_invoice_line_ids use the same bare line_id values.",
     "refresh_registry_context_handler: [DEPENDENCY_BOUNDARY] MUST obtain the exact RegistryContextService bound to request.app.state.registry and pass it to refresh_registry_context.",
     "validate_card_assignment_handler: [DEPENDENCY_BOUNDARY] MUST obtain the exact RegistryContextService bound to request.app.state.registry and pass it to validate_card_assignment.",
@@ -683,17 +683,17 @@
     "RegistryContextRepository.upsert_work_objects: [BEHAVIOR] MUST insert each supplied WorkObject by stable project_id or, when the row exists, update only registry_snapshot_id, registry_status, last_seen_at, and attention_status from the supplied object inside the active locked transaction; MUST NOT delete rows or change first_seen_at.",
     "PostgresRegistryContextRepository.upsert_work_objects: [BEHAVIOR] MUST insert each supplied WorkObject by stable project_id or, when the row exists, update only registry_snapshot_id, registry_status, last_seen_at, and attention_status from the supplied object inside the active locked transaction; MUST NOT delete rows or change first_seen_at.",
     "RegistryContextService.__init__: [DEPENDENCY_BOUNDARY] MUST retain the exact supplied RegistryContextRepository and DurableArchiveService; adapter construction, direct archive persistence, environment reads, nullable dependencies, and module-global fallbacks are forbidden.",
-    "RegistryContextService.__init__: [RULE_REFERENCE] Every timestamp the service produces is read from = rules.runtime_clock.timestamp_source (timezone-aware UTC, comparable with the values the persistence backend returns); naive datetimes are never constructed, per = rules.runtime_clock.naive_datetimes_allowed.",
+    "RegistryContextService.__init__: [DEPENDENCY_BOUNDARY] Every timestamp the service produces is timezone-aware UTC and comparable with the values the persistence backend returns; naive datetimes are never constructed.",
     "RegistryContextService.validate_card_assignment: [DEPENDENCY_BOUNDARY] MUST resolve the exact accepted immutable Card revision through the supplied DurableArchiveService before applying Registry assignment policy; invoice_id and content_hash alone are not evidence.",
     "RegistryContextService.validate_card_assignment: [FIELD_PROJECTION] The Registry project of a card is the project_id of the stored CardObjectAssignmentObservation for the exact revision; canonical_card.object (card_id, label) is capture evidence only and is never mapped to a project inside this module. An absent observation or an observation without project_id is missing_requires_review evidence, not an error.",
-    "RegistryContextService.validate_card_assignment: [FIELD_PROJECTION] Current Registry context is the WorkObject loaded by the observation project_id: registry_status active is the exact current active match (result = rules.registry_context.active_exact_match_result), registry_status archived is archived_requires_review, and a missing WorkObject is missing_requires_review; attention_status takes no part in the result.",
+    "RegistryContextService.validate_card_assignment: [FIELD_PROJECTION] Current Registry context is the WorkObject loaded by the observation project_id: registry_status active is the exact current active match (result AssignmentValidationResult.valid), registry_status archived records AssignmentValidationResult.project_closed with review required, and a missing WorkObject records AssignmentValidationResult.project_missing with review required; attention_status takes no part in the result.",
     "RegistryContextService.record_card_assignment_observation: [ORCHESTRATION] MUST begin one transaction, load the observation stored for observation.card_revision (invoice_id, content_hash), return the stored one unchanged when it exists, otherwise insert the supplied observation through insert_assignment_observation, commit, and return it; rollback on any failure.",
     "RegistryContextService.record_card_assignment_observation: [VALIDATION_ERROR] MUST raise RegistryContextUnavailableError when observation.decision_context is not one of online_current, offline_cached, label_only, unassigned, or when project_id is set while decision_context is unassigned.",
     "RegistryContextService.record_card_assignment_observation: [VALIDATION_ERROR] MUST raise RegistryContextUnavailableError when project_id is set without both catalogue_id and registry_snapshot_id naming the catalogue used at capture: object.card_id is never an implicit Registry project_id, and such an observation may only be stored as label_only, unassigned, or needs_review.",
     "create_local_app: [ORCHESTRATION] MUST construct RegistryContextService with the exact PostgresRegistryContextRepository and the already constructed DurableArchiveService, preserving one archive boundary.",
     "HoldedGatewayService: [ORCHESTRATION] HoldedAttemptRepository owns its transaction: every port method, reads included, runs only between begin() and commit() and raises without an active transaction; each public operation that touches the port opens it with begin() first, commits on success, rolls back on any failure, and never calls another public operation of this module that opens one (nested begin is rejected).",
     "HoldedGatewayService.__init__: [DEPENDENCY_BOUNDARY] Retain the exact supplied repository and HTTP client; reject missing dependencies and never construct adapters, read environment variables, or use module-global fallbacks.",
-    "HoldedGatewayService.__init__: [RULE_REFERENCE] Every timestamp the service produces is read from = rules.runtime_clock.timestamp_source (timezone-aware UTC, comparable with the values the persistence backend returns); naive datetimes are never constructed, per = rules.runtime_clock.naive_datetimes_allowed.",
+    "HoldedGatewayService.__init__: [DEPENDENCY_BOUNDARY] Every timestamp the service produces is timezone-aware UTC and comparable with the values the persistence backend returns; naive datetimes are never constructed.",
     "HoldedGatewayService.create_holded_purchase: [ORCHESTRATION] Under the lock on reservation.publication_attempt_id, load the stored attempt: reuse it when its publication_id, invoice_revision_hash, canonical_holded_payload_hash, and attempt_marker equal the reservation's, reject a conflicting one, otherwise insert the supplied reservation unchanged through insert_attempt; commit before network mutation, then re-read the locked attempt, require that no issuance is recorded, update it as issued with request_started_at, and commit before the sole permitted POST.",
     "HoldedGatewayService.create_holded_purchase: [FIELD_ASSIGNMENT] The caller supplies the reservation with request_started_at None, request_finished_at None, outcome reserved, document_id None, and safe_error_code None; the gateway never rewrites its identity fields and sets request_started_at only by the issued update that precedes the POST.",
     "HoldedGatewayService.create_holded_purchase: [BEHAVIOR] Never issue POST when the attempt already records issued, ambiguous, or terminal evidence; equivalent re-entry returns existing evidence without mutation.",
@@ -704,7 +704,7 @@
     "HoldedGatewayService.lookup_holded_purchase: [ORCHESTRATION] Resolve the exact durable attempt by its unique marker, use GET for a supplied document identifier or one bounded Holded v1 list response for the exact marker, and insert one typed observation evidence row without remote mutation or settling Cabinet publication.",
     "HoldedGatewayService.lookup_holded_purchase: [BEHAVIOR] Preserve zero, one, and multiple exact matches, malformed responses, unknown documents, and transport failures distinctly; return the typed observed document for one candidate but never perform A51 comparison or interpret raw status.",
     "HoldedGatewayService.lookup_holded_purchase: [FIELD_ASSIGNMENT] outcome is one HoldedLookupOutcome. GET path (document_id supplied): a 2xx body parsed through = rules.holded_transport_backend.responses into HoldedRemotePurchaseDocument is one_match with match_count 1 and that document, whatever its description; 404 is unknown_document; an unparsable 2xx body is malformed_response. List path (no document_id): candidates are the list items whose description equals attempt_marker exactly; zero_match, one_match (the candidate is then read through GET), or multiple_matches with match_count = number of candidates. Any transport exception is transport_failure.",
-    "HoldedGatewayService.lookup_holded_purchase: [FIELD_PROJECTION] HoldedRemotePurchaseDocument is built field by field from the GET JSON object using the key names in = rules.holded_document_projection (document_id ← id, supplier_code ← contactCode, supplier_name ← contactName, supplier_invoice_number ← docNumber, document_date ← date, currency ← currency, description ← desc, gross_total ← total as Decimal(str(value)), raw_status ← status, observed_at = the response received_at) and each item of the products array into HoldedRemotePurchaseItem (name, description ← desc, units, tax, subtotal as Decimal(str(value))); the JSON object is never passed to model_validate directly; a key that projects into an optional model field (supplier_code, description, item description, item subtotal) may be absent or null and then projects None, a missing key or wrong JSON type for a required field is malformed_response, and numeric values are accepted as JSON numbers or numeric strings.",
+    "HoldedGatewayService.lookup_holded_purchase: [FIELD_PROJECTION] HoldedRemotePurchaseDocument is built field by field from the GET JSON object using the imported HOLDED_DOCUMENT_PROJECTION field-to-key mapping (model field name to JSON key; gross_total projects as Decimal(str(value)), observed_at = the response received_at) and each item of the products array into HoldedRemotePurchaseItem through the same mapping's item_* entries (item_subtotal as Decimal(str(value))); the JSON object is never passed to model_validate directly; a key that projects into an optional model field (supplier_code, description, item description, item subtotal) may be absent or null and then projects None, a missing key or wrong JSON type for a required field is malformed_response, and numeric values are accepted as JSON numbers or numeric strings.",
     "HoldedHttpClient.create_purchase: [FORBIDDEN_ACTION] Issue exactly one POST per invocation with mutation retries and replaying redirects disabled.",
     "HoldedHttpClient.list_purchases: [BEHAVIOR] Perform one read-only bounded Holded v1 list request and return typed summaries in stable document-id order according to = rules.holded_transport_backend.",
     "HoldedHttpClient.get_purchase: [BEHAVIOR] Perform one read-only request for the exact document identifier and return bounded external evidence.",
@@ -733,9 +733,9 @@
     "HoldedAttemptRepository.load_attempt_by_marker: [BEHAVIOR] Return the exact attempt for one unique marker or None; reject duplicate persisted markers and never infer an attempt from payload similarity.",
     "SynchronizationService: [ORCHESTRATION] SynchronizationRepository owns its transaction: every port method, reads included, runs only between begin() and commit() and raises without an active transaction; each public operation that touches the port opens it with begin() first, commits on success, rolls back on any failure, and never calls another public operation of this module that opens one (nested begin is rejected).",
     "SynchronizationService.__init__: [DEPENDENCY_BOUNDARY] Retain the exact supplied repository, transport, archive, and registry; never construct or discover alternates.",
-    "SynchronizationService.__init__: [RULE_REFERENCE] Every timestamp the service produces is read from = rules.runtime_clock.timestamp_source (timezone-aware UTC, comparable with the values the persistence backend returns); naive datetimes are never constructed, per = rules.runtime_clock.naive_datetimes_allowed.",
+    "SynchronizationService.__init__: [DEPENDENCY_BOUNDARY] Every timestamp the service produces is timezone-aware UTC and comparable with the values the persistence backend returns; naive datetimes are never constructed.",
     "SynchronizationService.synchronize_invoice_work: [ORCHESTRATION] Under the exact synchronization lock, load the attempt bound to invoice, target node, and idempotency key: reuse it when its source_node_id equals selection.source_node_id (manifest_hash is not compared: it is None until delivery), reject one whose source_node_id differs, otherwise insert the reservation; commit, then re-read the locked attempt, require that no issuance is recorded, update it as issued, and commit before transport; afterwards update the same locked attempt from its issued state with the conclusive or unknown status, finished_at, and safe_error_code, and send an exact delivered package through archive acceptance and verification.",
-    "SynchronizationService.synchronize_invoice_work: [RULE_REFERENCE] The reservation is inserted with status = rules.synchronization.reservation_status; issuance requires the reloaded status to equal that value and writes = rules.synchronization.issued_status; every later update of the attempt follows one entry of = rules.synchronization.status_transitions (\"current->next\") from the reloaded status, and a stale or skipped transition writes nothing.",
+    "SynchronizationService.synchronize_invoice_work: [MODEL_REFERENCE] The reservation is inserted with SynchronizationStatus.reserved from = models.SynchronizationStatus; issuance requires the reloaded status to equal that member and writes SynchronizationStatus.issued; every later update of the attempt follows one entry of the imported SYNCHRONIZATION_STATUS_TRANSITIONS (\"current->next\") from the reloaded status, and a stale or skipped transition writes nothing.",
     "SynchronizationService.synchronize_invoice_work: [ORCHESTRATION] When the archive receipt is accepted or already_accepted and package.assignment_observation is not None, MUST pass it unchanged to registry_context.record_card_assignment_observation (idempotent by card revision) after the archive transaction has committed and before the final attempt update; a package without an observation records nothing and is not an error.",
     "SynchronizationService.synchronize_invoice_work: [BEHAVIOR] Equivalent re-entry for a synchronization that already finished returns the existing evidence: the stored attempt, the archive receipt found through durable_archive.get_transfer_receipt by the attempt's manifest_hash, and a fresh verify_durable_acceptance for the accepted content hash; it issues no transport call and creates no second acceptance.",
     "SynchronizationService.synchronize_invoice_work: [FIELD_PROJECTION] The content_hash argument of every capability:durable_archive.verify_durable_acceptance call is the Card revision identity (VpsInvoiceTransferPackage.card_revision.reference.content_hash on the transfer path, the single element of receipt.accepted_card_hashes of the found receipt on re-entry — a receipt accepts exactly one card revision and carries no other hash field); InvoiceSynchronization.manifest_hash and InvoiceTransferManifest.manifest_hash identify the manifest and are never passed as a content hash.",
@@ -745,7 +745,7 @@
     "SynchronizationService.get_sync_status: [BEHAVIOR] Compose the observation from the latest persisted synchronization attempt for the exact invoice and node: absent attempts yield an absent status, unknown outcomes stay unknown, and the replica field stays None until replica storage is decided; never synthesize a synchronized default.",
     "SynchronizationService.reconcile_transfer_outcome: [FORBIDDEN_ACTION] Use only read-only remote reconciliation for a persisted unknown attempt and never issue another transfer.",
     "CataloguePublicationService.__init__: [DEPENDENCY_BOUNDARY] Retain the exact supplied CataloguePublicationRepository and VpsSynchronizationTransport; MUST NOT construct transports or repositories, and MUST NOT read environment.",
-    "CataloguePublicationService.__init__: [RULE_REFERENCE] Every timestamp the service produces is read from = rules.runtime_clock.timestamp_source (timezone-aware UTC, comparable with the values the persistence backend returns); naive datetimes are never constructed, per = rules.runtime_clock.naive_datetimes_allowed.",
+    "CataloguePublicationService.__init__: [DEPENDENCY_BOUNDARY] Every timestamp the service produces is timezone-aware UTC and comparable with the values the persistence backend returns; naive datetimes are never constructed.",
     "CataloguePublicationService.publish_registry_catalogue: [ORCHESTRATION] Bind catalogue id, ordered content hash, endpoints, and idempotency key, then load the publication bound to catalogue, target node, and idempotency key: reuse it when the binding is exactly equivalent, reject a conflict, otherwise insert it; after delivery update the exact publication from its reloaded current status with the acknowledgement status, acknowledged_at, completed_at, and safe_error_code; a stale or conflicting transition writes nothing.",
     "CataloguePublicationService.publish_registry_catalogue: [FIELD_ASSIGNMENT] RegistryCataloguePublication.safe_error_code is one SynchronizationErrorCode: failed carries authentication_failed, incompatible_contract, remote_unavailable, remote_rejected, or conflicting_binding, unknown_outcome carries transport_failure, accepted carries None.",
     "SynchronizationService.observe_vps_connection: [BEHAVIOR] Report typed current evidence, insert it as one immutable observation row, and change no synchronization or archive state.",
@@ -784,11 +784,11 @@
     "create_app: [DEPENDENCY_BOUNDARY] Bind the exact supplied SynchronizationService into application state without exposing its credential.",
     "PlanActualService: [ORCHESTRATION] PlanActualRepository owns its transaction: every port method, reads included, runs only between begin() and commit() and raises without an active transaction; each public operation that touches the port opens it with begin() first, commits on success, rolls back on any failure, and never calls another public operation of this module that opens one (nested begin is rejected).",
     "PlanActualService.__init__: [DEPENDENCY_BOUNDARY] Retain the exact supplied repository, archive, and Registry services; never construct adapters or discover alternate runtimes.",
-    "PlanActualService.__init__: [RULE_REFERENCE] Every timestamp the service produces is read from = rules.runtime_clock.timestamp_source (timezone-aware UTC, comparable with the values the persistence backend returns); naive datetimes are never constructed, per = rules.runtime_clock.naive_datetimes_allowed.",
+    "PlanActualService.__init__: [DEPENDENCY_BOUNDARY] Every timestamp the service produces is timezone-aware UTC and comparable with the values the persistence backend returns; naive datetimes are never constructed.",
     "PlanActualService.refresh_estimate_snapshot: [ORCHESTRATION] Lock stable PresuPro identity, reuse exact canonical content, or append one immutable snapshot atomically.",
     "PlanActualService.propose_invoice_line_matches: [BEHAVIOR] Resolve exact archived and estimate evidence, return stable ordered non-authoritative proposals, and perform no confirmation transition.",
-    "PlanActualService.propose_invoice_line_matches: [RULE_REFERENCE] A proposal exists for every (invoice line, estimate item) pair whose fields listed in = rules.plan_actual.proposal_required_equalities are equal (line unit vs item unit, canonical_card.currency vs item currency); its score is = rules.plan_actual.proposal_quantity_equal_weight when the quantities are equal plus = rules.plan_actual.proposal_unit_price_proximity_weight multiplied by max(0, 1 - |line_unit_price - item.unit_price| / max(line_unit_price, item.unit_price)), quantized to = rules.plan_actual.proposal_score_places decimal places, and the result is ordered by = rules.plan_actual.proposal_ordering.",
-    "PlanActualService.propose_invoice_line_matches: [FIELD_PROJECTION] line_unit_price is InvoiceCardLine.unit_price_net when item.monetary_basis is net and InvoiceCardLine.gross_amount / InvoiceCardLine.quantity when it is gross (a zero quantity yields proximity 0); reason_codes are the ProposalReasonCode members that hold: unit_match and currency_match always, quantity_equal when quantities are equal, unit_price_close when the proximity factor is at least = rules.plan_actual.proposal_unit_price_close_threshold; descriptions take no part in scoring.",
+    "PlanActualService.propose_invoice_line_matches: [BEHAVIOR] A proposal exists for every (invoice line, estimate item) pair whose fields listed in the imported PROPOSAL_REQUIRED_EQUALITIES are equal (line unit vs item unit, canonical_card.currency vs item currency); its score is the imported PROPOSAL_QUANTITY_EQUAL_WEIGHT when the quantities are equal plus the imported PROPOSAL_UNIT_PRICE_PROXIMITY_WEIGHT multiplied by max(0, 1 - |line_unit_price - item.unit_price| / max(line_unit_price, item.unit_price)), quantized to the imported PROPOSAL_SCORE_PLACES decimal places, and the result is ordered by the imported PROPOSAL_ORDERING.",
+    "PlanActualService.propose_invoice_line_matches: [FIELD_PROJECTION] line_unit_price is InvoiceCardLine.unit_price_net when item.monetary_basis is net and InvoiceCardLine.gross_amount / InvoiceCardLine.quantity when it is gross (a zero quantity yields proximity 0); reason_codes are the ProposalReasonCode members that hold: unit_match and currency_match always, quantity_equal when quantities are equal, unit_price_close when the proximity factor is at least the imported PROPOSAL_UNIT_PRICE_CLOSE_THRESHOLD; descriptions take no part in scoring.",
     "PlanActualService.record_match_decision: [BEHAVIOR] Lock the exact invoice line, list its stored decisions, raise PlanActualPreconditionError for a confirmation when another active confirmed match exists for that line, insert a new decision or update only the status fields of the exact existing match_id for an invalidation, and never delete history.",
     "PlanActualService.get_unmatched_items: [DETERMINISM_OR_ORDERING] Compute unmatched invoice-line and estimate-item identities from exact pinned evidence and the confirmed decisions listed for the exact snapshot, restricted to the requested project, in stable ID order.",
     "PlanActualService.calculate_plan_actual: [ORCHESTRATION] Resolve every pinned snapshot, match, invoice, and project input through the supplied boundaries, raise PlanActualPreconditionError when any pinned match_id is absent from the loaded decisions, and only then apply accepted deterministic formulas.",
@@ -818,14 +818,14 @@
     "create_app: [DEPENDENCY_BOUNDARY] Bind the exact supplied PlanActualService into application state before route registration.",
     "HoldedPublicationService: [ORCHESTRATION] HoldedPublicationRepository owns its transaction: every port method, reads included, runs only between begin() and commit() and raises without an active transaction; each public operation that touches the port opens it with begin() first, commits on success, rolls back on any failure, and never calls another public operation of this module that opens one (nested begin is rejected).",
     "HoldedPublicationService.__init__: [DEPENDENCY_BOUNDARY] Retain the exact repository, archive, and gateway; never construct adapters or discover alternate services.",
-    "HoldedPublicationService.__init__: [RULE_REFERENCE] Every timestamp the service produces is read from = rules.runtime_clock.timestamp_source (timezone-aware UTC, comparable with the values the persistence backend returns); naive datetimes are never constructed, per = rules.runtime_clock.naive_datetimes_allowed.",
+    "HoldedPublicationService.__init__: [DEPENDENCY_BOUNDARY] Every timestamp the service produces is timezone-aware UTC and comparable with the values the persistence backend returns; naive datetimes are never constructed.",
     "HoldedPublicationService.request_holded_publication: [ORCHESTRATION] Lock the exact revision, resolve archive truth, then load the publication bound to the exact revision: reuse it when it binds the same card revision and idempotency key, raise HoldedPublicationIneligibleError when a different active publication exists, and otherwise insert one logical publication — all before the sole gateway create.",
     "HoldedPublicationService.request_holded_publication: [VALIDATION_ERROR] The required-source precondition is SourceStatus.complete of durable_archive.get_source_status for the invoice, read after the revision is resolved and before any publication row is inserted; canonical_card.source (file_ref, file_status) is capture evidence and takes no part in eligibility. Raise HoldedPublicationIneligibleError(\\\"required_source_missing\\\") only when complete is false.",
-    "HoldedPublicationService.request_holded_publication: [FIELD_PROJECTION] The HoldedPurchaseAttemptPayload is projected from the resolved canonical_card: contact_name = supplier.name or \"\", contact_code = supplier.tax_id or \"\", invoice_num = invoice_number, date = holded_wire_date(issue_date), currency = currency, desc = the attempt_marker, apply_contact_defaults = rules.holded_publication.payload_apply_contact_defaults, approve_doc = rules.holded_publication.payload_approve_doc; items are one HoldedPurchasePayloadItem per line in card order with name = description_original, units = quantity, subtotal = unit_price_net, discount = discount_percent, tax = tax_rate, desc None, sku = supplier_sku.",
+    "HoldedPublicationService.request_holded_publication: [FIELD_PROJECTION] The HoldedPurchaseAttemptPayload is projected from the resolved canonical_card: contact_name = supplier.name or \"\", contact_code = supplier.tax_id or \"\", invoice_num = invoice_number, date = holded_wire_date(issue_date), currency = currency, desc = the attempt_marker, the payload applies no contact defaults and does not approve the document (both flags false); items are one HoldedPurchasePayloadItem per line in card order with name = description_original, units = quantity, subtotal = unit_price_net, discount = discount_percent, tax = tax_rate, desc None, sku = supplier_sku.",
     "HoldedPublicationService.request_holded_publication: [FIELD_ASSIGNMENT] The reservation passed to create_holded_purchase is a HoldedPublicationAttempt with publication_attempt_id is publication_id and attempt_marker joined by one colon; publication_id, invoice_id, invoice_revision_hash = content_hash, canonical_holded_payload_hash = sha256 of the payload's model_dump_json(), attempt_marker is the fixed prefix cabinet-publication: followed by publication_id (the stable non-financial marker, also carried verbatim in payload.desc), outcome reserved, and request_started_at, request_finished_at, document_id, safe_error_code None.",
-    "HoldedPublicationService.request_holded_publication: [BEHAVIOR] Persist every lifecycle transition by updating the exact locked publication only from its reloaded current status along a transition listed in = rules.holded_publication.status_transitions (entries \"current->next\"; a status that appears in no entry as current is terminal); a stale, skipped, or conflicting transition raises HoldedReconciliationRequiredError and writes nothing.",
+    "HoldedPublicationService.request_holded_publication: [BEHAVIOR] Persist every lifecycle transition by updating the exact locked publication only from its reloaded current status along a transition listed in the imported HOLDED_STATUS_TRANSITIONS (entries \"current->next\"; a status that appears in no entry as current is terminal); a stale, skipped, or conflicting transition raises HoldedReconciliationRequiredError and writes nothing.",
     "HoldedPublicationService.reconcile_holded_publication: [FORBIDDEN_ACTION] Reload exact logical state and use read-only gateway recovery; never repeat create or change the bound revision.",
-    "HoldedPublicationService.reconcile_holded_publication: [BEHAVIOR] Settle or keep unresolved only by updating the exact locked publication from its reloaded current status along a transition listed in = rules.holded_publication.status_transitions (outcome_unknown and reconciliation_required are re-enterable; verified, failed, payload_mismatch, duplicate_conflict and cancelled are terminal); a stale, skipped, or conflicting transition raises HoldedReconciliationRequiredError and writes nothing.",
+    "HoldedPublicationService.reconcile_holded_publication: [BEHAVIOR] Settle or keep unresolved only by updating the exact locked publication from its reloaded current status along a transition listed in the imported HOLDED_STATUS_TRANSITIONS (outcome_unknown and reconciliation_required are re-enterable; verified, failed, payload_mismatch, duplicate_conflict and cancelled are terminal); a stale, skipped, or conflicting transition raises HoldedReconciliationRequiredError and writes nothing.",
     "HoldedPublicationService.reconcile_holded_publication: [FIELD_ASSIGNMENT] HoldedPublication.safe_outcome_code is one HoldedPublicationOutcomeCode bound to the settled status: failed carries rejected_by_holded or malformed_response, outcome_unknown carries ambiguous_create, zero_matches, or lookup_failure, duplicate_conflict carries multiple_matches, payload_mismatch carries verification_mismatch, reconciliation_required carries inconsistent_attempt_evidence, pending and verified carry None; request_holded_publication writes the same vocabulary for the statuses it settles.",
     "HoldedPublicationService.get_holded_publication_status: [VALIDATION_ERROR] Return exact committed state or raise HoldedPublicationNotFoundError; never fabricate pending or success.",
     "HoldedPublicationRepository.begin: [DEPENDENCY_BOUNDARY] Open one PostgreSQL transaction for the exact publication transition and reject nested begin.",
@@ -2362,66 +2362,6 @@
   "rules": {
     "role": "data",
     "schema_version": 1,
-    "access_control": {
-      "progressive_delay_after_failures": 5,
-      "temporary_block_after_failures": 10,
-      "temporary_block_seconds": 900,
-      "credential_hash_algorithm": "argon2id",
-      "offline_administration_only": true
-    },
-    "synchronization": {
-      "delivery_implies_durable_acceptance": false,
-      "direction": "backend_to_vps_only",
-      "unknown_outcome_reconciliation": "read_only",
-      "durable_reservation_before_mutation": true,
-      "reservation_status": "reserved",
-      "issued_status": "issued",
-      "status_transitions": [
-        "reserved->issued",
-        "issued->delivered",
-        "issued->failed",
-        "issued->unknown_outcome"
-      ],
-      "supported_manifest_versions": [
-        "v1"
-      ]
-    },
-    "holded_publication": {
-      "max_automatic_create_attempts_per_logical_attempt": 1,
-      "ambiguous_create_allows_automatic_retry": false,
-      "recovered_candidate_requires_full_verification": true,
-      "clear_create_requires_readback_verification": true,
-      "status_transitions": [
-        "pending->verified",
-        "pending->failed",
-        "pending->payload_mismatch",
-        "pending->outcome_unknown",
-        "pending->reconciliation_required",
-        "outcome_unknown->verified",
-        "outcome_unknown->duplicate_conflict",
-        "outcome_unknown->payload_mismatch",
-        "outcome_unknown->outcome_unknown",
-        "reconciliation_required->verified",
-        "reconciliation_required->duplicate_conflict",
-        "reconciliation_required->payload_mismatch",
-        "reconciliation_required->outcome_unknown",
-        "reconciliation_required->reconciliation_required"
-      ],
-      "payload_apply_contact_defaults": false,
-      "payload_approve_doc": false,
-      "readback_date_tolerance_seconds": 86400,
-      "readback_currency_case_insensitive": true
-    },
-    "registry_context": {
-      "registry_is_read_only_from_cabinet": true,
-      "registry_status_rewrites_immutable_card": false,
-      "active_exact_match_result": "valid",
-      "archived_requires_review": true,
-      "missing_requires_review": true,
-      "archived_means_completed": false,
-      "archived_project_result": "project_closed",
-      "missing_project_result": "project_missing"
-    },
     "system_clock_backend": {
       "kind": "system_clock_backend",
       "schema_version": 1,
@@ -6152,38 +6092,6 @@
         }
       ]
     },
-    "plan_actual": {
-      "confirmed_matches_only": true,
-      "source_records_are_immutable": true,
-      "actual_amount_source": "InvoiceCardLine.gross_amount",
-      "actual_amount_basis": "gross",
-      "proposal_required_equalities": [
-        "unit",
-        "currency"
-      ],
-      "proposal_quantity_equal_weight": "0.5",
-      "proposal_unit_price_proximity_weight": "0.5",
-      "proposal_unit_price_close_threshold": "0.9",
-      "proposal_score_places": 4,
-      "proposal_ordering": [
-        "score_desc",
-        "invoice_line_id_asc",
-        "estimate_item_id_asc"
-      ],
-      "analysis_grain": "estimate_item",
-      "planned_quantity_source": "EstimateItemSnapshot.quantity",
-      "planned_amount_source": "EstimateItemSnapshot.total",
-      "actual_quantity_source": "confirmed_matched_invoice_line.quantity",
-      "matched_line_aggregation": "sum",
-      "quantity_variance": "actual_minus_planned",
-      "amount_variance": "actual_minus_planned",
-      "remaining_quantity": "planned_minus_actual_unclamped",
-      "unmatched_actual_contributes_to_project_actual": true,
-      "unmatched_actual_contributes_to_item_actual": false,
-      "implicit_unit_conversion_allowed": false,
-      "implicit_currency_conversion_allowed": false,
-      "implicit_tax_basis_conversion_allowed": false
-    },
     "credential_security_backend": {
       "kind": "credential_security_backend",
       "schema_version": 2,
@@ -6952,53 +6860,135 @@
         "module": "api_irregular"
       }
     },
-    "source_security": {
-      "accepted_media_types": [
-        "image/jpeg",
-        "image/png",
-        "application/pdf"
-      ],
-      "require_content_signature_verification": true,
-      "trust_filename_or_declared_media_type": false,
-      "require_configured_finite_size_limit": true,
-      "bounded_parsing_required": true
-    },
-    "archive_byte_publication": {
-      "kind": "policy",
-      "authoritative_journal": "postgresql",
-      "availability_state": "published",
-      "final_path_scheme": "sha256_content_addressed",
-      "publication_primitive": "same_filesystem_atomic_rename",
-      "recovery_states": [
-        "staged",
-        "metadata_committed",
-        "published",
-        "failed"
-      ]
-    },
-    "durable_archive": {
-      "accepted_head_archive_status": "active"
-    },
-    "runtime_clock": {
-      "timestamp_source": "datetime.now(timezone.utc)",
-      "naive_datetimes_allowed": false
-    },
-    "holded_document_projection": {
-      "document_id": "id",
-      "supplier_code": "contactCode",
-      "supplier_name": "contactName",
-      "supplier_invoice_number": "docNumber",
-      "document_date": "date",
-      "currency": "currency",
-      "description": "desc",
-      "items": "products",
-      "gross_total": "total",
-      "raw_status": "status",
-      "item_name": "name",
-      "item_description": "desc",
-      "item_units": "units",
-      "item_tax": "tax",
-      "item_subtotal": "price"
+    "data_provider_backend": {
+      "kind": "data_provider_backend",
+      "schema_version": 1,
+      "backend": {
+        "emitter": "python_constant_data_v1"
+      },
+      "wiring": {
+        "module": "data_provider",
+        "models_module": "cabinet_backend.models"
+      },
+      "constants": {
+        "PROGRESSIVE_DELAY_AFTER_FAILURES": {
+          "value_type": "positive_integer",
+          "value": 5
+        },
+        "TEMPORARY_BLOCK_AFTER_FAILURES": {
+          "value_type": "positive_integer",
+          "value": 10
+        },
+        "TEMPORARY_BLOCK_SECONDS": {
+          "value_type": "positive_integer",
+          "value": 900
+        },
+        "CREDENTIAL_HASH_ALGORITHM": {
+          "value_type": "string",
+          "value": "argon2id"
+        },
+        "SUPPORTED_MANIFEST_VERSIONS": {
+          "value_type": "string_tuple",
+          "value": [
+            "v1"
+          ]
+        },
+        "ACCEPTED_SOURCE_MEDIA_TYPES": {
+          "value_type": "string_tuple",
+          "value": [
+            "image/jpeg",
+            "image/png",
+            "application/pdf"
+          ]
+        },
+        "SYNCHRONIZATION_STATUS_TRANSITIONS": {
+          "value_type": "string_tuple",
+          "value": [
+            "reserved->issued",
+            "issued->delivered",
+            "issued->failed",
+            "issued->unknown_outcome"
+          ]
+        },
+        "HOLDED_STATUS_TRANSITIONS": {
+          "value_type": "string_tuple",
+          "value": [
+            "pending->verified",
+            "pending->failed",
+            "pending->payload_mismatch",
+            "pending->outcome_unknown",
+            "pending->reconciliation_required",
+            "outcome_unknown->verified",
+            "outcome_unknown->duplicate_conflict",
+            "outcome_unknown->payload_mismatch",
+            "outcome_unknown->outcome_unknown",
+            "reconciliation_required->verified",
+            "reconciliation_required->duplicate_conflict",
+            "reconciliation_required->payload_mismatch",
+            "reconciliation_required->outcome_unknown",
+            "reconciliation_required->reconciliation_required"
+          ]
+        },
+        "HOLDED_MAX_AUTOMATIC_CREATE_ATTEMPTS": {
+          "value_type": "positive_integer",
+          "value": 1
+        },
+        "HOLDED_READBACK_DATE_TOLERANCE_SECONDS": {
+          "value_type": "positive_integer",
+          "value": 86400
+        },
+        "HOLDED_DOCUMENT_PROJECTION": {
+          "value_type": "string_mapping",
+          "value": {
+            "document_id": "id",
+            "supplier_code": "contactCode",
+            "supplier_name": "contactName",
+            "supplier_invoice_number": "docNumber",
+            "document_date": "date",
+            "currency": "currency",
+            "description": "desc",
+            "items": "products",
+            "gross_total": "total",
+            "raw_status": "status",
+            "item_name": "name",
+            "item_description": "desc",
+            "item_units": "units",
+            "item_tax": "tax",
+            "item_subtotal": "price"
+          }
+        },
+        "PROPOSAL_REQUIRED_EQUALITIES": {
+          "value_type": "string_tuple",
+          "value": [
+            "unit",
+            "currency"
+          ]
+        },
+        "PROPOSAL_QUANTITY_EQUAL_WEIGHT": {
+          "value_type": "string",
+          "value": "0.5"
+        },
+        "PROPOSAL_UNIT_PRICE_PROXIMITY_WEIGHT": {
+          "value_type": "string",
+          "value": "0.5"
+        },
+        "PROPOSAL_UNIT_PRICE_CLOSE_THRESHOLD": {
+          "value_type": "string",
+          "value": "0.9"
+        },
+        "PROPOSAL_SCORE_PLACES": {
+          "value_type": "positive_integer",
+          "value": 4
+        },
+        "PROPOSAL_ORDERING": {
+          "value_type": "string_tuple",
+          "value": [
+            "score_desc",
+            "invoice_line_id_asc",
+            "estimate_item_id_asc"
+          ]
+        }
+      }
     }
   },
   "persistence": {
@@ -7379,6 +7369,25 @@
         "enroll_local_agent",
         "rotate_local_agent_credential",
         "revoke_local_agent"
+      ],
+      "data_provider": [
+        "ACCEPTED_SOURCE_MEDIA_TYPES",
+        "CREDENTIAL_HASH_ALGORITHM",
+        "HOLDED_DOCUMENT_PROJECTION",
+        "HOLDED_MAX_AUTOMATIC_CREATE_ATTEMPTS",
+        "HOLDED_READBACK_DATE_TOLERANCE_SECONDS",
+        "HOLDED_STATUS_TRANSITIONS",
+        "PROGRESSIVE_DELAY_AFTER_FAILURES",
+        "PROPOSAL_ORDERING",
+        "PROPOSAL_QUANTITY_EQUAL_WEIGHT",
+        "PROPOSAL_REQUIRED_EQUALITIES",
+        "PROPOSAL_SCORE_PLACES",
+        "PROPOSAL_UNIT_PRICE_CLOSE_THRESHOLD",
+        "PROPOSAL_UNIT_PRICE_PROXIMITY_WEIGHT",
+        "SUPPORTED_MANIFEST_VERSIONS",
+        "SYNCHRONIZATION_STATUS_TRANSITIONS",
+        "TEMPORARY_BLOCK_AFTER_FAILURES",
+        "TEMPORARY_BLOCK_SECONDS"
       ]
     },
     "module_internal": {
@@ -7418,6 +7427,9 @@
         "registry_context": [
           "RegistryContextService",
           "record_card_assignment_observation"
+        ],
+        "data_provider": [
+          "SYNCHRONIZATION_STATUS_TRANSITIONS"
         ]
       },
       "catalogue_publication_persistence": {
@@ -7472,6 +7484,14 @@
           "AssignmentValidationResult",
           "EstimateItemSnapshot",
           "MonetaryBasis"
+        ],
+        "data_provider": [
+          "PROPOSAL_ORDERING",
+          "PROPOSAL_QUANTITY_EQUAL_WEIGHT",
+          "PROPOSAL_REQUIRED_EQUALITIES",
+          "PROPOSAL_SCORE_PLACES",
+          "PROPOSAL_UNIT_PRICE_CLOSE_THRESHOLD",
+          "PROPOSAL_UNIT_PRICE_PROXIMITY_WEIGHT"
         ]
       },
       "holded_publication": {
@@ -7509,6 +7529,11 @@
         ],
         "holded_transport": [
           "holded_wire_date"
+        ],
+        "data_provider": [
+          "HOLDED_MAX_AUTOMATIC_CREATE_ATTEMPTS",
+          "HOLDED_READBACK_DATE_TOLERANCE_SECONDS",
+          "HOLDED_STATUS_TRANSITIONS"
         ]
       },
       "api_irregular": {
@@ -7667,6 +7692,10 @@
           "SourceBinary",
           "SourceByteStatus",
           "ArchivePublicationState"
+        ],
+        "data_provider": [
+          "ACCEPTED_SOURCE_MEDIA_TYPES",
+          "SUPPORTED_MANIFEST_VERSIONS"
         ]
       },
       "registry_context": {
@@ -7708,6 +7737,9 @@
           "HoldedHttpClient",
           "HoldedLookupOutcome",
           "HoldedAttemptOutcome"
+        ],
+        "data_provider": [
+          "HOLDED_DOCUMENT_PROJECTION"
         ]
       },
       "holded_transport": {
@@ -7741,6 +7773,12 @@
           "issue_service_credential",
           "parse_service_token",
           "verify_service_secret"
+        ],
+        "data_provider": [
+          "CREDENTIAL_HASH_ALGORITHM",
+          "PROGRESSIVE_DELAY_AFTER_FAILURES",
+          "TEMPORARY_BLOCK_AFTER_FAILURES",
+          "TEMPORARY_BLOCK_SECONDS"
         ]
       },
       "holded_publication_persistence": {
@@ -8127,10 +8165,30 @@
       "enroll_local_agent",
       "rotate_local_agent_credential",
       "revoke_local_agent"
+    ],
+    "data_provider": [
+      "ACCEPTED_SOURCE_MEDIA_TYPES",
+      "CREDENTIAL_HASH_ALGORITHM",
+      "HOLDED_DOCUMENT_PROJECTION",
+      "HOLDED_MAX_AUTOMATIC_CREATE_ATTEMPTS",
+      "HOLDED_READBACK_DATE_TOLERANCE_SECONDS",
+      "HOLDED_STATUS_TRANSITIONS",
+      "PROGRESSIVE_DELAY_AFTER_FAILURES",
+      "PROPOSAL_ORDERING",
+      "PROPOSAL_QUANTITY_EQUAL_WEIGHT",
+      "PROPOSAL_REQUIRED_EQUALITIES",
+      "PROPOSAL_SCORE_PLACES",
+      "PROPOSAL_UNIT_PRICE_CLOSE_THRESHOLD",
+      "PROPOSAL_UNIT_PRICE_PROXIMITY_WEIGHT",
+      "SUPPORTED_MANIFEST_VERSIONS",
+      "SYNCHRONIZATION_STATUS_TRANSITIONS",
+      "TEMPORARY_BLOCK_AFTER_FAILURES",
+      "TEMPORARY_BLOCK_SECONDS"
     ]
   },
   "module_order": [
     "models",
+    "data_provider",
     "credential_security",
     "access_control_persistence",
     "access_control",
@@ -8508,7 +8566,8 @@
     "api_irregular": "cabinet_backend/api_irregular",
     "api": "cabinet_backend/api",
     "system_clock": "cabinet_backend/system_clock",
-    "bootstrap": "cabinet_backend/bootstrap"
+    "bootstrap": "cabinet_backend/bootstrap",
+    "data_provider": "cabinet_backend/data_provider"
   },
   "default_module": "api"
 }

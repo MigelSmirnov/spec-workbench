@@ -1124,6 +1124,41 @@ delegation to one accepted application capability.
 
 ---
 
+## `data_provider`
+
+### Owns
+
+Exactly the closed product-data constants emitted deterministically from
+`rules.data_provider_backend` (python_constant_data_v1): abuse thresholds,
+credential hash algorithm name, accepted media types, supported manifest
+versions, status-transition tables, the Holded read-back projection mapping and
+tolerances, and the plan/actual proposal scoring data.
+
+### Knows
+
+Only the accepted `rules.data_provider_backend` IR it is emitted from.
+
+### Must not own
+
+Behavior, policy interpretation, persistence, configuration loading, models,
+or any computed value.
+
+### Hides
+
+The encoding of accepted product data as Python constants behind plain named
+symbols, so no LLM-generated module ever receives a value in its prompt.
+
+### Candidate public capabilities
+
+```text
+constants
+```
+
+### Depth assessment
+
+kind: deep
+hidden mechanism: deterministic emission of the closed product-data constants from the accepted IR
+
 ## `system_clock`
 
 ### Owns
