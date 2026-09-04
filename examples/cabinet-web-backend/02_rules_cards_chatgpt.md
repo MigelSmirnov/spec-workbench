@@ -148,12 +148,15 @@ identity, or truthful partial-outcome rules.
     `ActorReference` carried in a command or request is provenance only and
     grants no authority.
 14. The nullable entity scope has one collision-resistant canonical key: the
-    lowercase SHA-256 digest of domain tag `cabinet-scope-v1` followed by the
-    canonical UTF-8 JSON object. The object contains an explicit scoped/unscoped
-    tag and, when scoped, every M65 field including the complete revision value;
-    keys are sorted, separators are compact, and datetimes are normalized to
-    timezone-aware UTC. Delimiter concatenation and omitted scope fields are
-    forbidden.
+    lowercase SHA-256 digest of domain tag `cabinet-scope-v1` (the data
+    provider's `ENTITY_SCOPE_DOMAIN_TAG`) immediately followed by the canonical
+    UTF-8 JSON object. The object has one key `scope`: null when unscoped, and
+    when scoped an object with exactly `entity_id`, `entity_kind`, and
+    `revision` — null or the JSON-mode dump of the complete M65 revision with
+    `observed_at` normalized to timezone-aware UTC; keys are sorted, separators
+    are compact, non-ASCII is preserved. Delimiter concatenation, another
+    prefix, and omitted scope fields are forbidden; a generation that changes
+    the key orphans every persisted grant.
 15. Initial owner enrollment is the sole unauthenticated lifecycle exception:
     it is allowed only at the protected operator boundary when no owner or
     operator exists. Every later enrollment, rotation, revocation, and grant
