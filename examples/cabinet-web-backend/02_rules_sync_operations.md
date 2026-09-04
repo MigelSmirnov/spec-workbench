@@ -89,6 +89,13 @@ discovery or packaging.
     the observation stays `label_only`, `unassigned`, or `needs_review`. Neither
     transport nor local acceptance derives a project mapping from Card ID or
     label.
+13. The issued package has one closed wire form: a fixed-width big-endian
+    unsigned length prefix, then exactly that many bytes of the M162 metadata
+    JSON (bounded by the accepted metadata limit), then the raw bytes of every
+    manifest source reference in manifest order, each exactly its declared
+    size. The metadata carries the M22 issuance the local node acknowledges,
+    the M21 manifest, the complete canonical Card revision, and the M29
+    observation; no other framing, encoding, or trailer exists.
 
 ### Formal invariants
 
@@ -156,6 +163,14 @@ decides durable local import and archive acceptance.
    from Registry status.
 7. Catalogue age and last successful publication remain visible while local
    Backend is offline; stale does not mean invalid or currently reachable.
+8. Catalogue content identity has one canonical recipe shared by both nodes:
+   the lowercase hexadecimal SHA-256 over the UTF-8 encoding of the sorted-key,
+   compact-separator, non-ASCII-preserving JSON of the delivery's JSON-mode
+   model dump with `content_hash` and `idempotency_key` excluded, after every
+   datetime in the delivery and its snapshots is normalized to timezone-aware
+   UTC. Projects stay in delivery order; no field is renamed, added, or
+   omitted. A delivery whose declared `content_hash` differs from the recipe is
+   rejected before any write.
 
 ### Formal invariants
 

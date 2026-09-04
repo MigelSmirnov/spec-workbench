@@ -353,9 +353,11 @@ and `module:source_custody`.
    `capability:card_workspace.get_card_revision` and opens each required source
    through `capability:source_custody.retrieve_original_source`, resolves the exact
    discovered immutable manifest, durably records issuance, then
-   `capability:invoice_exchange.pull_invoice_package` streams the exact Card,
-   M29 assignment observation, and bounded source byte parts. It never emits
-   base64 JSON, a VPS path, credential, or either peer's `storage_reference`.
+   `capability:invoice_exchange.pull_invoice_package` streams the closed A08
+   wire form: the length-prefixed M162 metadata (issuance, manifest, exact
+   Card revision, M29 assignment observation) followed by the bounded source
+   byte parts in manifest order. It never emits base64 JSON, a VPS path,
+   credential, or either peer's `storage_reference`.
 5. A later exact receipt is checked through
    `capability:invoice_exchange.record_invoice_transfer_receipt`. A timeout or
    uncertain response uses `capability:invoice_exchange.reconcile_invoice_transfer`
@@ -493,6 +495,9 @@ authentication, authorization, and credential lifecycle.
    with no actor only at the protected empty-installation boundary. Every later
    enrollment, rotation, and revocation supplies the separately authenticated
    active owner/operator M39; an M01 inside a command is never authority. The
+   local Backend installation is enrolled through
+   `capability:access_control.enroll_local_node`, which creates the bound
+   M02/M17 pair and returns the node-subject local-node bearer once. The
    issued credential is authenticated before
    `capability:access_control.provision_capability_grant` may idempotently bind
    one exact target, channel, A16 capability, and optional entity scope; no

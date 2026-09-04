@@ -120,6 +120,29 @@ value
 
 Substitution: equal exact synchronization, manifest, card revision, replica, and observation facts are interchangeable package observations. Continuity: any changed part is another package; the envelope itself never mutates. Reciprocal with the accepted `cabinet_backend` boundary model.
 
+## Model M162 — InvoicePackageMetadata
+
+Fields: `issuance: InvoiceTransferIssuance`,
+`manifest: InvoiceTransferManifest`,
+`card_revision: CanonicalCardRevision`,
+`assignment_observation: CardObjectAssignmentObservation | None`.
+
+### Meaning
+
+The bounded JSON metadata part of one issued Invoice package: the exact M22
+issuance the local node will acknowledge, the M21 manifest, the complete
+canonical M03 Card revision the manifest binds, and the M29 observation that
+travels unchanged (A08 rules 3, 5, 10, 12). Source bytes are not part of the
+metadata; they follow it as binary parts in manifest source-reference order.
+
+### Identity
+
+value
+
+### Identity evidence
+
+Substitution: equal issuance, manifest, canonical revision, and observation facts are interchangeable metadata values. Continuity: any changed part is another metadata value; an issued package never mutates.
+
 ## Model M17 — CabinetNodeIdentity
 
 ### Meaning

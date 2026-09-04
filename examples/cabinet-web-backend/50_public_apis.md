@@ -245,6 +245,45 @@ EnrollmentConflict, InvalidCredentialMaterial, OperatorDenied.
 
 Creates credential state, not business Card identity.
 
+## `public_op:access_control.enroll_local_node`
+
+### Owner
+
+`module:access_control`.
+
+### Callers
+
+`boundary:protected_operator`.
+
+### Inputs
+
+Separately authenticated active owner/operator M39 and the M160 command naming
+the installation's node identity and optional display label.
+
+### Outputs
+
+M161: the bound M17 node and M02 `local_backend_node` principal plus the
+one-time issued node-subject local-node credential.
+
+### Observable effect
+
+Persists the principal, the node bound to it under the negotiated node contract
+version, the credential verifier, and audit evidence in one transaction.
+
+### Enforces
+
+A03 rule 16: never unauthenticated, never for an existing node identity, never
+a principal-subject credential; plaintext is returned once and never durably
+recoverable.
+
+### Errors
+
+OperatorDenied, EnrollmentConflict.
+
+### State impact
+
+Creates node/principal/credential state, not business Card identity.
+
 ## `public_op:access_control.provision_capability_grant`
 
 ### Owner

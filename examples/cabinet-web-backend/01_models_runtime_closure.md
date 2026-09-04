@@ -683,6 +683,38 @@ value
 
 Equal typed transport and application facts are interchangeable.
 
+## Model M160 — LocalNodeEnrollmentCommand
+
+Fields: `node_id: str`, `display_label: str | None`.
+
+The node identity is the installation's own stable business identity chosen at
+the protected operator boundary; the channel is fixed to the local-node member
+of `CabinetChannel` and is not a command field.
+
+### Identity
+
+value
+
+### Identity evidence
+
+Equal typed transport and application facts are interchangeable.
+
+## Model M161 — IssuedNodeCredential
+
+Fields: `node: CabinetNodeIdentity`, `principal: CabinetPrincipal`,
+`credential_id: str`, `channel: str`, `secret: str`, `issued_at: datetime`.
+
+The one-time result of local-node enrollment: the bound M17/M02 pair and the
+node-subject bearer returned exactly once.
+
+### Identity
+
+value
+
+### Identity evidence
+
+Equal typed transport and application facts are interchangeable.
+
 ## Model M86 — ProjectCardPage
 
 Fields: `items: tuple[ProjectSummary, ...]`, `next_cursor: str | None`.

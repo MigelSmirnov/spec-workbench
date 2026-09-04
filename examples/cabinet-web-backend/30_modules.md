@@ -558,14 +558,16 @@ hidden mechanism: exact persisted capability matrix over canonical complete enti
 
 ### Owns
 
-Protected initial-owner bootstrap, later principal enrollment, atomic credential
-rotation, and credential revocation with separately authenticated M39 operator
-proof and append-only audit evidence.
+Protected initial-owner bootstrap, later principal enrollment, local-node
+enrollment (the bound M02/M17 pair and its node-subject credential in one
+transaction), atomic credential rotation, and credential revocation with
+separately authenticated M39 operator proof and append-only audit evidence.
 
 ### Knows
 
-M02, M39, M59, M61, M85, M108 and M111; UoW factory, pepper, Clock,
-`credential_vault`, and `security_evidence`.
+M02, M17, M39, M59, M61, M85, M108, M111, M160 and M161; UoW factory, pepper,
+Clock, `credential_vault`, `security_evidence`, and the negotiated node
+contract version constant.
 
 ### Hides
 
@@ -582,6 +584,7 @@ transport, node synchronization, or Card policy.
 
 ```text
 bootstrap_or_enroll_principal
+enroll_local_backend_node
 rotate_principal_credential
 revoke_principal_credential
 ```
@@ -596,9 +599,9 @@ hidden mechanism: protected principal and credential lifecycle transaction with 
 ### Owns
 
 The stable A03/A11 public access-control facade and its retained dependency
-bundle. It exposes authentication, authorization, principal enrollment, grant
-provisioning, credential rotation/revocation, and principal resolvers while
-delegating each hidden mechanism to its named deep module.
+bundle. It exposes authentication, authorization, principal enrollment, local-node
+enrollment, grant provisioning, credential rotation/revocation, and principal
+resolvers while delegating each hidden mechanism to its named deep module.
 
 ### Knows
 
@@ -625,6 +628,7 @@ inline any delegated transaction.
 authenticate_request
 authorize_capability
 enroll_principal
+enroll_local_node
 provision_capability_grant
 rotate_credential
 revoke_credential
@@ -806,9 +810,10 @@ the exchange modules, so transport replacement cannot rewrite sync policy.
 
 The A08 evening pull protocol: Invoice-only work discovery from the durable
 working-set producer, immutable M21 manifests, node-scoped M22 issuance, exact
-`VpsInvoiceTransferPackage` delivery (canonical metadata plus streamed bytes),
-M23 receipt acceptance, unchanged M29 transport, reconciliation, and explicit
-M28 conflict outcomes.
+package delivery in the closed A08 wire form (length-prefixed M162 metadata —
+issuance, manifest, complete canonical Card revision, M29 — followed by the
+raw source parts in manifest order), M23 receipt acceptance, reconciliation,
+and explicit M28 conflict outcomes.
 
 ### Knows
 
@@ -824,8 +829,8 @@ Card editing, credentials, or transport-success-as-durable-acceptance.
 ### Hides
 
 Manifest canonicalization against the accepted `cabinet_backend` wire models,
-package assembly, issuance locking, repeat pulls, receipt matching, unknown-
-outcome recovery, and incompatibility/conflict classification.
+package assembly and framing, issuance locking, repeat pulls, receipt matching,
+unknown-outcome recovery, and incompatibility/conflict classification.
 
 ### Candidate public capabilities
 
@@ -939,6 +944,7 @@ MANIFEST_HASH_FIELDS
 MANIFEST_ID_PREFIX
 MANIFEST_VERSION
 NODE_CONTRACT_VERSION
+PACKAGE_METADATA_LENGTH_PREFIX_BYTES
 PENDING_CUSTODY_STATUS
 PROJECT_CARD_TYPE
 PROTECTED_OPERATOR_CAPABILITIES

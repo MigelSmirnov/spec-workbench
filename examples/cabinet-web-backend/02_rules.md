@@ -48,6 +48,7 @@ local Backend synchronization
 
 protected operator
   principal.enroll
+  node.enroll
   principal.grant_capability
   credential.rotate
   credential.revoke

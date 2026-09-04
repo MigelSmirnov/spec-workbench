@@ -159,6 +159,14 @@ identity, or truthful partial-outcome rules.
     operator exists. Every later enrollment, rotation, revocation, and grant
     provisioning requires an active owner/operator M39 supplied as a separate
     operation argument.
+16. Local-node enrollment is one protected operator operation under an active
+    owner/operator M39. In one transaction it creates the M02
+    `local_backend_node` principal, the M17 node bound to it under the
+    negotiated node contract version, and the node-subject local-node
+    credential; it returns the node-subject bearer exactly once. Principal
+    enrollment never accepts the `local_backend_node` kind and never mints a
+    principal-subject credential for a node; an existing node identity is
+    never re-bound or updated — re-enrollment is another node.
 
 ### Formal invariants
 
@@ -185,6 +193,12 @@ AND active_bound_M17_node
 AND node.principal_id = principal.principal_id
 
 authenticated_lifecycle_actor = M39 -/> asserted_M01
+local_node_enrollment
+-> active_owner_or_operator_M39
+   AND new_M02_local_backend_node
+   AND new_M17_bound_to_that_principal
+   AND node_subject_local_node_credential
+principal_enrollment(local_backend_node) -/> accepted
 scope_key = sha256("cabinet-scope-v1" || canonical_complete_M65_json)
 ```
 
