@@ -330,7 +330,7 @@
     "release_vps_working_set": "(custody: SourceCustodyService, command: VpsWorkingSetReleaseCommand, authorization: AuthorizationDecision) -> VpsWorkingSetReleaseResult",
     "accept_source_upload": "(gateway: WebGateway, request: BrowserUploadRequest, upload: BinaryUpload) -> SourceCustodyResult",
     "serve_source_download": "(gateway: WebGateway, card_id: str, source_id: str, authorization: AuthorizationDecision) -> SourceDownload",
-    "observe_sync_compatibility": "(gateway: SyncGateway, request: SyncCompatibilityRequest) -> LocalBackendConnectionObservation",
+    "observe_sync_compatibility": "(gateway: SyncGateway, node: CabinetNodeIdentity, request: SyncCompatibilityRequest) -> LocalBackendConnectionObservation",
     "discover_invoice_work": "(exchange: InvoiceExchange, node: CabinetNodeIdentity, query: InvoiceWorkDiscoveryQuery) -> InvoiceWorkPage",
     "pull_invoice_package": "(exchange: InvoiceExchange, node: CabinetNodeIdentity, command: InvoicePackagePullCommand) -> InvoicePackageStream",
     "record_invoice_transfer_receipt": "(exchange: InvoiceExchange, node: CabinetNodeIdentity, issuance_id: str, receipt: InvoiceTransferReceipt) -> InvoiceTransferReceiptResult",
@@ -760,7 +760,7 @@
     "derive_shopping_list: [DETERMINISM_OR_ORDERING] MUST from one pinned accepted estimate, derive stable item identities and ordered planned quantities and totals, preserve estimate provenance, and return a proposal without saving or merging it.",
     "attach_project_estimate: [PROVENANCE] MUST require the exact Project revision and authorized reviewed estimate, append the immutable AcceptedEstimateSnapshot and successor Project revision atomically, and reject stale or conflicting attachment without replacing earlier snapshots.",
     "save_shopping_list: [PROVENANCE] MUST preserve the immutable artifact effect boundary and require a reviewed derivation pinned to one Project and estimate revision, issue a new immutable ShoppingListSnapshot version with stable ordering, and never overwrite or silently merge a prior issued list.",
-    "observe_sync_compatibility: [SECURITY_BOUNDARY] MUST record a bounded observation for the authenticated local node and contract version before any package issue, returning incompatible or unavailable truthfully without probing or calling into the local network.",
+    "observe_sync_compatibility: [SECURITY_BOUNDARY] MUST record a bounded observation for the already authenticated local node supplied as node — it performs no authentication call, opens no UoW, and never treats request.node_id as a credential — before any package issue: authenticated is True; available is True exactly when node.status is active and node.revoked_at is None; compatible is True exactly when available, request.node_id equals node.node_id, and request.contract_version equals both node.contract_version and the imported NODE_CONTRACT_VERSION constant; local_node_id is node.node_id, remote_contract_version is the imported NODE_CONTRACT_VERSION constant, and safe_error_code is None when compatible and otherwise a bounded code naming the failed condition; it returns incompatible or unavailable truthfully without probing or calling into the local network.",
     "discover_invoice_work: [DETERMINISM_OR_ORDERING] MUST snapshot only available Invoice work into one bounded InvoiceWorkPage whose membership is one InvoiceWorkingSetMembership ordered by Invoice ID and manifest ID, include exact Card and source hashes plus an opaque cursor, and never export Provider, Client, Project, estimate, or shopping-list data.",
     "discover_invoice_work: [ORCHESTRATION] MUST open, begin, and finally call `rollback` on one CabinetUnitOfWork, call list_available_working_set_records with the imported WORKING_SET_AVAILABLE_STATUS constant, map every record unchanged to InvoiceWorkingSetItem from its invoice_id, revision, manifest_id, manifest_hash and required_sources, order items by invoice_id then manifest_id, resume strictly after the item whose manifest_id equals query.cursor when a cursor is present, and include at most query.limit items; it performs no write.",
     "discover_invoice_work: [RETURN_SHAPE] MUST read observed_at from the retained clock's now() exactly once per operation and return InvoiceWorkPage whose membership carries vps_node_id=node.node_id, that observed_at value, the ordered bounded work_items, working_set_id equal to the working-set id of the first included item or the empty string for an empty page, and continuation_cursor equal to the page next_cursor, where next_cursor is the last included item's manifest_id when further ordered records remain and None otherwise.",
@@ -3718,6 +3718,9 @@
           "RegistryCatalogueDelivery",
           "RegistryCatalogueView",
           "VpsCatalogueAcknowledgement"
+        ],
+        "data_provider": [
+          "NODE_CONTRACT_VERSION"
         ]
       },
       "api": {
@@ -6396,6 +6399,16 @@
                 }
               ],
               "binds": false
+            },
+            {
+              "function": "require_authenticated_local_node",
+              "args": [
+                {
+                  "ref": "slot",
+                  "name": "actor"
+                }
+              ],
+              "binds": true
             }
           ],
           "delegate": {
@@ -6404,6 +6417,10 @@
               {
                 "ref": "slot",
                 "name": "sync_gateway"
+              },
+              {
+                "ref": "slot",
+                "name": "context"
               },
               {
                 "ref": "parameter",

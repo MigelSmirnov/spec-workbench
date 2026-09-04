@@ -1391,7 +1391,8 @@ Read-only gateway.
 
 ### Inputs
 
-Active node request and presented contract version.
+The authenticated active M17 node projected by the route, plus the node's
+own request naming its node identity and presented contract version.
 
 ### Outputs
 
