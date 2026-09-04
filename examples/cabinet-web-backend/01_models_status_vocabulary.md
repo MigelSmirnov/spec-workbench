@@ -64,6 +64,21 @@ value
 The value classifies one A08 M22 issuance's protocol position. Equal members
 are interchangeable; issuance identity remains the issuance record identity.
 
+## Model M163 — CatalogueAcknowledgementStatus
+
+Values: `accepted`, `already_accepted`, `rejected`.
+
+### Identity
+
+value
+
+### Identity evidence
+
+The value classifies one A09 M25 acknowledgement: first atomic acceptance,
+exact idempotent replay, or refusal carried with a safe error code. Equal
+members are interchangeable; the acknowledgement identity remains the
+publication record identity.
+
 ## Model M144 — ReconciliationStatus
 
 Values: `accepted`, `non_complete`, `conflict`, `unknown`.

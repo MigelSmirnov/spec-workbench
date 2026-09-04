@@ -153,7 +153,10 @@ decides durable local import and archive acceptance.
    ordered snapshots and their immutable M19 identities. Cabinet Web validates
    identity, ordering, negotiated version, and completeness before acceptance.
 3. Idempotent replay of the same publication/catalogue returns the existing M25
-   acknowledgement. Conflicting reuse is rejected.
+   acknowledgement as `already_accepted`. Conflicting reuse is rejected. Every
+   refusal — hash mismatch, wrong nodes, version, count, ordering, older
+   observation, conflicting reuse — is one M25 with status `rejected` and a
+   safe error code, never an exception escaping the operation.
 4. Cabinet Web commits the complete M20 replica and current-catalogue selection
    atomically. A partial catalogue is never current.
 5. A catalogue older than the current accepted source observation cannot

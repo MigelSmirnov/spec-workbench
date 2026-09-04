@@ -520,7 +520,8 @@ accepted, already accepted, or rejected.
 Candidate fields aligned with the existing local Backend contract:
 
 - local publication ID and catalogue ID;
-- `status`: accepted, already accepted, or rejected;
+- `status`: one M163 `CatalogueAcknowledgementStatus` member — accepted, already
+  accepted, or rejected;
 - acknowledgement time optional;
 - safe error code optional.
 
