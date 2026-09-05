@@ -12,6 +12,7 @@ from notes_workbench import gate as notes_gate
 from persistence_workbench import coverage as persistence_coverage
 from router_workbench import service as router_service
 from spec_language_workbench import verify as verify_language
+from factory_validation import assembly_check as factory_check
 
 from assembly_workbench.model import AssemblyWorkbenchError, CheckResult
 
@@ -25,7 +26,7 @@ def _normalize(name: str, report: dict[str, Any]) -> CheckResult:
     findings = report.get("findings", [])
     if not isinstance(summary, dict) or not isinstance(findings, list):
         raise AssemblyWorkbenchError(f"{name} returned an invalid report shape.")
-    if name == "language":
+    if name in {"language", "factory"}:
         errors = int(summary.get("errors", len(findings)))
         warnings = 0
         ready = bool(report.get("ready")) and errors == 0
@@ -85,7 +86,9 @@ CHECKS: dict[str, ReportFunction] = {
     "persistence": persistence_coverage,
 }
 
-def run(project: Path, name: str) -> CheckResult:
+def run(project: Path, name: str, *, factory_root: Path | None = None) -> CheckResult:
+    if name == "factory":
+        return _normalize(name, factory_check(project, factory_root))
     function = CHECKS.get(name)
     if function is None:
         raise AssemblyWorkbenchError(f"Unknown assembly check: {name}")

@@ -47,7 +47,7 @@ p.add_argument('--quiet', action='store_true')
 a = p.parse_args()
 s = json.load(open(a.spec, encoding='utf-8'))
 payload = json.dumps(s, sort_keys=True, ensure_ascii=False).encode()
-r = {'status': 'PASS', 'summary': {'error': 0}, 'spec_sha': 'sha256:' + hashlib.sha256(payload).hexdigest()}
+r = {'status': 'PASS', 'summary': {'error': 0}, 'findings': [], 'spec_sha': 'sha256:' + hashlib.sha256(payload).hexdigest()}
 open(a.out, 'w', encoding='utf-8').write(json.dumps(r))
 """,
     )

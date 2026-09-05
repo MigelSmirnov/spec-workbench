@@ -68,22 +68,19 @@ jobs:
           assert report["in_sync"] is True
           PY
 
-      - name: Verify mature Cabinet assembly
-        run: >-
-          python tools/design_assembly.py examples/cabinet-backend --json
-          > ../ci-artifacts/cabinet-backend-assembly.json
-
-      - name: Verify Cabinet Web assembly
+      - name: Record assembly without Factory (must remain unqualified)
         run: |
-          python tools/design_assembly.py examples/cabinet-web-backend --json \
-            > ../ci-artifacts/cabinet-web-backend-assembly.json
           python - <<'PY'
           import json
           from pathlib import Path
-          report = json.loads(Path("../ci-artifacts/cabinet-web-backend-assembly.json").read_text())
-          assert report["ready"] is True
-          assert report["summary"]["errors"] == 0
-          assert report["summary"]["ready_checks"] == report["summary"]["checks"]
+          import sys
+          sys.path.insert(0, "tools")
+          from assembly_workbench import verify
+          for name in ("cabinet-backend", "cabinet-web-backend"):
+              report = verify(Path("examples") / name, factory_root=Path("../unavailable-factory"))
+              Path(f"../ci-artifacts/{name}-assembly.json").write_text(json.dumps(report, indent=2))
+              check = next(item for item in report["checks"] if item["name"] == "factory")
+              assert report["ready"] is False and check["ready"] is False
           PY
 
       - name: Verify Cabinet Web Stage 8.1 ledger
@@ -159,6 +156,13 @@ jobs:
         run: >-
           python -m pip install
           pytest pyyaml pydantic Pillow pypdf "psycopg[binary]"
+
+      - name: Verify canonical validation bridge against the real Factory
+        if: steps.factory-access.outputs.available == 'true'
+        working-directory: spec-workbench
+        env:
+          SPEC_WORKBENCH_FACTORY_ROOT: ${{ github.workspace }}/code_factory
+        run: python -m pytest -q tests/test_factory_validation.py
 
       - name: Admit mature Cabinet backend
         if: steps.factory-access.outputs.available == 'true'

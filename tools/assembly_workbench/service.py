@@ -10,18 +10,18 @@ def _validate_project(project: Path) -> None:
     if not project.is_dir():
         raise AssemblyWorkbenchError(f"Project directory not found: {project}")
 
-def inspect_check(project: Path, name: str) -> dict[str, Any]:
+def inspect_check(project: Path, name: str, *, factory_root: Path | None = None) -> dict[str, Any]:
     _validate_project(project)
-    check = run(project, name)
+    check = run(project, name, factory_root=factory_root)
     return {
         "schema_version": INSPECTION_SCHEMA,
         "project_root": project.resolve().name,
         "check": check.to_dict(),
     }
 
-def verify(project: Path) -> dict[str, Any]:
+def verify(project: Path, *, factory_root: Path | None = None) -> dict[str, Any]:
     _validate_project(project)
-    checks = [run(project, name) for name in CHECK_ORDER]
+    checks = [run(project, name, factory_root=factory_root) for name in CHECK_ORDER]
     ready_checks = sum(check.ready for check in checks)
     errors = sum(check.errors for check in checks)
     warnings = sum(check.warnings for check in checks)
