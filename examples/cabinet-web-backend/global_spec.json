@@ -381,6 +381,7 @@
     "SystemClock.now": "(self) -> datetime",
     "request_hash": "(model: BaseModel) -> str",
     "catalogue_content_digest": "(model: BaseModel) -> str",
+    "manifest_hash": "(model: BaseModel) -> str",
     "canonical_json_text_digest": "(text: str) -> str",
     "string_tuple_digest": "(values: tuple[str, ...]) -> str",
     "CapabilityPolicy.__init__": "(self) -> None",
@@ -732,7 +733,7 @@
     "load_expected_draft: [RETURN_SHAPE] MUST return the exact InvoiceCardView from the catalogue without substituting the current head revision.",
     "commit_invoice_successor: [ORCHESTRATION] MUST call validate_invoice through the retained validator with InvoiceValidationInput(invoice=successor, expected_revision=None), reject any issue at the imported VALIDATION_ISSUE_SEVERITY constant with InvoiceRejectionCode.VALIDATION from = models.InvoiceRejectionCode, construct CardRevisionCommitCommand(card_id=successor.id, card_type=the imported INVOICE_CARD_TYPE constant, expected_content_hash=expected_content_hash, canonical_json=successor.model_dump_json(), validation_issues=validation.issues, actor=actor), and call commit_card_revision_in_unit_of_work through the retained card_workspace with the supplied unit_of_work exactly once.",
     "commit_invoice_successor: [RETURN_SHAPE] MUST construct InvoiceMutationResult(effect_id=effect_id, revision=commit_result.revision, status=commit_result.revision.observed_status, replayed=commit_result.replayed, issues=validation.issues, safe_error_code=None); a commit failure propagates the card_workspace rejection and never returns expected_content_hash as new evidence.",
-    "derive_transfer_records: [ORCHESTRATION] MUST call load_source_custody on unit_of_work with invoice.id and invoice.source.source_id and require custody_status the imported STORED_CUSTODY_STATUS constant with non-null content, construct SourceContentReference from custody.content and ContentReference with content_id=source_id, construct the single InvoiceCardRevisionReference with invoice_id=invoice.id, card_version=invoice.card_version, content_hash=committed.content_hash, observed_status=invoice.status (the reciprocal cabinet_backend reference carries the Card lifecycle status, never the revision commit status) and observed_at=committed.observed_at, set generated_at to committed.observed_at, hash the canonical JSON (sorted keys, compact separators) of exactly the imported MANIFEST_HASH_FIELDS constant with lowercase hexadecimal SHA-256 — the imported MANIFEST_HASH_ALGORITHM constant names that procedure in the manifest and is never passed to hashlib, and derive manifest_id and working_set_id from the imported MANIFEST_ID_PREFIX constant and the imported WORKING_SET_ID_PREFIX constant plus that hash.",
+    "derive_transfer_records: [ORCHESTRATION] MUST call load_source_custody on unit_of_work with invoice.id and invoice.source.source_id and require custody_status the imported STORED_CUSTODY_STATUS constant with non-null content, construct SourceContentReference from custody.content and ContentReference with content_id=source_id, construct the single InvoiceCardRevisionReference with invoice_id=invoice.id, card_version=invoice.card_version, content_hash=committed.content_hash, observed_status=invoice.status (the reciprocal cabinet_backend reference carries the Card lifecycle status, never the revision commit status) and observed_at=committed.observed_at, set generated_at to committed.observed_at, compute the hash as the imported manifest_hash(provisional manifest), where the provisional InvoiceTransferManifest carries the final invoice_id, manifest_version, generated_at, card_revisions and source_references and empty manifest_id and manifest_hash (the two fields the recipe excludes) — the imported MANIFEST_HASH_ALGORITHM constant names that procedure and is never passed to hashlib — then derive manifest_id and working_set_id from the imported MANIFEST_ID_PREFIX constant and the imported WORKING_SET_ID_PREFIX constant plus that hash and construct the final manifest with them.",
     "derive_transfer_records: [RETURN_SHAPE] MUST return the constructed InvoiceTransferManifest with the imported MANIFEST_VERSION constant and the InvoiceWorkingSetRecord with status the imported WORKING_SET_AVAILABLE_STATUS constant and released_at=None; custody failure raises ValidationRejectedError with InvoiceRejectionCode.SOURCE_CUSTODY from = models.InvoiceRejectionCode and nothing is inserted here.",
     "search_invoices: [ORCHESTRATION] MUST open, begin, and finally call `rollback` on one CabinetUnitOfWork; call list_current_card_references_by_type with the imported INVOICE_CARD_TYPE constant, load and parse every returned reference through load_invoice_revisions, and separately index list_available_working_set_records for the imported WORKING_SET_AVAILABLE_STATUS constant by revision before building views; it MUST NOT call a mutation.",
     "search_invoices: [DETERMINISM_OR_ORDERING] MUST filter parsed Cards by exact query.status, inclusive issue_date bounds, supplier.tax_id for query.provider_id, and casefolded substring query.text over invoice_number and the supplier name, tax_id and address; order by issue_date descending with missing last, then reference.card_id and reference.content_hash, resume strictly after the item whose content_hash equals query.cursor, and emit at most query.limit items.",
@@ -874,6 +875,7 @@
     "SystemClock.__init__: [DEPENDENCY_BOUNDARY] MUST bind no configuration, dependency, cached timestamp, or alternate time source; construction is side-effect free.",
     "request_hash: [DETERMINISM_OR_ORDERING] MUST return the canonical digest of the whole supplied model under = rules.canonical_digest_backend.recipes.request_hash; equal models always digest equally.",
     "catalogue_content_digest: [DETERMINISM_OR_ORDERING] MUST return the canonical digest of the supplied delivery under = rules.canonical_digest_backend.recipes.catalogue_content_digest; the delivery's own content_hash and idempotency_key never enter the digest.",
+    "manifest_hash: [DETERMINISM_OR_ORDERING] MUST return the canonical digest of the supplied manifest under = rules.canonical_digest_backend.recipes.manifest_hash; the manifest's own manifest_id and manifest_hash never enter the digest.",
     "canonical_json_text_digest: [DETERMINISM_OR_ORDERING] MUST return the canonical digest of the parsed JSON document under = rules.canonical_digest_backend.recipes.canonical_json_text_digest; two spellings of one document digest equally.",
     "string_tuple_digest: [DETERMINISM_OR_ORDERING] MUST return the canonical digest of the ordered strings under = rules.canonical_digest_backend.recipes.string_tuple_digest; order is significant.",
     "SystemClock.now: [PROVENANCE] MUST return the current system wall-clock time using datetime.now(timezone.utc).",
@@ -3338,7 +3340,6 @@
         "ISSUANCE_ID_PREFIX",
         "MANIFEST_CARD_REVISION_COUNT",
         "MANIFEST_HASH_ALGORITHM",
-        "MANIFEST_HASH_FIELDS",
         "MANIFEST_ID_PREFIX",
         "MANIFEST_VERSION",
         "NODE_CONTRACT_VERSION",
@@ -3365,6 +3366,7 @@
       "canonical_digest": [
         "request_hash",
         "catalogue_content_digest",
+        "manifest_hash",
         "canonical_json_text_digest",
         "string_tuple_digest"
       ]
@@ -3583,7 +3585,6 @@
           "INVOICE_CARD_TYPE",
           "INVOICE_VALIDATION_CHECKS",
           "MANIFEST_HASH_ALGORITHM",
-          "MANIFEST_HASH_FIELDS",
           "MANIFEST_ID_PREFIX",
           "MANIFEST_VERSION",
           "REQUEST_HASH_ALGORITHM",
@@ -3593,7 +3594,8 @@
           "WORKING_SET_ID_PREFIX"
         ],
         "canonical_digest": [
-          "request_hash"
+          "request_hash",
+          "manifest_hash"
         ]
       },
       "project_workspace": {
@@ -4705,7 +4707,6 @@
       "ISSUANCE_ID_PREFIX",
       "MANIFEST_CARD_REVISION_COUNT",
       "MANIFEST_HASH_ALGORITHM",
-      "MANIFEST_HASH_FIELDS",
       "MANIFEST_ID_PREFIX",
       "MANIFEST_VERSION",
       "NODE_CONTRACT_VERSION",
@@ -4732,6 +4733,7 @@
     "canonical_digest": [
       "request_hash",
       "catalogue_content_digest",
+      "manifest_hash",
       "canonical_json_text_digest",
       "string_tuple_digest"
     ]
@@ -4922,6 +4924,7 @@
     "SystemClock.now",
     "request_hash",
     "catalogue_content_digest",
+    "manifest_hash",
     "canonical_json_text_digest",
     "string_tuple_digest",
     "CapabilityPolicy.__init__",
@@ -11173,16 +11176,6 @@
           "value_type": "string",
           "value": "sha256_canonical_json_v1"
         },
-        "MANIFEST_HASH_FIELDS": {
-          "value_type": "string_tuple",
-          "value": [
-            "invoice_id",
-            "manifest_version",
-            "generated_at",
-            "card_revisions",
-            "source_references"
-          ]
-        },
         "MANIFEST_ID_PREFIX": {
           "value_type": "string",
           "value": "manifest:"
@@ -11702,6 +11695,14 @@
           "exclude_fields": [
             "content_hash",
             "idempotency_key"
+          ],
+          "datetime_normalization": "utc"
+        },
+        "manifest_hash": {
+          "input": "model",
+          "exclude_fields": [
+            "manifest_id",
+            "manifest_hash"
           ],
           "datetime_normalization": "utc"
         },
