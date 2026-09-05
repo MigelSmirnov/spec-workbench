@@ -1,12 +1,49 @@
 # State 1 — Existing Cabinet-owned data models
 
-## Model M05 — CardSource (retired 2026-09-05)
+## Model M05 — CardSource
 
-Retired by D0-010: the Card carries the product `InvoiceCardSourceBlock`
-(`source_id`, `kind`, opaque `file_ref`, `file_status`, `note`); exact custody
-states and storage confirmations live separately by `source_id` in M14
-`SourceCustodyRecord`. A storage reference or origin context is never a Card
-field.
+### Meaning
+
+One logical original source associated with an owning Provider, Client, or
+Project Card. Source identity exists even while original bytes are unavailable.
+
+Scope corrected 2026-09-05 by D0-010: the Invoice Card does not use this
+shape; it carries the product `InvoiceCardSourceBlock` (`source_id`, `kind`,
+opaque `file_ref`, `file_status`, `note`). Exact custody states and storage
+confirmations for every card live separately by `source_id` in M14
+`SourceCustodyRecord`.
+
+Fields: owning `card_id`; `source_id`, stable within the owning Card;
+`media_type` when known; `file_status`: stored, pending, or truthfully
+unavailable according to the source-file vocabulary; `storage_reference`,
+present only when Cabinet Web itself holds the bytes; `origin_context`, a
+string map naming where the source came from.
+
+### Identity
+
+entity
+
+### Identity evidence
+
+Substitution: the pair (`card_id`, `source_id`) names one logical source across
+custody states. Continuity: the same pair survives byte arrival, verification,
+and durable storage.
+
+### Source of truth
+
+Owned by Cabinet Web inside the owning Card.
+
+### Lifecycle candidate
+
+Follows the owning Card.
+
+### Persistence candidate
+
+Master data embedded in the owning Card record.
+
+### Open questions
+
+None.
 
 ## Model M06 — SourceContentReference
 
