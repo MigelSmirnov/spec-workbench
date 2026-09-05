@@ -738,8 +738,8 @@
     "get_invoice_in_unit_of_work: [ORCHESTRATION] MUST read inside the caller's already active unit_of_work: use load_current_card_reference(invoice_id) only when content_hash is None, then load_card_revision with the resolved card_id and content_hash, take the returned revision's own reference as the reference it reports (a CardRevisionReference is never synthesized from the arguments), parse it through parse_invoice_revision, require the reference card_type and the parsed id to match the imported INVOICE_CARD_TYPE constant and invoice_id, and never substitute another revision; it MUST NOT open, begin, commit, or roll back the unit of work.",
     "get_invoice_in_unit_of_work: [RETURN_SHAPE] MUST construct InvoiceCardView from the exact stored reference and parsed Card, set source_status from invoice.source.file_status, and derive synchronization_status only from a list_available_working_set_records result whose revision equals the reference, falling back to the imported SYNCHRONIZATION_UNAVAILABLE_STATUS constant; any missing or malformed record raises ValidationRejectedError with InvoiceRejectionCode.NOT_FOUND from = models.InvoiceRejectionCode.",
     "find_invoice_duplicates: [ORCHESTRATION] MUST open, begin, and finally call `rollback` on one CabinetUnitOfWork; call list_current_card_references_by_type with the imported INVOICE_CARD_TYPE constant, load and parse each returned revision through load_invoice_revisions, and read candidate values only through the imported DUPLICATE_CANDIDATE_FIELD_SOURCES constant; no stored revision may be synthesized or replaced by its current head.",
-    "find_invoice_duplicates: [BEHAVIOR] MUST apply all of the imported DUPLICATE_* duplicate-matching policy constants: normalize strings by strip plus casefold while dates and Decimal values compare exactly, compare only non-null candidate fields, exclude the same invoice id, and construct one InvoiceDuplicateCandidate per revision with invoice_revision = its stored reference and reason_codes in candidate_field_order using reason_code_prefix plus each matched field.",
-    "find_invoice_duplicates: [DETERMINISM_OR_ORDERING] MUST return the declared empty tuple when comparable fields are below minimum_match_fields or no revision matches, otherwise sort the constructed candidates by the declared stable_order and never merge, archive, confirm, or select a winner.",
+    "find_invoice_duplicates: [BEHAVIOR] MUST compare the candidate with every loaded revision on the fields named by the imported DUPLICATE_CANDIDATE_FIELD_ORDER, reading each field of the candidate and of the revision card at the path the imported DUPLICATE_CANDIDATE_FIELD_SOURCES maps it to: strings compare after strip plus casefold, dates and Decimal values compare exactly, a field whose candidate value is None is not comparable, and a revision whose card id equals candidate.invoice_id is excluded (the imported DUPLICATE_INVOICE_ID_MATCH_REQUIRES_EXACT_IDENTITY names that exclusion); MUST construct one InvoiceDuplicateCandidate per matching revision with invoice_revision = its stored reference and reason_codes = the imported DUPLICATE_REASON_CODE_PREFIX followed by each matched field name, in the order of DUPLICATE_CANDIDATE_FIELD_ORDER.",
+    "find_invoice_duplicates: [DETERMINISM_OR_ORDERING] MUST return the empty tuple when fewer comparable fields exist than the imported DUPLICATE_MINIMUM_MATCH_FIELDS or when no revision matches at least that many fields; otherwise MUST sort the constructed candidates by the attribute paths named by the imported DUPLICATE_STABLE_ORDER, applied in order to each candidate, and never merge, archive, confirm, or select a winner.",
     "prepare_invoice_draft: [ORCHESTRATION] MUST call InvoiceCardV1.model_validate_json on proposal.canonical_json, require the parsed card_type to equal the imported INVOICE_CARD_TYPE constant and card_version to equal the imported INVOICE_CARD_VERSION constant, require proposal.invoice_id when present to equal invoice.id, proposal.currency to equal invoice.currency, and invoice.source.source_id to be non-empty; then call validate_invoice exactly once and reuse its duplicate_candidates.",
     "prepare_invoice_draft: [RETURN_SHAPE] MUST construct InvoiceDraftProposal(invoice=validation.normalized_invoice, issues=validation.issues, duplicate_candidates=validation.duplicate_candidates); JSON/model mismatch raises ValidationRejectedError with InvoiceRejectionCode.VALIDATION from = models.InvoiceRejectionCode and no field, identity, actor, source, total, or payment is invented.",
     "validate_invoice: [ORCHESTRATION] MUST obtain the ordered issue tuple through evaluate_validation_checks for candidate.invoice; then construct InvoiceDuplicateCandidateInput from invoice id, invoice_number, supplier.tax_id, issue_date and totals.gross_total and call find_invoice_duplicates through the retained catalogue exactly once.",
@@ -3316,8 +3316,6 @@
         "DUPLICATE_CANDIDATE_FIELD_SOURCES",
         "DUPLICATE_INVOICE_ID_MATCH_REQUIRES_EXACT_IDENTITY",
         "DUPLICATE_MINIMUM_MATCH_FIELDS",
-        "DUPLICATE_NO_COMPARABLE_FIELDS_RESULT",
-        "DUPLICATE_POLICY_VERSION",
         "DUPLICATE_REASON_CODE_PREFIX",
         "DUPLICATE_STABLE_ORDER",
         "ESTIMATE_CHECKS",
@@ -4660,8 +4658,6 @@
       "DUPLICATE_CANDIDATE_FIELD_SOURCES",
       "DUPLICATE_INVOICE_ID_MATCH_REQUIRES_EXACT_IDENTITY",
       "DUPLICATE_MINIMUM_MATCH_FIELDS",
-      "DUPLICATE_NO_COMPARABLE_FIELDS_RESULT",
-      "DUPLICATE_POLICY_VERSION",
       "DUPLICATE_REASON_CODE_PREFIX",
       "DUPLICATE_STABLE_ORDER",
       "ESTIMATE_CHECKS",
@@ -11299,14 +11295,6 @@
           "value": true
         },
         "DUPLICATE_MINIMUM_MATCH_FIELDS": {
-          "value_type": "positive_integer",
-          "value": 1
-        },
-        "DUPLICATE_NO_COMPARABLE_FIELDS_RESULT": {
-          "value_type": "string",
-          "value": "empty"
-        },
-        "DUPLICATE_POLICY_VERSION": {
           "value_type": "positive_integer",
           "value": 1
         },
