@@ -19,8 +19,8 @@ Individual owner checks remain inspectable without Factory. Aggregate readiness
 is not available offline; CI records that state and checks the real bridge in
 the cross-repository job.
 
-This change belongs to `tools/pipeline-integrity`, based on Workbench `main`
-`ac5bcde`. The active Cabinet branch has additional generic checks, including
+This change belongs to `tools/pipeline-integrity-pr`, based on GitHub Workbench
+`main` at `ae5fa49`. The active Cabinet branch has additional generic checks, including
 witness and flows; applying this change there must preserve those checks and
 append `factory`. It must not replace the branch's check registry with main's.
 
