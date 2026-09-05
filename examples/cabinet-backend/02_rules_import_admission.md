@@ -60,3 +60,53 @@ accepted runtime import design without any model change: `draft` archives
 truthfully, exclusion is enforced where the business risk lives (publication
 and analytics eligibility), and unsupported contracts quarantine instead of
 silently degrading.
+
+## Accepted decision A78 — the archived card is the product Invoice Card V1 without narrowing (2026-09-05)
+
+The product owner fixed (2026-09-05) `InvoiceCardV1` at Cabinet_web `c897897`
+(`schemas/invoice-card-v1.schema.json`) as the canonical version-1 contract
+for every consumer. The Backend's typed projection (M01, M84, M86) narrowed
+three facts the product states as nullable and omitted the product's
+`source.source_id`; because the archive models forbid unknown fields, every
+product card would have been refused at the import boundary. The projection
+is corrected to the product schema; the Holded projection is the only place
+where a lossy mapping may live, and it refuses rather than invents.
+
+### Normative rules
+
+1. `InvoiceCardV1.invoice_number` and `issue_date` are nullable exactly as the
+   product schema states; `InvoiceCardPaymentTransaction.paid_at` is nullable.
+   Import archives such a card truthfully and never substitutes a value.
+2. `InvoiceCardSourceBlock` carries the product `source_id` as preserved card
+   content. The required-source set of an invoice is still
+   `InvoiceTransferManifest.source_references` and locally attached
+   `SourceBinary` rows (A20); the card's `source_id` is not read as a
+   required-source identity.
+3. Holded publication refuses a revision whose `invoice_number` or
+   `issue_date` is `None` before any gateway interaction with the
+   deterministic reason `card_incomplete`; the purchase payload is projected
+   only from a card that passed this gate, so `invoice_num` and `date` are
+   never manufactured.
+
+### Formal invariants
+
+```text
+product_card(c897897) -> representable_at_import_boundary
+invoice_number_none OR issue_date_none -/> holded_eligible
+card.source.source_id -/> required_source_identity
+```
+
+### Required tests
+
+1. A product card with `invoice_number = null` and `issue_date = null` is
+   archived truthfully and is refused Holded publication with reason
+   `card_incomplete`. [witness: verification:witness_A78]
+2. A product card carrying `source.source_id` is accepted at the import
+   boundary; its required sources are still taken from the manifest.
+   [witness: verification:witness_A78]
+
+### Consequence
+
+The Backend stops being a second, narrower definition of the invoice: the
+archive preserves the product card as stated, and the only lossy projection
+stays inside the Holded adapter behind an explicit refusal.
