@@ -23,8 +23,12 @@ InvoiceTransferReceipt:
   safe_error_code
 ```
 
-`manifest_version` is a string wire value; `card_revisions` is a tuple whose
-first-release cardinality is exactly one. Receipt fields are plural hash tuples
+`manifest_version` is a string wire value — the one the accepted
+`cabinet_backend` lists as supported, carried by the data provider's
+`MANIFEST_VERSION`; `card_revisions` is a tuple whose first-release
+cardinality is exactly one, and its `observed_status` is the Card lifecycle
+status the reciprocal `InvoiceCardRevisionReference` declares, not the
+revision commit status. Receipt fields are plural hash tuples
 and use `receipt_at`; singular `accepted_card_hash`, `received_at`, or a local
 integer manifest version are not wire-compatible aliases. The package is the
 typed JSON metadata plus streamed binary source parts; a free-form text blob or
