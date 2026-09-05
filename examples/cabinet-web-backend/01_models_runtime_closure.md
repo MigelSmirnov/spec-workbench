@@ -316,7 +316,9 @@ Equal typed transport and application facts are interchangeable.
 
 ## Model M56 — ConfirmInvoiceCommand
 
-Fields: `invoice_id: str`, `expected_revision: CardRevisionReference`, `confirmation: ConfirmedEffectAuthorization`, `effect_id: str`, `actor: ActorReference`.
+Fields: `invoice_id: str`, `expected_revision: CardRevisionReference`, `confirmation: ConfirmedEffectAuthorization`, `source_line_count: int`, `line_capture_complete: bool`, `effect_id: str`, `actor: ActorReference`.
+
+`source_line_count` and `line_capture_complete` are the product confirmation inputs (D0-011): the count of commercial rows visible in the source and the caller's explicit completeness statement, checked against the Card lines before the confirmation effect.
 
 ### Identity
 
@@ -1001,3 +1003,30 @@ value
 
 Equal revision, issuance status, receipt result, code, and observation time are
 interchangeable.
+
+## Model M180 — InvoiceLineCaptureEvidence
+
+Fields: `invoice_id: str`, `source_id: str`, `source_line_count: int`,
+`captured_line_count: int`, `line_capture_complete: bool`,
+`card_content_hash: str`, `state: str`, `recorded_at: datetime`,
+`operation: str`, `previous_card_content_hash: str | None`,
+`revision_reason: str | None`, `revised_at: datetime | None`.
+
+### Meaning
+
+The separate proof that every commercial row of the exact source was
+captured as an Invoice Line for the exact card revision (D0-011; product
+sidecar `line-capture.json`). It is never a Card field. Confirmation is
+refused while the proof for the exact card content hash is absent, stale or
+incomplete.
+
+### Identity
+
+entity
+
+### Identity evidence
+
+Substitution: evidence for a different card content hash is a different
+proof even for the same Invoice. Continuity: the proof for one hash never
+changes; a later revision of the lines produces another proof for the new
+hash with `operation` naming the revision.

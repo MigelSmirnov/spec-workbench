@@ -116,6 +116,7 @@ Members with declared safe codes:
 - `source_custody` = `invoice.source_not_stored`
 - `confirmation` = `invoice.confirmation_invalid`
 - `not_found` = `invoice.not_found`
+- `line_capture` = `invoice.line_capture_incomplete`
 
 ### Identity
 
@@ -270,8 +271,8 @@ matching M147 safe code carries the same member name.
 ## Model M155 — InvoiceLifecycleUnitOfWork
 
 The narrow A17-rule-2 unit-of-work port of the Invoice lifecycle module: the
-ten transaction, card-reference, custody-read, and manifest/working-set
-operations its atomic confirmation edge uses, plus the M156 effect-journal,
+twelve transaction, card-reference, custody-read, manifest/working-set and
+line-capture-evidence operations its atomic confirmation edge uses, plus the M156 effect-journal,
 M157 card-commit, and M158 revision-read sub-surfaces its retained
 collaborators exercise inside the same transaction. The wide persistence port
 satisfies it structurally; the lifecycle module receives only this surface,

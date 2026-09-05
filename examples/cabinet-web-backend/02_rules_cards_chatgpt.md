@@ -75,6 +75,15 @@ identity, validation, revision, duplicate, or source semantics.
 9. The plugin exposes only named typed capabilities backed by existing Cabinet
    application behavior; it cannot accept arbitrary operation names or generic
    executable payloads.
+10. Full line capture is a product invariant (D0-011): every commercial source
+    row is one Invoice Line and a synthetic aggregate line is forbidden; totals
+    and arithmetic checks never replace lines. Confirmation carries the
+    caller's `source_line_count` and `line_capture_complete`; the trusted check
+    before the confirmation effect refuses an incomplete statement, a count
+    that differs from the Card lines, or a missing statement, and warning
+    acknowledgement never bypasses it. The proof is recorded as M180 evidence
+    bound to the exact committed card hash, separate from the Card; the lines
+    of a confirmed Invoice change only through a separate explicit revision.
 
 ### Formal invariants
 

@@ -171,6 +171,9 @@ catalogue and validator, `CardRevisionCommitCommand` construction, and the
 atomic confirmation producer edge that creates or idempotently retains the exact
 `InvoiceWorkingSetItem` and `InvoiceTransferManifest` consumed by local-node
 discovery, including M29 assignment-observation production.
+The lifecycle also owns the trusted line-capture check before the
+confirmation effect and records M180 line-capture evidence bound to the exact
+committed card hash (D0-011).
 
 ### Knows
 
