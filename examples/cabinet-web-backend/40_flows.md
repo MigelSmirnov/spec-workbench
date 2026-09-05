@@ -196,8 +196,11 @@ to `module:source_custody`; HTTP/CSRF/output safety belongs to
 1. `capability:source_custody.issue_upload_handoff` creates one short-lived,
    single-use handoff for the exact target after authorization. The bearer is
    shown only to the protected upload context.
-2. `capability:web_gateway.accept_source_upload` enforces private-listener,
-   same-origin, CSRF, and bounded HTTP rules and passes data, never a caller path.
+2. The upload page, opened through the protected Basic Auth boundary, fetches
+   its CSRF value through `capability:web_gateway.issue_browser_csrf` for the
+   exact handoff; `capability:web_gateway.accept_source_upload` then receives
+   the edge-resolved owner, enforces private-listener, same-origin, CSRF, and
+   bounded HTTP rules and passes data, never a caller path.
 3. `capability:source_custody.store_original_source` verifies handoff state,
    size, identified media type and hash, then atomically publishes immutable
    bytes while consuming the handoff.

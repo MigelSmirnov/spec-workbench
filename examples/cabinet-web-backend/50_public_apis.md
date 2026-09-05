@@ -1311,6 +1311,41 @@ ReleaseBlocked, MembershipChanged, VerificationIncomplete, PartialRelease, Stora
 
 Mutates working-byte availability; preserves all logical history.
 
+## `public_op:web_gateway.issue_browser_csrf`
+
+### Owner
+
+`module:web_gateway`.
+
+### Callers
+
+`boundary:browser_http`.
+
+### Inputs
+
+The edge-resolved authenticated owner and one handoff identity.
+
+### Outputs
+
+M164: the CSRF value for that owner and handoff.
+
+### Observable effect
+
+None; the value is derived, never stored.
+
+### Enforces
+
+A07 rule 3: only the protected same-origin browser context obtains a value,
+and a value binds one owner to one handoff.
+
+### Errors
+
+BrowserAuthenticationFailed.
+
+### State impact
+
+None.
+
 ## `public_op:web_gateway.accept_source_upload`
 
 ### Owner
@@ -1323,7 +1358,7 @@ Mutates working-byte availability; preserves all logical history.
 
 ### Inputs
 
-Authenticated browser context, CSRF proof, handoff bearer and bounded body.
+The edge-resolved authenticated owner, CSRF proof, handoff bearer and bounded body.
 
 ### Outputs
 

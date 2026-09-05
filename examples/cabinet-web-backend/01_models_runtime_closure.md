@@ -715,6 +715,23 @@ value
 
 Equal typed transport and application facts are interchangeable.
 
+## Model M164 — BrowserCsrfToken
+
+Fields: `handoff_id: str`, `csrf_token: str`.
+
+The unguessable A07 value bound to the protected browser context and one
+upload target: derived, not stored, from the credential pepper, the
+authenticated owner, and the handoff identity; fetched same-origin by the
+upload page and presented back in both a request header and the form.
+
+### Identity
+
+value
+
+### Identity evidence
+
+Equal typed transport and application facts are interchangeable.
+
 ## Model M86 — ProjectCardPage
 
 Fields: `items: tuple[ProjectSummary, ...]`, `next_cursor: str | None`.

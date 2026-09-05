@@ -746,14 +746,15 @@ credential lifecycle, or plugin/local-node authentication.
 
 ### Hides
 
-HTTP parsing, request size enforcement at the application edge, CSRF tokens,
-content disposition, response headers, template escaping, and stable error
-mapping.
+HTTP parsing, request size enforcement at the application edge, the CSRF
+derivation (pepper-keyed HMAC over owner and handoff), content disposition,
+response headers, template escaping, and stable error mapping.
 
 ### Candidate public capabilities
 
 ```text
 serve_browser_request
+issue_browser_csrf
 accept_source_upload
 serve_source_download
 ```

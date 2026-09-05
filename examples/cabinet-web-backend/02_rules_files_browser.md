@@ -109,6 +109,13 @@ broad authenticated file-manager session.
    Web pages. Basic Auth is not plugin or local-node authentication.
 3. State-changing browser requests require accepted same-origin enforcement and
    an unguessable CSRF value bound to the current protected browser context.
+   The value is not a session: it is derived for the authenticated owner and
+   the exact upload handoff (M164) with the credential pepper, fetched by the
+   upload page from the same-origin CSRF operation, and presented in both a
+   request header and the form; the backend recomputes it and never stores it.
+   The owner identity itself is the TrustedEdge assertion the private nginx
+   hop injects after Basic Auth (A03 rule 2); no browser credential is
+   authenticated by the application.
 4. Cross-origin credentialed requests are denied. The accepted Web application
    needs no permissive CORS mode.
 5. All Card/source/user strings are encoded as text in HTML. No stored value may
