@@ -351,3 +351,90 @@ value
 
 An interface carries no instance identity; the composition passes the one
 persistence factory.
+
+## Model M173 — InvoiceLineKind
+
+Values: `material`, `labor`, `equipment`, `transport`, `service`, `fee`, `other`.
+
+### Identity
+
+value
+
+### Identity evidence
+
+The product's closed line kinds (`tools/invoice_validation.py`, LINE_KINDS);
+equal members are interchangeable and do not identify a line.
+
+## Model M174 — InvoicePaymentStatus
+
+Values: `unknown`, `unpaid`, `partially_paid`, `paid`, `refunded`.
+
+### Identity
+
+value
+
+### Identity evidence
+
+The product's closed payment statuses; missing payment knowledge is `unknown`,
+never inferred as `unpaid`.
+
+## Model M175 — InvoicePaymentMethod
+
+Values: `cash`, `card`, `bank_transfer`, `direct_debit`, `cheque`, `other`, `unknown`.
+
+### Identity
+
+value
+
+### Identity evidence
+
+The product's closed payment methods.
+
+## Model M176 — PaymentEvidenceBasis
+
+Values: `invoice_source`, `user_statement`, `external_record`.
+
+### Identity
+
+value
+
+### Identity evidence
+
+The product's closed evidence bases for one payment transaction.
+
+## Model M177 — InvoiceSourceKind
+
+Values: `photo`, `pdf`, `message`, `scan`, `other`.
+
+### Identity
+
+value
+
+### Identity evidence
+
+The product's closed source kinds.
+
+## Model M178 — InvoiceSourceFileStatus
+
+Values: `stored`, `not_stored`, `pending`, `missing`.
+
+### Identity
+
+value
+
+### Identity evidence
+
+The product's closed source file statuses as carried inside the Card; exact
+custody state lives separately by `source_id` (D0-010).
+
+## Model M179 — ProvenanceCreator
+
+Values: `assistant`, `user`, `import`.
+
+### Identity
+
+value
+
+### Identity evidence
+
+The product's closed provenance creators.

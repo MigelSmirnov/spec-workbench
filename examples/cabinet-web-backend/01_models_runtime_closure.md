@@ -2,7 +2,9 @@
 
 ## Model M30 — InvoiceCardLine
 
-Fields: `line_id: str`, `description_original: str`, `description_normalized: str | None`, `classification: str | None`, `quantity: Decimal`, `unit: str`, `unit_price_net: Decimal`, `discount_amount: Decimal`, `net_amount: Decimal`, `tax_rate: Decimal`, `tax_amount: Decimal`, `gross_amount: Decimal`.
+Fields: `line_id: str`, `kind: str`, `description_original: str`, `description_normalized: str | None`, `supplier_sku: str | None`, `matched_material_id: str | None`, `quantity: Decimal`, `unit: str`, `unit_price_net: Decimal`, `discount_percent: Decimal`, `discount_amount: Decimal`, `net_amount: Decimal`, `tax_rate: Decimal`, `tax_amount: Decimal`, `gross_amount: Decimal`.
+
+Exactly the product schema `line` (D0-010); `kind` is one M173 `InvoiceLineKind` member. One Invoice Line per commercial source row (D0-011).
 
 ### Identity
 
@@ -36,17 +38,10 @@ value
 
 Equal typed provisioning outcomes are interchangeable. `created=False` reports an exact idempotent replay and never a broader pre-existing authority.
 
-## Model M31 — InvoicePayment
+## Model M31 — InvoicePayment (retired 2026-09-05)
 
-Fields: `status: str`, `transactions_json: str`, `paid_total: Decimal`, `outstanding_total: Decimal`.
-
-### Identity
-
-value
-
-### Identity evidence
-
-Equal typed transport and application facts are interchangeable.
+Retired by D0-010: payment is the product `InvoiceCardPayment` (M170) with
+typed transactions; a JSON string of transactions is not a Card field.
 
 ## Model M32 — EstimateSection
 
@@ -110,7 +105,7 @@ Equal typed transport and application facts are interchangeable.
 
 ## Model M37 — AttachInvoiceSourceCommand
 
-Fields: `invoice_id: str`, `expected_revision: CardRevisionReference`, `source: CardSource`, `effect_id: str`, `actor: ActorReference`.
+Fields: `invoice_id: str`, `expected_revision: CardRevisionReference`, `source: InvoiceCardSourceBlock`, `effect_id: str`, `actor: ActorReference`.
 
 ### Identity
 
@@ -493,7 +488,9 @@ Equal typed transport and application facts are interchangeable.
 
 ## Model M70 — InvoiceDraftInput
 
-Fields: `invoice_id: str | None`, `currency: str`, `canonical_json: str`, `source_provenance: str | None`.
+Fields: `invoice_id: str | None`, `currency: str`, `canonical_json: str`.
+
+`source_provenance` was retired on 2026-09-05: the product Card records its source in `InvoiceCardSourceBlock` and its creator in `InvoiceCardProvenance`; a caller-supplied provenance word is not a Card fact.
 
 ### Identity
 
