@@ -26,18 +26,18 @@ def test_cabinet_assembly_is_blocked_on_the_depth_invariant() -> None:
     assert report["ready"] is False
     assert [check["name"] for check in report["checks"]] == [
         "language", "modules", "identity", "data", "contracts", "external_contracts",
-        "notes", "router", "persistence"
+        "notes", "router", "persistence", "factory"
     ]
     modules = report["checks"][1]
     assert modules["ready"] is False
     assert modules["errors"] > 0
     for check in report["checks"]:
-        if check["name"] == "modules":
+        if check["name"] in {"modules", "factory"}:
             continue
         assert check["ready"] is True, check["name"]
     language = report["checks"][0]
     assert language["errors"] == 0
-    persistence = report["checks"][-1]
+    persistence = next(check for check in report["checks"] if check["name"] == "persistence")
     assert persistence["summary"]["handoff_ready"] is True
 
 

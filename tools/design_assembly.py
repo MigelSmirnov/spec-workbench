@@ -15,9 +15,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("project", type=Path)
     parser.add_argument("--check", choices=CHECK_ORDER)
     parser.add_argument("--json", action="store_true")
+    parser.add_argument("--factory-root", type=Path, help="Factory checkout for canonical validation")
     args = parser.parse_args(argv)
     try:
-        report = inspect_check(args.project, args.check) if args.check else verify(args.project)
+        report = (inspect_check(args.project, args.check, factory_root=args.factory_root)
+                  if args.check else verify(args.project, factory_root=args.factory_root))
     except AssemblyWorkbenchError as error:
         print(f"design_assembly: error: {error}", file=sys.stderr)
         return 2
