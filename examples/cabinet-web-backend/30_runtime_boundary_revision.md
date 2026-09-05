@@ -120,6 +120,50 @@ The adapter is deliberately separate from the composition root so services
 depend only on `Clock`, while `bootstrap` constructs and shares one concrete
 instance.
 
+## `canonical_digest`
+
+### Owns
+
+Exactly the canonical digest recipes of the application, one function per
+entry of `rules.canonical_digest_backend.recipes`: `request_hash`,
+`catalogue_content_digest`, `project_snapshot_digest`,
+`canonical_json_text_digest`, `string_tuple_digest`.
+
+### Knows
+
+Only the closed procedure of `canonical_digest_backend/v1`: canonical JSON
+(sorted keys, compact separators, `ensure_ascii` False, UTF-8) under SHA-256,
+with the declared field exclusions and UTC normalization per recipe.
+
+### Must not own
+
+Which value is digested when, business policy, persistence, or any stored
+record; the consumer names the recipe and supplies the exact value.
+
+### Hides
+
+Serialization, exclusion and datetime normalization of the digested value so
+that no consumer module re-spells the procedure (the promoted tree carried
+four spellings and a duck-typed `hasattr` before `model_dump`, 2026-09-05).
+
+### Candidate public capabilities
+
+```text
+request_hash
+catalogue_content_digest
+project_snapshot_digest
+canonical_json_text_digest
+string_tuple_digest
+```
+
+### Depth assessment
+
+kind: deep
+hidden mechanism: deterministic canonical serialization under one digest procedure
+
+Emitted, never generated: a digest is a persisted key — data plus a witnessed
+vector — and the A09 catalogue vector is reproduced by the emitter exactly.
+
 ## `bootstrap`
 
 ### Owns
