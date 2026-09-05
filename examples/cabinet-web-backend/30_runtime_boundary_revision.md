@@ -126,8 +126,7 @@ instance.
 
 Exactly the canonical digest recipes of the application, one function per
 entry of `rules.canonical_digest_backend.recipes`: `request_hash`,
-`catalogue_content_digest`, `project_snapshot_digest`,
-`canonical_json_text_digest`, `string_tuple_digest`.
+`catalogue_content_digest`, `canonical_json_text_digest`, `string_tuple_digest`.
 
 ### Knows
 
@@ -151,7 +150,6 @@ four spellings and a duck-typed `hasattr` before `model_dump`, 2026-09-05).
 ```text
 request_hash
 catalogue_content_digest
-project_snapshot_digest
 canonical_json_text_digest
 string_tuple_digest
 ```

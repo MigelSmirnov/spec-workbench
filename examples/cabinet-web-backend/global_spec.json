@@ -381,7 +381,6 @@
     "SystemClock.now": "(self) -> datetime",
     "request_hash": "(model: BaseModel) -> str",
     "catalogue_content_digest": "(model: BaseModel) -> str",
-    "project_snapshot_digest": "(model: BaseModel) -> str",
     "canonical_json_text_digest": "(text: str) -> str",
     "string_tuple_digest": "(values: tuple[str, ...]) -> str",
     "CapabilityPolicy.__init__": "(self) -> None",
@@ -798,7 +797,7 @@
     "SourceCustodySourceDownload.read_chunk: [BEHAVIOR] MUST return the next at most max_bytes bytes of the retained payload from the current offset and advance the offset by the bytes returned; it returns b\"\" once the payload is exhausted and returns b\"\" without advancing when max_bytes <= 0.",
     "record_invoice_transfer_receipt: [PROVENANCE] MUST accept only the authenticated issuance node, lock the issuance with `lock_transfer_issuance` and load it with `load_transfer_issuance`, require an exact receipt whose synchronization, Invoice, manifest hash, and accepted hashes match the persisted issuance, append it once through `insert_transfer_receipt`, update the issuance through `update_transfer_issuance` to TransferIssuanceStatus.ACKNOWLEDGED from = models.TransferIssuanceStatus with the receipt evidence, and reject wrong-node, malformed, conflicting, or partial acknowledgement.",
     "reconcile_invoice_transfer: [BEHAVIOR] MUST open, begin, and finally call `rollback` on one CabinetUnitOfWork; read the exact node-scoped issuance with `load_transfer_issuance`, the matching receipt with `load_transfer_receipt`, and the conflict state with `load_synchronization_conflict`, together with local durable-verification evidence, returning exactly one the members of = models.ReconciliationStatus value without issuing another package or choosing a revision winner.",
-    "publish_registry_catalogue: [DETERMINISM_OR_ORDERING] MUST verify cabinet-web-sync-v1; that delivery.source_node_id equals the authenticated node id — admission already guarantees the local backend node kind and no other kind is re-derived — and delivery.target_node_id equals the self node label; idempotency, declared count, project_id ordering, monotonic observation, and the canonical content digest before atomically committing the complete replica and current selector; partial or older delivery leaves current unchanged. The canonical content digest is the imported catalogue_content_digest(delivery) and each project snapshot identity is the imported project_snapshot_digest(snapshot) — projects stay in delivery order, no field is renamed, added or omitted, and no hand-built JSON template stands in for the model; a delivery whose content_hash differs from that digest is rejected before any write. Every refusal — digest mismatch, node mismatch, contract version, declared count, ordering, older observation, conflicting idempotency reuse — returns VpsCatalogueAcknowledgement with status CatalogueAcknowledgementStatus.REJECTED from = models.CatalogueAcknowledgementStatus and a non-null safe_error_code and raises nothing; the first atomic commit returns status CatalogueAcknowledgementStatus.ACCEPTED from = models.CatalogueAcknowledgementStatus and an exact replay returns the recorded acknowledgement with status CatalogueAcknowledgementStatus.ALREADY_ACCEPTED from = models.CatalogueAcknowledgementStatus.",
+    "publish_registry_catalogue: [DETERMINISM_OR_ORDERING] MUST verify cabinet-web-sync-v1; that delivery.source_node_id equals the authenticated node id — admission already guarantees the local backend node kind and no other kind is re-derived — and delivery.target_node_id equals the self node label; idempotency, declared count, project_id ordering, monotonic observation, and the canonical content digest before atomically committing the complete replica and current selector; partial or older delivery leaves current unchanged. The canonical content digest is the imported catalogue_content_digest(delivery) — projects stay in delivery order, no field is renamed, added or omitted, and no hand-built JSON template stands in for the model; a delivery whose content_hash differs from that digest is rejected before any write. Every refusal — digest mismatch, node mismatch, contract version, declared count, ordering, older observation, conflicting idempotency reuse — returns VpsCatalogueAcknowledgement with status CatalogueAcknowledgementStatus.REJECTED from = models.CatalogueAcknowledgementStatus and a non-null safe_error_code and raises nothing; the first atomic commit returns status CatalogueAcknowledgementStatus.ACCEPTED from = models.CatalogueAcknowledgementStatus and an exact replay returns the recorded acknowledgement with status CatalogueAcknowledgementStatus.ALREADY_ACCEPTED from = models.CatalogueAcknowledgementStatus.",
     "publish_registry_catalogue: [ORCHESTRATION] MUST open one CabinetUnitOfWork through unit_of_work_factory.open, begin it, and inside that single transaction call lock_registry_current for the self node label — the CabinetNodeKind.LOCAL_BACKEND value from = models.CabinetNodeKind, the one label the read path resolves — resolve replay through load_registry_publication_by_idempotency for delivery.source_node_id and delivery.idempotency_key — an identical committed delivery returns the recorded acknowledgement without mutation and conflicting reuse is rejected — record the publication through insert_registry_publication or update_registry_publication, persist the accepted catalogue as insert_registry_snapshot for a catalogue identity not yet stored, insert_registry_replica or update_registry_replica for the replica row keyed by that same self node label, and insert_registry_current_selector or update_registry_current_selector for the current selection keyed by that same self node label — never by the delivering node id, then commit exactly once while every exception calls `rollback`; a stored snapshot is immutable and MUST NOT be updated or re-inserted, and equal catalogue identity with different content is rejected.",
     "get_current_registry_catalogue: [RETURN_SHAPE] MUST return the last complete accepted Registry replica, exact catalogue identity and hash, ordered project snapshots, freshness and last-publication evidence; stale or offline is explicit and never rewrites Project Cards.",
     "get_current_registry_catalogue: [ORCHESTRATION] MUST open one CabinetUnitOfWork through unit_of_work_factory.open, begin, call load_registry_current_selector with the self node label — the CabinetNodeKind.LOCAL_BACKEND value from = models.CabinetNodeKind — and, when a selector exists, load_registry_replica and load_registry_snapshot for the selected catalogue inside that same transaction, and finally call `rollback`; this read path never commits or mutates replica state.",
@@ -875,7 +874,6 @@
     "SystemClock.__init__: [DEPENDENCY_BOUNDARY] MUST bind no configuration, dependency, cached timestamp, or alternate time source; construction is side-effect free.",
     "request_hash: [DETERMINISM_OR_ORDERING] MUST return the canonical digest of the whole supplied model under = rules.canonical_digest_backend.recipes.request_hash; equal models always digest equally.",
     "catalogue_content_digest: [DETERMINISM_OR_ORDERING] MUST return the canonical digest of the supplied delivery under = rules.canonical_digest_backend.recipes.catalogue_content_digest; the delivery's own content_hash and idempotency_key never enter the digest.",
-    "project_snapshot_digest: [DETERMINISM_OR_ORDERING] MUST return the canonical digest of the supplied snapshot under = rules.canonical_digest_backend.recipes.project_snapshot_digest; the snapshot's own content_hash never enters the digest.",
     "canonical_json_text_digest: [DETERMINISM_OR_ORDERING] MUST return the canonical digest of the parsed JSON document under = rules.canonical_digest_backend.recipes.canonical_json_text_digest; two spellings of one document digest equally.",
     "string_tuple_digest: [DETERMINISM_OR_ORDERING] MUST return the canonical digest of the ordered strings under = rules.canonical_digest_backend.recipes.string_tuple_digest; order is significant.",
     "SystemClock.now: [PROVENANCE] MUST return the current system wall-clock time using datetime.now(timezone.utc).",
@@ -3366,7 +3364,6 @@
       "canonical_digest": [
         "request_hash",
         "catalogue_content_digest",
-        "project_snapshot_digest",
         "canonical_json_text_digest",
         "string_tuple_digest"
       ]
@@ -3738,8 +3735,7 @@
           "CatalogueAcknowledgementStatus"
         ],
         "canonical_digest": [
-          "catalogue_content_digest",
-          "project_snapshot_digest"
+          "catalogue_content_digest"
         ]
       },
       "runtime_control": {
@@ -4735,7 +4731,6 @@
     "canonical_digest": [
       "request_hash",
       "catalogue_content_digest",
-      "project_snapshot_digest",
       "canonical_json_text_digest",
       "string_tuple_digest"
     ]
@@ -4926,7 +4921,6 @@
     "SystemClock.now",
     "request_hash",
     "catalogue_content_digest",
-    "project_snapshot_digest",
     "canonical_json_text_digest",
     "string_tuple_digest",
     "CapabilityPolicy.__init__",
@@ -11707,13 +11701,6 @@
           "exclude_fields": [
             "content_hash",
             "idempotency_key"
-          ],
-          "datetime_normalization": "utc"
-        },
-        "project_snapshot_digest": {
-          "input": "model",
-          "exclude_fields": [
-            "content_hash"
           ],
           "datetime_normalization": "utc"
         },
