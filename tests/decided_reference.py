@@ -36,6 +36,16 @@ def decided_reference(tmp_path: Path) -> Path:
         "Clock.now": ("module:models", "(self) -> datetime"),
         "RegistryContextService.__init__": ("module:registry_context", "(self, clock: Clock) -> None"),
         "HoldedGatewayService.__init__": ("module:holded_gateway", "(self, clock: Clock) -> None"),
+        # the snapshot's notes delegate to these service methods, which the
+        # snapshot never declared; the canonical case declares them
+        "RegistryContextService.record_card_assignment_observation": (
+            "module:registry_context",
+            "(self, observation: CardObjectAssignmentObservation) -> CardObjectAssignmentObservation",
+        ),
+        "RegistryContextService.get_assignment_validation": (
+            "module:registry_context",
+            "(self, invoice_id: str, content_hash: str) -> ObjectAssignmentValidation",
+        ),
     }
     for function, (module, signature) in additions.items():
         catalog["contracts"][function] = signature
@@ -50,6 +60,8 @@ def decided_reference(tmp_path: Path) -> Path:
         "Clock.now: [DEPENDENCY_BOUNDARY] MUST return the current wall-clock time as a timezone-aware UTC datetime and never a naive value.",
         "RegistryContextService.__init__: [DEPENDENCY_BOUNDARY] MUST retain the exact supplied Clock port and read every observed_at from it; MUST NOT construct an alternate time source.",
         "HoldedGatewayService.__init__: [DEPENDENCY_BOUNDARY] MUST retain the exact supplied Clock port and read every attempt timestamp from it; MUST NOT construct an alternate time source.",
+        "RegistryContextService.record_card_assignment_observation: [ORCHESTRATION] MUST record the supplied observation through the retained repository inside one transaction and return the stored observation unchanged.",
+        "RegistryContextService.get_assignment_validation: [ORCHESTRATION] MUST validate the exact pinned revision through validate_card_assignment and return that ObjectAssignmentValidation without mutation.",
     )) + "\n"
     notes_path.write_text(notes, encoding="utf-8")
     return project
