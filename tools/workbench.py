@@ -7,6 +7,7 @@ import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
+import authoring_pipeline
 from project_navigation import (
     NavigationError,
     load_index,
@@ -200,7 +201,7 @@ def case_state_from_files(case: str, ref: str, files: list[str]) -> CaseState:
         case=case,
         ref=ref,
         stage_code=code,
-        stage_name="Assembly complete" if assembled else name,
+        stage_name="Assembled artifacts" if assembled else name,
         state_file=state_file,
         assembled=assembled,
         numbered_docs=numbered_docs,
@@ -265,7 +266,7 @@ def list_cases(repo_root: Path, *, include_worktree: bool = True) -> list[CaseSt
 
 def next_primary_state(state: CaseState) -> str:
     if state.assembled:
-        return "done"
+        return "verify with authoring next"
     if state.stage_code is None:
         return "00 Product boundary"
     for code, label in PRIMARY_STATES:
@@ -292,7 +293,37 @@ def repo_status(repo_root: Path) -> RepoStatus:
     )
 
 
-def project_rows(repo_root: Path) -> list[dict[str, object]]:
+def authoring_summary(repo_root: Path, project_id: str) -> dict[str, object]:
+    """Pipeline-resolved authoring phase for one project.
+
+    `stage_name`/`next` in a ProjectView are artifact-prefix hints. The
+    authoring phase, its gate findings and the phase-scoped reading list come
+    from the common pipeline; this is the value agents must act on.
+    """
+    try:
+        payload = authoring_pipeline.project_next(repo_root, project_id)
+    except Exception as exc:  # noqa: BLE001 - surfaced to the caller as data
+        return {"phase": None, "blocked": None, "findings": None, "read": [], "error": str(exc)}
+    authoring = payload["authoring"]
+    return {
+        "phase": authoring.get("phase"),
+        "blocked": authoring.get("blocked"),
+        "findings": len(authoring.get("findings") or []),
+        "read": list(authoring.get("read") or []),
+        "error": None,
+    }
+
+
+def _authoring_label(summary: dict[str, object]) -> str:
+    if summary.get("error"):
+        return "unresolved"
+    phase = str(summary.get("phase"))
+    if summary.get("blocked"):
+        return f"{phase} (blocked: {summary.get('findings')})"
+    return phase
+
+
+def project_rows(repo_root: Path, *, resolve_authoring: bool = True) -> list[dict[str, object]]:
     """Curated project list that preserves stale index entries as warnings."""
     result: list[dict[str, object]] = []
     for project in indexed_projects(repo_root):
@@ -300,6 +331,9 @@ def project_rows(repo_root: Path) -> list[dict[str, object]]:
             row = asdict(project_view(repo_root, project))
             row["status"] = "ok"
             row["problem"] = None
+            row["authoring"] = (
+                authoring_summary(repo_root, project.id) if resolve_authoring else None
+            )
         except NavigationError as exc:
             row = {
                 "id": project.id,
@@ -315,6 +349,7 @@ def project_rows(repo_root: Path) -> list[dict[str, object]]:
                 "assembled": False,
                 "next": "fix PROJECT_INDEX.json",
                 "read_order": [],
+                "authoring": None,
                 "status": "stale",
                 "problem": str(exc),
             }
@@ -360,12 +395,12 @@ def _print_project_table(rows: list[dict[str, object]]) -> None:
     if not rows:
         print("No working projects indexed.")
         return
-    headers = ("PROJECT", "CANONICAL REF", "PATH", "STAGE", "STATUS")
+    headers = ("PROJECT", "CANONICAL REF", "AUTHORING PHASE", "ARTIFACTS", "STATUS")
     data = [
         (
             row["id"],
             row["canonical_ref"],
-            row["path"],
+            _authoring_label(row["authoring"]) if row.get("authoring") else "-",
             row["stage_name"],
             str(row["status"]).upper(),
         )
@@ -384,6 +419,11 @@ def _print_project_table(rows: list[dict[str, object]]) -> None:
         print("\nIndex warnings:")
         for row in stale:
             print(f"  {row['id']}: {row['problem']}")
+    unresolved = [row for row in rows if row.get("authoring") and row["authoring"].get("error")]
+    if unresolved:
+        print("\nAuthoring phase unresolved:")
+        for row in unresolved:
+            print(f"  {row['id']}: {row['authoring']['error']}")
 
 
 def print_list(repo_root: Path, *, as_json: bool) -> None:
@@ -392,25 +432,39 @@ def print_list(repo_root: Path, *, as_json: bool) -> None:
         print(json.dumps(rows, indent=2))
         return
     _print_project_table(rows)
-    print("\nSelect a project, then run:")
+    print("\nAUTHORING PHASE is resolved by the common pipeline; ARTIFACTS is a file-layout hint.")
+    print("Select a project, then run:")
     print("  python tools/workbench.py show <project>")
 
 
 def print_show(repo_root: Path, query: str, *, as_json: bool) -> None:
     row = project_view(repo_root, query)
+    authoring = authoring_summary(repo_root, row.id)
     if as_json:
-        print(json.dumps(asdict(row), indent=2))
+        payload = asdict(row)
+        payload["authoring"] = authoring
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
         return
     print(f"Project:       {row.title} ({row.id})")
     print(f"Canonical ref: {row.canonical_ref}")
     if row.resolved_ref != row.canonical_ref:
         print(f"Resolved ref:  {row.resolved_ref}")
     print(f"Path:          {row.path}")
-    print(f"Stage:         {row.stage_name}")
-    print(f"Next:          {row.next}")
+    print(f"Artifacts:     {row.stage_name}")
+    if authoring.get("error"):
+        print(f"Phase:         unresolved ({authoring['error']})")
+    else:
+        print(f"Phase:         {_authoring_label(authoring)}")
     if row.summary:
         print(f"Summary:       {row.summary}")
-    print("\nRead in order:")
+    print("\nNext:")
+    print(f"  python tools/authoring.py next {row.id} --json")
+    if authoring.get("read"):
+        print("\nRead for this phase:")
+        for doc in authoring["read"]:
+            where = f"{doc['path']}#{doc['section']}" if doc.get("section") else doc["path"]
+            print(f"  {where}")
+    print("\nProject read order (design states, numerical):")
     for item in row.read_order:
         print(f"  {item}")
     print("\nWork on this project with:")
