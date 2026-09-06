@@ -105,3 +105,9 @@ reader validated the decoded dict in pydantic strict mode, which rejects the
 Decimal, date and datetime strings JSON carries inside InvoiceCardV1. The note
 now names JSON-mode model_validate_json and states that strictness applies to
 the JSON text. Slices re-hashed with zero structural blocks: `canonical_invoice_source`.
+
+Re-review 2026-09-06 (ordinal base): the witnesses refused every fixture set
+with source_set_mismatch because the generated validator required ordinals
+0, 1, ... while the snapshot exporter writes 1, 2, .... The note now states
+that the first member carries ordinal 1. Slices re-hashed with zero structural
+blocks: `canonical_invoice_source`.
