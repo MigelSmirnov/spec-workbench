@@ -502,7 +502,7 @@ def test_old_lineage_without_codec_snapshot_is_not_fresh(tmp_path: Path) -> None
     assert target["evidence"]["lineage_codec_coverage"] is None
 
 
-def test_dirty_source_is_blocked_unless_explicitly_allowed(tmp_path: Path) -> None:
+def test_dirty_source_is_blocked_even_when_explicitly_allowed(tmp_path: Path) -> None:
     report = _run(tmp_path)
     workbench = tmp_path / "spec-workbench"
     dirty = {**CLEAN_GIT, "dirty": True}
@@ -523,9 +523,10 @@ def test_dirty_source_is_blocked_unless_explicitly_allowed(tmp_path: Path) -> No
         allow_dirty_source=True,
         source_git=dirty,
     )
+    # the fence: a dirty source is never admitted, even when asked
     source_check = next(item for item in allowed["checks"] if item["id"] == "FA001")
-    assert allowed["ready"] is True
-    assert source_check["status"] == "WARNING"
+    assert allowed["ready"] is False
+    assert source_check["status"] == "BLOCK"
 
 
 def test_projection_drift_check_not_applicable_without_case() -> None:

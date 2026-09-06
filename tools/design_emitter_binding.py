@@ -20,6 +20,7 @@ admission.
 from __future__ import annotations
 
 import argparse
+import fence
 import json
 import os
 import subprocess
@@ -106,7 +107,7 @@ def coverage(project: Path, factory: Path | None = None) -> dict[str, Any]:
             "errors": unbound,
             "handoff_ready": unbound == 0,
         },
-        "findings": findings,
+        "findings": fence.enforce(findings),
     }
 
 

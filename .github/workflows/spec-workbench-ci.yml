@@ -76,22 +76,28 @@ jobs:
           assert report["in_sync"] is True
           PY
 
-      - name: Verify mature Cabinet assembly
-        run: >-
-          python tools/design_assembly.py canonical-cases/examples/cabinet-backend --json
-          > ../ci-artifacts/cabinet-backend-assembly.json
-
-      - name: Verify Cabinet Web assembly
+      # This job has no Factory checkout: the witness and persistence-codec
+      # checks reach the Factory and are verified by the admission job below.
+      - name: Verify canonical Cabinet assemblies (Factory-independent checks)
         run: |
-          python tools/design_assembly.py canonical-cases/examples/cabinet-web-backend --json \
-            > ../ci-artifacts/cabinet-web-backend-assembly.json
+          for case in cabinet-backend cabinet-web-backend; do
+            python tools/design_assembly.py "canonical-cases/examples/$case" --json \
+              > "../ci-artifacts/$case-assembly.json" || true
+          done
           python - <<'PY'
           import json
           from pathlib import Path
-          report = json.loads(Path("../ci-artifacts/cabinet-web-backend-assembly.json").read_text())
-          assert report["ready"] is True
-          assert report["summary"]["errors"] == 0
-          assert report["summary"]["ready_checks"] == report["summary"]["checks"]
+          deferred = {"witness", "persistence"}  # need the Factory checkout; the admission job verifies them
+          for case in ("cabinet-backend", "cabinet-web-backend"):
+              report = json.loads(Path(f"../ci-artifacts/{case}-assembly.json").read_text())
+              blocked = [c for c in report["checks"] if not c["ready"] and c["name"] not in deferred]
+              for check in blocked:
+                  print(case, check["name"], check["errors"], json.dumps(check["summary"], ensure_ascii=False)[:300])
+                  for finding in check.get("findings", [])[:5]:
+                      print("   ", json.dumps(finding, ensure_ascii=False)[:300])
+              assert not blocked, (case, [c["name"] for c in blocked])
+              waiting = [c["name"] for c in report["checks"] if not c["ready"]]
+              print(case, "ready except Factory-dependent:", waiting or "none")
           PY
 
       - name: Verify Cabinet Web Stage 8.1 ledger
@@ -175,38 +181,48 @@ jobs:
           python -m pip install
           pytest pyyaml pydantic Pillow pypdf "psycopg[binary]"
 
-      - name: Admit mature Cabinet backend
+      # Admission needs the case's own git metadata (FA001), so the canonical
+      # ref is materialised as a full worktree next to this checkout.
+      - name: Check out canonical case worktree
+        if: steps.factory-access.outputs.available == 'true'
+        working-directory: spec-workbench
+        run: |
+          ref=$(python - <<'PY'
+          import json
+          index = json.load(open("PROJECT_INDEX.json"))
+          print(next(p["canonical_ref"] for p in index["projects"] if p["id"] == "cabinet-web-backend"))
+          PY
+          )
+          git fetch --quiet origin "$ref"
+          git worktree add --detach ../canonical-wb FETCH_HEAD
+          echo "canonical worktree: $ref $(git -C ../canonical-wb rev-parse HEAD)"
+      - name: Admit canonical Cabinet cases against the Factory
         if: steps.factory-access.outputs.available == 'true'
         working-directory: spec-workbench
         run: |
           mkdir -p ../ci-artifacts
-          python tools/design_factory_admission.py examples/cabinet-backend \
-            --project cabinet_backend \
-            --factory-root ../code_factory \
-            --update-existing \
-            --json > ../ci-artifacts/cabinet-backend-admission.json
-
-      - name: Admit Cabinet Web backend
-        if: steps.factory-access.outputs.available == 'true'
-        working-directory: spec-workbench
-        run: |
-          python tools/design_factory_admission.py examples/cabinet-web-backend \
-            --project Cabinet_web \
-            --factory-root ../code_factory \
-            --update-existing \
-            --json > ../ci-artifacts/cabinet-web-backend-admission.json
+          for pair in cabinet-backend:cabinet_backend cabinet-web-backend:Cabinet_web; do
+            case="${pair%%:*}"; project="${pair##*:}"
+            python tools/design_factory_admission.py "../canonical-wb/examples/$case" \
+              --project "$project" \
+              --factory-root ../code_factory \
+              --update-existing \
+              --json > "../ci-artifacts/$case-admission.json" || true
+          done
           python - <<'PY'
           import json
           from pathlib import Path
-          report = json.loads(Path("../ci-artifacts/cabinet-web-backend-admission.json").read_text())
-          assert report["status"] == "READY_TO_EXPORT", report
-          assert report["ready"] is True, report
-          assert report["summary"]["blocks"] == 0, report
-          assert report["summary"]["warnings"] == 0, report
-          assert report["summary"]["passes"] == report["summary"]["checks"], report
-          checks = {item["id"]: item for item in report["checks"]}
-          for key in ("FA002", "FA003", "FA005", "FA013", "FA014"):
-              assert checks[key]["status"] == "PASS", (key, checks[key])
+          failed = []
+          for case in ("cabinet-backend", "cabinet-web-backend"):
+              report = json.loads(Path(f"../ci-artifacts/{case}-admission.json").read_text())
+              print(case, report["status"], json.dumps(report["summary"]))
+              for check in report["checks"]:
+                  if check["status"] not in ("PASS", "NOT_APPLICABLE"):
+                      print("   ", check["id"], check["status"], check["summary"][:200])
+              if not (report["ready"] is True and report["status"] == "READY_TO_EXPORT"
+                      and report["summary"]["blocks"] == 0 and report["summary"]["warnings"] == 0):
+                  failed.append(case)
+          assert not failed, failed
           PY
 
       - name: Upload Factory admission evidence

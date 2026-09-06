@@ -136,6 +136,75 @@ def test_change_scope_uses_factory_delta_and_keeps_model_symbols_narrow(tmp_path
     assert scope["projection"] == "factory_spec_delta"
 
 
+def test_carry_unions_pending_manifest_scope(tmp_path: Path) -> None:
+    working = tmp_path / "working"
+    working.mkdir()
+    _write_json(working / "spec_editor_manifest.json", {
+        "accepted": True,
+        "status": "pass",
+        "outputs": {"base_spec_sha256_after": "a" * 64},
+        "change_summary": {
+            "changed_modules": ["principal_lifecycle"],
+            "changed_addresses": ["models.PrincipalKind"],
+            "changed_symbols_by_module": {"models": ["PrincipalKind"]},
+            "retired_unconsumed_addresses": ["rules.legacy.version"],
+        },
+    })
+    scope = {
+        "changed_modules": ["invoice_validation"],
+        "changed_addresses": ["rules.data_provider_backend"],
+        "changed_symbols_by_module": {"models": ["EffectStatus"]},
+    }
+
+    carried = export_to_factory.carry_pending_scope(scope, working, "a" * 64)
+    assert carried["changed_modules"] == ["invoice_validation", "principal_lifecycle"]
+    assert carried["changed_symbols_by_module"]["models"] == ["EffectStatus", "PrincipalKind"]
+    assert carried["retired_unconsumed_addresses"] == ["rules.legacy.version"]
+
+    # a passing route for the previous spec ends the carry
+    _write_json(working / "route_b_run_manifest.json", {
+        "status": "pass", "accepted_spec_sha256": "a" * 64,
+    })
+    uncarried = export_to_factory.carry_pending_scope(scope, working, "a" * 64)
+    assert uncarried["changed_modules"] == ["invoice_validation"]
+
+    # a broken lineage never carries
+    assert export_to_factory.carry_pending_scope(scope, working, "b" * 64)[
+        "changed_modules"
+    ] == ["invoice_validation"]
+
+
+def test_lineage_manifest_carries_address_classification(tmp_path: Path) -> None:
+    base_spec_path = tmp_path / "global_spec.json"
+    _write_json(base_spec_path, {"standard_version": 2})
+
+    manifest = export_to_factory.stage9_lineage_manifest(
+        project="demo",
+        source_sha="s" * 64,
+        source_commit="c" * 40,
+        standard_version=2,
+        codec_coverage={},
+        started_at="2026-08-31T00:00:00Z",
+        base_spec_path=base_spec_path,
+        base_spec_sha_before="b" * 64,
+        base_spec_sha_after="a" * 64,
+        admission_path=tmp_path / "admission.json",
+        validation_path=tmp_path / "validation.json",
+        handoff_path=tmp_path / "handoff.json",
+        change_scope={
+            "changed_modules": ["provider"],
+            "changed_addresses": ["rules.legacy_catalogue.version"],
+            "unresolved_addresses": [],
+            "retired_unconsumed_addresses": ["rules.legacy_catalogue.version"],
+            "projection": "factory_spec_delta",
+        },
+    )
+
+    summary = manifest["change_summary"]
+    assert summary["unresolved_addresses"] == []
+    assert summary["retired_unconsumed_addresses"] == ["rules.legacy_catalogue.version"]
+
+
 def _clean_git_metadata(root: Path) -> dict[str, object]:
     return {
         "commit": "a" * 40,
