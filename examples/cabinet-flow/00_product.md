@@ -686,7 +686,7 @@ State 0 is accepted because:
 - tunnel and bridge authentication establish transport identities but never
   replace exact Cabinet Flow or local authorization;
 - the first-release operational and evolution proofs are distinct;
--- working-release status requires passed integration tests through the real
+- working-release status requires passed integration tests through the real
   GPT/OpenAI tunnel path and deployed `cabinet-web-backend` bridge;
 - legacy migration and backend responsibilities are bounded;
 - offline behavior and protected effects are truthful;
