@@ -153,3 +153,9 @@ equivalence had compared the retained pin with the current one) and the
 package pull (source_not_stored: the retrieval request carried the member
 content_id as source_id). Both notes now state the rule exactly. Slices
 re-hashed with zero structural blocks: `source_custody`, `invoice_exchange`.
+
+Re-review 2026-09-06 (receipt hash order): the live stand refused the
+acknowledgement of every multi-file manifest (422) because the generated
+receipt check compared accepted_source_hashes as a tuple in manifest order
+while cabinet_backend reports them sorted. The note now compares the hashes as
+multisets. Slices re-hashed with zero structural blocks: `invoice_exchange`.
