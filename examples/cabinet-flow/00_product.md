@@ -36,6 +36,56 @@ Cabinet Flow is a successor architecture for the current `Cabinet_web`
 application. It is a new implementation, not an in-place rewrite and not a new
 name for either existing backend component.
 
+## Architectural motivation
+
+Construction operations combine a relatively stable set of identities,
+evidence and protected effects with a continually changing set of small working
+tasks.
+
+A user may need to compare estimate fields today, associate invoices with
+suppliers tomorrow, then check source-line completeness, prepare material data
+for a work stage, reconcile planned and actual costs or assemble a Capability
+Box for a local estimator.
+
+Implementing every such need as a new conventional application module imposes
+a disproportionate cost. The small piece of business logic also requires new
+integration structure, dependency wiring, testing context, deployment and
+coordination with the rest of the application. Repeating that process makes
+Cabinet slow to adapt to ordinary operational change.
+
+Cabinet Flow therefore separates two kinds of behavior.
+
+Stable and security-critical behavior remains in the trusted deterministic
+system boundary. This includes durable identity, provenance, storage and
+transaction integrity, authorization, source custody, capability registration,
+version selection, sandbox isolation, boundary validation, protected-effect
+application and execution evidence.
+
+Changeable operational behavior may be represented by small versioned
+capabilities with explicit contracts. Examples include comparing accepted
+estimate fields, matching an Invoice to a supplier candidate, checking data
+completeness, deriving a bounded analysis, preparing planning input or
+assembling a Capability Box.
+
+A declarative data flow composes these capabilities without giving one
+implementation access to another implementation's internals. The flow makes
+ordering, validated data boundaries, selected versions, failures and results
+observable.
+
+The architecture is intended to reduce the cost and risk of changing
+operational behavior, not merely to make code generation easier. Agent-assisted
+authoring is useful because the required operations change; it remains
+controlled because generated behavior is untrusted.
+
+The agent must first discover and compose existing accepted capabilities. A new
+capability is justified only when the requested operational result exposes a
+real bounded behavior gap. A new wording, one-off data value or trivial private
+helper is not by itself a new capability.
+
+This separation preserves deep deterministic ownership for stable rules while
+allowing small operational transformations to be tested, versioned, activated,
+reused, replaced and rolled back independently.
+
 ## Construction operations in scope
 
 Cabinet Flow supports the everyday operational work of a small construction
