@@ -98,3 +98,10 @@ had answered 500). `read_pinned_canonical_snapshot` and
 `<snapshot digest>/CANONICAL_INPUT_BUNDLE_DIRECTORY/...`, the layout the
 snapshot exporter and the contract document already fix; the generator had
 inverted it. Slices re-hashed with zero structural blocks: `invoice_validation`, `canonical_invoice_source`.
+
+Re-review 2026-09-06 (snapshot validation mode): the canonical source witnesses
+refused every fixture snapshot with invalid_snapshot because the generated
+reader validated the decoded dict in pydantic strict mode, which rejects the
+Decimal, date and datetime strings JSON carries inside InvoiceCardV1. The note
+now names JSON-mode model_validate_json and states that strictness applies to
+the JSON text. Slices re-hashed with zero structural blocks: `canonical_invoice_source`.
