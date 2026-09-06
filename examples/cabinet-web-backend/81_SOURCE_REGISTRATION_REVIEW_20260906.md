@@ -13,6 +13,11 @@ transfer source admission responsibility to them.
 
 Resolved findings:
 
+- Post-export lineage reconciliation found the Workbench baseline had omitted
+  the accepted validation_rules deterministic unit. Restored its exact accepted
+  IR and ownership from Factory bb77c05d, preserving A02/A17. This is a retained
+  generation mechanism, not part of source registration behavior.
+
 - A pending admission without a custody record must have a readable status.
   It cannot pass None to the retained-source reader. Added a runtime witness.
 - SourceDownload has one policy cursor with model/interface constructor inputs.
@@ -40,7 +45,8 @@ Reviewed module outcomes:
 - `effect_journal`: Reviewed against the retained 3d12c16 behavior: owned contracts and behavioral notes are unchanged. Expanded model/dependency surfaces do not alter the module’s existing call signatures, authority, transport projection or effect semantics. Canonical admission remains owned by invoice_exchange, not this module.
 - `card_workspace`: Reviewed against the retained 3d12c16 behavior: owned contracts and behavioral notes are unchanged. Expanded model/dependency surfaces do not alter the module’s existing call signatures, authority, transport projection or effect semantics. Canonical admission remains owned by invoice_exchange, not this module.
 - `invoice_catalogue`: Reviewed against the retained 3d12c16 behavior: owned contracts and behavioral notes are unchanged. Expanded model/dependency surfaces do not alter the module’s existing call signatures, authority, transport projection or effect semantics. Canonical admission remains owned by invoice_exchange, not this module.
-- `invoice_validation`: Reviewed against the retained 3d12c16 behavior: owned contracts and behavioral notes are unchanged. Expanded model/dependency surfaces do not alter the module’s existing call signatures, authority, transport projection or effect semantics. Canonical admission remains owned by invoice_exchange, not this module.
+- `validation_rules`: Reconciled against Factory accepted bb77c05d: preserve the exact deterministic backend IR, module owner, typed signature, model and catalogue imports, and ordered issue projection. No business rule or formula value is changed by source registration.
+- `invoice_validation`: Public proposal and validation behavior remains unchanged. The exact accepted validation_rules evaluator is imported instead of regenerated as an internal formula interpreter; duplicate discovery remains in the capability owner.
 - `invoice_lifecycle`: Reviewed removal of derive_transfer_records from contracts, flows and confirmation. Card/capture/effect atomicity and draft mutation guards remain; confirmation no longer silently becomes canonical delivery admission.
 - `project_workspace`: Reviewed against the retained 3d12c16 behavior: owned contracts and behavioral notes are unchanged. Expanded model/dependency surfaces do not alter the module’s existing call signatures, authority, transport projection or effect semantics. Canonical admission remains owned by invoice_exchange, not this module.
 - `cabinet_persistence`: Reviewed exact composite keys, immutable effect-result insert-only surface, unique manifest binding, explicit per-Invoice/per-manifest query filters and transaction ownership. Removed unused whole-table working-set read. No canonical product seed or second writer is introduced.

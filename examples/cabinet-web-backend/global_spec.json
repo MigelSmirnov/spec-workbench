@@ -782,10 +782,8 @@
     "load_invoice_revisions: [RETURN_SHAPE] MUST return one (reference, parsed Card) pair per returned reference in the exact order the unit of work returned them, with no reference skipped, substituted by its current head, or synthesized.",
     "parse_invoice_revision: [ORCHESTRATION] MUST call InvoiceCardV1.model_validate_json on revision.canonical_json and require the parsed card_type and card_version to equal the imported INVOICE_CARD_TYPE constant and the imported INVOICE_CARD_VERSION constant.",
     "parse_invoice_revision: [VALIDATION_ERROR] MUST raise ValidationRejectedError with InvoiceRejectionCode.NOT_FOUND from = models.InvoiceRejectionCode for malformed JSON or a card type/version mismatch, and MUST NOT repair, default, or partially construct the Card.",
-    "evaluate_validation_checks: [ORCHESTRATION] MUST evaluate every entry of the imported INVOICE_VALIDATION_CHECKS rows in its declared order against invoice, including every indexed line — a rule field_path is a dot-separated segment path over the declared invoice fields whose asterisk segment iterates the lines tuple, and the concrete indexed field_path replaces the asterisk segment with the bracketed line index — and construct a ValidationIssue for each failure with severity and message from the imported VALIDATION_ISSUE_SEVERITY constant and the imported VALIDATION_ISSUE_MESSAGE constant, the rule code, the concrete indexed field_path, expected = the rule formula, and actual = the offending value.",
-    "evaluate_validation_checks: [BEHAVIOR] MUST evaluate each rule formula as exactly one call-form production op(arguments) of the closed check vocabulary, dispatching on the operation name and never executing formula text as code: equals_constant compares the resolved value to the imported constant named by its argument; equals_path compares it to the value at the dotted path from the invoice root — a path argument is a double-quoted string literal, arithmetic over row fields is written bare, where the leading invoice segment names the card itself; equals_expr compares it to the arithmetic expression over fields of the owning row — the resolved value itself when that value is a model row; expr_equals_path compares the arithmetic expression over fields of the resolved value to the value at the dotted root path of its second argument; equals_sum_over compares it to the sum of the values iterated by the asterisk segment of its argument; round_half_up compares it to the expression of its single argument over the owning row fields, quantized to two decimal places by the half-up rule; non_empty requires a non-empty string or non-empty tuple; one_of_enum requires membership among the members of the imported runtime enum named by its argument; Decimal comparison is exact.",
-    "evaluate_validation_checks: [DEPENDENCY_BOUNDARY] MUST resolve the argument of one_of_enum only among the runtime enums the check table names — InvoiceLifecycleState, InvoiceLineKind, InvoicePaymentStatus, InvoiceSourceKind, InvoiceSourceFileStatus, ProvenanceCreator — by a closed name-to-enum dispatch; an enum name outside that set makes the check fail and is never resolved by dynamic lookup.",
-    "evaluate_validation_checks: [RETURN_SHAPE] MUST return the complete issue tuple sorted by the imported VALIDATION_ISSUE_ORDER constant and line index; it performs no write, no duplicate lookup, and never suppresses a failed declared check.",
+    "evaluate_validation_checks: [BEHAVIOR] MUST evaluate invoice with the retained deterministic validation_rules backend declared by 70_validation_rules_closure.json. Evaluate the imported INVOICE_VALIDATION_CHECKS rows using their exact code, field_path and formula under that closed backend; never interpret arbitrary expressions or omit a declared check.",
+    "evaluate_validation_checks: [RETURN_SHAPE] MUST return the complete ordered tuple of ValidationIssue values produced from the imported INVOICE_VALIDATION_CHECKS, with message from the imported VALIDATION_ISSUE_MESSAGE, severity from the imported VALIDATION_ISSUE_SEVERITY and order from the imported VALIDATION_ISSUE_ORDER followed by numeric line index; present offending values populate actual as text and absent values populate actual as None.",
     "require_mutation_authorization: [SECURITY_BOUNDARY] MUST require authorization.allowed, authorization.capability == capability with that capability present in the imported CAPABILITY_GRANTS rows, and authorization.principal_id == actor.principal_id. An absent authorization.entity_scope carries unscoped capability authority and passes for any target; when entity_scope is present it MUST identify invoice_id, with revision equal to expected_revision when expected_revision is not None and with no revision otherwise. Any failure raises ValidationRejectedError with InvoiceRejectionCode.ACCESS_DENIED from = models.InvoiceRejectionCode before any read or write.",
     "require_mutation_authorization: [RETURN_SHAPE] MUST return None on success and MUST NOT mutate, log secrets, or fabricate an authorization decision.",
     "load_expected_draft: [ORCHESTRATION] MUST call the imported get_invoice_in_unit_of_work function with the retained catalogue as its first argument, then the active operation unit_of_work, invoice_id and expected_revision.content_hash, require the returned reference to equal expected_revision and the parsed invoice id to equal invoice_id, and raise ValidationRejectedError with InvoiceRejectionCode.REVISION from = models.InvoiceRejectionCode on any mismatch or InvoiceRejectionCode.NOT_FOUND from = models.InvoiceRejectionCode when the revision is absent.",
@@ -3879,6 +3877,9 @@
           "VALIDATION_ISSUE_MESSAGE",
           "VALIDATION_ISSUE_ORDER",
           "VALIDATION_ISSUE_SEVERITY"
+        ],
+        "validation_rules": [
+          "evaluate_validation_checks"
         ]
       },
       "invoice_lifecycle": {
@@ -4772,6 +4773,26 @@
           "SourceSetCustodyRecord",
           "CanonicalSourceSetObservation"
         ]
+      },
+      "validation_rules": {
+        "models": [
+          "InvoiceCardV1",
+          "ValidationIssue",
+          "InvoiceLifecycleState",
+          "InvoiceLineKind",
+          "InvoicePaymentStatus",
+          "InvoiceSourceFileStatus",
+          "InvoiceSourceKind",
+          "ProvenanceCreator"
+        ],
+        "data_provider": [
+          "INVOICE_VALIDATION_CHECKS",
+          "VALIDATION_ISSUE_SEVERITY",
+          "VALIDATION_ISSUE_MESSAGE",
+          "VALIDATION_ISSUE_ORDER",
+          "INVOICE_CARD_TYPE",
+          "INVOICE_CARD_VERSION"
+        ]
       }
     },
     "stdlib_by_module": {
@@ -5045,8 +5066,7 @@
     "invoice_validation": [
       "prepare_invoice_draft",
       "validate_invoice",
-      "InvoiceValidator",
-      "evaluate_validation_checks"
+      "InvoiceValidator"
     ],
     "invoice_lifecycle": [
       "create_invoice_draft",
@@ -5311,6 +5331,9 @@
       "classify_legacy_capture",
       "CanonicalSourceError",
       "get_registered_source_observation"
+    ],
+    "validation_rules": [
+      "evaluate_validation_checks"
     ]
   },
   "module_order": [
@@ -5329,6 +5352,7 @@
     "effect_journal",
     "card_workspace",
     "invoice_catalogue",
+    "validation_rules",
     "invoice_validation",
     "invoice_lifecycle",
     "project_workspace",
@@ -5363,6 +5387,7 @@
     "effect_journal": "cabinet_web_backend/effect_journal",
     "card_workspace": "cabinet_web_backend/card_workspace",
     "invoice_catalogue": "cabinet_web_backend/invoice_catalogue",
+    "validation_rules": "cabinet_web_backend/validation_rules",
     "invoice_validation": "cabinet_web_backend/invoice_validation",
     "invoice_lifecycle": "cabinet_web_backend/invoice_lifecycle",
     "project_workspace": "cabinet_web_backend/project_workspace",
@@ -12994,6 +13019,37 @@
           ],
           "datetime_normalization": "utc"
         }
+      }
+    },
+    "validation_rules_backend": {
+      "kind": "validation_rules_backend",
+      "schema_version": 1,
+      "backend": {
+        "emitter": "python_validation_rules_v1"
+      },
+      "wiring": {
+        "module": "validation_rules",
+        "function": "evaluate_validation_checks",
+        "models_module": "cabinet_web_backend.models",
+        "data_provider_module": "cabinet_web_backend.data_provider"
+      },
+      "checks": {
+        "source": "rules.data_provider_backend.constants.INVOICE_VALIDATION_CHECKS",
+        "issue_severity": "rules.data_provider_backend.constants.VALIDATION_ISSUE_SEVERITY",
+        "issue_message": "rules.data_provider_backend.constants.VALIDATION_ISSUE_MESSAGE",
+        "issue_order": "rules.data_provider_backend.constants.VALIDATION_ISSUE_ORDER",
+        "enum_names": [
+          "InvoiceLifecycleState",
+          "InvoiceLineKind",
+          "InvoicePaymentStatus",
+          "InvoiceSourceFileStatus",
+          "InvoiceSourceKind",
+          "ProvenanceCreator"
+        ],
+        "constant_names": [
+          "INVOICE_CARD_TYPE",
+          "INVOICE_CARD_VERSION"
+        ]
       }
     }
   }

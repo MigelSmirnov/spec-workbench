@@ -221,3 +221,40 @@ local backend (intermittent)
   -> sync_gateway only
   -/> bootstrap, PostgreSQL, filesystem, or ordinary Web operations
 ```
+
+## `validation_rules`
+
+### Owns
+
+The retained deterministic evaluation mechanism for A02/A17 Invoice checks.
+This generation unit is restored from the accepted Factory bb77c05d baseline;
+source registration must not retire it or return formula evaluation to LLM code.
+Invoice validation remains the public capability owner.
+
+### Knows
+
+The closed validation backend IR, typed InvoiceCardV1 fields, exact Decimal
+comparison and the declared validation catalogue.
+
+### Must not own
+
+Custody, source registration, admission, product writes, duplicate discovery,
+credentials, arbitrary expression evaluation or network access.
+
+### Hides
+
+Ordered field expansion, finite check dispatch and exact issue projection.
+
+### Candidate public capabilities
+
+```text
+evaluate_validation_checks
+```
+
+### Depth assessment
+
+kind: deep
+hidden mechanism: deterministic compilation of the closed Invoice check IR
+
+The public invoice_validation capability delegates this mechanism and retains
+its existing duplicate-discovery and proposal behavior.

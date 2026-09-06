@@ -212,7 +212,7 @@ never exposes internal storage keys or permits a client to choose paths.
   M45 distinguishes integration observation provenance from product provenance.
 - States 4–5: registration and admission have independent flows and internal-only
   operator boundaries. Confirmation no longer produces delivery work.
-- States 6–7: 447 typed functions, 63 public operations, 447 classified notes,
+- States 6–7: 447 typed functions, 63 public operations, 445 classified notes,
   29 persistence tables and deterministic query bindings are assembled. Pending
   publication plans commit before filesystem writes. Retained trusted pins support
   retries after the active pin advances. Immutable effect results preserve earlier
@@ -235,7 +235,7 @@ never exposes internal storage keys or permits a client to choose paths.
 - All 11 aggregate assembly checks passed in the canonical sibling checkout.
   The final Factory canonical validator and Spec Inspector also pass after
   closing exact digest signatures, provider declarations and dependency types.
-  Final module review covers all 32 assembled modules; current packet hashes
+  Final module review covers all 33 assembled modules; current packet hashes
   and rationale are in 81_module_review_status.json and its review record.
 - Registration/admission runtime witnesses cover exact retry, conflicting keys,
   multi-file custody, partial publication recovery, pin advancement, concurrency,
@@ -247,3 +247,7 @@ never exposes internal storage keys or permits a client to choose paths.
 Do not repair this through a handwritten production route, database seed,
 forced confirmation, evidence rewrite, or by treating structural validation as
 semantic or runtime acceptance.
+
+Post-export reconciliation preserves the accepted Factory bb77c05d deterministic
+validation_rules unit. The prior Workbench source had omitted that lowering; its
+exact IR, callable owner and notes are restored, with no catalogue/value changes.
