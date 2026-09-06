@@ -89,3 +89,12 @@ digests). Twelve fields were restored exactly as authored in
 matching `canonical_snapshot_sha256` columns on the custody and admission tables
 and `capture_raw_sha256` on admissions. No note, decision or signature changed.
 Slices re-hashed with zero structural blocks: `models`, `credential_vault`, `authentication_admission`, `capability_grants`, `principal_lifecycle`, `access_control`, `card_workspace`, `invoice_catalogue`, `project_workspace`, `cabinet_persistence`, `canonical_digest`, `canonical_invoice_source`, `source_custody`, `invoice_exchange`, `registry_replica`, `chatgpt_interaction`, `runtime_control`, `bootstrap`.
+
+Re-review 2026-09-06 (note precision, after the model surface gate landed):
+`validate_invoice` now names `totals.gross` as the source of the duplicate
+lookup's gross_total (InvoiceCardTotals has no gross_total; the generated code
+had answered 500). `read_pinned_canonical_snapshot` and
+`read_canonical_input_object` now state the walk order
+`<snapshot digest>/CANONICAL_INPUT_BUNDLE_DIRECTORY/...`, the layout the
+snapshot exporter and the contract document already fix; the generator had
+inverted it. Slices re-hashed with zero structural blocks: `invoice_validation`, `canonical_invoice_source`.
