@@ -146,3 +146,10 @@ content hash, while source_custody projects source_id = member.content_id and
 the bare digest (what final_reference_for accepts). The projection is now
 stated identically in the three notes that name it. Slices re-hashed with zero
 structural blocks: `canonical_invoice_source`, `source_custody`, `invoice_exchange`.
+
+Re-review 2026-09-06 (custody equivalence, pull source id): the witnesses
+refused the concurrent re-registration under a newer pin (custody_mismatch:
+equivalence had compared the retained pin with the current one) and the
+package pull (source_not_stored: the retrieval request carried the member
+content_id as source_id). Both notes now state the rule exactly. Slices
+re-hashed with zero structural blocks: `source_custody`, `invoice_exchange`.
