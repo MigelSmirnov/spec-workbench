@@ -7,8 +7,8 @@ closure decisions D0-001 through D0-026.
 
 The correction separates Cabinet Flow's product purpose from its managed
 self-extension mechanism. Issue
-[MigelSmirnov/spec-workbench#35](https://github.com/MigelSmirnov/spec-workbench/issues/35)
-is design input and evidence, not a substitute for this canonical artifact.
+[#35](https://github.com/MigelSmirnov/spec-workbench/issues/35) is design input
+and evidence, not a substitute for this canonical artifact.
 
 Models, modules, storage tables, Python contracts, transport DTOs and
 implementation algorithms are intentionally deferred to their owning states.
@@ -543,8 +543,8 @@ integrity-binds each exact HandoffPackage before release to the bridge.
 
 The receiving Cabinet Backend independently authenticates its peer and
 validates the exact contract, identity, scope, replay/idempotency state and
-permitted local effect. Successful bridge delivery is not local authorization, durable
-acceptance or capability execution.
+permitted local effect. Successful bridge delivery is not local authorization,
+durable acceptance or capability execution.
 
 The bridge does not own Slot, function, Flow, Box, execution-context, Card,
 source, activation, agent-authority or local-archive semantics. No credential,
