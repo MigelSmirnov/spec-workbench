@@ -3,7 +3,7 @@
 ## Status
 
 Accepted and corrected on 2026-09-06 after product-design discussion and
-closure decisions D0-001 through D0-022.
+closure decisions D0-001 through D0-024.
 
 The correction separates Cabinet Flow's product purpose from its managed
 self-extension mechanism. Issue
@@ -471,17 +471,80 @@ the target architecture or own Cabinet Flow semantics.
 MCP operations are named, typed and bounded. The MCP boundary is not a generic
 database, filesystem, code-execution or backend proxy.
 
+## External access and trust boundaries
+
+The first release has three separate access planes. Successful access through
+one plane grants no access through another.
+
+### Operator administration
+
+The human operator administers the VPS through SSH. SSH identity and credentials
+belong only to deployment, diagnosis, backup and recovery. SSH is not an
+application login, agent credential or Cabinet capability, and no ordinary
+Cabinet operation is exposed through an administrative shell interface.
+
+### Browser access
+
+The current browser surface remains behind HTTPS and nginx Basic Auth. This
+Basic Auth is an accepted first-release login for the single-owner browser
+surface. It is not the identity of the online agent, an MCP credential or proof
+that a Cabinet data or effect operation is authorized.
+
+The browser and application service expose no reusable SSH, tunnel, bridge or
+local-machine credential. Browser reachability, a successful Basic Auth check,
+UI state or possession of an entity identifier grants no Cabinet capability by
+itself.
+
+### Online-agent access
+
+The online agent reaches Cabinet Flow MCP only through the existing Secure MCP
+Tunnel pattern proven on `cabinet-dev`. There is no anonymous or directly
+public MCP fallback.
+
+The tunnel establishes protected transport and a configured external identity.
+Cabinet Flow maps that identity to the first-release owner principal, then
+independently resolves and authorizes the exact MCP operation or capability,
+target data and requested effect. Tunnel reachability never grants unrestricted
+Cabinet access or permission to perform every effect.
+
+OpenAI or workspace action controls and approvals are additional outer
+safeguards. Cabinet Flow remains responsible for server-side validation,
+current authority, protected-effect policy, idempotency, bounded responses and
+audit evidence.
+
+The working `cabinet-dev` tunnel, edge and service arrangement may be reused as
+a deployment baseline after its configuration, dependencies and secret
+placement are inspected. Its credentials, legacy tool catalogue, Basic Auth
+assumptions and old product authorization rules are not copied as Cabinet Flow
+authority.
+
+SSH, browser Basic Auth, tunnel and bridge credentials are separate,
+independently revocable and non-substitutable. Reusable secrets remain in
+protected host configuration and are absent from source, prompts, Cards,
+HandoffPackages, logs, traces, errors and process arguments.
+
 ## Local integration and offline behavior
 
 Cabinet Flow has one integration with `cabinet-web-backend` for exchange with
 the independent local Cabinet Backend.
 
-That bridge may own machine authentication, bounded transport, delivery
-acknowledgements, retry and unknown-outcome reconciliation required by the
-transport protocol.
+That bridge may own a dedicated machine identity, machine authentication,
+bounded transport, delivery acknowledgements, retry and unknown-outcome
+reconciliation required by the transport protocol.
 
-It does not own Slot, function, Flow, Box, execution-context, Card, source,
-activation, agent-authority or local-archive semantics.
+The bridge credential cannot act as the online owner, invoke unrelated Cabinet
+capabilities or become a local administrator. Cabinet Flow authorizes and
+integrity-binds each exact HandoffPackage before release to the bridge.
+
+The receiving Cabinet Backend independently authenticates its peer and validates
+the exact contract, identity, scope, replay/idempotency state and permitted local
+effect. Successful bridge delivery is not local authorization, durable
+acceptance or capability execution.
+
+The bridge does not own Slot, function, Flow, Box, execution-context, Card,
+source, activation, agent-authority or local-archive semantics. No credential,
+principal or grant is trusted transitively across the online, bridge and local
+boundaries.
 
 Cabinet Flow remains usable while the local Backend is offline:
 
@@ -585,6 +648,10 @@ State 0 is accepted because:
   lifecycles;
 - the product and successor boundary are explicit;
 - primary actors and authority are explicit;
+- SSH administration, browser Basic Auth and online-agent tunnel access are
+  separate non-substitutable planes;
+- tunnel and bridge authentication establish transport identities but never
+  replace exact Cabinet Flow or local authorization;
 - the first-release operational and evolution proofs are distinct;
 - legacy migration and backend responsibilities are bounded;
 - offline behavior and protected effects are truthful;
