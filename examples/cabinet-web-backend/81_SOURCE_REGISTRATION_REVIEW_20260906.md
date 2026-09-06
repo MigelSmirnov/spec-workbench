@@ -133,3 +133,8 @@ runtime_control candidate that re-read and updated the drill record after
 commit (owned_transaction_call_outside_begin). The verify_backup_restore note
 now states the A17 single-transaction shape. Slices re-hashed with zero
 structural blocks: `runtime_control`.
+
+Re-review 2026-09-06 (recovery clock): Route B refused a bootstrap candidate
+for datetime.now() in startup recovery (naive_datetime_now). The composition
+root note now binds every recovery timestamp to the single SystemClock now().
+Slices re-hashed with zero structural blocks: `bootstrap`.
