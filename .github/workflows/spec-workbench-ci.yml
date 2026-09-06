@@ -34,31 +34,39 @@ jobs:
           python -m pip install
           pytest pyyaml pydantic Pillow pypdf "psycopg[binary]"
 
+      # The Cabinet cases are authored on their canonical refs (PROJECT_INDEX.json),
+      # not on the branch under test. Verify the tools of this checkout against the
+      # canonical case, never against a stale snapshot that happens to sit here.
+      - name: Check out canonical cases
+        env:
+          CANONICAL_DIR: canonical-cases
+        run: |
+          mkdir -p ../ci-artifacts "$CANONICAL_DIR"
+          python - <<'PY' > ../ci-artifacts/canonical-refs.txt
+          import json
+          index = json.load(open("PROJECT_INDEX.json"))
+          for project in index["projects"]:
+              if project["id"] in ("cabinet-backend", "cabinet-web-backend"):
+                  print(project["id"], project["canonical_ref"], project["path"])
+          PY
+          while read -r case ref path; do
+            git fetch --quiet --depth=1 origin "$ref"
+            git archive --format=tar FETCH_HEAD "$path" | tar -x -C "$CANONICAL_DIR"
+            echo "$case $ref $(git rev-parse FETCH_HEAD) $path" >> ../ci-artifacts/canonical-refs.resolved.txt
+          done < ../ci-artifacts/canonical-refs.txt
+          cat ../ci-artifacts/canonical-refs.resolved.txt
+
       - name: Capture Cabinet Web closure sources
         run: |
-          mkdir -p ../ci-artifacts
           tar -czf ../ci-artifacts/cabinet-web-closure-sources.tar.gz \
-            examples/cabinet-web-backend/01_models_persistence_runtime.md \
-            examples/cabinet-web-backend/01_models_runtime_closure.md \
-            examples/cabinet-web-backend/02_rules_security_config.md \
-            examples/cabinet-web-backend/30_runtime_boundary_revision.md \
-            examples/cabinet-web-backend/60_model_closure_domain.json \
-            examples/cabinet-web-backend/60_model_closure_runtime.json \
-            examples/cabinet-web-backend/60_contract_plan.json \
-            examples/cabinet-web-backend/60_contracts.json \
-            examples/cabinet-web-backend/60_data_closure.json \
-            examples/cabinet-web-backend/70_persistence_closure.json \
-            examples/cabinet-web-backend/70_runtime_closure.json \
-            examples/cabinet-web-backend/80_notes.md \
-            examples/cabinet-web-backend/81_module_review_status.json \
-            examples/cabinet-web-backend/81_runtime_boundary_review.md
+            -C canonical-cases examples/cabinet-web-backend
 
       - name: Run complete Workbench test suite
         run: python -m pytest -q --junitxml=../ci-artifacts/pytest.xml
 
       - name: Verify Cabinet Web canonical projection
         run: |
-          python tools/design_spec_projection.py examples/cabinet-web-backend --verify --json \
+          python tools/design_spec_projection.py canonical-cases/examples/cabinet-web-backend --verify --json \
             > ../ci-artifacts/cabinet-web-backend-projection.json
           python - <<'PY'
           import json
@@ -70,12 +78,12 @@ jobs:
 
       - name: Verify mature Cabinet assembly
         run: >-
-          python tools/design_assembly.py examples/cabinet-backend --json
+          python tools/design_assembly.py canonical-cases/examples/cabinet-backend --json
           > ../ci-artifacts/cabinet-backend-assembly.json
 
       - name: Verify Cabinet Web assembly
         run: |
-          python tools/design_assembly.py examples/cabinet-web-backend --json \
+          python tools/design_assembly.py canonical-cases/examples/cabinet-web-backend --json \
             > ../ci-artifacts/cabinet-web-backend-assembly.json
           python - <<'PY'
           import json
@@ -91,9 +99,16 @@ jobs:
           python - <<'PY'
           import json
           from pathlib import Path
-          ledger = json.loads(Path("examples/cabinet-web-backend/81_module_review_status.json").read_text())
+          ledger = json.loads(Path("canonical-cases/examples/cabinet-web-backend/81_module_review_status.json").read_text())
           assert ledger["status"] == "closed"
-          assert ledger["summary"] == {"module_count": 18, "reviewed": 18, "passed": 18, "ambiguities": 0, "pending": 0, "stale": 0}
+          summary = ledger["summary"]
+          modules = ledger["modules"]
+          # the ledger is closed when every assembled module is reviewed and passed;
+          # the module count is the case's, never a number fixed in this workflow
+          assert summary["module_count"] == len(modules) > 0
+          assert summary["reviewed"] == summary["passed"] == summary["module_count"]
+          assert summary["ambiguities"] == summary["pending"] == summary["stale"] == 0
+          assert all(item["review_status"] == "PASS" for item in modules)
           PY
 
       - name: Check patch integrity
