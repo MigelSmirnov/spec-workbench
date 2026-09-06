@@ -756,6 +756,14 @@ and the explicit evidence-backed release of eligible VPS working bytes.
 Logical source identity and membership remain with the canonical capability
 owner and enter only through canonical_invoice_source.
 
+SourceCustodySourceDownload and CanonicalSourceFileDownload implement the
+SourceDownload policy port: they own a bounded in-memory cursor, never an open
+file, connection or network stream. The legacy implementation consumes verified
+immutable payload bytes. The canonical implementation obtains one verified
+payload solely through the SourceByteStore interface; filesystem ownership and
+validation stay in its deterministic concrete backend. Their implementation
+disposition is policy, not a second filesystem backend.
+
 ### Knows
 
 Exact Card/source/revision targets, approved media catalogue, A13 limits,
