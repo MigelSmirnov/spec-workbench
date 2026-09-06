@@ -111,3 +111,9 @@ with source_set_mismatch because the generated validator required ordinals
 0, 1, ... while the snapshot exporter writes 1, 2, .... The note now states
 that the first member carries ordinal 1. Slices re-hashed with zero structural
 blocks: `canonical_invoice_source`.
+
+Re-review 2026-09-06 (open flags): Route B refused a canonical_invoice_source
+candidate for hasattr(os, "O_NOFOLLOW") (reflective_attribute_access gate). The
+three reading notes now prescribe one shared helper with the unconditional
+flags os.O_RDONLY | os.O_NOFOLLOW on the POSIX runtime and no platform probe.
+Slices re-hashed with zero structural blocks: `canonical_invoice_source`.
