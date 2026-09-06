@@ -87,6 +87,16 @@ slice. This document records the stable product boundary and keeps unresolved
 product choices explicit when they exist. Models, modules, Python contracts, HTTP routes,
 storage tables, and implementation algorithms are intentionally deferred.
 
+## Source registration contract correction — 2026-09-06
+
+D0-012 below resolves the recovered-originals case under D0-007 through D0-011.
+The detailed boundary contract and propagation obligations are in
+`SOURCE_REGISTRATION_CONTRACT_20260906.md`. This is a design correction, not
+runtime admission: the previously assembled specification still contains the
+single-file/browser and confirmation-only producer and must not be treated as
+implementing this correction. No export or deployment is authorized by a local
+structural lint result.
+
 ## Product statement
 
 The Cabinet Web Backend is the continuously available server companion of
@@ -741,6 +751,48 @@ Confirmation is refused while the evidence is absent, stale or incomplete;
 the lines of a confirmed Invoice change only through a separate explicit
 revision. In Cabinet Flow this is a trusted check before the confirmation
 effect that no agent function can bypass or misreport.
+
+### Resolved decision D0-012 — register originals independently of Card mutation
+
+A photograph is an original; several photographs can represent one logical
+Invoice source. Preserve the existing Card/source association, original bytes,
+and recorded ordering. Do not merge photographs into a new PDF to satisfy a
+single-file interface. A file is not necessarily a page: alternate shots and
+detail shots remain distinct evidence and do not imply additional pages.
+
+Restoring or registering original custody is allowed for an existing confirmed
+Invoice. It does not edit InvoiceCardV1, reopen a draft, invoke confirmation,
+change line-capture evidence, or create a successor Card revision. The existing
+draft-only source-metadata effect remains a different operation. Registration
+never mints a replacement logical source ID for an existing association.
+
+Cabinet Flow is the target owner of document-to-file association and canonical
+source acceptance. The owner clarified on 2026-09-06 that Flow is not yet a
+deployed service: the existing Cabinet_web capability remains canonical under
+D0-008. The transition uses a read-only, revision-pinned adapter over its Cards
+and accepted source-association artifacts; it does not wait for a new Flow
+service or introduce Flow storage. This integration service may verify and hold immutable working
+copies and consume an authenticated, exact canonical revision and source-set
+observation. It cannot declare an arbitrary caller payload canonical merely
+because its hash matches itself. Existing canonical GitHub Cards are consumed
+through a read-only compatibility boundary until that capability migrates;
+no new GitHub request-bridge action and no PostgreSQL product master is added.
+
+A canonical revision becomes discoverable for delivery through a separate
+idempotent integration admission, not only as a side effect of confirmation.
+Discovery represents every observed revision with its exact readiness or
+pending reasons. Registering bytes does not repair missing or stale capture
+proof. Full source-bearing delivery requires the exact registered file set,
+verified working bytes, and valid capture evidence for the exact revision.
+The local Backend's manifest file identities remain separate from the
+InvoiceCardV1 logical source ID; Backend A78 already preserves that boundary.
+
+Confirmed status alone, a recovered filename, a custody receipt, and a transfer
+screenshot cannot establish source-page completeness or line completeness.
+New evidence produces a new immutable source-set observation and, when
+eligible, a new transfer manifest; already issued manifests and receipts are
+never rewritten. Release continues to require the exact reciprocal evidence
+under A10 and is never automatic.
 
 ## State 0 placeholder resistance review
 

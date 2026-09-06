@@ -396,21 +396,21 @@ Durable separate artifact when instantiated; analytics are calculated from it.
 None for identity closure.
 
 
-## Model M128 — InvoiceParty (retired 2026-09-05)
+## Retirement record M128 — InvoiceParty (retired 2026-09-05)
 
 Retired by D0-010: the product Invoice contract carries typed sub-blocks
 (`InvoiceCardParty`, `InvoiceCardTotals`, `InvoiceCardObjectBlock`); no
 competing reduced form remains.
 
 
-## Model M129 — InvoiceTotals (retired 2026-09-05)
+## Retirement record M129 — InvoiceTotals (retired 2026-09-05)
 
 Retired by D0-010: the product Invoice contract carries typed sub-blocks
 (`InvoiceCardParty`, `InvoiceCardTotals`, `InvoiceCardObjectBlock`); no
 competing reduced form remains.
 
 
-## Model M130 — InvoiceObjectContext (retired 2026-09-05)
+## Retirement record M130 — InvoiceObjectContext (retired 2026-09-05)
 
 Retired by D0-010: the product Invoice contract carries typed sub-blocks
 (`InvoiceCardParty`, `InvoiceCardTotals`, `InvoiceCardObjectBlock`); no

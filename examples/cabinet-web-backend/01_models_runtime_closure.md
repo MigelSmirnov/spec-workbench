@@ -38,7 +38,7 @@ value
 
 Equal typed provisioning outcomes are interchangeable. `created=False` reports an exact idempotent replay and never a broader pre-existing authority.
 
-## Model M31 — InvoicePayment (retired 2026-09-05)
+## Retirement record M31 — InvoicePayment (retired 2026-09-05)
 
 Retired by D0-010: payment is the product `InvoiceCardPayment` (M170) with
 typed transactions; a JSON string of transactions is not a Card field.

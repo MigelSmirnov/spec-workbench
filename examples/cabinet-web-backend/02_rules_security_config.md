@@ -205,16 +205,23 @@ and project-specific constraints remain outside the generic emitter.
 
 ### Normative rules
 
-1. PostgreSQL is the authoritative store for every Cabinet Web `master` model,
-   current selectors, immutable evidence, idempotency reservation, conflict,
-   and recovery-journal state.
+1. Under D0-007/D0-008, PostgreSQL is authoritative only for this service's
+   operational integration state: custody/delivery evidence, idempotency,
+   attempts, receipts, conflicts, and recovery journals. Product Cards and
+   logical source membership remain with the capability's single canonical
+   owner. Read-only projections retain exact origin/revision evidence and
+   cannot become a second product master or canonical writer.
 2. Every stateful application operation receives a narrow repository or unit
    of work. Domain services never receive a database URL, open connections,
    read environment variables, or construct persistence adapters.
-3. One application operation uses one explicit PostgreSQL transaction. Locks
-   and uniqueness constraints serialize identity, revision, idempotency, and
-   current-selector decisions before state is read or changed. A failed
-   operation rolls back without exposing partial logical state.
+3. One operational application transition uses one explicit PostgreSQL
+   transaction. Locks and uniqueness constraints serialize operational
+   identity, revision observation, idempotency, and selector decisions before
+   state is changed. Failure rolls back without partial logical visibility.
+   The transaction cannot commit an external GitHub or Cabinet Flow product
+   mutation. Admission reads an exact immutable canonical observation and
+   commits only its operational outcome; it cannot call Card confirmation to
+   create missing transfer work.
 4. Original source bytes are stored only beneath one required absolute private
    VPS storage root. The root is outside the public Web tree, is not a symlink,
    is on one filesystem for staging and final paths, and is unavailable to
@@ -249,7 +256,10 @@ and project-specific constraints remain outside the generic emitter.
 ### Formal invariants
 
 ```text
-master_state -> committed_postgresql_row
+integration_state -> committed_postgresql_row
+canonical_product_state -> capability_single_writer
+postgresql_commit -/> external_product_commit
+canonical_projection -/> canonical_write_authority
 source_available -> committed_metadata AND reopened_final_bytes_hash_match
 domain_service -/> database_url OR environment OR adapter_construction
 local_backend_offline -/> cabinet_web_state_unavailable
@@ -280,7 +290,6 @@ State 3 must separate application policy from PostgreSQL and filesystem
 mechanisms, State 6 must expose narrow repository/unit-of-work and byte-store
 contracts plus one composition root, and Stage 8.1 cannot close until every
 stateful slice receives those dependencies.
-
 ## Accepted decision A14 — dependencies are inventoried and release-gated
 
 ### Normative rules
