@@ -70,9 +70,9 @@ This is not a data or Card-contract blocker. The real candidate is ready.
 The verified execution code currently exists as protected executors:
 
 ```text
-tools/cabinet_web_revision_accept_runtime.py
-tools/invoice_source_attach_runtime.py
-tools/cabinet_web_source_attach_adapter.py
+experiments/cabinet-vault/tools/cabinet_web_revision_accept_runtime.py
+experiments/cabinet-vault/tools/invoice_source_attach_runtime.py
+experiments/cabinet-vault/tools/cabinet_web_source_attach_adapter.py
 ```
 
 These executors require `AuthorityKernel` authentication/authorization and exact resource scope. They are not currently exposed to the local agent by a running trusted local transport/host surface.

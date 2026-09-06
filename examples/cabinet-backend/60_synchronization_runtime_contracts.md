@@ -16,6 +16,7 @@ first parameter.
 
 - `VpsSynchronizationTransport.transfer_invoice(self, selection: SynchronizationWorkSelection, node: CabinetNodeIdentity) -> VpsInvoiceTransferPackage`
 - `VpsSynchronizationTransport.reconcile_transfer(self, synchronization_id: str) -> VpsTransferReconciliationEvidence`
+- `VpsSynchronizationTransport.acknowledge_transfer(self, synchronization_id: str, receipt: InvoiceTransferReceipt) -> VpsTransferReconciliationEvidence`
 - `VpsSynchronizationTransport.publish_catalogue(self, delivery: RegistryCatalogueDelivery) -> VpsCatalogueAcknowledgement`
 - `VpsSynchronizationTransport.observe_connection(self) -> VpsConnectionObservation`
 

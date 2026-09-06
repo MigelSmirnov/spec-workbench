@@ -1,6 +1,6 @@
 # State 2 decision — manual VPS retention release
 
-## Accepted decision
+## Accepted decision A11 — manual VPS retention release
 
 Cabinet VPS keeps working copies of Invoice Cards, photographs, PDFs, and related project evidence after successful synchronization to Local Backend.
 
@@ -28,13 +28,29 @@ Archive or release VPS copies for project <project_id>
 
 The system must show what will be affected and whether all required originals are safely stored in Local Backend before proceeding.
 
+### Formal invariants
+
+```text
+successful_synchronization -/> vps_evidence_deletion
+vps_release -> explicit_manual_action AND verified_durable_local_replicas
+registry_status_change -/> vps_deletion
+same_release_request_replayed -> same_release_record
+```
+
 ### Required tests
 
 1. Successful synchronization leaves the VPS working copy intact.
+   [witness: verification:semantic_flow6_synchronization]
 2. Registry status changes alone do not delete VPS files.
 3. A manual release is blocked when required local source replicas are missing or unverified.
 4. A manual release may proceed after durable local verification.
 5. Repeating the same release request does not recreate or duplicate deletion records.
+
+### Consequence
+
+VPS evidence outlives synchronization until a human explicitly releases it
+against verified durable local custody; no cached Registry state can silently
+destroy originals.
 
 ### Open question — Registry completion signal
 

@@ -12,6 +12,8 @@ The resulting handoff uses stable ``module:*`` and ``capability:*`` keys from
 """
 from __future__ import annotations
 
+import fence
+
 import argparse
 import json
 import sys
@@ -136,6 +138,7 @@ def analyze(project: Path, trace_file: Path | None = None) -> dict[str, Any]:
         findings.append(Finding("error", "unclaimed_state2_decision", key, "State 2 decision has no primary owner or explicit disposition."))
 
     findings.sort(key=lambda finding: (finding.severity, finding.code, finding.subject, finding.message))
+    fenced_findings = fence.enforce([asdict(finding) for finding in findings])
     return {
         "schema_version": REPORT_SCHEMA,
         "project_root": project.name,
@@ -145,12 +148,12 @@ def analyze(project: Path, trace_file: Path | None = None) -> dict[str, Any]:
             "owned": sum(1 for value in normalized.values() if value["primary_owner"] is not None),
             "dispositioned": sum(1 for value in normalized.values() if value["disposition"] is not None),
             "unclaimed": len(unclaimed),
-            "errors": sum(f.severity == "error" for f in findings),
-            "warnings": sum(f.severity == "warning" for f in findings),
+            "errors": fence.stops(fenced_findings),
+            "warnings": 0,
         },
         "decisions": normalized,
         "unclaimed_state2_decisions": unclaimed,
-        "findings": [asdict(finding) for finding in findings],
+        "findings": fenced_findings,
     }
 
 

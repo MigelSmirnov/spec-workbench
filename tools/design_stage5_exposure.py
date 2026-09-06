@@ -13,10 +13,7 @@ SCHEMA = "spec_workbench_state5_exposure_lint.v1"
 EXPOSURE_SCHEMA = "spec_workbench_state5_exposure.v1"
 EXPOSURE_FILE = "50_exposure_plan.json"
 ALLOWED = {"external", "internal-only"}
-FORCED_INTERNAL_PREFIXES = (
-    "public_op:access_control.",
-    "public_op:holded_gateway.",
-)
+FORCED_INTERNAL_KEY = "forced_internal_prefixes"
 
 
 def lint(project: Path) -> dict[str, object]:
@@ -33,6 +30,11 @@ def lint(project: Path) -> dict[str, object]:
     if not isinstance(mapping, dict):
         mapping = {}
         findings.append({"code": "invalid_exposure_operations", "message": "operations must be an object"})
+    forced = payload.get(FORCED_INTERNAL_KEY, [])
+    if not isinstance(forced, list) or not all(isinstance(item, str) and item for item in forced):
+        forced = []
+        findings.append({"code": "invalid_forced_internal_prefixes", "message": f"{FORCED_INTERNAL_KEY} must be a list of non-empty strings"})
+    forced_internal_prefixes = tuple(forced)
 
     state5 = design_stage5.coverage(project)
     planned = {row["key"] for row in state5["operations"]}
@@ -44,7 +46,7 @@ def lint(project: Path) -> dict[str, object]:
     for key, exposure in sorted(mapping.items()):
         if exposure not in ALLOWED:
             findings.append({"code": "invalid_exposure_value", "message": f"{key}: {exposure!r}"})
-        if exposure == "external" and key.startswith(FORCED_INTERNAL_PREFIXES):
+        if exposure == "external" and key.startswith(forced_internal_prefixes):
             findings.append({"code": "forbidden_external_boundary", "message": key})
 
     external = sum(value == "external" for value in mapping.values())

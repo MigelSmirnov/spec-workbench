@@ -2,7 +2,7 @@
 
 This file refines `public_op:retention_release.evaluate_vps_release` and `public_op:retention_release.request_manual_vps_release` for Stage 7.1 Flow 6.
 
-## `public_op:retention_release.evaluate_vps_release`
+## Withdrawn — `public_op:retention_release.evaluate_vps_release`
 
 ### Refined outputs
 
@@ -16,7 +16,7 @@ The existence of one or several positive proofs is insufficient when they do not
 
 The operation performs no physical deletion.
 
-## `public_op:retention_release.request_manual_vps_release`
+## Withdrawn — `public_op:retention_release.request_manual_vps_release`
 
 Before recording authorization, the operation must re-check that the supplied allowed evaluation still applies to the exact same working-set identity/membership and that its complete evidence coverage remains valid. A stale evaluation, changed target membership, missing required proof, mismatched evidence identity, or newly ineligible obligation raises `VpsReleaseBlockedError`.
 

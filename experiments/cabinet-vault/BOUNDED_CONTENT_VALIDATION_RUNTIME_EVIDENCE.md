@@ -7,8 +7,8 @@
 Executed on 2026-08-21 in the selected Termux runtime against the fingerprint-bound capability execution provider:
 
 ```text
-tools/bounded_content_validation_kernel.py
-tools/bounded_content_validation_kernel_probe.py
+experiments/cabinet-vault/tools/bounded_content_validation_kernel.py
+experiments/cabinet-vault/tools/bounded_content_validation_kernel_probe.py
 ```
 
 Observed focused guards:

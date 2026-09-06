@@ -53,7 +53,7 @@ Command shape:
 
 ```bash
 SPEC_WORKBENCH_TEST_POSTGRES_DSN="host=$PREFIX/tmp port=55432 dbname=postgres user=$(whoami)" \
-python tools/postgres_record_kernel_probe.py
+python experiments/cabinet-vault/tools/postgres_record_kernel_probe.py
 ```
 
 Observed result:

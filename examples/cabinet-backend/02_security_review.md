@@ -35,6 +35,7 @@ interpreted_input
 ### Required tests
 
 1. Search and identifier inputs cannot alter query structure or select fields,
+   [witness: verification:witness_A62]
    operators, or commands outside the accepted closed vocabulary.
 2. Filenames, OCR text, and document content cannot invoke Cabinet tools or
    privileged operations.
@@ -117,12 +118,12 @@ Security review: PERFORMED
 
 - authentication_credential_abuse: APPLICABLE; references: A61, A66, A67; affected: A60, M03, M04, VPS human and service authentication, local agent/service boundary, sync-node boundary
 - secrets: APPLICABLE; references: A60, A61, A66, A67; affected: M04, synchronization, local agent/service, recovery, and Holded gateway boundaries
-- authorization: APPLICABLE; references: A61, A66, source:02_rules_local_upload.md#accepted-decision; affected: M03, M06, M10, M33, exact invoice and source targets
+- authorization: APPLICABLE; references: A61, A66, A10; affected: M03, M06, M10, M33, exact invoice and source targets
 - injection_interpreted_input: APPLICABLE; references: A62; affected: search, agent, OCR, filename, Registry, PresuPro, and Holded inputs
-- external_callbacks_webhooks: APPLICABLE; references: A60, A61, source:02_rules_import.md#accepted-decision; affected: M19, M20, M21, VPS synchronization boundary (no inbound webhook is accepted)
+- external_callbacks_webhooks: APPLICABLE; references: A60, A61, A20; affected: M19, M20, M21, VPS synchronization boundary (no inbound webhook is accepted)
 - browser_boundary: APPLICABLE; references: A61, A66, A67; affected: local uploader, local OS-delegated interactive context, VPS browser sessions, login, and recovery
-- files_artifacts: APPLICABLE; references: A60, A61, A64, A66, source:02_rules_local_upload.md#accepted-decision; affected: M05, M10, M11, upload, storage, processing, and retrieval boundaries
-- concurrency: APPLICABLE; references: A65, source:02_rules_import.md#accepted-decision; affected: M10, M11, M21, source attachment, import, and missing-source transitions
+- files_artifacts: APPLICABLE; references: A60, A61, A64, A66, A10; affected: M05, M10, M11, upload, storage, processing, and retrieval boundaries
+- concurrency: APPLICABLE; references: A65, A20; affected: M10, M11, M21, source attachment, import, and missing-source transitions
 - dependencies: APPLICABLE; references: A68; affected: public VPS, document processing, local Backend, agent/MCP runtimes, and integration/gateway runtimes
 
 ### Formal invariants
@@ -138,6 +139,7 @@ stable_entity_id_known
 ### Required tests
 
 1. `design_lint.py --state 2` resolves every reference in this review.
+   [witness: workbench:language]
 2. Each `UNRESOLVED` line produces a blocking error.
 3. Removing a category or its outcome fails the structural gate.
 4. `NOT_APPLICABLE` cannot be introduced without a rationale.

@@ -8,7 +8,7 @@ PASS
 
 Date: 2026-08-21
 Runtime: user-selected Termux environment on Android
-Runner: `tools/typed_schema_kernel_probe.py`
+Runner: `experiments/cabinet-vault/tools/typed_schema_kernel_probe.py`
 Runner fingerprint is bound in `generic_host_provider_verification_v0.yaml`.
 
 Observed terminal result:

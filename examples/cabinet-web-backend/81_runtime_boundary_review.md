@@ -1,125 +1,371 @@
 # Stage 8.1 — runtime boundary review
 
-Date: 2026-08-24
+Date: 2026-08-25
 
-Status: **AMBIGUITY**
-
-Product decision update (2026-08-24): the owner accepted PostgreSQL as the
-authoritative Cabinet Web metadata store and a mandatory protected local VPS
-filesystem store for original bytes. The exact decision is recorded as D0-006,
-A17, and `70_runtime_closure.json`. The module results remain `AMBIGUITY` until
-that decision is lowered through repository/unit-of-work, byte-store, and
-composition contracts and the rebuilt slices are reviewed.
-
-Lowering update: the protected local filesystem mechanism is now closed as a
-Factory-owned deterministic `source_byte_store_backend`; PostgreSQL v3
-authoring is open and currently proves only the `CabinetEffect` table and
-effect-journal repository methods. It intentionally remains `open`: the other
-master projections, per-request unit-of-work factory, source-publication
-journal, and composition root are not yet closed.
+Status: **PASS — INVOICE CONFIRMATION CLOSED**
 
 ## Result
 
-The assembled specification is not ready for implementation.  Its business
-rules are substantive, but the final module slices do not close the runtime
-mechanisms needed to preserve those rules across requests and process
-restarts.  A generator can therefore satisfy the visible Python contracts
-with materially different storage, transaction, and dependency behaviour.
+The reopened `invoice_workspace` ambiguity is resolved. Its State 2–6 inputs
+and manually authored State 7 notes now specify exact authorization,
+dependency calls, transaction boundaries, source custody, result-field
+assignments, duplicate ordering, and error outcomes without invented model
+fields. Invoice confirmation commits its canonical Card revision, transfer
+manifest, and working-set record through the same caller-owned unit of work.
 
-This is a specification revision.  It is not eligible for bounded generation
-repair.
+The Cabinet Web Backend runtime boundary is implementation-ready for the accepted VPS architecture. The earlier Stage 8.1 ambiguities were returned to their owning design states, lowered, assembled, and re-reviewed rather than waived.
 
-## Finding 1 — accepted durable backend is not yet lowered
+PostgreSQL remains the authoritative Cabinet Web metadata store and the protected local VPS filesystem remains the authority for original source bytes. The local `cabinet_backend` remains a separate intermittent synchronization peer and is not required for ordinary Cabinet Web reads or mutations.
 
-Fourteen models are classified as `master`, while
-`rules.persistence_backend` is absent and the persistence authoring workbench
-is disabled for this case.  Stateful services receive a generic
-`database_url`, but no accepted repository, unit-of-work, transaction,
-concurrency, migration, or restart-recovery contract is lowered into their
-module slices.
+Final deterministic evidence:
 
-The omission was deliberate in the earlier product document, not an implicit
-SQLite decision. It is now superseded for runtime implementation by accepted
-decisions D0-006 and A17: PostgreSQL owns metadata and the protected local VPS
-filesystem owns original bytes. `VPS_RUNTIME_DISCOVERY_2026-08-22.md` remains
-correct that the Client Portal's one-worker SQLite pattern must not be copied.
-The open defect is propagation: final contracts and backend IR still expose the
-old generic `database_url` service boundary.
+- `persistence_backend/v3` is closed for **25 PostgreSQL tables**;
+- `PostgresCabinetUnitOfWork` has **80 deterministic `postgres_sync_v1` methods**;
+- one `CabinetUnitOfWorkFactory` opens a fresh UoW per application operation;
+- the protected filesystem `source_byte_store_backend` is closed;
+- the recoverable source-byte publication journal is durable in PostgreSQL;
+- transfer issuance/receipt/conflict, Registry replica/current-selector, security, restore-drill, and release evidence all have explicit durable projections;
+- `bootstrap.create_cabinet_web_app` is the sole composition root and owns protected configuration reads, migrations/connectivity checks, startup recovery, adapter/service construction, and the final `create_app` handoff;
+- State 7 notes are propagated into the assembled specification before module review;
+- complete Workbench assembly is **8/8 ready with 0 errors**.
 
-Affected modules:
+The mature local `cabinet-backend` was used only as an E2E-tested structural precedent for shared Factory mechanisms such as `persistence_backend/v3`, `postgres_sync_v1`, verifier-only credential storage, transaction ownership, and recoverable byte publication. No local-backend product ownership or Holded behavior was transferred into the server application.
 
-- `access_control`;
-- `effect_journal`;
-- `card_workspace`;
-- `invoice_workspace`;
-- `project_workspace`;
-- `source_custody`;
-- `invoice_exchange`;
-- `registry_replica`;
-- `runtime_control`.
+## Resolution of prior findings
 
-Earliest return point: State 0/2 must accept the deployment and failure-policy
-decision.  State 6 must then lower it into a structured persistence backend,
-narrow repositories/unit-of-work contracts, and explicit startup
-configuration.  State 8 assembly is rebuilt only after those sources close.
+### Invoice confirmation semantic re-review
 
-## Finding 2 — stateful repository operations are only partly lowered
+**Resolved.** The six Invoice mutations now carry actor provenance and have
+explicit security, orchestration, transaction, rollback, and return-shape
+requirements. Duplicate matching uses real `CardRevisionReference` fields and
+declares the source path for every candidate value. Card owns canonical
+revision preparation and exposes a transaction-aware commit helper, allowing
+Invoice confirmation to persist the Card revision, custody evidence, transfer
+manifest, and working-set record atomically without duplicating Card policy.
+The rebuilt `card_workspace` and `invoice_workspace` slices report zero
+findings.
 
-The cross-module application graph is now explicit. `chatgpt_interaction`,
-`web_gateway`, and `sync_gateway` receive the exact service and operation
-contracts they orchestrate. Stateful services receive an external
-`CabinetUnitOfWorkFactory`; each operation opens a fresh UoW, so singleton HTTP
-services cannot share an active PostgreSQL transaction.
+### Finding 1 — durable backend lowering
 
-The remaining gap is the UoW surface. Effect-journal storage is closed, but
-access control, Card revision history, source custody/publication journal,
-transfer evidence, Registry replicas, and runtime recovery do not yet have
-their typed repository methods and deterministic projections.
+**Resolved.** Every accepted server durable state family now has an explicit PostgreSQL projection or is intentionally embedded in the immutable canonical Card revision aggregate. Table names are closed under `config.persistence`; persistence adapters do not read deployment configuration or invent business policy.
 
-Affected modules:
+### Finding 2 — typed repository and UoW surface
 
-- all still-ambiguous stateful modules listed in the Stage 8.1 ledger;
-- `cabinet_persistence` until its post-contract closure is complete.
+**Resolved.** Stateful application services depend on the external `CabinetUnitOfWorkFactory`; each operation receives a fresh transaction-scoped UoW. The deterministic repository surface covers Card revisions/current heads, effects, principals/nodes/credentials/grants/throttle/audit, source handoffs/custody/publication, working sets/manifests/issuance/receipts/conflicts, Registry publication/replica/current selection, restore drills, and VPS release evidence.
 
-State 3 dependency ownership is repaired. State 6 must now complete the typed
-repository operations and projections. Domain modules remain forbidden from
-reading deployment configuration or constructing persistence/transport
-adapters themselves.
+### Finding 3 — cross-resource atomicity and recovery
 
-## Finding 3 — atomic effects cannot be implemented from the slice
+**Resolved.** One application operation owns one PostgreSQL transaction. Card/effect, Invoice producer, transfer, Registry, security, and release transitions can share that transaction. Source-byte custody uses the accepted staged/verified/metadata-committed/atomic-publish protocol with durable recovery journal evidence; startup recovery finalizes or fails pending publications without reporting unavailable bytes as present.
 
-The accepted flows require atomic or recoverable coordination across effect
-reservation, Card revision mutation, source custody, transfer issuance, and
-receipt/reconciliation.  The final slices contain the behavioral rules but no
-shared transaction boundary or declared compensation/recovery protocol.  In
-particular, the `invoice_workspace` flow calls for coordination with
-`effect_journal` and `card_workspace`, while its lowered dependency map is
-empty.
+### Finding 4 — runtime composition
 
-Earliest return point: State 2 owns the failure and truthfulness policy; State
-5 owns the end-to-end effect boundaries; State 6 owns the repository/unit-of-
-work contracts that make those boundaries executable.
+**Resolved.** `bootstrap` is now a first-class assembled module with the exact `create_cabinet_web_app() -> FastAPI` contract and a State 7 orchestration constraint. It is the only boundary allowed to read protected deployment configuration and construct the concrete PostgreSQL/filesystem/runtime graph.
 
-## Closed slices
+### Factory emitter ownership re-review
 
-- `models`: **PASS** for the deterministic model surface.
-- `capability_policy`: **PASS_INTERNAL_VARIATION**; its closed capability rules
-  do not require a durable adapter.
-- `api`: **PASS** for the deterministic router/handler lowering.  This does not
-  constitute application bootstrap or runtime-persistence closure.
+**Resolved.** `PostgresCabinetUnitOfWorkFactory` is owned by `bootstrap`, which
+already owns protected configuration and construction of the operation-scoped
+PostgreSQL adapter. The deterministic `cabinet_persistence` emitter target owns
+only `create_cabinet_schema` and `PostgresCabinetUnitOfWork`, so regeneration
+cannot erase composition-root callables. Structural review reports zero
+findings for both changed slices. `cabinet_persistence` remains `PASS` and
+`bootstrap` remains `PASS_INTERNAL_VARIATION` because only private construction
+details vary.
 
-## Required revision sequence
+### Imported contract type-surface re-review
 
-1. Accept a VPS persistence mechanism and its operational constraints; do not
-   infer SQLite from the Client Portal evidence.
-2. Accept the source-byte store and the database/file atomicity and recovery
-   policy.
-3. Define narrow repositories and unit-of-work ownership for the fourteen
-   master models, including uniqueness, concurrency, migration, and restart
-   behaviour.
-4. Restore the behavioral module dependency graph and add an explicit
-   composition/bootstrap boundary.
-5. Recheck the cross-resource flows, then rebuild contracts, persistence IR,
-   notes, and `global_spec.json`.
-6. Rebuild and manually review every affected module slice.  Only then may the
-   Stage 8.1 ledger become `closed` and Factory admission be retried.
+**Resolved.** Factory Spec Inspector exposed 78 missing model edges in the
+direct runtime import surfaces of `invoice_workspace`, `project_workspace`,
+`invoice_exchange`, `chatgpt_interaction`, `web_gateway`, and `sync_gateway`.
+Every added edge points to the unique `models` owner and is required by the
+signature of an already accepted imported callable; no callable dependency,
+ownership boundary, or business behavior changed. Rebuilt structural reviews
+for all six affected slices report zero findings. Their current hashes are
+recorded in `81_module_review_status.json`.
+
+### Deterministic model ownership re-review
+
+**Resolved.** The 13 persistence/runtime records introduced by the closed model
+closure are now projected into both `module_functions.models` and
+`imports.internal.models`. This assigns their unique generation owner and
+exports the complete deterministic model surface without changing any model
+shape. The rebuilt `models` slice reports zero findings and remains `PASS`.
+
+### Capability policy construction re-review
+
+**Resolved.** Factory generation exposed an impermissible internal variation:
+`CapabilityPolicy.__init__` invented an initialization timestamp after
+`datetime` entered its type context through `CabinetPrincipal`. State 3 now
+forbids wall-clock access and clock-derived state for this module, State 6
+names catalogue-only construction as the constructor purpose, and State 7
+contains an explicit forbidden-action constraint. The assembled contract is
+also marked deterministic. The rebuilt `capability_policy` slice has two
+notes, zero blocks, and no remaining semantic ambiguity: representation of the
+immutable catalogue may vary, but additional lifecycle state may not.
+
+### Access-control temporal semantics re-review
+
+**Resolved.** Factory generation exposed a previously implicit temporal
+boundary: access control legitimately observes time for credential lifecycle
+timestamps and abuse throttling, but the specification did not distinguish
+wall-clock values from elapsed-time measurements. State 3 now assigns
+timezone-aware UTC lifecycle observations and monotonic throttle intervals to
+the module, while State 7 forbids naive datetimes and wall-clock-derived
+elapsed intervals. The rebuilt `access_control` slice retains ten contracts
+and thirteen notes with zero blocks; implementations may vary internally but
+cannot mix naive timestamps, aware persistence values, and throttle timing.
+
+### Access-control UoW surface re-review
+
+**Resolved.** The next Factory handoff showed that behavioral requirements
+named durable effects but did not project the records and exact port calls
+needed to implement them, so the generator either invented repository methods
+or returned security-denial stubs. State 3 now names the operation-scoped UoW
+and its four access-control records. State 6 adds the bounded
+`list_principals_by_kind` interface/concrete pair and deterministic PostgreSQL
+query. State 7 fixes the self-identifying bearer shape and maps authentication,
+authorization, enrollment, grant provisioning, resolution, rotation, and
+revocation to exact UoW calls and commit-or-rollback behavior. Rebuilt slices
+for `models`, `access_control`, and `cabinet_persistence` report zero blocks;
+the behavioral implementation may vary only behind this closed port.
+The plugin-owner resolver delegates to the transaction-owning authentication
+operation and performs only an in-memory owner-kind check after it returns, so
+it cannot create a re-entrant or nested UoW.
+
+### Runtime timestamp policy re-review
+
+**Resolved globally.** Repeated Factory generation exposed that timezone
+awareness was implicit across the persistence-backed service boundary. A17 now
+requires every persisted, emitted, or compared wall-clock value to be
+timezone-aware UTC, forbids naive datetimes, and reserves monotonic clocks for
+elapsed intervals. Each behavioral service constructor note projects that
+shared rule into its module generation slice, preventing local clock-style
+invention without introducing a shared transaction or clock-derived state.
+
+### Invoice workspace implementation-completeness re-review
+
+**Resolved.** Factory received the complete invoice rules, UoW surface, Card
+workspace seams, and runtime model fields, but the generator substituted
+unconditional rejection and empty-return bodies for ten owned operations. The
+invoice workspace boundary now explicitly forbids fail-closed placeholders and
+requires every owned callable to execute its complete specified algorithm.
+This closes implementation completeness without weakening any security rule or
+changing the public contract surface.
+
+## Stage 8.1 semantic re-review
+
+All **18 assembled modules** were rebuilt from the final specification. Every structural module review reports **0 blocks and 0 review findings**. Deterministic modules (`models`, `cabinet_persistence`, `source_byte_store`, `api`) are `PASS`; behavioral modules are `PASS_INTERNAL_VARIATION` where their observable behavior is closed but internal algorithms/construction details may vary.
+
+The exact current slice SHA-256 values and per-module results are recorded in `81_module_review_status.json`. That ledger is the Stage 9 lineage gate and must become stale if any assembled module slice changes.
+
+## Stage 9 handoff condition
+
+Stage 8.1 is closed. Factory admission may proceed only against the clean committed source and must independently re-check assembly, current slice hashes, persistence closure, closure-completeness fuses, target identity, Factory compatibility, and the remaining Stage 9 checks.
+
+## Invoice module split (2026-08-26)
+
+`invoice_workspace` was accepted as one module because every operation was
+"about Invoice". Its accepted implementation had no private helper, no
+dependency shared by all functions, and 11 of 12 owned functions public; the
+generator collapsed it to stubs on the largest generation packet of the case.
+The State 3 cohesion test now splits it along its mechanisms:
+
+- `invoice_catalogue` — the revision-exact read model (`load_invoice_revisions`,
+  `parse_invoice_revision`) behind `search_invoices`, `get_invoice`,
+  `find_invoice_duplicates`; owns `ValidationRejectedError` as the lowest
+  Invoice module in dependency order.
+- `invoice_validation` — declared-order rule evaluation
+  (`evaluate_validation_checks`) behind `prepare_invoice_draft` and
+  `validate_invoice`; duplicate reuse goes through the retained catalogue.
+- `invoice_lifecycle` — the lifecycle state machine
+  (`require_mutation_authorization`, `load_expected_draft`,
+  `commit_invoice_successor`, `derive_transfer_records`) behind the six
+  mutations; depends on `card_workspace`, the catalogue and the validator.
+
+Every public note keeps its accepted behaviour and now names the internal
+mechanism it goes through, so the depth is declared rather than assumed. The
+three slices report zero blocks; `api`, `chatgpt_interaction` and `bootstrap`
+consume the three modules directly, without a façade.
+
+
+## Re-slice 2026-08-28: measured invoice arithmetic
+
+`rules.invoice_workspace.validation_checks` now mirrors the live-data
+contract (`LIVE_INVOICE_DATA_EVIDENCE_20260828.md`): `line_net` gains
+explicit `round_half_up`, while `line_tax`, `total_net` and `total_tax`
+leave the blocking set — no formula over the 109 observed lines supports
+them, and the live validator does not enforce them. Slice hashes for
+`models`, `invoice_validation` and `invoice_lifecycle` are recomputed;
+review statuses are unchanged because no note, contract, or model shape
+moved — only the declared rule data the notes already reference
+generically.
+
+## Re-slice 2026-08-31: prepare_invoice_draft reference scope
+
+The `prepare_invoice_draft` orchestration note now addresses
+`rules.invoice_workspace.card_type` and
+`rules.invoice_workspace.card_version` directly instead of dereferencing the
+whole `rules.invoice_workspace` block. The `invoice_validation` slice was
+rebuilt and re-reviewed with 4 contracts, 8 assembled notes, and no structural
+findings. This is a reference-scope repair only; accepted behavior and review
+status are unchanged.
+
+## Re-slice 2026-08-28 (2): prepare_card_revision pinned against drift
+
+Route B regeneration drifted on `prepare_card_revision`: one closure parsed
+canonically with a sorted-JSON content hash (the OTK-verified behaviour), the
+next narrowed the function to a project/provider whitelist and a raw-string
+hash, breaking every invoice commit at runtime smoke. The note now pins the
+generic parse (no enumerated card_type subset), the id/type identity check,
+and the sha256-over-canonical-JSON hash closed as
+`rules.card_workspace.revision_hash_algorithm`. Only the `card_workspace`
+slice hash is recomputed; review statuses are unchanged.
+
+## Re-slice 2026-08-28 (3): the byte store gains its read port
+
+`open_verified_source` demanded re-reading published bytes, but the
+SourceByteStore port had no read operation — an obligation without a
+surface. Generation therefore alternated between stubbing the function and
+faking custody with a module-private in-memory byte dict (the currently
+promoted closure does the latter, so stored bytes do not survive a process
+restart). The port now declares `read_stored` (verified read of published
+final bytes), the custody notes route every byte through the port and forbid
+byte retention in module state. Slice hashes recomputed for the changed
+modules; statuses unchanged.
+
+## Re-slice 2026-08-28 (4): access_control is cut along its named mechanisms
+
+The depth invariant (PR #26) exposed `access_control` as a bucket: nine
+responsibilities enumerated in Owns, 695 generated lines, and the evening's
+Route B failures all clustered on it. The cut follows the mechanisms the
+declaration could not name as one: `credential_vault` (peppered bearer-secret
+custody: mint, timing-safe verification, retirement) and `abuse_throttle`
+(the failure-window throttle state machine). Both operate over the
+caller-owned UoW, own no transaction and no transport, and the public
+admission surface of `access_control` is unchanged — its notes now name the
+delegate mechanisms instead of describing their internals.
+
+Reviewed finding recorded on the way: the promoted closure's throttle latch
+set `blocked_until` to the observation instant, so no throttle ever became
+active after the same instant — the smoke never restarts or replays, so OTK
+missed it. The `register_authentication_failure` note now closes the
+thresholds over `config.authentication` (block after
+`failures_before_throttle` failures for `throttle_seconds`).
+
+Every module now carries a structured Depth assessment (`kind: deep` with one
+hidden mechanism, or `kind: facade` with delegates); `api` remains outside
+State 3 — a declared gap for a follow-up, not silently waived.
+
+## Re-slice 2026-08-28 (5): unscoped grants carry unscoped authority
+
+The router rules never build an EntityScope for effect authorizations while
+require_mutation_authorization demanded a scoped decision for every
+revision-bearing mutation — confirm, update, payment, source attach, and
+archive were unreachable through the transport (the smoke stops at
+create-draft, which needs no scope, so no gate saw it; the live-data replay
+did). The note now states the Q1 semantics explicitly: an absent entity_scope
+carries unscoped capability authority; a present scope must match its target.
+Slice hashes recomputed; statuses unchanged.
+
+## Re-slice 2026-08-29: access_control closes the authenticated node boundary
+
+Ten independent Microscope samples exposed one deterministic type break and
+several correlated depth leaks: the local resolver returned raw M17 while
+authorization required M39; caller-supplied or constant abuse contexts leaked
+the throttle mechanism; lifecycle commands carried asserted M01 provenance as
+if it were authentication; scope keys could omit fields or collide; audit
+primary keys could reuse stable domain identities; and unexpected exception
+rollback was not closed.
+
+The accepted A03/A11 design is now lowered as one complete admission mechanism.
+M17 has an exact `principal_id` binding to its M02 machine principal. M39 carries
+that bound M17 only for `local_node`; authorization consumes M39, and the typed
+`require_authenticated_local_node` seam projects M17 into Invoice/Registry
+domain calls without reflection or cross-module auth leakage. Access control
+internally derives bounded known/unknown abuse contexts, canonical complete M65
+scope hashes, and fresh audit UUIDs. Enrollment bootstrap is closed to the sole
+empty-installation owner case; later enrollment, rotation, revocation, and grant
+provisioning require a separately authenticated owner/operator M39. Every
+unexpected failure and lifecycle/authorization refusal rolls back explicitly.
+
+All 23 final module slices were recomputed because M39 and router/persistence
+closure participate in downstream packets. `design_module_review --review`
+reported zero blocks and zero review findings for every slice; access_control
+retains `PASS_INTERNAL_VARIATION` because its observable behavior is now closed
+while local implementation structure may still vary behind the named seams.
+
+## Re-slice 2026-08-30: access control becomes a facade over deep mechanisms
+
+The next official Route B run still produced stubs in all ten Microscope
+samples. The earlier `credential_vault` and `abuse_throttle` extraction was
+correct but insufficient: the residual module still owned three independent
+stateful mechanisms — authentication admission, capability-grant evaluation
+and provisioning, and principal/credential lifecycle. This correlated directly
+with the generator's repeated stub and missing-contract failures.
+
+The accepted A03/A11 boundary is retained as the public `access_control`
+facade, while its mechanisms are now closed in `authentication_admission`,
+`capability_grants`, and `principal_lifecycle`. `security_evidence` owns fresh
+M111 identity issuance, and contract-only `access_control_errors` preserves one
+cycle-free refusal taxonomy. The facade performs typed delegation only; it may
+not open a UoW, reproduce transaction policy, use reflection, or invent a
+fallback implementation.
+
+All 28 assembled module slices were recomputed. Structural review reports zero
+blocks and zero review findings for every slice. The four behavioral mechanism
+modules and the facade remain `PASS_INTERNAL_VARIATION`; the contract-only error
+module is `PASS` because it owns no behavior that may vary.
+
+## Re-hash 2026-08-30: design labels leave the notes, the principal kind gets a catalogue
+
+The split's own route reached verification and the runtime smoke rejected a
+freshly enrolled owner: the generated `authentication_admission` compared
+`principal_kind == 'M02'` and `capability_grants` required
+`contract_version == "M02"`. The notes named subjects by their design labels
+("exact M02/M17 subject", "complete M39") and the generator turned a label
+into vocabulary the specification never declared; the pre-split
+`access_control` never compared the kind at all, which is why it passed.
+
+`rules.principal_catalogue` is now the single machine-readable home of the
+principal-kind vocabulary (`cabinet_owner`, `operator`, `local_backend_node`,
+the owner/operator set, and the `cabinet-web-sync-v1` node contract version),
+placed under A03/A11 in the data closure. Fifteen notes name
+`CabinetPrincipal`, `CabinetNodeIdentity`, `AuthenticatedPrincipal`,
+`InvoiceWorkPage` and the catalogue values instead of labels; the State 1
+vocabulary `cabinet_owner` replaces the prose kind `owner`.
+
+The changed module slices were re-hashed. Structural review reports zero
+blocks and zero findings for every re-hashed slice; review statuses are
+unchanged because no contract, ownership or mechanism moved — only the words
+the generator reads.
+
+## Re-hash 2026-08-30: the ports get their declared providers
+
+`pull_invoice_package` and `open_verified_source` returned ports whose
+concrete implementation existed nowhere in the design; fifteen generated
+candidates invented a private stream class and the rest left the function a
+stub. The State 6 lint `interface_without_provider` (spec-workbench PR #31)
+now names that gap and its repair. `InvoiceExchangeInvoicePackageStream`
+(parts in manifest order, read in order until exhausted) and
+`SourceCustodySourceDownload` (retained ContentReference and verified payload)
+are planned, contracted and noted method by method; the notes name them
+instead of "module-owned concrete". The manifest source reference is a
+ContentReference whose content_id is the source identity, matching the local
+Backend wire model; the SourceContentReference for custody lookup comes from
+the resolved working set. Structural review reports zero blocks and zero
+findings; statuses unchanged.
+
+## Re-slice 2026-08-31: runtime settings become a typed startup boundary
+
+A18 is closed by one deterministic `runtime_settings` provider. The provider
+compiles only the project-declared runtime-settings IR into one typed
+`RuntimeSettings` snapshot. `bootstrap` is the sole caller of
+`load_runtime_settings`; behavioral modules receive typed fields and do not
+receive environment names, defaults, configuration tables, or configuration
+values in their notes or local LLM slices.
+
+All 29 module slices were recomputed after the A18 model, provider, startup
+boundary, consumer wiring, and prompt-data cleanup. Structural review reports
+zero blocks and zero findings for the refreshed slices. The accepted product
+constraints remain project data: they are not prerequisites baked into the
+generic producer.

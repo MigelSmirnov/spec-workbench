@@ -144,7 +144,7 @@ sessions, and append-only audit evidence remain separate concerns.
 
 ---
 
-## OQ-008 — PlanActual monetary comparison semantics
+## OQ-012 — PlanActual monetary comparison semantics
 
 **Status:** Reopened after stronger source-contract evidence.
 

@@ -5,7 +5,7 @@
 Accepted repair for the Stage 8.1 finding in
 `81_access_control_module_review.md`.
 
-## `access_control`
+## Refinement — access_control
 
 The existing module ownership remains authoritative and is refined as follows.
 

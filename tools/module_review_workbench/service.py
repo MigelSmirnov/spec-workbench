@@ -5,7 +5,7 @@ from typing import Any
 
 from notes_workbench import service as notes_service
 from persistence_workbench.slice import module_slice as persistence_module_slice
-from holded_transport_workbench import module_slice as holded_transport_module_slice
+from project_extensions import deterministic_backends
 from external_contract_workbench import module_evidence
 
 from module_review_workbench.model import MODULES_SCHEMA, REVIEW_SCHEMA, SLICE_SCHEMA, ModuleReviewError
@@ -74,15 +74,18 @@ def build_slice(project: Path, module: str) -> dict[str, Any]:
         scope for scope in persistence_backend["deterministic_method_scopes"]
         if scope in contracts
     }
-    holded_transport_backend = holded_transport_module_slice(project, module_name)
-    holded_deterministic = {
-        scope for scope in (
-            holded_transport_backend["deterministic_method_scopes"]
-            if holded_transport_backend is not None else []
-        ) if scope in contracts
+    extension_backends = {
+        backend.id: backend.module_slice(project, module_name)
+        for backend in deterministic_backends(project)
+    }
+    extension_deterministic = {
+        scope
+        for backend_slice in extension_backends.values() if backend_slice is not None
+        for scope in backend_slice["deterministic_method_scopes"]
+        if scope in contracts
     }
     deterministic_callables = sorted(
-        router_deterministic | persistence_deterministic | holded_deterministic
+        router_deterministic | persistence_deterministic | extension_deterministic
     )
 
     lowered_specification = {
@@ -102,8 +105,9 @@ def build_slice(project: Path, module: str) -> dict[str, Any]:
     # exact persistence IR becomes required lowering evidence for that module.
     if persistence_backend["enabled"] and persistence_backend["repository"] is not None:
         lowered_specification["persistence_backend"] = persistence_backend
-    if holded_transport_backend is not None:
-        lowered_specification["holded_transport_backend"] = holded_transport_backend
+    for backend_id, backend_slice in extension_backends.items():
+        if backend_slice is not None:
+            lowered_specification[f"{backend_id}_backend"] = backend_slice
 
     accepted_evidence = {
         "responsibility": semantic["responsibility"],
@@ -133,7 +137,7 @@ def build_slice(project: Path, module: str) -> dict[str, Any]:
                 "Can every accepted error, refusal, state effect, and invariant be located in the lowered specification?",
                 "Does the lowered specification introduce behavior with no accepted business source?",
             ],
-            "allowed_semantic_results": ["PASS", "PASS_INTERNAL_VARIATION", "AMBIGUITY"],
+            "allowed_semantic_results": ["PASS", "AMBIGUITY"],
         },
     }
 

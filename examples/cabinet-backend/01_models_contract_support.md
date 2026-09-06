@@ -188,7 +188,11 @@ Substitution: equal submitted bytes and declared expectations are interchangeabl
 
 ### Identity
 
-enum (no runtime identity).
+value
+
+### Identity evidence
+
+The value is a closed classification without runtime identity; equal members are interchangeable.
 
 ---
 
@@ -198,7 +202,11 @@ enum (no runtime identity).
 
 ### Identity
 
-enum (no runtime identity).
+value
+
+### Identity evidence
+
+The value is a closed classification without runtime identity; equal members are interchangeable.
 
 ---
 
@@ -230,7 +238,11 @@ Substitution: equal file, hash, source, result, and safe-error facts are interch
 
 ### Identity
 
-enum (no runtime identity).
+value
+
+### Identity evidence
+
+The value is a closed classification without runtime identity; equal members are interchangeable.
 
 ---
 
@@ -422,7 +434,11 @@ Values:
 
 ### Identity
 
-enum (no runtime identity; a closed list — adding a value is a code change).
+value
+
+### Identity evidence
+
+The value is a closed classification without runtime identity; equal members are interchangeable — a closed list — adding a value is a code change.
 
 ---
 
@@ -434,7 +450,11 @@ code change, so it is a taxonomy, not a rule.
 
 ### Identity
 
-enum (no runtime identity).
+value
+
+### Identity evidence
+
+The value is a closed classification without runtime identity; equal members are interchangeable.
 
 ---
 
@@ -446,7 +466,11 @@ A publication verdict is never stored here.
 
 ### Identity
 
-enum (no runtime identity).
+value
+
+### Identity evidence
+
+The value is a closed classification without runtime identity; equal members are interchangeable.
 
 ---
 
@@ -459,7 +483,11 @@ always carries `external_document_id`.
 
 ### Identity
 
-enum (no runtime identity).
+value
+
+### Identity evidence
+
+The value is a closed classification without runtime identity; equal members are interchangeable.
 
 ---
 

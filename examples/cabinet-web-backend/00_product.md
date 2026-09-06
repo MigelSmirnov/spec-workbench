@@ -2,7 +2,79 @@
 
 ## Status
 
-Accepted State 0 after correction of the primary product interface.
+Accepted State 0, corrected on 2026-09-05 by the accepted boundary decision
+recorded below (D0-007 … D0-011). Live product evidence for that correction is
+`LIVE_PRODUCT_EVIDENCE_20260905_c897897.md`; it is the migration starting
+point and carries no architectural authority over Cabinet Flow.
+
+## Accepted correction 2026-09-05 — this service is the integration arm of Cabinet Flow
+
+The target boundary has three owners:
+
+```text
+Cabinet Flow
+  owns the product model, functions, graphs, Cards, source identity,
+  capability rules, and the primary online MCP
+
+Cabinet Web Backend (this case)
+  the integration and compatibility arm between Cabinet Flow and the local
+  Cabinet Backend; it owns no product entity
+
+cabinet_backend (local)
+  owns the durable local archive and local effects
+```
+
+This service may keep only the operational state its integration role needs:
+machine authentication; delivery idempotency; transfer queues and attempts;
+temporary working custody when delivery requires it; local-acceptance
+confirmations and receipts; rebuildable indexes or projections. None of it is
+the source of truth for an Invoice, Project, Provider or any other product
+entity.
+
+The choice between the GitHub repository and a database is made per
+capability, never for the whole system at once. Until a capability migrates,
+its canonical data are the existing GitHub JSON files and related artifacts of
+`Cabinet_web`; after migration the canonical writer is Cabinet Flow and its
+store. At any moment a capability has exactly one writer; the other side may be
+only a read-only projection, an index, or a compatible adapter. Parallel
+authoritative writes to GitHub and a database are forbidden. Running on the VPS
+does not make this service the owner of product data; the persistent store of
+Cabinet Flow is chosen at the next design level.
+
+The GitHub request bridge of `Cabinet_web` remains only as a temporary
+compatibility adapter for capabilities that have not migrated. It is not
+extended into a target backend and its semantics are not carried into this
+plugin. The primary online interface of the target system is Cabinet Flow's
+own MCP; the MCP surface of this case is a legacy surface for the migration
+period.
+
+Photographs and other originals enter through one first-version path: the
+Syncthing Inbox owned by Cabinet Flow. Cabinet Flow accepts the original that
+appears there, verifies it, creates the `source_id`, stores an immutable copy
+outside the synchronized folder and grants the online agent bounded access to
+the image through its own MCP. ChatGPT does not pass source bytes through the
+GitHub request bridge, and the browser upload handoff is not part of the first
+version. This plugin passes the local Backend the source identity, the data it
+needs and the acceptance confirmations; it does not define source semantics.
+
+The Invoice contract of every surface of this case is the product
+`InvoiceCardV1` (`schemas/invoice-card-v1.schema.json`, card_version 1),
+carried without loss. A reduced Invoice model does not exist as a competing
+product form. Where an integration target (Holded) cannot represent a field,
+the lossy mapping lives only inside that integration adapter and never
+degrades the Cabinet card. `source.file_ref` is an opaque source reference —
+not a GitHub, Syncthing or local filesystem path; exact custody states and
+storage confirmations are kept separately by `source_id`.
+
+Full line capture is a product invariant: every commercial source row is one
+Invoice Line, a synthetic aggregate line is forbidden, totals and arithmetic
+checks never replace lines. Line-capture evidence is a separate proof bound
+to the exact source, the source row count, the captured row count, the exact
+card content hash and the completeness state; confirmation is refused while
+that evidence is absent, stale or incomplete, and the lines of a confirmed
+Invoice change only through a separate explicit revision. In Cabinet Flow this
+is a trusted check before the confirmation effect; no agent function bypasses
+it or reports an invalid result as success.
 
 Online ChatGPT with the already connected Cabinet server plugin is mandatory
 and is the principal human UI/UX. The ordinary Cabinet Web pages are a
@@ -15,6 +87,16 @@ slice. This document records the stable product boundary and keeps unresolved
 product choices explicit when they exist. Models, modules, Python contracts, HTTP routes,
 storage tables, and implementation algorithms are intentionally deferred.
 
+## Source registration contract correction — 2026-09-06
+
+D0-012 below resolves the recovered-originals case under D0-007 through D0-011.
+The detailed boundary contract and propagation obligations are in
+`SOURCE_REGISTRATION_CONTRACT_20260906.md`. This is a design correction, not
+runtime admission: the previously assembled specification still contains the
+single-file/browser and confirmation-only producer and must not be treated as
+implementing this correction. No export or deployment is authorized by a local
+structural lint result.
+
 ## Product statement
 
 The Cabinet Web Backend is the continuously available server companion of
@@ -23,10 +105,12 @@ conversation through the Cabinet plugin already connected to the VPS server.
 This plugin access is part of the product, not an optional diagnostic channel.
 The normal Invoice workflow begins by attaching the document in ChatGPT.
 
-Its first product responsibility is to preserve and serve all information that
-`Cabinet_web` already owns. The existing product set includes Provider, Client,
-Project, and Invoice Cards plus current project-owned shopping-list, estimate,
-procurement, payment, and financial facts.
+Its responsibility is integration and compatibility: it serves the accepted
+product information of `Cabinet_web` to the online surfaces during the
+migration period as a projection, and it carries the evening synchronization
+with the local backend. It does not own Provider, Client, Project or Invoice
+Cards, nor project-owned shopping-list, estimate, procurement, payment or
+financial facts; those belong to Cabinet Flow (2026-09-05 correction).
 
 The local integration is intentionally narrower. During an evening session,
 `cabinet_backend` pulls only Invoice Cards and their source files from Cabinet
@@ -258,13 +342,20 @@ bounded receipt.
 
 ## Sources of truth and ownership
 
+Current ownership below follows the owner’s 2026-09-06 clarification: Cabinet
+Flow is planned, while Cabinet_web is the existing canonical application.
+D0-007 describes the target architecture; D0-008 governs each future migration.
+Neither a planned service nor the integration backend becomes a product writer
+through this source-registration correction.
+
 | Concern | Authoritative owner | Cabinet Web Backend treatment |
 | --- | --- | --- |
-| Confirmed Invoice Card facts | `Cabinet_web` | Deliver the exact immutable revision; never rewrite it during transport. |
+| Confirmed Invoice Card facts | `Cabinet_web` canonical Card artifacts | Deliver the exact immutable `InvoiceCardV1` revision; never rewrite or reduce it during transport. |
 | Card revision identity | `Cabinet_web` canonical content hash plus Invoice identity | Recompute and verify before delivery; preserve in progress and receipts. |
-| Source identity inside the Card | `Cabinet_web` | Preserve exactly; never mint or replace it in the backend adapter. |
+| Source identity inside the Card | `Cabinet_web` canonical Card | Preserve exactly; never mint or replace it in the backend adapter. |
+| Line-capture evidence | Existing `Cabinet_web` capture artifacts | Preserve and verify separate evidence; missing proof remains missing and is never manufactured by custody registration. |
 | Git revision provenance | `Cabinet_web` repository history | Preserve separately from Card content identity. |
-| Source bytes before local durable acceptance | Cabinet Web Backend working custody | Protect durably enough to survive backend outage and service restart. |
+| Original bytes | Recovered `Cabinet_web` originals with verified existing associations; Syncthing is intake transport | Working custody here only when delivery requires it; never the source of truth. |
 | Complete durable source custody | `cabinet_backend` | Accept only through the protected backend effect and report a bounded receipt. |
 | Local replica and effect audit | `cabinet_backend` | Never infer from a network success alone or expose raw storage details. |
 | Delivery intent, attempts, and receipts | Cabinet Web Backend | Preserve durable user-visible progress and idempotent resume evidence. |
@@ -509,6 +600,10 @@ the current set. New Card types require explicit later product acceptance.
 
 ### Resolved decision D0-002 — hybrid ChatGPT and Web source ingress
 
+Superseded on 2026-09-05 by D0-009: the browser upload handoff is not part of
+the first version; originals enter through the Syncthing Inbox owned by
+Cabinet Flow. The text below is kept as history.
+
 The normal first-release workflow begins with the Invoice PDF or photo attached
 in ChatGPT. ChatGPT reads the document and calls explicit plugin effects with a
 structured Card draft and any requested derived shopping-list facts.
@@ -569,6 +664,8 @@ flow/contract gap, not a reason to reverse the connection direction.
 
 ### Resolved decision D0-005 — source attachment from the primary ChatGPT UI
 
+Superseded on 2026-09-05 by D0-009 (Syncthing Inbox path). Kept as history.
+
 Online ChatGPT is the primary UI and reads the user's attached Invoice. The
 plugin receives the extracted structured proposal and performs only explicit,
 authorized Cabinet effects. For durable original custody, it creates a
@@ -579,10 +676,16 @@ plugin tool call and avoids imposing document-recognition load on the backend.
 
 ### Resolved decision D0-006 — autonomous VPS durability
 
+Corrected on 2026-09-05 by D0-007/D0-008: the VPS store of this service holds
+operational state (authentication, idempotency, queues and attempts, working
+custody, receipts, rebuildable projections) and is not the authoritative store
+of product facts; ownership of product entities is Cabinet Flow's, per
+capability. The durability requirements below still apply to that operational
+state.
+
 Cabinet Web is a standalone continuously available Web application, not a
 cache or online façade for `cabinet_backend`. PostgreSQL on the VPS is the
-authoritative metadata, identity, revision, effect, custody, transfer, conflict,
-Registry-replica, and recovery store for Cabinet Web-owned facts.
+durable store of this service's operational state.
 
 Original source bytes are held in one mandatory Cabinet Web-owned protected
 local filesystem store on the VPS. The store survives application replacement
@@ -603,6 +706,99 @@ then atomically rename on the same filesystem. A source becomes available only
 when committed metadata and the verified final file agree. Startup recovery
 finishes or safely fails incomplete publications without exposing partial
 bytes.
+
+### Resolved decision D0-007 — integration arm, not product owner
+
+Cabinet Flow owns the product model, functions, graphs, Cards, source
+identity, capability rules and the primary online MCP; this service is the
+integration and compatibility arm between Cabinet Flow and the local Cabinet
+Backend; the local backend owns the durable local archive and local effects.
+This service keeps only the operational state listed in the 2026-09-05
+correction and is never the source of truth for a product entity.
+
+### Resolved decision D0-008 — one writer per capability
+
+GitHub versus database is decided per capability. Until a capability
+migrates, its canonical data are the existing GitHub JSON and related
+`Cabinet_web` artifacts; after migration, Cabinet Flow and its store. One
+writer at a time; the other side is a read-only projection, index or
+compatible adapter. Parallel authoritative writes are forbidden. The GitHub
+request bridge is a temporary compatibility adapter and is not extended. The
+persistent store of Cabinet Flow is chosen at the next design level; no product
+record is moved into PostgreSQL before that design exists.
+
+### Resolved decision D0-009 — originals through the Syncthing Inbox
+
+The first-version path for photographs is the Syncthing Inbox owned by
+Cabinet Flow: accept, verify, create `source_id`, store an immutable copy
+outside the synchronized folder, grant the online agent bounded image access
+through Cabinet Flow's MCP. No bytes through the GitHub request bridge; no
+browser upload handoff in the first version. This plugin carries source
+identity, needed data and confirmations to the local backend and does not
+define source semantics. The one remaining integration check is end to end:
+the online agent obtains an image accepted through Syncthing via Cabinet Flow's
+MCP and can perform recognition; it does not change this plugin's boundary.
+
+### Resolved decision D0-010 — `InvoiceCardV1` is the canonical contract
+
+`schemas/invoice-card-v1.schema.json` (card_version 1) is the canonical
+migration contract; every surface of this case carries it without loss and no
+reduced Invoice model exists. Integration-target loss (Holded) stays inside
+that adapter. `source.file_ref` is an opaque source reference; custody states
+and storage confirmations live separately by `source_id`.
+
+### Resolved decision D0-011 — full line capture and separate evidence
+
+Every commercial source row is one Invoice Line; synthetic aggregate lines are
+forbidden; totals and arithmetic checks never replace lines. Line-capture
+evidence is a separate proof bound to the exact source, source row count,
+captured row count, exact card content hash and completeness state.
+Confirmation is refused while the evidence is absent, stale or incomplete;
+the lines of a confirmed Invoice change only through a separate explicit
+revision. In Cabinet Flow this is a trusted check before the confirmation
+effect that no agent function can bypass or misreport.
+
+### Resolved decision D0-012 — register originals independently of Card mutation
+
+A photograph is an original; several photographs can represent one logical
+Invoice source. Preserve the existing Card/source association, original bytes,
+and recorded ordering. Do not merge photographs into a new PDF to satisfy a
+single-file interface. A file is not necessarily a page: alternate shots and
+detail shots remain distinct evidence and do not imply additional pages.
+
+Restoring or registering original custody is allowed for an existing confirmed
+Invoice. It does not edit InvoiceCardV1, reopen a draft, invoke confirmation,
+change line-capture evidence, or create a successor Card revision. The existing
+draft-only source-metadata effect remains a different operation. Registration
+never mints a replacement logical source ID for an existing association.
+
+Cabinet Flow is the target owner of document-to-file association and canonical
+source acceptance. The owner clarified on 2026-09-06 that Flow is not yet a
+deployed service: the existing Cabinet_web capability remains canonical under
+D0-008. The transition uses a read-only, revision-pinned adapter over its Cards
+and accepted source-association artifacts; it does not wait for a new Flow
+service or introduce Flow storage. This integration service may verify and hold immutable working
+copies and consume an authenticated, exact canonical revision and source-set
+observation. It cannot declare an arbitrary caller payload canonical merely
+because its hash matches itself. Existing canonical GitHub Cards are consumed
+through a read-only compatibility boundary until that capability migrates;
+no new GitHub request-bridge action and no PostgreSQL product master is added.
+
+A canonical revision becomes discoverable for delivery through a separate
+idempotent integration admission, not only as a side effect of confirmation.
+Discovery represents every observed revision with its exact readiness or
+pending reasons. Registering bytes does not repair missing or stale capture
+proof. Full source-bearing delivery requires the exact registered file set,
+verified working bytes, and valid capture evidence for the exact revision.
+The local Backend's manifest file identities remain separate from the
+InvoiceCardV1 logical source ID; Backend A78 already preserves that boundary.
+
+Confirmed status alone, a recovered filename, a custody receipt, and a transfer
+screenshot cannot establish source-page completeness or line completeness.
+New evidence produces a new immutable source-set observation and, when
+eligible, a new transfer manifest; already issued manifests and receipts are
+never rewritten. Release continues to require the exact reciprocal evidence
+under A10 and is never automatic.
 
 ## State 0 placeholder resistance review
 

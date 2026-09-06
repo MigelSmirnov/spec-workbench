@@ -62,7 +62,7 @@ def coverage(project: Path) -> dict[str, Any]:
         findings.append({"severity":"error","code":"unknown_app_factory","message":str(app_factory)})
     request_parameter = wiring.get("request_parameter")
     if request_parameter != "request":
-        findings.append({"severity":"error","code":"invalid_request_parameter","message":"v1 Cabinet handlers use canonical request parameter 'request'."})
+        findings.append({"severity":"error","code":"invalid_request_parameter","message":"v1 handlers use the canonical request parameter 'request'."})
     state_bindings = wiring.get("state_bindings")
     if not isinstance(state_bindings, dict) or not state_bindings:
         findings.append({"severity":"error","code":"missing_state_bindings","message":"state_bindings must be a non-empty object."})

@@ -37,8 +37,8 @@ The confirmed Web Card remained unchanged during the complete canary.
 
 ```text
 spec-workbench implementation commit: bc872b605c3e4b3774749cdf1711eeeb35399eaf
-entrypoint: tools/local_capability_bridge.py
-real canary runner: tools/f260001_real_canary_via_bridge.py
+entrypoint: experiments/cabinet-vault/tools/local_capability_bridge.py
+real canary runner: experiments/cabinet-vault/tools/f260001_real_canary_via_bridge.py
 declared bridge transport: local_cli_stdio
 real runner invocation: in_process_bridge_methods
 ```

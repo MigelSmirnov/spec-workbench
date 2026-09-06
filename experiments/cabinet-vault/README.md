@@ -29,7 +29,7 @@ The agent does not receive raw SQL, storage paths, box credentials, or authority
 `invoice.summary` demonstrated that a trusted host can expose a bounded semantic operation and lower it internally while enforcing grant scope.
 
 ```bash
-python tools/cabinet_host.py \
+python experiments/cabinet-vault/tools/cabinet_host.py \
   experiments/cabinet-vault/cabinet_backend_invoice_summary.yaml \
   --project project-1
 ```
@@ -39,7 +39,7 @@ python tools/cabinet_host.py \
 `cabinet_backend_execution_graph.yaml` decomposes the coarse capability into typed operators. The agent composes the graph; the host validates it before data access and keeps opaque invoice-set handles local.
 
 ```bash
-python tools/cabinet_graph_host.py \
+python experiments/cabinet-vault/tools/cabinet_graph_host.py \
   experiments/cabinet-vault/cabinet_backend_execution_graph.yaml
 ```
 
@@ -51,7 +51,7 @@ python tools/cabinet_graph_host.py \
 
 ## Spike 4 — derivability is an instrument
 
-`tools/box_derivability.py` implements the rule:
+`experiments/cabinet-vault/tools/box_derivability.py` implements the rule:
 
 > If mapping is determined by the two self-described box surfaces, compile it. If the compiler must choose, return a semantic gap instead of guessing.
 
@@ -69,7 +69,7 @@ The Registry-like project-catalogue probe is fully derivable into the Cabinet pr
 
 ## Spike 5 — composition compiler
 
-`tools/box_composition.py` turns a derivability proof into a disposable execution plan:
+`experiments/cabinet-vault/tools/box_composition.py` turns a derivability proof into a disposable execution plan:
 
 ```text
 source capability

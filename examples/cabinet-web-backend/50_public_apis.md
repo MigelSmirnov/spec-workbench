@@ -150,11 +150,13 @@ Read-only.
 
 ### Inputs
 
-Channel, presented credential evidence and bounded abuse context.
+Channel and presented credential evidence. The bounded abuse context is an
+internal access-control classification and cannot be supplied by a caller.
 
 ### Outputs
 
-Active M02/M17 principal context or bounded refusal.
+One active M39 containing the authenticated M02 principal and, exactly for the
+local-node channel, its bound active compatible M17; otherwise bounded refusal.
 
 ### Observable effect
 
@@ -184,7 +186,8 @@ Credential evidence only; no domain mutation.
 
 ### Inputs
 
-Principal context, resolved capability, target identity and current lifecycle state.
+Complete M39 principal context, resolved capability, target identity and
+current lifecycle state.
 
 ### Outputs
 
@@ -218,7 +221,9 @@ No domain mutation.
 
 ### Inputs
 
-Operator authorization, business identity, channel and credential enrollment material.
+Separately authenticated active owner/operator M39, business identity, channel
+and credential enrollment material. The M39 may be absent only for the first
+owner at the protected empty-installation bootstrap.
 
 ### Outputs
 
@@ -240,6 +245,45 @@ EnrollmentConflict, InvalidCredentialMaterial, OperatorDenied.
 
 Creates credential state, not business Card identity.
 
+## `public_op:access_control.enroll_local_node`
+
+### Owner
+
+`module:access_control`.
+
+### Callers
+
+`boundary:protected_operator`.
+
+### Inputs
+
+Separately authenticated active owner/operator M39 and the M160 command naming
+the installation's node identity and optional display label.
+
+### Outputs
+
+M161: the bound M17 node and M02 `local_backend_node` principal plus the
+one-time issued node-subject local-node credential.
+
+### Observable effect
+
+Persists the principal, the node bound to it under the negotiated node contract
+version, the credential verifier, and audit evidence in one transaction.
+
+### Enforces
+
+A03 rule 16: never unauthenticated, never for an existing node identity, never
+a principal-subject credential; plaintext is returned once and never durably
+recoverable.
+
+### Errors
+
+OperatorDenied, EnrollmentConflict.
+
+### State impact
+
+Creates node/principal/credential state, not business Card identity.
+
 ## `public_op:access_control.provision_capability_grant`
 
 ### Owner
@@ -248,7 +292,7 @@ Creates credential state, not business Card identity.
 
 ### Callers
 
-`boundary:protected_operator` and the protected application composition bootstrap.
+`boundary:protected_operator`.
 
 ### Inputs
 
@@ -287,7 +331,8 @@ Mutates authorization grant state only; no credential or domain Card mutation.
 
 ### Inputs
 
-Operator authorization, principal identity and replacement credential material.
+Separately authenticated active owner/operator M39, principal identity and
+replacement credential material.
 
 ### Outputs
 
@@ -321,7 +366,8 @@ Mutates credential lifecycle only.
 
 ### Inputs
 
-Operator authorization, principal and credential identity.
+Separately authenticated active owner/operator M39, principal and credential
+identity.
 
 ### Outputs
 
@@ -351,7 +397,7 @@ Mutates credential lifecycle only.
 
 ### Callers
 
-`module:chatgpt_interaction`.
+`boundary:chatgpt_plugin`.
 
 ### Inputs
 
@@ -385,7 +431,7 @@ Read-only.
 
 ### Callers
 
-`module:chatgpt_interaction`.
+`boundary:chatgpt_plugin`.
 
 ### Inputs
 
@@ -419,27 +465,28 @@ Read-only.
 
 ### Callers
 
-`module:invoice_exchange`.
+`module:invoice_lifecycle`.
 
 ### Inputs
 
-Card ID and exact M03 revision/content hash.
+Exact legacy CardRevisionReference.
 
 ### Outputs
 
-Exact typed Card revision or absence.
+CanonicalCardRevision for that retained product revision.
 
 ### Observable effect
 
-None.
+Read the exact legacy revision for draft/lifecycle operations. The canonical
+admission package path uses canonical_invoice_source instead.
 
 ### Enforces
 
-A newer revision never substitutes for the requested revision.
+No revision substitution or mutation on a read.
 
 ### Errors
 
-CardNotFound, RevisionNotFound, IntegrityMismatch.
+Unknown or conflicting exact revision.
 
 ### State impact
 
@@ -453,7 +500,7 @@ Read-only.
 
 ### Callers
 
-`module:invoice_workspace`, `module:project_workspace`.
+`module:invoice_lifecycle`, `module:project_workspace`.
 
 ### Inputs
 
@@ -479,15 +526,15 @@ ValidationRejected, RevisionConflict, CanonicalHashConflict, PersistenceUnavaila
 
 Mutates canonical Card history.
 
-## `public_op:invoice_workspace.search_invoices`
+## `public_op:invoice_catalogue.search_invoices`
 
 ### Owner
 
-`module:invoice_workspace`.
+`module:invoice_catalogue`.
 
 ### Callers
 
-`module:chatgpt_interaction`.
+`boundary:chatgpt_plugin`.
 
 ### Inputs
 
@@ -513,15 +560,15 @@ InvalidSearch, SearchLimitExceeded.
 
 Read-only.
 
-## `public_op:invoice_workspace.get_invoice`
+## `public_op:invoice_catalogue.get_invoice`
 
 ### Owner
 
-`module:invoice_workspace`.
+`module:invoice_catalogue`.
 
 ### Callers
 
-`module:chatgpt_interaction`.
+`boundary:chatgpt_plugin`, `module:invoice_lifecycle`, `module:chatgpt_interaction`.
 
 ### Inputs
 
@@ -547,15 +594,15 @@ InvoiceNotFound, RevisionNotFound.
 
 Read-only.
 
-## `public_op:invoice_workspace.find_invoice_duplicates`
+## `public_op:invoice_catalogue.find_invoice_duplicates`
 
 ### Owner
 
-`module:invoice_workspace`.
+`module:invoice_catalogue`.
 
 ### Callers
 
-`module:chatgpt_interaction`.
+`boundary:chatgpt_plugin`, `module:invoice_validation`, `module:chatgpt_interaction`.
 
 ### Inputs
 
@@ -581,15 +628,15 @@ InvoiceNotFound, InvalidDuplicateQuery.
 
 Read-only.
 
-## `public_op:invoice_workspace.prepare_invoice_draft`
+## `public_op:invoice_validation.prepare_invoice_draft`
 
 ### Owner
 
-`module:invoice_workspace`.
+`module:invoice_validation`.
 
 ### Callers
 
-`module:chatgpt_interaction`.
+`boundary:chatgpt_plugin`, `module:chatgpt_interaction`.
 
 ### Inputs
 
@@ -615,15 +662,15 @@ DraftPreparationRejected, UnsupportedInvoiceShape.
 
 Read-only proposal.
 
-## `public_op:invoice_workspace.validate_invoice`
+## `public_op:invoice_validation.validate_invoice`
 
 ### Owner
 
-`module:invoice_workspace`.
+`module:invoice_validation`.
 
 ### Callers
 
-`module:chatgpt_interaction`.
+`boundary:chatgpt_plugin`, `module:invoice_lifecycle`, `module:chatgpt_interaction`.
 
 ### Inputs
 
@@ -649,15 +696,15 @@ UnsupportedInvoiceVersion.
 
 Read-only.
 
-## `public_op:invoice_workspace.create_invoice_draft`
+## `public_op:invoice_lifecycle.create_invoice_draft`
 
 ### Owner
 
-`module:invoice_workspace`.
+`module:invoice_lifecycle`.
 
 ### Callers
 
-`module:chatgpt_interaction`.
+`boundary:chatgpt_plugin`.
 
 ### Inputs
 
@@ -683,15 +730,15 @@ ValidationRejected, IdempotencyConflict, PersistenceUnavailable.
 
 Creates canonical Invoice state.
 
-## `public_op:invoice_workspace.update_invoice_draft`
+## `public_op:invoice_lifecycle.update_invoice_draft`
 
 ### Owner
 
-`module:invoice_workspace`.
+`module:invoice_lifecycle`.
 
 ### Callers
 
-`module:chatgpt_interaction`.
+`boundary:chatgpt_plugin`.
 
 ### Inputs
 
@@ -717,15 +764,15 @@ InvoiceNotFound, NotDraft, RevisionConflict, ValidationRejected.
 
 Mutates canonical Invoice history.
 
-## `public_op:invoice_workspace.confirm_invoice`
+## `public_op:invoice_lifecycle.confirm_invoice`
 
 ### Owner
 
-`module:invoice_workspace`.
+`module:invoice_lifecycle`.
 
 ### Callers
 
-`module:chatgpt_interaction`.
+`boundary:chatgpt_plugin`.
 
 ### Inputs
 
@@ -751,15 +798,15 @@ RevisionConflict, ValidationRejected, ConfirmationRequired, WarningNotAcknowledg
 
 Mutates Invoice lifecycle.
 
-## `public_op:invoice_workspace.record_invoice_payment`
+## `public_op:invoice_lifecycle.record_invoice_payment`
 
 ### Owner
 
-`module:invoice_workspace`.
+`module:invoice_lifecycle`.
 
 ### Callers
 
-`module:chatgpt_interaction`.
+`boundary:chatgpt_plugin`.
 
 ### Inputs
 
@@ -785,15 +832,15 @@ InvoiceNotFound, RevisionConflict, InvalidPaymentEvidence.
 
 Mutates canonical Invoice history.
 
-## `public_op:invoice_workspace.attach_invoice_source_metadata`
+## `public_op:invoice_lifecycle.attach_invoice_source_metadata`
 
 ### Owner
 
-`module:invoice_workspace`.
+`module:invoice_lifecycle`.
 
 ### Callers
 
-`module:chatgpt_interaction`, `module:source_custody`.
+`boundary:chatgpt_plugin`, `module:source_custody`.
 
 ### Inputs
 
@@ -819,15 +866,15 @@ InvoiceNotFound, RevisionConflict, SourceIdentityConflict.
 
 Mutates Invoice metadata history.
 
-## `public_op:invoice_workspace.archive_invoice`
+## `public_op:invoice_lifecycle.archive_invoice`
 
 ### Owner
 
-`module:invoice_workspace`.
+`module:invoice_lifecycle`.
 
 ### Callers
 
-`module:chatgpt_interaction`.
+`boundary:chatgpt_plugin`.
 
 ### Inputs
 
@@ -861,7 +908,7 @@ Mutates Invoice lifecycle.
 
 ### Callers
 
-`module:chatgpt_interaction`.
+`boundary:chatgpt_plugin`.
 
 ### Inputs
 
@@ -895,7 +942,7 @@ Read-only.
 
 ### Callers
 
-`module:chatgpt_interaction`.
+`boundary:chatgpt_plugin`, `module:chatgpt_interaction`.
 
 ### Inputs
 
@@ -929,7 +976,7 @@ Read-only proposal.
 
 ### Callers
 
-`module:chatgpt_interaction`.
+`boundary:chatgpt_plugin`, `module:chatgpt_interaction`.
 
 ### Inputs
 
@@ -963,7 +1010,7 @@ Read-only proposal.
 
 ### Callers
 
-`module:chatgpt_interaction`.
+`boundary:chatgpt_plugin`.
 
 ### Inputs
 
@@ -997,7 +1044,7 @@ Mutates Project artifact state.
 
 ### Callers
 
-`module:chatgpt_interaction`.
+`boundary:chatgpt_plugin`.
 
 ### Inputs
 
@@ -1031,7 +1078,7 @@ Creates Project artifact state.
 
 ### Callers
 
-`module:chatgpt_interaction`, `module:invoice_workspace`, `module:project_workspace`, `module:source_custody`.
+`module:chatgpt_interaction`, `module:invoice_lifecycle`, `module:project_workspace`, `module:source_custody`.
 
 ### Inputs
 
@@ -1065,7 +1112,7 @@ Mutates effect journal only.
 
 ### Callers
 
-`module:chatgpt_interaction`, `module:invoice_workspace`, `module:project_workspace`, `module:source_custody`.
+`module:chatgpt_interaction`, `module:invoice_lifecycle`, `module:project_workspace`, `module:source_custody`.
 
 ### Inputs
 
@@ -1133,7 +1180,7 @@ Read/recovery of effect journal.
 
 ### Callers
 
-`module:chatgpt_interaction`, `module:web_gateway`.
+`boundary:chatgpt_plugin`, `module:web_gateway`, `module:chatgpt_interaction`.
 
 ### Inputs
 
@@ -1235,7 +1282,7 @@ Read-only.
 
 ### Callers
 
-`module:chatgpt_interaction`.
+`boundary:chatgpt_plugin`.
 
 ### Inputs
 
@@ -1265,6 +1312,41 @@ ReleaseBlocked, MembershipChanged, VerificationIncomplete, PartialRelease, Stora
 
 Mutates working-byte availability; preserves all logical history.
 
+## `public_op:web_gateway.issue_browser_csrf`
+
+### Owner
+
+`module:web_gateway`.
+
+### Callers
+
+`boundary:browser_http`.
+
+### Inputs
+
+The edge-resolved authenticated owner and one handoff identity.
+
+### Outputs
+
+M164: the CSRF value for that owner and handoff.
+
+### Observable effect
+
+None; the value is derived, never stored.
+
+### Enforces
+
+A07 rule 3: only the protected same-origin browser context obtains a value,
+and a value binds one owner to one handoff.
+
+### Errors
+
+BrowserAuthenticationFailed.
+
+### State impact
+
+None.
+
 ## `public_op:web_gateway.accept_source_upload`
 
 ### Owner
@@ -1277,7 +1359,7 @@ Mutates working-byte availability; preserves all logical history.
 
 ### Inputs
 
-Authenticated browser context, CSRF proof, handoff bearer and bounded body.
+The edge-resolved authenticated owner, CSRF proof, handoff bearer and bounded body.
 
 ### Outputs
 
@@ -1345,7 +1427,8 @@ Read-only gateway.
 
 ### Inputs
 
-Active node request and presented contract version.
+The authenticated active M17 node projected by the route, plus the node's
+own request naming its node identity and presented contract version.
 
 ### Outputs
 
@@ -1367,40 +1450,6 @@ NodeAuthenticationFailed, ContractIncompatible, ServiceNotReady.
 
 Observation only.
 
-## `public_op:sync_gateway.serve_sync_request`
-
-### Owner
-
-`module:sync_gateway`.
-
-### Callers
-
-`boundary:local_backend`.
-
-### Inputs
-
-Bounded local-node request, exact capability and typed payload.
-
-### Outputs
-
-Typed Invoice exchange or Registry acknowledgement response.
-
-### Observable effect
-
-No independent domain effect; delegated owner may mutate protocol state.
-
-### Enforces
-
-No human capability, generic proxy, arbitrary operation or dynamic tool.
-
-### Errors
-
-NodeAuthenticationFailed, UnknownSyncCapability, RequestTooLarge, SafeSerializationError.
-
-### State impact
-
-Gateway state only.
-
 ## `public_op:invoice_exchange.discover_invoice_work`
 
 ### Owner
@@ -1409,7 +1458,7 @@ Gateway state only.
 
 ### Callers
 
-`module:sync_gateway`.
+`boundary:local_backend`.
 
 ### Inputs
 
@@ -1446,7 +1495,7 @@ Read plus optional immutable observation.
 
 ### Callers
 
-`module:sync_gateway`.
+`boundary:local_backend`.
 
 ### Inputs
 
@@ -1484,7 +1533,7 @@ Creates immutable issuance/protocol state.
 
 ### Callers
 
-`module:sync_gateway`.
+`boundary:local_backend`.
 
 ### Inputs
 
@@ -1518,7 +1567,7 @@ Mutates transfer evidence only.
 
 ### Callers
 
-`module:sync_gateway`, `module:source_custody`, `module:chatgpt_interaction`.
+`boundary:local_backend`, `module:source_custody`.
 
 ### Inputs
 
@@ -1544,6 +1593,40 @@ IssuanceNotFound, ReconciliationUnavailable, ReceiptConflict, RevisionConflict.
 
 Read/recovery of protocol evidence.
 
+## `public_op:invoice_exchange.get_invoice_transfer_status`
+
+### Owner
+
+`module:invoice_exchange`.
+
+### Callers
+
+`module:chatgpt_interaction`.
+
+### Inputs
+
+Exact Invoice ID and Card revision reference.
+
+### Outputs
+
+M132 transfer status: source custody status, issuance status when a package was issued, and the local Backend receipt result and safe code when a receipt exists.
+
+### Observable effect
+
+None.
+
+### Enforces
+
+Transport success never becomes local durable acceptance; without a receipt the status stays issued, acknowledged, or not issued.
+
+### Errors
+
+ResourceNotFoundError for an unknown revision.
+
+### State impact
+
+Read-only.
+
 ## `public_op:registry_replica.publish_registry_catalogue`
 
 ### Owner
@@ -1552,7 +1635,7 @@ Read/recovery of protocol evidence.
 
 ### Callers
 
-`module:sync_gateway`.
+`boundary:local_backend`.
 
 ### Inputs
 
@@ -1590,7 +1673,7 @@ Mutates Registry replica protocol state.
 
 ### Callers
 
-`module:chatgpt_interaction`, `module:sync_gateway`.
+`boundary:chatgpt_plugin`.
 
 ### Inputs
 
@@ -1683,3 +1766,417 @@ BackupNotFound, RestoreFailed, IntegrityMismatch, CoverageIncomplete, IsolationC
 ### State impact
 
 No production business mutation.
+
+## `public_op:runtime_settings.load_runtime_settings`
+
+### Owner
+
+`module:runtime_settings`.
+
+### Callers
+
+`boundary:process_startup`; `module:bootstrap` is the composition owner that
+invokes the imported provider exactly once.
+
+### Inputs
+
+The closed structured runtime-settings declaration and current process
+environment.
+
+### Outputs
+
+One immutable M135 `RuntimeSettings` snapshot.
+
+### Observable effect
+
+Reads declared process environment values only.
+
+### Enforces
+
+Requiredness, normalization, positive-integer parsing, declared defaults,
+closed environment identity, exact targets, and project-declared constraints.
+
+### Errors
+
+MissingSetting, InvalidSetting, RuntimeSettingConstraintViolation.
+
+### State impact
+
+No durable state; fail-closed startup input only.
+
+## `public_op:access_control.require_protected_operator`
+
+### Owner
+
+`module:access_control`.
+
+### Callers
+
+`module:source_custody`, `module:invoice_exchange`.
+
+### Inputs
+
+Caller-owned transaction and authenticated operator.
+
+### Outputs
+
+ActorReference for the exact active Cabinet owner/operator.
+
+### Observable effect
+
+Re-read durable identity under the caller transaction; reject absent, revoked, machine or mismatched authority.
+
+### Enforces
+
+A03/A19/A20: caller data is not authority.
+
+### Errors
+
+Authorization failure.
+
+### State impact
+
+Read-only; no independent commit.
+
+## `public_op:canonical_invoice_source.load_canonical_invoice_snapshot`
+
+### Owner
+
+`module:canonical_invoice_source`.
+
+### Callers
+
+`boundary:protected_operator`.
+
+### Inputs
+
+Constructor-injected current trusted origin pins and immutable input root.
+
+### Outputs
+
+CanonicalInvoiceSnapshot with the complete verified bounded inventory.
+
+### Observable effect
+
+Verify snapshot digest, origin and every referenced object before exposing facts.
+
+### Enforces
+
+A19: unconfigured input is explicit, never an empty inventory.
+
+### Errors
+
+Unconfigured source, pin/schema/object mismatch or input bounds.
+
+### State impact
+
+Read-only.
+
+## `public_op:canonical_invoice_source.get_canonical_invoice_observation`
+
+### Owner
+
+`module:canonical_invoice_source`.
+
+### Callers
+
+`module:source_custody`, `module:invoice_exchange`.
+
+### Inputs
+
+Exact configured snapshot digest, Invoice ID, expected Card hash and source-set hash.
+
+### Outputs
+
+CanonicalInvoiceObservation for exactly those canonical facts.
+
+### Observable effect
+
+Resolve and verify the exact accepted association and unchanged capture evidence.
+
+### Enforces
+
+A19/A20: no caller-selected repository, no newer-revision substitution.
+
+### Errors
+
+Unknown or mismatched target, untrusted origin or corrupt input.
+
+### State impact
+
+Read-only.
+
+## `public_op:canonical_invoice_source.read_canonical_original`
+
+### Owner
+
+`module:canonical_invoice_source`.
+
+### Callers
+
+`module:source_custody`.
+
+### Inputs
+
+Durable SourceSetCustodyRecord supplied by source_custody and one declared content identity.
+
+### Outputs
+
+Bounded exact original bytes.
+
+### Observable effect
+
+Reopen and verify the selected original against its declared size and hash.
+
+### Enforces
+
+A05/A19: accepted membership, no arbitrary file path or external fetch.
+
+### Errors
+
+Missing member, absent bytes, corruption or bound violation.
+
+### State impact
+
+Read-only.
+
+## `public_op:canonical_invoice_source.read_admitted_card_revision`
+
+### Owner
+
+`module:canonical_invoice_source`.
+
+### Callers
+
+`module:invoice_exchange`.
+
+### Inputs
+
+Retained CanonicalInvoiceAdmissionRecord and exact manifest revision.
+
+### Outputs
+
+CanonicalCardRevision containing unchanged canonical JSON and exact reference.
+
+### Observable effect
+
+Read retained admitted input even after the current snapshot advances.
+
+### Enforces
+
+A20: projection metadata never rewrites Card provenance or creates a product revision.
+
+### Errors
+
+Missing retained input, pin/hash mismatch or manifest mismatch.
+
+### State impact
+
+Read-only.
+
+## `public_op:source_custody.register_canonical_source_set`
+
+### Owner
+
+`module:source_custody`.
+
+### Callers
+
+`boundary:protected_operator`.
+
+### Inputs
+
+RegisterCanonicalSourceSetCommand and authenticated protected operator.
+
+### Outputs
+
+SourceSetRegistrationResult for the exact complete custody or replay.
+
+### Observable effect
+
+Verify and durably register every original independently of Card mutation.
+
+### Enforces
+
+A19/A05/A04: preserve canonical bytes, membership, actor and idempotency.
+
+### Errors
+
+Authority, target, input, media, limits, publication or effect conflict.
+
+### State impact
+
+Operational custody/effect state and immutable working bytes only.
+
+## `public_op:source_custody.inspect_source_set_custody`
+
+### Owner
+
+`module:source_custody`.
+
+### Callers
+
+`module:invoice_exchange`.
+
+### Inputs
+
+Caller transaction and exact verified canonical observation.
+
+### Outputs
+
+Matching SourceSetCustodyRecord or explicit absence/unavailability.
+
+### Observable effect
+
+Recheck each required working member before admission without opening another transaction.
+
+### Enforces
+
+A19/A20: a singleton record never proves complete set custody.
+
+### Errors
+
+Corrupt stored membership or bytes; explicit absent/released custody.
+
+### State impact
+
+Read-only within caller transaction.
+
+## `public_op:source_custody.retrieve_source_set_file`
+
+### Owner
+
+`module:source_custody`.
+
+### Callers
+
+`module:invoice_exchange`.
+
+### Inputs
+
+SourceSetFileRetrievalRequest and verified exact download authorization.
+
+### Outputs
+
+SourceDownload for one selected immutable file.
+
+### Observable effect
+
+Authorize exact Card/source/set/hash and verify bounded original bytes.
+
+### Enforces
+
+A05/A19: never select the first photo implicitly or expose storage paths.
+
+### Errors
+
+Unauthorized target, missing set/member, released bytes or corruption.
+
+### State impact
+
+Read-only.
+
+## `public_op:invoice_exchange.admit_canonical_invoice`
+
+### Owner
+
+`module:invoice_exchange`.
+
+### Callers
+
+`boundary:protected_operator`.
+
+### Inputs
+
+AdmitCanonicalInvoiceCommand and authenticated protected operator.
+
+### Outputs
+
+CanonicalInvoiceAdmissionResult, including exact pending reasons or immutable ready manifest.
+
+### Observable effect
+
+Atomically retain admission, and when ready its manifest and working set, with its effect.
+
+### Enforces
+
+A20/A08/A04: no product write or confirmation; exact multi-file membership.
+
+### Errors
+
+Authority, canonical-input, effect conflict or transaction failure; unmet prerequisites are pending.
+
+### State impact
+
+Operational admission, manifest, working-set and effect state only.
+
+## `public_op:invoice_exchange.get_canonical_invoice_admission`
+
+### Owner
+
+`module:invoice_exchange`.
+
+### Callers
+
+`boundary:protected_operator`.
+
+### Inputs
+
+Exact Invoice/source-set identity and authenticated protected operator.
+
+### Outputs
+
+CanonicalInvoiceAdmissionRecord or explicit not-observed result.
+
+### Observable effect
+
+Expose truthful readiness or unmet prerequisites for that exact admitted revision.
+
+### Enforces
+
+A20: no empty ready queue may conceal existing pending admission.
+
+### Errors
+
+Authorization failure or unknown observation.
+
+### State impact
+
+Read-only.
+
+## `public_op:canonical_invoice_source.get_registered_source_observation`
+
+### Owner
+
+`module:canonical_invoice_source`.
+
+### Callers
+
+`module:source_custody`, `module:invoice_exchange`.
+
+### Inputs
+
+A SourceSetCustodyRecord loaded from the protected operational repository,
+including its previously accepted immutable input pins and exact set identity.
+
+### Outputs
+
+The exact verified CanonicalInvoiceObservation from that retained accepted input.
+
+### Observable effect
+
+Read retained accepted evidence during prepared registration recovery, including
+a retry after the operator selects a newer current snapshot.
+
+### Enforces
+
+A19: stored acceptance pins are authority only within this trusted internal
+call; a request cannot supply a custody record or choose arbitrary input.
+
+### Errors
+
+Absent/corrupt retained input or a different Card/source/set.
+
+### State impact
+
+Read-only; it cannot create or upgrade custody.

@@ -1,6 +1,6 @@
 # State 2 decision — missing original invoice source
 
-## Accepted decision
+## Accepted decision A50 — missing original invoice source
 
 Local Cabinet Backend distinguishes a usable confirmed Invoice Card from a Card
 whose original photograph or PDF is durably available.
@@ -8,6 +8,12 @@ whose original photograph or PDF is durably available.
 A source may be temporarily missing and expected later, or it may be explicitly
 recorded as permanently lost. Loss of the original does not delete the accepted
 Card or erase the working decisions already made from it.
+
+### Normative rules
+
+The sections below are the normative rules of this decision: the user-visible
+source states, the allowed internal use of incomplete invoices, the Holded
+restriction, and the Client Portal rule.
 
 ### User-visible states
 
@@ -62,7 +68,7 @@ The portal publication must carry or derive the source-completeness state so tha
 `source_lost` is not presented as if documentary evidence were available. The
 exact visual presentation belongs to the Client Portal contract.
 
-### Invariants
+### Formal invariants
 
 For every successful Holded publication:
 
@@ -92,6 +98,7 @@ Marking a source as lost cannot remove:
 ### Required tests
 
 1. A complete confirmed invoice may be published to Holded.
+   [witness: verification:witness_A50]
 2. An invoice awaiting an original cannot be published to Holded.
 3. An invoice whose original is declared lost cannot be published to Holded.
 4. Both incomplete states remain usable in internal analytics with a warning.
@@ -101,3 +108,10 @@ Marking a source as lost cannot remove:
    `awaiting_source` to `complete`.
 7. A `source_lost` invoice may return to `complete` if the original is later found
    and verified; the earlier loss decision remains in history.
+
+### Consequence
+
+A missing or lost original never blocks internal work or Client Portal
+visibility, but Holded publication demands complete verified custody; every
+loss is an explicit auditable human decision that later recovery does not
+erase.

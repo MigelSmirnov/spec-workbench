@@ -941,6 +941,57 @@ Argon2id (`profile`) над `HMAC-SHA256(pepper, secret)`; проверка —
 `ValueError` при выпуске и проверке. Секрет и pepper никогда не входят в
 текст исключений.
 
+### 6.7 `canonical_digest_backend/v1`
+
+`rules.canonical_digest_backend` версии 1 — закрытый IR канонических
+дайджестов проекта: сохраняемых ключей, идентичностей содержимого и
+хешей запросов, которые прежде описывались прозой в notes каждого
+потребителя и переизобретались генерацией в каждом модуле (четыре
+написания «канонического JSON» в одном дереве, duck-typed `hasattr`
+перед `model_dump`). Единственный emitter — `python_canonical_json_digest_v1`.
+
+Форма закрыта:
+
+```json
+{
+  "kind": "canonical_digest_backend",
+  "schema_version": 1,
+  "backend": {"emitter": "python_canonical_json_digest_v1"},
+  "wiring": {"module": "<module>"},
+  "recipes": {
+    "<recipe_name>": {
+      "input": "model",
+      "exclude_fields": ["<field>"],
+      "datetime_normalization": "utc"
+    },
+    "<other_recipe>": {"input": "json_text"},
+    "<third_recipe>": {"input": "string_tuple"}
+  }
+}
+```
+
+Модуль `wiring.module` владеет ровно одной функцией на рецепт, в порядке
+объявления, с контрактом, фиксированным полем `input`:
+
+```text
+<recipe_name>(model: BaseModel) -> str          # input: model
+<recipe_name>(text: str) -> str                 # input: json_text
+<recipe_name>(values: tuple[str, ...]) -> str   # input: string_tuple
+```
+
+Процедура одна для всех рецептов и фиксирована версией: канонический JSON
+(ключи отсортированы, разделители компактные, `ensure_ascii` False,
+UTF-8) под SHA-256, строчный hex. Для `model` значение — сериализация
+модели в JSON-режиме после исключения `exclude_fields`; при
+`datetime_normalization: utc` каждый datetime нормализуется к UTC (наивный
+принимается как UTC, aware — конвертируется), при `none` — сериализуется
+как есть. Для `json_text` документ разбирается и сериализуется заново
+канонически. Для `string_tuple` дайджест берётся от JSON-массива строк.
+Ключи рецепта закрыты: `model` требует все три поля, остальные входы —
+только `input`. Потребитель называет рецепт по имени функции; note не
+воспроизводит процедуру. Фокусная проверка эмиттера — вектор на фикстуре
+с offset-aware datetime и не-ASCII строкой.
+
 ---
 
 ## 7. imports

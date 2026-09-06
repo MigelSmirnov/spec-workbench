@@ -2,7 +2,7 @@
 
 ## Service
 
-- HoldedGatewayService.__init__(self, repository: HoldedAttemptRepository, http_client: HoldedHttpClient) -> None
+- HoldedGatewayService.__init__(self, repository: HoldedAttemptRepository, http_client: HoldedHttpClient, clock: Clock) -> None
 - HoldedGatewayService.create_holded_purchase(self, payload: HoldedPurchaseAttemptPayload, reservation: HoldedPublicationAttempt) -> HoldedPublicationAttempt
 - HoldedGatewayService.lookup_holded_purchase(self, attempt_marker: str, document_id: str | None = None) -> HoldedPurchaseLookupEvidence
 

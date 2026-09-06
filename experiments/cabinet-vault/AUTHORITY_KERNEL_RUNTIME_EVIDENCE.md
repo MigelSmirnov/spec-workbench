@@ -7,8 +7,8 @@
 Executed on 2026-08-21 in the selected Termux runtime against the fingerprint-bound candidate:
 
 ```text
-tools/authority_kernel.py
-tools/authority_kernel_probe.py
+experiments/cabinet-vault/tools/authority_kernel.py
+experiments/cabinet-vault/tools/authority_kernel_probe.py
 ```
 
 Observed runner result supplied from the real runtime:

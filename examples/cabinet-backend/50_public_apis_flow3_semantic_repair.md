@@ -2,7 +2,7 @@
 
 This bounded repair restores accepted State 2 A34 semantics lost during compression into the State 5 public API. It introduces no new Registry status and does not change the `validate_card_assignment` contract.
 
-## `public_op:registry_context.validate_card_assignment` refinement
+## Superseded — `public_op:registry_context.validate_card_assignment` refinement
 
 For an exact immutable Card revision and an accepted current Registry context:
 

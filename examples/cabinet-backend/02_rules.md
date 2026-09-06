@@ -71,6 +71,7 @@ evidence, but it cannot create or replace:
 ### Required tests
 
 1. A valid Invoice Card V1 is evaluated by the accepted V1 validator.
+   [witness: verification:witness_A77]
 2. A payload declaring an unknown Card version returns
    `unsupported_card_version`.
 3. An unknown version does not create an accepted Card revision.
@@ -120,36 +121,24 @@ cycle and marked the Card `confirmed`.
 
 ### Formal invariants
 
-For every `StoredInvoiceCardRevision` in the accepted Local Backend archive:
+The border invariants `revision.observed_status = confirmed` and the draft
+rejection rules are superseded by A77 together with A20 B.1: a `draft`
+revision is archived truthfully as `draft`. The surviving exclusions remain
+normative and are owned by A77:
 
 ```text
-revision.observed_status = confirmed
+draft_revision -/> holded_eligible
+draft_revision -/> confirmed_actual_totals_input
 ```
-
-For every `InvoiceImport` with status `accepted` or `already_accepted`:
-
-```text
-all imported Card revisions have status = confirmed
-```
-
-A Card revision with status `draft` cannot create or replace:
-
-- `StoredInvoiceCard`;
-- `StoredInvoiceCardRevision`;
-- `current_content_hash`;
-- an accepted `InvoiceWorkingReplica` entry;
-- PresuPro matching input;
-- PlanActualAnalysis input;
-- Holded publication eligibility.
 
 ### Required tests
 
-1. A valid confirmed Invoice Card V1 may proceed to normal Backend validation.
-2. A valid but `draft` Invoice Card V1 returns `card_not_confirmed`.
-3. A rejected draft does not appear in durable archive queries.
-4. Re-photographing and repeated extraction on the VPS do not create Backend Card
-   revisions until a confirmed Card is synchronized.
-5. A later corrected and confirmed payload for an existing `invoice_id` is
+1. A `draft` Invoice Card V1 revision is archived with truthful `draft` status
+   and is refused Holded publication with reason `card_not_confirmed`.
+   [witness: verification:witness_A77]
+2. Re-photographing and repeated extraction on the VPS do not create Backend Card
+   revisions until a Card revision is synchronized.
+3. A later corrected and confirmed payload for an existing `invoice_id` is
    evaluated as a new Card content revision.
 
 ### Consequence
@@ -263,6 +252,7 @@ Invoice number alone cannot satisfy that invariant.
 ### Required tests
 
 1. A confirmed Card with all required source bytes is accepted without an
+   [witness: verification:witness_A3]
    override.
 2. A confirmed Card missing expected bytes is rejected or quarantined when the
    explicit flag is absent.
@@ -318,9 +308,20 @@ other business signals.
    downstream views, but both accepted histories and their evidence remain
    auditable.
 
+### Formal invariants
+
+```text
+same_transfer_manifest_replayed -> same_import
+same_card_content_hash_replayed -> same_revision
+same_source_bytes_replayed -> same_source_replica
+new_content_hash_same_invoice_id -> new_revision
+suspected_semantic_duplicate -/> automatic_merge_delete_or_rewrite
+```
+
 ### Required tests
 
 1. Repeating one manifest does not create a second import.
+   [witness: verification:witness_A4]
 2. Repeating one Card content hash does not create a second revision.
 3. Reattaching identical bytes to the same source target is idempotent.
 4. A different confirmed content hash for the same `invoice_id` is accepted as a
@@ -376,6 +377,12 @@ Card bytes or content hash.
 3. A later corrected Cabinet revision is stored as a new revision.
 4. Removing a local decision restores unresolved interpretation without mutating
    the Card.
+
+### Consequence
+
+Local interpretation evolves as auditable Backend decisions while the accepted
+Card bytes and content hash stay exactly as Cabinet published them; no
+downstream consumer can mistake a local assignment for a Card fact.
 
 ---
 
@@ -533,6 +540,7 @@ new Card support
 ### Required tests
 
 1. A valid confirmed Invoice Card V1 enters normal Backend validation.
+   [witness: verification:witness_A77]
 2. An unknown Card type returns `unsupported_card_type`.
 3. A known but unsupported Cabinet Card type returns
    `unsupported_card_type`.
@@ -585,13 +593,28 @@ produce or support the Card.
 10. If source metadata inside the Card must change, Cabinet must produce a new
     confirmed Card revision.
 
+### Formal invariants
+
+```text
+count(logical_source_package per invoice_card) = 1
+package_complete <-> every_expected_part_verified_or_declared_not_stored
+late_attachment -/> accepted_card_change
+identical_attachment_replayed -> same_binary_record
+```
+
 ### Required tests
 
 1. Three ordered photographs can form one complete source package.
+   [witness: verification:witness_A12]
 2. Absence of one declared photograph produces an incomplete package.
 3. Adding the missing verified photograph completes the package.
 4. Adding a later PDF preserves the original photographs and provenance.
 5. Repeating an identical attachment does not create a duplicate binary record.
+
+### Consequence
+
+One Card carries one logical evidence package that may complete over time:
+source custody grows monotonically and never rewrites the accepted Card.
 
 ---
 
@@ -675,6 +698,7 @@ source_package_status = complete
 ### Required tests
 
 1. One failed file leaves the Source Package incomplete.
+   [witness: verification:semantic_flow2_source_attachment]
 2. A failed file is never represented as available.
 3. Without explicit acceptance, the incomplete invoice cannot enter workflows
    that require complete source evidence.
@@ -727,14 +751,30 @@ with stale or incorrect context.
 7. No arbitrary project is created automatically to satisfy the missing link.
 8. The original object context from the Card is always preserved for audit.
 
+### Formal invariants
+
+```text
+unresolved_project -/> card_or_source_loss
+unresolved_project -> excluded_from_project_analytics
+unresolved_project -> not_holded_eligible
+automatic_project_creation = forbidden
+```
+
 ### Required tests
 
 1. A Card with no resolved project is preserved and marked for review.
+   [witness: verification:semantic_status_vocabularies]
 2. Its source evidence remains accessible.
 3. It does not enter project-specific analysis before resolution.
 4. It does not become Holded-eligible solely through archival acceptance.
 5. A later explicit assignment makes it eligible for the downstream operations
    whose other requirements are satisfied.
+
+### Consequence
+
+An invoice is never lost to a missing project link: it waits in explicit
+review with its full evidence, and only a human assignment unlocks the
+project-scoped downstream paths.
 
 ---
 
@@ -756,12 +796,26 @@ after the related project has been closed in Registry.
 6. Any separate restriction on Holded publication or project reporting must be
    specified explicitly and must not be inferred merely from project closure.
 
+### Formal invariants
+
+```text
+project_closed -/> card_rejection
+validation_record -> preserves_project_status_observed_at_validation
+project_closure -/> object_context_erasure
+```
+
 ### Required tests
 
 1. A valid confirmed Card for a closed existing project is accepted.
+   [witness: verification:semantic_status_vocabularies]
 2. The validation record preserves `project_closed` context.
 3. The Card's object block remains unchanged.
 4. Existing project-linked history remains queryable after closure.
+
+### Consequence
+
+Closure is context, not a gate: late and corrective invoices keep entering the
+archive while the observed project status stays visible for policy and audit.
 
 ---
 
@@ -881,6 +935,7 @@ backend_may_change_registry_status = false
 ### Required tests
 
 1. An invoice for an active project enters normal processing.
+   [witness: verification:semantic_status_vocabularies]
 2. An invoice for a completed project is accepted and marked
    `late_project_cost`.
 3. A completed project is not reopened automatically.
@@ -928,6 +983,16 @@ Cabinet synchronization and project-assignment workflows.
 
 The catalogue contains only fields already available from the current Registry
 project list.
+
+### Normative rules
+
+1. The catalogue is a compact read-only projection of the current Registry
+   project list and never extends the Registry contract.
+2. Each entry carries exactly the declared catalogue fields, mapped one-to-one
+   from the Registry source fields listed below.
+3. The Registry `id` value is preserved unchanged as `project_id`.
+4. The catalogue serves Cabinet synchronization and project-assignment
+   workflows only; it is never an authority over Registry facts.
 
 ### Catalogue fields
 
@@ -1084,6 +1149,7 @@ archived_means_completed = true
 ### Required tests
 
 1. A full Registry list is projected into the five accepted catalogue fields.
+   [witness: workbench:data]
 2. Registry `id` is preserved unchanged as `project_id`.
 3. An active project is available for normal assignment.
 4. An archived project requires manual review.
@@ -1268,6 +1334,7 @@ missing catalogue entry -> WorkObject remains stored
 ### Required tests
 
 1. A new Registry project creates one corresponding `WorkObject`.
+   [witness: verification:semantic_flow3_registry_refresh]
 2. Repeating the same catalogue refresh does not create a duplicate
    `WorkObject`.
 3. A Registry name or address change updates the Registry-derived fields.
@@ -1330,6 +1397,12 @@ existing one.
 3. Existing matches continue to reference their original snapshot.
 4. A new snapshot receives no copied confirmed matches by default.
 
+### Consequence
+
+History stays reproducible: every match points at the exact estimate content it
+was decided against, and a new estimate state earns a new snapshot and new
+decisions instead of silently inheriting old ones.
+
 ---
 
 ## Accepted decision A41 — unmatched purchases are normal analytical facts
@@ -1351,14 +1424,30 @@ Card validation error and does not block invoice acceptance.
    provenance; it does not invent a category.
 7. Unmatched lines remain available to coverage and variance analytics.
 
+### Formal invariants
+
+```text
+count(active_confirmed_match per invoice_line) <= 1
+unmatched_line -/> acceptance_failure
+unmatched_line -/> placeholder_estimate_item
+match_removed -> line_explicitly_unmatched
+```
+
 ### Required tests
 
 1. An invoice containing unmatched lines is accepted normally.
+   [witness: verification:semantic_flow4_plan_actual]
 2. An unmatched line does not create a placeholder estimate item.
 3. Backend rejects attempts to create two simultaneous active confirmed matches
    for one line.
 4. Rejecting or removing a match returns the line to explicit unmatched status
    without changing the Invoice Card.
+
+### Consequence
+
+Coverage analytics rest on explicit facts: every line is either matched to one
+exact estimate item or explicitly unmatched, and Backend never manufactures a
+category to close the gap.
 
 ---
 
@@ -1412,6 +1501,7 @@ accepted matching calculation
 ### Required tests
 
 1. A similarity suggestion without Cabinet confirmation remains unconfirmed.
+   [witness: verification:semantic_status_vocabularies]
 2. Similar descriptions, prices, suppliers, or quantities do not cause Backend
    to create a confirmed match automatically.
 3. A confirmed decision referencing an existing invoice revision, line, estimate
@@ -1456,6 +1546,13 @@ The current PresuPro contract behaves as follows:
     PresuPro contract.
 
 ---
+
+### Normative rules
+
+The snapshot semantics below are the normative rules of this decision:
+Cabinet-owned immutable snapshots, snapshot identity and creation, idempotency,
+no inferred lineage, distinct PresuPro identities, snapshot sequence, matching
+behavior, locked and converted estimates, and status handling.
 
 ### Cabinet-owned immutable snapshots
 
@@ -1699,6 +1796,7 @@ confirmed match -> exact immutable snapshot_id
 ### Required tests
 
 1. First import of an estimate creates one immutable snapshot.
+   [witness: verification:witness_A43]
 2. Re-import of identical content does not create a duplicate snapshot.
 3. Editing PresuPro content under the same `Estimate.id` creates a new snapshot.
 4. The previous snapshot remains unchanged and queryable.
@@ -1755,7 +1853,7 @@ The experiment confirmed:
   behavior;
 - a numeric Holded status whose business meaning remains unverified.
 
-### Normative sequence
+### Normative rules
 
 1. Validate the immutable Invoice Card revision.
 2. Build the Holded purchase payload.
@@ -1949,6 +2047,7 @@ numeric Holded status -> stored raw, not interpreted
 ### Required tests
 
 1. A valid Invoice Card creates exactly one purchase.
+   [witness: verification:semantic_flow5_holded_publication]
 2. The returned `documentId` is stored.
 3. GET of the created document succeeds.
 4. `docNumber` matches the supplier invoice number.
@@ -2006,6 +2105,14 @@ The completed discovery established:
 10. Automatic retry after an ambiguous create outcome is unsafe.
 
 ---
+
+### Normative rules
+
+The recovery semantics below are the normative rules of this decision:
+marker-based create recovery, the publication attempt record, the first-POST
+rule, ambiguous outcome handling, the recovery sequence and its deterministic
+outcomes, required business verification, marker semantics, bounded polling,
+retry policy, and audit requirements.
 
 ### Marker-based create recovery
 
@@ -2337,6 +2444,7 @@ marker match + payload mismatch
 ### Required tests
 
 1. Attempt state is persisted before POST.
+   [witness: verification:semantic_flow5_holded_publication]
 2. Exactly one automatic POST is issued per publication attempt.
 3. A successful POST-created purchase can be recovered using only list and GET.
 4. Recovery does not use the saved POST response.
@@ -2404,6 +2512,14 @@ A local-user identity authorizes human or agent-assisted operations inside the
 local Backend.
 
 ---
+
+### Normative rules
+
+The identity semantics below are the normative rules of this decision: the
+trust boundary, the sync node credential and its lifecycle, local user
+identity, the local-only HTML uploader, agent-assisted operations and
+delegation, roles and the permission matrix, high-risk operations, the audit
+record, secret handling, session behavior, and failure behavior.
 
 ### Trust boundary
 
@@ -2699,7 +2815,7 @@ A failed authorization attempt must also be auditable without storing secrets.
 
 ---
 
-### Authorization invariants
+### Formal invariants
 
 Machine and user identity separation:
 
@@ -2809,6 +2925,7 @@ Failures must not disclose secret material or unnecessary identity details.
 ### Required tests
 
 1. A valid active node credential permits Backend-initiated synchronization.
+   [witness: verification:semantic_local_access_control]
 2. A revoked node credential is rejected.
 3. One installation cannot use another installation's credential.
 4. A sync credential cannot authorize a local mutation.
