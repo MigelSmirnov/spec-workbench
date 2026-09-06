@@ -96,7 +96,7 @@ Candidate fields:
 - `source_set: CanonicalSourceSetObservation`;
 - `source_set_hash: str`;
 - `capture_raw_sha256: str | None`;
-- `capture_state: str`;
+- `capture_state: LegacyCaptureState`;
 - `document_completeness: str`;
 
 ### Identity
@@ -334,10 +334,10 @@ Candidate fields:
 - `canonical_snapshot_sha256: str`;
 - `canonical_repository_commit: str`;
 - `capture_raw_sha256: str | None`;
-- `status: str`;
+- `status: CanonicalAdmissionState`;
 - `manifest_id: str | None`;
 - `manifest_hash: str | None`;
-- `pending_reasons: tuple[str, ...]`;
+- `pending_reasons: tuple[CanonicalAdmissionPendingReason, ...]`;
 - `actor: ActorReference`;
 - `created_at: datetime`;
 - `updated_at: datetime`;
@@ -437,3 +437,197 @@ Transient read request; no independent persistence or lifecycle.
 ### Open questions
 
 None for identity closure.
+
+## Model M192 — CanonicalIntegrationEffectRecord
+
+### Meaning
+
+The immutable typed original result of one canonical integration effect. Exactly one registration_result or admission_result is present. The saved result has replayed=False; a later response changes only its outer replay flag.
+
+Candidate fields:
+
+- `effect_id: str`;
+- `principal_id: str`;
+- `request_hash: str`;
+- `registration_result: SourceSetRegistrationResult | None`;
+- `admission_result: CanonicalInvoiceAdmissionResult | None`;
+- `completed_at: datetime`;
+
+### Identity
+
+entity
+
+### Identity evidence
+
+The effect_id names the same journal effect throughout retries. Later changes in custody or readiness cannot replace its original result.
+
+### Source of truth
+
+The source-custody or admission transaction, atomically with the shared effect journal.
+
+### Lifecycle candidate
+
+Created once with the committed effect; never overwritten.
+
+### Persistence candidate
+
+Retained operational PostgreSQL evidence; nested snapshots are immutable historical results, not current selectors.
+
+### Open questions
+
+None for this boundary.
+
+## Model M193 — CanonicalInputPin
+
+### Meaning
+
+A protected operator-installed trust selector for one immutable Cabinet_web snapshot. It supplies externally accepted digest and Git commit, never self-authentication by the snapshot.
+
+Candidate fields:
+
+- `snapshot_sha256: str`;
+- `repository_commit: str`;
+
+### Identity
+
+value
+
+### Identity evidence
+
+Equal accepted digest and commit identify interchangeable trust selections. A new pin selects another source observation; retained admitted input is not overwritten.
+
+### Source of truth
+
+Protected operator administration of the private canonical-input area under the configured source store; never a network request or synchronized Inbox.
+
+### Lifecycle candidate
+
+No independent lifecycle.
+
+### Persistence candidate
+
+Private bounded selector artifact. The module reads it for new observations and retains the admitted pins in custody/admission records.
+
+### Open questions
+
+None for this boundary.
+
+## Model M194 — LegacyCaptureState
+
+### Meaning
+
+Closed machine-readable vocabulary for the canonical source boundary; no lifecycle or authority is conferred by a classification.
+
+### Identity
+
+value
+
+### Identity evidence
+
+Equal classifications are substitutable. These are labels on observed evidence or refusals, not entities or policy grants.
+
+### Source of truth
+
+A19/A20 and the verified legacy input contract; exact vocabulary is deterministically emitted in the model closure.
+
+### Lifecycle candidate
+
+No independent lifecycle.
+
+### Persistence candidate
+
+Embedded in the relevant immutable observation or operational outcome.
+
+### Open questions
+
+None.
+
+## Model M195 — CanonicalAdmissionState
+
+### Meaning
+
+Closed machine-readable vocabulary for the canonical source boundary; no lifecycle or authority is conferred by a classification.
+
+### Identity
+
+value
+
+### Identity evidence
+
+Equal classifications are substitutable. These are labels on observed evidence or refusals, not entities or policy grants.
+
+### Source of truth
+
+A19/A20 and the verified legacy input contract; exact vocabulary is deterministically emitted in the model closure.
+
+### Lifecycle candidate
+
+No independent lifecycle.
+
+### Persistence candidate
+
+Embedded in the relevant immutable observation or operational outcome.
+
+### Open questions
+
+None.
+
+## Model M196 — CanonicalAdmissionPendingReason
+
+### Meaning
+
+Closed machine-readable vocabulary for the canonical source boundary; no lifecycle or authority is conferred by a classification.
+
+### Identity
+
+value
+
+### Identity evidence
+
+Equal classifications are substitutable. These are labels on observed evidence or refusals, not entities or policy grants.
+
+### Source of truth
+
+A19/A20 and the verified legacy input contract; exact vocabulary is deterministically emitted in the model closure.
+
+### Lifecycle candidate
+
+No independent lifecycle.
+
+### Persistence candidate
+
+Embedded in the relevant immutable observation or operational outcome.
+
+### Open questions
+
+None.
+
+## Model M197 — CanonicalSourceErrorCode
+
+### Meaning
+
+Closed machine-readable vocabulary for the canonical source boundary; no lifecycle or authority is conferred by a classification.
+
+### Identity
+
+value
+
+### Identity evidence
+
+Equal classifications are substitutable. These are labels on observed evidence or refusals, not entities or policy grants.
+
+### Source of truth
+
+A19/A20 and the verified legacy input contract; exact vocabulary is deterministically emitted in the model closure.
+
+### Lifecycle candidate
+
+No independent lifecycle.
+
+### Persistence candidate
+
+Embedded in the relevant immutable observation or operational outcome.
+
+### Open questions
+
+None.

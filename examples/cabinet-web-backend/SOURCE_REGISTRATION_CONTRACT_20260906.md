@@ -7,9 +7,9 @@ recovery of the already associated originals. D0-007 through D0-011 remain
 binding. It supersedes A05's requirement to turn multiple photographs into one
 file and the assumption that a new Web confirmation is the only transfer
 producer. It does not change InvoiceCardV1 or relax the draft-only metadata
-mutation. The current assembled/runtime specification does not implement this
-contract. The propagation ledger below is deliberately open until all owners,
-contracts, consumers, and reciprocal evidence have been reviewed.
+mutation. The local assembled specification now carries this contract. It has not yet
+passed final module review, Factory admission, generation, or runtime verification.
+The propagation ledger remains open for those acceptance steps.
 
 Recovery evidence: Cabinet_web PR 31, commit
 `3fcbd19e5721ec68e1d9f9fe798a07a9c2b09124`, merged as
@@ -204,32 +204,44 @@ never exposes internal storage keys or permits a client to choose paths.
 10. Interruption before and after metadata commit, a lost response, and a local
     Backend outage retain truthful state and permit exact idempotent recovery.
 
-## Propagation ledger — not yet closed
+## Propagation ledger — assembly checkpoint, acceptance still open
 
-The following are required changes, not claims that the current runtime already
-implements them:
+- States 1–3: M181–M197, A19/A20 and module ownership are authored. M06
+  distinguishes per-file content identity from the unchanged logical Card source;
+  M45 distinguishes integration observation provenance from product provenance.
+- States 4–5: registration and admission have independent flows and internal-only
+  operator boundaries. Confirmation no longer produces delivery work.
+- States 6–7: 452 typed functions, 63 public operations, 449 classified notes,
+  29 persistence tables and deterministic query bindings are assembled. Pending
+  publication plans commit before filesystem writes. Retained trusted pins support
+  retries after the active pin advances. Immutable effect results preserve earlier
+  pending outcomes; a fresh effect can reevaluate admission.
+- Canonical input uses an operator-installed private accepted-pin.json under the
+  configured source store's canonical-input directory. Its snapshot selects
+  canonical-input/<snapshot_sha256>/bundle. Missing input blocks these operations,
+  not generic application startup. No new RuntimeSettings fields or public upload
+  channel are introduced.
+- Retrieval binds exact Card, source set, admission revision and file identity.
+  Card-only status refuses ambiguous multiple-set admissions. Source streams load
+  one member lazily and discard bytes at EOF.
+- Release of new canonical sets fails closed: the existing release command lacks
+  typed local verification evidence required by A10. No original is deleted and
+  no successful release is claimed. Completing that boundary remains separate work.
+- Counterpart: all 12 recovered raw Cards validate against the actual generated
+  cabinet_backend InvoiceCardV1 model with logical source IDs preserved. Existing
+  external wire bindings remain unchanged. The external transport adapter and
+  archival end-to-end behavior have not been demonstrated by that model check.
+- Local structural gates for language, ownership, identity, data, contracts,
+  external bindings, notes, routes and flows pass. The temporary checkout cannot
+  resolve the Factory codec registry and witness configuration; the aggregate
+  gate must run again in the canonical sibling checkout without waivers.
+- Registration/admission runtime witnesses cover exact retry, conflicting keys,
+  multi-file custody, partial publication recovery, pin advancement, concurrency,
+  missing capture, lazy retrieval and package bytes. Their Python syntax is checked;
+  they have not run against the new generated runtime.
+- Stage 8–9: final adversarial module review, admission, export, handoff verification
+  and official Factory Route B remain open. No new runtime is deployed.
 
-- State 1: authored M181–M191 for canonical observations, source-set custody,
-  registration, admission, and exact-file retrieval. M06/M14 retain legacy
-  singleton semantics. The new models still require runtime model closure.
-- State 2: A05/A17 corrected, A19/A20 authored and A15 security review updated.
-  Review the remaining A01/A03/A04/A08/A10/A13/A16 consumers while propagating
-  typed runtime operations; structural lint alone is not semantic closure.
-- State 3: canonical_invoice_source owns pinned read-only input; source_custody
-  owns working-byte registration/retrieval; invoice_exchange owns admission.
-  Module descriptions and A19/A20 ownership trace are authored and lint clean.
-- State 4–5: propagate canonical admission and pending/ready discovery through
-  flows and public operations. Retire the confirmation-only producer dependency
-  and keep draft metadata effects separate. This work remains open.
-- State 6–7: close typed models, canonical-source authority adapter, public and
-  internal contracts, constructors, settings, persistence, routes, exact wire
-  projection, and behavior notes; no undeclared dependency or arbitrary payload.
-- Counterpart: review file identities, framing, source-set representation and
-  acknowledgement/release coverage in cabinet-backend before wire-version change.
-- Stage 8–9: assemble, adversarially review affected modules and the reciprocal
-  scenarios, run admission, export and verify handoff, then run official Route B.
-
-Until this ledger is closed, the old global_spec is a prior implementation
-baseline, not an implementation of D0-012. Do not repair this by a handwritten
-production route, database seed, forced confirmation, evidence rewrite, or by
-marking a structural check as semantic acceptance.
+Do not repair this through a handwritten production route, database seed,
+forced confirmation, evidence rewrite, or by treating structural validation as
+semantic or runtime acceptance.

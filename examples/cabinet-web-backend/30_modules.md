@@ -167,10 +167,9 @@ with indexed issue construction, shared by proposal preparation and validation.
 Invoice lifecycle transitions draft → confirmed → archived and their successor
 revisions for payment recording and source-metadata attachment: authorization
 and confirmation-binding checks, exact-revision read-modify-write through the
-catalogue and validator, `CardRevisionCommitCommand` construction, and the
-atomic confirmation producer edge that creates or idempotently retains the exact
-`InvoiceWorkingSetItem` and `InvoiceTransferManifest` consumed by local-node
-discovery, including M29 assignment-observation production.
+catalogue and validator, and `CardRevisionCommitCommand` construction.
+Under A20, canonical transfer admission and manifest/working-set production
+belong to invoice_exchange, independently of this retained lifecycle boundary.
 The lifecycle also owns the trusted line-capture check before the
 confirmation effect and records M180 line-capture evidence bound to the exact
 committed card hash (D0-011).
@@ -178,7 +177,7 @@ committed card hash (D0-011).
 ### Knows
 
 M05, M07–M11 mutation semantics, `rules.invoice_workspace.lifecycle`,
-`rules.invoice_workspace.rejection_codes`, the manifest and working-set policy,
+`rules.invoice_workspace.rejection_codes`,
 and the revision-safe commit port exposed by `card_workspace`, plus the retained
 `Clock` port used once for each operation-level expiry comparison.
 
@@ -191,8 +190,9 @@ or local transfer packaging.
 ### Hides
 
 Transition rules, successor derivation, expected-revision enforcement,
-manifest and working-set hashing, and the single-transaction sequencing that
-keeps Card, manifest, and working set atomic.
+and the single-transaction sequencing that keeps a retained product Card
+transition, its capture evidence and its effect atomic. It does not derive
+canonical transfer manifests or working sets.
 
 ### Candidate public capabilities
 
@@ -208,12 +208,12 @@ archive_invoice
 ### Depth assessment
 
 kind: deep
-hidden mechanism: guarded invoice lifecycle transitions that commit successors together with transfer evidence
+hidden mechanism: guarded invoice lifecycle transitions with exact capture and effect evidence
 
 kind: deep
 hidden mechanism: the Invoice lifecycle state machine — exact-revision
-read-modify-write, validation before commit, and atomic Card/manifest/working-set
-commitment shared by every mutation capability.
+read-modify-write, validation before commit, and atomic Card/capture/effect
+commitment shared by retained mutation capabilities.
 
 ## `project_workspace`
 
@@ -613,6 +613,11 @@ shape, channel labels, owner/local-node resolver postconditions, and the exact
 call signatures of `authentication_admission`, `capability_grants`, and
 `principal_lifecycle`.
 
+A19/A20 operator admission reuses this owner: the caller supplies its current
+transaction and authenticated operator; this module rechecks durable active
+owner/operator identity and returns the exact actor without granting a network
+capability or inventing credentials.
+
 ### Must not own
 
 Credential verification, throttle transitions, transactions, grant storage,
@@ -633,6 +638,7 @@ authorize_capability
 enroll_principal
 enroll_local_node
 provision_capability_grant
+require_protected_operator
 rotate_credential
 revoke_credential
 ```
@@ -697,11 +703,16 @@ admissions the source is Cabinet_web; this module does not require Cabinet Flow.
 
 ### Knows
 
-The protected immutable input-store root, configured current snapshot digest
-and repository commit, finite input-object bounds, the accepted snapshot schema,
+The protected immutable input area under the typed source-store root, M193
+operator-installed current snapshot digest and repository commit, finite
+input-object bounds, the accepted snapshot schema,
 product Card hash semantics, and retained admission references for issued work.
-These are constructor inputs from the composition root, never request paths or
-runtime environment reads. An unconfigured input boundary is explicit and does
+The existing typed source-store root and byte bound are constructor inputs
+from composition. This module alone reads the protected M193 selector as
+canonical-source trust evidence; it never reads environment variables. Missing
+input configuration does not prevent generic service startup, but every
+canonical-source operation fails explicitly until an operator installs a pin.
+Request paths, Git refs, URLs and credentials cannot select the source. An unconfigured input boundary is explicit and does
 not become an empty canonical inventory.
 
 ### Must not own
@@ -721,6 +732,7 @@ ordering, and safe bounded reads from retained immutable snapshots.
 ```text
 load_canonical_invoice_snapshot
 get_canonical_invoice_observation
+get_registered_source_observation
 read_canonical_original
 read_admitted_card_revision
 ```

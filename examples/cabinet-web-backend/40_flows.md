@@ -130,6 +130,10 @@ never becomes a stored or confirmed fact.
 `module:effect_journal` owns idempotency conflicts and ambiguous effect state;
 `module:chatgpt_interaction` translates only safe, bounded results for ChatGPT.
 
+The retained lifecycle obtains an exact draft through
+`capability:card_workspace.get_card_revision`; canonical import/admission never
+uses this legacy product repository as a substitute for the pinned source.
+
 ## `flow:create_project_artifacts_through_chatgpt`
 
 ### Trigger
@@ -266,63 +270,132 @@ Card, custody, effect, synchronization, or release state.
 `module:web_gateway` owns safe HTTP translation. No error exposes internal
 storage layout, bearer values, secrets, or unbounded external text.
 
-## `flow:confirmed_invoice_enters_vps_working_set`
+## `flow:register_existing_canonical_originals`
 
 ### Trigger
 
-The owner confirms one Invoice Card through the normal ChatGPT or Web UI flow.
+An authenticated protected operator registers the already associated originals
+of one exact Cabinet_web Card revision from the configured immutable snapshot.
 
 ### Boundary
 
-`module:invoice_lifecycle` owns the confirmation transition and the producer
-edge that derives the working-set item and manifest from the committed
-revision. Canonical Card commits belong to `module:card_workspace`; verified
-source custody evidence belongs to `module:source_custody`; effect identity and
-idempotent replay belong to `module:effect_journal`; local discovery and package
-issuance belong to `module:invoice_exchange`, which reads the producer output
-and never derives it.
+`module:access_control` verifies the operator against durable principal state.
+`module:canonical_invoice_source` owns trusted input and exact existing facts.
+`module:source_custody` owns working-byte publication and set custody;
+`module:effect_journal` owns principal-scoped replay. No network caller can
+supply a path, repository, origin credential or replacement Card.
 
 ### Steps
 
-1. `capability:invoice_lifecycle.confirm_invoice` commits the exact successor
-   revision through `capability:card_workspace.commit_card_revision` and verified
-   source membership under its existing effect boundary.
-2. In the same durable transition it creates or idempotently retains one
-   immutable `InvoiceWorkingSetItem` and `InvoiceTransferManifest` for that
-   revision. The manifest has exactly one `card_revisions` entry and immutable
-   source references.
-3. Any available `CardObjectAssignmentObservation` is pinned to the revision
-   and later carried unchanged by `module:invoice_exchange`; no project is
-   inferred from an Invoice ID or label.
-4. `capability:invoice_exchange.discover_invoice_work` reads this durable
-   producer output in stable order;
-   an empty working set is truthful only when no confirmed eligible Invoice
-   exists.
+1. `capability:canonical_invoice_source.load_canonical_invoice_snapshot` checks
+   the configured origin pins before returning the bounded inventory. The
+   protected operator selects an exact Card hash and source-set hash from it.
+2. `capability:source_custody.register_canonical_source_set` opens its operational
+   transaction, calls `capability:access_control.require_protected_operator`
+   with that same transaction and the authenticated operator, checks the command
+   actor, and calls `capability:effect_journal.begin_effect` for the exact request.
+3. `capability:canonical_invoice_source.get_canonical_invoice_observation`
+   resolves the exact target from the pinned snapshot. Registration rejects a
+   different Card hash, logical source association or set hash before publication.
+4. Registration durably commits the prepared effect and exact per-file
+   publication plans and pending M185 trust anchor before writing bytes. A final
+   transaction locks the exact
+   set and effect, rechecks the prepared request hash and any retained result,
+   then `capability:canonical_invoice_source.get_registered_source_observation`
+   resolves that retained accepted input and
+   `capability:canonical_invoice_source.read_canonical_original` supplies each
+   exact bounded original in declared order. Custody verifies, stages, publishes
+   and reopens every member through the immutable byte-store port. Publication
+   progress is recoverable; it is not a completed set until all members verify.
+5. Custody stores M185, the immutable M192 result, and the committed effect atomically through
+   `capability:effect_journal.commit_effect`. Equal replay returns the recorded
+   M187 result. A conflicting key or different set cannot overwrite a record.
+6. `capability:source_custody.inspect_source_set_custody` exposes that exact set
+   and its verified state to subsequent admission in the caller's transaction.
 
 ### Invariants
 
-`confirm_invoice` success -> durable discovery item and immutable manifest;
-changed revision/source set -> new manifest; repeated confirmation -> one
-logical producer item; failed confirmation -> no discoverable transfer item.
+A19 applies. Card bytes, status, logical source and capture proof never change.
+Partial publication is never complete custody; equal bytes never confer access
+across Cards. No registration implicitly creates a manifest or local receipt.
 
 ### Outcomes
 
-State 0 outcome proven here: "Backend temporarily unavailable" — the confirmed revision and its bytes wait for the next local session without claiming acceptance.
-
-Success leaves exactly one committed confirmed revision, one immutable
-`InvoiceTransferManifest`, and one `InvoiceWorkingSetItem` for that revision,
-discoverable in stable order. Repeated confirmation of the same revision is
-idempotent and creates no second manifest or item. Failure at any step leaves
-no confirmed revision, manifest, or working-set item and no discoverable
-transfer work.
+Exact M187 registration result or a bounded failure; originals remain separate
+files with their accepted ordering. Confirmed Cards are valid targets. Failed
+or interrupted publication leaves truthful recoverable state and no false
+success. Existing missing capture proof stays missing.
 
 ### Errors
 
-`module:invoice_lifecycle` owns confirmation-binding, stale-revision,
-validation, and custody rejections; `module:card_workspace` owns revision
-conflicts; `module:source_custody` owns missing or unverified custody;
-`module:effect_journal` owns idempotency conflicts and unknown outcomes. No
-error fabricates custody, manifest, or working-set evidence.
+`module:access_control` owns absent, revoked or non-operator authority;
+`module:canonical_invoice_source` owns unconfigured/untrusted input, stale
+revision, invalid association and missing/corrupt immutable input;
+`module:source_custody` owns media, bounds and publication failures;
+`module:effect_journal` owns replay conflicts. None expose paths or secrets.
+
+## `flow:admit_canonical_invoice_for_delivery`
+
+### Trigger
+
+The protected operator admits an exact existing Cabinet_web revision and its
+accepted source set for delivery, independently of registration and confirmation.
+
+### Boundary
+
+`module:invoice_exchange` owns durable pending/ready admission and produces the
+manifest and working set. `module:canonical_invoice_source` owns exact canonical
+reads; `module:source_custody` owns verified set custody; `module:access_control`
+owns operator authority; `module:effect_journal` owns replay. The canonical
+repository does not participate in the operational PostgreSQL transaction.
+
+### Steps
+
+1. `capability:invoice_exchange.admit_canonical_invoice` opens one operational
+   transaction and calls `capability:access_control.require_protected_operator`.
+   It checks the command actor and reserves its exact principal-scoped effect
+   through `capability:effect_journal.begin_effect`.
+2. `capability:canonical_invoice_source.get_canonical_invoice_observation`
+   returns the exact revision, accepted ordered original set and unchanged
+   capture evidence. `capability:source_custody.inspect_source_set_custody`
+   checks matching custody and re-verifies its members in the same transaction.
+3. Admission creates or updates M189 with exact pending reasons when the Card
+   is not confirmed, source custody is unavailable, or capture proof is missing,
+   malformed, stale, mismatched or incomplete. Pending is a durable visible
+   outcome, never a fabricated proof or an empty inventory.
+4. When all A20 prerequisites hold, the exchange creates one immutable manifest
+   with exactly one Card revision and one ContentReference per original in the
+   accepted order, copying each file's content identity rather than the logical
+   Card source ID. It atomically retains the admission, manifest, working-set
+   record and effect through `capability:effect_journal.commit_effect`. Ready
+   evidence is immutable.
+5. `capability:invoice_exchange.get_canonical_invoice_admission` exposes the
+   exact pending/ready result to the protected operator. A fresh effect may
+   re-evaluate pending evidence; equal replay reports the original outcome.
+6. `capability:invoice_exchange.discover_invoice_work` reads only available
+   ready producer output. Pending admissions remain visible through admission
+   status, even when no package is ready. Local outage leaves work durable.
+
+### Invariants
+
+A20 applies. No step calls confirm_invoice, commits a Card, seeds old product
+master tables or rewrites capture evidence. Different revision or membership
+requires a new manifest. Equal replay cannot change previously issued work.
+
+### Outcomes
+
+M190 contains an exact durable pending or ready admission. Ready manifests
+are discoverable without reconfirming the Card. Pending can be re-evaluated
+against newly accepted evidence of the same exact canonical facts; an issued
+manifest and its receipts can never be refreshed in place. Admission claims
+neither local acceptance nor permission to delete working originals.
+
+### Errors
+
+Authority, trusted-input and idempotency failures reject the operation.
+Missing delivery prerequisites produce pending reasons. Persistence failure
+rolls back admission, manifest, working set and effect together. No failure
+mutates canonical product artifacts.
 
 ## `flow:pull_invoice_package_to_local_backend`
 
@@ -335,8 +408,8 @@ compatibility observation, discovers Invoice work, and requests an exact package
 
 `module:sync_gateway` owns wire parsing and safe responses. Authentication uses
 `module:access_control`. Protocol state and truth belong to
-`module:invoice_exchange`; exact Card and byte reads use `module:card_workspace`
-and `module:source_custody`.
+`module:invoice_exchange`; exact admitted Card reads use `module:canonical_invoice_source` and working
+byte reads use `module:source_custody`.
 
 ### Steps
 
@@ -352,9 +425,11 @@ and `module:source_custody`.
    page containing only exact available Invoice IDs, Card revision/content
    hashes, immutable manifest IDs/hashes, ordered source metadata, and an opaque
    continuation cursor.
-4. The exchange reads exact Card content through
-   `capability:card_workspace.get_card_revision` and opens each required source
-   through `capability:source_custody.retrieve_original_source`, resolves the exact
+4. The exchange verifies retained source membership through
+   `capability:canonical_invoice_source.get_registered_source_observation`
+   and reads exact Card content through
+   `capability:canonical_invoice_source.read_admitted_card_revision` and opens
+   each exact file through `capability:source_custody.retrieve_source_set_file`, resolves the exact
    discovered immutable manifest, durably records issuance, then
    `capability:invoice_exchange.pull_invoice_package` streams the closed A08
    wire form: the length-prefixed M162 metadata (issuance, manifest, exact

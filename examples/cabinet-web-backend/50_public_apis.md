@@ -465,27 +465,28 @@ Read-only.
 
 ### Callers
 
-`module:invoice_exchange`.
+`module:invoice_lifecycle`.
 
 ### Inputs
 
-Card ID and exact M03 revision/content hash.
+Exact legacy CardRevisionReference.
 
 ### Outputs
 
-Exact typed Card revision or absence.
+CanonicalCardRevision for that retained product revision.
 
 ### Observable effect
 
-None.
+Read the exact legacy revision for draft/lifecycle operations. The canonical
+admission package path uses canonical_invoice_source instead.
 
 ### Enforces
 
-A newer revision never substitutes for the requested revision.
+No revision substitution or mutation on a read.
 
 ### Errors
 
-CardNotFound, RevisionNotFound, IntegrityMismatch.
+Unknown or conflicting exact revision.
 
 ### State impact
 
@@ -1802,3 +1803,380 @@ MissingSetting, InvalidSetting, RuntimeSettingConstraintViolation.
 ### State impact
 
 No durable state; fail-closed startup input only.
+
+## `public_op:access_control.require_protected_operator`
+
+### Owner
+
+`module:access_control`.
+
+### Callers
+
+`module:source_custody`, `module:invoice_exchange`.
+
+### Inputs
+
+Caller-owned transaction and authenticated operator.
+
+### Outputs
+
+ActorReference for the exact active Cabinet owner/operator.
+
+### Observable effect
+
+Re-read durable identity under the caller transaction; reject absent, revoked, machine or mismatched authority.
+
+### Enforces
+
+A03/A19/A20: caller data is not authority.
+
+### Errors
+
+Authorization failure.
+
+### State impact
+
+Read-only; no independent commit.
+
+## `public_op:canonical_invoice_source.load_canonical_invoice_snapshot`
+
+### Owner
+
+`module:canonical_invoice_source`.
+
+### Callers
+
+`boundary:protected_operator`.
+
+### Inputs
+
+Constructor-injected current trusted origin pins and immutable input root.
+
+### Outputs
+
+CanonicalInvoiceSnapshot with the complete verified bounded inventory.
+
+### Observable effect
+
+Verify snapshot digest, origin and every referenced object before exposing facts.
+
+### Enforces
+
+A19: unconfigured input is explicit, never an empty inventory.
+
+### Errors
+
+Unconfigured source, pin/schema/object mismatch or input bounds.
+
+### State impact
+
+Read-only.
+
+## `public_op:canonical_invoice_source.get_canonical_invoice_observation`
+
+### Owner
+
+`module:canonical_invoice_source`.
+
+### Callers
+
+`module:source_custody`, `module:invoice_exchange`.
+
+### Inputs
+
+Exact configured snapshot digest, Invoice ID, expected Card hash and source-set hash.
+
+### Outputs
+
+CanonicalInvoiceObservation for exactly those canonical facts.
+
+### Observable effect
+
+Resolve and verify the exact accepted association and unchanged capture evidence.
+
+### Enforces
+
+A19/A20: no caller-selected repository, no newer-revision substitution.
+
+### Errors
+
+Unknown or mismatched target, untrusted origin or corrupt input.
+
+### State impact
+
+Read-only.
+
+## `public_op:canonical_invoice_source.read_canonical_original`
+
+### Owner
+
+`module:canonical_invoice_source`.
+
+### Callers
+
+`module:source_custody`.
+
+### Inputs
+
+Durable SourceSetCustodyRecord supplied by source_custody and one declared content identity.
+
+### Outputs
+
+Bounded exact original bytes.
+
+### Observable effect
+
+Reopen and verify the selected original against its declared size and hash.
+
+### Enforces
+
+A05/A19: accepted membership, no arbitrary file path or external fetch.
+
+### Errors
+
+Missing member, absent bytes, corruption or bound violation.
+
+### State impact
+
+Read-only.
+
+## `public_op:canonical_invoice_source.read_admitted_card_revision`
+
+### Owner
+
+`module:canonical_invoice_source`.
+
+### Callers
+
+`module:invoice_exchange`.
+
+### Inputs
+
+Retained CanonicalInvoiceAdmissionRecord and exact manifest revision.
+
+### Outputs
+
+CanonicalCardRevision containing unchanged canonical JSON and exact reference.
+
+### Observable effect
+
+Read retained admitted input even after the current snapshot advances.
+
+### Enforces
+
+A20: projection metadata never rewrites Card provenance or creates a product revision.
+
+### Errors
+
+Missing retained input, pin/hash mismatch or manifest mismatch.
+
+### State impact
+
+Read-only.
+
+## `public_op:source_custody.register_canonical_source_set`
+
+### Owner
+
+`module:source_custody`.
+
+### Callers
+
+`boundary:protected_operator`.
+
+### Inputs
+
+RegisterCanonicalSourceSetCommand and authenticated protected operator.
+
+### Outputs
+
+SourceSetRegistrationResult for the exact complete custody or replay.
+
+### Observable effect
+
+Verify and durably register every original independently of Card mutation.
+
+### Enforces
+
+A19/A05/A04: preserve canonical bytes, membership, actor and idempotency.
+
+### Errors
+
+Authority, target, input, media, limits, publication or effect conflict.
+
+### State impact
+
+Operational custody/effect state and immutable working bytes only.
+
+## `public_op:source_custody.inspect_source_set_custody`
+
+### Owner
+
+`module:source_custody`.
+
+### Callers
+
+`module:invoice_exchange`.
+
+### Inputs
+
+Caller transaction and exact verified canonical observation.
+
+### Outputs
+
+Matching SourceSetCustodyRecord or explicit absence/unavailability.
+
+### Observable effect
+
+Recheck each required working member before admission without opening another transaction.
+
+### Enforces
+
+A19/A20: a singleton record never proves complete set custody.
+
+### Errors
+
+Corrupt stored membership or bytes; explicit absent/released custody.
+
+### State impact
+
+Read-only within caller transaction.
+
+## `public_op:source_custody.retrieve_source_set_file`
+
+### Owner
+
+`module:source_custody`.
+
+### Callers
+
+`module:invoice_exchange`.
+
+### Inputs
+
+SourceSetFileRetrievalRequest and verified exact download authorization.
+
+### Outputs
+
+SourceDownload for one selected immutable file.
+
+### Observable effect
+
+Authorize exact Card/source/set/hash and verify bounded original bytes.
+
+### Enforces
+
+A05/A19: never select the first photo implicitly or expose storage paths.
+
+### Errors
+
+Unauthorized target, missing set/member, released bytes or corruption.
+
+### State impact
+
+Read-only.
+
+## `public_op:invoice_exchange.admit_canonical_invoice`
+
+### Owner
+
+`module:invoice_exchange`.
+
+### Callers
+
+`boundary:protected_operator`.
+
+### Inputs
+
+AdmitCanonicalInvoiceCommand and authenticated protected operator.
+
+### Outputs
+
+CanonicalInvoiceAdmissionResult, including exact pending reasons or immutable ready manifest.
+
+### Observable effect
+
+Atomically retain admission, and when ready its manifest and working set, with its effect.
+
+### Enforces
+
+A20/A08/A04: no product write or confirmation; exact multi-file membership.
+
+### Errors
+
+Authority, canonical-input, effect conflict or transaction failure; unmet prerequisites are pending.
+
+### State impact
+
+Operational admission, manifest, working-set and effect state only.
+
+## `public_op:invoice_exchange.get_canonical_invoice_admission`
+
+### Owner
+
+`module:invoice_exchange`.
+
+### Callers
+
+`boundary:protected_operator`.
+
+### Inputs
+
+Exact Invoice/source-set identity and authenticated protected operator.
+
+### Outputs
+
+CanonicalInvoiceAdmissionRecord or explicit not-observed result.
+
+### Observable effect
+
+Expose truthful readiness or unmet prerequisites for that exact admitted revision.
+
+### Enforces
+
+A20: no empty ready queue may conceal existing pending admission.
+
+### Errors
+
+Authorization failure or unknown observation.
+
+### State impact
+
+Read-only.
+
+## `public_op:canonical_invoice_source.get_registered_source_observation`
+
+### Owner
+
+`module:canonical_invoice_source`.
+
+### Callers
+
+`module:source_custody`, `module:invoice_exchange`.
+
+### Inputs
+
+A SourceSetCustodyRecord loaded from the protected operational repository,
+including its previously accepted immutable input pins and exact set identity.
+
+### Outputs
+
+The exact verified CanonicalInvoiceObservation from that retained accepted input.
+
+### Observable effect
+
+Read retained accepted evidence during prepared registration recovery, including
+a retry after the operator selects a newer current snapshot.
+
+### Enforces
+
+A19: stored acceptance pins are authority only within this trusted internal
+call; a request cannot supply a custody record or choose arbitrary input.
+
+### Errors
+
+Absent/corrupt retained input or a different Card/source/set.
+
+### State impact
+
+Read-only; it cannot create or upgrade custody.

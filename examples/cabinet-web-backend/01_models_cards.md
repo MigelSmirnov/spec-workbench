@@ -60,6 +60,12 @@ Candidate fields:
 - accepted `media_type`;
 - original display filename optional.
 
+
+For an A19 canonical source set, source_id in each M06 identifies that original
+file and equals its accepted CanonicalSourceFile.content_id. The containing
+M185.source_id and canonical InvoiceCardV1.source.source_id remain the logical
+document identity. Legacy single-file M14 references retain their original
+source_id. No migration rewrites a Card or old reference to make these IDs equal.
 ### Identity
 
 value

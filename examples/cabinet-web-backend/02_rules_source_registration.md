@@ -11,7 +11,11 @@ A05 owns general file safety, A03 authority, A04 replay, and A17 durability.
 
 1. The current input is one bounded, operator-pinned canonical snapshot of
    Cabinet_web. Its repository and accepted commit/hash are protected operator
-   configuration, never request-selected paths, URLs, Git refs, or credentials.
+   configuration in M193, never request-selected paths, URLs, Git refs, or
+   credentials. The canonical-source module reads this protected selector from
+   its private area under the existing typed source-store root. A18 remains the
+   only environment parser; absence of canonical input blocks source operations,
+   not generic backend startup. Retained admitted snapshots survive pin changes.
    The adapter reads immutable input only and cannot invoke a product mutation.
 2. A source-only recovery audit may supply the already reviewed associations
    only after its Card and original hashes have been verified against the
@@ -31,12 +35,22 @@ A05 owns general file safety, A03 authority, A04 replay, and A17 durability.
    source membership and file order, including alternate shots. Equal bytes
    may share physical storage but never object-level retrieval authority.
    An empty observed set remains missing source evidence, not stored custody.
-6. Working bytes are independently checked under A05/A13, staged, published,
+6. A prepared effect and its exact deterministic per-file publication plan
+   and pending M185 trust anchor commit before filesystem writes. That record
+   retains the accepted snapshot and repository commit, allowing an exact
+   prepared retry after the current input selector advances. The final set
+   custody and immutable effect
+   result commit together only after all files verify. A19 does not pretend
+   filesystem publication and PostgreSQL are one atomic resource. Working bytes
+   are independently checked under A05/A13, staged, published,
    reopened and verified through the byte-store boundary. Set custody is stored
    only when every declared member is durable and verifiable. Partial progress
    stays recoverable pending/failed evidence and is never complete success.
-7. Equal retry has one retained logical result; the same effect identity with
-   another request is a conflict. A different set produces another custody
+7. M192 retains the immutable typed original result in the same transaction
+   as the shared effect journal. Equal retry has one retained logical result; the same effect identity with
+   another request is a conflict, including a still-prepared effect: these
+   operator operations explicitly compare request_hash even where the shared
+   journal permits a proposal-to-confirmation payload change. A different set produces another custody
    obligation. Concurrent attempts cannot overwrite content or lose members.
    Already issued manifests and release receipts are never changed by retry.
 8. Exact file retrieval requires the authorized Card/source/set/hash. A guessed
@@ -97,7 +111,7 @@ already accepts multi-photo source packages.
 2. Every observed revision remains visible through admission status, including
    absent working bytes or capture proof. An empty old confirmation-produced
    queue cannot stand as evidence that no canonical Invoice exists.
-3. Ready requires the exact canonical revision, nonempty accepted source set,
+3. Ready requires the exact confirmed canonical revision, nonempty accepted source set,
    verified set custody and valid current capture proof under D0-011. Missing
    prerequisites produce bounded explicit pending reasons. A confirmed status
    alone cannot bypass custody or capture checks.
@@ -115,7 +129,8 @@ already accepts multi-photo source packages.
    digest already covers the exact ordered file references and Card revision;
    the local Backend continues to verify every required file and return its
    exact manifest receipt. Product InvoiceCardV1 content remains unchanged.
-7. Equal admission replays one logical outcome. A changed Card revision or file
+7. Equal admission replays the original M192 result, including its original
+   pending reasons. A fresh effect may re-evaluate a pending M189 outcome. A changed Card revision or file
    set produces another manifest. Ready manifests and their issuance/receipt
    evidence are immutable; pending obligations may be re-evaluated against a
    newly trusted observation of the same canonical facts and actual proof.
@@ -123,9 +138,16 @@ already accepts multi-photo source packages.
    named by the admitted manifest. It cannot substitute a later Card, a different
    source set, or the first photograph. Local unavailability leaves work durable;
    no operator admission claims local acceptance or triggers automatic release.
+   Card-only transfer status reports ambiguity when multiple exact source-set
+   admissions match; exact-set admission status remains available. Missing
+   capture proof does not relabel independently verified originals as missing.
 9. Exact source-set release retains A10's complete reciprocal checks. It cannot
    release a shared file still required by another live working-set obligation,
-   or use a receipt for one file/set to release a different one.
+   or use a receipt for one file/set to release a different one. The current
+   release command lacks the complete typed local verification required by A10;
+   new canonical sets therefore remain retained and release is refused until
+   that independent reciprocal evidence boundary is supplied. Hash tuples and
+   a nonempty evidence ID are not replacements for missing source-ID evidence.
 
 ### Formal invariants
 

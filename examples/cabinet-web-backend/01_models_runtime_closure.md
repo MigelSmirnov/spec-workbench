@@ -218,6 +218,13 @@ value
 
 Equal typed transport and application facts are interchangeable.
 
+
+For an A20 imported canonical revision, canonical_json is the unchanged accepted
+Card JSON and reference retains the original Card identity/hash. created_by and
+created_at describe creation of this integration envelope from the admitted
+observation (its actor and created_at), not authorship or creation of the product
+Card. The product's provenance is preserved inside canonical_json. This envelope
+cannot be used as evidence of a canonical product commit by the integration service.
 ## Model M46 — CapabilityResolution
 
 Fields: `capability: str`, `operation_class: str`, `channel: str`, `allowed: bool`.
