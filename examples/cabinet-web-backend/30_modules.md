@@ -686,13 +686,63 @@ hidden mechanism: the principal-scoped idempotency journal: canonical request bi
 The three operations hide difficult concurrency and retry behavior shared by
 otherwise independent domain effects.
 
+## `canonical_invoice_source`
+
+### Owns
+
+A19's read-only canonical-input adapter: M181–M184 snapshot validation against
+an operator-pinned origin and digest, exact Invoice/source-set lookup, and
+bounded verification of referenced immutable input objects. For current
+admissions the source is Cabinet_web; this module does not require Cabinet Flow.
+
+### Knows
+
+The protected immutable input-store root, configured current snapshot digest
+and repository commit, finite input-object bounds, the accepted snapshot schema,
+product Card hash semantics, and retained admission references for issued work.
+These are constructor inputs from the composition root, never request paths or
+runtime environment reads. An unconfigured input boundary is explicit and does
+not become an empty canonical inventory.
+
+### Must not own
+
+Card/source identity allocation, source association invention, GitHub requests,
+Git writes, product mutations, custody admission, transfer readiness, credentials,
+line recognition, capture-evidence creation, or local archive acceptance.
+
+### Hides
+
+Private content-addressed input layout, pin verification before decoding,
+lossless Card/capture object verification, exact source-set membership and
+ordering, and safe bounded reads from retained immutable snapshots.
+
+### Candidate public capabilities
+
+```text
+load_canonical_invoice_snapshot
+get_canonical_invoice_observation
+read_canonical_original
+read_admitted_card_revision
+```
+
+### Depth assessment
+
+kind: deep
+hidden mechanism: pinned canonical snapshot verification and exact immutable object reads
+
+The boundary supplies verified existing facts without letting downstream
+integration modules become product writers or filesystem interpreters.
+
 ## `source_custody`
 
 ### Owns
 
-M05/M06/M14/M15 lifecycle; bounded non-executable original-byte validation and
-immutable storage; single-use upload handoffs; authorized retrieval; and the
-explicit evidence-backed release of eligible VPS working bytes.
+A19/M185 working custody for exact multi-file canonical source observations;
+bounded non-executable original-byte validation, immutable storage, and exact
+set/file retrieval; retained M06/M14/M15 legacy custody and single-use handoffs;
+and the explicit evidence-backed release of eligible VPS working bytes.
+Logical source identity and membership remain with the canonical capability
+owner and enter only through canonical_invoice_source.
 
 ### Knows
 
@@ -702,7 +752,7 @@ retained `Clock` port for custody evidence timestamps.
 
 ### Must not own
 
-OCR, previews, Card confirmation, local durable acceptance, filenames as paths,
+OCR, previews, Card confirmation, canonical Card mutation, local durable acceptance, filenames as paths,
 public static serving, or automatic cleanup from inactivity or Registry status.
 
 ### Hides
@@ -718,6 +768,9 @@ issue_upload_handoff
 store_original_source
 retrieve_original_source
 release_vps_working_set
+register_canonical_source_set
+inspect_source_set_custody
+retrieve_source_set_file
 ```
 
 ### Depth assessment
@@ -725,8 +778,11 @@ release_vps_working_set
 kind: deep
 hidden mechanism: the verified byte-custody chain: staged upload, atomic commit, and verified re-read through the byte-store port
 
-Four custody operations hide file-system safety, concurrent handoff use, byte
-identity, and conservative release without becoming a document processor.
+Custody operations hide file-system safety, concurrent publication, exact set
+membership, byte identity and conservative release. Registration is independent
+of Card confirmation; inspection can share the caller's admitted transaction
+without opening a competing unit of work.
+
 
 ## `web_gateway`
 
@@ -812,8 +868,9 @@ the exchange modules, so transport replacement cannot rewrite sync policy.
 
 ### Owns
 
-The A08 evening pull protocol: Invoice-only work discovery from the durable
-working-set producer, immutable M21 manifests, node-scoped M22 issuance, exact
+A20's protected canonical-revision admission and truthful pending/ready status,
+and the A08 evening pull protocol: Invoice-only work discovery from durable
+admission output, immutable M21 manifests, node-scoped M22 issuance, exact
 package delivery in the closed A08 wire form (length-prefixed M162 metadata —
 issuance, manifest, complete canonical Card revision, M29 — followed by the
 raw source parts in manifest order), M23 receipt acceptance, reconciliation,
@@ -828,7 +885,9 @@ the retained `Clock` port for discovery and issuance observations.
 ### Must not own
 
 Provider/Client/Project export, local import decisions, automatic VPS release,
-Card editing, credentials, or transport-success-as-durable-acceptance.
+Card editing or confirmation, canonical product storage, credentials, or
+transport-success-as-durable-acceptance. Admission must not call the legacy
+confirmation producer or seed canonical Card tables.
 
 ### Hides
 
@@ -844,6 +903,8 @@ pull_invoice_package
 record_invoice_transfer_receipt
 reconcile_invoice_transfer
 get_invoice_transfer_status
+admit_canonical_invoice
+get_canonical_invoice_admission
 ```
 
 ### Depth assessment
@@ -851,8 +912,11 @@ get_invoice_transfer_status
 kind: deep
 hidden mechanism: manifest-driven invoice transfer: issuance, package streaming, and receipt/reconciliation state
 
-Four protocol operations hide immutable package construction and distributed
-delivery ambiguity while keeping the local Backend authoritative for import.
+Admission hides exact canonical input, custody and capture prerequisites;
+protocol operations hide immutable package construction and distributed delivery
+ambiguity while keeping the local Backend authoritative for import. Pending
+admission remains inspectable even when no ready work item can be issued.
+
 
 ## `registry_replica`
 

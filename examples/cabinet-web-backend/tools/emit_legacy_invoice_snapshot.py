@@ -29,6 +29,15 @@ def canonical_bytes(value: object) -> bytes:
                       separators=(",", ":"), allow_nan=False).encode("utf-8")
 
 
+def source_set_hash(source_set: dict) -> str:
+    # Provenance remains pinned by the outer snapshot. Updating an unrelated
+    # audit entry must not create a new custody obligation for equal membership.
+    membership = {name: source_set[name] for name in (
+        "card_id", "source_id", "card_content_hash", "files"
+    )}
+    return "sha256:" + sha256(canonical_bytes(membership))
+
+
 def load_json(raw: bytes) -> object:
     def unique_keys(pairs: list[tuple[str, object]]) -> dict[str, object]:
         result: dict[str, object] = {}
@@ -196,7 +205,7 @@ def build_snapshot(repository: PinnedRepository, audit_path: str) -> tuple[dict,
             "card_id": invoice_id, "card_raw_sha256": retain(raw),
             "card_content_hash": card_hash, "card": card,
             "source_set": source_set,
-            "source_set_hash": "sha256:" + sha256(canonical_bytes(source_set)),
+            "source_set_hash": source_set_hash(source_set),
             "capture_raw_sha256": retain(capture_raw) if capture_raw is not None else None,
             "capture_state": "invalid" if malformed_capture else capture_state(card, card_hash, evidence),
             "document_completeness": "not_asserted",

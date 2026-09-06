@@ -33,8 +33,10 @@ The snapshot's raw SHA-256 is computed over the exact `snapshot.json` bytes,
 including the final newline. Canonical Card hashes retain the existing product
 `sha256:` prefix and the exact sorted, compact UTF-8 JSON recipe from
 `invoice_service.content_hash`. They are distinct from raw Card-file hashes.
-Source-set hashes apply that same canonical encoding to the complete
-`source_set` object. Each file's `content_id` is its prefixed raw byte hash;
+Source-set hashes apply that same canonical encoding to `card_id`, `source_id`,
+`card_content_hash` and the ordered `files` of `source_set`. The association audit
+hash remains pinned by the outer snapshot and is excluded from membership
+identity: unrelated audit changes cannot create new custody obligations. Each file's `content_id` is its prefixed raw byte hash;
 it is distinct from the Card-scoped logical `source_id`. Ordinals preserve
 accepted audit order, not inferred page numbering. Duplicate content identities
 inside one audited set fail instead of silently changing membership.

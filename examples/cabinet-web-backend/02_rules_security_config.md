@@ -342,6 +342,10 @@ security subsystem or silently shipping stale vulnerable components.
 The review covers every actor and ingress boundary accepted in State 0 and ties
 authorization to M02/M17 identities from State 1. All nine required categories
 are applicable to this deployed server product and have enforceable decisions.
+The 2026-09-06 review includes A19/A20: protected operator admission of a
+pinned canonical snapshot, private immutable input artifacts, multi-file custody
+and exact replay. It introduces no public upload, callback or path-selection
+surface. M181–M191 keep source ownership, custody and admission distinct.
 
 ### Formal invariants
 
@@ -368,12 +372,12 @@ or loses its enforceable boundary.
 
 Security review: PERFORMED
 
-- authentication_credential_abuse: APPLICABLE; references: A03, A11, A13; affected: M02, M17, browser, ChatGPT plugin, local synchronization, operator boundary
-- secrets: APPLICABLE; references: A06, A11, A14; affected: M02, M15, M17, deployment configuration, logs, backups, exports
-- authorization: APPLICABLE; references: A02, A03, A10, A16; affected: M02, M07, M08, M09, M10, M14, M15, M16, M17, M20, M22
-- injection_interpreted_input: APPLICABLE; references: A02, A05, A07, A12, A16; affected: ChatGPT proposals, Card fields, search, files, templates, queries, operation selection
-- external_callbacks_webhooks: APPLICABLE; references: A04, A08, A09; affected: local-initiated Invoice pull receipt and Registry catalogue publication boundaries
+- authentication_credential_abuse: APPLICABLE; references: A03, A11, A13, A19; affected: M02, M17, browser, ChatGPT plugin, local synchronization, operator boundary
+- secrets: APPLICABLE; references: A06, A11, A14, A19; affected: M02, M15, M17, deployment configuration, logs, backups, exports
+- authorization: APPLICABLE; references: A02, A03, A10, A16, A19, A20; affected: M02, M07, M08, M09, M10, M14, M15, M16, M17, M20, M22, M181, M182, M183, M184, M185, M186, M188, M189, M191
+- injection_interpreted_input: APPLICABLE; references: A02, A05, A07, A12, A16, A19; affected: ChatGPT proposals, Card fields, search, files, templates, queries, operation selection
+- external_callbacks_webhooks: APPLICABLE; references: A04, A08, A09, A20; affected: local-initiated Invoice pull receipt and Registry catalogue publication boundaries
 - browser_boundary: APPLICABLE; references: A05, A06, A07, A11; affected: secondary Web upload and Card surfaces
-- files_artifacts: APPLICABLE; references: A01, A05, A06, A10, A13; affected: M05, M06, M14, M15, M21, source download, backups
-- concurrency: APPLICABLE; references: A01, A04, A06, A08, A09, A10; affected: M10, M14, M15, M16, M20, M22, M28
+- files_artifacts: APPLICABLE; references: A01, A05, A06, A10, A13, A19, A20; affected: M05, M06, M14, M15, M21, source download, backups, M181, M182, M183, M184, M185, M186, M188, M189, M191
+- concurrency: APPLICABLE; references: A01, A04, A06, A08, A09, A10, A19, A20; affected: M10, M14, M15, M16, M20, M22, M28, M181, M182, M183, M184, M185, M186, M188, M189, M191
 - dependencies: APPLICABLE; references: A14; affected: deployed Python, MCP/tunnel, Web and host runtime dependencies

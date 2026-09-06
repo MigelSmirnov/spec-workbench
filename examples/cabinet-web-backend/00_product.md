@@ -342,14 +342,20 @@ bounded receipt.
 
 ## Sources of truth and ownership
 
+Current ownership below follows the owner’s 2026-09-06 clarification: Cabinet
+Flow is planned, while Cabinet_web is the existing canonical application.
+D0-007 describes the target architecture; D0-008 governs each future migration.
+Neither a planned service nor the integration backend becomes a product writer
+through this source-registration correction.
+
 | Concern | Authoritative owner | Cabinet Web Backend treatment |
 | --- | --- | --- |
-| Confirmed Invoice Card facts | Cabinet Flow (`Cabinet_web` repository until the capability migrates) | Deliver the exact immutable `InvoiceCardV1` revision; never rewrite or reduce it during transport. |
-| Card revision identity | Cabinet Flow canonical content hash plus Invoice identity | Recompute and verify before delivery; preserve in progress and receipts. |
-| Source identity inside the Card | Cabinet Flow | Preserve exactly; never mint or replace it in the backend adapter. |
-| Line-capture evidence | Cabinet Flow | Trusted check before confirmation; carried as separate evidence, never folded into the Card. |
+| Confirmed Invoice Card facts | `Cabinet_web` canonical Card artifacts | Deliver the exact immutable `InvoiceCardV1` revision; never rewrite or reduce it during transport. |
+| Card revision identity | `Cabinet_web` canonical content hash plus Invoice identity | Recompute and verify before delivery; preserve in progress and receipts. |
+| Source identity inside the Card | `Cabinet_web` canonical Card | Preserve exactly; never mint or replace it in the backend adapter. |
+| Line-capture evidence | Existing `Cabinet_web` capture artifacts | Preserve and verify separate evidence; missing proof remains missing and is never manufactured by custody registration. |
 | Git revision provenance | `Cabinet_web` repository history | Preserve separately from Card content identity. |
-| Original bytes | Cabinet Flow Syncthing Inbox and its immutable store | Working custody here only when delivery requires it; never the source of truth. |
+| Original bytes | Recovered `Cabinet_web` originals with verified existing associations; Syncthing is intake transport | Working custody here only when delivery requires it; never the source of truth. |
 | Complete durable source custody | `cabinet_backend` | Accept only through the protected backend effect and report a bounded receipt. |
 | Local replica and effect audit | `cabinet_backend` | Never infer from a network success alone or expose raw storage details. |
 | Delivery intent, attempts, and receipts | Cabinet Web Backend | Preserve durable user-visible progress and idempotent resume evidence. |

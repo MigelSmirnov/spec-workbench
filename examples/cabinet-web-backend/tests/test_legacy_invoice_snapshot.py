@@ -88,6 +88,16 @@ def test_dirty_working_tree_is_not_canonical_input(source):
     assert build(repo, revision) == expected
 
 
+def test_unrelated_audit_provenance_does_not_change_membership_identity(source):
+    repo, revision, audit, _, _ = source
+    first, _ = build(repo, revision)
+    audit["review_note"] = "Additional provenance; no association changed."
+    write(repo, "audit.json", audit)
+    second, _ = build(repo, commit(repo))
+    assert first["association_audit_sha256"] != second["association_audit_sha256"]
+    assert [i["source_set_hash"] for i in first["invoices"]] == [i["source_set_hash"] for i in second["invoices"]]
+
+
 def test_changed_card_cannot_reuse_old_association(source):
     repo, _, _, cards, _ = source
     cards["invoice-a"]["lines"].append({"description": "Unreviewed successor"})

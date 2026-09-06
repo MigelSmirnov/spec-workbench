@@ -39,8 +39,9 @@ authentication. No new public upload endpoint is created by the exporter.
 
 The logical source is the pair `(card_id, source_id)` from the canonical Card.
 A source_id alone is not globally unique. The Card and its logical source are
-owned by Cabinet Flow, with the existing GitHub capability remaining canonical
-until its migration under D0-008.
+currently owned by Cabinet_web through its existing canonical artifacts.
+Cabinet Flow is the future owner only after an explicit capability migration
+under D0-008; it is not a provider required by this registration contract.
 
 One logical document has an ordered, nonempty collection of immutable file
 references. Every file reference carries its byte hash, byte length, verified
@@ -59,16 +60,19 @@ Card revision produces another observation. File custody is an integration
 obligation with continuity across verification, delivery, and release. It is
 not the document's identity or the product's completeness decision.
 
-Cabinet Flow is the authority for source membership and completeness. Web owns
-only verified working-copy custody and delivery records. The local Backend
+The current Cabinet_web artifacts are the authority for existing source
+membership and capture evidence. They do not assert document-page completeness.
+The integration backend owns only verified working-copy custody and delivery
+records. Future Flow ownership begins only when that capability migrates. The local Backend
 owns its durable replicas and acceptance receipts. Each receiver independently
 verifies bytes; an upstream hash declaration alone is not byte verification.
 
 ## Operation: register existing original custody
 
-Owner: Cabinet Flow's source boundary accepts and associates originals;
-Web's `source_custody` consumes the accepted association and verifies working
-copies. This is separate from `attach_invoice_source_metadata`.
+Owner: the current Cabinet_web capability supplies its already accepted
+originals and associations; the integration backend’s `source_custody` consumes
+that accepted association and verifies working copies. No new association or
+Flow service is required. This is separate from `attach_invoice_source_metadata`.
 
 Required inputs at the integration boundary:
 
@@ -153,12 +157,15 @@ Preserve both decisions: each required file receives its own manifest content
 identity, while the product Card retains its original logical source ID.
 Never reuse that logical ID as the content ID for multiple unequal files.
 
-The file-ID encoding, source-set digest, exact binary framing and ordering,
-issuer-authority representation, and completeness-evidence representation must
-be frozen reciprocally before changing the serialized exchange. This document
-does not silently select a new wire version or assert that old parsers accept
-new metadata fields. The existing receipt meaning remains exact manifest and
-byte acceptance. Only that exact acceptance plus the remaining A10 evidence
+The transitional input schema freezes file identity and source-set identity.
+The existing Backend wire version, metadata shape and binary framing remain
+unchanged under A20: one manifest ContentReference per exact original, in the
+accepted order, with its content_id copied from the input file reference. The
+new canonical snapshot wrapper and source-set digest are internal input and
+operational binding evidence; they are not extra fields for the old Backend
+parser. Reciprocal verification must exercise the unchanged wire with several
+file identities for one logical Card source. The existing receipt meaning
+remains exact manifest and byte acceptance. Only that exact acceptance plus the remaining A10 evidence
 can authorize explicit working-copy release; registering or sending is not
 release authority.
 
@@ -202,15 +209,18 @@ never exposes internal storage keys or permits a client to choose paths.
 The following are required changes, not claims that the current runtime already
 implements them:
 
-- State 1: distinguish document membership, per-file content, per-file custody,
-  immutable canonical revision observation, and capture evidence. M06 and M14
-  currently model a single content value and cannot encode the whole set.
-- State 2: propagate D0-007/D0-008 into A01/A17 and D0-009/D0-012 into A05;
-  review A03/A04/A08/A10/A13/A15/A16 for the new trusted ingress and replay scope.
-- State 3–5: source_custody owns working-byte registration/retrieval;
-  invoice_exchange owns canonical admission and pending/ready discovery;
-  canonical identity and membership remain external owner facts. Retire the
-  confirmation-only producer dependency and keep draft metadata effects separate.
+- State 1: authored M181–M191 for canonical observations, source-set custody,
+  registration, admission, and exact-file retrieval. M06/M14 retain legacy
+  singleton semantics. The new models still require runtime model closure.
+- State 2: A05/A17 corrected, A19/A20 authored and A15 security review updated.
+  Review the remaining A01/A03/A04/A08/A10/A13/A16 consumers while propagating
+  typed runtime operations; structural lint alone is not semantic closure.
+- State 3: canonical_invoice_source owns pinned read-only input; source_custody
+  owns working-byte registration/retrieval; invoice_exchange owns admission.
+  Module descriptions and A19/A20 ownership trace are authored and lint clean.
+- State 4–5: propagate canonical admission and pending/ready discovery through
+  flows and public operations. Retire the confirmation-only producer dependency
+  and keep draft metadata effects separate. This work remains open.
 - State 6–7: close typed models, canonical-source authority adapter, public and
   internal contracts, constructors, settings, persistence, routes, exact wire
   projection, and behavior notes; no undeclared dependency or arbitrary payload.
