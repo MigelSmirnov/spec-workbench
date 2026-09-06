@@ -423,6 +423,7 @@
     "LocalFilesystemSourceByteStore.publish": "(self, staging_reference: str, final_reference: str, expected_hash: str, expected_size: int) -> None",
     "LocalFilesystemSourceByteStore.remove_staging": "(self, staging_reference: str) -> None",
     "LocalFilesystemSourceByteStore.read_stored": "(self, final_reference: str, expected_hash: str, expected_size: int) -> bytes",
+    "LocalFilesystemSourceByteStore.staging_reference_for": "(self, publication_id: str) -> str",
     "SourceByteStore.final_reference_for": "(self, expected_hash: str) -> str",
     "SourceByteStore.stage": "(self, publication_id: str, content: bytes, expected_hash: str, expected_size: int) -> str",
     "SourceByteStore.verify": "(self, storage_reference: str, expected_hash: str, expected_size: int) -> bool",
@@ -703,7 +704,6 @@
     "CanonicalSourceError.__init__": "(self, code: CanonicalSourceErrorCode) -> None",
     "prepare_canonical_source_publications": "(custody: SourceCustodyService, unit_of_work: CabinetUnitOfWork, observation: CanonicalInvoiceObservation, observed_at: datetime) -> tuple[SourceBytePublication, ...]",
     "SourceByteStore.staging_reference_for": "(self, publication_id: str) -> str",
-    "LocalFilesystemSourceByteStore.staging_reference_for": "(self, publication_id: str) -> str",
     "CanonicalSourceFileDownload.__init__": "(self, content: ContentReference, source_byte_store: SourceByteStore) -> None",
     "CanonicalSourceFileDownload.describe": "(self) -> ContentReference",
     "CanonicalSourceFileDownload.read_chunk": "(self, max_bytes: int) -> bytes",
@@ -3019,6 +3019,7 @@
       "fields": {
         "ordinal": "int",
         "content_id": "str",
+        "content_sha256": "str",
         "size_bytes": "int",
         "media_type": "str",
         "display_filename": "str"
@@ -3030,6 +3031,7 @@
         "card_id": "str",
         "source_id": "str",
         "card_content_hash": "str",
+        "association_audit_sha256": "str",
         "files": "tuple[CanonicalSourceFile, ...]"
       }
     },
@@ -3037,10 +3039,12 @@
       "identity": "value",
       "fields": {
         "card_id": "str",
+        "card_raw_sha256": "str",
         "card_content_hash": "str",
         "card": "InvoiceCardV1",
         "source_set": "CanonicalSourceSetObservation",
         "source_set_hash": "str",
+        "capture_raw_sha256": "str | None",
         "capture_state": "LegacyCaptureState",
         "document_completeness": "str"
       }
@@ -3050,6 +3054,8 @@
       "fields": {
         "schema_version": "str",
         "repository_commit": "str",
+        "association_audit_sha256": "str",
+        "invoice_schema_sha256": "str",
         "unassociated_original_count": "int",
         "invoices": "tuple[CanonicalInvoiceObservation, ...]"
       }
@@ -3060,6 +3066,7 @@
         "card_id": "str",
         "source_id": "str",
         "source_set_hash": "str",
+        "canonical_snapshot_sha256": "str",
         "canonical_repository_commit": "str",
         "contents": "tuple[SourceContentReference, ...]",
         "custody_status": "str",
@@ -3076,6 +3083,7 @@
         "invoice_id": "str",
         "expected_card_content_hash": "str",
         "source_set_hash": "str",
+        "canonical_snapshot_sha256": "str",
         "effect_id": "str",
         "actor": "ActorReference"
       }
@@ -3093,6 +3101,7 @@
         "invoice_id": "str",
         "expected_card_content_hash": "str",
         "source_set_hash": "str",
+        "canonical_snapshot_sha256": "str",
         "effect_id": "str",
         "actor": "ActorReference"
       }
@@ -3103,7 +3112,9 @@
         "invoice_id": "str",
         "revision": "CardRevisionReference",
         "source_set_hash": "str",
+        "canonical_snapshot_sha256": "str",
         "canonical_repository_commit": "str",
+        "capture_raw_sha256": "str | None",
         "status": "CanonicalAdmissionState",
         "manifest_id": "str | None",
         "manifest_hash": "str | None",
@@ -3143,6 +3154,7 @@
     "CanonicalInputPin": {
       "identity": "value",
       "fields": {
+        "snapshot_sha256": "str",
         "repository_commit": "str"
       }
     },
@@ -10129,6 +10141,14 @@
               "element_model": null
             },
             {
+              "column": "canonical_snapshot_sha256",
+              "field": "canonical_snapshot_sha256",
+              "storage": "text",
+              "nullable": false,
+              "check": null,
+              "element_model": null
+            },
+            {
               "column": "canonical_repository_commit",
               "field": "canonical_repository_commit",
               "storage": "text",
@@ -10230,10 +10250,26 @@
               "element_model": null
             },
             {
+              "column": "canonical_snapshot_sha256",
+              "field": "canonical_snapshot_sha256",
+              "storage": "text",
+              "nullable": false,
+              "check": null,
+              "element_model": null
+            },
+            {
               "column": "canonical_repository_commit",
               "field": "canonical_repository_commit",
               "storage": "text",
               "nullable": false,
+              "check": null,
+              "element_model": null
+            },
+            {
+              "column": "capture_raw_sha256",
+              "field": "capture_raw_sha256",
+              "storage": "text",
+              "nullable": true,
               "check": null,
               "element_model": null
             },
@@ -12052,6 +12088,7 @@
                 "card_id",
                 "source_id",
                 "source_set_hash",
+                "canonical_snapshot_sha256",
                 "canonical_repository_commit",
                 "contents",
                 "custody_status",
@@ -12070,6 +12107,7 @@
                 "card_id",
                 "source_id",
                 "source_set_hash",
+                "canonical_snapshot_sha256",
                 "canonical_repository_commit",
                 "contents",
                 "custody_status",
@@ -12098,6 +12136,7 @@
               ],
               "updates": [
                 "source_id",
+                "canonical_snapshot_sha256",
                 "canonical_repository_commit",
                 "contents",
                 "custody_status",
@@ -12138,7 +12177,9 @@
                 "invoice_id",
                 "revision",
                 "source_set_hash",
+                "canonical_snapshot_sha256",
                 "canonical_repository_commit",
+                "capture_raw_sha256",
                 "status",
                 "manifest_id",
                 "manifest_hash",
@@ -12156,7 +12197,9 @@
                 "invoice_id",
                 "revision",
                 "source_set_hash",
+                "canonical_snapshot_sha256",
                 "canonical_repository_commit",
+                "capture_raw_sha256",
                 "status",
                 "manifest_id",
                 "manifest_hash",
@@ -12184,10 +12227,12 @@
               ],
               "updates": [
                 "revision",
+                "canonical_snapshot_sha256",
                 "canonical_repository_commit",
                 "status",
                 "manifest_id",
                 "manifest_hash",
+                "capture_raw_sha256",
                 "pending_reasons",
                 "actor",
                 "created_at",
@@ -12210,7 +12255,9 @@
                 "invoice_id",
                 "revision",
                 "source_set_hash",
+                "canonical_snapshot_sha256",
                 "canonical_repository_commit",
+                "capture_raw_sha256",
                 "status",
                 "manifest_id",
                 "manifest_hash",
@@ -12276,7 +12323,9 @@
                 "invoice_id",
                 "revision",
                 "source_set_hash",
+                "canonical_snapshot_sha256",
                 "canonical_repository_commit",
+                "capture_raw_sha256",
                 "status",
                 "manifest_id",
                 "manifest_hash",

@@ -78,3 +78,14 @@ slice changed (packet hash d333e9260e20… → e75c0c75e4de…); its review pack
 149 contracts, 149 notes and zero structural blocks. The concrete
 `LocalFilesystemSourceByteStore` contract order was also moved beside its class in
 the contract plan; no signature, decision or other module slice changed.
+
+Re-review 2026-09-06 (model closure repair): Route B generation of
+`canonical_invoice_source` refused code that read `pin.snapshot_sha256` and
+`record.canonical_snapshot_sha256`, because `60_model_closure_domain.json` had
+never carried the `*_sha256` fields that State 1 declares for M181–M193 and the
+accepted notes rely on (pin digest, raw Card/capture hashes, audit and schema
+digests). Twelve fields were restored exactly as authored in
+`01_models_source_registration.md`; `70_persistence_closure.json` gained the
+matching `canonical_snapshot_sha256` columns on the custody and admission tables
+and `capture_raw_sha256` on admissions. No note, decision or signature changed.
+Slices re-hashed with zero structural blocks: `models`, `credential_vault`, `authentication_admission`, `capability_grants`, `principal_lifecycle`, `access_control`, `card_workspace`, `invoice_catalogue`, `project_workspace`, `cabinet_persistence`, `canonical_digest`, `canonical_invoice_source`, `source_custody`, `invoice_exchange`, `registry_replica`, `chatgpt_interaction`, `runtime_control`, `bootstrap`.
