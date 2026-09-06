@@ -17,23 +17,20 @@ def _copy_project(tmp_path: Path) -> Path:
     return project
 
 
-def test_cabinet_assembly_is_blocked_on_the_depth_invariant() -> None:
-    # Depth is an assembly invariant: cabinet-backend's State 3 predates the
-    # structured depth declarations, so its assembly is truthfully blocked
-    # until that migration lands. Every other check stays ready.
+def test_cabinet_assembly_is_ready_after_depth_migration() -> None:
+    # Cabinet's State 3 declares the structured depth invariant and its
+    # refinement/review headings do not masquerade as duplicate definitions.
     report = verify(CABINET)
     assert report["schema_version"] == "spec_workbench_assembly_verification.v1"
-    assert report["ready"] is False
+    assert report["ready"] is True
     assert [check["name"] for check in report["checks"]] == [
         "language", "modules", "identity", "data", "contracts", "external_contracts",
         "notes", "router", "persistence"
     ]
     modules = report["checks"][1]
-    assert modules["ready"] is False
-    assert modules["errors"] > 0
+    assert modules["ready"] is True
+    assert modules["errors"] == 0
     for check in report["checks"]:
-        if check["name"] == "modules":
-            continue
         assert check["ready"] is True, check["name"]
     language = report["checks"][0]
     assert language["errors"] == 0

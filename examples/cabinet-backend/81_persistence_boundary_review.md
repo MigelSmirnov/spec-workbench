@@ -61,7 +61,7 @@ including the new module: no `rules.persistence_backend` IR exists for
 PostgreSQL yet. That is the next repair and is recorded as an open item in
 `30_modules_persistence_boundary.md`.
 
-## `holded_publication`
+## Review: `holded_publication`
 
 - `holded_publication_persistence` owns `PostgresHoldedPublicationRepository`.
 - `reserve_publication(publication) -> HoldedPublication` becomes the plain
@@ -89,7 +89,7 @@ operation, rule, or model changed. Result: `PASS_INTERNAL_VARIATION` for
 Slice hashes of modules whose notes follow the inserted service notes were
 refreshed: their packets changed only in note index numbers, not in content.
 
-## `registry_context`
+## Review: `registry_context`
 
 - `registry_context_persistence` owns `PostgresRegistryContextRepository`.
 - `merge_work_objects(work_objects)` is replaced by `list_work_objects() ->
@@ -113,7 +113,7 @@ Open item recorded in `30_modules_persistence_boundary.md`:
 `WorkObject.registry_snapshot_id` references it. Pre-existing; not resolved
 here.
 
-## `holded_gateway`
+## Review: `holded_gateway`
 
 - `holded_gateway_persistence` owns `PostgresHoldedAttemptRepository`.
 - `reserve_attempt` becomes the plain append `insert_attempt` (uniqueness on
@@ -139,7 +139,7 @@ impossible without an issuance record; `update_attempt` cannot change the
 identity or hash fields; evidence rows cannot be deleted. Result:
 `PASS_INTERNAL_VARIATION` for `holded_gateway`, `PASS` for the others.
 
-## `synchronization`
+## Review: `synchronization`
 
 - `synchronization_persistence` owns `PostgresSynchronizationRepository`;
   `HttpxVpsSynchronizationTransport` stays in `synchronization` until its
@@ -172,7 +172,7 @@ impossible without an issuance record; updates cannot change identity or
 binding fields; evidence rows cannot be deleted. Result:
 `PASS_INTERNAL_VARIATION` for `synchronization`, `PASS` for the others.
 
-## `plan_actual`
+## Review: `plan_actual`
 
 - `plan_actual_persistence` owns `PostgresPlanActualRepository`.
 - `load_match_decisions` becomes a plain set read in stable match-id order;
@@ -191,7 +191,7 @@ invariant cannot be skipped because the service must list before writing;
 absent pinned identities cannot silently shrink an analysis. Result:
 `PASS_INTERNAL_VARIATION` for `plan_actual`, `PASS` for the others.
 
-## `durable_archive`
+## Review: `durable_archive`
 
 - `durable_archive_persistence` owns `PostgresArchiveUnitOfWork`;
   `LocalFilesystemSourceByteStore` stays in `durable_archive` until it is
