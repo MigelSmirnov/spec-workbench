@@ -756,13 +756,13 @@ and the explicit evidence-backed release of eligible VPS working bytes.
 Logical source identity and membership remain with the canonical capability
 owner and enter only through canonical_invoice_source.
 
-SourceCustodySourceDownload and CanonicalSourceFileDownload implement the
-SourceDownload policy port: they own a bounded in-memory cursor, never an open
-file, connection or network stream. The legacy implementation consumes verified
-immutable payload bytes. The canonical implementation obtains one verified
-payload solely through the SourceByteStore interface; filesystem ownership and
-validation stay in its deterministic concrete backend. Their implementation
-disposition is policy, not a second filesystem backend.
+CanonicalSourceFileDownload implements the SourceDownload policy port for both
+canonical multi-file and retained legacy retrieval. It owns only a bounded
+in-memory cursor, never an open file, connection or network stream. It obtains
+one verified payload solely through the SourceByteStore interface; filesystem
+ownership and validation stay in that deterministic concrete backend. The old
+payload-taking SourceCustodySourceDownload is retired; no second cursor or
+filesystem backend is needed.
 
 ### Knows
 

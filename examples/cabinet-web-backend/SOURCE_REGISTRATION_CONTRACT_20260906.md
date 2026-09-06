@@ -8,7 +8,8 @@ binding. It supersedes A05's requirement to turn multiple photographs into one
 file and the assumption that a new Web confirmation is the only transfer
 producer. It does not change InvoiceCardV1 or relax the draft-only metadata
 mutation. The local assembled specification now carries this contract. It has not yet
-passed final module review, Factory admission, generation, or runtime verification.
+passed Factory admission, generation, or runtime verification.
+Final assembled module review is recorded separately.
 The propagation ledger remains open for those acceptance steps.
 
 Recovery evidence: Cabinet_web PR 31, commit
@@ -211,7 +212,7 @@ never exposes internal storage keys or permits a client to choose paths.
   M45 distinguishes integration observation provenance from product provenance.
 - States 4–5: registration and admission have independent flows and internal-only
   operator boundaries. Confirmation no longer produces delivery work.
-- States 6–7: 452 typed functions, 63 public operations, 449 classified notes,
+- States 6–7: 447 typed functions, 63 public operations, 447 classified notes,
   29 persistence tables and deterministic query bindings are assembled. Pending
   publication plans commit before filesystem writes. Retained trusted pins support
   retries after the active pin advances. Immutable effect results preserve earlier
@@ -231,16 +232,17 @@ never exposes internal storage keys or permits a client to choose paths.
   cabinet_backend InvoiceCardV1 model with logical source IDs preserved. Existing
   external wire bindings remain unchanged. The external transport adapter and
   archival end-to-end behavior have not been demonstrated by that model check.
-- Local structural gates for language, ownership, identity, data, contracts,
-  external bindings, notes, routes and flows pass. The temporary checkout cannot
-  resolve the Factory codec registry and witness configuration; the aggregate
-  gate must run again in the canonical sibling checkout without waivers.
+- All 11 aggregate assembly checks passed in the canonical sibling checkout.
+  The final Factory canonical validator and Spec Inspector also pass after
+  closing exact digest signatures, provider declarations and dependency types.
+  Final module review covers all 32 assembled modules; current packet hashes
+  and rationale are in 81_module_review_status.json and its review record.
 - Registration/admission runtime witnesses cover exact retry, conflicting keys,
   multi-file custody, partial publication recovery, pin advancement, concurrency,
   missing capture, lazy retrieval and package bytes. Their Python syntax is checked;
   they have not run against the new generated runtime.
-- Stage 8–9: final adversarial module review, admission, export, handoff verification
-  and official Factory Route B remain open. No new runtime is deployed.
+- Stage 9: admission, export, handoff verification and official Factory Route B
+  remain open. No new runtime is deployed.
 
 Do not repair this through a handwritten production route, database seed,
 forced confirmation, evidence rewrite, or by treating structural validation as
