@@ -138,3 +138,11 @@ Re-review 2026-09-06 (recovery clock): Route B refused a bootstrap candidate
 for datetime.now() in startup recovery (naive_datetime_now). The composition
 root note now binds every recovery timestamp to the single SystemClock now().
 Slices re-hashed with zero structural blocks: `bootstrap`.
+
+Re-review 2026-09-06 (content reference projection): the witnesses refused
+registration with custody_mismatch because get_registered_source_observation
+compared contents[i].source_id with the logical source_id and prefixed the
+content hash, while source_custody projects source_id = member.content_id and
+the bare digest (what final_reference_for accepts). The projection is now
+stated identically in the three notes that name it. Slices re-hashed with zero
+structural blocks: `canonical_invoice_source`, `source_custody`, `invoice_exchange`.
