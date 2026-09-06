@@ -341,3 +341,21 @@ Use `--json` for agents and future MCP wrappers.
 Do not reconstruct the authoring order from filenames and do not search for a
 project-local sequencer. The machine sequence is
 `skills/spec-authoring/authoring_sequence.json` in `main`.
+
+## Phase-scoped reading
+
+Each phase in `authoring_sequence.json` declares `docs`: the one to three
+methodology documents (with an optional section heading) that apply to that
+phase and why. `authoring next` returns them as `read`, and
+`workbench.py show` prints them as "Read for this phase".
+
+The reading contract is:
+
+- `AGENTS.md` is always in force (semantic rules, repair discipline, ownership);
+- read the documents returned for the current phase;
+- do not read the rest of `skills/spec-authoring/` "to be safe" — a phase whose
+  gate needs another document is a sequence bug and is fixed in
+  `authoring_sequence.json`, not by a longer reading list.
+
+Methodology text that is not referenced from any phase is a candidate for
+being folded into a gate or deleted.
