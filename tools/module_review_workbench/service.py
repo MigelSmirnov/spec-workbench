@@ -137,7 +137,7 @@ def build_slice(project: Path, module: str) -> dict[str, Any]:
                 "Can every accepted error, refusal, state effect, and invariant be located in the lowered specification?",
                 "Does the lowered specification introduce behavior with no accepted business source?",
             ],
-            "allowed_semantic_results": ["PASS", "PASS_INTERNAL_VARIATION", "AMBIGUITY"],
+            "allowed_semantic_results": ["PASS", "AMBIGUITY"],
         },
     }
 

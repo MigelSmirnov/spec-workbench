@@ -220,7 +220,7 @@ def test_unknown_consumer_is_error(tmp_path: Path) -> None:
     assert any(f["code"] == "unknown_consumer" for f in report["findings"])
 
 
-def test_primary_owner_repeated_as_consumer_is_warning(tmp_path: Path) -> None:
+def test_primary_owner_repeated_as_consumer_stops(tmp_path: Path) -> None:
     project = _project(tmp_path)
     path = project / "30_trace.json"
     payload = json.loads(path.read_text(encoding="utf-8"))
@@ -230,7 +230,7 @@ def test_primary_owner_repeated_as_consumer_is_warning(tmp_path: Path) -> None:
     report = design_trace.analyze(project)
 
     assert any(
-        f["severity"] == "warning" and f["code"] == "owner_repeated_as_consumer"
+        f["severity"] == "error" and f["code"] == "owner_repeated_as_consumer"
         for f in report["findings"]
     )
 

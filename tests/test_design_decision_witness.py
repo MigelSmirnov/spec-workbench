@@ -59,14 +59,16 @@ def _case(tmp_path: Path, tag1: str = "", tag2: str = "",
     return case, factory
 
 
-def test_invariants_without_any_witness_warn_but_do_not_block(tmp_path):
+def test_invariants_without_any_witness_stop(tmp_path):
     case, factory = _case(tmp_path, check_names=[], notes=[])
     report = design_decision_witness.coverage(case, factory)
     assert report["summary"] == {
         "decisions_with_invariants": 1, "witnessed": 0, "unwitnessed": 1,
-        "errors": 0, "handoff_ready": True,
+        "errors": 1, "handoff_ready": False,
     }
     assert [f["code"] for f in report["findings"]] == ["decision_without_witness"]
+    assert report["findings"][0]["severity"] == "error"
+    assert "name the accepted decision" in report["findings"][0]["hint"]
     assert report["findings"][0]["decision"] == "A90"
 
 
@@ -107,20 +109,20 @@ def test_note_witness_requires_test_evidence_marker(tmp_path):
     assert [f["code"] for f in report["findings"]] == ["witness_unresolved"]
 
 
-def test_missing_factory_is_unverifiable_not_blocking(tmp_path):
+def test_missing_factory_is_unverifiable_and_stops(tmp_path):
     case, factory = _case(
         tmp_path,
         tag1="[witness: verification:streaming_download_behavior]",
         check_names=None, notes=[],
     )
     report = design_decision_witness.coverage(case, tmp_path / "absent-factory")
-    assert report["summary"]["handoff_ready"] is True
+    assert report["summary"]["handoff_ready"] is False
     assert [f["code"] for f in report["findings"]] == ["witness_unverifiable"]
 
 
-def test_real_case_reports_untagged_decisions_without_blocking(tmp_path):
+def test_real_case_stops_on_untagged_decisions(tmp_path):
     report = design_decision_witness.coverage(CABINET_WEB, ROOT.parent.parent / "code_factory")
     assert report["summary"]["decisions_with_invariants"] > 5
-    assert report["summary"]["handoff_ready"] is True
+    assert report["summary"]["handoff_ready"] is False
     codes = {f["code"] for f in report["findings"]}
     assert codes <= {"decision_without_witness", "witness_unverifiable"}
