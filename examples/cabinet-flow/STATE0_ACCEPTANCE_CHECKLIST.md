@@ -86,8 +86,9 @@ deterministic sandbox tests and isolated host-level cleanup tests.
 - [ ] **VER-001 — immutable implementation identity:** changing implementation
   bytes creates a new digest and draft; activation of the previous digest is
   not inherited.
-- [ ] **VER-002 — expanded contract:** adding data access, effects, dependencies,
-  resources or scope requires a new admission and activation decision even when
+- [ ] **VER-002 — expanded contract:** adding data access, effects,
+  dependencies, resources or scope requires a new admission and activation
+  decision even when
   the implementation bytes are unchanged.
 - [ ] **VER-003 — invocation authority:** an activated implementation without
   current authority for the exact actor, target and effect cannot apply that
@@ -136,8 +137,9 @@ State 7.1 preflight/execution oracles and deterministic PR-CI tests.
   contract reference or digest no longer matches its issued identity is
   rejected by the receiving side. The exact cryptographic/transport mechanism
   remains a later-state decision.
-- [ ] **HND-005 — credential non-transitivity:** the bridge credential cannot act
-  as the online owner or an MCP caller; the tunnel identity cannot authenticate
+- [ ] **HND-005 — credential non-transitivity:** the bridge credential cannot
+  act as the online owner or an MCP caller; the tunnel identity cannot
+  authenticate
   to the bridge or local administration; browser Basic Auth and SSH credentials
   cannot substitute for either machine boundary.
 
