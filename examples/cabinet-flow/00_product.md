@@ -3,7 +3,7 @@
 ## Status
 
 Accepted and corrected on 2026-09-06 after product-design discussion and
-closure decisions D0-001 through D0-024.
+closure decisions D0-001 through D0-025.
 
 The correction separates Cabinet Flow's product purpose from its managed
 self-extension mechanism. Issue
@@ -571,6 +571,39 @@ The first usable release does not require full legacy parity. It must pass two
 distinct proofs so the product purpose is not confused with its extension
 mechanism.
 
+### Working implementation criterion
+
+A Cabinet Flow implementation is called working only after its release candidate
+passes repeatable integration tests against both real external boundaries:
+
+1. the configured GPT/OpenAI infrastructure invokes Cabinet Flow MCP through the
+   deployed Secure MCP Tunnel, establishes the expected owner principal and
+   receives a schema-conforming bounded result from the exact released
+   capability;
+2. Cabinet Flow exchanges an exact HandoffPackage through the deployed
+   `cabinet-web-backend` compatibility bridge and observes the truthful
+   delivery, pending, rejection or acknowledgement state produced by that
+   boundary.
+
+These tests use the deployed adapters, authentication paths and release
+configuration. A direct local MCP call, mocked tunnel, mocked bridge, manual
+database change or bypass endpoint does not satisfy this criterion.
+
+Evidence binds the tested Cabinet Flow release, tunnel and bridge configuration
+identity, actor or machine principal, operation or capability version,
+HandoffPackage and source identities or digests, validation result and bounded
+acknowledgement or failure. Secrets and unrestricted source data are not copied
+into test evidence.
+
+Unit, contract, sandbox and simulated integration tests remain required for
+development, but passing them alone does not make a build a working release.
+Temporary unavailability may produce the explicitly designed pending outcome;
+an invented success, silent fallback or bypass is a failed integration test.
+
+The operational and capability-evolution proofs below are accepted as release
+proof only when their applicable external steps are exercised through these real
+boundaries.
+
 ### Operational proof
 
 1. An invoice photo arrives through the dedicated Syncthing Inbox.
@@ -653,6 +686,8 @@ State 0 is accepted because:
 - tunnel and bridge authentication establish transport identities but never
   replace exact Cabinet Flow or local authorization;
 - the first-release operational and evolution proofs are distinct;
+-- working-release status requires passed integration tests through the real
+  GPT/OpenAI tunnel path and deployed `cabinet-web-backend` bridge;
 - legacy migration and backend responsibilities are bounded;
 - offline behavior and protected effects are truthful;
 - trusted isolation is non-bypassable at the product boundary;
@@ -677,8 +712,12 @@ accepted bytes, media was correctly identified as `image/png`, and the online
 model received and described the image. The operation remained read-only and
 did not create an Invoice Card, invoke OCR or a database, or modify the source.
 
-This proves the transport subsection of the operational path. It does not yet
-prove automatic activation, multi-source ordering, hostile-file rejection,
-crash recovery, structured Invoice creation, project association, analysis,
-HandoffPackage delivery, managed function admission, flow execution, protected
-effects or local archival acknowledgement.
+This proves the GPT/OpenAI transport subsection of the operational path against
+the then-deployed Cabinet MCP service. It is reusable external-boundary
+evidence, but it does not qualify a future Cabinet Flow release by itself.
+
+It does not yet prove the Cabinet Flow release identity, the
+`cabinet-web-backend` HandoffPackage path, automatic activation, multi-source
+ordering, hostile-file rejection, crash recovery, structured Invoice creation,
+project association, analysis, managed function admission, flow execution,
+protected effects or local archival acknowledgement.
