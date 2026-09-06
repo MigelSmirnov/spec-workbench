@@ -3,7 +3,7 @@
 ## Status
 
 Accepted and corrected on 2026-09-06 after product-design discussion and
-closure decisions D0-001 through D0-026.
+closure decisions D0-001 through D0-027.
 
 The correction separates Cabinet Flow's product purpose from its managed
 self-extension mechanism. Issue
@@ -718,7 +718,22 @@ State 0 is accepted because:
 - trusted isolation is non-bypassable at the product boundary;
 - one original-photo ingress and its ownership split are explicit;
 - negative product boundaries prevent scope drift;
+- their concrete negative and boundary scenarios are tracked in a derived
+  acceptance checklist for promotion into later rules and executable oracles;
 - remaining implementation choices belong to later design states.
+
+## Derived verification checklist
+
+[The State 0 acceptance checklist](STATE0_ACCEPTANCE_CHECKLIST.md) records
+testable consequences of this product boundary, including negative cases for
+ingress, sandbox/admission, versioning/authority, flow execution, handoff,
+access planes and agent context.
+
+The checklist is verification backlog rather than additional product behavior.
+Later states must promote applicable entries into precise rules, identities,
+contracts and executable semantic oracles. A checklist entry is not considered
+proved until its evidence is bound to the identified artifact and required
+environment.
 
 ## Feasibility evidence
 
