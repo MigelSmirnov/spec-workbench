@@ -159,3 +159,9 @@ acknowledgement of every multi-file manifest (422) because the generated
 receipt check compared accepted_source_hashes as a tuple in manifest order
 while cabinet_backend reports them sorted. The note now compares the hashes as
 multisets. Slices re-hashed with zero structural blocks: `invoice_exchange`.
+
+Re-review 2026-09-06 (proposal issue strings): witness A02 refused a
+regenerated chatgpt_interaction that placed a revision model dump into
+ValidationIssue.expected/actual (str | None). The proposal note now states
+that revision-reporting issues carry the content_hash strings. Slices
+re-hashed with zero structural blocks: `chatgpt_interaction`.
