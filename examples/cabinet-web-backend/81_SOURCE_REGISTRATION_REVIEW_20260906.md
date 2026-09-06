@@ -127,3 +127,9 @@ InvoiceTransferStatus.safe_error_code was typed TransferReceiptErrorCode while
 get_invoice_transfer_status reports admission-pending and canonical-source
 codes; the field is now a bounded code string (str | None) and the note names
 the .value. Slices re-hashed with zero structural blocks: `models`, `credential_vault`, `authentication_admission`, `capability_grants`, `principal_lifecycle`, `access_control`, `card_workspace`, `invoice_catalogue`, `invoice_lifecycle`, `project_workspace`, `cabinet_persistence`, `source_custody`, `invoice_exchange`, `registry_replica`, `chatgpt_interaction`, `runtime_control`, `bootstrap`.
+
+Re-review 2026-09-06 (drill transaction shape): Route B refused a
+runtime_control candidate that re-read and updated the drill record after
+commit (owned_transaction_call_outside_begin). The verify_backup_restore note
+now states the A17 single-transaction shape. Slices re-hashed with zero
+structural blocks: `runtime_control`.
