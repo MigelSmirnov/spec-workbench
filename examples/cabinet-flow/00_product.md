@@ -3,7 +3,7 @@
 ## Status
 
 Accepted and corrected on 2026-09-06 after product-design discussion and
-closure decisions D0-001 through D0-018.
+closure decisions D0-001 through D0-021.
 
 The correction separates Cabinet Flow's product purpose from its managed
 self-extension mechanism. Issue
@@ -152,17 +152,38 @@ business. Its principal work areas are:
 
 ### Capability Boxes
 
-A Capability Box is the product-visible handoff mechanism for bounded work that
-crosses an agent or application boundary.
+A Capability Box is a self-described, bounded semantic and trust surface through
+which an agent or application publishes work that another authorized participant
+may invoke.
 
-A Box carries the declared structured payload, relevant stable identities,
-schema or contract identity, provenance, intended capability or recipient and
-delivery state. It does not grant arbitrary filesystem, database, network or
-operation access.
+A Box declares the schemas and stable semantic identities it understands, the
+capabilities it offers, and the authority, disclosure, effect, audit and
+provenance rules at its boundary. The host enforces those declarations; a Box
+does not grant arbitrary filesystem, database, network or operation access.
 
-Boxes allow Cabinet Flow to prepare work for a local agent or application and
-later correlate the returned result or acknowledgement with the exact request.
-Their exact data model and protocol belong to later design states.
+The Box itself is not the payload transferred between Cabinet Flow and a local
+agent or application. A particular exchange is a capability invocation or
+handoff package addressed to a capability published by a Box. It carries the
+bounded input, stable identities, exact contract or schema references,
+provenance and correlation state required for that exchange.
+
+Cabinet Flow inherits the durable semantic principles demonstrated by
+`experiments/cabinet-vault` and `cabinet_box_language.v0`:
+
+- composition is based on declared semantic identity, exact compatible types
+  and required authority, not on similar field names;
+- derivable projections and plumbing may be generated deterministically;
+- unresolved composition fails closed without model or generated-code fallback;
+- the agent may choose a composition, but trusted behavior proves, lowers and
+  enforces it.
+
+The current Cabinet Vault language remains exploratory evidence and a
+compatibility baseline, not an automatically normative wire syntax for Cabinet
+Flow. State 1 must decide what is adopted unchanged, versioned or replaced while
+preserving these semantic and security properties.
+
+The exact Box definition, invocation and handoff models and delivery protocol
+belong to later design states.
 
 ## Primary user outcome
 
@@ -176,8 +197,8 @@ conversation. Within delegated authority, the online agent:
 3. selects existing accepted capabilities;
 4. composes or selects a versioned flow when more than one operation is needed;
 5. validates data at every capability boundary;
-6. returns a useful structured result, analysis, plan, Card proposal or
-   Capability Box;
+6. returns a useful structured result, analysis, plan, Card proposal or a
+   reviewable handoff addressed to a capability published by a Box;
 7. shows uncertainty, failures and protected effect previews explicitly;
 8. applies persistent or external effects only with the required authority;
 9. records enough provenance and execution evidence for the result to be
@@ -210,6 +231,21 @@ In this mode the authorized agent can:
 Capability evolution serves the construction operation. It is not the default
 answer to every user request, and absence of a capability is reported
 explicitly rather than hidden behind improvised unregistered code.
+
+### Baseline capabilities
+
+The first release does not bootstrap itself by asking the online agent to author
+all capabilities at first startup.
+
+A minimum baseline is supplied by the implementation and explicit migration of
+accepted legacy behavior. Each baseline capability is reviewed and accepted by
+the human owner or release process and records its provider and provenance.
+Trusted built-in behavior may publish a capability without pretending to be an
+agent-authored slot implementation; that distinction remains visible.
+
+The operational proof uses this accepted baseline. The separate
+capability-evolution proof demonstrates how the agent adds a new capability
+after a real bounded behavior gap is found.
 
 ## Existing-system context
 
@@ -268,36 +304,60 @@ version's authority.
 
 The author's declaration is evidence but is not sufficient proof by itself.
 
-## Slot and flow boundary
+## Slot, implementation, capability and flow boundary
 
-A slot is a stable, named and versioned behavioral contract, not a source file
-or arbitrary helper function.
+The following terms are distinct.
 
-A slot contract declares typed input and output schemas, minimum context,
-effects, data-access requirements, relevant resource expectations and the
-validation boundary visible to a composing flow.
+A **slot contract** is a stable, named and versioned contract for replaceable
+behavior. It declares typed input and output schemas, minimum context, effects,
+data-access requirements, relevant resource expectations and the validation
+boundary visible to composition.
 
-An implementation is one immutable realization of one contract version,
-identified by the digest of its accepted artifact. Changing content creates a
-new version; changing the contract requires explicit compatibility or migration
-handling.
+An **implementation version** is one immutable artifact that realizes one slot
+contract version. It is identified by the digest of its accepted artifact.
+Changing its content creates a new version; changing the contract requires
+explicit compatibility or migration handling.
 
-Not every helper is a slot. Behavior becomes a slot only when it is meaningful
-to observe, validate, replace, test and evolve independently.
+A **capability** is the registered, invocable product operation visible to an
+agent or flow. A capability may bind a slot contract to one admitted
+implementation version, or it may be published by trusted built-in behavior
+whose provider and provenance are explicit. Registration and activation decide
+what implementation may provide it; invocation authority separately decides
+whether a particular actor may call it with particular data and effects.
 
-Slots do not directly call neighboring slot implementations. A versioned
-declarative flow owns composition. Trusted behavior validates structural and
-declared semantic constraints before one step's output can become another
-step's input.
+A **flow** is a versioned declarative graph of capability invocations. It owns
+composition and pins the exact capability bindings, contracts and
+implementation versions required for reproducible execution.
 
-A run pins the exact flow, contract and implementation versions. Missing,
-invalid or semantically unacceptable output is an explicit failure and is not
-forwarded as successful data.
+The resulting relationship is:
+
+```text
+slot contract
+→ immutable implementation version
+→ admitted capability binding
+→ capability invocation in a flow
+```
+
+Not every helper function is a slot, and not every capability needs an
+agent-authored implementation. Behavior becomes a slot only when it is
+meaningful to observe, validate, replace, test and evolve independently.
+
+Implementations do not directly call neighboring implementations. Trusted
+behavior validates structural and declared semantic constraints before one
+capability invocation's output can become another's input.
+
+A run pins the exact flow, capability binding, contract and implementation
+versions. Missing, invalid or semantically unacceptable output is an explicit
+failure and is not forwarded as successful data.
 
 Execution data and execution evidence are distinct. Traces record identities,
 versions, order, statuses, validation, safe references or digests and effect
 intents; they do not copy secrets, unrestricted facts or source bytes merely
 for observability.
+
+State 1 must model at least the distinct concepts of slot contract,
+implementation version, capability, capability binding, flow and flow node, Box
+definition, and capability invocation or handoff package.
 
 ## Agent context
 
@@ -446,8 +506,8 @@ mechanism.
    identity.
 5. The result is associated with the correct project or construction object, or
    remains explicitly unassigned when the evidence is insufficient.
-6. The agent produces useful analysis or prepares a Capability Box containing
-   the bounded inputs needed by the local estimating workflow.
+6. The agent produces useful analysis or prepares a reviewable capability
+   invocation or handoff package addressed to the local estimating Box.
 7. Protected persistent or local effects occur only after required human
    authorization.
 8. The local side returns a separate acknowledgement when it actually accepts
@@ -502,6 +562,12 @@ State 0 is accepted because:
 - the product is explicitly an operational environment for construction work;
 - its principal work areas and observable user outcomes are named;
 - ordinary operations and capability evolution are separate modes;
+- slot contracts, implementation versions, capabilities and flows have distinct
+  meanings;
+- the first release has an explicitly accepted baseline and does not depend on
+  self-bootstrap;
+- Capability Boxes inherit proven Cabinet Vault semantics while invocations and
+  handoff payloads remain distinct from Boxes;
 - the product and successor boundary are explicit;
 - primary actors and authority are explicit;
 - the first-release operational and evolution proofs are distinct;
