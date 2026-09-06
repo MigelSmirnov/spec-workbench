@@ -70,3 +70,11 @@ not executed against newly generated code. The reciprocal check validates all
 an external transport/archival round trip. No source registration, admission,
 receipt, deletion or deployment has been performed on live data. Stage 9 must
 still validate this committed review, clean source/target and exact handoff.
+
+Re-review 2026-09-06 (f2aa792 lineage): the `SourceByteStore.staging_reference_for`
+port note now states that the derived staging reference is part of the committed
+publication plan and that `stage` returns that same reference. Only the `models`
+slice changed (packet hash d333e9260e20… → e75c0c75e4de…); its review packet reports
+149 contracts, 149 notes and zero structural blocks. The concrete
+`LocalFilesystemSourceByteStore` contract order was also moved beside its class in
+the contract plan; no signature, decision or other module slice changed.
