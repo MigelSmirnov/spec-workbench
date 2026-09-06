@@ -3,7 +3,7 @@
 ## Status
 
 Accepted and corrected on 2026-09-06 after product-design discussion and
-closure decisions D0-001 through D0-021.
+closure decisions D0-001 through D0-022.
 
 The correction separates Cabinet Flow's product purpose from its managed
 self-extension mechanism. Issue
@@ -44,8 +44,8 @@ tasks.
 
 A user may need to compare estimate fields today, associate invoices with
 suppliers tomorrow, then check source-line completeness, prepare material data
-for a work stage, reconcile planned and actual costs or assemble a Capability
-Box for a local estimator.
+for a work stage, reconcile planned and actual costs or prepare a durable handoff to a capability published by a local estimator
+Box.
 
 Implementing every such need as a new conventional application module imposes
 a disproportionate cost. The small piece of business logic also requires new
@@ -65,7 +65,7 @@ Changeable operational behavior may be represented by small versioned
 capabilities with explicit contracts. Examples include comparing accepted
 estimate fields, matching an Invoice to a supplier candidate, checking data
 completeness, deriving a bounded analysis, preparing planning input or
-assembling a Capability Box.
+preparing a bounded cross-boundary handoff.
 
 A declarative data flow composes these capabilities without giving one
 implementation access to another implementation's internals. The flow makes
@@ -150,40 +150,7 @@ business. Its principal work areas are:
 - keep server-side preparation, transport delivery and local durable acceptance
   as separate observable facts.
 
-### Capability Boxes
 
-A Capability Box is a self-described, bounded semantic and trust surface through
-which an agent or application publishes work that another authorized participant
-may invoke.
-
-A Box declares the schemas and stable semantic identities it understands, the
-capabilities it offers, and the authority, disclosure, effect, audit and
-provenance rules at its boundary. The host enforces those declarations; a Box
-does not grant arbitrary filesystem, database, network or operation access.
-
-The Box itself is not the payload transferred between Cabinet Flow and a local
-agent or application. A particular exchange is a capability invocation or
-handoff package addressed to a capability published by a Box. It carries the
-bounded input, stable identities, exact contract or schema references,
-provenance and correlation state required for that exchange.
-
-Cabinet Flow inherits the durable semantic principles demonstrated by
-`experiments/cabinet-vault` and `cabinet_box_language.v0`:
-
-- composition is based on declared semantic identity, exact compatible types
-  and required authority, not on similar field names;
-- derivable projections and plumbing may be generated deterministically;
-- unresolved composition fails closed without model or generated-code fallback;
-- the agent may choose a composition, but trusted behavior proves, lowers and
-  enforces it.
-
-The current Cabinet Vault language remains exploratory evidence and a
-compatibility baseline, not an automatically normative wire syntax for Cabinet
-Flow. State 1 must decide what is adopted unchanged, versioned or replaced while
-preserving these semantic and security properties.
-
-The exact Box definition, invocation and handoff models and delivery protocol
-belong to later design states.
 
 ## Primary user outcome
 
@@ -197,8 +164,9 @@ conversation. Within delegated authority, the online agent:
 3. selects existing accepted capabilities;
 4. composes or selects a versioned flow when more than one operation is needed;
 5. validates data at every capability boundary;
-6. returns a useful structured result, analysis, plan, Card proposal or a
-   reviewable handoff addressed to a capability published by a Box;
+6. returns a useful structured result, analysis, plan or Card proposal and,
+   when work must cross a durable or offline boundary, prepares a reviewable
+   `HandoffPackage` addressed to a capability published by a Box;
 7. shows uncertainty, failures and protected effect previews explicitly;
 8. applies persistent or external effects only with the required authority;
 9. records enough provenance and execution evidence for the result to be
@@ -356,8 +324,54 @@ intents; they do not copy secrets, unrestricted facts or source bytes merely
 for observability.
 
 State 1 must model at least the distinct concepts of slot contract,
-implementation version, capability, capability binding, flow and flow node, Box
-definition, and capability invocation or handoff package.
+implementation version, capability, capability binding, flow and flow node.
+
+## Box, invocation and handoff boundary
+
+A **Capability Box** is a self-described, bounded semantic and trust surface
+through which an agent or application publishes work that another authorized
+participant may invoke.
+
+A Box declares the schemas and stable semantic identities it understands, the
+capabilities it offers, and the authority, disclosure, effect, audit and
+provenance rules at its boundary. The host enforces those declarations; a Box
+does not grant arbitrary filesystem, database, network or operation access.
+
+A **CapabilityInvocation** is a request to execute one exact capability binding
+inside an active Cabinet Flow runtime or flow run. It participates in execution
+validation, version pinning, effect evaluation and trace. Its execution evidence
+may be durable, but it is not a delivery queue item.
+
+A **HandoffPackage** is a durable, idempotent unit of work crossing a process,
+authority or offline boundary. It is addressed to a capability published by a
+particular Box and carries only the bounded input or references, stable
+identities, exact contract or schema references, provenance, correlation
+identity and delivery state required for that exchange.
+
+When Cabinet Flow sends work to the local side, it creates a HandoffPackage.
+Acceptance of that package does not itself mean that the capability ran. After
+acceptance, the receiving host may create its own CapabilityInvocation and
+report execution outcome separately from delivery acknowledgement.
+
+Cabinet Flow inherits the durable semantic principles demonstrated by
+`experiments/cabinet-vault` and `cabinet_box_language.v0`:
+
+- composition is based on declared semantic identity, exact compatible types
+  and required authority, not on similar field names;
+- derivable projections and plumbing may be generated deterministically;
+- unresolved composition fails closed without model or generated-code fallback;
+- the agent may choose a composition, but trusted behavior proves, lowers and
+  enforces it.
+
+The current Cabinet Vault language remains exploratory evidence and a
+compatibility baseline, not an automatically normative wire syntax for Cabinet
+Flow. State 1 must decide what is adopted unchanged, versioned or replaced while
+preserving these semantic and security properties.
+
+State 1 must model Box definition, CapabilityInvocation and HandoffPackage as
+separate concepts and define the transition from accepted handoff to local
+invocation. Their exact fields and delivery protocol belong to later design
+states.
 
 ## Agent context
 
@@ -437,9 +451,8 @@ Trusted Cabinet Flow behavior must:
   on Syncthing events.
 
 The online agent recognizes the source and proposes or applies authorized
-structured facts. It does not own original-byte custody. Flows and Boxes carry
-source identity and bounded access capability, not a Syncthing path or repeated
-uncontrolled copies.
+structured facts. It does not own original-byte custody. Flows and HandoffPackages carry source identity and bounded access capability,
+not a Syncthing path or repeated uncontrolled copies.
 
 Direct transfer of ChatGPT attachment bytes and a separate browser upload are
 not first-release ingress paths.
@@ -506,8 +519,9 @@ mechanism.
    identity.
 5. The result is associated with the correct project or construction object, or
    remains explicitly unassigned when the evidence is insufficient.
-6. The agent produces useful analysis or prepares a reviewable capability
-   invocation or handoff package addressed to the local estimating Box.
+6. The agent produces useful analysis or prepares a reviewable
+   `HandoffPackage` addressed to an estimating capability published by the
+   local Box.
 7. Protected persistent or local effects occur only after required human
    authorization.
 8. The local side returns a separate acknowledgement when it actually accepts
@@ -566,8 +580,9 @@ State 0 is accepted because:
   meanings;
 - the first release has an explicitly accepted baseline and does not depend on
   self-bootstrap;
-- Capability Boxes inherit proven Cabinet Vault semantics while invocations and
-  handoff payloads remain distinct from Boxes;
+- Capability Boxes inherit proven Cabinet Vault semantics, while
+  CapabilityInvocation and HandoffPackage have distinct execution and delivery
+  lifecycles;
 - the product and successor boundary are explicit;
 - primary actors and authority are explicit;
 - the first-release operational and evolution proofs are distinct;
@@ -598,5 +613,5 @@ did not create an Invoice Card, invoke OCR or a database, or modify the source.
 This proves the transport subsection of the operational path. It does not yet
 prove automatic activation, multi-source ordering, hostile-file rejection,
 crash recovery, structured Invoice creation, project association, analysis,
-Capability Box delivery, managed function admission, flow execution, protected
+HandoffPackage delivery, managed function admission, flow execution, protected
 effects or local archival acknowledgement.
