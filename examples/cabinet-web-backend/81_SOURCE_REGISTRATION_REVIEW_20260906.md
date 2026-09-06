@@ -117,3 +117,13 @@ candidate for hasattr(os, "O_NOFOLLOW") (reflective_attribute_access gate). The
 three reading notes now prescribe one shared helper with the unconditional
 flags os.O_RDONLY | os.O_NOFOLLOW on the POSIX runtime and no platform probe.
 Slices re-hashed with zero structural blocks: `canonical_invoice_source`.
+
+Re-review 2026-09-06 (retained pin source, status code type): generated
+register_canonical_source_set and admit_canonical_invoice filled
+canonical_repository_commit with observation digests because no note named the
+source; both notes now copy canonical_snapshot_sha256 and
+canonical_repository_commit from read_canonical_input_pin. M132
+InvoiceTransferStatus.safe_error_code was typed TransferReceiptErrorCode while
+get_invoice_transfer_status reports admission-pending and canonical-source
+codes; the field is now a bounded code string (str | None) and the note names
+the .value. Slices re-hashed with zero structural blocks: `models`, `credential_vault`, `authentication_admission`, `capability_grants`, `principal_lifecycle`, `access_control`, `card_workspace`, `invoice_catalogue`, `invoice_lifecycle`, `project_workspace`, `cabinet_persistence`, `source_custody`, `invoice_exchange`, `registry_replica`, `chatgpt_interaction`, `runtime_control`, `bootstrap`.

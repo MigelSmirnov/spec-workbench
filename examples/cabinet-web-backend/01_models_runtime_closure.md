@@ -995,7 +995,9 @@ Equal effect identities request the same composite outcome.
 
 ## Model M132 — InvoiceTransferStatus
 
-Fields: `invoice_id: str`, `card_revision: CardRevisionReference`, `source_custody_status: str`, `issuance_status: str | None`, `receipt_result: TransferReceiptResult | None`, `safe_error_code: TransferReceiptErrorCode | None`, `observed_at: datetime`.
+Fields: `invoice_id: str`, `card_revision: CardRevisionReference`, `source_custody_status: str`, `issuance_status: str | None`, `receipt_result: TransferReceiptResult | None`, `safe_error_code: str | None`, `observed_at: datetime`.
+
+`safe_error_code` is a bounded code string, the `.value` of one member of the transfer-receipt, canonical-admission-pending or canonical-source vocabularies; it is not typed as one of those enums because the status reports whichever bounded reason applies.
 
 The transfer-side synchronization status of one exact Invoice Card revision as
 Cabinet Web truthfully knows it: no issuance yet, an issued or acknowledged
