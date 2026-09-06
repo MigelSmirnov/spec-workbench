@@ -3,7 +3,7 @@
 ## Status
 
 Accepted and corrected on 2026-09-06 after product-design discussion and
-closure decisions D0-001 through D0-025.
+closure decisions D0-001 through D0-026.
 
 The correction separates Cabinet Flow's product purpose from its managed
 self-extension mechanism. Issue
@@ -44,8 +44,8 @@ tasks.
 
 A user may need to compare estimate fields today, associate invoices with
 suppliers tomorrow, then check source-line completeness, prepare material data
-for a work stage, reconcile planned and actual costs or prepare a durable handoff to a capability published by a local estimator
-Box.
+for a work stage, reconcile planned and actual costs or prepare a durable
+handoff to a capability published by a local estimator Box.
 
 Implementing every such need as a new conventional application module imposes
 a disproportionate cost. The small piece of business logic also requires new
@@ -211,9 +211,13 @@ the human owner or release process and records its provider and provenance.
 Trusted built-in behavior may publish a capability without pretending to be an
 agent-authored slot implementation; that distinction remains visible.
 
-The operational proof uses this accepted baseline. The separate
-capability-evolution proof demonstrates how the agent adds a new capability
-after a real bounded behavior gap is found.
+The operational proof uses this accepted baseline. Human or release acceptance
+of a baseline capability does not exempt it from release qualification: the
+exact baseline capability versions exercised by the operational proof must pass
+the applicable real-boundary tests in the working-implementation criterion.
+
+The separate capability-evolution proof demonstrates how the agent adds a new
+capability after a real bounded behavior gap is found.
 
 ## Existing-system context
 
@@ -451,8 +455,9 @@ Trusted Cabinet Flow behavior must:
   on Syncthing events.
 
 The online agent recognizes the source and proposes or applies authorized
-structured facts. It does not own original-byte custody. Flows and HandoffPackages carry source identity and bounded access capability,
-not a Syncthing path or repeated uncontrolled copies.
+structured facts. It does not own original-byte custody. Flows and
+HandoffPackages carry source identity and bounded access capability, not a
+Syncthing path or repeated uncontrolled copies.
 
 Direct transfer of ChatGPT attachment bytes and a separate browser upload are
 not first-release ingress paths.
@@ -536,9 +541,9 @@ The bridge credential cannot act as the online owner, invoke unrelated Cabinet
 capabilities or become a local administrator. Cabinet Flow authorizes and
 integrity-binds each exact HandoffPackage before release to the bridge.
 
-The receiving Cabinet Backend independently authenticates its peer and validates
-the exact contract, identity, scope, replay/idempotency state and permitted local
-effect. Successful bridge delivery is not local authorization, durable
+The receiving Cabinet Backend independently authenticates its peer and
+validates the exact contract, identity, scope, replay/idempotency state and
+permitted local effect. Successful bridge delivery is not local authorization, durable
 acceptance or capability execution.
 
 The bridge does not own Slot, function, Flow, Box, execution-context, Card,
@@ -573,21 +578,38 @@ mechanism.
 
 ### Working implementation criterion
 
-A Cabinet Flow implementation is called working only after its release candidate
-passes repeatable integration tests against both real external boundaries:
+A Cabinet Flow implementation is called working only after its immutable release
+candidate passes repeatable integration tests against both real external
+boundaries:
 
 1. the configured GPT/OpenAI infrastructure invokes Cabinet Flow MCP through the
    deployed Secure MCP Tunnel, establishes the expected owner principal and
    receives a schema-conforming bounded result from the exact released
    capability;
-2. Cabinet Flow exchanges an exact HandoffPackage through the deployed
-   `cabinet-web-backend` compatibility bridge and observes the truthful
-   delivery, pending, rejection or acknowledgement state produced by that
-   boundary.
+2. while the local Cabinet Backend is online, Cabinet Flow sends an exact
+   HandoffPackage through the deployed `cabinet-web-backend` compatibility
+   bridge, the local side accepts that exact package, and Cabinet Flow observes
+   the corresponding bounded acknowledgement.
 
-These tests use the deployed adapters, authentication paths and release
-configuration. A direct local MCP call, mocked tunnel, mocked bridge, manual
-database change or bypass endpoint does not satisfy this criterion.
+A truthful pending, rejection or unknown result remains a correct operational
+outcome for its conditions, but it does not by itself qualify the successful
+lower integration path.
+
+This is an operator-triggered release-qualification gate, not a mandatory PR-CI
+job. It runs in the configured integration environment when the GPT/OpenAI
+connection, deployed bridge and local Cabinet Backend are deliberately
+available. The two external tests may run as separate stages against the same
+immutable release candidate and recorded configuration identities.
+
+Ordinary PR-CI runs deterministic unit, contract, sandbox, simulated integration
+and security-negative tests without requiring external credentials or an
+online local machine. Passing PR-CI is necessary but does not grant
+working-release status.
+
+The release-qualification tests use the deployed adapters, authentication paths
+and release configuration. A direct local MCP call, mocked tunnel, mocked
+bridge, manual database change or bypass endpoint does not satisfy this
+criterion.
 
 Evidence binds the tested Cabinet Flow release, tunnel and bridge configuration
 identity, actor or machine principal, operation or capability version,
@@ -595,10 +617,10 @@ HandoffPackage and source identities or digests, validation result and bounded
 acknowledgement or failure. Secrets and unrestricted source data are not copied
 into test evidence.
 
-Unit, contract, sandbox and simulated integration tests remain required for
-development, but passing them alone does not make a build a working release.
-Temporary unavailability may produce the explicitly designed pending outcome;
-an invented success, silent fallback or bypass is a failed integration test.
+Temporary unavailability must still produce the explicitly designed pending
+outcome; an invented success, silent fallback or bypass is a failed integration
+test. Exact operator procedure, environment preparation, evidence retention and
+qualification freshness belong to later design states.
 
 The operational and capability-evolution proofs below are accepted as release
 proof only when their applicable external steps are exercised through these real
@@ -686,8 +708,11 @@ State 0 is accepted because:
 - tunnel and bridge authentication establish transport identities but never
   replace exact Cabinet Flow or local authorization;
 - the first-release operational and evolution proofs are distinct;
-- working-release status requires passed integration tests through the real
-  GPT/OpenAI tunnel path and deployed `cabinet-web-backend` bridge;
+- working-release status requires an operator-triggered qualification against
+  the real GPT/OpenAI tunnel path, deployed `cabinet-web-backend` bridge and
+  online local Cabinet Backend;
+- PR-CI remains deterministic and does not require those external systems or
+  their credentials;
 - legacy migration and backend responsibilities are bounded;
 - offline behavior and protected effects are truthful;
 - trusted isolation is non-bypassable at the product boundary;
