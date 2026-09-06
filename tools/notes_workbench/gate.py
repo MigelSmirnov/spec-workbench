@@ -14,6 +14,8 @@ from notes_workbench.note_standard import (
     SINGLETON_CLASSES,
     SUSPICIOUS_CLASS_PAIRS,
 )
+from model_surface_workbench import attributes as note_attributes
+from model_surface_workbench.index import ModelIndex
 from persistence_workbench import authoring as persistence_authoring
 from project_extensions import deterministic_backends
 
@@ -301,6 +303,8 @@ def coverage(project: Path) -> dict[str, Any]:
     findings.extend(
         _table_access_findings(notes, _load_provider_tables(project), contract_scopes)
     )
+    # a note that reads value.attribute names an attribute the declared type has
+    findings.extend(note_attributes.findings(notes, ModelIndex.load(project)))
 
     by_scope: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for note in notes:

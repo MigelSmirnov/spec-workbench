@@ -28,7 +28,7 @@ def test_cabinet_assembly_stops_on_every_undecided_fact() -> None:
     assert report["schema_version"] == "spec_workbench_assembly_verification.v1"
     assert report["ready"] is False
     assert [check["name"] for check in report["checks"]] == [
-        "language", "modules", "identity", "data", "contracts", "external_contracts",
+        "language", "modules", "identity", "fields", "data", "contracts", "external_contracts",
         "notes", "router", "persistence", "witness", "flows",
     ]
     by_name = {check["name"]: check for check in report["checks"]}
