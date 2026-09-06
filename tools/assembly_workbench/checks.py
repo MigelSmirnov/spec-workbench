@@ -8,6 +8,7 @@ import design_stage6_contracts
 import design_stage6_data
 from external_contract_workbench import coverage as external_contract_coverage
 from identity_workbench import verify as verify_identity
+from model_surface_workbench import fields as model_fields
 from notes_workbench import gate as notes_gate
 from persistence_workbench import coverage as persistence_coverage
 from router_workbench import service as router_service
@@ -34,6 +35,10 @@ def _normalize(name: str, report: dict[str, Any]) -> CheckResult:
         warnings = int(summary.get("warnings", 0))
         ready = errors == 0
     elif name == "identity":
+        errors = int(summary.get("errors", len(findings)))
+        warnings = 0
+        ready = errors == 0
+    elif name == "fields":
         errors = int(summary.get("errors", len(findings)))
         warnings = 0
         ready = errors == 0
@@ -77,6 +82,7 @@ CHECKS: dict[str, ReportFunction] = {
     "language": verify_language,
     "modules": design_stage3.lint,
     "identity": verify_identity,
+    "fields": model_fields.lint,
     "data": design_stage6_data.lint,
     "contracts": design_stage6_contracts.lint,
     "external_contracts": external_contract_coverage,

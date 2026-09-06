@@ -25,7 +25,7 @@ def test_cabinet_assembly_is_blocked_on_the_depth_invariant() -> None:
     assert report["schema_version"] == "spec_workbench_assembly_verification.v1"
     assert report["ready"] is False
     assert [check["name"] for check in report["checks"]] == [
-        "language", "modules", "identity", "data", "contracts", "external_contracts",
+        "language", "modules", "identity", "fields", "data", "contracts", "external_contracts",
         "notes", "router", "persistence"
     ]
     modules = report["checks"][1]

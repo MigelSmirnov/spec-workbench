@@ -136,6 +136,14 @@ aggregate readiness gate. Use `--check <name>` for a detailed owner report;
 future MCP wrappers must call `assembly_workbench` instead of reimplementing
 the orchestration.
 
+The model surface is closed twice inside that gate and can be inspected alone
+with `python tools/design_field_closure.py examples/<case>`: the `fields`
+check requires every typed State 1 field list to equal the model closure (the
+projection reads the closure, so a field that lives only in design text never
+reaches the generator), and the notes gate refuses a note that reads
+`value.attribute` when the value's declared type has no such attribute. Prose
+field lists are reported as unparsed, never judged.
+
 Before semantic closure, build one final packet per assembled module with
 `python tools/design_module_review.py examples/<case> --module <name> --slice
 --json`. Run `--review` for deterministic gaps, then perform the Stage 7.1
