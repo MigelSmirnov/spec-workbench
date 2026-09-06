@@ -267,6 +267,17 @@ def test_recovery_regression_classes_fit_the_obligation_registry():
     } <= set(RULES)
 
 
+def test_data_migration_findings_fit_the_obligation_registry():
+    assert {
+        "data_domain_mismatch",
+        "data_provider_missing",
+        "runtime_settings_wiring_missing",
+        "data_form_invalid",
+        "data_reference_overscoped",
+        "data_owner_unresolved",
+    } <= set(RULES)
+
+
 def test_cabinet_regression_corpus_preserves_semantic_relations(projection, backend_projection):
     web_kinds = {item.kind for item in projection.obligations}
     assert {

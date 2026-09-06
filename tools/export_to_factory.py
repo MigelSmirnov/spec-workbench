@@ -85,6 +85,7 @@ def require_factory(factory_root: Path) -> dict[str, Path]:
         "standard": factory_root / "SPEC_STANDARD.md",
         "validator": factory_root / "tools" / "validate_spec.py",
         "bootstrap": factory_root / "tools" / "bootstrap_project.py",
+        "delta": factory_root / "tools" / "project_spec_delta.py",
         "structure": factory_root / "project_index" / "structure.json",
     }
     missing = [str(path) for path in required.values() if not path.is_file()]
@@ -135,6 +136,60 @@ def project_paths(factory_root: Path, structure: dict[str, Any], project: str) -
         "canonical": project_root / structure["files"]["global_spec"],
         "working": project_root / structure["dirs"]["working"],
     }
+
+
+def project_change_scope(
+    *, delta_tool: Path, project: str, previous: Path | None, source: Path
+) -> dict[str, Any]:
+    """Ask the Factory's canonical diff projector for an addressable Route B scope."""
+    if previous is None or not previous.is_file():
+        return {
+            "changed_modules": ["global"],
+            "changed_functions": [],
+            "changed_notes": [],
+            "changed_contracts": [],
+            "changed_addresses": [],
+            "changed_symbols_by_module": {},
+            "unresolved_addresses": [],
+            "removed_modules": [],
+            "projection": "new_project_global",
+        }
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(delta_tool),
+            "--project",
+            project,
+            "--old-spec",
+            str(previous),
+            "--new-spec",
+            str(source),
+        ],
+        cwd=delta_tool.parents[1],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    try:
+        report = json.loads(result.stdout)
+    except json.JSONDecodeError as exc:
+        raise SystemExit("Factory change-scope projector returned invalid JSON") from exc
+    if result.returncode != 0 or report.get("status") != "pass":
+        raise SystemExit(
+            "Factory change-scope projection failed: "
+            + str(report.get("error") or result.stderr.strip() or f"exit {result.returncode}")
+        )
+    unresolved = report.get("unresolved_addresses") or []
+    if unresolved:
+        raise SystemExit(
+            "Factory change-scope projection is ambiguous; refusing narrow handoff: "
+            + json.dumps(unresolved, ensure_ascii=False, sort_keys=True)
+        )
+    changed_modules = report.get("changed_modules") or []
+    if load_json(previous) != load_json(source) and not changed_modules:
+        raise SystemExit("Factory change-scope projection found a non-empty diff without an owner")
+    report["projection"] = "factory_spec_delta"
+    return report
 
 
 def semantic_export_plan(source: Path, case: str | None) -> tuple[Path, dict[str, Any]] | None:
@@ -223,6 +278,7 @@ def stage9_lineage_manifest(
     admission_path: Path,
     validation_path: Path,
     handoff_path: Path,
+    change_scope: dict[str, Any],
 ) -> dict[str, Any]:
     identity = source_commit[:16] if source_commit else source_sha[:16]
     # the Factory's OTK lineage gate requires every accepted-lineage artifact
@@ -248,7 +304,7 @@ def stage9_lineage_manifest(
             "argv": sys.argv,
         },
         "scope": {
-            "module": "global",
+            "module": "global" if change_scope.get("changed_modules") == ["global"] else "projected",
             "allow_functions": [],
             "allow_notes": [],
             "forbid_contract_edits": False,
@@ -261,6 +317,7 @@ def stage9_lineage_manifest(
             "source_commit": source_commit,
             "standard_version": standard_version,
             "codec_coverage": codec_coverage,
+            "change_scope_projection": change_scope.get("projection"),
         },
         "outputs": {
             "base_spec_sha256_after": base_spec_sha_after,
@@ -269,17 +326,18 @@ def stage9_lineage_manifest(
             "spec_workbench_handoff_path": str(handoff_path),
         },
         "change_summary": {
-            "diff_non_empty": True,
+            "diff_non_empty": bool(change_scope.get("changed_modules") or change_scope.get("changed_addresses")),
             "lineage_adoption": True,
-            "changed_modules": ["global"],
-            "changed_functions": [],
-            "changed_notes": [],
-            "changed_contracts": [],
-            "changed_addresses": [],
+            "changed_modules": change_scope.get("changed_modules", []),
+            "changed_functions": change_scope.get("changed_functions", []),
+            "changed_notes": change_scope.get("changed_notes", []),
+            "changed_contracts": change_scope.get("changed_contracts", []),
+            "changed_addresses": change_scope.get("changed_addresses", []),
+            "changed_symbols_by_module": change_scope.get("changed_symbols_by_module", {}),
             "applied_count": 1,
             "no_op_count": 0,
             "errors_count": 0,
-            "removed_modules": [],
+            "removed_modules": change_scope.get("removed_modules", []),
         },
         "findings": [],
     }
@@ -348,6 +406,15 @@ def main() -> int:
     codec_coverage = admission.get("codec_coverage")
     if not isinstance(codec_coverage, dict):
         raise SystemExit("Factory admission did not return codec coverage evidence")
+    structure = load_json(required["structure"])
+    paths = project_paths(factory_root, structure, args.project)
+    change_scope = project_change_scope(
+        delta_tool=required["delta"],
+        project=args.project,
+        previous=paths["canonical"] if paths["canonical"].is_file() else None,
+        source=source,
+    )
+    admission["projected_change_scope"] = change_scope
     if args.check:
         print(json.dumps(admission, ensure_ascii=False, indent=2, sort_keys=True))
         return 0 if admission["ready"] else 1
@@ -370,8 +437,6 @@ def main() -> int:
     if validation_report.get("spec_sha") != expected_validator_sha:
         raise SystemExit("factory validation report is not bound to the source specification")
 
-    structure = load_json(required["structure"])
-    paths = project_paths(factory_root, structure, args.project)
     base_spec_sha_before = sha256_file(paths["canonical"]) if paths["canonical"].is_file() else None
     command = [sys.executable, str(required["bootstrap"]), "--project", args.project, "--spec", str(source)]
     if args.update_existing:
@@ -446,6 +511,7 @@ def main() -> int:
         admission_path=admission_path,
         validation_path=validation_path,
         handoff_path=manifest_path,
+        change_scope=change_scope,
     )
     write_json_atomic(lineage_path, lineage)
     recorded_sha = lineage["outputs"]["base_spec_sha256_after"]
