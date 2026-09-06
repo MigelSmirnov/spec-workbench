@@ -479,7 +479,7 @@ get_canonical_invoice_admission: [ORCHESTRATION] MUST open and begin a read tran
 
 read_manifest_admission: [VALIDATION_ERROR] MUST load_canonical_admission_for_manifest in the supplied transaction and require an exact READY record, matching manifest ID/hash, Invoice identity, and the single manifest Card hash/status/version matching its retained revision. Missing or mismatched admitted evidence fails before issuance; no old product table or newly selected current pin is a substitute.
 
-SourceByteStore.staging_reference_for: [DEPENDENCY_BOUNDARY] MUST expose deterministic confined staging-reference derivation for the exact publication_id before bytes are written, returning no physical path and performing no I/O. The later stage operation must return this same opaque reference.
+SourceByteStore.staging_reference_for: [DEPENDENCY_BOUNDARY] MUST expose deterministic confined staging-reference derivation for the exact publication_id before bytes are written, returning no physical path and performing no I/O. This reference is part of the committed publication plan and the later stage operation must return this same opaque reference.
 
 LocalFilesystemSourceByteStore.staging_reference_for: [PATH_OR_ARTIFACT_POLICY] MUST validate publication_id by the same safe token constraint as stage and derive the exact opaque staging reference that stage will use under the retained private store. It creates nothing, follows no caller path and never returns a filesystem path.
 
