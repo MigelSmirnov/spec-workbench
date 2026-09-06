@@ -72,7 +72,7 @@ def test_list_projects_uses_curated_index_not_arbitrary_cases(tmp_path: Path):
 
     assert [row.id for row in rows] == ["demo"]
     assert rows[0].canonical_ref == "agent/demo"
-    assert rows[0].stage_name == "Assembly complete"
+    assert rows[0].stage_name == "Assembled artifacts"
     assert "examples/unindexed" not in rows[0].read_order
 
 

@@ -28,6 +28,9 @@ def _print_next(payload: dict[str, object]) -> None:
     if action:
         print(f"Gate:    {action['tool']}")
         print("Args:    " + " ".join(action["args"]))
+    for doc in authoring.get("read") or []:
+        where = f"{doc['path']}#{doc['section']}" if doc.get("section") else doc["path"]
+        print(f"Read:    {where}")
 
 
 def build_parser() -> argparse.ArgumentParser:

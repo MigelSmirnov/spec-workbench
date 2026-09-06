@@ -85,7 +85,7 @@ def test_factory_admission_is_stage_9_not_a_semantic_state() -> None:
     stages = {entry["stage"]: entry for entry in payload["phases"] if "stage" in entry}
     assert set(stages) == {"8", "8.1", "9"}
     assert stages["8.1"]["next"] == "stage9_factory_admission"
-    assert stages["9"] == {
+    assert {k: v for k, v in stages["9"].items() if k != "docs"} == {
         "id": "stage9_factory_admission",
         "stage": "9",
         "status": "available",

@@ -187,6 +187,9 @@ def _files(repo_root: Path, ref: str, path: str) -> list[str]:
 
 
 def _stage(files: list[str]) -> tuple[int | None, str, str | None, bool]:
+    """Highest numbered artifact present. This is a file-layout hint, not the
+    authoring phase: `global_spec.json` may exist while later gates still block.
+    The authoring phase is resolved by tools/authoring_pipeline.py."""
     labels = dict(PRIMARY_STATES)
     primary: list[tuple[int, str]] = []
     for rel in files:
@@ -198,13 +201,14 @@ def _stage(files: list[str]) -> tuple[int | None, str, str | None, bool]:
     assembled = "global_spec.json" in files
     if primary:
         code, rel = max(primary, key=lambda item: item[0])
-        return code, "Assembly complete" if assembled else labels[code], rel, assembled
-    return None, "Assembly complete" if assembled else "No primary state", None, assembled
+        return code, "Assembled artifacts" if assembled else labels[code], rel, assembled
+    return None, "Assembled artifacts" if assembled else "No primary state", None, assembled
 
 
 def _next(stage_code: int | None, assembled: bool) -> str:
+    """Artifact-prefix hint only. Semantic readiness is owned by `authoring next`."""
     if assembled:
-        return "done"
+        return "verify with authoring next"
     if stage_code is None:
         return "00 Product boundary"
     for code, label in PRIMARY_STATES:
