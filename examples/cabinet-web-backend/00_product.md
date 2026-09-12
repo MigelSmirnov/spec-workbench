@@ -3,7 +3,8 @@
 ## Status
 
 Accepted State 0, corrected on 2026-09-05 by the accepted boundary decision
-recorded below (D0-007 … D0-011). Live product evidence for that correction is
+recorded below (D0-007 … D0-011), with the narrowly scoped temporary bridge
+exception D0-013 accepted on 2026-09-12. Live product evidence for that correction is
 `LIVE_PRODUCT_EVIDENCE_20260905_c897897.md`; it is the migration starting
 point and carries no architectural authority over Cabinet Flow.
 
@@ -42,9 +43,10 @@ does not make this service the owner of product data; the persistent store of
 Cabinet Flow is chosen at the next design level.
 
 The GitHub request bridge of `Cabinet_web` remains only as a temporary
-compatibility adapter for capabilities that have not migrated. It is not
-extended into a target backend and its semantics are not carried into this
-plugin. The primary online interface of the target system is Cabinet Flow's
+compatibility adapter for capabilities that have not migrated. D0-013 permits
+one additional operation, `link_project_invoice`, in that existing adapter.
+It is not extended into a target backend and its semantics are not carried
+into this integration plugin. The primary online interface of the target system is Cabinet Flow's
 own MCP; the MCP surface of this case is a legacy surface for the migration
 period.
 
@@ -723,8 +725,8 @@ migrates, its canonical data are the existing GitHub JSON and related
 `Cabinet_web` artifacts; after migration, Cabinet Flow and its store. One
 writer at a time; the other side is a read-only projection, index or
 compatible adapter. Parallel authoritative writes are forbidden. The GitHub
-request bridge is a temporary compatibility adapter and is not extended. The
-persistent store of Cabinet Flow is chosen at the next design level; no product
+request bridge is a temporary compatibility adapter; D0-013 is the sole
+authorized addition to its existing operation set. The persistent store of Cabinet Flow is chosen at the next design level; no product
 record is moved into PostgreSQL before that design exists.
 
 ### Resolved decision D0-009 — originals through the Syncthing Inbox
@@ -838,3 +840,48 @@ current Cabinet repository check (85 tests)      PASS
 ```
 
 State 0 is accepted. State 1 model authoring has not started.
+
+
+### Resolved decision D0-013 — temporary project/invoice link operation
+
+Accepted by the product owner on 2026-09-12: "разрешить link_project_invoice",
+in response to the proposal to allow this single new temporary bridge operation.
+This narrows the no-extension rule in D0-008 only for `link_project_invoice`.
+D0-007 product ownership, D0-009 original custody, D0-011 line capture and
+D0-012 integration admission remain in force. In particular, the read-only
+source-registration adapter described in D0-012 acquires no write authority.
+
+Until this capability migrates to Cabinet Flow, the existing Cabinet_web
+canonical GitHub request runner is its sole writer. It persists the existing
+separate Project Invoice Link artifact using the existing project/stage
+registry and `project-invoice-link-v1` schema. The Actions endpoint submits
+a typed request and reports the runner's final receipt; submission alone is
+never reported as a saved link. No parallel PostgreSQL product master is
+introduced in this integration service.
+
+The operation links an existing confirmed Invoice to one explicitly selected
+Project and stage. It checks the exact reviewed Invoice revision and the
+Project/stage context before writing, rejects stale or conflicting assignments,
+and replays an already completed identical request without creating another
+link. Inbox membership supplies project context; it does not constitute a
+persisted canonical link or silently select a stage. Assignment confirmation
+may be carried by an existing explicit user instruction for the same target.
+
+Project/stage attribution does not assert that material lines match estimate
+items. Unresolved line mappings remain explicit; the operation must not invent
+estimate matches, classify unknown lines as unplanned, or aggregate source rows.
+It does not rewrite Invoice facts, status, payment, rounding warnings, source
+bytes, line-capture proof, Project facts, or historical links. Reassignment and
+allocation of an Invoice across several stages require separately designed
+operations and are outside this exception.
+
+The bounded implementation and acceptance requirements are recorded in
+`PROJECT_INVOICE_LINK_BRIDGE_CONTRACT_20260912.md`. They apply to the legacy
+compatibility adapter, not to generated `project_workspace` Python contracts
+or the integration service's M13 model. A later Cabinet Flow migration must
+preserve accepted link identities and history and retire the bridge writer
+before enabling a replacement writer.
+
+This decision authorizes implementation and validation of the operation.
+It does not claim that a handler has been deployed or that any live Invoice
+has been linked merely because the design decision was accepted.
