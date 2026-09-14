@@ -167,3 +167,26 @@ def test_capture_counts_cannot_manufacture_completeness(source, count):
     _, _, _, cards, evidence = source
     evidence["source_line_count"] = count
     assert snapshot.capture_state(cards["invoice-a"], evidence["card_content_hash"], evidence) == "invalid"
+
+
+def test_png_original_is_recognised_by_the_plugin_signature(source):
+    repo, _, audit, _, _ = source
+    raw = b"\x89PNG\r\n\x1a\nfixture\x00\x00\x00\x00IEND\xaeB`\x82"
+    write(repo, "data/cards/invoice-b/2.png", raw)
+    audit["files"].append({"invoice_id": "invoice-b", "path": "data/cards/invoice-b/2.png",
+                           "sha256": snapshot.sha256(raw), "size_bytes": len(raw)})
+    write(repo, "audit.json", audit)
+    result, _ = build(repo, commit(repo))
+    files = next(i for i in result["invoices"] if i["card_id"] == "invoice-b")["source_set"]["files"]
+    assert [f["media_type"] for f in files] == ["application/pdf", "image/png"]
+
+
+@pytest.mark.parametrize("raw", [b"RIFF\x00\x00\x00\x00WEBPVP8 ", b"\x89PNG\r\n\x1a\ntruncated", b"GIF89a", b""])
+def test_other_or_truncated_originals_stay_rejected(source, raw):
+    repo, _, audit, _, _ = source
+    write(repo, "data/cards/invoice-b/2.bin", raw)
+    audit["files"].append({"invoice_id": "invoice-b", "path": "data/cards/invoice-b/2.bin",
+                           "sha256": snapshot.sha256(raw), "size_bytes": len(raw)})
+    write(repo, "audit.json", audit)
+    with pytest.raises(ValueError):
+        build(repo, commit(repo))

@@ -97,13 +97,16 @@ class PinnedRepository:
 
 
 def recovered_media(raw: bytes) -> str:
-    # This emitter handles the audited JPEG/PDF recovery corpus only. The
-    # general source ingress catalogue and full content validation remain A05.
+    # The accepted original formats are the plugin's CONTENT_FORMAT_SIGNATURES
+    # rows (JPEG, PNG, PDF), checked here by signature and trailer. Full content
+    # validation of every admitted original remains A05 on the plugin side.
     if raw.startswith(b"\xff\xd8\xff") and raw.rstrip().endswith(b"\xff\xd9"):
         return "image/jpeg"
+    if raw.startswith(b"\x89PNG\r\n\x1a\n") and raw.endswith(b"IEND\xaeB`\x82"):
+        return "image/png"
     if raw.startswith(b"%PDF-") and raw.rstrip().endswith(b"%%EOF"):
         return "application/pdf"
-    raise ValueError("unrecognized recovered JPEG/PDF original")
+    raise ValueError("unrecognized recovered JPEG/PNG/PDF original")
 
 
 def capture_state(card: dict, card_hash: str, evidence: dict | None) -> str:
