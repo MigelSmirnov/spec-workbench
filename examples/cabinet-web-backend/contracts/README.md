@@ -42,7 +42,7 @@ accepted audit order, not inferred page numbering. Duplicate content identities
 inside one audited set fail instead of silently changing membership.
 
 An empty observed file list is representable so missing sources are visible;
-it is not an accepted complete source set. The recovery corpus is JPEG/PDF.
+it is not an accepted complete source set. Accepted original formats are the plugin's signature table: JPEG, PNG, PDF.
 The emitter's signature check recognizes that audited corpus; it does not
 replace full runtime A05 validation or narrow the general ingress catalogue.
 Unassociated recovered receipts/orders are verified and counted but are not
