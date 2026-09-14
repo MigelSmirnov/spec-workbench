@@ -5,7 +5,8 @@
 Cabinet Web accepts a published Registry catalogue only when its project
 snapshots are in strictly ascending `project_id` order
 (`rules.registry_publication.snapshot_order_key = project_id`; the rejection is
-`PROJECT_ORDER_INVALID`), and its A09 rule 8 hashes that ordered snapshot. The
+`PROJECT_ORDER_INVALID`), and its [catalogue hash rule](../cabinet-web-backend/02_rules_sync_operations.md)
+hashes that ordered snapshot. The
 local Backend's A35 and A72 spoke of "an exact ordered snapshot" without naming
 the order. On 2026-09-14 a three-project catalogue delivered in Registry export
 order was rejected; the two-project catalogues of 2026-09-05/06 had passed by

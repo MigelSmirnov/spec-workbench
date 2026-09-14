@@ -232,7 +232,8 @@ Cabinet does not currently:
 
 ### Why it is open
 
-A11 here and A10 in Cabinet Web keep the VPS working copies until the owner
+A11 here and the [Cabinet Web release rule](../cabinet-web-backend/02_rules_sync_operations.md)
+keep the VPS working copies until the owner
 explicitly releases the working set of one `project_id`, after the local
 Backend has confirmed verified durable replicas of every required original.
 The owner confirmed on 2026-09-15 that this is the intended shape: an object is
@@ -241,12 +242,13 @@ consequence of a receipt.
 
 Two facts make the question urgent rather than academic:
 
-- Cabinet Web discovery (A08) lists every ready manifest of every object until
+- [Cabinet Web discovery](../cabinet-web-backend/02_rules_sync_operations.md) lists every ready manifest of every object until
   its working set is released; each local sync session re-pulls all of them.
   The cost is linear in the number of unreleased Invoices and ends only with
   release (2026-09-14: 13 Invoices, seconds).
-- Cabinet Web A20 rule 9 refuses release for every canonical source set: the
-  release command lacks the complete typed local verification A10 requires. The
+- The [Cabinet Web admission rule](../cabinet-web-backend/02_rules_source_registration.md)
+  (rule 9) refuses release for every canonical source set: the release command
+  lacks the complete typed local verification its release rule requires. The
   local Backend already exposes that evidence
   (`durable_archive.verify_durable_acceptance`,
   `durable_archive.get_transfer_receipt`, A76), but no wire carries it into the
@@ -262,16 +264,16 @@ Two facts make the question urgent rather than academic:
    discovery stops listing released manifests without deleting evidence the
    Backend has not confirmed.
 3. Whether a receipt `accepted` may already remove a manifest from discovery
-   while the bytes stay retained (a smaller change to A08) — or whether
-   discovery stays coupled to release.
+   while the bytes stay retained (a smaller change to the Cabinet Web discovery
+   rule) — or whether discovery stays coupled to release.
 
 ### Not in question
 
 - Automatic release after a receipt (rejected: release is the only irreversible
   loss point; the Backend's witnesses run on an in-memory unit of work and
   cannot vouch for persisted bytes).
-- Filtering discovery by project (not designed; A08 rule 2 returns every
-  available revision, the project assignment travels inside the package).
+- Filtering discovery by project (not designed; Cabinet Web discovery returns
+  every available revision, the project assignment travels inside the package).
 
 ---
 
