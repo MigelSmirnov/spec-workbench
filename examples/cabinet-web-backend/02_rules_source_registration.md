@@ -180,3 +180,82 @@ invoice_exchange owns canonical admission and consumes source_custody evidence.
 The confirmation-only producer is retired for this capability. The protected
 canonical input and admission records close the legacy-to-transfer connection
 without introducing Cabinet Flow storage or another product writer.
+
+## Accepted decision A21 — the canonical input producer is the protected operator (2026-09-14)
+
+The owner decided (2026-09-14) that the gap between the Cabinet journal and
+this plugin closes with a producer, not with a new module: A19 rule 1 already
+names an operator-pinned snapshot and A20 rule 4 an immutable external fact.
+The producer is that operator. Since 2026-09-12 the journal is the VPS local
+repository and holds only `data/` and `ops/`; originals of new Cards live in
+the Cabinet Flow ingress store by sha256 and the Card schema in the deployed
+Actions release. Capability boxes of the estimator are outside this decision
+by the owner's explicit choice.
+
+### Normative rules
+
+1. The pin (M193) is advanced only by the producer of the Cabinet_web factory
+   project (`deploy/backend/publish_canonical_snapshot.sh`) running on the VPS
+   as the journal owner and the deploy user. No request, plugin, browser or
+   local-node caller advances it; A19 rule 3 is unchanged.
+2. One journal revision yields one composite input commit holding exactly: the
+   journal `data/` tree; the product Card schema of the deployed Actions
+   release; the association evidence `audit/association.json` — every Card's
+   raw hash, the 2026-09-06 recovery audit entries re-verified against the
+   tree by path, hash and size, and every Inbox source set whose identity
+   `source-<sha256(canonical({project_id, source_ids}))>` is recomputed from
+   the Inbox job that produced the Card and equals the Card's
+   `source.source_id`; and the accepted ingress objects of those sets under
+   `sources/ingress/<sha256>` in set order. Equal inputs give equal commits and
+   equal snapshots; an existing snapshot is never overwritten.
+3. The snapshot is produced by the workbench emitter
+   (`tools/emit_legacy_invoice_snapshot.py`, contract
+   `contracts/legacy_invoice_snapshot_v1.schema.json`), vendored byte-identically
+   with recorded provenance. Accepted original formats are the plugin's
+   `CONTENT_FORMAT_SIGNATURES` rows: JPEG, PNG, PDF.
+4. The whole snapshot fails closed when any Card of the inventory fails the
+   product schema or any audited original is missing or differs. The repair is
+   a journal transaction with a receipt under `ops/maintenance/` (precedent:
+   `invoice-suma-26b90054`, 2026-09-14), never an emitter or producer
+   exception.
+5. Admission runs as the owner inside the api container:
+   `register_canonical_source_set` only for a non-empty set (A19 rule 5), then
+   `admit_canonical_invoice` for every Card of the snapshot; an empty set is
+   admitted pending `source_membership_missing`. Effect identities derive from
+   the Card and the snapshot; a rerun replays.
+6. Installed snapshots are never removed or rewritten; advancing the pin
+   retains every earlier snapshot (A19 rule 1).
+
+### Formal invariants
+
+```text
+pin_advance -> producer_run AND composite_commit(journal_revision)
+composite_commit -> data_tree(journal) AND card_schema(actions_release)
+                    AND association_audit AND ingress_members_in_set_order
+equal_journal_and_ingress_inputs -> equal_snapshot_sha256
+invalid_card OR missing_audited_original -> no_snapshot
+empty_source_set -> admission_pending(source_membership_missing) AND no_custody
+installed_snapshot -> immutable
+```
+
+### Required tests
+
+1. A Card without originals is admitted pending `source_membership_missing`
+   and no custody record exists for it.
+   [witness: verification:canonical_invoice_admission]
+2. Every non-empty set is registered before admission and the issued manifest
+   binds all exact file hashes.
+   [witness: verification:canonical_source_registration]
+3. The emitter recognises PNG by signature and trailer as `image/png`, rejects
+   other or truncated formats, and fails the whole snapshot on a schema-invalid
+   Card. Executable in `tests/test_legacy_invoice_snapshot.py` (offline
+   contract, as A19 test 2).
+4. A rerun on an unchanged pin replays every registration and admission
+   without a second custody, manifest or effect.
+
+### Consequence
+
+The journal-to-plugin link no longer depends on a person: the producer is the
+protected operator of A19, the plugin still owns no product entity (State 0),
+and the Cabinet Flow ingress remains the source of originals. Triggering the
+producer after each journal commit is deployment work, not design.
