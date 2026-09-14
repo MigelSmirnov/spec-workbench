@@ -2,7 +2,11 @@ from __future__ import annotations
 
 import json
 
+from pathlib import Path
+
 from notes_workbench import language
+
+ROOT = Path(__file__).resolve().parents[1]
 
 
 CREATE_APP = "(archive: DurableArchiveService, plan_actual: PlanActualService) -> FastAPI"
@@ -174,3 +178,46 @@ def test_unbound_app_state_attribute_is_reported(tmp_path):
     finding = _by_code(report, "unknown_app_state_attribute")[0]
     assert finding["attribute"] == "registry"
     assert finding["bound_attributes"] == ["archive", "plan_actual"]
+
+
+def test_note_surface_gate_blocks_unknown_attribute_and_undeclared_callable(tmp_path):
+    """A note may oblige only what the declared surface carries."""
+    import json
+    import shutil
+
+    from notes_workbench import language
+
+    case = tmp_path / "cabinet-backend"
+    shutil.copytree(ROOT / "examples" / "cabinet-backend", case)
+    spec = json.loads((case / "global_spec.json").read_text(encoding="utf-8"))
+    owner = {f: m for m, fs in spec["module_functions"].items() for f in fs}
+
+    def model_typed(sig):
+        for name, typ in language.signature_parameters(sig):
+            model = spec["models"].get(typ.split("|")[0].strip())
+            if isinstance(model, dict) and model.get("fields"):
+                return name
+        return None
+
+    scope, parameter = next(
+        (name, model_typed(sig)) for name, sig in spec["contracts"].items()
+        if "." not in name and owner.get(name) and model_typed(sig)
+    )
+    declared = spec["imports"].get("module_internal", {}).get(owner[scope], {})
+    foreign = next(
+        f for m, fs in spec["module_functions"].items() if m != owner[scope]
+        for f in fs if f in spec["contracts"] and "." not in f and f not in declared.get(m, [])
+    )
+    notes = case / "80_notes.md"
+    notes.write_text(
+        notes.read_text(encoding="utf-8").rstrip("\n")
+        + f"\n{scope}: [BEHAVIOR] MUST read {parameter}.no_such_field before deciding and call {foreign}() afterwards.\n",
+        encoding="utf-8",
+    )
+    findings = language.surface_findings(case, spec)
+    codes = {(f["code"], f.get("attribute_path") or f.get("callee")) for f in findings}
+    assert ("note_attribute_unknown", f"{parameter}.no_such_field") in codes
+    assert any(code == "note_callable_undeclared" and callee == foreign for code, callee in codes)
+    assert all(f["severity"] == "block" for f in findings)
+    baseline = language.surface_findings(ROOT / "examples" / "cabinet-backend", json.loads((ROOT / "examples" / "cabinet-backend" / "global_spec.json").read_text(encoding="utf-8")))
+    assert baseline == []

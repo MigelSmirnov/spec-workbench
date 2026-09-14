@@ -150,6 +150,49 @@ A useful operational version:
 
 > If contracts require inventing new models, return to models. If notes require inventing new behavior, return to product rules or module design. If a module needs `utils` to hold unclear responsibilities, return to responsibility design.
 
+## The fence
+
+The workbench has no warnings and accepts no waivers. A finding that is not
+an error is an undecided fact wearing a softer label, and a specification is
+not assembled on undecided facts. Every tool passes its findings through
+`tools/fence.py` before counting them:
+
+- a `warning` or `review` finding is raised to a stop, and every stop carries
+  a `hint` that names what to decide — `not decided — decide: …`;
+- `closure_gap_waivers.json` is not read as permission: its presence blocks
+  Stage 9 until each waived gap is recorded as a decision with an owner and
+  carried by a contract;
+- a module review result is `PASS` or `AMBIGUITY`; `PASS_INTERNAL_VARIATION`
+  no longer exists, because a mechanism that may vary is an undecided
+  mechanism;
+- assembly runs two more checks: `witness` (every accepted decision with
+  formal invariants names a verified witness) and `flows` (every capability a
+  State 4 flow names is planned, contracted, and reached from a route through
+  the calls the notes oblige);
+- a dirty Workbench or Factory checkout blocks admission; no flag softens it.
+
+The rule for the author is short: **not decided → decide.** The tool tells
+you what; it never tells you it is fine.
+
+## The frontier
+
+Beside the ladder there is a read-only frontier:
+
+    python tools/obligations examples/<case> next
+    python tools/obligations examples/<case> focus module:<m>
+
+It rebuilds, on every run, the graph of what the decided artifacts oblige the
+corpus to decide next — nothing is stored, nothing is design truth. Every
+obligation is typed by the closed registry in `tools/obligations/registry.py`;
+the type, not the message, decides scheduling: only `defining` obligations
+block dependents, `convergence` ones never do. A node reads on two axes —
+LOCAL complete/open and SYSTEM settled/blocked — so a finished contract whose
+parameter type has no design source says "go close the interface", not
+"rewrite the contract". `authoring.py next` still names the State; use the
+frontier to choose *which* obligation to close, and `focus` to close one deep
+module in both directions (what it owes, and who owes it a call). See
+`tools/OBLIGATIONS.md`.
+
 ## Design states
 
 The states below are ordered by dependency, not by the order of sections in `global_spec.json`.
@@ -364,6 +407,83 @@ Prefer deep modules:
 - stable ownership boundary;
 - no leakage of internal sequencing to callers.
 
+#### Cohesion test (mandatory)
+
+A module is deep only when most of its public capabilities rest on **one**
+coherent hidden mechanism, one set of invariants, and one reason to change. A
+shared domain entity, namespace, or product word is a taxonomic link, not
+cohesion: "everything here is about Invoice" justifies a domain boundary, never
+an implementation module.
+
+A domain boundary is not an implementation module. The correct chain is:
+
+```text
+domain area
+→ several independent knowledge / change clusters
+→ several deep implementation modules
+→ optionally one thin public façade
+```
+
+not:
+
+```text
+domain area → one owner of its rules → one module → every operation of the area
+```
+
+Every module records the outcome of the test in its `Depth assessment` as a
+declaration the State 3 lint reads:
+
+```text
+### Depth assessment
+
+kind: deep
+hidden mechanism: <the one mechanism most public capabilities share>
+```
+
+or
+
+```text
+### Depth assessment
+
+kind: facade
+delegates to: `module_a`, `module_b`
+```
+
+A module with a wide candidate surface (`WIDE_SURFACE_CAPABILITIES` or more)
+without this declaration is a State 3 error; a narrower module without it stops
+the case just the same — the workbench has no warnings.
+"Substantial hidden responsibility" is not enough: many mechanisms in one file
+make the module big, not deep.
+
+#### Split triggers
+
+Any of the following means the candidate is several modules, not one:
+
+- several independent state machines;
+- several unrelated transactional topologies;
+- groups of operations that use almost disjoint dependency sets;
+- public operations each carrying its own large algorithm with little shared
+  internal implementation;
+- consumers that regularly need only one subset of the API;
+- a public surface that nearly equals the whole owned function surface
+  (State 6 reports `module_surface_not_deep` when it does);
+- a change in one group of rules that should not require revisiting the
+  others.
+
+For each public operation ask: which internal mechanism does it reuse; which
+invariants are genuinely shared; does it change for the same reason as its
+neighbours; does it need the same dependencies; could a consumer depend on a
+subset only. When the answers split, the module splits — and the split runs
+along the mechanism, never along size.
+
+#### Shallow façade
+
+A thin façade is admissible as a composition boundary when it owns no policy
+and delegates to several deep modules. Its shallowness must be declared
+(`kind: facade`), never mistaken for depth; the generation gates treat a
+declared façade's short functions as intended, and an undeclared one as
+collapse.
+
 Treat the following as warning signs:
 
 - `utils`, `helpers`, `common`, `manager`, `processor`, or `service` without a precise domain qualifier and ownership statement;
@@ -372,14 +492,16 @@ Treat the following as warning signs:
 - rendering changing domain state;
 - modules that only rename or forward arguments;
 - one module per endpoint when several endpoints share one responsibility;
-- modules whose public API is nearly identical to all internal functions.
+- modules whose public API is nearly identical to all internal functions;
+- one module per whole entity or subsystem when its operations do not share a mechanism — the mirror image of one module per endpoint.
 
 Readiness questions:
 
 - Can each invariant be assigned to one primary enforcement owner?
 - Can each model’s creation and mutation be assigned to a responsible module?
-- Does each module hide something meaningful?
+- Does each module hide something meaningful — and is that one mechanism named in its Depth assessment?
 - Is the public API smaller than the module’s internal behavior?
+- Would any split trigger fire if the module were implemented as one file?
 - Are forbidden responsibilities explicit?
 
 Expected specification output at this stage:
@@ -474,11 +596,35 @@ For each public operation:
 4. add exact contracts for every public and private function;
 5. establish `function_order`.
 
+The chain for every product operation is:
+
+```text
+product operation
+→ responsible capability
+→ deep implementation module that owns the mechanism
+→ public façade or handler, when the boundary needs one
+```
+
+not "product operation → one public function of the domain module". A module
+whose planned functions are almost all public has been assembled from use
+cases, not from a mechanism; the State 6 lint reports it as
+`module_surface_not_deep` (see `module_surface` in the coverage report) unless
+State 3 declares the module a façade. Treat that report as a State 3 question,
+not as a State 6 formatting issue: go back and split along the mechanism.
+
 For every interface used as a dependency parameter, decide whether its runtime
 implementation is local or external. Record the decision structurally in
 `implementation_obligations`. A local concrete class must receive contracts for
 the complete interface method surface; a concrete `__init__` alone is never a
-complete implementation obligation. Do not infer the relation from class names
+complete implementation obligation. The State 6 lint enforces the producing side of
+this: when a planned function returns an interface (a class whose methods are
+planned only under `module:models`) and no planned class outside `models`
+carries that interface's operations, it reports `interface_without_provider`
+as an error. The finding names the returning functions and carries the exact
+plan entries and contract signatures to add (`prescription`), because every
+generation of such a module otherwise invents a private class or leaves the
+function a stub. A note saying the implementation is module-owned pins the
+prescription to that module. Do not infer the relation from class names
 or repeat it only in a composition note.
 
 Do not introduce new domain concepts silently at this stage.

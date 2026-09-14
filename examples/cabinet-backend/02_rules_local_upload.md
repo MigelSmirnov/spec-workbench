@@ -1,6 +1,6 @@
 # State 2 decision — local invoice source upload
 
-## Accepted decision
+## Accepted decision A10 — local invoice source upload
 
 Accepted supporting decision for `02_rules.md`.
 
@@ -62,9 +62,20 @@ and must not modify any invoice before that choice.
 10. A successfully attached and verified file removes the corresponding visible
     missing-source warning when no other required source remains missing.
 
+### Formal invariants
+
+```text
+uploader_binding -> private_interface_only
+agent_attachment_path = html_attachment_path
+same_bytes_same_target_replayed -> same_stored_replica
+hash_mismatch_or_ambiguous_match -/> source_replacement
+mutation_by_invoice_number_alone = forbidden
+```
+
 ### Required tests
 
 1. A local user can find an invoice, select it, upload a photograph, and receive a
+   [witness: verification:semantic_flow2_source_attachment]
    success result.
 2. Several invoices with the same invoice number are displayed as separate
    choices and no file is attached before one is selected.

@@ -48,6 +48,7 @@ exception_expired
 ### Required tests
 
 1. Dependency review rejects a proposed release that introduces a known critical vulnerability.
+   [witness: verification:deployed_tree_inventory]
 2. Dependency review rejects a proposed release that introduces a known high vulnerability.
 3. Moderate and low findings remain visible even when they do not automatically block release.
 4. Each deployable Cabinet surface can produce or identify its reproducible dependency inventory.

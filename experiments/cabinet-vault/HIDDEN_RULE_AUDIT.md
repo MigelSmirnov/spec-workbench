@@ -56,7 +56,7 @@ BXL-COMPOSE-005 unresolved composition has no model/generated-code fallback
 
 ## Compiler binding
 
-`tools/box_derivability.py` and `tools/box_composition.py` export their implemented rule IDs.
+`experiments/cabinet-vault/tools/box_derivability.py` and `experiments/cabinet-vault/tools/box_composition.py` export their implemented rule IDs.
 
 Their result artifacts also carry the applied rule IDs:
 
@@ -72,13 +72,13 @@ A proof is therefore explicit about the language rules under which it was produc
 Run:
 
 ```bash
-python tools/box_language_audit.py
+python experiments/cabinet-vault/tools/box_language_audit.py
 ```
 
 or:
 
 ```bash
-python tools/box_language_audit.py --json
+python experiments/cabinet-vault/tools/box_language_audit.py --json
 ```
 
 The audit blocks when:
@@ -94,7 +94,7 @@ The fingerprint rule is deliberate. Any compiler-code change forces an explicit 
 
 ## Mandatory change discipline
 
-Treat `python tools/box_language_audit.py` as a required gate before accepting any change to the box compiler or composition runtime.
+Treat `python experiments/cabinet-vault/tools/box_language_audit.py` as a required gate before accepting any change to the box compiler or composition runtime.
 
 A compiler fingerprint drift is not repaired by refreshing the fingerprint alone. Review the code change first and determine whether it:
 

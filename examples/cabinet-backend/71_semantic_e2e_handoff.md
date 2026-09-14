@@ -32,9 +32,9 @@ Each oracle depends on a Factory/project-owned pytest fixture named `semantic_ru
 4. reject a differing existing target unless `--update-existing` is explicit;
 5. verify source and target SHA-256 after copy;
 6. record per-file provenance in `spec_workbench_handoff.json`;
-7. record `factory_execution_verified = false` because Workbench export cannot prove local Factory runtime execution.
+7. record `factory_execution_verified = false` because Workbench export itself cannot prove local Factory runtime execution.
 
-The physical Factory migration and execution are intentionally **not claimed here**. The Factory is local and unavailable in this environment. The prepared exporter must be exercised against the real local Factory checkout before runtime acceptance can be reported as passing.
+The exporter remains intentionally unable to infer successful execution merely from file transfer. Runtime acceptance still requires execution evidence from the Factory/project environment.
 
 ## Local Factory completion gate
 
@@ -47,4 +47,10 @@ all six declared semantic tests copied with matching SHA-256
 + failures are treated as implementation/generation defects unless upstream semantics are intentionally reopened
 ```
 
-No successful local Factory execution is asserted by this Workbench closure record.
+## Subsequent runtime evidence
+
+A subsequent operator-attested execution is recorded in `71_factory_runtime_execution_evidence.md`.
+
+That record reports that the mature `cabinet-backend` path passed its Factory/E2E execution and that an experimental invoice was processed through Cabinet Backend and loaded into Holded. This removes the historical information gap behind the earlier statement that no successful local Factory execution had been asserted, while preserving an important provenance distinction: the Workbench still does not fabricate machine-captured runtime logs, external document identifiers, or build hashes that were not recorded.
+
+The runtime evidence strengthens the mature `cabinet-backend` case as an E2E-tested reference for shared mechanical runtime patterns; it does not change any accepted semantic oracle and does not transfer local-backend domain ownership to `cabinet-web-backend`.

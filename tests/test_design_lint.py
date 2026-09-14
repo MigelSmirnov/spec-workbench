@@ -305,8 +305,9 @@ def test_missing_canonical_sections_are_review_warnings(tmp_path: Path) -> None:
     assert _codes(report) == ["missing_security_review"] + ["missing_canonical_section"] * 4 + [
         "section_not_nested"
     ]
-    assert report.summary.warnings == 5
-    assert report.summary.errors == 1
+    # the fence: every review-grade finding stops
+    assert report.summary.warnings == 0
+    assert report.summary.errors == 6
     assert design_lint.report_exit_code(report) == 1
 
 
@@ -380,7 +381,7 @@ Invariant.
     report = design_lint.lint_project(project)
 
     assert _codes(report) == ["canonical_section_order"]
-    assert report.findings[0].severity == "warning"
+    assert report.findings[0].severity == "error"
 
 
 def test_exact_duplicate_section_is_ambiguity_error(tmp_path: Path) -> None:
@@ -414,7 +415,7 @@ def test_case_only_duplicate_section_is_warning_not_error(tmp_path: Path) -> Non
         "duplicate_canonical_section",
         "duplicate_section_name",
     ]
-    assert {finding.severity for finding in report.findings} == {"warning"}
+    assert {finding.severity for finding in report.findings} == {"error"}
 
 
 def test_supporting_decision_source_key_is_info(tmp_path: Path) -> None:
@@ -459,7 +460,7 @@ Supporting body.
         if finding.code == "section_not_nested"
     )
     assert finding.item_key == "source:02_rules.md#accepted-decision"
-    assert finding.severity == "warning"
+    assert finding.severity == "error"
 
 
 def test_unresolved_references_warn_and_statistics_distinguish_resolution(
@@ -479,7 +480,7 @@ def test_unresolved_references_warn_and_statistics_distinguish_resolution(
 
     assert _codes(report) == ["unresolved_reference"]
     assert report.findings[0].item_key == "A1"
-    assert report.findings[0].severity == "warning"
+    assert report.findings[0].severity == "error"
     assert "OQ-404" in report.findings[0].message
     assert report.summary.explicit_references == 2
     assert report.summary.resolved_references == 1

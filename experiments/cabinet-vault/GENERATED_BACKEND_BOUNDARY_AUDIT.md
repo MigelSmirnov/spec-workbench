@@ -14,7 +14,7 @@ evidence is intentionally not converted into a green result.
 ## Artifacts
 
 ```text
-tools/cabinet_boundary_audit.py
+experiments/cabinet-vault/tools/cabinet_boundary_audit.py
 experiments/cabinet-vault/generated_backend_failure_evidence_v0.yaml
 tests/test_cabinet_boundary_audit.py
 experiments/cabinet-vault/generic_host_lowering_contract_v0.yaml

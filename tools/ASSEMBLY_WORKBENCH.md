@@ -17,6 +17,7 @@ It delegates semantic validation to the existing owners:
 | Check | Owner |
 | --- | --- |
 | `identity` | `identity_workbench` |
+| `fields` | `model_surface_workbench.fields` |
 | `data` | `design_stage6_data` compatibility workbench |
 | `contracts` | `design_stage6_contracts` |
 | `notes` | `notes_workbench.gate` |

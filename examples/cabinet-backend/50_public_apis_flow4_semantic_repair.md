@@ -4,7 +4,7 @@
 
 Bounded State 5 repair propagating the accepted State 2 plan/actual decision without changing the public operation name or State 6 callable signature.
 
-## `public_op:plan_actual.calculate_plan_actual`
+## Superseded — `public_op:plan_actual.calculate_plan_actual`
 
 ### Refined inputs
 

@@ -61,6 +61,8 @@ Candidate fields:
 - exact `card_id`, `source_id`, and expected M03 Card revision;
 - issuing M02 principal and M01 actor provenance;
 - `status`: `issued`, `consumed`, `expired`, or `revoked`;
+- `secret_verifier`: the one-way verifier of the single-use handoff secret;
+  the plaintext secret is returned exactly once at issue and is never stored;
 - issued and expiry times;
 - consumed/revoked time optional.
 
@@ -144,3 +146,18 @@ change; retained as bounded audit/idempotency evidence.
 
 None.
 
+## Model M133 — UploadHandoffIssuance
+
+Fields: `handoff: SourceUploadHandoff`, `handoff_secret: str`.
+
+The single response of handoff issue: the durable M15 record, which carries
+only the one-way `secret_verifier`, together with the plaintext single-use
+secret returned exactly once and never stored.
+
+### Identity
+
+value
+
+### Identity evidence
+
+Equal handoff records with equal plaintext secrets are the same issuance.

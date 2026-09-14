@@ -9,8 +9,8 @@ Executed on 2026-08-21 in the selected Termux runtime.
 Fingerprint-bound implementation and probe runner:
 
 ```text
-tools/protected_configuration_kernel.py
-tools/protected_configuration_kernel_probe.py
+experiments/cabinet-vault/tools/protected_configuration_kernel.py
+experiments/cabinet-vault/tools/protected_configuration_kernel_probe.py
 ```
 
 Observed command result:

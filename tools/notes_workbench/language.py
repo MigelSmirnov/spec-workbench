@@ -255,6 +255,84 @@ def authored_repair_sites(project: Path) -> tuple[list[dict[str, Any]], list[str
     return findings, sorted(files)
 
 
+
+# --------------------------------------------------------------------------- note surface
+# A note may oblige only what the declared surface carries.  An attribute path
+# on a declared parameter must walk declared model fields; a callable the note
+# names that another module owns must be a declared runtime import.  The
+# generator cannot implement an obligation whose surface does not exist — it
+# guesses (revision.created_by, hasattr) or stubs the module — and no
+# deterministic gate saw it before generation.
+
+_ATTRIBUTE_PATH_RE = re.compile(r"\b([a-z_][a-z0-9_]*)((?:\.[a-z_][a-z0-9_]*)+)\b(?!\s*\()")
+_CALLABLE_RE = re.compile(r"\b([a-z_][a-z0-9_]*)\s*\(")
+_SURFACE_SKIP_ROOTS = frozenset({"rules", "config", "models", "self", "e", "json", "hashlib", "datetime", "unit_of_work"})
+_PYDANTIC_CALLS = frozenset({"model_copy", "model_dump", "model_dump_json", "model_validate", "model_validate_json"})
+
+
+def _model_fields(spec: dict[str, Any], type_text: str) -> dict[str, str] | None:
+    name = type_text.split("|")[0].strip()
+    declaration = (spec.get("models") or {}).get(name)
+    if not isinstance(declaration, dict):
+        return None
+    fields = declaration.get("fields")
+    return fields if isinstance(fields, dict) else None
+
+
+def surface_findings(project: Path, spec: dict[str, Any]) -> list[dict[str, Any]]:
+    """Attribute paths and callables a note names, resolved against the declared surface."""
+    contracts = spec.get("contracts") or {}
+    module_functions = spec.get("module_functions") or {}
+    owner = {symbol: module for module, symbols in module_functions.items() for symbol in symbols}
+    module_internal = (spec.get("imports") or {}).get("module_internal") or {}
+    findings: list[dict[str, Any]] = []
+    for note in _iter_authored_notes(project):
+        scope = note["scope"]
+        signature = contracts.get(scope)
+        if not isinstance(signature, str) or "(" not in signature:
+            continue
+        parameters = dict(signature_parameters(signature))
+        scope_module = owner.get(scope.split(".", 1)[0])
+        text = note["text"]
+        for match in _ATTRIBUTE_PATH_RE.finditer(text):
+            root, chain = match.group(1), match.group(2)[1:].split(".")
+            if root in _SURFACE_SKIP_ROOTS or root not in parameters:
+                continue
+            current = parameters[root]
+            for attribute in chain:
+                fields = _model_fields(spec, current)
+                if fields is None:
+                    break
+                if attribute not in fields:
+                    findings.append(_finding(
+                        "block",
+                        "note_attribute_unknown",
+                        f"{note['path']}:{note['line']} {scope} names {root}.{'.'.join(chain)}, but "
+                        f"{current.split('|')[0].strip()} declares no field {attribute!r}: an obligation without a surface.",
+                        path=note["path"], line=note["line"], scope=scope,
+                        attribute_path=f"{root}.{'.'.join(chain)}", model=current.split("|")[0].strip(), attribute=attribute,
+                    ))
+                    break
+                current = fields[attribute]
+        for match in _CALLABLE_RE.finditer(text):
+            callee = match.group(1)
+            if callee in _PYDANTIC_CALLS or callee not in contracts or "." in callee:
+                continue
+            callee_owner = owner.get(callee)
+            if not scope_module or not callee_owner or callee_owner == scope_module:
+                continue
+            declared = (module_internal.get(scope_module) or {}).get(callee_owner) or []
+            if callee not in declared:
+                findings.append(_finding(
+                    "block",
+                    "note_callable_undeclared",
+                    f"{note['path']}:{note['line']} {scope} calls {callee}(), owned by {callee_owner}, but "
+                    f"imports.module_internal.{scope_module}.{callee_owner} does not carry it: declare the dependency or drop the call.",
+                    path=note["path"], line=note["line"], scope=scope, callee=callee, callee_owner=callee_owner,
+                ))
+    return findings
+
+
 def dependency_bindings(spec: dict[str, Any]) -> list[dict[str, Any]]:
     """Findings where a note's named runtime dependency contradicts contracts."""
     contracts = spec.get("contracts")
@@ -341,6 +419,7 @@ def report(project: Path) -> dict[str, Any]:
     repair_sites, note_files = authored_repair_sites(project)
     findings.extend(repair_sites)
     findings.extend(dependency_bindings(spec))
+    findings.extend(surface_findings(project, spec))
     if drift:
         findings.append(_finding(
             "warn",

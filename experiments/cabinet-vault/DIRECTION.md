@@ -112,8 +112,8 @@ The branch contains:
 - coarse trusted host and typed execution-graph spikes;
 - `CABINET_BACKEND_CLASSIFICATION.md`;
 - `cabinet_backend_box_v0.yaml` — real archive/source-custody manifest;
-- `tools/box_derivability.py` — deterministic mapping proof/gap detector;
-- `tools/box_composition.py` — compiler/executor for disposable cross-box composition plans;
+- `experiments/cabinet-vault/tools/box_derivability.py` — deterministic mapping proof/gap detector;
+- `experiments/cabinet-vault/tools/box_composition.py` — compiler/executor for disposable cross-box composition plans;
 - Registry-like source and Cabinet provider-agnostic project-catalogue manifests;
 - PresuPro estimate-observation and pricing semantic manifests;
 - Cabinet provider-agnostic estimate observation and planned-amount requirement manifests;
@@ -147,7 +147,7 @@ A successful derivation is executable through an exact projection. An unresolved
 
 ## Composition compiler result
 
-`tools/box_composition.py` compiles:
+`experiments/cabinet-vault/tools/box_composition.py` compiles:
 
 ```text
 source capability

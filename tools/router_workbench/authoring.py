@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import fence
+
 from pathlib import Path
 from typing import Any
 
@@ -33,10 +35,12 @@ def lint(project: Path) -> dict[str, Any]:
         "message": "operation is not ready for Factory handoff",
         "operation": operation,
     } for operation in report["unresolved_operations"])
+    findings = fence.enforce(findings)
     return {
         "schema_version": LINT_SCHEMA,
         "project_root": report["project_root"],
-        "summary": {**report["summary"], "warnings": sum(item["severity"] == "warning" for item in findings)},
+        "summary": {**report["summary"], "errors": fence.stops(findings), "warnings": 0,
+                    "handoff_ready": bool(report["summary"].get("handoff_ready")) and fence.stops(findings) == 0},
         "findings": findings,
     }
 

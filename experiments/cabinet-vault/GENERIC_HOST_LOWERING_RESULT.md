@@ -95,9 +95,9 @@ invoice_source_attach_runtime_lowering_v0.yaml
 Runtime implementation:
 
 ```text
-tools/invoice_source_attach_models.py
-tools/invoice_source_attach_runtime.py
-tools/invoice_source_attach_runtime_probe.py
+experiments/cabinet-vault/tools/invoice_source_attach_models.py
+experiments/cabinet-vault/tools/invoice_source_attach_runtime.py
+experiments/cabinet-vault/tools/invoice_source_attach_runtime_probe.py
 ```
 
 The first real run exposed a Pydantic-v1 nested `ForwardRef` compatibility defect before byte/metadata effects. The typed model implementation was repaired without changing Cabinet semantics, and a regression guard was added.

@@ -6,7 +6,11 @@
 
 ### Identity
 
-enum (no runtime identity).
+value
+
+### Identity evidence
+
+The value is a closed classification without runtime identity; equal members are interchangeable.
 
 ---
 

@@ -42,6 +42,7 @@ verification succeeds, archive reads must not report its replica as available.
 ### Required tests
 
 - crash before metadata commit leaves no accepted metadata or visible bytes;
+   [witness: verification:witness_A70]
 - crash after commit and before rename is finalized by startup recovery;
 - missing or hash-mismatched staged bytes produce a safe failed publication;
 - concurrent equivalent requests converge on one logical result;

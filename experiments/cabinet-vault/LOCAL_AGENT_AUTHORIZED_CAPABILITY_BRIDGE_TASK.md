@@ -31,16 +31,16 @@ invoice.source.attach
 Use the existing verified components:
 
 ```text
-tools/authority_kernel.py
-tools/protected_configuration_kernel.py
-tools/typed_schema_kernel.py
-tools/postgres_record_kernel.py
-tools/local_private_byte_vault.py
-tools/bounded_content_validation_kernel.py
-tools/bounded_media_identification.py
-tools/cabinet_web_revision_accept_runtime.py
-tools/cabinet_web_source_attach_adapter.py
-tools/invoice_source_attach_runtime.py
+experiments/cabinet-vault/tools/authority_kernel.py
+experiments/cabinet-vault/tools/protected_configuration_kernel.py
+experiments/cabinet-vault/tools/typed_schema_kernel.py
+experiments/cabinet-vault/tools/postgres_record_kernel.py
+experiments/cabinet-vault/tools/local_private_byte_vault.py
+experiments/cabinet-vault/tools/bounded_content_validation_kernel.py
+experiments/cabinet-vault/tools/bounded_media_identification.py
+experiments/cabinet-vault/tools/cabinet_web_revision_accept_runtime.py
+experiments/cabinet-vault/tools/cabinet_web_source_attach_adapter.py
+experiments/cabinet-vault/tools/invoice_source_attach_runtime.py
 ```
 
 Do not route the real canary through `cabinet_host.py` or `cabinet_graph_host.py`; those are older demo SQLite hosts for different capability surfaces.

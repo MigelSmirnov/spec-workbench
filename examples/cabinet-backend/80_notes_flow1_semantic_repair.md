@@ -10,7 +10,7 @@ These notes supplement the `# synchronization` entries in `80_notes.md` and exis
 
 synchronize_invoice_work: [ORCHESTRATION] When transport produces an exact delivered package, present that exact manifest, immutable Card revision evidence, and required source evidence to durable_archive.accept_transfer_manifest before returning the delivered branch; a delivered result with receipt=None is forbidden when the archive boundary was reachable and no archive call was attempted.
 
-synchronize_invoice_work: [ORCHESTRATION] Preserve the InvoiceTransferReceipt returned by durable_archive.accept_transfer_manifest in SynchronizationOutcome.receipt; do not reinterpret archive validation, duplicate, incomplete, integrity, or quarantine classifications inside synchronization.
+synchronize_invoice_work: [ORCHESTRATION] Preserve the InvoiceTransferReceipt returned by capability:durable_archive.accept_transfer_manifest in SynchronizationOutcome.receipt; do not reinterpret archive validation, duplicate, incomplete, integrity, or quarantine classifications inside synchronization.
 
 synchronize_invoice_work: [ORCHESTRATION] When and only when the archive receipt is accepted or already_accepted, obtain authoritative proof for the same exact invoice revision/evidence identity through durable_archive.verify_durable_acceptance and preserve that result in SynchronizationOutcome.durable_acceptance.
 

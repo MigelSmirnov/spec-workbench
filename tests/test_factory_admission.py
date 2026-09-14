@@ -31,7 +31,9 @@ def _write_json(path: Path, payload: object) -> None:
     _write(path, json.dumps(payload, ensure_ascii=False, indent=2) + "\n")
 
 
-def _factory(tmp_path: Path, *, valid: bool = True) -> Path:
+def _factory(
+    tmp_path: Path, *, valid: bool = True, inspector_valid: bool = True
+) -> Path:
     root = tmp_path / "code_factory"
     _write(root / "SPEC_STANDARD.md", STANDARD)
     _write(root / "tools/bootstrap_project.py", "# test fixture\n")
@@ -59,15 +61,48 @@ open(a.out, 'w', encoding='utf-8').write(json.dumps(report))
 raise SystemExit({returncode})
 """,
     )
+    inspector_status = "PASS" if inspector_valid else "FINDINGS_PRESENT"
+    inspector_blocks = 0 if inspector_valid else 1
+    inspector_returncode = 0 if inspector_valid else 1
+    _write(
+        root / "tools/run_spec_inspector_preflight.py",
+        f"""import argparse, hashlib, json
+p = argparse.ArgumentParser()
+p.add_argument('--project', required=True)
+p.add_argument('--spec', required=True)
+p.add_argument('--out', required=True)
+a = p.parse_args()
+raw = open(a.spec, 'rb').read()
+report = {{
+    'status': '{inspector_status}',
+    'summary': {{'BLOCK': {inspector_blocks}, 'WARN': 0, 'INFO': 0}},
+    'spec_sha': 'sha256:' + hashlib.sha256(raw).hexdigest(),
+    'findings': [] if {str(inspector_valid)} else [{{
+        'id': 'SI-TEST',
+        'severity': 'BLOCK',
+        'type': 'module_type_surface_incomplete',
+    }}],
+    'exit_policy': {{'exit_code': {inspector_returncode}}},
+}}
+open(a.out, 'w', encoding='utf-8').write(json.dumps(report))
+raise SystemExit({inspector_returncode})
+""",
+    )
     return root
 
 
-def _run(tmp_path: Path, *, valid: bool = True, update_existing: bool = False) -> dict:
+def _run(
+    tmp_path: Path,
+    *,
+    valid: bool = True,
+    inspector_valid: bool = True,
+    update_existing: bool = False,
+) -> dict:
     workbench = tmp_path / "spec-workbench"
     _write(workbench / "skills/spec-authoring/SPEC_STANDARD.md", STANDARD)
     source = workbench / "accepted/global_spec.json"
     _write_json(source, {"standard_version": 2, "contracts": {}})
-    factory = _factory(tmp_path, valid=valid)
+    factory = _factory(tmp_path, valid=valid, inspector_valid=inspector_valid)
     return check(
         workbench_root=workbench,
         source=source,
@@ -248,6 +283,21 @@ def test_factory_validator_findings_block_admission(tmp_path: Path) -> None:
     assert validation["status"] == "BLOCK"
     assert validation["evidence"]["findings"] == [
         {"id": "SV-TEST", "severity": "error"}
+    ]
+
+
+def test_factory_inspector_findings_block_admission(tmp_path: Path) -> None:
+    report = _run(tmp_path, inspector_valid=False)
+    inspector = next(item for item in report["checks"] if item["id"] == "FA015")
+    assert report["status"] == "BLOCKED"
+    assert inspector["status"] == "BLOCK"
+    assert inspector["evidence"]["summary"]["BLOCK"] == 1
+    assert inspector["evidence"]["findings"] == [
+        {
+            "id": "SI-TEST",
+            "severity": "BLOCK",
+            "type": "module_type_surface_incomplete",
+        }
     ]
 
 
@@ -452,7 +502,7 @@ def test_old_lineage_without_codec_snapshot_is_not_fresh(tmp_path: Path) -> None
     assert target["evidence"]["lineage_codec_coverage"] is None
 
 
-def test_dirty_source_is_blocked_unless_explicitly_allowed(tmp_path: Path) -> None:
+def test_dirty_source_is_blocked_even_when_explicitly_allowed(tmp_path: Path) -> None:
     report = _run(tmp_path)
     workbench = tmp_path / "spec-workbench"
     dirty = {**CLEAN_GIT, "dirty": True}
@@ -473,6 +523,82 @@ def test_dirty_source_is_blocked_unless_explicitly_allowed(tmp_path: Path) -> No
         allow_dirty_source=True,
         source_git=dirty,
     )
+    # the fence: a dirty source is never admitted, even when asked
     source_check = next(item for item in allowed["checks"] if item["id"] == "FA001")
-    assert allowed["ready"] is True
-    assert source_check["status"] == "WARNING"
+    assert allowed["ready"] is False
+    assert source_check["status"] == "BLOCK"
+
+
+def test_projection_drift_check_not_applicable_without_case() -> None:
+    from factory_admission_workbench.service import _projection_drift_check
+
+    result = _projection_drift_check(None)
+    assert result.check_id == "FA016"
+    assert result.status == "NOT_APPLICABLE"
+
+
+def test_projection_drift_blocks_when_out_of_sync(monkeypatch, tmp_path: Path) -> None:
+    from factory_admission_workbench import service
+
+    monkeypatch.setattr(
+        service,
+        "verify_projection",
+        lambda project: {
+            "ready": True,
+            "in_sync": False,
+            "summary": {"changes": 1, "blocks": 0},
+        },
+    )
+    result = service._projection_drift_check(tmp_path)
+    assert result.check_id == "FA016"
+    assert result.status == "BLOCK"
+    assert "drifts" in result.summary
+
+
+def test_projection_drift_blocks_when_sources_not_ready(monkeypatch, tmp_path: Path) -> None:
+    from factory_admission_workbench import service
+
+    monkeypatch.setattr(
+        service,
+        "verify_projection",
+        lambda project: {
+            "ready": False,
+            "in_sync": False,
+            "summary": {"changes": 0, "blocks": 2},
+        },
+    )
+    result = service._projection_drift_check(tmp_path)
+    assert result.check_id == "FA016"
+    assert result.status == "BLOCK"
+    assert "not ready" in result.summary
+
+
+def test_projection_drift_blocks_on_unbuildable_projection(monkeypatch, tmp_path: Path) -> None:
+    from factory_admission_workbench import service
+    from spec_projection_workbench.model import SpecProjectionError
+
+    def raise_error(project):
+        raise SpecProjectionError("missing authoring handoff")
+
+    monkeypatch.setattr(service, "verify_projection", raise_error)
+    result = service._projection_drift_check(tmp_path)
+    assert result.check_id == "FA016"
+    assert result.status == "BLOCK"
+    assert "cannot be built" in result.summary
+
+
+def test_projection_drift_passes_when_in_sync(monkeypatch, tmp_path: Path) -> None:
+    from factory_admission_workbench import service
+
+    monkeypatch.setattr(
+        service,
+        "verify_projection",
+        lambda project: {
+            "ready": True,
+            "in_sync": True,
+            "summary": {"changes": 0, "blocks": 0},
+        },
+    )
+    result = service._projection_drift_check(tmp_path)
+    assert result.check_id == "FA016"
+    assert result.status == "PASS"

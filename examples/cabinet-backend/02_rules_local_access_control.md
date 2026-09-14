@@ -72,6 +72,7 @@ principal_revoked
 ### Required tests
 
 1. Codex and Claude Code receive distinct principals and credentials.
+   [witness: verification:semantic_local_access_control]
 2. Enrollment with an empty or unknown capability is rejected without issuing a
    credential.
 3. Plaintext credentials are absent from database rows, logs, and audit records.

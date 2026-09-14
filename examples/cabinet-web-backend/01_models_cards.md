@@ -4,19 +4,20 @@
 
 ### Meaning
 
-One logical original source associated with an owning Cabinet Card. Source
-identity exists even while original bytes are unavailable.
+One logical original source associated with an owning Provider, Client, or
+Project Card. Source identity exists even while original bytes are unavailable.
 
-Candidate fields common to accepted Card formats:
+Scope corrected 2026-09-05 by D0-010: the Invoice Card does not use this
+shape; it carries the product `InvoiceCardSourceBlock` (`source_id`, `kind`,
+opaque `file_ref`, `file_status`, `note`). Exact custody states and storage
+confirmations for every card live separately by `source_id` in M14
+`SourceCustodyRecord`.
 
-- owning `card_id`;
-- `source_id`, stable within the owning Card;
-- `kind` or `media_type` when known;
-- `file_status`: stored, pending, or truthfully unavailable according to the
-  owning Card contract;
-- storage reference optional;
-- origin context such as platform, author, publication, URL, capture time, or
-  note when the owning Card type accepts it.
+Fields: owning `card_id`; `source_id`, stable within the owning Card;
+`media_type` when known; `file_status`: stored, pending, or truthfully
+unavailable according to the source-file vocabulary; `storage_reference`,
+present only when Cabinet Web itself holds the bytes; `origin_context`, a
+string map naming where the source came from.
 
 ### Identity
 
@@ -24,23 +25,21 @@ entity
 
 ### Identity evidence
 
-Substitution: sources with different owning Card/source ID pairs are not
-interchangeable even if their metadata is equal. Continuity: the same source
-keeps its identity when bytes arrive later or storage metadata changes.
+Substitution: the pair (`card_id`, `source_id`) names one logical source across
+custody states. Continuity: the same pair survives byte arrival, verification,
+and durable storage.
 
 ### Source of truth
 
-The source reference inside the owning canonical Card.
+Owned by Cabinet Web inside the owning Card.
 
 ### Lifecycle candidate
 
-`identified -> bytes_pending | bytes_stored`; later availability changes do
-not replace identity. Exact allowed states remain type-specific until State 2.
+Follows the owning Card.
 
 ### Persistence candidate
 
-Durable as part of the owning Card; server custody is separately modeled by
-M14.
+Master data embedded in the owning Card record.
 
 ### Open questions
 
@@ -61,6 +60,12 @@ Candidate fields:
 - accepted `media_type`;
 - original display filename optional.
 
+
+For an A19 canonical source set, source_id in each M06 identifies that original
+file and equals its accepted CanonicalSourceFile.content_id. The containing
+M185.source_id and canonical InvoiceCardV1.source.source_id remain the logical
+document identity. Legacy single-file M14 references retain their original
+source_id. No migration rewrites a Card or old reference to make these IDs equal.
 ### Identity
 
 value
@@ -227,18 +232,19 @@ The implemented Cabinet Invoice Card V1 containing one invoice's confirmed or
 draft supplier facts, lines, totals, payment evidence, object context, source,
 and provenance.
 
-Candidate fields are the complete accepted Invoice Card V1 contract:
+Fields are exactly the product contract `schemas/invoice-card-v1.schema.json`
+(`LIVE_PRODUCT_EVIDENCE_20260905_c897897.md`, D0-010), carried without loss:
 
-- `card_type = invoice`, `card_version = 1`, stable `id`, and status;
-- invoice dates/number and currency;
-- supplier and buyer parties;
-- required object block with optional Card ID and label;
-- stable line IDs, source/original descriptions, classifications, quantities,
-  decimal monetary and tax facts;
-- deterministic totals;
-- explicit payment status and transactions;
-- exactly one stable source block;
-- creation and confirmation provenance.
+`card_type: str`, `card_version: int`, `id: str`, `status: str`,
+`invoice_number: str | None`, `issue_date: date | None`,
+`service_date: date | None`, `due_date: date | None`, `currency: str`,
+`supplier: InvoiceCardParty`, `buyer: InvoiceCardParty`,
+`object: InvoiceCardObjectBlock`, `lines: tuple[InvoiceCardLine, ...]`,
+`totals: InvoiceCardTotals`, `payment: InvoiceCardPayment`,
+`source: InvoiceCardSourceBlock`, `provenance: InvoiceCardProvenance`.
+
+`status` is one M141 `InvoiceLifecycleState` member. No reduced Invoice form
+exists beside this one; the former M128–M130, M31 and M05 shapes are retired.
 
 ### Identity
 
@@ -395,3 +401,136 @@ Durable separate artifact when instantiated; analytics are calculated from it.
 
 None for identity closure.
 
+
+## Retirement record M128 — InvoiceParty (retired 2026-09-05)
+
+Retired by D0-010: the product Invoice contract carries typed sub-blocks
+(`InvoiceCardParty`, `InvoiceCardTotals`, `InvoiceCardObjectBlock`); no
+competing reduced form remains.
+
+
+## Retirement record M129 — InvoiceTotals (retired 2026-09-05)
+
+Retired by D0-010: the product Invoice contract carries typed sub-blocks
+(`InvoiceCardParty`, `InvoiceCardTotals`, `InvoiceCardObjectBlock`); no
+competing reduced form remains.
+
+
+## Retirement record M130 — InvoiceObjectContext (retired 2026-09-05)
+
+Retired by D0-010: the product Invoice contract carries typed sub-blocks
+(`InvoiceCardParty`, `InvoiceCardTotals`, `InvoiceCardObjectBlock`); no
+competing reduced form remains.
+
+## Model M165 — InvoiceCardParty
+
+Fields: `name: str | None`, `tax_id: str | None`, `address: str | None`.
+
+### Identity
+
+value
+
+### Identity evidence
+
+Equal typed party facts are interchangeable. Reciprocal with the product
+schema `party` and the accepted `cabinet_backend` boundary model.
+
+## Model M166 — InvoiceCardObjectBlock
+
+Fields: `card_id: str | None`, `label: str | None`.
+
+### Identity
+
+value
+
+### Identity evidence
+
+Equal typed object-assignment facts are interchangeable; an unassigned
+Invoice carries both null (product warning `invoice_object_unassigned`).
+
+## Model M167 — InvoiceCardTotals
+
+Fields: `net: Decimal`, `discount: Decimal`, `tax: Decimal`, `gross: Decimal`,
+`withholding: Decimal`, `payable: Decimal`.
+
+### Identity
+
+value
+
+### Identity evidence
+
+Equal typed monetary totals are interchangeable; `payable = gross -
+withholding` is a hard product check, `net`/`tax` versus line sums a warning.
+
+## Model M168 — InvoiceCardPaymentEvidence
+
+Fields: `basis: str`, `source_ref: str | None`.
+
+### Identity
+
+value
+
+### Identity evidence
+
+Equal typed evidence facts are interchangeable; `basis` is one M176
+`PaymentEvidenceBasis` member.
+
+## Model M169 — InvoiceCardPaymentTransaction
+
+Fields: `payment_id: str`, `method: str`, `paid_at: datetime | None`,
+`currency: str`, `tendered_amount: Decimal | None`, `applied_amount: Decimal`,
+`change_amount: Decimal | None`, `reference: str | None`,
+`evidence: InvoiceCardPaymentEvidence`.
+
+### Identity
+
+value
+
+### Identity evidence
+
+Equal typed transaction facts are interchangeable within one Card;
+`payment_id` is unique within the Card, `method` is one M175
+`InvoicePaymentMethod` member, `currency` equals the Card currency.
+
+## Model M170 — InvoiceCardPayment
+
+Fields: `status: str`, `transactions: tuple[InvoiceCardPaymentTransaction, ...]`.
+
+### Identity
+
+value
+
+### Identity evidence
+
+Equal typed payment facts are interchangeable; `status` is one M174
+`InvoicePaymentStatus` member and its consistency with the applied sum is a
+hard product check.
+
+## Model M171 — InvoiceCardSourceBlock
+
+Fields: `source_id: str`, `kind: str`, `file_ref: str | None`,
+`file_status: str`, `note: str | None`.
+
+### Identity
+
+value
+
+### Identity evidence
+
+Equal typed source facts are interchangeable; `source_id` is the source
+identity, `kind` one M177 `InvoiceSourceKind` member, `file_status` one M178
+`InvoiceSourceFileStatus` member, `file_ref` an opaque source reference —
+never a GitHub, Syncthing or filesystem path (D0-010).
+
+## Model M172 — InvoiceCardProvenance
+
+Fields: `created_at: datetime`, `confirmed_at: datetime | None`, `created_by: str`.
+
+### Identity
+
+value
+
+### Identity evidence
+
+Equal typed provenance facts are interchangeable; `created_by` is one M179
+`ProvenanceCreator` member.

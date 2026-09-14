@@ -45,7 +45,7 @@ Before any backend effect:
 
 1. Require `Cabinet_web` to be on `main`.
 2. Require `data/cards/invoice-f260001/card.json` to be tracked and clean.
-3. Run `verify_reviewed_contract()` from `tools/cabinet_web_checkout_sync_adapter.py`.
+3. Run `verify_reviewed_contract()` from `experiments/cabinet-vault/tools/cabinet_web_checkout_sync_adapter.py`.
 4. Validate the exact Card with the current Cabinet_web Invoice validator.
 5. Recompute the canonical Card hash and require exact equality with the pinned hash above. If it differs, stop and report contract/Card drift.
 6. Require `source.source_id == source-f260001`.

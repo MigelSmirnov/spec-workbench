@@ -46,6 +46,7 @@ stable_source_identifier_known -/> source_access_authorized
 ### Required tests
 
 1. A disallowed type, oversized payload, content/type mismatch, malformed document,
+   [witness: verification:witness_A64]
    or bounded-processing failure never produces a normal verified replica.
 2. Traversal-like and absolute filenames remain metadata and cannot affect the
    Backend-selected storage location.
@@ -103,6 +104,7 @@ missing_source_cleared
 ### Required tests
 
 1. Two concurrent identical attachments return the same logical outcome and leave
+   [witness: verification:witness_A65]
    one source/replica result.
 2. Two concurrent conflicting payloads for one source identity cannot both commit.
 3. Concurrent attachments for two distinct expected source IDs may both commit

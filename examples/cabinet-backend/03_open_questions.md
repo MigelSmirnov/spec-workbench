@@ -144,7 +144,7 @@ sessions, and append-only audit evidence remain separate concerns.
 
 ---
 
-## OQ-008 — PlanActual monetary comparison semantics
+## OQ-012 — PlanActual monetary comparison semantics
 
 **Status:** Reopened after stronger source-contract evidence.
 
@@ -223,6 +223,113 @@ Cabinet does not currently:
 - default to Card `net_amount` or `gross_amount`;
 - infer monetary basis from currency, locale, names, or integration context;
 - perform implicit net/gross, tax-basis, or currency conversion.
+
+---
+
+## OQ-013 — Manual release of canonical working sets must work before the first object closes
+
+**Status:** Open (owner decision 2026-09-15: release stays manual, per project).
+
+### Why it is open
+
+A11 here and the [Cabinet Web release rule](../cabinet-web-backend/02_rules_sync_operations.md)
+keep the VPS working copies until the owner
+explicitly releases the working set of one `project_id`, after the local
+Backend has confirmed verified durable replicas of every required original.
+The owner confirmed on 2026-09-15 that this is the intended shape: an object is
+finite, its Invoices end, and release is the closing action — not an automatic
+consequence of a receipt.
+
+Two facts make the question urgent rather than academic:
+
+- [Cabinet Web discovery](../cabinet-web-backend/02_rules_sync_operations.md) lists every ready manifest of every object until
+  its working set is released; each local sync session re-pulls all of them.
+  The cost is linear in the number of unreleased Invoices and ends only with
+  release (2026-09-14: 13 Invoices, seconds).
+- The [Cabinet Web admission rule](../cabinet-web-backend/02_rules_source_registration.md)
+  (rule 9) refuses release for every canonical source set: the release command
+  lacks the complete typed local verification its release rule requires. The
+  local Backend already exposes that evidence
+  (`durable_archive.verify_durable_acceptance`,
+  `durable_archive.get_transfer_receipt`, A76), but no wire carries it into the
+  release decision. When the first object closes, the owner cannot release it.
+
+### What must be decided
+
+1. The reciprocal wire: how the plugin asks this Backend, per manifest and per
+   file hash, whether the replica is present, reopened and verified, and how
+   that answer is bound to the exact release request (identity, replay,
+   unknown outcome).
+2. Which side owns the "released" transition of a working set and how
+   discovery stops listing released manifests without deleting evidence the
+   Backend has not confirmed.
+3. Whether a receipt `accepted` may already remove a manifest from discovery
+   while the bytes stay retained (a smaller change to the Cabinet Web discovery
+   rule) — or whether discovery stays coupled to release.
+
+### Not in question
+
+- Automatic release after a receipt (rejected: release is the only irreversible
+  loss point; the Backend's witnesses run on an in-memory unit of work and
+  cannot vouch for persisted bytes).
+- Filtering discovery by project (not designed; Cabinet Web discovery returns
+  every available revision, the project assignment travels inside the package).
+
+---
+
+## OQ-014 — One injected clock for every module that produces a timestamp
+
+**Status:** Open (owner decision 2026-09-15: close the class, do not keep repairing it).
+
+### Why it is open
+
+The case owns a system clock (`system_clock`, the `Clock` interface emitted by
+`rules.system_clock_backend`), but only `registry_context` and
+`holded_gateway` receive it. Seven modules read the wall clock themselves:
+
+```text
+access_control, durable_archive, holded_transport, synchronization,
+catalogue_publication, plan_actual, holded_publication
+```
+
+Their only note about time is the boilerplate "every timestamp the service
+produces is timezone-aware UTC; naive datetimes are never constructed". That
+names a shape, not a source, so every regeneration invents the source anew
+(`datetime.UTC`, `timezone.utc`, `utcnow()`). The Factory's static gate
+`naive_datetime_now` catches the worst forms and a deterministic rewrite makes
+the draft run (Route B 2026-09-14: two of four candidates were repaired this
+way). The repair is honest about syntax and silent about design: the module
+still ships a private clock no witness can stop or substitute, and the
+"recurring clock problem" is the visible symptom of the unnamed source.
+
+The ambient-time fuse of the workbench is deliberately narrow (the UTC
+boilerplate does not count as an ambient effect), which is why these seven
+modules pass admission today.
+
+### What must be decided
+
+1. Thread the `Clock` port into the seven modules the way `registry_context`
+   holds it: an interface model in `imports.module_internal.<module>.models`,
+   the port retained by the service constructor, and one note per service —
+   the current time comes only from that port; the module never calls
+   `datetime.now`, `utcnow` or `date.today`.
+2. Change the Factory gate for a module that owns a clock port: a wall-clock
+   read is a second time source and BLOCKS regeneration; the deterministic
+   rewrite stays only for modules without a clock obligation.
+3. Bootstrap wires the one `SystemClock` into every service (it already
+   constructs it for `registry_context` and `holded_gateway`).
+4. Cost and order: this is a contract and models change, so Route B regenerates
+   the seven modules and bootstrap (about twice the 2026-09-14 run); schedule it
+   as the next cabinet_backend spec run, before other note-level changes, so
+   the clock class does not keep paying for every later regeneration.
+
+### Not in question
+
+- Keeping the deterministic rewrite as the closure: it fixes the AttributeError,
+  not the unnamed source.
+- Passing `observed_at` as a caller parameter instead of a port: the callers
+  of these services are the sync session, the local API and the scheduler, and
+  a caller-supplied time would only move the ambient read one layer up.
 
 ---
 

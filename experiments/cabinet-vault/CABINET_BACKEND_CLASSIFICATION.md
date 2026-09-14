@@ -126,7 +126,7 @@ Cabinet/VPS bridge is required by this model.
 The first executable probe is now in:
 
 ```text
-tools/box_derivability.py
+experiments/cabinet-vault/tools/box_derivability.py
 experiments/cabinet-vault/registry_project_box_v0.yaml
 experiments/cabinet-vault/cabinet_registry_context_box_v0.yaml
 tests/test_box_derivability.py

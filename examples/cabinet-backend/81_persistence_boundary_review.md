@@ -61,7 +61,7 @@ including the new module: no `rules.persistence_backend` IR exists for
 PostgreSQL yet. That is the next repair and is recorded as an open item in
 `30_modules_persistence_boundary.md`.
 
-## `holded_publication`
+### `holded_publication`
 
 - `holded_publication_persistence` owns `PostgresHoldedPublicationRepository`.
 - `reserve_publication(publication) -> HoldedPublication` becomes the plain
@@ -89,7 +89,7 @@ operation, rule, or model changed. Result: `PASS_INTERNAL_VARIATION` for
 Slice hashes of modules whose notes follow the inserted service notes were
 refreshed: their packets changed only in note index numbers, not in content.
 
-## `registry_context`
+### `registry_context`
 
 - `registry_context_persistence` owns `PostgresRegistryContextRepository`.
 - `merge_work_objects(work_objects)` is replaced by `list_work_objects() ->
@@ -113,7 +113,7 @@ Open item recorded in `30_modules_persistence_boundary.md`:
 `WorkObject.registry_snapshot_id` references it. Pre-existing; not resolved
 here.
 
-## `holded_gateway`
+### `holded_gateway`
 
 - `holded_gateway_persistence` owns `PostgresHoldedAttemptRepository`.
 - `reserve_attempt` becomes the plain append `insert_attempt` (uniqueness on
@@ -139,7 +139,7 @@ impossible without an issuance record; `update_attempt` cannot change the
 identity or hash fields; evidence rows cannot be deleted. Result:
 `PASS_INTERNAL_VARIATION` for `holded_gateway`, `PASS` for the others.
 
-## `synchronization`
+### `synchronization`
 
 - `synchronization_persistence` owns `PostgresSynchronizationRepository`;
   `HttpxVpsSynchronizationTransport` stays in `synchronization` until its
@@ -172,7 +172,7 @@ impossible without an issuance record; updates cannot change identity or
 binding fields; evidence rows cannot be deleted. Result:
 `PASS_INTERNAL_VARIATION` for `synchronization`, `PASS` for the others.
 
-## `plan_actual`
+### `plan_actual`
 
 - `plan_actual_persistence` owns `PostgresPlanActualRepository`.
 - `load_match_decisions` becomes a plain set read in stable match-id order;
@@ -191,7 +191,7 @@ invariant cannot be skipped because the service must list before writing;
 absent pinned identities cannot silently shrink an analysis. Result:
 `PASS_INTERNAL_VARIATION` for `plan_actual`, `PASS` for the others.
 
-## `durable_archive`
+### `durable_archive`
 
 - `durable_archive_persistence` owns `PostgresArchiveUnitOfWork`;
   `LocalFilesystemSourceByteStore` stays in `durable_archive` until it is
@@ -221,7 +221,7 @@ append is inside the invoice-locked transaction committed once; conflicting
 bytes for one source identity cannot both commit. Result:
 `PASS_INTERNAL_VARIATION` for `durable_archive`, `PASS` for the others.
 
-## `retention_release_persistence` — deterministic backend
+### `retention_release_persistence` — deterministic backend
 
 First module lowered through `persistence_backend/v3`: tables
 `vps_release_evaluations` (key `project_id, working_set_id, evaluated_at`)
@@ -278,7 +278,7 @@ of a key is honoured; `update_*` rows never touch identity or binding
 columns; `upsert_*` rows never touch `first_received_at`/`first_seen_at`;
 no method deletes. Result: `PASS` for all seven persistence modules.
 
-## `source_byte_store` — deterministic backend
+### `source_byte_store` — deterministic backend
 
 `LocalFilesystemSourceByteStore` moved out of `durable_archive` into
 `source_byte_store` and is emitted from `rules.source_byte_store_backend`
@@ -291,7 +291,7 @@ owns its layout and `attach_local_source` never composes paths. The Factory
 emitter is exercised against a real filesystem, including traversal,
 tampered-final, and idempotent staging removal cases. Result: `PASS`.
 
-## `access_control` — policy, storage, mechanism
+### `access_control` — policy, storage, mechanism
 
 `PostgresAccessControlBackend` mixed three owners and is split:
 

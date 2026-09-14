@@ -46,6 +46,7 @@ local_os_delegated_human_context
 ### Required tests
 
 1. Five consecutive failed VPS human-login attempts trigger progressive delay.
+   [witness: verification:semantic_local_access_control]
 2. Ten consecutive failed attempts trigger a 15-minute temporary block and no protected session is created during the block.
 3. Attempts distributed across accounts from one abusive source still encounter source-scoped throttling.
 4. Attempts distributed across sources against one account still encounter account-scoped throttling.

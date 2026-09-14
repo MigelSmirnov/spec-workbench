@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import fence
+
 import hashlib
 import json
 import re
@@ -10,6 +12,8 @@ from pathlib import Path
 from typing import Any
 
 from assembly_workbench import verify as verify_assembly
+from spec_projection_workbench import verify as verify_projection
+from spec_projection_workbench.model import SpecProjectionError
 from module_review_workbench import build_slice
 from external_contract_workbench import coverage as external_contract_coverage
 from notes_workbench.language import signature_parameters
@@ -19,7 +23,7 @@ from factory_admission_workbench.model import (
     CHECK_BLOCK,
     CHECK_NOT_APPLICABLE,
     CHECK_PASS,
-    CHECK_WARNING,
+    CHECK_BLOCK,
     REPORT_SCHEMA,
     AdmissionCheck,
 )
@@ -78,8 +82,8 @@ def _source_clean_check(metadata: dict[str, Any], allow_dirty_source: bool) -> A
         if allow_dirty_source:
             return AdmissionCheck(
                 "FA001",
-                CHECK_WARNING,
-                "Dirty Workbench source was explicitly allowed; handoff will be non-reproducible.",
+                CHECK_BLOCK,
+                "Workbench checkout is dirty; the fence accepts no dirty source even when asked — commit the accepted source first.",
                 metadata,
             )
         return AdmissionCheck(
@@ -91,7 +95,7 @@ def _source_clean_check(metadata: dict[str, Any], allow_dirty_source: bool) -> A
     if metadata.get("dirty") is None:
         return AdmissionCheck(
             "FA001",
-            CHECK_WARNING,
+            CHECK_BLOCK,
             "Workbench git cleanliness could not be determined.",
             metadata,
         )
@@ -112,7 +116,7 @@ def _target_identity_check(case_root: Path | None, project: str) -> AdmissionChe
     if not manifest_path.is_file():
         return AdmissionCheck(
             "FA014",
-            CHECK_WARNING,
+            CHECK_BLOCK,
             "Case has no pinned Factory target; the CLI project name is not independently verified.",
             {
                 "case": case_root.name,
@@ -166,6 +170,10 @@ def _review_check(case_root: Path | None) -> AdmissionCheck:
     ledger = _load_json(ledger_path)
     summary = ledger.get("summary", {})
     modules = ledger.get("modules", [])
+    not_passed = sorted(
+        item["module"] for item in modules
+        if isinstance(item, dict) and item.get("review_status") != "PASS"
+    )
     closed = (
         ledger.get("status") == "closed"
         and summary.get("reviewed") == summary.get("module_count")
@@ -173,7 +181,16 @@ def _review_check(case_root: Path | None) -> AdmissionCheck:
         and summary.get("ambiguities") == 0
         and summary.get("pending") == 0
         and summary.get("stale") == 0
+        and not not_passed
     )
+    if not_passed:
+        return AdmissionCheck(
+            "FA002",
+            CHECK_BLOCK,
+            f"{len(not_passed)} module review(s) are not PASS ({', '.join(not_passed[:6])}{'…' if len(not_passed) > 6 else ''}): "
+            "a mechanism that may vary is undecided.",
+            {"path": str(ledger_path), "not_passed": not_passed, "hint": fence.HINTS["review_not_passed"]},
+        )
     changed: list[str] = []
     if closed:
         for item in modules:
@@ -382,15 +399,18 @@ def _closure_gaps_check(case_root: Path | None) -> AdmissionCheck:
         if isinstance(loaded, dict):
             waivers = [w for w in loaded.get("waivers", []) if isinstance(w, dict)]
 
-    def waived(finding: dict[str, Any]) -> bool:
-        for waiver in waivers:
-            keys = {k: v for k, v in waiver.items() if k not in {"reason", "decided"}}
-            if keys and all(finding.get(k) == v for k, v in keys.items()):
-                return bool(waiver.get("reason"))
-        return False
-
-    open_findings = [f for f in report["findings"] if not waived(f)]
-    waived_count = len(report["findings"]) - len(open_findings)
+    # the fence: a waiver is a decision nobody made; nothing is waived
+    open_findings = fence.enforce(list(report["findings"]))
+    waived_count = 0
+    if waivers:
+        return AdmissionCheck(
+            "FA012",
+            CHECK_BLOCK,
+            f"{len(waivers)} closure-gap waiver(s) are present and none is accepted: "
+            "record each decision in State 2 and carry it in a contract, then delete closure_gap_waivers.json.",
+            {"waivers_file": str(waivers_path), "waivers": waivers, "open_findings": open_findings,
+             "hint": fence.HINTS["waiver_not_accepted"]},
+        )
     evidence = {
         "summary": report["summary"],
         "open_findings": open_findings,
@@ -410,6 +430,62 @@ def _closure_gaps_check(case_root: Path | None) -> AdmissionCheck:
         CHECK_PASS,
         "Closure-gap fuses are clean" + (f" ({waived_count} waived with reasons)." if waived_count else "."),
         evidence,
+    )
+
+
+def _projection_drift_check(case_root: Path | None) -> AdmissionCheck:
+    """Require global_spec.json to equal its deterministic projection.
+
+    The stage handoffs are the authoring source of truth and
+    ``design_spec_projection --apply`` is the only sanctioned writer of
+    ``global_spec.json``.  A hand edit that drifts from the projection ships a
+    value no gate ever compared: the notes gate resolves address existence,
+    the Stage 6 lint pairs placements with values, but nothing else proves the
+    exported literal equals the authored one.
+    """
+    if case_root is None:
+        return AdmissionCheck(
+            "FA016",
+            CHECK_NOT_APPLICABLE,
+            "Explicit --spec admission has no Workbench projection sources.",
+            {},
+        )
+    try:
+        report = verify_projection(case_root)
+    except SpecProjectionError as error:
+        return AdmissionCheck(
+            "FA016",
+            CHECK_BLOCK,
+            f"Spec projection cannot be built: {error}",
+            {"error": str(error)},
+        )
+    summary = report.get("summary") if isinstance(report, dict) else None
+    summary = summary if isinstance(summary, dict) else {}
+    in_sync = report.get("in_sync") is True if isinstance(report, dict) else False
+    ready = report.get("ready") is True if isinstance(report, dict) else False
+    if not ready:
+        return AdmissionCheck(
+            "FA016",
+            CHECK_BLOCK,
+            "Spec projection sources are not ready; close the authoring handoffs first.",
+            {"summary": summary},
+        )
+    if not in_sync:
+        return AdmissionCheck(
+            "FA016",
+            CHECK_BLOCK,
+            (
+                "global_spec.json drifts from its deterministic projection; "
+                "author the stage files and run design_spec_projection --apply "
+                "instead of editing global_spec.json by hand."
+            ),
+            {"summary": summary},
+        )
+    return AdmissionCheck(
+        "FA016",
+        CHECK_PASS,
+        "global_spec.json equals its deterministic projection.",
+        {"summary": summary},
     )
 
 
@@ -667,6 +743,74 @@ def _factory_validation_check(factory_root: Path, source: Path) -> tuple[Admissi
     ), report
 
 
+def _factory_inspector_check(
+    factory_root: Path, project: str, source: Path
+) -> tuple[AdmissionCheck, dict[str, Any] | None]:
+    runner = factory_root / "tools/run_spec_inspector_preflight.py"
+    if not runner.is_file():
+        return AdmissionCheck(
+            "FA015",
+            CHECK_BLOCK,
+            "Factory Spec Inspector preflight is missing.",
+            {"path": str(runner)},
+        ), None
+    with tempfile.TemporaryDirectory(prefix="spec-workbench-inspector-") as temp_dir:
+        report_path = Path(temp_dir) / "spec_inspector_report.json"
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(runner),
+                "--project",
+                project,
+                "--spec",
+                str(source),
+                "--out",
+                str(report_path),
+            ],
+            cwd=factory_root,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        if not report_path.is_file():
+            return AdmissionCheck(
+                "FA015",
+                CHECK_BLOCK,
+                "Factory Spec Inspector did not produce a bound report.",
+                {
+                    "returncode": result.returncode,
+                    "stdout": result.stdout.strip(),
+                    "stderr": result.stderr.strip(),
+                },
+            ), None
+        report = _load_json(report_path)
+    source_sha = "sha256:" + _sha256_file(source)
+    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    ready = (
+        report.get("status") == "PASS"
+        and summary.get("BLOCK") == 0
+        and report.get("spec_sha") == source_sha
+        and result.returncode == 0
+    )
+    return AdmissionCheck(
+        "FA015",
+        CHECK_PASS if ready else CHECK_BLOCK,
+        "Factory Spec Inspector accepts the source specification."
+        if ready
+        else "Factory Spec Inspector rejects the source specification.",
+        {
+            "returncode": result.returncode,
+            "status": report.get("status"),
+            "summary": summary,
+            "spec_sha": report.get("spec_sha"),
+            "expected_spec_sha": source_sha,
+            "findings": report.get("findings", []),
+            "stdout": result.stdout.strip(),
+            "stderr": result.stderr.strip(),
+        },
+    ), report
+
+
 def _semantic_check(case_root: Path | None) -> AdmissionCheck:
     if case_root is None:
         return AdmissionCheck(
@@ -808,6 +952,7 @@ def _factory_toolchain_check(factory_root: Path) -> AdmissionCheck:
     required = [
         factory_root / "SPEC_STANDARD.md",
         factory_root / "tools/validate_spec.py",
+        factory_root / "tools/run_spec_inspector_preflight.py",
         factory_root / "tools/bootstrap_project.py",
         factory_root / "project_index/structure.json",
     ]
@@ -816,10 +961,10 @@ def _factory_toolchain_check(factory_root: Path) -> AdmissionCheck:
         for path in required
         if path.is_file()
     }
-    status = CHECK_WARNING if metadata.get("dirty") else CHECK_PASS
+    status = CHECK_BLOCK if metadata.get("dirty") else CHECK_PASS
     summary = (
-        "Factory checkout is dirty; exact admission tool fingerprints will be recorded."
-        if status == CHECK_WARNING
+        "Factory checkout is dirty; commit or clean the admission toolchain before handoff."
+        if status == CHECK_BLOCK
         else "Factory admission toolchain is clean and fingerprinted."
     )
     return AdmissionCheck(
@@ -856,16 +1001,21 @@ def check(
         _runtime_persistence_check(source_spec, case_root),
         _external_contract_check(case_root),
         _closure_gaps_check(case_root),
+        _projection_drift_check(case_root),
     ]
     validation_check, validation_report = _factory_validation_check(factory_root, source)
+    inspector_check, inspector_report = _factory_inspector_check(
+        factory_root, project, source
+    )
     checks.extend([
         validation_check,
+        inspector_check,
         _semantic_check(case_root),
         _target_check(factory_root, project, source, update_existing),
         _factory_toolchain_check(factory_root),
     ])
     blocks = sum(item.status == CHECK_BLOCK for item in checks)
-    warnings = sum(item.status == CHECK_WARNING for item in checks)
+    warnings = sum(item.status == CHECK_BLOCK for item in checks)
     passes = sum(item.status == CHECK_PASS for item in checks)
     return {
         "schema_version": REPORT_SCHEMA,
@@ -894,4 +1044,5 @@ def check(
         },
         "checks": [item.to_dict() for item in checks],
         "factory_validation": validation_report,
+        "factory_inspector": inspector_report,
     }
