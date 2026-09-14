@@ -277,6 +277,62 @@ Two facts make the question urgent rather than academic:
 
 ---
 
+## OQ-014 — One injected clock for every module that produces a timestamp
+
+**Status:** Open (owner decision 2026-09-15: close the class, do not keep repairing it).
+
+### Why it is open
+
+The case owns a system clock (`system_clock`, the `Clock` interface emitted by
+`rules.system_clock_backend`), but only `registry_context` and
+`holded_gateway` receive it. Seven modules read the wall clock themselves:
+
+```text
+access_control, durable_archive, holded_transport, synchronization,
+catalogue_publication, plan_actual, holded_publication
+```
+
+Their only note about time is the boilerplate "every timestamp the service
+produces is timezone-aware UTC; naive datetimes are never constructed". That
+names a shape, not a source, so every regeneration invents the source anew
+(`datetime.UTC`, `timezone.utc`, `utcnow()`). The Factory's static gate
+`naive_datetime_now` catches the worst forms and a deterministic rewrite makes
+the draft run (Route B 2026-09-14: two of four candidates were repaired this
+way). The repair is honest about syntax and silent about design: the module
+still ships a private clock no witness can stop or substitute, and the
+"recurring clock problem" is the visible symptom of the unnamed source.
+
+The ambient-time fuse of the workbench is deliberately narrow (the UTC
+boilerplate does not count as an ambient effect), which is why these seven
+modules pass admission today.
+
+### What must be decided
+
+1. Thread the `Clock` port into the seven modules the way `registry_context`
+   holds it: an interface model in `imports.module_internal.<module>.models`,
+   the port retained by the service constructor, and one note per service —
+   the current time comes only from that port; the module never calls
+   `datetime.now`, `utcnow` or `date.today`.
+2. Change the Factory gate for a module that owns a clock port: a wall-clock
+   read is a second time source and BLOCKS regeneration; the deterministic
+   rewrite stays only for modules without a clock obligation.
+3. Bootstrap wires the one `SystemClock` into every service (it already
+   constructs it for `registry_context` and `holded_gateway`).
+4. Cost and order: this is a contract and models change, so Route B regenerates
+   the seven modules and bootstrap (about twice the 2026-09-14 run); schedule it
+   as the next cabinet_backend spec run, before other note-level changes, so
+   the clock class does not keep paying for every later regeneration.
+
+### Not in question
+
+- Keeping the deterministic rewrite as the closure: it fixes the AttributeError,
+  not the unnamed source.
+- Passing `observed_at` as a caller parameter instead of a port: the callers
+  of these services are the sync session, the local API and the scheduler, and
+  a caller-supplied time would only move the ambient read one layer up.
+
+---
+
 ## Resolution protocol
 
 When an open question is resolved:
