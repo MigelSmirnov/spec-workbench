@@ -1,12 +1,12 @@
 import json
-from pathlib import Path
 
-
-CASE = Path(__file__).parents[1] / "examples" / "cabinet-web-backend"
+from canonical_cases import canonical_case
 
 
 def _spec() -> dict:
-    return json.loads((CASE / "global_spec.json").read_text(encoding="utf-8"))
+    # the taxonomy is a decision of the canonical case, not of a snapshot
+    case = canonical_case("cabinet-web-backend")
+    return json.loads((case / "global_spec.json").read_text(encoding="utf-8"))
 
 
 def test_identity_taxonomy_has_one_models_home() -> None:

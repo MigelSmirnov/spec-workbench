@@ -137,7 +137,7 @@ def test_missing_router_handler_mapping_is_fail_closed(tmp_path: Path) -> None:
 def test_ready_handoff_contains_operation_and_handler_contracts(tmp_path: Path) -> None:
     handoff = design_stage6_contracts.handoff(_ready(tmp_path))
     assert handoff["ready"] is True
-    assert handoff["summary"]["resolved"] == 195  # 192 + the decided Clock port and its two retainers
+    assert handoff["summary"]["resolved"] == 197  # 192 + the decided Clock port, its two retainers, and the two RegistryContextService methods
     domain = handoff["contracts"]["attach_local_source"]
     handler = handoff["contracts"]["attach_local_source_handler"]
     assert domain["public_operation"] == FIRST_EXTERNAL
