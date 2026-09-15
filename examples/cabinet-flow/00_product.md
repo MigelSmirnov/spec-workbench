@@ -13,6 +13,96 @@ and evidence, not a substitute for this canonical artifact.
 Models, modules, storage tables, Python contracts, transport DTOs and
 implementation algorithms are intentionally deferred to their owning states.
 
+## Accepted correction 2026-09-15 — the operating environment is the platform agent environment
+
+The owner corrected the execution environment of Cabinet Flow after the live
+producer work of 2026-09-14. The product purpose above is unchanged; what
+changes is where the agent runs and how it acquires abilities.
+
+The original text assumed one authorized online agent behind Cabinet Flow's
+own MCP, reached from a mobile chat. That assumption met a technical limit: the
+mobile client is a Custom GPT, whose tools are its published schema. A tool
+change there is a schema release, so the agent cannot compose or author
+capabilities on the fly, and the self-extension mechanism loses its meaning in
+that environment.
+
+### D0-028 — Environment
+
+The operating environment of Cabinet Flow is the platform agent environment:
+the machine that carries the platform manifest (`platform/manifest/` of the
+Factory), the declared MCP servers, the operator entry points, the
+repositories, the receipts and the access to the trusted stores. Any agent
+that can drive that environment is a Cabinet Flow agent. The environment is
+indifferent to the agent provider: nothing the environment must know may live
+only in one provider's memory or configuration.
+
+### D0-029 — Two agents, one capability declaration
+
+The mobile chat agent (Custom GPT, online, used in the field) and the machine
+agent are two agents of the same platform. A capability is declared once in
+the platform manifest and exposed through channels: `http_api` for the schema
+client, `mcp` and `operator` for the machine agent. The mobile agent is a full
+conversational client of the accepted capabilities, not merely an intake; it
+has no temporary-tool ladder, because for it a new tool is a schema release.
+
+### D0-030 — Managed capability evolution is a graduation ladder
+
+Managed function authoring keeps its purpose and loses its sandbox: the
+trusted deterministic boundary is the sandbox. An agent-authored tool climbs
+one ladder, or expires with the session:
+
+1. a temporary tool in the agent's scratch space, verified live;
+2. a checked-in operator entry point with recorded provenance, idempotent
+   effects and a receipt for every durable change;
+3. a declared capability of the platform manifest, held by the surface gate;
+4. a product behavior authored in the Spec Workbench and produced by the
+   Factory — only when the behavior becomes part of a product entity.
+
+A tool at any rung writes to a trusted store only through that store's
+declared operations (the journal writer under its lock, the plugin's
+protected operator operations, the local Backend's API).
+
+### D0-031 — No environment store; boxes are the transfer unit
+
+The environment owns no database. Every source of truth stays in the store of
+the service that owns its lifecycle (the VPS journal, the plugin's PostgreSQL
+and custody, the local Backend archive, PresuPro, the portal). Data in flight
+between services travels as a Box: an immutable, content-addressed package
+built by one producer from one source revision, with a manifest naming the
+producer and its version, the source revision, every file by hash, size and
+media type, and the consumer contract it is meant for. Equal inputs produce
+the same Box, so a repeated transfer is safe by construction. The relay is a
+content-addressed directory of Boxes on the VPS with a local mirror; a
+consumer verifies the hashes and records the accepted Box identity in its own
+receipt. The canonical input snapshot of the plugin, the estimator Capability
+Box and the local Backend package already have this shape; they converge on
+one manifest format without changing the accepted Invoice transfer wire.
+
+### D0-032 — Knowledge lives in the environment
+
+Everything the environment must know is kept in neutral form: capabilities in
+the manifest, tools under the projects' `deploy/` and `tools/`, work history
+as receipts, decisions in the Workbench, working instructions in `AGENTS.md`
+and the documentation. A provider's memory is a cache over that record, never
+its only copy. The test is operational: another agent with the same MCP
+servers and access must be able to repeat a day's work from the manifest and
+the documents alone.
+
+### Superseded statements
+
+- "MCP ownership": Cabinet Flow no longer owns a primary online MCP of its
+  own; the machine agent uses the platform's MCP servers and operator entry
+  points, the mobile agent the published schema.
+- "Agent context" and "Non-bypassable execution boundary": the bounded
+  context and the non-bypassable boundary stay as principles; the execution
+  substrate is the platform environment and the trusted stores, not a Cabinet
+  Flow sandbox runtime.
+- "Local integration and offline behavior": the bridge to the local Backend
+  remains the deployed `cabinet-web-backend` plugin with its accepted
+  transfer contract; HandoffPackage generalizes into the Box of D0-031.
+- "First-release proof": the working-release qualification against the
+  GPT/OpenAI tunnel applies to the mobile agent's channel only.
+
 ## Product statement
 
 Cabinet Flow is a conversational operating environment for construction work.
