@@ -299,3 +299,75 @@ caller_or_environment_override(release_ceiling) -> forbidden
 Every generator sees one closed set of resource and payload maxima. Limits are
 release facts, not local implementation choices.
 
+## Accepted decision A27 — authentication throttling is durable and exact
+
+### Normative rules
+
+1. `module:access_control` owns one AuthenticationThrottleState M49 per
+   `(credential_binding_ref, channel)`. Credential material is never part of
+   the key or record.
+2. A failed authentication increments `consecutive_failures` atomically and
+   records `last_failure_at` from `system_clock.now`. The exact delay after
+   the resulting failure count is:
+
+   ```text
+   count 1..4 -> 0 seconds
+   count 5    -> 1 second
+   count 6    -> 2 seconds
+   count 7    -> 4 seconds
+   count 8    -> 8 seconds
+   count 9    -> 16 seconds
+   count >=10 -> temporary block for 900 seconds
+   ```
+
+3. On the tenth failure, `blocked_until = now + 900 seconds`. Requests during
+   an active block receive the same public authentication refusal, do not
+   increment the counter and do not extend the block.
+4. After the active block has elapsed, the next authentication attempt is
+   evaluated normally. A successful authentication resets
+   `consecutive_failures = 0` and clears `blocked_until`.
+5. Owner and agent credentials have independent throttle keys. Failures against
+   an agent credential can never delay or block the owner's distinct
+   credential/channel pair.
+6. The throttle state is durable and restored with the operational store.
+   Restart never resets a counter or shortens an active block.
+7. Delays use KernelInstant M47 for persisted deadlines. Sleeping is not the
+   source of truth: a request is allowed or refused by comparing one
+   `system_clock.now` value with the durable state.
+
+### Formal invariants
+
+```text
+throttle_key = (credential_binding_ref, channel)
+credential_value IN AuthenticationThrottleState -> never
+
+failures <= 4 -> delay_seconds = 0
+failures = 5 -> delay_seconds = 1
+failures = 6 -> delay_seconds = 2
+failures = 7 -> delay_seconds = 4
+failures = 8 -> delay_seconds = 8
+failures = 9 -> delay_seconds = 16
+failures >= 10 -> block_seconds = 900
+
+blocked_attempt -/> increments_failure_count
+blocked_attempt -/> extends_block
+agent_failure -/> owner_throttle_state
+restart -/> resets_throttle
+```
+
+### Required tests
+
+1. Counts one through nine produce exactly the delay table above.
+2. The tenth failed authentication creates a block exactly 900 seconds after
+   the recorded failure instant.
+3. Repeated requests during the block return the same refusal without changing
+   count or `blocked_until`.
+4. Restart halfway through a block preserves the remaining block.
+5. A successful authentication after expiry resets the state.
+6. Ten failures on an agent credential do not delay the owner's channel.
+
+### Consequence
+
+Authentication abuse control is reproducible across implementations and
+restart; no generated access-control module invents thresholds or sleep logic.
+
