@@ -20,6 +20,7 @@ class StandardBackend:
     closure_schema: str
     rule_key: str
     scope_mapping_path: tuple[str, ...] | None = None
+    concrete_methods: tuple[str, ...] = ()
 
     def _load(self, path: Path) -> Any:
         return json.loads(path.read_text(encoding="utf-8"))
@@ -75,7 +76,15 @@ class StandardBackend:
         if backend is None:
             return set()
         mapping = self._mapping(backend)
-        return set(mapping) if mapping is not None else set()
+        if mapping is not None:
+            return set(mapping)
+        if self.concrete_methods:
+            wiring = backend.get("wiring")
+            concrete = wiring.get("concrete_class") if isinstance(wiring, dict) else None
+            if not isinstance(concrete, str) or not concrete:
+                return set()
+            return {f"{concrete}.{method}" for method in self.concrete_methods}
+        return set()
 
     def module_slice(self, project: Path, module: str) -> dict[str, Any] | None:
         backend = self.closed_backend(project)
@@ -92,6 +101,13 @@ class StandardBackend:
 
 
 STANDARD_BACKENDS = (
+    StandardBackend(
+        id="holded_transport",
+        closure_file="70_holded_transport_closure.json",
+        closure_schema="spec_workbench_holded_transport_backend_closure.v1",
+        rule_key="holded_transport_backend",
+        concrete_methods=("__init__", "create_purchase", "list_purchases", "get_purchase"),
+    ),
     StandardBackend(
         id="canonical_digest",
         closure_file="70_canonical_digest_closure.json",
