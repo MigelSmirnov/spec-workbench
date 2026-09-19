@@ -1,5 +1,7 @@
 # State 5 — Cabinet Flow run-executor operations
 
+A25 clock contract: run lifecycle timestamps, attempt timing evidence and persisted retry deadlines use KernelInstant M47 from the injected `module:system_clock.now`. No request or surface call supplies current time.
+
 The run executor owns the durable dataflow state machine. It decides what is
 ready, what waits and what may run next; it delegates isolation, service
 invocation, authority, value/file storage and immutable trace recording to their
