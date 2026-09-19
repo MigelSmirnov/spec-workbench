@@ -1,5 +1,7 @@
 # State 5 — Cabinet Flow service-transport operations
 
+A25 timer contract: this module does not use wall clock for domain state. Local non-persisted request/response timeout measurement uses only Python `time.monotonic_ns()`; monotonic readings are never persisted as KernelInstant.
+
 The transport performs one bounded exchange with one declared service instance.
 It resolves credentials only at send time and reports transport facts without
 deciding replay, authorization, outcome semantics or run state.
