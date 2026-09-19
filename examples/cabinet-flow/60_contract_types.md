@@ -356,3 +356,71 @@ Fields:
 
 Both references are present only for acceptance. Rejection returns the same
 proposal in final rejected state and no governed revision.
+
+
+---
+
+## `RunFileDescriptor`
+
+Immutable safe description of one live SpooledBytes object.
+
+Fields:
+
+- `spooled_ref: SpooledBytes`;
+- `content_digest: str`;
+- `size_bytes: int`;
+- `observed_media_type: str`;
+- `disclosure_class: str`;
+- `producer_run_id: str`;
+- `producer_node_id: str`;
+- `producer_port_id: str`.
+
+No host spool path is representable.
+
+---
+
+## `OwnerStatementRequest`
+
+Closed input to deterministic owner-statement rendering.
+
+Fields:
+
+- `statement_kind: str`;
+- `target_refs: tuple[str, ...]`;
+- `service_operation_refs: tuple[str, ...]`;
+- `effect_classes: tuple[str, ...]`;
+- `preview_port_ids: tuple[str, ...]`;
+- `motivating_refs: tuple[str, ...]`.
+
+Every reference names already accepted/pinned evidence. Agent-authored prose is
+not part of this value.
+
+---
+
+## `OwnerStatement`
+
+Fields:
+
+- `text: str`;
+- `digest: str`.
+
+The digest binds the deterministic bounded text to every fact represented by the
+corresponding OwnerStatementRequest.
+
+---
+
+## `EffectAuthorization`
+
+Authoritative one-attempt result from `module:owner_authority`.
+
+Fields:
+
+- `status: str` — `authorized`, `approval_required` or `denied`;
+- `authority_kind: str | None` — `approval` or `standing_grant` only when
+  authorized;
+- `authority_ref: str | None`;
+- `covered_input_digests: tuple[str, ...]`;
+- `reason: str | None`.
+
+An authorized value is scoped to the exact run/node/binding/instance/input set
+used to request it and is not reusable for another attempt.
