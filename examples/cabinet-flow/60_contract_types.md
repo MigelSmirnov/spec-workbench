@@ -244,3 +244,115 @@ Fields:
 - `items: tuple[BindingDriftItem, ...]`.
 
 Items are deterministically ordered by binding identity/version.
+
+
+---
+
+## `VocabularySeedResult`
+
+Deterministic installation-seed result.
+
+Fields:
+
+- `installed_entry_refs: tuple[str, ...]`;
+- `installed_revision_refs: tuple[str, ...]`;
+- `already_initialized: bool`.
+
+The lists are deterministically ordered and contain only the release-owned seed
+bundle; no external "latest" vocabulary is consulted.
+
+---
+
+## `TermRevisionView`
+
+Exact term-revision lookup result.
+
+Fields:
+
+- `revision: SemanticTermRevision`;
+- `term_id: str`;
+- `axis_id: str`;
+- `term_status: str`;
+- `axis_status: str`.
+
+Historical revisions remain representable after either stable entity retires.
+
+---
+
+## `AxisProposalContent`
+
+Complete candidate content for a semantic axis entry or revision.
+
+Fields:
+
+- `axis_id: str | None`;
+- `display_name: str`;
+- `meaning: str`;
+- `value_family: str`;
+- `qualifier_contract_ref: str | None`.
+
+A revision identity is never accepted from the caller.
+
+---
+
+## `TermProposalContent`
+
+Complete candidate content for a semantic term entry or revision.
+
+Fields:
+
+- `term_id: str | None`;
+- `axis_id: str`;
+- `display_name: str`;
+- `meaning: str`;
+- `value_schema_ref: str`;
+- `required_qualifier_kind: str | None`;
+- `subject_kind: str | None`;
+- `temporal_role: str | None`.
+
+A term-revision identity is never accepted from the caller.
+
+---
+
+## `RelationProposalContent`
+
+Complete candidate content for a semantic relation entry or revision.
+
+Fields:
+
+- `relation_id: str | None`;
+- `source_term_revision_ref: str`;
+- `target_term_revision_ref: str`;
+- `source_schema_ref: str`;
+- `target_schema_ref: str`;
+- `relation_kind: str`;
+- `loss_class: str`;
+- `required_slot_ref: str | None`.
+
+A relation-revision identity is never accepted from the caller.
+
+---
+
+## `VocabularyProposalContent`
+
+Closed State 6 union:
+
+`AxisProposalContent | TermProposalContent | RelationProposalContent`.
+
+The variant determines the proposal kind; no separate free-form kind may
+contradict the content.
+
+---
+
+## `VocabularyDecisionResult`
+
+Owner decision result for one exact VocabularyProposal.
+
+Fields:
+
+- `proposal: VocabularyProposal`;
+- `governed_entry_ref: str | None`;
+- `issued_revision_ref: str | None`.
+
+Both references are present only for acceptance. Rejection returns the same
+proposal in final rejected state and no governed revision.
