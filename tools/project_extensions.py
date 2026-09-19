@@ -34,6 +34,8 @@ from pathlib import Path
 from types import ModuleType
 from typing import Any
 
+from standard_backends import standard_backends
+
 EXTENSIONS_FILE = "workbench_extensions.json"
 SCHEMA = "spec_workbench_project_extensions.v1"
 REQUIRED_CALLABLES = ("structured_addresses", "deterministic_method_scopes", "module_slice")
@@ -131,10 +133,13 @@ def declared_backends(project: Path) -> list[dict[str, Any]]:
 
 
 
-def deterministic_backends(project: Path) -> list[DeterministicBackendExtension]:
-    """Load every deterministic backend the project declares."""
-    result: list[DeterministicBackendExtension] = []
-    for entry in declared_backends(project):
+def deterministic_backends(project: Path) -> list[Any]:
+    """Load shared standard backends plus any still-migrating legacy declarations."""
+    declared = declared_backends(project)
+    result: list[Any] = list(
+        standard_backends(exclude_ids={entry["id"] for entry in declared})
+    )
+    for entry in declared:
         module = _load_module(entry["id"], entry["path"], kind="backend")
         missing = [name for name in REQUIRED_CALLABLES if not callable(getattr(module, name, None))]
         if missing:
