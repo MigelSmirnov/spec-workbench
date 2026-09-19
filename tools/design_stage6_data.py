@@ -19,6 +19,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from identity_workbench.sources import load_state1
+
 # Compatibility identifiers: do not infer semantic state numbering from them.
 SCHEMA = "spec_workbench_state6_data_closure.v1"
 REPORT_SCHEMA = "spec_workbench_state6_data_lint.v2"
@@ -80,6 +82,7 @@ def lint(project: Path) -> dict[str, Any]:
 
     persistence = sections.get("persistence", {})
     persistence_counts = {name: 0 for name in sorted(PERSISTENCE_CLASSES)}
+    state1_identities, _ = load_state1(project)
     if isinstance(persistence, dict):
         for model_name, declaration in sorted(persistence.items()):
             if not isinstance(model_name, str) or not model_name:
@@ -93,6 +96,22 @@ def lint(project: Path) -> dict[str, Any]:
                 findings.append({"severity":"error","code":"invalid_persistence_class","message":f"persistence.{model_name}.class must be one of {sorted(PERSISTENCE_CLASSES)}"})
                 continue
             persistence_counts[persistence_class] += 1
+            identity_record = state1_identities.get(model_name)
+            if identity_record is None:
+                findings.append({
+                    "severity": "error",
+                    "code": "persistence_model_missing_identity",
+                    "message": f"persistence.{model_name} refers to a model without canonical State 1 identity",
+                })
+            elif persistence_class in {"master", "mirrored"} and identity_record.identity != "entity":
+                findings.append({
+                    "severity": "error",
+                    "code": "persistence_identity_incompatible",
+                    "message": (
+                        f"persistence.{model_name} class={persistence_class} requires identity entity; "
+                        f"State 1 declares {identity_record.identity}"
+                    ),
+                })
             if persistence_class == "mirrored":
                 remote = declaration.get("remote")
                 if not isinstance(remote, str) or not remote.strip():
