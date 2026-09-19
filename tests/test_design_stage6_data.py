@@ -168,13 +168,25 @@ def test_issued_value_snapshot_remains_allowed(tmp_path: Path) -> None:
     )
 
 
-def test_final_data_closure_status_rejects_unresolved_topics(tmp_path: Path) -> None:
+def test_closed_data_closure_status_rejects_unresolved_topics(tmp_path: Path) -> None:
     payload = json.loads((CABINET / "60_data_closure.json").read_text(encoding="utf-8"))
     payload["status"] = "closed"
     payload["unresolved"] = [{"topic": "retention", "reason": "still open"}]
     (tmp_path / "60_data_closure.json").write_text(json.dumps(payload), encoding="utf-8")
     report = design_stage6_data.lint(tmp_path)
     assert any(
+        item["code"] == "final_data_closure_has_unresolved"
+        for item in report["findings"]
+    )
+
+
+def test_accepted_data_closure_may_carry_later_unresolved_topics(tmp_path: Path) -> None:
+    payload = json.loads((CABINET / "60_data_closure.json").read_text(encoding="utf-8"))
+    payload["status"] = "accepted"
+    payload["unresolved"] = [{"topic": "determinism", "reason": "belongs to later closure"}]
+    (tmp_path / "60_data_closure.json").write_text(json.dumps(payload), encoding="utf-8")
+    report = design_stage6_data.lint(tmp_path)
+    assert not any(
         item["code"] == "final_data_closure_has_unresolved"
         for item in report["findings"]
     )
