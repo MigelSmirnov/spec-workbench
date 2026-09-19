@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from holded_transport_workbench import deterministic_method_scopes, structured_addresses
+from project_extensions import deterministic_backends
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -55,8 +55,9 @@ def test_holded_v1_wire_contract_matches_runtime_evidence() -> None:
 
 
 def test_closed_ir_is_visible_to_notes_and_deterministic_review() -> None:
-    assert structured_addresses(CABINET) == {"rules.holded_transport_backend"}
-    assert deterministic_method_scopes(CABINET) == {
+    backend = next(item for item in deterministic_backends(CABINET) if item.id == "holded_transport")
+    assert backend.structured_addresses(CABINET) == {"rules.holded_transport_backend"}
+    assert backend.deterministic_method_scopes(CABINET) == {
         "HttpxHoldedHttpClient.__init__",
         "HttpxHoldedHttpClient.create_purchase",
         "HttpxHoldedHttpClient.list_purchases",
