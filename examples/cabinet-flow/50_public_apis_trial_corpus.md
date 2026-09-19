@@ -108,9 +108,10 @@ failure are refused without a partial case.
 ### State impact
 
 One immutable TrialCase and retained value/fixture references may be appended.
-After commit, the corpus module asks
-`module:slot_activation.contract_health` to refresh derived serving health
-from this exact captured failure; it does not change the serving activation.
+The serving activation and its history do not change. A later
+`module:slot_activation.contract_health` read derives any `known_failing`
+view from this case and the immutable execution evidence; the corpus stores no
+activation-health flag.
 
 ## `public_op:trial_corpus.withdraw_trial_case`
 
