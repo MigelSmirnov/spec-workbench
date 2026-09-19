@@ -56,21 +56,21 @@ release and accepted sandbox-runtime revisions.
 
 ### Callers
 
-`module:bootstrap` validates them at startup; `module:slot_registry`,
-`module:trial_corpus`, `module:sandbox_supervisor`, `module:value_store` and
-`module:run_spool` apply the relevant resource, code, fixture, value and spool
-limits.
+`module:bootstrap` reads and validates the complete record once during
+fail-closed startup and injects that same immutable M48 value into every
+consumer.
 
 ### Inputs
 
-An optional closed ceiling category. No caller-proposed override or per-flow
-limit increase is accepted.
+None. The operation reads the ReleaseCeilings M48 record shipped with the exact
+running kernel release. No category selector, host override or per-flow value is
+accepted.
 
 ### Outputs
 
-The typed bounded set of maximum execution time, memory, process count, code
-size, output size, value size, trial-fixture size and run-spool size for the
-installed release and runtime revisions.
+Exactly one ReleaseCeilings M48 value containing the complete release-v1 limits
+for sandbox resources, code/value/fixture/spool sizes, surface/text/pagination
+bounds and transport timeout.
 
 ### Observable effect
 
@@ -78,9 +78,9 @@ None.
 
 ### Enforces
 
-Authored bounds may only be equal to or below release ceilings; runtime images
-and dependency versions are pinned; withdrawing a runtime prevents its use in
-new contracts without mutating existing evidence.
+The returned fields exactly equal the M48 values of the running release; every
+field is positive and internally consistent; callers cannot raise, replace or
+partially select ceilings; runtime images and dependency versions are pinned.
 
 ### Errors
 
