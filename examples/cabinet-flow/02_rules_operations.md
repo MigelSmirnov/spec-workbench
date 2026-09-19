@@ -327,3 +327,69 @@ assumed_outcome -> never
 
 The kernel says "I do not know" when it does not know, finds out by asking the
 service that owns the fact, and only then moves.
+
+## Accepted decision A28 — pending service retries use one persisted back-off schedule
+
+### Normative rules
+
+1. `module:run_executor` owns retry timing for waits caused by
+   `service_unreachable` and `outcome_unknown`. `operation_invoker` performs
+   one requested attempt/reconciliation and never chooses the next retry time.
+2. When a node enters or remains in one of those timed waits after an
+   unsuccessful attempt, the executor increments that wait entry's
+   `retry_ordinal` and writes `retry_not_before` using this exact schedule:
+
+   ```text
+   ordinal 1 -> 1 second
+   ordinal 2 -> 2 seconds
+   ordinal 3 -> 5 seconds
+   ordinal 4 -> 10 seconds
+   ordinal 5 -> 30 seconds
+   ordinal >=6 -> 60 seconds
+   ```
+
+3. There is no jitter and no host-local sleep state. The durable deadline is
+   `system_clock.now + delay`; a kernel-process wake-up before the deadline
+   re-evaluates nothing and starts no request.
+4. Restart preserves `retry_ordinal` and `retry_not_before`. It never resets
+   the sequence or immediately retries merely because the process restarted.
+5. A successful node conclusion, terminal run transition or owner cancellation
+   removes the timed wait entry. A fresh later wait for another attempt begins
+   again at ordinal 1.
+6. `binding_suspended` and `owner_approval` are not timed by this schedule.
+   They wait for their owning external/state change and have no
+   `retry_not_before`.
+7. Reaching ordinal 6 never changes `pending` into failure. Later retries
+   remain capped at 60 seconds until success, cancellation or another truthful
+   state transition.
+
+### Formal invariants
+
+```text
+retry_delay_seconds(1..6) = [1, 2, 5, 10, 30, 60]
+retry_delay_seconds(n > 6) = 60
+
+timed_wait_reason IN {service_unreachable, outcome_unknown}
+timed_wait -> retry_not_before = KernelInstant
+wake_before(retry_not_before) -/> invocation
+restart -/> retry_ordinal_reset
+retry_count -/> run_failed
+```
+
+### Required tests
+
+1. Six consecutive unsuccessful retries produce delays
+   `1, 2, 5, 10, 30, 60` seconds and the seventh also produces 60 seconds.
+2. A wake one microsecond before `retry_not_before` causes no invocation; a
+   wake at the deadline may re-evaluate the run.
+3. Restart after ordinal 4 preserves both ordinal and exact deadline.
+4. Success clears the wait; a later unrelated service wait starts at ordinal 1.
+5. An approval wait lasting hours receives no retry deadline.
+6. Repeated failures for days never make the run `failed` without another
+   failure rule.
+
+### Consequence
+
+Retry timing is deterministic durable run state, not an implementation-local
+timer or a policy invented by operation transport code.
+
