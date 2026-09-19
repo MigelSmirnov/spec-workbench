@@ -1,5 +1,7 @@
 # State 5 — Cabinet Flow whole-graph proof operation
 
+A25 clock contract: every operational timestamp written by this module is KernelInstant M47 obtained from its injected `module:system_clock.now` at the atomic event it owns. No public operation accepts caller-, gateway- or surface-supplied current time.
+
 Proof judges one immutable flow version against exact accepted evidence. It
 does not repair, suggest, activate or execute the graph, and no actor can supply
 or override its verdict.
