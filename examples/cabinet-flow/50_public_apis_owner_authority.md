@@ -1,5 +1,7 @@
 # State 5 — Cabinet Flow owner-authority operations
 
+A25 clock contract: every operational timestamp written by this module is KernelInstant M47 obtained from its injected `module:system_clock.now` at the atomic event it owns. No public operation accepts caller-, gateway- or surface-supplied current time.
+
 Authority binds the sole owner's decision to an exact effect. It does not
 authenticate the owner, schedule a run or invoke a service. Draft writes rely
 on flow activation; destructive operations can never receive a standing grant.
