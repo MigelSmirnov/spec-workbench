@@ -9,6 +9,7 @@ import fence
 import flow_closure
 import design_stage6_contracts
 import design_stage6_data
+import project_gates
 from external_contract_workbench import coverage as external_contract_coverage
 from identity_workbench import verify as verify_identity
 from model_surface_workbench import fields as model_fields
@@ -118,6 +119,7 @@ def _factory_storage_resolver():
 
 
 CHECKS: dict[str, ReportFunction] = {
+    "project_gates": project_gates.coverage,
     "language": verify_language,
     "modules": design_stage3.lint,
     "identity": verify_identity,
