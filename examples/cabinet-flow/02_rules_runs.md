@@ -331,6 +331,26 @@ of the business.
 8. Tests inject a deterministic clock. Tests that exercise time-dependent
    behavior advance that clock explicitly; sleeping and monkeypatching global
    wall-clock functions are not accepted as the semantic oracle.
+9. A timestamp produced by a microservice, manifest-declared operation or
+   external system is never KernelInstant merely because it represents an
+   instant. It remains typed business/service data, normally TemporalValue M08
+   when it participates in semantic composition, or exact service-owned
+   concurrency/precondition evidence when an API contract uses it that way.
+10. Service/application clocks are outside the kernel clock trust boundary.
+    Their values never supply kernel `now`, operational record timestamps,
+    retry/back-off deadlines, retention expiry, authentication throttling,
+    approval/grant authority or run lifecycle time.
+11. The kernel never corrects, normalizes against, synchronizes with or assumes
+    bounded skew between service clocks. Cross-service causal ordering is not
+    inferred from comparing service timestamps. Causality comes from pinned
+    versions, immutable references, digests, invocation/reconciliation evidence
+    and explicit semantic relations.
+12. When a binding exposes a service timestamp as an input/output/precondition,
+    `service_transport` carries its exact declared representation and
+    `operation_invoker` validates it against the binding. Neither converts it
+    to M47. If business logic intentionally compares temporal facts, that occurs
+    as typed TemporalValue semantics under the vocabulary/flow proof, not as
+    kernel wall-clock authority.
 
 ### Formal invariants
 
@@ -343,6 +363,15 @@ host_wall_clock_read
    AND primitive = time.time_ns
 
 current_time_request_field -> forbidden
+
+service_timestamp -/> KernelInstant
+service_timestamp -/> kernel_now
+service_timestamp -/> retry_deadline
+service_timestamp -/> retention_deadline
+service_timestamp -/> authority
+
+cross_service_ordering
+-/> inferred_from(service_timestamp_comparison)
 
 persisted_monotonic_value -> never
 
@@ -369,6 +398,14 @@ elapsed_timeout_measurement
    authority, semantic meaning or pinned execution identity.
 6. A request containing a field intended to override current time is rejected
    by its strict schema.
+7. A service response containing a timestamp far in the future or past does not
+   change kernel retry, retention, authorization, run state or any operational
+   record timestamp.
+8. Two services may return mutually inconsistent wall-clock timestamps without
+   changing kernel causal ordering; the kernel orders only by its own records
+   and explicit references/evidence.
+9. A service-owned optimistic-concurrency timestamp/precondition is replayed
+   exactly according to its binding contract and is never converted to M47.
 
 ### Consequence
 
