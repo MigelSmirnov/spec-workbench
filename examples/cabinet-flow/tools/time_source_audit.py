@@ -107,7 +107,7 @@ def audit_design(project: Path) -> list[Finding]:
     for path in sorted(project.glob("50_public_apis_*.md")):
         text = path.read_text(encoding="utf-8")
         for line, op, body in _section_inputs(text):
-            lowered = body.lower()
+            lowered = " ".join(body.lower().split())
             if "current utc time" in lowered:
                 findings.append(
                     Finding(path, line, f"{op}: Inputs still accept or mention 'current UTC time'; owning module must call system_clock")
