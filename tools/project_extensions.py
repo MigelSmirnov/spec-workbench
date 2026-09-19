@@ -1,16 +1,19 @@
 """Project-declared Workbench extensions.
 
 Generic tools must not import product-specific modules by name. A project may
-declare deterministic backend data bindings in ``<project>/workbench_extensions.json``
-only where the platform explicitly supports that schema. Authoring gates are
-platform-owned and must live in root ``tools/``; projects may not supply
-executable gate modules.
+declare deterministic backends and project-local deterministic gates in
+``<project>/workbench_extensions.json`` and ships each implementation inside
+its own directory. Generic tooling loads only the declared protocol and never
+learns the product's name.
 
 ```json
 {
   "schema_version": "spec_workbench_project_extensions.v1",
   "deterministic_backends": [
     {"id": "holded_transport", "module": "tools/holded_transport_workbench.py"}
+  ],
+  "project_gates": [
+    {"id": "domain_clock", "module": "tools/project_gate.py"}
   ]
 }
 ```
@@ -23,6 +26,12 @@ Each backend module must expose:
   by the closed backend IR (no note required);
 - ``module_slice(project, module) -> dict | None`` — the module-scoped lowering
   evidence for Stage 8.1 review, or ``None`` when the module owns nothing.
+
+Each project-gate module must expose:
+
+- ``run_gate(project) -> dict`` — a deterministic report with schema
+  ``spec_workbench_project_gate_result.v1``, boolean ``ready``, a summary
+  containing integer ``errors`` / ``warnings``, and a list of findings.
 """
 from __future__ import annotations
 
@@ -37,6 +46,7 @@ from typing import Any
 EXTENSIONS_FILE = "workbench_extensions.json"
 SCHEMA = "spec_workbench_project_extensions.v1"
 REQUIRED_CALLABLES = ("structured_addresses", "deterministic_method_scopes", "module_slice")
+GATE_CALLABLE = "run_gate"
 _ID_CHARS = set("abcdefghijklmnopqrstuvwxyz0123456789_")
 
 
@@ -58,6 +68,16 @@ class DeterministicBackendExtension:
 
     def module_slice(self, project: Path, module: str) -> dict[str, Any] | None:
         return self.module.module_slice(project, module)
+
+
+@dataclass(frozen=True)
+class ProjectGateExtension:
+    id: str
+    path: Path
+    module: ModuleType
+
+    def run_gate(self, project: Path) -> dict[str, Any]:
+        return self.module.run_gate(project)
 
 
 def _load_module(extension_id: str, path: Path, *, kind: str) -> ModuleType:
@@ -85,10 +105,6 @@ def _manifest_payload(project: Path) -> tuple[Path, dict[str, Any] | None]:
         raise ProjectExtensionError(f"{manifest.name}: invalid JSON: {exc}") from exc
     if not isinstance(payload, dict) or payload.get("schema_version") != SCHEMA:
         raise ProjectExtensionError(f"{manifest.name}: expected schema_version {SCHEMA}")
-    if "project_gates" in payload:
-        raise ProjectExtensionError(
-            f"{manifest.name}: project_gates are forbidden; authoring gates are platform-owned under root tools/"
-        )
     return manifest, payload
 
 
@@ -128,6 +144,11 @@ def declared_backends(project: Path) -> list[dict[str, Any]]:
     return _declared_entries(project, "deterministic_backends", kind="backend")
 
 
+def declared_project_gates(project: Path) -> list[dict[str, Any]]:
+    """Return raw project-gate declarations, validated but not loaded."""
+    return _declared_entries(project, "project_gates", kind="project gate")
+
+
 def deterministic_backends(project: Path) -> list[DeterministicBackendExtension]:
     """Load every deterministic backend the project declares."""
     result: list[DeterministicBackendExtension] = []
@@ -139,4 +160,18 @@ def deterministic_backends(project: Path) -> list[DeterministicBackendExtension]
                 f"backend {entry['id']!r} ({entry['module']}) lacks required callables: {', '.join(missing)}"
             )
         result.append(DeterministicBackendExtension(id=entry["id"], path=entry["path"], module=module))
+    return result
+
+
+
+def project_gates(project: Path) -> list[ProjectGateExtension]:
+    """Load every deterministic gate declared by a project."""
+    result: list[ProjectGateExtension] = []
+    for entry in declared_project_gates(project):
+        module = _load_module(entry["id"], entry["path"], kind="gate")
+        if not callable(getattr(module, GATE_CALLABLE, None)):
+            raise ProjectExtensionError(
+                f"project gate {entry['id']!r} ({entry['module']}) lacks required callable: {GATE_CALLABLE}"
+            )
+        result.append(ProjectGateExtension(id=entry["id"], path=entry["path"], module=module))
     return result
