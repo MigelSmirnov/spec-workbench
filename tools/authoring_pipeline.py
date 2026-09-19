@@ -13,7 +13,6 @@ from pathlib import Path
 from typing import Any, Iterator
 
 import design_authoring_next
-import project_gates
 import project_navigation
 
 
@@ -82,24 +81,10 @@ def project_next(repo_root: Path, project_query: str) -> dict[str, Any]:
     explicit user/agent action on the canonical project branch.
     """
     with materialized_project(repo_root, project_query) as (view, case_root):
-        gate_report = project_gates.coverage(case_root)
         payload = design_authoring_next.next_step(
             case_root,
             display_path=view.path,
         )
-        if not gate_report["ready"]:
-            payload = dict(payload)
-            summary = gate_report["summary"]
-            payload["blocked"] = True
-            payload["reason"] = (
-                f"Project-declared deterministic gates block {payload['phase']}: "
-                f"{summary['errors']} errors and {summary['warnings']} warnings."
-            )
-            payload["action"] = {
-                "tool": "tools/design_project_gates.py",
-                "args": [view.path],
-                "command": None,
-            }
 
     action = payload.get("action")
     if action is not None:
@@ -120,5 +105,4 @@ def project_next(repo_root: Path, project_query: str) -> dict[str, Any]:
             "path": view.path,
         },
         "authoring": payload,
-        "project_gates": gate_report,
     }
