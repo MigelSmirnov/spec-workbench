@@ -3,7 +3,7 @@
 ## Purpose
 
 This document defines the seven initial typed value families referenced by the
-Cabinet Flow semantic-axis registry and the boundary for a valid result that is
+kernel's semantic-axis registry and the boundary for a valid result that is
 not automatically composable.
 
 The models carry exact semantic-term revisions. They do not make values
@@ -50,7 +50,7 @@ No independent lifecycle; a changed observation creates another value.
 
 ### Persistence candidate
 
-Embedded in structured results, Cards, capability inputs/outputs and evidence
+Embedded in node inputs and outputs, trial cases and run evidence
 when the exact temporal fact must be preserved.
 
 ### Open questions
@@ -75,8 +75,8 @@ Candidate fields:
 - `source_fact_ref`.
 
 An address, site reference and coordinate are not equal merely because they
-refer to a place. Resolution requires an accepted relation and, when needed, a
-capability.
+refer to a place. Resolution requires an accepted relation and, when needed, the
+slot that relation names.
 
 ### Identity
 
@@ -148,7 +148,7 @@ No independent lifecycle.
 
 ### Persistence candidate
 
-Embedded in Cards, analyses, plans, estimates, capability data and evidence.
+Embedded in node inputs and outputs, trial cases and run evidence.
 
 ### Open questions
 
@@ -186,7 +186,7 @@ party entity, not to this issued reference value.
 
 ### Source of truth
 
-The Cabinet party Card or explicitly accepted external identity authority.
+The party record of the microservice named by `identity_authority`.
 
 ### Lifecycle candidate
 
@@ -194,7 +194,7 @@ No independent lifecycle.
 
 ### Persistence candidate
 
-Embedded wherever a capability, Card, flow or analysis refers to a party.
+Embedded wherever a node input or output refers to a party.
 
 ### Open questions
 
@@ -230,7 +230,8 @@ project or work-object entity.
 
 ### Source of truth
 
-The Cabinet project or work-object Card named by the reference.
+The project or work-object record of the microservice named by
+`identity_authority`.
 
 ### Lifecycle candidate
 
@@ -238,7 +239,7 @@ No independent lifecycle.
 
 ### Persistence candidate
 
-Embedded in Cards, plans, estimates, capabilities, flows and evidence.
+Embedded wherever a node input or output refers to a project or work object.
 
 ### Open questions
 
@@ -258,7 +259,8 @@ Candidate fields:
 - `content_digest`;
 - `media_type`;
 - `source_revision_ref` when the source description is revisioned;
-- `bounded_access_capability_ref` optional;
+- `content_read_binding_ref` optional: the accepted `read` operation binding
+  through which an operation node may obtain the bytes from the owning service;
 - `provenance_ref`.
 
 A filename, Syncthing path or caller-supplied digest is not source identity.
@@ -276,7 +278,8 @@ produce another reference value.
 
 ### Source of truth
 
-The trusted Cabinet Flow source registry and immutable held-byte evidence.
+The microservice that holds the bytes in custody. The kernel never holds them
+(M38).
 
 ### Lifecycle candidate
 
@@ -284,7 +287,7 @@ No independent lifecycle.
 
 ### Persistence candidate
 
-Embedded in Cards, capability inputs, HandoffPackages, flows and evidence.
+Embedded in node inputs and outputs and run evidence.
 
 ### Open questions
 
@@ -308,7 +311,7 @@ Candidate fields:
 - `accepted_conversion_ref` optional.
 
 Equal numbers or similar unit labels do not establish comparability. Unit
-conversion requires an accepted exact relation or conversion capability.
+conversion requires an accepted exact relation and, when needed, its slot.
 
 ### Identity
 
@@ -331,7 +334,7 @@ No independent lifecycle.
 
 ### Persistence candidate
 
-Embedded in line items, estimates, plans, analyses and capability data.
+Embedded in node inputs and outputs, trial cases and run evidence.
 
 ### Open questions
 
@@ -341,7 +344,7 @@ None.
 
 ### Meaning
 
-A bounded reference to a valid capability output that lacks sufficient accepted
+A bounded reference to a valid node output that lacks sufficient accepted
 semantic evidence for automatic graph composition but may still be returned to
 the user.
 
@@ -373,7 +376,7 @@ semantics create another classification.
 ### Source of truth
 
 The trusted composition preflight or runtime boundary evaluating one exact
-validated capability output.
+validated node output.
 
 ### Lifecycle candidate
 
@@ -390,15 +393,15 @@ None.
 
 ## Composition example — delivery and weather
 
-A delivery capability may expose temporal term
+A delivery operation binding may expose temporal term
 `construction.delivery.occurred_on` and place term
-`construction.work_object.site`. A weather capability may require
+`construction.work_object.site`. A weather operation binding may require
 `weather.query_on` and `weather.query_place`.
 
 These ports are not connected merely because they use date and place value
 families. Composition requires accepted SemanticRelation revisions proving the
 intended role bindings. An address-to-coordinate step additionally requires an
-accepted place-resolution relation and its required capability.
+accepted place-resolution relation and the slot it requires, placed as a node.
 
 An invoice issue date cannot substitute for delivery occurrence merely because
 both are local dates. If the required relation is absent, preflight returns an
@@ -408,20 +411,21 @@ The weather result may still be shown to the user. It may continue through
 another graph edge only when its output port has an accepted semantic term and
 the next edge is independently derivable.
 
-## Capability granularity consequence
+## Granularity consequence
 
-Baseline capabilities should be shaped around complete, independently testable
-semantic transformations rather than existing application modules.
+Slots and operation bindings should be shaped around complete, independently
+testable semantic transformations rather than around the modules of any existing
+application.
 
-This does not require one capability per scalar field. A capability may return a
-cohesive structured result when its fields form one bounded semantic outcome.
-Trivial helpers and private calculations do not become slots merely to increase
-graph granularity.
+This does not require one slot per scalar field. A slot may return a cohesive
+structured result when its fields form one bounded semantic outcome. A trivial
+helper or a private calculation does not become a slot merely to make the graph
+finer: a slot is a step worth observing, replacing and repairing on its own.
 
 ## Slice readiness
 
 Models M08 through M15 have explicit value identity, substitution evidence,
 continuity evidence, source of truth, lifecycle and persistence candidates.
 
-This companion closes only the initial semantic value families. The overall
-State 1 gate remains open as recorded in `01_models.md`.
+This companion closes the initial semantic value families. Overall State 1
+readiness is recorded in `01_models.md`.

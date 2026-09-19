@@ -1,15 +1,16 @@
-# State 1 — Cabinet Flow domain models
+# State 1 — Cabinet Flow kernel models
 
 ## Status
 
-**IN PROGRESS.** This first State 1 slice defines the semantic composition
-foundation accepted after State 0. It does not declare the complete Cabinet Flow
-runtime model set or authorize entry into State 2.
+**COMPLETE for the kernel of State 0 (2026-09-19).** This document defines the
+governed semantic vocabulary through which function nodes and operation nodes
+are composed (D0-038). Its companions define every other kernel model; the
+document map below lists them.
 
-The immediate priority is the governed semantic vocabulary through which small
-capabilities can be composed into question-specific flows. Box, capability,
-flow, execution, source-custody and operational Card models remain required
-State 1 work.
+The vocabulary models M01–M07 are kernel models. The vocabulary's content — the
+axes listed below and every term and relation — is data of the first
+application, seeded at installation and extended only through accepted
+VocabularyProposals (M45).
 
 This state describes product meaning, identity, candidate fields, lifecycle and
 persistence. It does not select Python classes, tables, modules, algorithms,
@@ -31,9 +32,9 @@ An automatically composable edge requires either:
 - or one accepted semantic-relation revision that explicitly connects the
   source term and target term.
 
-Authority and disclosure compatibility remain independently required. Similar
-field names, equal primitive types and an agent's interpretation are not
-composition evidence.
+Disclosure compatibility remains independently required (D0-047). Similar field
+names, equal primitive types and an agent's interpretation are not composition
+evidence.
 
 ## Initial governed semantic-axis registry
 
@@ -87,7 +88,8 @@ or its status changes.
 
 ### Source of truth
 
-The Cabinet Flow semantic registry accepted through human/release governance.
+The kernel's semantic registry. An entry exists only by installation seed or by
+the owner's acceptance of a VocabularyProposal (M45).
 
 ### Lifecycle candidate
 
@@ -117,7 +119,7 @@ Candidate fields:
 - `value_family`;
 - `qualifier_contract_ref`;
 - `issued_at`;
-- `accepted_by`: human/release provenance reference.
+- `accepted_by`: ActorRef of kind `owner`, or the installation seed.
 
 ### Identity
 
@@ -176,7 +178,8 @@ are revised.
 
 ### Source of truth
 
-The Cabinet Flow semantic registry accepted through human/release governance.
+The kernel's semantic registry. An entry exists only by installation seed or by
+the owner's acceptance of a VocabularyProposal (M45).
 
 ### Lifecycle candidate
 
@@ -234,7 +237,7 @@ No independent lifecycle; immutable after issuance.
 
 ### Persistence candidate
 
-Durable and pinned by capability contracts, relations and flow evidence.
+Durable and pinned by ports, relations, flow proofs and stored values.
 
 ### Open questions
 
@@ -244,23 +247,27 @@ None.
 
 ### Meaning
 
-One immutable capability-contract input or output position whose data shape and
-domain meaning are explicit enough for composition preflight.
+One immutable input or output position of a slot contract version, an operation
+binding version or a flow version, whose data shape and domain meaning are
+explicit enough for flow proof.
 
 Candidate fields:
 
-- `contract_revision_ref`;
-- `port_id`: stable only inside that contract revision;
+- `owner_ref`: the SlotContractVersion, OperationBindingVersion or FlowVersion
+  the port belongs to;
+- `port_id`: stable only inside that owner;
 - `direction`: `input` or `output`;
 - `value_schema_ref`;
 - `semantic_term_revision_ref` optional only for output;
 - `cardinality`: `one`, `optional` or `many`;
-- `required_authority_refs`;
-- `disclosure_class`.
+- `disclosure_class`: `open`, `business_confidential` or `personal_data`. On an
+  input port it is the highest class the port accepts. On an operation binding's
+  output port it is declared. On a function's output port it is never authored:
+  the kernel derives it as the highest class among the values the execution
+  received, so code cannot launder a value into a lower class.
 
-An input without a semantic term is not a composable public port. An output
-without a term remains observable but becomes an UncomposableOutput at the
-automatic graph boundary.
+An input without a semantic term is not a port. An output without a term remains
+observable but becomes an UncomposableOutput and feeds no edge.
 
 ### Identity
 
@@ -268,14 +275,13 @@ value
 
 ### Identity evidence
 
-Substitution: equal owning contract revision, port identity, direction, schema,
-term, cardinality, authority and disclosure facts are interchangeable.
-Continuity: a port has no identity outside its immutable contract revision;
-changing it creates a new contract revision.
+Substitution: equal owner, port identity, direction, schema, term, cardinality
+and disclosure facts are interchangeable. Continuity: a port has no identity
+outside its immutable owner; changing it creates a new version of that owner.
 
 ### Source of truth
 
-The accepted immutable capability-contract revision.
+The immutable contract version, binding version or flow version that owns it.
 
 ### Lifecycle candidate
 
@@ -283,8 +289,8 @@ No independent lifecycle.
 
 ### Persistence candidate
 
-Embedded in capability-contract revisions and copied by exact reference into
-flow preflight and run evidence.
+Embedded in its owner and cited by exact reference in flow proofs and node
+executions.
 
 ### Open questions
 
@@ -302,10 +308,11 @@ Candidate fields:
 - `relation_id`: stable namespaced identity;
 - `source_term_id`;
 - `target_term_id`;
-- `status`: `draft`, `active` or `retired`;
+- `status`: `active` or `retired`;
 - `current_revision_id`.
 
-The relation is explicit evidence. Sharing an axis or primitive type does not
+A relation that is only proposed is a VocabularyProposal (M45) and is not in
+this registry. The relation is explicit evidence. Sharing an axis or primitive type does not
 create it.
 
 ### Identity
@@ -321,11 +328,14 @@ changes.
 
 ### Source of truth
 
-The Cabinet Flow semantic registry accepted through human/release governance.
+The kernel's semantic registry. An entry exists only by installation seed or by
+the owner's acceptance of a VocabularyProposal (M45).
 
 ### Lifecycle candidate
 
-`draft -> active -> retired`. Reactivation policy belongs to State 2.
+`active -> retired`. Retirement is final; the same claim returns only through a
+new accepted proposal. A flow version already proven on a relation revision
+keeps that proof.
 
 ### Persistence candidate
 
@@ -353,8 +363,9 @@ Candidate fields:
 - `relation_kind`: `exact_identity`, `lossless_projection`,
   `role_binding`, `explicit_conversion` or `resolution`;
 - `loss_class`: `none` or one named accepted loss classification;
-- `required_capability_contract_ref` when execution is required;
-- `required_authority_refs`;
+- `required_slot_ref` when execution is required: the slot whose function
+  performs the conversion or resolution, which then appears as a node on the
+  path and never as a bare edge;
 - `issued_at`;
 - `accepted_by`.
 
@@ -368,8 +379,7 @@ value
 ### Identity evidence
 
 Substitution: equal relation identity, source and target revisions, shapes,
-kind, loss, required capability, authority and issuance facts are
-interchangeable. Continuity: any change issues another immutable revision.
+kind, loss, required slot and issuance facts are interchangeable. Continuity: any change issues another immutable revision.
 
 ### Source of truth
 
@@ -389,11 +399,19 @@ None.
 
 ## State 1 document map
 
-- `01_models_semantic_values.md` defines the seven initial typed value
+- `01_models_semantic_values.md` — M08–M15: the seven initial typed value
   families and the uncomposable-output boundary.
-
-Later companion files will close the remaining State 0 runtime concepts without
-renumbering or redefining the models above.
+- `01_models_authority.md` — M16–M18: the owner, agent delegation and the actor
+  reference.
+- `01_models_slots.md` — M19–M27: slot, contract version, resource bounds,
+  sandbox runtime, implementation, trial case, trial execution, admission
+  verdict and slot activation.
+- `01_models_flows.md` — M28–M37: manifest operation reference, operation
+  binding and version, flow, flow version, node, edge, constant, proof and
+  flow activation.
+- `01_models_runs.md` — M38–M45: stored value, service target, run, node
+  execution, effect approval, standing grant, outcome reconciliation and
+  vocabulary proposal.
 
 ## State 1 evidence
 
@@ -403,35 +421,37 @@ This slice preserves and refines:
   by `experiments/cabinet-vault/box_language_v0.yaml`;
 - Cabinet Backend evidence that amount, currency and monetary basis are jointly
   required for monetary comparison;
-- the State 0 distinction between governed meaning and changeable capability
+- the State 0 distinction between governed meaning and replaceable function
   implementation;
 - the State 0 rule that unproven composition cannot fall back to model guessing
   or generated code.
 
-## Remaining State 1 work
+## Deliberately absent models
 
-State 1 is not complete. Later State 1 slices must close identity and data shape
-for at least:
+The superseded State 0 required models that the kernel does not have. Their
+absence is a decision, not a gap:
 
-- principal, actor provenance and delegated authority references;
-- operational Cards and immutable Card revisions;
-- original source, held-byte identity, custody and ingress observations;
-- slot contract, implementation version, capability and capability binding;
-- flow definition/version, node, run and bounded trace evidence;
-- Box definition, CapabilityInvocation and HandoffPackage;
-- effect intent, approval, application and result evidence;
-- sandbox/admission observations and activation history;
-- integration configuration identity and release-qualification evidence.
-
-Those slices must reuse this semantic registry rather than introduce another
-field-matching vocabulary.
+- Card, Card revision, source custody and ingress observation are facts of the
+  microservices that own them (D0-042); the kernel holds a SourceReference.
+- Capability, capability binding, CapabilityInvocation, HandoffPackage and Box
+  are replaced by the two node kinds of D0-034 and the operation binding of
+  D0-035. Transfer between microservices is outside the kernel.
+- Effect intent does not exist: a function produces data and an operation node
+  performs the effect (D0-034).
+- Configuration, service handle, import list and secret have no model because a
+  function has none of them.
+- Roles, users and invitations have no model because there is one trusted
+  entrance (D0-046).
 
 ## State 1 readiness assessment
 
-This initial registry slice closes identity for its models. The overall State 1
-gate remains intentionally open until the companion semantic values and
-remaining runtime models are defined, indexed and linted with zero identity
-errors.
+Models M01 through M45 have explicit identity, substitution and continuity
+evidence, source of truth, lifecycle and persistence candidates, and no open
+question. State 2 may be authored.
 
-State 2 rules, modules and contracts must not be authored as if this partial
-model set were a complete design.
+State 2 must state as rules, among others, what the models only make possible:
+the exact edge-proof procedure; derivation of an output's disclosure class; the
+admission procedure and what happens to a serving implementation when a captured
+trial case shows it failing; the approval, grant and replay procedure of an
+operation node; resumption after restart; retention of stored values; and the
+suspension of bindings on manifest change.

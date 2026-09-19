@@ -2,852 +2,382 @@
 
 ## Status
 
-Accepted and corrected on 2026-09-06 after product-design discussion and
-closure decisions D0-001 through D0-027.
+Accepted on 2026-09-19. The owner states product behavior and business logic;
+the technical shape is decided by the designing agent and recorded here with its
+reason. On that basis the owner confirmed the behavior of this document in plain
+terms: the agent reads and computes on its own, every change of data waits for
+the owner's approval, routine changes may receive a standing approval, work
+waits truthfully when a service is unreachable, and there is one trusted
+entrance (D0-046).
 
-The correction separates Cabinet Flow's product purpose from its managed
-self-extension mechanism. Issue
-[#35](https://github.com/MigelSmirnov/spec-workbench/issues/35) is design input
-and evidence, not a substitute for this canonical artifact.
+This text replaces the State 0 of 2026-09-06 and its correction of 2026-09-15,
+kept unchanged in `archive/00_product_20260915_superseded.md`. That document
+described three things at once — a kernel, a construction application and an
+agent environment — and after the correction it held two incompatible execution
+architectures. The owner restated the product on 2026-09-19:
 
-Models, modules, storage tables, Python contracts, transport DTOs and
-implementation algorithms are intentionally deferred to their owning states.
+> We are building a system that manages microservices on the dataflow
+> philosophy, where the unit is a pluggable function. We need a kernel in which
+> an agent can quickly create tools, check them in sandboxes and apply them to
+> the microservices. We cannot build every needed process in advance: today it
+> is a photo upload, tomorrow third-party data has to be taken, processed by the
+> platform and analysed.
 
-## Accepted correction 2026-09-15 — the operating environment is the platform agent environment
+The owner also fixed the method: no reduced first version. A deferred part
+becomes a stub, and a stub costs tens of Factory runs. Every part named here is
+designed to closure before generation.
 
-The owner corrected the execution environment of Cabinet Flow after the live
-producer work of 2026-09-14. The product purpose above is unchanged; what
-changes is where the agent runs and how it acquires abilities.
-
-The original text assumed one authorized online agent behind Cabinet Flow's
-own MCP, reached from a mobile chat. That assumption met a technical limit: the
-mobile client is a Custom GPT, whose tools are its published schema. A tool
-change there is a schema release, so the agent cannot compose or author
-capabilities on the fly, and the self-extension mechanism loses its meaning in
-that environment.
-
-### D0-028 — Environment
-
-The operating environment of Cabinet Flow is the platform agent environment:
-the machine that carries the platform manifest (`platform/manifest/` of the
-Factory), the declared MCP servers, the operator entry points, the
-repositories, the receipts and the access to the trusted stores. Any agent
-that can drive that environment is a Cabinet Flow agent. The environment is
-indifferent to the agent provider: nothing the environment must know may live
-only in one provider's memory or configuration.
-
-### D0-029 — Two agents, one capability declaration
-
-The mobile chat agent (Custom GPT, online, used in the field) and the machine
-agent are two agents of the same platform. A capability is declared once in
-the platform manifest and exposed through channels: `http_api` for the schema
-client, `mcp` and `operator` for the machine agent. The mobile agent is a full
-conversational client of the accepted capabilities, not merely an intake; it
-has no temporary-tool ladder, because for it a new tool is a schema release.
-
-### D0-030 — Managed capability evolution is a graduation ladder
-
-Managed function authoring keeps its purpose and loses its sandbox: the
-trusted deterministic boundary is the sandbox. An agent-authored tool climbs
-one ladder, or expires with the session:
-
-1. a temporary tool in the agent's scratch space, verified live;
-2. a checked-in operator entry point with recorded provenance, idempotent
-   effects and a receipt for every durable change;
-3. a declared capability of the platform manifest, held by the surface gate;
-4. a product behavior authored in the Spec Workbench and produced by the
-   Factory — only when the behavior becomes part of a product entity.
-
-A tool at any rung writes to a trusted store only through that store's
-declared operations (the journal writer under its lock, the plugin's
-protected operator operations, the local Backend's API).
-
-### D0-031 — No environment store; boxes are the transfer unit
-
-The environment owns no database. Every source of truth stays in the store of
-the service that owns its lifecycle (the VPS journal, the plugin's PostgreSQL
-and custody, the local Backend archive, PresuPro, the portal). Data in flight
-between services travels as a Box: an immutable, content-addressed package
-built by one producer from one source revision, with a manifest naming the
-producer and its version, the source revision, every file by hash, size and
-media type, and the consumer contract it is meant for. Equal inputs produce
-the same Box, so a repeated transfer is safe by construction. The relay is a
-content-addressed directory of Boxes on the VPS with a local mirror; a
-consumer verifies the hashes and records the accepted Box identity in its own
-receipt. The canonical input snapshot of the plugin, the estimator Capability
-Box and the local Backend package already have this shape; they converge on
-one manifest format without changing the accepted Invoice transfer wire.
-
-### D0-032 — Knowledge lives in the environment
-
-Everything the environment must know is kept in neutral form: capabilities in
-the manifest, tools under the projects' `deploy/` and `tools/`, work history
-as receipts, decisions in the Workbench, working instructions in `AGENTS.md`
-and the documentation. A provider's memory is a cache over that record, never
-its only copy. The test is operational: another agent with the same MCP
-servers and access must be able to repeat a day's work from the manifest and
-the documents alone.
-
-### Superseded statements
-
-- "MCP ownership": Cabinet Flow no longer owns a primary online MCP of its
-  own; the machine agent uses the platform's MCP servers and operator entry
-  points, the mobile agent the published schema.
-- "Agent context" and "Non-bypassable execution boundary": the bounded
-  context and the non-bypassable boundary stay as principles; the execution
-  substrate is the platform environment and the trusted stores, not a Cabinet
-  Flow sandbox runtime.
-- "Local integration and offline behavior": the bridge to the local Backend
-  remains the deployed `cabinet-web-backend` plugin with its accepted
-  transfer contract; HandoffPackage generalizes into the Box of D0-031.
-- "First-release proof": the working-release qualification against the
-  GPT/OpenAI tunnel applies to the mobile agent's channel only.
+Models, modules, storage layout, Python contracts, transport DTOs and algorithms
+belong to their owning states. Every product decision belongs here.
 
 ## Product statement
 
-Cabinet Flow is a conversational operating environment for construction work.
-
-Its primary purpose is to help the human owner bring order to fragmented
-incoming work: text, invoice photos, project facts, supplier and contractor
-information, estimates, plans, payments, local-system results and other
-construction evidence.
-
-Through a conversation with an authorized online agent, the user can provide
-unstructured information or ask for an operational result. The agent identifies
-the relevant Cabinet context, uses bounded capabilities, composes them through
-validated data flows, presents uncertainty and protected effects for review,
-and records accepted structured results with their provenance.
-
-Cabinet Flow is not primarily a pipeline for creating functions. Managed
-function authoring is the way the operating environment can acquire a missing
-ability without turning into unrestricted agent-written application code.
-
-Cabinet Flow is a successor architecture for the current `Cabinet_web`
-application. It is a new implementation, not an in-place rewrite and not a new
-name for either existing backend component.
-
-## Architectural motivation
-
-Construction operations combine a relatively stable set of identities,
-evidence and protected effects with a continually changing set of small working
-tasks.
-
-A user may need to compare estimate fields today, associate invoices with
-suppliers tomorrow, then check source-line completeness, prepare material data
-for a work stage, reconcile planned and actual costs or prepare a durable
-handoff to a capability published by a local estimator Box.
-
-Implementing every such need as a new conventional application module imposes
-a disproportionate cost. The small piece of business logic also requires new
-integration structure, dependency wiring, testing context, deployment and
-coordination with the rest of the application. Repeating that process makes
-Cabinet slow to adapt to ordinary operational change.
-
-Cabinet Flow therefore separates two kinds of behavior.
-
-Stable and security-critical behavior remains in the trusted deterministic
-system boundary. This includes durable identity, provenance, storage and
-transaction integrity, authorization, source custody, capability registration,
-version selection, sandbox isolation, boundary validation, protected-effect
-application and execution evidence.
-
-Changeable operational behavior may be represented by small versioned
-capabilities with explicit contracts. Examples include comparing accepted
-estimate fields, matching an Invoice to a supplier candidate, checking data
-completeness, deriving a bounded analysis, preparing planning input or
-preparing a bounded cross-boundary handoff.
-
-A declarative data flow composes these capabilities without giving one
-implementation access to another implementation's internals. The flow makes
-ordering, validated data boundaries, selected versions, failures and results
-observable.
-
-The architecture is intended to reduce the cost and risk of changing
-operational behavior, not merely to make code generation easier. Agent-assisted
-authoring is useful because the required operations change; it remains
-controlled because generated behavior is untrusted.
-
-The agent must first discover and compose existing accepted capabilities. A new
-capability is justified only when the requested operational result exposes a
-real bounded behavior gap. A new wording, one-off data value or trivial private
-helper is not by itself a new capability.
-
-This separation preserves deep deterministic ownership for stable rules while
-allowing small operational transformations to be tested, versioned, activated,
-reused, replaced and rolled back independently.
-
-## Construction operations in scope
-
-Cabinet Flow supports the everyday operational work of a small construction
-business. Its principal work areas are:
-
-### Suppliers and contractors
-
-- preserve and find supplier Cards;
-- preserve and find contractor or performer Cards;
-- organize identities, contact information, offered work or materials, service
-  area and relevant operational history;
-- connect incoming invoices, estimates, purchases, work and project evidence to
-  the correct party without treating a name string as durable identity.
-
-### Projects and construction objects
-
-- preserve Cards for projects and physical work objects;
-- gather project context that is otherwise scattered across messages,
-  documents, invoices, plans and local applications;
-- associate operational facts with the correct project or object;
-- expose a coherent current view without erasing provenance or unresolved
-  conflicts.
-
-### Invoices and source evidence
-
-- accept invoice facts from user text and recognized photos;
-- preserve original-source identity separately from extracted facts;
-- create and revise structured Invoice information;
-- preserve commercial line identity rather than replacing source lines with a
-  synthetic aggregate;
-- track project/object association, supplier, totals, payments, status,
-  provenance and source custody truthfully;
-- distinguish a structured result from custody of the original bytes and from
-  local archival acceptance.
-
-### Operational analysis
-
-- answer questions across accepted Cabinet data;
-- detect missing, inconsistent, duplicated or unassigned information;
-- calculate and compare operational totals where the required facts exist;
-- surface uncertainty, stale information and provenance rather than silently
-  inventing values;
-- produce reviewable analysis that can become input to a later flow without
-  becoming an untraceable mutation.
-
-### Work-stage planning
-
-- help plan construction stages from current project facts;
-- connect planned stages with work, materials, contractors, invoices, estimates
-  and dependencies;
-- revise plans as new evidence arrives while preserving accepted identity and
-  history;
-- distinguish an analytical proposal from an authorized persistent change.
-
-### Local estimates
-
-- prepare bounded, structured inputs for the local estimating workflow;
-- transfer the exact source-derived and project-related facts required by the
-  estimator;
-- receive local estimate results and acknowledgements without making Cabinet
-  Flow the owner of local estimator internals;
-- keep server-side preparation, transport delivery and local durable acceptance
-  as separate observable facts.
-
-
-
-## Primary user outcome
-
-The normal user does not need to design a flow or request a new function.
-
-The human owner brings an operational question or incoming evidence to the
-conversation. Within delegated authority, the online agent:
-
-1. determines the user's operational intent;
-2. identifies the minimum relevant Cabinet facts and source identities;
-3. selects existing accepted capabilities;
-4. composes or selects a versioned flow when more than one operation is needed;
-5. validates data at every capability boundary;
-6. returns a useful structured result, analysis, plan or Card proposal and,
-   when work must cross a durable or offline boundary, prepares a reviewable
-   `HandoffPackage` addressed to a capability published by a Box;
-7. shows uncertainty, failures and protected effect previews explicitly;
-8. applies persistent or external effects only with the required authority;
-9. records enough provenance and execution evidence for the result to be
-   understood and revised.
-
-The primary product value is an agent that turns incoming construction chaos
-into coherent, traceable operational state and advances real work.
-
-## Managed capability evolution
-
-When existing accepted capabilities cannot produce the requested operational
-outcome, the agent may enter a distinct managed capability-evolution mode.
-
-In this mode the authorized agent can:
-
-- describe the missing bounded behavior;
-- author a small implementation and declare typed input, output, context, data
-  access and effects;
-- register an immutable draft implementation against a stable versioned
-  behavioral contract;
-- execute and inspect the exact version in a sandbox;
-- receive explicit admission and effect-policy outcomes;
-- activate an accepted version;
-- compose it into a versioned declarative flow;
-- observe selected versions, validation, trace, failures, effect intents and
-  results;
-- revise, deactivate or roll back the capability without erasing earlier
-  accepted versions.
-
-Capability evolution serves the construction operation. It is not the default
-answer to every user request, and absence of a capability is reported
-explicitly rather than hidden behind improvised unregistered code.
-
-### Baseline capabilities
-
-The first release does not bootstrap itself by asking the online agent to author
-all capabilities at first startup.
-
-A minimum baseline is supplied by the implementation and explicit migration of
-accepted legacy behavior. Each baseline capability is reviewed and accepted by
-the human owner or release process and records its provider and provenance.
-Trusted built-in behavior may publish a capability without pretending to be an
-agent-authored slot implementation; that distinction remains visible.
-
-The operational proof uses this accepted baseline. Human or release acceptance
-of a baseline capability does not exempt it from release qualification: the
-exact baseline capability versions exercised by the operational proof must pass
-the applicable real-boundary tests in the working-implementation criterion.
-
-The separate capability-evolution proof demonstrates how the agent adds a new
-capability after a real bounded behavior gap is found.
-
-## Existing-system context
-
-Three existing systems remain distinct:
-
-1. `Cabinet_web` is the current upper GitHub-backed Cabinet application and
-   remains working evidence and a temporary legacy provider while behavior is
-   migrated capability by capability.
-2. `cabinet-web-backend` is the existing VPS/server component. It remains a
-   narrow compatibility and transport bridge rather than becoming the product
-   owner of Cabinet Flow.
-3. `Cabinet Backend` is the independent local archival application. It opens
-   bounded synchronization sessions and remains authoritative for local
-   archival acceptance and local effects.
-
-The AI Code Factory and its DSL remain compile-time infrastructure. Their
-`models`, rules, contracts and notes retain compiler meaning. Runtime
-functions, execution context, flows, Boxes and managed capabilities belong to
-Cabinet Flow unless a later explicit product decision changes that boundary.
-
-## Authority
-
-The first release has one human owner.
-
-Online, server-side and local agents act only through delegated authority. They
-may organize information, propose decisions, author operations, execute
-permitted flows and return evidence, but they cannot:
-
-- expand their own permissions;
-- grant themselves additional data or effects;
-- approve their own protected effects;
-- replace a required human decision with another agent's assertion;
-- use another actor's credential or grant.
-
-Registration, activation and invocation authority are separate. Activating a
-version does not authorize every protected effect during invocation.
-
-Human and machine identities remain distinguishable in execution and effect
-evidence.
-
-## Managed activation
-
-Every agent-authored implementation is initially a managed draft.
-
-Automatic activation is permitted only when sandbox evidence proves bounded
-computation with schema-conforming input and output and no persistent mutation,
-external communication, local-machine action, secret access, system command,
-privilege expansion or undeclared effect.
-
-Any uncertainty or protected effect requires explicit human approval.
-
-Activation applies to one immutable implementation version and one
-slot-contract version. Changed code creates a new draft. Expanded data access,
-effects, dependencies, scope or resource requirements cannot inherit the old
-version's authority.
-
-The author's declaration is evidence but is not sufficient proof by itself.
-
-## Slot, implementation, capability and flow boundary
-
-The following terms are distinct.
-
-A **slot contract** is a stable, named and versioned contract for replaceable
-behavior. It declares typed input and output schemas, minimum context, effects,
-data-access requirements, relevant resource expectations and the validation
-boundary visible to composition.
-
-An **implementation version** is one immutable artifact that realizes one slot
-contract version. It is identified by the digest of its accepted artifact.
-Changing its content creates a new version; changing the contract requires
-explicit compatibility or migration handling.
-
-A **capability** is the registered, invocable product operation visible to an
-agent or flow. A capability may bind a slot contract to one admitted
-implementation version, or it may be published by trusted built-in behavior
-whose provider and provenance are explicit. Registration and activation decide
-what implementation may provide it; invocation authority separately decides
-whether a particular actor may call it with particular data and effects.
-
-A **flow** is a versioned declarative graph of capability invocations. It owns
-composition and pins the exact capability bindings, contracts and
-implementation versions required for reproducible execution.
-
-The resulting relationship is:
+Cabinet Flow is a dataflow kernel that manages a platform of microservices.
+
+Its unit of behavior is a pluggable function: a small, pure, versioned
+implementation of a declared contract. An agent authors such functions, the
+kernel proves them in a sandbox, admits them, and composes them with the
+declared operations of the platform's microservices into flows. The kernel
+executes flows, validates data on every edge, applies effects only through the
+microservices' own declared operations, and records an immutable trace.
+
+The product exists because the platform's processes cannot be enumerated in
+advance. The stable part of the platform lives in the microservices. The
+changing part lives in functions and flows, and changing it must not require a
+new application, a new module or a redeployment of any microservice.
+
+Cabinet Flow manages behavior, not code. To change what the platform does, a
+function implementation is replaced by hash or a flow version is replaced; the
+rest of the system is not read, edited or restarted.
+
+## Origin
+
+The design continues `AI-Native Protocol v1` (2026-04-03,
+`jestor_VBC/data/protocol_v1`) and its sketch implementation in the same
+repository: a slot is a contract and a hash is an implementation; the agent
+reads one slot, not the system; output is validated between nodes; a trace is
+data, not a log; replacement is by hash; only a human changes the orchestrator.
+
+The sketch also shows what failed. Every rule it kept only by convention was not
+kept: each function received the whole context including secrets, the hash was
+copied from a file rather than derived from the code, imports were unchecked,
+startup validation only warned, a proposal was never an activation, and the
+graph was the orchestrator's code. Cabinet Flow therefore makes each of those
+rules structural: the forbidden thing is impossible, not prohibited.
+
+## Decisions
+
+### D0-033 — The product is the kernel
+
+Cabinet Flow is the kernel described here and nothing else. Construction work,
+invoices, estimates, the portal and the mobile chat are the first application of
+the kernel, recorded in the last section. No construction concept is a kernel
+concept.
+
+### D0-034 — Two node kinds, and functions are always pure
+
+A flow has exactly two kinds of node.
+
+A **function node** runs one admitted implementation of one slot contract. A
+function is pure: it receives its declared input and returns its declared
+output. It has no network, no filesystem beyond its input, no clock, no randomness source, no secret and no handle to any
+service. It cannot perform or request an effect.
+
+An **operation node** invokes one declared operation of one microservice. The
+kernel performs the invocation. Reading from a service, writing to a service and
+calling an external provider such as a language model are all operation nodes.
+
+Consequently an effect is never hidden inside code. It is always a visible node
+of the flow whose input arrived over a validated edge, and everything an agent
+writes is a pure transformation. This replaces the "effect intent" of the
+superseded text: a function does not describe an effect, it produces the data
+that an operation node consumes.
+
+### D0-035 — Microservices are known only through the platform manifest
+
+A microservice exists for the kernel only as a record of the platform manifest
+(`platform/manifest/` of the Factory): its instances, its operations, and for
+every operation the channel, the effect class, the idempotency key, the replay
+behavior and the preconditions. The kernel reaches a service by no other path
+and invokes no undeclared operation.
+
+The kernel is itself one service of that manifest. It owns no operation of
+another service and never writes to another service's store.
+
+The manifest does not type an operation's data. An **operation binding** is the
+kernel's immutable, versioned declaration that gives one exact manifest
+operation its typed input and output ports under D0-038. An agent may propose a
+binding; only the human owner accepts one, because a wrong binding aims an
+effect at the wrong data. An operation without an accepted binding is invocable
+by nobody, and a binding whose manifest operation has changed or disappeared is
+refused rather than guessed.
+
+### D0-036 — Slot, implementation, activation
+
+A **slot contract** is an immutable, versioned declaration: typed input ports,
+typed output ports and resource bounds. A function has no configuration: a
+constant it needs, such as a tax rate, is a typed literal pinned in the flow
+version and delivered over an edge like any other input. A change of a contract
+is another contract version. A flow pins contract versions, so an existing flow
+never changes meaning under a new version.
+
+An **implementation** is immutable code realizing one contract version. Its
+identity is the digest of its content, computed by the kernel. No identity is
+assigned, copied or declared by the author.
+
+An **activation** binds one contract version to one admitted implementation.
+Earlier implementations are never deleted; rollback is another activation. A
+flow run pins the exact implementation it used.
+
+The agent may create new slot contracts and new implementations. It cannot
+alter an issued contract version or an admitted implementation.
+
+### D0-037 — Every function execution is sandboxed, trial and real alike
+
+Agent-authored code is untrusted forever. Each execution of a function node —
+during trial and during a real flow run — happens in a disposable isolated
+environment that contains only the declared input and one exact accepted
+language runtime. It has bounded time, memory, output size and process count,
+and it ends with the destruction of the environment and every
+descendant process.
+
+Any attempt to reach what is not declared, a timeout, resource exhaustion, a
+failed cleanup or an output that violates the contract is an observable failure
+and never a success.
+
+**Trial** executes one exact implementation against trial inputs that carry the
+contract's port types. Trial evidence records the implementation identity, the
+input and output digests, the validation verdicts, every denied attempt and the
+resources used.
+
+Each contract version has a trial corpus that only grows. A real execution that
+failed can be captured into it, so a slot that was repaired stays repaired: every
+later implementation must pass every active case.
+
+**Admission** is a deterministic verdict over trial evidence for the whole
+active corpus. An empty corpus refuses. Because a function
+is pure by construction, admission needs no human: conforming evidence admits
+the implementation, anything else refuses it with the reason. Human authority is
+spent where effects are, in D0-040.
+
+### D0-038 — Edges are proven by a governed semantic vocabulary
+
+Every port carries a value schema and an exact semantic term. An edge from an
+output port to an input port is valid only when both carry the same accepted
+term revision with a compatible shape, or when one accepted semantic relation
+connects the two terms. Equal primitive types, similar field names and an
+agent's judgement are not evidence.
+
+The vocabulary — axes, terms and relations — is governed by the human owner. An
+agent may propose an addition; a proposal is not composable until accepted.
+
+An output without an accepted term is valid and may be returned to the caller,
+and cannot feed another node.
+
+### D0-039 — A flow is versioned data, proven before it runs
+
+A flow is an immutable, versioned, acyclic graph of function nodes and operation
+nodes with typed edges. It has three structural forms and no others: an edge, a
+map of one node over a collection-valued edge, and a guard that enables an edge
+on a declared closed value of an output port. It has no loops, no embedded code
+and no expressions.
+
+An agent composes a flow. The kernel proves it before it can run: every edge
+satisfies D0-038, every node pins an existing contract or operation version,
+the graph is acyclic, and every required input is supplied. An unproven flow
+does not run partially.
+
+Nodes never call each other. Data moves only over edges, and a value is
+validated against the source contract before it leaves a node and against the
+target contract before it enters one. Input is validated as strictly as output.
+
+### D0-040 — Authority lives on operation nodes
+
+Every manifest operation has an effect class: `read`, `draft-write`,
+`state-transition`, `external-effect` or `destructive`.
+
+A flow whose operation nodes are all `read` is activated by the kernel once
+proven, and any authorized agent may run it.
+
+A flow containing any other class is activated only by the human owner, who
+approves that exact flow version. At run time each `state-transition`,
+`external-effect` and `destructive` node stops for the owner's approval of a
+preview showing the exact operation, target and input, unless the owner has
+granted that exact flow version a standing approval for that node. A grant
+never transfers to another flow version, and a `destructive` node can never be
+granted: it always asks. The kernel performs the effect only on the exact input
+the owner saw.
+
+The kernel honours the declared replay behavior. It supplies the declared
+idempotency key, and it never re-invokes an operation declared `duplicates`
+within one run or on recovery without a fresh approval. An outcome it cannot
+determine is recorded as unknown and reconciled through the service's declared
+read operations, never assumed.
+
+An agent cannot approve its own flow, extend its own authority, or act under
+another actor's identity. Human and agent identities stay distinguishable in
+every record.
+
+### D0-041 — The trace is immutable data
+
+Every node execution produces one immutable trace record: the run, the node, the
+pinned contract, implementation or operation version, input and output by
+digest and bounded reference, validation verdicts, status, failure, resources
+and time. A status is never successful by default; it becomes successful only
+after output validation.
+
+A run pins every version it used and is reproducible from its trace for its
+function nodes. A failed node stops its dependants; independent branches finish.
+A run rests in `awaiting_approval`, or in `pending` when a required service
+instance is unreachable or an effect's outcome is undetermined, and ends
+`succeeded`, `failed`, `refused` or, by the owner's decision, `cancelled`.
+Nothing is reported complete that did not complete, and no wait ends by
+timeout.
+
+Traces carry no secret and no unbounded payload.
+
+### D0-042 — The kernel owns an operational store and no business fact
+
+The kernel durably stores its own records only: the vocabulary, slot contracts,
+implementations, trial evidence, admissions, activations, flow versions,
+approvals and grants, runs and traces, and the bounded content-addressed values
+that edges carry between nodes under a retention policy.
+
+It stores no business fact. Every business fact lives in the microservice that
+owns its lifecycle, and the kernel holds at most a digest and a reference. This
+narrows D0-031 of the superseded correction, which denied the environment any
+store.
+
+### D0-043 — Any agent, a fixed kernel surface
+
+The kernel is indifferent to the agent's provider (D0-028 stands). It exposes
+one fixed set of named, typed operations over two channels: `mcp` for an agent
+that can author, and `http_api` for a schema client such as the mobile chat.
+
+The surface is fixed and generic: inspect the vocabulary, slots, flows and runs;
+author a contract, an implementation or a flow; request trial; run a flow;
+read a trace; and, for the owner, approve and grant. A new function or flow
+therefore never changes the surface, and a schema client can run a flow authored
+a minute earlier without a schema release. This is what removes the limit that
+produced the correction of 2026-09-15.
+
+The surface is not a database proxy, a filesystem, a shell or a code-execution
+endpoint outside the sandbox.
+
+### D0-044 — The agent sees one slot
+
+For authoring or repair the agent receives one slot contract, its current
+implementation, and the recent traces and trial evidence of that slot. For
+composition it receives contracts, operation declarations and the vocabulary,
+not implementation bodies. It never receives the kernel's store, another
+actor's data or a service credential.
+
+The evolution loop is the protocol's, closed by the kernel:
 
 ```text
-slot contract
-→ immutable implementation version
-→ admitted capability binding
-→ capability invocation in a flow
+failure or gap → trace → agent reads one slot → new implementation
+→ trial in sandbox → admission → activation by new hash → flow runs
 ```
 
-Not every helper function is a slot, and not every capability needs an
-agent-authored implementation. Behavior becomes a slot only when it is
-meaningful to observe, validate, replace, test and evolve independently.
-
-Implementations do not directly call neighboring implementations. Trusted
-behavior validates structural and declared semantic constraints before one
-capability invocation's output can become another's input.
-
-A run pins the exact flow, capability binding, contract and implementation
-versions. Missing, invalid or semantically unacceptable output is an explicit
-failure and is not forwarded as successful data.
-
-Execution data and execution evidence are distinct. Traces record identities,
-versions, order, statuses, validation, safe references or digests and effect
-intents; they do not copy secrets, unrestricted facts or source bytes merely
-for observability.
-
-State 1 must model at least the distinct concepts of slot contract,
-implementation version, capability, capability binding, flow and flow node.
-
-## Box, invocation and handoff boundary
-
-A **Capability Box** is a self-described, bounded semantic and trust surface
-through which an agent or application publishes work that another authorized
-participant may invoke.
-
-A Box declares the schemas and stable semantic identities it understands, the
-capabilities it offers, and the authority, disclosure, effect, audit and
-provenance rules at its boundary. The host enforces those declarations; a Box
-does not grant arbitrary filesystem, database, network or operation access.
-
-A **CapabilityInvocation** is a request to execute one exact capability binding
-inside an active Cabinet Flow runtime or flow run. It participates in execution
-validation, version pinning, effect evaluation and trace. Its execution evidence
-may be durable, but it is not a delivery queue item.
-
-A **HandoffPackage** is a durable, idempotent unit of work crossing a process,
-authority or offline boundary. It is addressed to a capability published by a
-particular Box and carries only the bounded input or references, stable
-identities, exact contract or schema references, provenance, correlation
-identity and delivery state required for that exchange.
-
-When Cabinet Flow sends work to the local side, it creates a HandoffPackage.
-Acceptance of that package does not itself mean that the capability ran. After
-acceptance, the receiving host may create its own CapabilityInvocation and
-report execution outcome separately from delivery acknowledgement.
-
-Cabinet Flow inherits the durable semantic principles demonstrated by
-`experiments/cabinet-vault` and `cabinet_box_language.v0`:
-
-- composition is based on declared semantic identity, exact compatible types
-  and required authority, not on similar field names;
-- derivable projections and plumbing may be generated deterministically;
-- unresolved composition fails closed without model or generated-code fallback;
-- the agent may choose a composition, but trusted behavior proves, lowers and
-  enforces it.
-
-The current Cabinet Vault language remains exploratory evidence and a
-compatibility baseline, not an automatically normative wire syntax for Cabinet
-Flow. State 1 must decide what is adopted unchanged, versioned or replaced while
-preserving these semantic and security properties.
-
-State 1 must model Box definition, CapabilityInvocation and HandoffPackage as
-separate concepts and define the transition from accepted handoff to local
-invocation. Their exact fields and delivery protocol belong to later design
-states.
-
-## Agent context
-
-Context is bounded by task and operating mode.
-
-For ordinary construction work, the agent receives the user's request, the
-public descriptions of relevant accepted capabilities and only the authorized
-Cabinet facts and sources required for that task. It does not receive every
-implementation body or the whole Cabinet dataset by default.
-
-For capability authoring or revision, the normal context contains the selected
-contract, the relevant current implementation, relevant validation failures and
-execution evidence, and the explicitly available implementation environment.
-
-For flow composition, the agent may receive the versioned graph and public slot
-contracts without receiving every implementation body.
-
-For execution, a slot receives only the minimum authorized immutable input
-snapshot and opaque bounded capabilities declared by its contract.
-
-The agent cannot replace, disable or route around trusted scheduling, context
-selection, version pinning, validation, isolation, effect evaluation or
-evidence capture.
-
-## Non-bypassable execution boundary
-
-All agent-authored code remains untrusted in sandbox and real execution.
-
-Every execution is enclosed by a mandatory trusted boundary. Agent-authored
-code never receives:
-
-- a production database connection or storage credential;
-- unrestricted network or filesystem access;
-- direct access to the long-lived Cabinet Flow process;
-- authority to apply persistent, external, secret-bearing, system or local
-  effects;
-- another actor's identity or grants.
-
-Code returns validated outputs and explicit effect intents. Only trusted
-Cabinet Flow behavior may revalidate current authority and apply an accepted
-effect.
-
-Each execution has bounded resources and a disposable lifetime. Completion
-includes termination of the environment and descendant processes so leaked
-memory, processes, connections, files or caches cannot remain owned by the
-long-lived service.
-
-Timeout, resource exhaustion, failed cleanup, schema violation and unauthorized
-effects are observable failures, never successful execution.
-
-A successful sandbox result is evidence for admission, not a production
-transaction. Real execution starts again with current inputs and authority; a
-sandbox effect preview cannot later be committed.
-
-## Original-photo ingress
-
-The first release has one supported ingress path for original invoice-photo
-bytes: a dedicated Syncthing Inbox.
-
-Syncthing is transport only. A synchronized path, filename, device timestamp,
-rename or deletion is not a source identity, processing decision, business
-association or custody acknowledgement.
-
-Trusted Cabinet Flow behavior must:
-
-- accept only complete bounded files of an actually supported media type;
-- create immutable source identity, content digest, provenance and custody
-  state;
-- copy accepted original bytes outside the synchronized directory before
-  reporting them as held;
-- deduplicate repeated delivery by content identity;
-- leave new sources unassigned until an authorized flow links them;
-- expose an accepted image to the authorized online agent through Cabinet
-  Flow's own MCP;
-- keep server receipt and local archival acceptance as separate facts;
-- rediscover pending or accepted sources after restart without depending only
-  on Syncthing events.
-
-The online agent recognizes the source and proposes or applies authorized
-structured facts. It does not own original-byte custody. Flows and
-HandoffPackages carry source identity and bounded access capability, not a
-Syncthing path or repeated uncontrolled copies.
-
-Direct transfer of ChatGPT attachment bytes and a separate browser upload are
-not first-release ingress paths.
-
-## MCP ownership
-
-Cabinet Flow owns its online MCP boundary because the agent must inspect and
-organize Cabinet information, execute operational flows, create reviewable
-results and, when necessary, manage capabilities through the same primary
-conversation.
-
-The MCP currently deployed with `cabinet-web-backend` is legacy evidence and
-may temporarily proxy accepted operations during migration. It does not define
-the target architecture or own Cabinet Flow semantics.
-
-MCP operations are named, typed and bounded. The MCP boundary is not a generic
-database, filesystem, code-execution or backend proxy.
-
-## External access and trust boundaries
-
-The first release has three separate access planes. Successful access through
-one plane grants no access through another.
-
-### Operator administration
-
-The human operator administers the VPS through SSH. SSH identity and credentials
-belong only to deployment, diagnosis, backup and recovery. SSH is not an
-application login, agent credential or Cabinet capability, and no ordinary
-Cabinet operation is exposed through an administrative shell interface.
-
-### Browser access
-
-The current browser surface remains behind HTTPS and nginx Basic Auth. This
-Basic Auth is an accepted first-release login for the single-owner browser
-surface. It is not the identity of the online agent, an MCP credential or proof
-that a Cabinet data or effect operation is authorized.
-
-The browser and application service expose no reusable SSH, tunnel, bridge or
-local-machine credential. Browser reachability, a successful Basic Auth check,
-UI state or possession of an entity identifier grants no Cabinet capability by
-itself.
-
-### Online-agent access
-
-The online agent reaches Cabinet Flow MCP only through the existing Secure MCP
-Tunnel pattern proven on `cabinet-dev`. There is no anonymous or directly
-public MCP fallback.
-
-The tunnel establishes protected transport and a configured external identity.
-Cabinet Flow maps that identity to the first-release owner principal, then
-independently resolves and authorizes the exact MCP operation or capability,
-target data and requested effect. Tunnel reachability never grants unrestricted
-Cabinet access or permission to perform every effect.
-
-OpenAI or workspace action controls and approvals are additional outer
-safeguards. Cabinet Flow remains responsible for server-side validation,
-current authority, protected-effect policy, idempotency, bounded responses and
-audit evidence.
-
-The working `cabinet-dev` tunnel, edge and service arrangement may be reused as
-a deployment baseline after its configuration, dependencies and secret
-placement are inspected. Its credentials, legacy tool catalogue, Basic Auth
-assumptions and old product authorization rules are not copied as Cabinet Flow
-authority.
-
-SSH, browser Basic Auth, tunnel and bridge credentials are separate,
-independently revocable and non-substitutable. Reusable secrets remain in
-protected host configuration and are absent from source, prompts, Cards,
-HandoffPackages, logs, traces, errors and process arguments.
-
-## Local integration and offline behavior
-
-Cabinet Flow has one integration with `cabinet-web-backend` for exchange with
-the independent local Cabinet Backend.
-
-That bridge may own a dedicated machine identity, machine authentication,
-bounded transport, delivery acknowledgements, retry and unknown-outcome
-reconciliation required by the transport protocol.
-
-The bridge credential cannot act as the online owner, invoke unrelated Cabinet
-capabilities or become a local administrator. Cabinet Flow authorizes and
-integrity-binds each exact HandoffPackage before release to the bridge.
-
-The receiving Cabinet Backend independently authenticates its peer and
-validates the exact contract, identity, scope, replay/idempotency state and
-permitted local effect. Successful bridge delivery is not local authorization,
-durable acceptance or capability execution.
-
-The bridge does not own Slot, function, Flow, Box, execution-context, Card,
-source, activation, agent-authority or local-archive semantics. No credential,
-principal or grant is trusted transitively across the online, bridge and local
-boundaries.
-
-Cabinet Flow remains usable while the local Backend is offline:
-
-- server-owned sources, results and Boxes retain their truthful durable states;
-- work requiring a local consumer remains explicitly pending;
-- local-only effects stop at the integration boundary;
-- reconnection resumes or reconciles the exact exchange idempotently;
-- local absence never becomes false completion or loss of accepted input.
-
-The target direction is:
-
-```text
-online agent
-→ Cabinet Flow MCP
-→ Cabinet Flow
-→ cabinet-web-backend compatibility bridge
-→ local Cabinet Backend
-→ local agent or application
-```
-
-## First-release proof
-
-The first usable release does not require full legacy parity. It must pass two
-distinct proofs so the product purpose is not confused with its extension
-mechanism.
-
-### Working implementation criterion
-
-A Cabinet Flow implementation is called working only after its immutable release
-candidate passes repeatable integration tests against both real external
-boundaries:
-
-1. the configured GPT/OpenAI infrastructure invokes Cabinet Flow MCP through the
-   deployed Secure MCP Tunnel, establishes the expected owner principal and
-   receives a schema-conforming bounded result from the exact released
-   capability;
-2. while the local Cabinet Backend is online, Cabinet Flow sends an exact
-   HandoffPackage through the deployed `cabinet-web-backend` compatibility
-   bridge, the local side accepts that exact package, and Cabinet Flow observes
-   the corresponding bounded acknowledgement.
-
-A truthful pending, rejection or unknown result remains a correct operational
-outcome for its conditions, but it does not by itself qualify the successful
-lower integration path.
-
-This is an operator-triggered release-qualification gate, not a mandatory PR-CI
-job. It runs in the configured integration environment when the GPT/OpenAI
-connection, deployed bridge and local Cabinet Backend are deliberately
-available. The two external tests may run as separate stages against the same
-immutable release candidate and recorded configuration identities.
-
-Ordinary PR-CI runs deterministic unit, contract, sandbox, simulated integration
-and security-negative tests without requiring external credentials or an
-online local machine. Passing PR-CI is necessary but does not grant
-working-release status.
-
-The release-qualification tests use the deployed adapters, authentication paths
-and release configuration. A direct local MCP call, mocked tunnel, mocked
-bridge, manual database change or bypass endpoint does not satisfy this
-criterion.
-
-Evidence binds the tested Cabinet Flow release, tunnel and bridge configuration
-identity, actor or machine principal, operation or capability version,
-HandoffPackage and source identities or digests, validation result and bounded
-acknowledgement or failure. Secrets and unrestricted source data are not copied
-into test evidence.
-
-Temporary unavailability must still produce the explicitly designed pending
-outcome; an invented success, silent fallback or bypass is a failed integration
-test. Exact operator procedure, environment preparation, evidence retention and
-qualification freshness belong to later design states.
-
-The operational and capability-evolution proofs below are accepted as release
-proof only when their applicable external steps are exercised through these real
-boundaries.
-
-### Operational proof
-
-1. An invoice photo arrives through the dedicated Syncthing Inbox.
-2. Trusted behavior validates, hashes, registers and holds the source.
-3. The authorized online agent retrieves it through Cabinet Flow MCP and
-   recognizes its contents.
-4. Existing accepted capabilities turn the recognized facts into a reviewable
-   structured Invoice result while preserving source and commercial-line
-   identity.
-5. The result is associated with the correct project or construction object, or
-   remains explicitly unassigned when the evidence is insufficient.
-6. The agent produces useful analysis or prepares a reviewable
-   `HandoffPackage` addressed to an estimating capability published by the
-   local Box.
-7. Protected persistent or local effects occur only after required human
-   authorization.
-8. The local side returns a separate acknowledgement when it actually accepts
-   delivery.
-9. Identity, provenance, versions, validation, pending states, effect outcomes
-   and failures remain observable.
-
-This proof demonstrates that Cabinet Flow brings real incoming construction
-work into an ordered operational state. It does not require the user to author
-a function during the invoice workflow.
-
-### Capability-evolution proof
-
-1. The user requests an operational result that existing accepted capabilities
-   cannot produce.
-2. The agent identifies and describes the missing bounded behavior instead of
-   improvising hidden code.
-3. The agent authors a small implementation with a declared contract and
-   effects.
-4. Cabinet Flow registers an immutable draft and runs it in the mandatory
-   sandbox.
-5. Admission and effect policy produce an explicit outcome.
-6. An accepted version is activated and composed into a versioned flow.
-7. The capability can be executed against authorized Cabinet data and later
-   revised, deactivated or rolled back.
-8. The exact versions, trace, validation and effect outcomes remain observable.
-
-Legacy Cabinet behavior not yet migrated remains available from the current
-application.
+The agent cannot replace, disable or route around trial, admission, proof, edge
+validation, approval or trace capture.
+
+### D0-045 — Knowledge lives in the kernel and the platform, not in an agent
+
+D0-032 stands. A second agent with the same access must be able to continue the
+work from the kernel's records, the platform manifest and the repositories
+alone.
+
+### D0-047 — A value's disclosure class follows it
+
+Every value carries one of three disclosure classes: `open`,
+`business_confidential` or `personal_data`. An operation binding declares the
+class of what a service returns and the highest class each of its inputs
+accepts. A function cannot lower a class: the kernel gives a function's output
+the highest class among what that execution received. The flow proof refuses an
+edge that would deliver a value to an input accepting less, so personal data of
+a client cannot reach an external provider through any chain of functions
+unless the owner accepted a binding that says it may.
+
+An agent delegation has a disclosure ceiling, and the surface returns to an
+agent no value above it.
+
+### D0-048 — One installation drives one set of instances
+
+A kernel installation selects one manifest instance per service. No flow, run or
+agent can choose another. An effectful flow is rehearsed on an installation
+whose instances are disposable rigs, never through a switch inside the
+installation that drives production.
+
+### D0-046 — One trusted entrance
+
+The kernel has exactly one human principal, the owner. Every agent acts under
+the owner's delegation, and every approval and grant is the owner's. The kernel
+has no second user, no roles and no invitation mechanism.
+
+Material from anyone else — an employee sending a photo from a site, a supplier,
+a client — never reaches the kernel as that person's action. It arrives at a
+microservice's own intake, stays there as unaccepted material, and enters a flow
+only when the owner, or an agent under the owner's delegation, submits it. The
+kernel records the owner as the actor and the outside sender only as provenance
+of the data.
+
+Opening the kernel to another principal is a change of this State 0, not a
+configuration.
+
+## Superseded
+
+- D0-030's statement that managed function authoring "loses its sandbox" is
+  withdrawn. Its graduation ladder remains true for platform tools outside the
+  kernel and is not a kernel mechanism.
+- D0-031's "no environment store" is narrowed by D0-042. Its Box remains the
+  transfer unit between microservices and is outside the kernel.
+- "Effect intent", "Capability Box", "CapabilityInvocation", "HandoffPackage",
+  "MCP ownership", the three access planes, Syncthing ingress and the bridge to
+  the local Backend are not kernel concepts. Where they still hold they are
+  facts of the first application or of a microservice.
+- D0-028, D0-029 and D0-032 stand and are restated by D0-043 and D0-045.
 
 ## Explicit exclusions
 
-Cabinet Flow is not:
+- No message broker and no stream processing; a flow run is a bounded graph
+  execution.
+- No general workflow language: no loops, expressions or scripts inside a flow.
+- No effectful, stateful or network-capable function.
+- No business data store, reporting database or search index in the kernel.
+- No management of the microservices' deployment, scaling or configuration; the
+  kernel invokes their declared operations and nothing else.
+- No agent-to-agent trust: one agent's assertion never replaces a proof, an
+  admission or an owner approval.
 
-- a general-purpose IDE or software factory;
-- unrestricted arbitrary-code execution;
-- a generic operating-system, filesystem, database or MCP proxy;
-- a replacement for the independent local archive;
-- a generic integration hub;
-- an autonomous agent allowed to expand its authority;
-- the owner of AI Code Factory compiler semantics;
-- dependent on local Backend availability for unrelated online work.
+## First application — Cabinet
 
-It is not limited to Invoice processing or estimation. Those are the first
-evidence-rich construction workflows, not the complete long-term product
-boundary.
+The platform's current services are the VPS journal, the `cabinet-web-backend`
+plugin, the local Cabinet Backend, PresuPro and the client portal, each already
+recorded in the platform manifest. Two cases qualify the kernel, and both are
+required:
 
-## State 0 acceptance
+1. **Photo upload.** A flow of operation nodes and function nodes takes an
+   original invoice photo into custody through the owning service's declared
+   operations. It qualifies effect classes, approval, replay and the `pending`
+   state.
+2. **Third-party data and analysis.** The agent meets a need no function covers,
+   authors the missing functions, proves and admits them, composes a read-only
+   flow over declared read operations and returns an analysis, within one
+   conversation and without a release of anything. It qualifies authoring,
+   sandbox, admission, activation, proof and the fixed surface.
 
-State 0 is accepted because:
+The kernel is accepted as working only when both cases pass against the real
+service instances, and when each refusal named in D0-037 through D0-041 is shown
+by a bounded negative case.
 
-- the product is explicitly an operational environment for construction work;
-- its principal work areas and observable user outcomes are named;
-- ordinary operations and capability evolution are separate modes;
-- slot contracts, implementation versions, capabilities and flows have distinct
-  meanings;
-- the first release has an explicitly accepted baseline and does not depend on
-  self-bootstrap;
-- Capability Boxes inherit proven Cabinet Vault semantics, while
-  CapabilityInvocation and HandoffPackage have distinct execution and delivery
-  lifecycles;
-- the product and successor boundary are explicit;
-- primary actors and authority are explicit;
-- SSH administration, browser Basic Auth and online-agent tunnel access are
-  separate non-substitutable planes;
-- tunnel and bridge authentication establish transport identities but never
-  replace exact Cabinet Flow or local authorization;
-- the first-release operational and evolution proofs are distinct;
-- working-release status requires an operator-triggered qualification against
-  the real GPT/OpenAI tunnel path, deployed `cabinet-web-backend` bridge and
-  online local Cabinet Backend;
-- PR-CI remains deterministic and does not require those external systems or
-  their credentials;
-- legacy migration and backend responsibilities are bounded;
-- offline behavior and protected effects are truthful;
-- trusted isolation is non-bypassable at the product boundary;
-- one original-photo ingress and its ownership split are explicit;
-- negative product boundaries prevent scope drift;
-- their concrete negative and boundary scenarios are tracked in a derived
-  acceptance checklist for promotion into later rules and executable oracles;
-- remaining implementation choices belong to later design states.
+## Consequences for the existing State 1
 
-## Derived verification checklist
+Models M01–M15 (semantic registry and value families) remain and serve D0-038.
+Their references to Cards, HandoffPackages and the Cabinet Flow source registry
+are first-application vocabulary and are revised when State 1 is completed.
 
-[The State 0 acceptance checklist](STATE0_ACCEPTANCE_CHECKLIST.md) records
-testable consequences of this product boundary, including negative cases for
-ingress, sandbox/admission, versioning/authority, flow execution, handoff,
-access planes and agent context.
-
-The checklist is verification backlog rather than additional product behavior.
-Later states must promote applicable entries into precise rules, identities,
-contracts and executable semantic oracles. A checklist entry is not considered
-proved until its evidence is bound to the identified artifact and required
-environment.
-
-## Feasibility evidence
-
-On 2026-09-05 a live test passed through:
-
-```text
-Syncthing device delivery
-→ VPS trusted ingress
-→ Cabinet MCP get_invoice_source
-→ OpenAI Secure MCP Tunnel
-→ ChatGPT
-```
-
-The returned source identity matched the server registry, SHA-256 matched the
-accepted bytes, media was correctly identified as `image/png`, and the online
-model received and described the image. The operation remained read-only and
-did not create an Invoice Card, invoke OCR or a database, or modify the source.
-
-This proves the GPT/OpenAI transport subsection of the operational path against
-the then-deployed Cabinet MCP service. It is reusable external-boundary
-evidence, but it does not qualify a future Cabinet Flow release by itself.
-
-It does not yet prove the Cabinet Flow release identity, the
-`cabinet-web-backend` HandoffPackage path, automatic activation, multi-source
-ordering, hostile-file rejection, crash recovery, structured Invoice creation,
-project association, analysis, managed function admission, flow execution,
-protected effects or local archival acknowledgement.
+`STATE0_ACCEPTANCE_CHECKLIST.md` was derived from the superseded text. Its
+sandbox, versioning, flow-execution and agent-context sections carry over; its
+ingress, handoff and access-plane sections belong to the first application. It
+is re-derived from this document once the owner accepts it.
