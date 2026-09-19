@@ -1,5 +1,7 @@
 # State 5 — Cabinet Flow sandbox-supervisor operations
 
+A25 timer contract: this module does not use wall clock for domain state. Local non-persisted timeout/resource-duration measurement uses only Python `time.monotonic_ns()`; monotonic readings are never persisted as KernelInstant.
+
 The sandbox supervisor executes untrusted function code and nothing else. It
 owns isolation, external resource enforcement, denied-attempt evidence and
 confirmed cleanup; semantic contract validation, admission, run scheduling and
