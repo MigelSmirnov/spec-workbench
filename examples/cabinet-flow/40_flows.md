@@ -230,8 +230,10 @@ selection.
 1. Through `capability:kernel_surface.request_trial`,
    `capability:admission.run_trial` takes `capability:trial_corpus.active_corpus`
    and runs the implementation on every case with
-   `capability:sandbox_supervisor.execute_function`, files being delivered by
-   `capability:run_spool.deliver_file`.
+   `capability:sandbox_supervisor.execute_function`. A trial fixture remains a
+   `StoredValue` of carriage `byte_stream`; admission supplies its validated
+   bounded stream directly to the sandbox supervisor and never creates
+   `SpooledBytes` for a trial.
 2. `capability:admission.decide_admission` records the verdict with every
    applicable refusal reason. No actor can supply or alter it.
 3. Through `capability:kernel_surface.activate`,
