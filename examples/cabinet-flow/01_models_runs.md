@@ -293,49 +293,64 @@ None.
 
 ### Meaning
 
-The owner's recorded decision about one exact effect that one run is about to
-perform.
+One continuing approval request for one exact effect that one run is about to
+perform, from the immutable preview the kernel presents until the owner decides
+and, when approved, until that authority is consumed by the one exact execution
+it covers.
 
 Candidate fields:
 
-- `approval_id`;
+- `approval_id`: stable identity;
 - `run_id`, `node_id`;
 - `binding_version_ref`;
 - `service_instance`;
-- `preview_value_refs`: the StoredValues of the binding's preview ports, exactly
-  as shown; for a mapped node, those of every element of the collection;
+- `preview_value_refs`: the StoredValues of the binding's preview ports,
+  exactly as shown; for a mapped node, those of every element of the collection;
 - `preview_digest`: digest over the binding version, the instance and the
   digests of all input values of the node — for a mapped node, of every
   element — not only the previewed ones;
-- `decision`: `approved` or `denied`;
-- `decided_by`: ActorRef, always of kind `owner`;
-- `decided_at`.
+- `status`: `pending`, `approved`, `denied` or `consumed`;
+- `decided_by`: ActorRef of kind `owner`, and `decided_at`, present only
+  after the `pending -> approved | denied` transition;
+- `consumed_by_attempt_ref`: the exact run/node/map-index/attempt authorized
+  by this approval, present only after `approved -> consumed`.
 
 The kernel invokes the operation only with inputs whose digest equals the
 approved preview. A different input is a different effect and needs another
-approval. One approval of a mapped node covers the whole collection it listed.
+approval. One approval of a mapped node covers the complete mapped collection
+shown in its preview and can be consumed only by the corresponding recorded
+element attempts.
 
 ### Identity
 
-value
+entity
 
 ### Identity evidence
 
-Substitution: equal approval identity is interchangeable. Approvals of equal
-previews in different runs are distinct decisions. Continuity: a decision never
-changes and is never reused by another node execution.
+Substitution: two approval requests are never interchangeable, even with equal
+previews, because each belongs to one run/node decision and one consumption
+history. Continuity: the same approval remains identifiable while it moves from
+`pending` to the owner's final decision and, when approved, to one consumed
+attempt set. Its preview and digest never change.
 
 ### Source of truth
 
-The owner's action on the kernel surface.
+`module:owner_authority` creates the pending approval from kernel-owned
+evidence; only the owner changes `pending` to `approved` or `denied`; the
+kernel alone records consumption when exact invocation authority is taken.
 
 ### Lifecycle candidate
 
-No independent lifecycle.
+`pending -> approved -> consumed` or `pending -> denied`. `denied` and
+`consumed` are final. An approved approval whose input digest no longer
+matches is not rewritten for the new input; it is unusable and a new pending
+approval is required.
 
 ### Persistence candidate
 
-Durable evidence, referenced by the node execution it authorized.
+Durable entity of the kernel's operational store. The pending preview, owner
+decision and consumption state survive restart and are referenced by the
+execution evidence they authorize.
 
 ### Open questions
 
