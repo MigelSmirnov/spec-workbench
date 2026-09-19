@@ -1,5 +1,7 @@
 # State 5 — Cabinet Flow value-store operations
 
+A25 clock contract: retention-time comparisons use KernelInstant M47 from the injected `module:system_clock.now`; retention durations are module policy and no caller supplies current time.
+
 The value store keeps bounded, content-addressed evidence values without
 becoming a business database. Content visibility follows disclosure class, and
 retention may remove bytes while preserving the identities needed to explain a
