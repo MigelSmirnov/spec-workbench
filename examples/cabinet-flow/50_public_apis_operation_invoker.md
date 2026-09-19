@@ -1,5 +1,7 @@
 # State 5 — Cabinet Flow operation-invoker operations
 
+A25 clock contract: every operational timestamp written by this module is KernelInstant M47 obtained from its injected `module:system_clock.now` at the atomic event it owns. Retry timing belongs to `module:run_executor`; this module never invents wall time.
+
 The invoker performs one pinned operation node safely. It neither schedules the
 graph nor decides when owner approval is required. Unknown outcomes remain
 unknown until validated service-owned evidence resolves them.
