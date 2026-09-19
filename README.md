@@ -314,8 +314,7 @@ Cases that have a stable Factory destination should pin it in
 
 Admission prints and records the exact `case -> Factory project` pair. A
 different `--project` is blocked before export; a case without this manifest
-is blocked as well — the workbench has no warnings (see "The fence" in
-`skills/spec-authoring/SKILL.md`).
+remains admissible but receives an explicit warning.
 
 ## GitHub Actions CI
 
@@ -363,3 +362,7 @@ and `experiments/` only; `python tools/tools_ownership_check.py --base origin/ma
 is the pre-push check and the CI gate. Project-owned deterministic backends are
 declared in `examples/<project>/workbench_extensions.json` and loaded through
 `tools/project_extensions.py`.
+
+Project-local executable gates are not supported. A design invariant discovered
+on one project must be promoted to the shared root Workbench pipeline before it
+can become a mandatory gate for applications.
