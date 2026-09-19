@@ -287,10 +287,12 @@ failure permanent evidence. Authoring and admission then proceed as in
 2. `capability:trial_corpus.capture_trial_case` turns the failed execution into a
    case, copying a file input out of the live run through
    `capability:run_spool.describe_file`; a `personal_data` file needs the owner.
-3. After the captured case is committed, `module:trial_corpus` asks
-   `capability:slot_activation.contract_health` to refresh the serving
-   contract's derived health from that exact captured failure. It reports
-   `known_failing` with the case while the same activation keeps serving.
+3. After the captured case is committed,
+   `capability:slot_activation.contract_health` derives the current serving
+   contract's health from `capability:trial_corpus.active_corpus` and
+   `capability:trace_journal.slot_evidence`. It reports `known_failing` with
+   the exact captured case while the same activation keeps serving; no mutable
+   health record is written.
 4. The agent authors a repaired implementation; it is admitted only by passing
    the grown corpus, and its activation clears `known_failing`.
 5. When the contract itself must change,
