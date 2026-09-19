@@ -268,8 +268,10 @@ Candidate fields:
   expected outputs;
 - `contract_version_ref`;
 - `inputs`: one bounded value per input port, each carrying the port's exact
-  semantic-term revision;
-- `expected_outputs`: optional; when present, one bounded value per output port;
+  semantic-term revision; for a `byte_stream` port, one fixture file held as a
+  StoredValue of that carriage;
+- `expected_outputs`: optional; when present, one bounded value per output port,
+  a file output being compared by digest;
 - `origin`: `authored` or `captured_from_run`, with the node-execution reference
   when captured;
 - `status`: `active` or `withdrawn`;

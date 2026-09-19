@@ -236,15 +236,18 @@ nobody, including the kernel, can rewrite it.
 1. The kernel's operational store holds only the records of States 1 M01–M45.
    It holds no copy of a microservice's business record beyond the bounded
    values that crossed an edge.
-2. Source bytes never enter the store. A photo or document already in custody
-   travels as a SourceReference M13. Bytes that must pass from one service to
-   another travel as SpooledBytes M46: the kernel receives them from the source
-   operation into the run's spool, computes their digest, observes their size
-   and media type, and sends them to the target operation from the spool.
-   Approval of the target effect under A12 covers that digest, so it happens
-   after receipt and before sending. The spool entry is emptied when the run
-   reaches a terminal state, and is bounded per run; exceeding the bound fails
-   the receiving node as `contract_violation` with reason `value_too_large`.
+2. The store keeps no file except trial fixtures. A file at rest belongs to its
+   owning service and travels as a SourceReference M13. A file in flight is
+   SpooledBytes M46: whatever node produces it — an operation reading it from a
+   service or a function generating it — the kernel takes it into the run's
+   spool, computes its digest and observes its size and media type from the
+   bytes, and delivers it from the spool to the next node. Approval of an effect
+   under A12 covers that digest, so it happens after the file exists and before
+   it is sent, and the owner's preview shows the file itself. The spool is
+   emptied when the run reaches a terminal state and is bounded per run;
+   exceeding the bound fails the producing node as `contract_violation` with
+   reason `value_too_large`. A file the business must keep is handed by an
+   operation node to the service that owns it before the run ends.
 3. A StoredValue M38 has a size ceiling fixed by the kernel release. A value
    above it fails the producing node as `contract_violation` with reason
    `value_too_large`; large data belongs behind a reference in its service.
@@ -276,10 +279,10 @@ retention(value) = max(retention(record) for record naming value)
 
 ### Required tests
 
-1. A flow over a photo already in custody stores a SourceReference and never the
-   image bytes. A flow moving a photo between two services holds the bytes in
-   the run's spool only, shows the owner the digest of what arrived, sends
-   exactly those bytes, and leaves no bytes after the run ends.
+1. A flow that reads a photo from one service, normalizes it in a function and
+   gives it to another service holds both files in the run's spool only, shows
+   the owner the file and digest about to be sent, sends exactly those bytes,
+   and leaves no bytes after the run ends.
 2. A node output above the size ceiling fails with `value_too_large`.
 3. After the retention period a run's trace is readable with digests and
    verdicts, and its expired content is absent.

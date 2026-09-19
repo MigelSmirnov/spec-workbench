@@ -79,8 +79,9 @@ concept.
 A flow has exactly two kinds of node.
 
 A **function node** runs one admitted implementation of one slot contract. A
-function is pure: it receives its declared input and returns its declared
-output. It has no network, no filesystem beyond its input, no clock, no randomness source, no secret and no handle to any
+function is pure: it receives its declared input, values and files alike, and
+returns its declared output. It has no network, no filesystem beyond its input,
+no clock, no randomness source, no secret and no handle to any
 service. It cannot perform or request an effect.
 
 An **operation node** invokes one declared operation of one microservice. The
@@ -253,11 +254,16 @@ that edges carry between nodes under a retention policy.
 It stores no business fact. Every business fact lives in the microservice that
 owns its lifecycle, and the kernel holds at most a digest and a reference.
 
-A file too large to be a value, such as a photo taken from one service and given
-to another, moves between two operation nodes through a spool that belongs to
-the run. The kernel learns its digest there, so the owner approves the exact
-bytes that arrived, and the spool is emptied when the run ends. A function never
-receives such bytes. This
+Files are ordinary cargo of the kernel: photos and images today, drawings such
+as DWG and DXF later. A file moves between any two nodes through a spool that
+belongs to the run. A function may receive a file and may produce one — parsing
+a drawing, measuring it, normalizing a photo are pure transformations like any
+other — and it stays exactly as isolated as D0-037 requires. The kernel learns a
+file's digest, size and real media type in the spool, so the owner approves the
+exact bytes that arrived and a node receives only the kind of file its port
+accepts. The spool is emptied when the run ends; a file that must last is given
+to the service that owns it, and the kernel keeps the reference. The only files
+the kernel keeps are the fixtures of a trial corpus. This
 narrows D0-031 of the superseded correction, which denied the environment any
 store.
 

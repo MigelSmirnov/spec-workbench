@@ -20,16 +20,18 @@ Candidate fields:
 - `value_digest`: identity, the digest of the canonical value bytes;
 - `semantic_term_revision_ref`;
 - `value_schema_ref`;
-- `size`;
+- `carriage`: `value`, or `byte_stream` for a trial fixture file, which is the
+  only file the store ever holds and always has retention class `trial_corpus`;
+- `size`; `media_type` when the carriage is `byte_stream`;
 - `disclosure_class`: copied from the port that produced it;
 - `retention_class`: `run_evidence`, `trial_corpus` or `approval_evidence`;
 - `held_until`: absent for `trial_corpus`.
 
 A StoredValue is never a business record. It is what passed through the kernel,
 kept so that a run can be explained; the fact it describes lives in the
-microservice that owns it. Source bytes such as a photo are never stored here:
-an edge carries a SourceReference (M13) and the bytes stay with the owning
-service.
+microservice that owns it. A file in flight is SpooledBytes (M46), not a
+StoredValue; a file at rest belongs to its owning service and is named by a
+SourceReference (M13).
 
 ### Identity
 
@@ -61,22 +63,27 @@ None.
 
 ### Meaning
 
-The bytes of one `byte_stream` output, held for the duration of one run so that
-they can be identified, approved and handed to another operation node.
+One file produced by a `byte_stream` output port of a function node or an
+operation node, held for the duration of one run so that it can be identified,
+approved where an effect needs it, and handed to the next node.
 
 Candidate fields:
 
 - `run_id`;
 - `content_digest`: computed by the kernel while receiving;
-- `size`, `media_type`: as observed, not as claimed by the source;
+- `size`, `media_type`: as observed by the kernel from the bytes, not as claimed
+  by the producing service, the producing function or a file name;
 - `semantic_term_revision_ref`, `disclosure_class`: from the producing port;
 - `produced_by`: the node execution that received them;
 - `released_at`: when the spool entry was emptied.
 
-Spooled bytes are not a StoredValue. They are never part of a trial corpus, are
-never returned over the surface and are never an input of a function node. What
-remains after release is the digest, size and media type in the node executions
-that named them.
+Spooled bytes are delivered to a function node as a read-only file inside its
+sandbox and to an operation node as the request body the binding declares. Over
+the surface they are shown only to the owner, in an approval preview, and to an
+agent only as digest, size, media type and class. What remains after release is
+that description in the node executions that named them. A file that a trial
+case needs is copied, deliberately, into the trial corpus as a StoredValue of
+carriage `byte_stream` (M38, A07).
 
 ### Identity
 

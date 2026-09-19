@@ -260,9 +260,12 @@ Candidate fields:
 - `value_schema_ref`;
 - `semantic_term_revision_ref` optional only for output;
 - `cardinality`: `one`, `optional` or `many`;
-- `carriage`: `value` or `byte_stream`. `byte_stream` is permitted only on a
-  port of an operation binding version and carries bytes too large to be a
-  StoredValue. A function port and a flow constant are always `value`;
+- `carriage`: `value` or `byte_stream`. A `byte_stream` port carries a file. Its
+  value schema is a closed set of accepted media types and a size ceiling rather
+  than a structure. It is permitted on the ports of a slot contract version and
+  of an operation binding version. A flow input, a flow output and a flow
+  constant are always `value`: a file enters a flow from a service and leaves it
+  into a service;
 - `disclosure_class`: `open`, `business_confidential` or `personal_data`. On an
   input port it is the highest class the port accepts. On an operation binding's
   output port it is declared. On a function's output port it is never authored:

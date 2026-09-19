@@ -77,11 +77,14 @@ authors is checked against a vocabulary only the owner can extend.
 6. Sharing an axis, a value family, a primitive type or a field name is never
    evidence. An edge with no valid basis is refused; the proof does not search
    for or suggest a basis on its own authority.
-7. A port of carriage `byte_stream` exists only on an operation binding version.
-   An edge from a `byte_stream` output is valid only into a `byte_stream` input
-   of another operation node, under the same term and relation rules. It is
-   never valid into a function node, a flow output or a guard, and a
-   `byte_stream` port cannot be mapped.
+7. A port of carriage `byte_stream` carries a file and exists on slot contract
+   versions and operation binding versions. An edge from a `byte_stream` output
+   is valid only into a `byte_stream` input, of a function node or an operation
+   node, under the same term and relation rules, and only when every media type
+   the source may produce is accepted by the target and the source's size
+   ceiling does not exceed the target's. It is never valid into a `value` port,
+   a flow output or a guard. Cardinality and mapping apply to files as to
+   values: a collection of photos is mapped element by element.
 8. An output port without a term produces an UncomposableOutput M15. It may be a
    flow output returned to the caller and may not be the source of any edge to a
    node.
@@ -113,9 +116,10 @@ same_axis OR same_primitive_type -/> edge_valid
    as `cardinality_incompatible`.
 5. A term-less output wired to a node input is refused; wired to a flow output
    it is accepted and returned as UncomposableOutput.
-6. A `byte_stream` output wired to a function input or to a flow output is
-   refused; wired to a `byte_stream` input of an operation node under the same
-   term it is proven.
+6. A `byte_stream` output wired to a `value` input or to a flow output is
+   refused. Wired to a `byte_stream` input of a function or of an operation under
+   the same term it is proven; wired to an input that accepts only JPEG while
+   the source may produce PNG it is refused as `shape_incompatible`.
 
 ### Consequence
 

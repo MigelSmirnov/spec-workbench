@@ -58,31 +58,40 @@ the sketch implementation lacked.
    sandbox supervisor from one SandboxRuntimeRevision M22, in trial and in real
    runs alike. There is no in-process, trusted or fast path.
 2. The environment contains the runtime, the implementation's code, and the
-   validated input values of that one execution. It contains no network
-   interface, no clock, no entropy source, no environment variable, no
-   credential, no handle to the kernel's store and no path to another
-   execution's data.
+   validated inputs of that one execution: values, and files as read-only paths.
+   It contains no network interface, no clock, no entropy source, no environment
+   variable, no credential, no handle to the kernel's store and no path to
+   another execution's data. A file is delivered only after the kernel confirmed
+   from its bytes that its media type and size are within what the port accepts;
+   the file's name and the producer's claim are not evidence.
 3. The only writable location is one scratch directory inside the environment,
    limited in size and destroyed with it.
 4. Input is delivered and output is collected by the supervisor over one
-   bounded channel. Output larger than `output_size_limit` is a failure, not a
-   truncation.
-5. ResourceBounds M21 of the contract version, clamped by the release ceilings,
+   bounded channel. A file output is written by the code into its scratch
+   directory and collected from there into the run's spool, where its observed
+   media type must be one the output port declares. Output, values and files
+   together, larger than `output_size_limit` is a failure, not a truncation.
+5. A file is hostile input. Decoding it is the function's job and happens inside
+   the sandbox under the same bounds, so a decompression bomb, a malformed
+   drawing or a polyglot file can exhaust only that one execution. The kernel
+   itself never decodes, renders, thumbnails or parses a file; it reads only the
+   leading bytes needed to establish the media type.
+6. ResourceBounds M21 of the contract version, clamped by the release ceilings,
    are enforced from outside the environment. Exceeding wall time is `timeout`;
    exceeding CPU time, memory or process count is `resource_exhausted`.
-6. Every attempt to use something absent — a socket, a path outside scratch, a
+7. Every attempt to use something absent — a socket, a path outside scratch, a
    subprocess beyond the limit, the clock, entropy, the environment — is denied,
    recorded as a denied attempt with its kind, and makes the execution fail as
    `denied_attempt` even if the code then returns a conforming output.
-7. Completion includes destroying the environment and every descendant process.
+8. Completion includes destroying the environment and every descendant process.
    If destruction cannot be confirmed the execution is `cleanup_failed`, its
    output is discarded, and the supervisor refuses further executions until the
    leak is cleared.
-8. Because a function has no clock and no entropy, the same implementation on
+9. Because a function has no clock and no entropy, the same implementation on
    the same input under the same runtime revision yields the same output. A
    differing output on re-execution is a kernel defect and is recorded as one.
-9. Nothing the code prints, raises or writes is interpreted by the kernel. Only
-   the collected output, validated against the contract, has meaning.
+10. Nothing the code prints, raises or writes is interpreted by the kernel. Only
+    the collected output, validated against the contract, has meaning.
 
 ### Formal invariants
 
@@ -113,6 +122,12 @@ same(implementation, input, runtime_revision) -> same(output)
    the same output digest.
 6. A simulated cleanup failure discards the output and stops the supervisor from
    accepting further executions.
+7. A bounded decompression-bomb image and a malformed DXF fixture fail only
+   their own execution, as `resource_exhausted` or `crashed`, and the supervisor
+   stays healthy. A file whose bytes are PNG under a `.jpg` name is refused at a
+   JPEG-only port before the function starts. A function writing a file whose
+   observed type is not declared by its output port concludes
+   `contract_violation`.
 
 Negative fixtures are bounded and synthetic. They never risk a real fork bomb,
 decompression bomb or secret.
@@ -136,16 +151,22 @@ compute and do nothing else, in trial and in production by the same mechanism.
    origin `captured_from_run`. Capturing a failed execution records its inputs
    without expected outputs; an authoring actor may then state the correct
    expected outputs as a further case.
-4. A case is never edited. A wrong case is withdrawn with a reason and an
+4. A case, including its fixture files, is never edited. A wrong case is withdrawn with a reason and an
    actor; the withdrawal is final and listed in every later admission verdict of
    that contract version.
 5. Withdrawing a case that states expected outputs requires the owner when that
    case has ever contributed to an `admitted` verdict. An agent cannot clear its
    own path by withdrawing the case its code fails.
-6. Trial values are StoredValues with retention class `trial_corpus` and follow
+6. A case for a contract with file ports carries fixture files, held as
+   StoredValues of carriage `byte_stream` within a fixture size ceiling fixed by
+   the kernel release. Capturing a run's file into the corpus copies it out of
+   the spool while the run still holds it. Because a fixture is kept for the
+   life of the installation, capturing a file of class `personal_data` requires
+   the owner; an agent may always author a synthetic fixture instead.
+7. Trial values are StoredValues with retention class `trial_corpus` and follow
    A03: an agent sees only cases at or below its disclosure ceiling, and sees
    digest and class for the rest.
-7. A new contract version starts with an empty corpus. Cases of an earlier
+8. A new contract version starts with an empty corpus. Cases of an earlier
    version are copied to it only by an explicit request, and only those that
    still validate against the new ports.
 
