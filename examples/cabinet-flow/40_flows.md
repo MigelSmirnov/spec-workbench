@@ -486,8 +486,11 @@ owns the service's refusal and an unknown outcome.
 
 ### Trigger
 
-A response to an effectful call was lost, the kernel restarted during a run, or
-the owner cancels a waiting run.
+A response to an effectful call was lost, the kernel restarted during a run,
+the long-lived `boundary:kernel_process` reaches a module-owned retry wake-up
+for a pending run, or the owner cancels a waiting run. A wake-up only asks the
+executor to re-evaluate durable state; elapsed time by itself never changes the
+run's status or authorizes an effect.
 
 ### Boundary
 
