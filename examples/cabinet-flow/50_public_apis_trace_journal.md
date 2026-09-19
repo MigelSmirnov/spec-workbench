@@ -116,7 +116,9 @@ function without revealing unrelated run activity.
 `module:kernel_surface` calls it from bounded inspection for an authoring
 agent. `module:trial_corpus` calls it to verify that a requested
 `captured_from_run` case names a concluded execution of the exact slot and to
-obtain only the evidence needed for capture.
+obtain only the evidence needed for capture. `module:slot_activation` calls it
+with a bounded exact-slot query when deriving whether the currently serving
+implementation is `known_failing` on an active regression case.
 
 ### Inputs
 
@@ -141,8 +143,9 @@ None.
 
 Exact slot ownership; concluded attempts only; no unrelated nodes or run facts;
 disclosure ceiling; immutable execution identity; capture evidence must match
-the contract version and referenced node execution; secret-free bounded failure
-detail.
+the contract version and referenced node execution; health derivation receives
+only evidence for the exact serving slot/implementation it names; secret-free
+bounded failure detail.
 
 ### Errors
 
