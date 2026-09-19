@@ -22,8 +22,8 @@ The injected clock is called directly by timestamp-owning modules:
 `module:owner_authority`, `module:operation_invoker`,
 `module:run_executor` and `module:value_store`.
 
-`module:kernel_surface`, gateways and request DTOs never obtain a current-time
-value merely to forward it downstream.
+The kernel surface, gateways and request DTOs never obtain a current-time value
+merely to forward it downstream.
 
 ### Inputs
 
