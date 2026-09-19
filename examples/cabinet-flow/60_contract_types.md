@@ -99,3 +99,35 @@ Fields:
 
 The projection contains only non-secret routing facts and protected credential
 binding references; no resolved credential value is representable.
+
+
+---
+
+## `ContractVersionIdentity`
+
+Exact identity result for a SlotContractVersion definition.
+
+Fields:
+
+- `contract_version_id: str` — digest over defining contract content;
+- `canonicalization_version: str` — the kernel-release serialization version
+  used to compute that identity.
+
+The author, issue time and rationale are absent from this result.
+
+---
+
+## `CanonicalField`
+
+Internal closed tree used only by `module:identity` while producing canonical
+bytes.
+
+Fields:
+
+- `name: str`;
+- `value: str | int | bool | bytes | None | tuple[CanonicalField, ...]`.
+
+Sequences are represented by ordered child fields; mappings are represented by
+children already ordered by the record-kind canonicalization rule. Floating
+point, arbitrary objects, caller-provided identity values and unordered
+containers are not admitted to this internal representation.
