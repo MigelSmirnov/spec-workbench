@@ -21,10 +21,13 @@ element of a real Run.
 
 ### Inputs
 
-The immutable implementation bytes/reference; exact sandbox runtime revision;
+The exact immutable Implementation reference; exact sandbox runtime revision;
 release-clamped ResourceBounds; one bounded set of already validated input
 values; and file inputs whose bytes, observed media type and size have already
-been accepted for their ports. In a real Run, files are delivered through
+been accepted for their ports. The supervisor resolves the implementation's
+contract, entry point and executable bytes only through
+`module:slot_registry.implementation_record`; no caller supplies or substitutes
+code bytes. In a real Run, files are delivered through
 `module:run_spool`; a trial fixture remains a `StoredValue` of carriage
 `byte_stream` and is supplied directly as a bounded read-only stream. No
 credential, network target, host path outside the assigned exchange, clock,
