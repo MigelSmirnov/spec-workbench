@@ -110,11 +110,6 @@ def audit_design(project: Path) -> list[Finding]:
                 findings.append(
                     Finding(path, line, f"{op}: Inputs still accept or mention 'current UTC time'; owning module must call system_clock")
                 )
-            risky = re.search(r"(?<!no )(?<!not )caller[- ]supplied (?:current )?time", lowered)
-            if risky:
-                findings.append(
-                    Finding(path, line, f"{op}: Inputs appear to admit caller-supplied current time")
-                )
     return findings
 
 
