@@ -45,8 +45,11 @@ explicitly captures it as a trial fixture.
 
 ### Enforces
 
-Release size ceiling; canonical digest identity; exact accepted semantic and
-schema references; `byte_stream` persistence only for trial fixtures;
+Canonical content size must not exceed injected
+`ReleaseCeilings.stored_value_bytes_max`; canonical digest identity; exact
+accepted semantic and schema references; `byte_stream` persistence only for
+trial fixtures, whose bytes must also not exceed the injected trial-fixture
+ceiling;
 retention equal to the longest live naming requirement; immutable metadata for
 a digest; and no overwrite with different bytes.
 
