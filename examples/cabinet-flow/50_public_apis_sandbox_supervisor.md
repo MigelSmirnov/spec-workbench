@@ -57,8 +57,10 @@ no service effect and writes no business state.
 ### Enforces
 
 No ambient network, clock, entropy, credential or environment access; no
-filesystem outside read-only inputs and the bounded scratch directory; process,
-CPU, memory, wall-time, scratch and aggregate-output ceilings; every denied
+filesystem outside read-only inputs and the bounded scratch directory. The
+enforced process, CPU, memory, wall-time, scratch and aggregate-output limits
+must be no greater than the corresponding injected ReleaseCeilings M48 values;
+every denied
 attempt is observable and makes the execution non-successful even if code later
 returns; file media type is observed from bytes rather than filename; no
 truncation of oversized output; isolation between concurrent executions; and
