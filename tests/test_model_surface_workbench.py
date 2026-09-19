@@ -166,3 +166,41 @@ def test_notes_gate_blocks_unknown_attribute(tmp_path):
 
 def test_fields_is_an_assembly_check_after_identity():
     assert CHECK_ORDER.index("fields") == CHECK_ORDER.index("identity") + 1
+
+
+PROSE_MD = (
+    "## Model M01 — Delegation\n\n### Meaning\n\nPermission.\n\nCandidate fields:\n\n"
+    "- `delegation_id`;\n- `status`: `active` or `revoked`;\n\n### Identity\n\nentity\n"
+)
+
+
+def test_prose_only_case_without_a_closure_is_not_ready(tmp_path):
+    # nothing to compare must never read as "everything agrees"
+    report = fields.lint(_write(tmp_path, models_md=PROSE_MD))
+    assert _codes(report["findings"]) == ["model_missing_in_closure"]
+    assert report["summary"]["models_compared"] == 0
+    assert report["summary"]["handoff_ready"] is False
+
+
+def test_prose_model_declared_by_the_closure_stays_unparsed_not_missing(tmp_path):
+    closure = {"Delegation": {"identity": "entity", "fields": {"delegation_id": "str", "status": "str"}}}
+    report = fields.lint(_write(tmp_path, models_md=PROSE_MD, closure=closure))
+    assert report["findings"] == []
+    assert report["unparsed_models"] == ["Delegation"]
+
+
+def test_model_carried_only_by_the_assembled_spec_is_a_lineage_debt_not_a_lost_model(tmp_path):
+    project = _write(tmp_path, models_md=PROSE_MD)
+    (project / "global_spec.json").write_text(
+        json.dumps({"models": {"Delegation": {"identity": "entity", "fields": {}}}}), encoding="utf-8"
+    )
+    report = fields.lint(project)
+    assert report["findings"] == []
+    assert report["unparsed_models"] == ["Delegation"]
+
+
+def test_the_unsplit_state1_document_is_read_too(tmp_path):
+    (tmp_path / "01_models.md").write_text(PROSE_MD, encoding="utf-8")
+    report = fields.lint(tmp_path)
+    assert report["summary"]["models_designed"] == 1
+    assert _codes(report["findings"]) == ["model_missing_in_closure"]
