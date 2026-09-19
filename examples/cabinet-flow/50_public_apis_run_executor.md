@@ -82,11 +82,12 @@ state transition.
 ### Inputs
 
 The exact non-terminal Run reference and a bounded wake reason. When evaluating
-persisted retry/back-off deadlines, the executor calls its injected
-`module:system_clock.now` and receives KernelInstant M47. All executable facts
-are re-read from the Run's immutable pins and durable evidence; callers cannot
-supply a ready-node list, success flag, approval result, retry decision, clock
-value or alternate dependency.
+a `service_unreachable` or `outcome_unknown` wait, the executor calls its
+injected `module:system_clock.now` and compares that M47 value with the
+persisted `retry_not_before`. All executable facts are re-read from the Run's
+immutable pins and durable evidence; callers cannot supply a ready-node list,
+success flag, approval result, retry ordinal/deadline, clock value or alternate
+dependency.
 
 ### Outputs
 
@@ -111,8 +112,9 @@ validation; deterministic mapped-element order and one NodeExecution per
 element attempt; guard semantics; no dependant execution after failed required
 input; exact pinned implementations/bindings/target; owner approval bound to the
 current effect inputs; no guessed result from an unreachable service or unknown
-effect outcome; `succeeded` only after every required node/output satisfies
-A17.
+effect outcome; A28 retry delays are exactly 1, 2, 5, 10, 30 and then 60 seconds
+with no jitter, and a wake before `retry_not_before` invokes nothing;
+`succeeded` only after every required node/output satisfies A17.
 
 ### Errors
 
@@ -125,9 +127,11 @@ intact and is never translated into success.
 ### State impact
 
 Run state, waiting reasons, stored output references and execution bookkeeping
-may advance atomically with the owned records of collaborating modules. On a
-terminal transition the executor asks `module:run_spool` to release the run's
-temporary files. Earlier evidence is never rewritten.
+may advance atomically with the owned records of collaborating modules. A timed
+wait persists its A28 `retry_ordinal` and `retry_not_before`; success or a
+terminal transition clears that timed wait. On a terminal transition the
+executor asks `module:run_spool` to release the run's temporary files. Earlier
+evidence is never rewritten.
 
 ## `public_op:run_executor.resume_runs`
 
@@ -145,8 +149,8 @@ begins serving requests.
 
 No caller-selected run list or recovery verdict. The executor reads all
 non-terminal Runs and their durable pins, NodeExecutions, approvals, in-flight
-effect attempts, reconciliations, values and waiting reasons from the
-operational store.
+effect attempts, reconciliations, values and waiting reasons — including any
+A28 `retry_ordinal` and `retry_not_before` — from the operational store.
 
 ### Outputs
 
@@ -168,7 +172,8 @@ then permit further advancement.
 
 Recovery from durable records only; no loss or re-supply of accepted input,
 approval or value; no second effect while an earlier send may have happened;
-same immutable pins as before restart; waiting has no timeout-generated
+same immutable pins as before restart; A28 retry ordinal/deadline survive
+restart and are never reset by process start; waiting has no timeout-generated
 decision; service absence stays `pending`; owner approval stays
 `awaiting_approval`.
 
