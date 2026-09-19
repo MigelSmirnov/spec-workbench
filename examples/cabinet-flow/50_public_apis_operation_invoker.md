@@ -97,8 +97,9 @@ effect binding's output ports.
 ### Observable effect
 
 The operation invokes only the declared read binding and appends reconciliation
-evidence. It never repeats the original effect. Reconciliation retry uses
-bounded back-off while the run remains pending.
+evidence. It never repeats the original effect. It performs one reconciliation
+attempt only; retry timing and bounded back-off while the run remains pending
+belong to `module:run_executor`.
 
 ### Enforces
 
