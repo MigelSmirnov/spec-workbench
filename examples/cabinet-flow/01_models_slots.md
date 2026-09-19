@@ -45,8 +45,9 @@ The kernel's slot registry, written only through the kernel surface.
 ### Lifecycle candidate
 
 `active -> retired`. A retired slot accepts no new contract version,
-implementation or activation. Flow versions that pin it keep running with what
-they pinned.
+implementation or activation, and a new FlowProof cannot newly accept a
+function node whose contract belongs to it. Flow versions already proven on its
+contract versions and Runs already pinned to them keep what they pinned.
 
 Whether a contract version is `known_failing` is not a status anyone sets. It is
 derived from the active corpus and the serving implementation's trial
