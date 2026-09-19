@@ -233,8 +233,10 @@ unchanged.
 
 ### Inputs
 
-The active owner ActorRef, exact grant identity, expected active status,
-current UTC time and bounded reason.
+The active owner ActorRef, exact grant identity, expected active status and
+bounded reason. `module:owner_authority` obtains `revoked_at` from its
+injected `module:system_clock` at the successful compare-and-set; no
+caller-supplied current time is accepted.
 
 ### Outputs
 
