@@ -50,6 +50,29 @@ def test_unbound_port_blocks_and_carries_the_catalog_card(tmp_path):
     assert finding["catalog_card"]["ir_skeleton"]["kind"] == "system_clock_backend"
 
 
+def test_boundary_bound_by_capability_carries_its_own_form(tmp_path):
+    """A module-level clock operation has no interface; the factory binds it by capability."""
+    case = _case(tmp_path, {"implementation_obligations": {}})
+    form = {"form": "module_function", "capability": "wall_clock_authority",
+            "ir_skeleton": {"kind": "system_clock_backend", "schema_version": 2}}
+    factory = _fake_factory(tmp_path, {
+        "bound": False,
+        "unbound_ports": [{
+            "interface": None, "capability": "wall_clock_authority",
+            "concrete": "now", "module": "system_clock",
+            "direction": "author rules.system_clock_backend per catalog_form.ir_skeleton",
+            "catalog_card": {"rule_key": "system_clock_backend", "ir_skeleton": {"kind": "system_clock_backend"}},
+            "catalog_form": form,
+        }],
+    })
+    report = design_emitter_binding.coverage(case, factory)
+    assert report["summary"]["handoff_ready"] is False
+    finding = report["findings"][0]
+    assert finding["capability"] == "wall_clock_authority"
+    assert finding["catalog_form"] == form
+    assert finding["message"].startswith("wall_clock_authority: ")
+
+
 def test_bound_spec_is_ready(tmp_path):
     case = _case(tmp_path, {"implementation_obligations": {}})
     factory = _fake_factory(tmp_path, {"bound": True, "unbound_ports": []})
