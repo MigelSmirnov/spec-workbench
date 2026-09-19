@@ -350,7 +350,9 @@ outcomes. Continuity: the record never changes.
 
 ### Source of truth
 
-The kernel's sandbox supervisor, never the executed code.
+The kernel's `admission` module, from the sandbox supervisor's observed
+execution evidence plus the contract and expected-output validation performed
+by admission; never the executed code.
 
 ### Lifecycle candidate
 
