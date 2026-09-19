@@ -21,9 +21,12 @@ the actor is authorized for implementation activation.
 
 The resolved ActorRef; exact contract-version and implementation references;
 the expected current/previous SlotActivation for compare-and-set; and no
-caller-authored admission verdict or health flag. The operation obtains the
-latest immutable verdict from `module:admission.current_admission` and the
-exact current active-corpus snapshot from `module:trial_corpus.active_corpus`.
+caller-authored admission verdict or health flag. The operation resolves the
+exact contract and owning-slot status through
+`module:slot_registry.contract_version`, exact implementation metadata through
+`module:slot_registry.implementation_record`, the latest immutable verdict
+from `module:admission.current_admission`, and the exact current active-corpus
+snapshot from `module:trial_corpus.active_corpus`.
 
 ### Outputs
 
