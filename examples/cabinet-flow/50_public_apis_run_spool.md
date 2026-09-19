@@ -40,10 +40,11 @@ not persist a StoredValue or business file.
 ### Enforces
 
 The bytes belong to the named live run and producing execution; media type is
-derived from content and accepted by the exact output port; per-file and
-per-run size ceilings hold during streaming; incomplete or excess input is
-discarded; no decoding, rendering or parser-specific business interpretation
-occurs.
+derived from content and accepted by the exact output port; the port-specific
+limit and injected M48 `run_spool_file_bytes_max` both hold for one file, and
+the injected M48 `run_spool_total_bytes_max` holds for the whole live run
+during streaming; incomplete or excess input is discarded; no decoding,
+rendering or parser-specific business interpretation occurs.
 
 ### Errors
 
