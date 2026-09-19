@@ -29,11 +29,11 @@ def test_cabinet_assembly_stops_on_every_undecided_fact() -> None:
     assert report["ready"] is False
     assert [check["name"] for check in report["checks"]] == [
         "project_gates", "language", "modules", "identity", "fields", "data", "contracts", "external_contracts",
-        "notes", "router", "persistence", "witness", "flows",
+        "notes", "closure_gaps", "router", "persistence", "witness", "flows",
     ]
     by_name = {check["name"]: check for check in report["checks"]}
     assert all(check["warnings"] == 0 for check in report["checks"])
-    for name in ("modules", "contracts", "persistence", "witness", "flows"):
+    for name in ("modules", "contracts", "closure_gaps", "persistence", "witness", "flows"):
         if name == "persistence" and _factory_storage_resolver() is not None:
             assert by_name[name]["ready"] is True, name  # the factory registry proved the codec coverage
             continue
@@ -83,6 +83,18 @@ def test_check_inspection_preserves_owner_report() -> None:
     assert report["check"]["schema_version"] == "spec_workbench_state7_notes_gate.v1"
     assert report["check"]["summary"]["notes"] == 255
     assert report["check"]["ready"] is True
+
+
+def test_closure_gap_check_blocks_unnamed_time_sources() -> None:
+    report = inspect_check(CABINET, "closure_gaps")
+    assert report["schema_version"] == "spec_workbench_assembly_check.v1"
+    check = report["check"]
+    assert check["schema_version"] == "design_closure_gaps.v1"
+    assert check["ready"] is False
+    assert check["errors"] > 0
+    codes = {item["code"] for item in check["findings"]}
+    assert "fresh_timestamp_without_source" in codes
+    assert all(item["severity"] == "error" for item in check["findings"])
 
 
 def test_identity_failure_blocks_assembly(tmp_path: Path) -> None:
