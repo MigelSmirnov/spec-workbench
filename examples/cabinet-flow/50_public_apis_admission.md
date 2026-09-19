@@ -19,9 +19,13 @@ The ActorRef authorizes the request but is not an input to the verdict.
 ### Inputs
 
 Exact contract-version and implementation references. The module resolves the
-active corpus from `module:trial_corpus`, the contract's exact sandbox runtime
-and bounds, and the immutable implementation bytes. A caller cannot select or
-omit cases, supply expected outcomes, choose a runtime, or provide a verdict.
+immutable contract through `module:slot_registry.contract_version`, exact
+implementation metadata through `module:slot_registry.implementation_record`,
+and the complete active corpus from `module:trial_corpus`. It passes only the
+implementation reference, pinned runtime/bounds and validated case inputs to
+`module:sandbox_supervisor`; executable code bytes are fetched by the sandbox
+supervisor itself. A caller cannot select or omit cases, supply expected
+outcomes, choose a runtime, provide code bytes or provide a verdict.
 
 ### Outputs
 
