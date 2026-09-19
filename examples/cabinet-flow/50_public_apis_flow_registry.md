@@ -1,5 +1,7 @@
 # State 5 — Cabinet Flow flow-registry operations
 
+A25 clock contract: every operational timestamp written by this module is KernelInstant M47 obtained from its injected `module:system_clock.now` at the atomic event it owns. No public operation accepts caller-, gateway- or surface-supplied current time.
+
 The registry owns immutable graphs and the selection of a runnable version. It
 does not prove graphs, approve individual effects, grant standing authority or
 execute nodes.
