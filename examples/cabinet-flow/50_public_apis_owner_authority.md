@@ -144,8 +144,8 @@ execution may proceed now.
 
 ### Callers
 
-`module:run_executor` calls it immediately before handing a ready effectful node
-to `module:operation_invoker`.
+`module:run_executor` calls it immediately before delegating a ready effectful
+node to the operation-invocation boundary.
 
 ### Inputs
 
