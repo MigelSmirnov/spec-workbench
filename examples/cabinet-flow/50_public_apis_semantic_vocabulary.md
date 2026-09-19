@@ -1,5 +1,7 @@
 # State 5 — Cabinet Flow semantic-vocabulary operations
 
+A25 clock contract: every operational timestamp written by this module is KernelInstant M47 obtained from its injected `module:system_clock.now` at the atomic event it owns. No public operation accepts caller-, gateway- or surface-supplied current time.
+
 The semantic vocabulary is the governed registry of meaning. Accepted axes,
 terms and relations have stable identities and immutable revisions; proposals
 are not composition evidence, and only the installation seed or an owner
