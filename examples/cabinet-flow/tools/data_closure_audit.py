@@ -73,6 +73,7 @@ EXPECTED_PERSISTENCE = {
     "OwnerPrincipal": "master",
     "AgentDelegation": "master",
     "AuthenticationThrottleState": "master",
+    "EffectApproval": "master",
     "OperationBinding": "master",
     "Flow": "master",
     "FlowRun": "master",
