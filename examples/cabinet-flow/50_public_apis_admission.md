@@ -1,5 +1,7 @@
 # State 5 — Cabinet Flow admission operations
 
+A25 clock contract: every operational timestamp written by this module is KernelInstant M47 obtained from its injected `module:system_clock.now` at the atomic event it owns. No public operation accepts caller-, gateway- or surface-supplied current time.
+
 Admission exposes orchestration and evidence lookup, not a caller-controlled
 decision. `decide_admission` remains a hidden step of `module:admission`: no
 surface or peer module can record, edit, override or waive a verdict.
