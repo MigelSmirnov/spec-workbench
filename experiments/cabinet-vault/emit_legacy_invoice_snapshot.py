@@ -232,8 +232,11 @@ def emit(repository: PinnedRepository, audit_path: str, destination: Path) -> di
     if destination.is_relative_to(repository.repository):
         raise ValueError("output must be outside the canonical repository")
     snapshot, objects = build_snapshot(repository, audit_path)
-    wrapper_schema = json.loads((Path(__file__).parents[1] / "contracts" /
-                                "legacy_invoice_snapshot_v1.schema.json").read_text())
+    repo_root = Path(__file__).resolve().parents[2]
+    wrapper_schema = json.loads((
+        repo_root / "examples" / "cabinet-web-backend" / "contracts" /
+        "legacy_invoice_snapshot_v1.schema.json"
+    ).read_text())
     Draft202012Validator(wrapper_schema).validate(snapshot)
     destination.parent.mkdir(parents=True, exist_ok=True)
     stage = Path(tempfile.mkdtemp(prefix=".cabinet-snapshot-", dir=destination.parent))

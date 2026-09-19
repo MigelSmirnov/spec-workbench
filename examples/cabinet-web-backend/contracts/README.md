@@ -6,7 +6,8 @@ dependency of this adapter. The schema embeds the unchanged product
 InvoiceCardV1 schema, copied deterministically from the pinned source revision.
 It does not define another Invoice product model.
 
-The offline emitter is `../tools/emit_legacy_invoice_snapshot.py`. It reads only
+The offline migration emitter lives outside the project Workbench tooling namespace at
+`experiments/cabinet-vault/emit_legacy_invoice_snapshot.py`. It reads only
 Git objects from an explicit full commit. The trusted repository, accepted
 commit, and byte bound are operator inputs, not fields supplied by an HTTP or
 MCP caller. No repository code, hook, working-tree file, or request bridge is
@@ -15,7 +16,7 @@ inventory and match every Card's raw hash and every recovered original's hash
 and size. An unknown association or absent audited Card fails explicitly.
 
 ```bash
-python examples/cabinet-web-backend/tools/emit_legacy_invoice_snapshot.py \
+python experiments/cabinet-vault/emit_legacy_invoice_snapshot.py \
   --repository /path/to/trusted/Cabinet_web \
   --commit FULL_ACCEPTED_COMMIT \
   --audit-path docs/04-migrations/SOURCE_RECOVERY_20260906.json \

@@ -7,7 +7,8 @@ import subprocess
 import pytest
 
 
-SCRIPT = Path(__file__).parents[1] / "tools" / "emit_legacy_invoice_snapshot.py"
+ROOT = Path(__file__).resolve().parents[3]
+SCRIPT = ROOT / "experiments" / "cabinet-vault" / "emit_legacy_invoice_snapshot.py"
 SPEC = importlib.util.spec_from_file_location("legacy_snapshot", SCRIPT)
 snapshot = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(snapshot)
