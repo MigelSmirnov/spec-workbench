@@ -173,7 +173,8 @@ A09 and A12 require it for, and the store as one backup unit under A20.
 
 ### Knows
 
-The record kinds of M01–M46 that are durable and which of them are append-only.
+The durable record kinds of M01–M49 and which of them are append-only,
+compare-and-set or mutable master state.
 
 ### Must not own
 
@@ -203,15 +204,16 @@ rollback_unit_of_work
 
 ### Owns
 
-A21: resolution of every authenticated request to the owner or to exactly one
-active delegation; issuing and revoking delegations; the closed list of
-owner-only actions and its enforcement; per-credential throttling that cannot
-lock the owner out; the ActorRef attached to every action.
+A21 and A27: resolution of every authenticated request to the owner or to
+exactly one active delegation; issuing and revoking delegations; the closed
+list of owner-only actions and its enforcement; exact durable per-credential
+throttling that cannot lock the owner out; the ActorRef attached to every
+action.
 
 ### Knows
 
-M16, M17, M18, the channel a request arrived on and the credential references of
-`installation`.
+M16, M17, M18, M49, the channel a request arrived on, the credential references
+of `installation`, and KernelInstant M47 for throttle deadlines.
 
 ### Must not own
 
@@ -872,17 +874,18 @@ slot_evidence
 
 ### Owns
 
-A16, A17 and A18: creation of a run with everything pinned and every input
+A16, A17, A18 and A28: creation of a run with everything pinned and every input
 validated; data-driven readiness; validation of a value at the source port and
 at the target port; mapping; guards; failure propagation to dependants only;
-the run's states and their truthful meaning; waiting without timeout; durable
-resumption after restart; cancellation.
+the run's states and their truthful meaning; exact persisted retry ordinal and
+deadline for timed waits; waiting without timeout; durable resumption after
+restart; cancellation.
 
 ### Knows
 
-M39, M40, the pinned flow version and proof, exact function contract versions
-through `slot_registry`, serving activations from `slot_activation`, bindings
-from `operation_bindings`, and the conclusions returned by
+M39, M40, M47, the pinned flow version and proof, exact function contract
+versions through `slot_registry`, serving activations from `slot_activation`,
+bindings from `operation_bindings`, and the conclusions returned by
 `sandbox_supervisor` and `operation_invoker`.
 
 ### Must not own
