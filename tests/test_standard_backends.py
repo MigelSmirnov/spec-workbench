@@ -79,3 +79,60 @@ def test_standard_backend_fails_closed_on_projection_drift(tmp_path: Path) -> No
     assert backend.structured_addresses(project) == set()
     assert backend.deterministic_method_scopes(project) == set()
     assert backend.module_slice(project, "canonical_digest") is None
+
+
+def test_standard_holded_transport_backend_needs_no_project_module(tmp_path: Path) -> None:
+    project = tmp_path / "holded"
+    project.mkdir()
+    backend_ir = {
+        "kind": "holded_transport_backend",
+        "schema_version": 1,
+        "backend": {"emitter": "python_httpx_holded_purchase_v1"},
+        "wiring": {
+            "module": "holded_transport",
+            "concrete_class": "HttpxHoldedHttpClient",
+            "interface": "HoldedHttpClient",
+            "models_module": "cabinet_backend.models",
+        },
+        "protocol": {"origin": "https://api.holded.com"},
+        "payload": {},
+        "responses": {},
+    }
+    (project / "70_holded_transport_closure.json").write_text(
+        json.dumps(
+            {
+                "schema_version": "spec_workbench_holded_transport_backend_closure.v1",
+                "status": "closed",
+                "backend_ir": backend_ir,
+            }
+        ),
+        encoding="utf-8",
+    )
+    (project / "global_spec.json").write_text(
+        json.dumps({"rules": {"holded_transport_backend": backend_ir}}),
+        encoding="utf-8",
+    )
+
+    backend = next(
+        item for item in deterministic_backends(project)
+        if item.id == "holded_transport"
+    )
+    assert backend.structured_addresses(project) == {
+        "rules.holded_transport_backend"
+    }
+    assert backend.deterministic_method_scopes(project) == {
+        "HttpxHoldedHttpClient.__init__",
+        "HttpxHoldedHttpClient.create_purchase",
+        "HttpxHoldedHttpClient.list_purchases",
+        "HttpxHoldedHttpClient.get_purchase",
+    }
+    assert backend.module_slice(project, "holded_transport") == {
+        "enabled": True,
+        "backend_ir": backend_ir,
+        "deterministic_method_scopes": [
+            "HttpxHoldedHttpClient.__init__",
+            "HttpxHoldedHttpClient.create_purchase",
+            "HttpxHoldedHttpClient.get_purchase",
+            "HttpxHoldedHttpClient.list_purchases",
+        ],
+    }
