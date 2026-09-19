@@ -1,5 +1,7 @@
 # State 5 — Cabinet Flow slot-registry operations
 
+A25 clock contract: every operational timestamp written by this module is KernelInstant M47 obtained from its injected `module:system_clock.now` at the atomic event it owns. No public operation accepts caller-, gateway- or surface-supplied current time.
+
 The slot registry owns replaceable pure-function definitions: the continuing
 Slot identity, immutable contract versions and immutable implementation
 submissions. It never executes, admits or activates code. Exact read operations
