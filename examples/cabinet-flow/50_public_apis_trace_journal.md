@@ -1,5 +1,7 @@
 # State 5 — Cabinet Flow trace-journal operations
 
+A25 clock contract: `module:trace_journal` never reads host wall time. Any `started_at`/`ended_at` KernelInstant M47 stored in NodeExecution is trusted internal evidence produced by the run executor from `module:system_clock.now`.
+
 The trace journal is the append-only evidence boundary for concluded node
 attempts. It does not schedule work, validate business values, retain content or
 act as a process log.
