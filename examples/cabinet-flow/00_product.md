@@ -208,7 +208,10 @@ A flow whose operation nodes are all `read` is activated by the kernel once
 proven, and any authorized agent may run it.
 
 A flow containing any other class is activated only by the human owner, who
-approves that exact flow version. At run time each `state-transition`,
+approves that exact flow version. A `draft-write` node then asks nothing at
+run time: a draft changes nothing until it is approved in its own service, and
+the owner confirmed on 2026-09-19 that drafts are created without a question
+once the flow itself was approved. At run time each `state-transition`,
 `external-effect` and `destructive` node stops for the owner's approval of a
 preview showing the exact operation, target and input, unless the owner has
 granted that exact flow version a standing approval for that node. A grant
