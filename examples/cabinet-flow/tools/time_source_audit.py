@@ -286,25 +286,40 @@ def audit_source(
 
     tree, resolver = clock_entry
     now_functions = _find_now_functions(tree)
-    if len(now_functions) != 1:
-        findings.append(Finding(system_clock, 0, f"expected exactly one production now() function/method, found {len(now_functions)}"))
+    production_now: list[ast.FunctionDef | ast.AsyncFunctionDef] = []
+    for candidate in now_functions:
+        calls = [
+            node for node in ast.walk(candidate)
+            if isinstance(node, ast.Call) and resolver.resolve(node.func) == "time.time_ns"
+        ]
+        if calls:
+            production_now.append(candidate)
+            if len(calls) != 1:
+                findings.append(
+                    Finding(
+                        system_clock,
+                        candidate.lineno,
+                        f"production system_clock.now must call time.time_ns exactly once, found {len(calls)}",
+                    )
+                )
+
+    if len(production_now) != 1:
+        findings.append(
+            Finding(
+                system_clock,
+                0,
+                f"expected exactly one concrete now() that samples time.time_ns, found {len(production_now)}",
+            )
+        )
         return findings
 
-    now_node = now_functions[0]
-    time_ns_calls = [
-        node for node, call_name, function_name in resolver.calls
-        if call_name == "time.time_ns" and function_name == "now"
-    ]
-    if len(time_ns_calls) != 1:
-        findings.append(
-            Finding(system_clock, now_node.lineno, f"system_clock.now must call time.time_ns exactly once, found {len(time_ns_calls)}")
-        )
+    now_node = production_now[0]
     if not _kernel_instant_return_contract(now_node, resolver):
         findings.append(
             Finding(
                 system_clock,
                 now_node.lineno,
-                "system_clock.now must floor the one time.time_ns sample by 1000 and return KernelInstant(epoch_us=...)",
+                "production system_clock.now must floor the one time.time_ns sample by 1000 and return KernelInstant(epoch_us=...)",
             )
         )
     return findings
