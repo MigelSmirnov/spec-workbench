@@ -1,5 +1,7 @@
 # State 5 — Cabinet Flow trial-corpus operations
 
+A25 clock contract: every operational timestamp written by this module is KernelInstant M47 obtained from its injected `module:system_clock.now` at the atomic event it owns. No public operation accepts caller-, gateway- or surface-supplied current time.
+
 The trial corpus is the append-only memory of a contract version. Cases are
 immutable after creation; withdrawal is a final visible fact, and durable file
 fixtures are StoredValues rather than live-run spool objects.
