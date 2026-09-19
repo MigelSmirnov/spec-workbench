@@ -57,13 +57,16 @@ None; `module:slot_registry` owns idempotent lookup and persistence.
 
 ### Inputs
 
-The exact implementation byte sequence and the identity-relevant runtime/code
-format discriminator. Filename, author, submission time, rationale and a
-claimed implementation ID are not defining inputs.
+The exact target SlotContractVersion reference, exact implementation byte
+sequence and the identity-relevant runtime/code format discriminator. Filename,
+author, submission time, rationale and a claimed implementation ID are not
+defining inputs.
 
 ### Outputs
 
-The content digest as `implementation_id`.
+The content digest over the canonical tuple
+`(contract_version_ref, code_format, code_bytes)` as
+`implementation_id`.
 
 ### Observable effect
 
@@ -71,8 +74,10 @@ None.
 
 ### Enforces
 
-Byte-exact repeatability, no identity copied from a file or request, and the
-same bytes producing one identity across delegations and submission times.
+Byte-exact repeatability within one exact contract version, no identity copied
+from a file or request, the same bytes for the same contract producing one
+identity across delegations/submission times, and identical bytes targeting a
+different contract version producing a different implementation identity.
 
 ### Errors
 
