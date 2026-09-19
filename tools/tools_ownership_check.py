@@ -22,6 +22,10 @@ PROJECT_OWNED = (
     "experiments/*/**",
     "experiments/*",
 )
+PROJECT_LOCAL_TOOLING = (
+    "examples/*/tools/**",
+    "examples/*/tools",
+)
 TOOLING_BRANCH_PREFIXES = ("tools/", "main", "master")
 
 
@@ -40,8 +44,15 @@ def is_tooling_branch(branch: str) -> bool:
     return any(branch == prefix.rstrip("/") or branch.startswith(prefix) for prefix in TOOLING_BRANCH_PREFIXES)
 
 
+def is_project_local_tooling(path: str) -> bool:
+    return any(fnmatch.fnmatch(path, pattern) for pattern in PROJECT_LOCAL_TOOLING)
+
+
 def is_project_owned(path: str) -> bool:
-    return any(fnmatch.fnmatch(path, pattern) for pattern in PROJECT_OWNED)
+    return (
+        any(fnmatch.fnmatch(path, pattern) for pattern in PROJECT_OWNED)
+        and not is_project_local_tooling(path)
+    )
 
 
 def changed_paths(repo_root: Path, base: str, head: str = "HEAD") -> list[str]:
@@ -76,7 +87,11 @@ def main(argv: list[str] | None = None) -> int:
     if not bad:
         print(f"{branch}: {len(paths)} changed path(s), all project-owned")
         return 0
-    print(f"{branch}: {len(bad)} path(s) outside project ownership; generic tooling changes only on a tools/* branch into main:")
+    print(
+        f"{branch}: {len(bad)} path(s) outside project ownership; "
+        "generic tooling, including examples/<project>/tools/, changes only "
+        "on a tools/* branch into main:"
+    )
     for path in bad:
         print(f"  {path}")
     return 1

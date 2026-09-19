@@ -373,9 +373,13 @@ def _post_state5_step(sequence: dict[str, Any], project: Path, project_text: str
         return _result(
             sequence=sequence, project=project, project_text=project_text,
             phase="decision_witness_resolution", blocked=True,
-            reason="A required-tests witness tag claims a verification check or [TEST_EVIDENCE] note that does not exist; a claimed witness that is absent is worse than no claim.",
+            reason=(
+                "Accepted decisions declare formal invariants that nothing mechanical enforces, or claim a "
+                "witness that does not exist. A decision without a verified witness is undecided: name a "
+                "verification check or [TEST_EVIDENCE] note for each before anything is assembled."
+            ),
             summary=witnesses["summary"], findings=witnesses["findings"],
-            router_allowed=True, persistence_allowed=True,
+            router_allowed=False, persistence_allowed=False,
         )
 
     return _result(

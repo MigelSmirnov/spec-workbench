@@ -24,6 +24,14 @@ Project branches own project data and design artifacts. They must not own a fork
 copy of the generic authoring sequence. MCP integrations must wrap the same
 pipeline API used by the CLI rather than reimplementing routing.
 
+## No warnings, no waivers
+
+Every phase of the sequence stops on any finding that is not clean: the
+fence (`tools/fence.py`, "The fence" in SKILL.md) raises warnings and review
+findings to stops with a hint, refuses closure-gap waivers, and adds the
+`witness` and `flows` assembly checks. A phase that reports a stop is not
+"ready with remarks"; it is not ready.
+
 ## Canonical order
 
 The generic sequence promoted to `main` is:

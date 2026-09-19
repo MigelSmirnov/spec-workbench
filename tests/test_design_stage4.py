@@ -156,6 +156,65 @@ def test_coverage_marks_missing_planned_refs_inside_existing_flow(tmp_path: Path
     assert row["missing_candidate_capabilities"] == ["capability:archive.get_record"]
 
 
+def test_coverage_rejects_extra_known_refs_not_declared_by_plan(tmp_path: Path) -> None:
+    project = _project(tmp_path)
+    path = project / "40_flows.md"
+    path.write_text(
+        path.read_text(encoding="utf-8").replace(
+            "`capability:archive.accept_transfer`.",
+            "`capability:archive.accept_transfer` and `capability:archive.get_record`.",
+        ),
+        encoding="utf-8",
+    )
+    row = design_stage4.coverage(project)["flows"][0]
+    assert row["extra_capability_refs"] == ["capability:archive.get_record"]
+    assert row["missing_candidate_capabilities"] == []
+    assert design_stage4.coverage(project)["summary"]["remaining"] == 2
+
+    lint = design_stage4.lint(project)
+    assert any(f["code"] == "flow_capability_refs_mismatch" for f in lint["findings"])
+
+
+def test_coverage_requires_exact_module_refs(tmp_path: Path) -> None:
+    project = _project(tmp_path)
+    modules = project / "30_modules.md"
+    modules.write_text(
+        modules.read_text(encoding="utf-8")
+        + """
+## `audit`
+
+### Owns
+- audit evidence.
+### Knows
+- audit semantics.
+### Hides
+- audit storage.
+### Must not own
+- archive acceptance.
+### Candidate public capabilities
+```text
+record_audit
+```
+### Depth assessment
+Deep module.
+""",
+        encoding="utf-8",
+    )
+    path = project / "40_flows.md"
+    path.write_text(
+        path.read_text(encoding="utf-8").replace(
+            "`module:archive` owns acceptance",
+            "`module:archive` and `module:audit` own acceptance",
+        ),
+        encoding="utf-8",
+    )
+    row = design_stage4.coverage(project)["flows"][0]
+    assert row["extra_module_refs"] == ["module:audit"]
+
+    lint = design_stage4.lint(project)
+    assert any(f["code"] == "flow_module_refs_mismatch" for f in lint["findings"])
+
+
 def test_lint_rejects_plan_refs_not_present_in_state3(tmp_path: Path) -> None:
     project = _project(tmp_path)
     plan_path = project / "40_flow_plan.json"

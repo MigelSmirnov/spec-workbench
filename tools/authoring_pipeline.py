@@ -77,7 +77,7 @@ def project_next(repo_root: Path, project_query: str) -> dict[str, Any]:
     """Resolve one logical project and return its next authoring phase.
 
     The materialized project checkout is read-only from the pipeline's point of
-    view: the sequencer and gates only inspect it. Authoring mutations remain an
+    view: the sequencer only inspects it. Authoring mutations remain an
     explicit user/agent action on the canonical project branch.
     """
     with materialized_project(repo_root, project_query) as (view, case_root):

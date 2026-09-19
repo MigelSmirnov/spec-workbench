@@ -12,7 +12,7 @@ import json
 import re
 import sys
 from collections import Counter, defaultdict
-from dataclasses import asdict, dataclass
+from dataclasses import replace, asdict, dataclass
 from pathlib import Path
 from typing import Literal, Sequence
 
@@ -897,6 +897,11 @@ def lint_project(project: Path, *, state: int = DEFAULT_STATE) -> LintReport:
     ordered_drafts = sorted(drafts, key=_finding_sort_key)
     ordered_findings = tuple(
         _enrich_finding(project, draft) for draft in ordered_drafts
+    )
+    # the fence: a warning is an undecided fact and stops the state
+    ordered_findings = tuple(
+        replace(finding, severity="error") if finding.severity == "warning" else finding
+        for finding in ordered_findings
     )
     severities = Counter(finding.severity for finding in ordered_findings)
     reference_count = sum(len(item["explicit_refs"]) for item in selected_items)

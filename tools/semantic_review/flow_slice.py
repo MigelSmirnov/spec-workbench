@@ -87,6 +87,6 @@ def build(project: Path, flow: str) -> dict[str, Any]:
                 "Can a trivial implementation satisfy the accepted obligations of any participating generated callable?",
                 "Can every material branch be written as an implementation-independent Given/When/Then scenario without guessing?",
             ],
-            "allowed_results": ["PASS", "PASS_INTERNAL_VARIATION", "AMBIGUITY"],
+            "allowed_results": ["PASS", "AMBIGUITY"],
         },
     }
