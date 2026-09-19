@@ -260,6 +260,9 @@ Candidate fields:
 - `value_schema_ref`;
 - `semantic_term_revision_ref` optional only for output;
 - `cardinality`: `one`, `optional` or `many`;
+- `carriage`: `value` or `byte_stream`. `byte_stream` is permitted only on a
+  port of an operation binding version and carries bytes too large to be a
+  StoredValue. A function port and a flow constant are always `value`;
 - `disclosure_class`: `open`, `business_confidential` or `personal_data`. On an
   input port it is the highest class the port accepts. On an operation binding's
   output port it is declared. On a function's output port it is never authored:
@@ -409,9 +412,9 @@ None.
 - `01_models_flows.md` — M28–M37: manifest operation reference, operation
   binding and version, flow, flow version, node, edge, constant, proof and
   flow activation.
-- `01_models_runs.md` — M38–M45: stored value, service target, run, node
-  execution, effect approval, standing grant, outcome reconciliation and
-  vocabulary proposal.
+- `01_models_runs.md` — M38–M46: stored value, spooled bytes, service target,
+  run, node execution, effect approval, standing grant, outcome reconciliation
+  and vocabulary proposal.
 
 ## State 1 evidence
 
@@ -445,7 +448,7 @@ absence is a decision, not a gap:
 
 ## State 1 readiness assessment
 
-Models M01 through M45 have explicit identity, substitution and continuity
+Models M01 through M46 have explicit identity, substitution and continuity
 evidence, source of truth, lifecycle and persistence candidates, and no open
 question. State 2 may be authored.
 

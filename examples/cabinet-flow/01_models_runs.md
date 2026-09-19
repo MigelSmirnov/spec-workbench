@@ -57,6 +57,56 @@ Content-addressed area of the kernel's operational store.
 
 None.
 
+## Model M46 — SpooledBytes
+
+### Meaning
+
+The bytes of one `byte_stream` output, held for the duration of one run so that
+they can be identified, approved and handed to another operation node.
+
+Candidate fields:
+
+- `run_id`;
+- `content_digest`: computed by the kernel while receiving;
+- `size`, `media_type`: as observed, not as claimed by the source;
+- `semantic_term_revision_ref`, `disclosure_class`: from the producing port;
+- `produced_by`: the node execution that received them;
+- `released_at`: when the spool entry was emptied.
+
+Spooled bytes are not a StoredValue. They are never part of a trial corpus, are
+never returned over the surface and are never an input of a function node. What
+remains after release is the digest, size and media type in the node executions
+that named them.
+
+### Identity
+
+value
+
+### Identity evidence
+
+Substitution: equal run and content digest are interchangeable; the same bytes
+received twice within a run are held once. Continuity: the bytes never change;
+release removes them and leaves their description.
+
+### Source of truth
+
+The kernel, from the bytes an operation node actually received.
+
+### Lifecycle candidate
+
+No independent lifecycle. Release at the run's terminal state is retention, not
+a state.
+
+### Persistence candidate
+
+Run-scoped spool of the kernel host, outside the operational store's
+content-addressed area and outside its backups' business meaning; size-bounded
+per run by the kernel release.
+
+### Open questions
+
+None.
+
 ## Model M39 — ServiceTarget
 
 ### Meaning

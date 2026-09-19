@@ -104,6 +104,13 @@ and invokes no undeclared operation.
 The kernel is itself one service of that manifest. It owns no operation of
 another service and never writes to another service's store.
 
+The kernel is indifferent to whose service it is. The platform's own estimator
+and a third party's API such as a messenger are the same thing to it: a manifest
+record with instances and declared operations. An integration is therefore never
+code that reaches out. It is a manifest record, operation bindings, and pure
+functions that turn the service's raw answers into the platform's meanings. An
+agent writes no network code, and only the kernel speaks to a service.
+
 The manifest does not type an operation's data. An **operation binding** is the
 kernel's immutable, versioned declaration that gives one exact manifest
 operation its typed input and output ports under D0-038. An agent may propose a
@@ -244,7 +251,13 @@ approvals and grants, runs and traces, and the bounded content-addressed values
 that edges carry between nodes under a retention policy.
 
 It stores no business fact. Every business fact lives in the microservice that
-owns its lifecycle, and the kernel holds at most a digest and a reference. This
+owns its lifecycle, and the kernel holds at most a digest and a reference.
+
+A file too large to be a value, such as a photo taken from one service and given
+to another, moves between two operation nodes through a spool that belongs to
+the run. The kernel learns its digest there, so the owner approves the exact
+bytes that arrived, and the spool is emptied when the run ends. A function never
+receives such bytes. This
 narrows D0-031 of the superseded correction, which denied the environment any
 store.
 

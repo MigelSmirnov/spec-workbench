@@ -236,9 +236,15 @@ nobody, including the kernel, can rewrite it.
 1. The kernel's operational store holds only the records of States 1 M01–M45.
    It holds no copy of a microservice's business record beyond the bounded
    values that crossed an edge.
-2. Source bytes never enter the store. A photo or document travels as a
-   SourceReference M13 and is read from its owning service by an operation node
-   when a provider needs it.
+2. Source bytes never enter the store. A photo or document already in custody
+   travels as a SourceReference M13. Bytes that must pass from one service to
+   another travel as SpooledBytes M46: the kernel receives them from the source
+   operation into the run's spool, computes their digest, observes their size
+   and media type, and sends them to the target operation from the spool.
+   Approval of the target effect under A12 covers that digest, so it happens
+   after receipt and before sending. The spool entry is emptied when the run
+   reaches a terminal state, and is bounded per run; exceeding the bound fails
+   the receiving node as `contract_violation` with reason `value_too_large`.
 3. A StoredValue M38 has a size ceiling fixed by the kernel release. A value
    above it fails the producing node as `contract_violation` with reason
    `value_too_large`; large data belongs behind a reference in its service.
@@ -270,7 +276,10 @@ retention(value) = max(retention(record) for record naming value)
 
 ### Required tests
 
-1. A flow over a photo stores a SourceReference and never the image bytes.
+1. A flow over a photo already in custody stores a SourceReference and never the
+   image bytes. A flow moving a photo between two services holds the bytes in
+   the run's spool only, shows the owner the digest of what arrived, sends
+   exactly those bytes, and leaves no bytes after the run ends.
 2. A node output above the size ceiling fails with `value_too_large`.
 3. After the retention period a run's trace is readable with digests and
    verdicts, and its expired content is absent.
