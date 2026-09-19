@@ -42,7 +42,8 @@ does not create a FlowActivation and invokes no node.
 
 ### Enforces
 
-Every node pins an existing contract version or accepted binding version;
+Every function node pins an existing contract version whose owning Slot is
+active at proof time, every operation node pins an accepted binding version;
 every edge has exact-term or accepted-relation evidence with schema acceptance
 without coercion; conversion and resolution relations require their declared
 function node; byte-stream carriage, media types and ceilings match;
