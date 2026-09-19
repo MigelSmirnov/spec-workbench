@@ -312,8 +312,11 @@ Candidate fields:
 - `status`: `pending`, `approved`, `denied` or `consumed`;
 - `decided_by`: ActorRef of kind `owner`, and `decided_at`, present only
   after the `pending -> approved | denied` transition;
-- `consumed_by_attempt_ref`: the exact run/node/map-index/attempt authorized
-  by this approval, present only after `approved -> consumed`.
+- `consumed_attempt_refs`: the exact run/node/map-index/attempt identities
+  already authorized by this approval; empty before first use. For a non-mapped
+  node it contains at most one item. For a mapped node it grows only within the
+  previewed element set and the approval reaches `consumed` when every covered
+  element attempt has taken its one authority.
 
 The kernel invokes the operation only with inputs whose digest equals the
 approved preview. A different input is a different effect and needs another
@@ -330,8 +333,9 @@ entity
 Substitution: two approval requests are never interchangeable, even with equal
 previews, because each belongs to one run/node decision and one consumption
 history. Continuity: the same approval remains identifiable while it moves from
-`pending` to the owner's final decision and, when approved, to one consumed
-attempt set. Its preview and digest never change.
+`pending` to the owner's final decision and, when approved, while its exact
+covered attempt set is consumed element by element. Its preview and digest
+never change.
 
 ### Source of truth
 
