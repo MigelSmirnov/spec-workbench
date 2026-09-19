@@ -74,6 +74,25 @@ class Finding:
     source: SourceRange
 
 
+PUBLIC_API_DOCUMENT = "50_public_apis.md"
+PUBLIC_API_SPLIT_GLOB = "50_public_apis_*.md"
+
+
+def public_api_documents(project: Path) -> list[Path]:
+    """The State 5 documents a post-State-5 reader takes operations from.
+
+    A case keeps its public operations either in the one canonical document or,
+    when that document is absent, split by module into ``50_public_apis_<x>.md``.
+    A case with the canonical document is read from it alone: its sibling
+    ``50_public_apis_*`` files are repairs and reviews, and module slices hashed
+    into Stage 8.1 must not change under them.
+    """
+    canonical = project / PUBLIC_API_DOCUMENT
+    if canonical.is_file():
+        return [canonical]
+    return sorted(path for path in project.glob(PUBLIC_API_SPLIT_GLOB) if path.is_file())
+
+
 def _iter_state5_files(project: Path) -> Iterable[Path]:
     for path in sorted(project.rglob("*.md")):
         if not path.is_file():
