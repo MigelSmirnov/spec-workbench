@@ -176,13 +176,15 @@ credential never changes the owner's record or another agent's record.
 
 ### Identity
 
-value
+entity
 
 ### Identity evidence
 
-Substitution: equal credential-binding reference and channel address the same
-throttle state. Continuity: the counters/times change as authentication fails,
-succeeds or a temporary block expires.
+Substitution: two records with the same credential-binding reference and channel
+cannot coexist as different throttle states; they name the same abuse-control
+state. Continuity: that state remains the same entity while
+`consecutive_failures`, `last_failure_at` and `blocked_until` change across
+failures, success, block expiry and restart.
 
 ### Source of truth
 
