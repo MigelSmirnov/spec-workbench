@@ -226,9 +226,9 @@ Security review: PERFORMED
 - injection_interpreted_input: APPLICABLE; references: A02, A06, A17, A22; affected: M23, M32, M34, M35, agent-supplied text, submitted code, flow definitions
 - external_callbacks_webhooks: APPLICABLE; references: A10, A14, A15, A23; affected: M28, M30, M41, M44, outbound service invocation and untrusted service responses
 - browser_boundary: APPLICABLE; references: A03, A22; affected: http_api channel, owner-facing previews and statements
-- files_artifacts: APPLICABLE; references: A02, A05, A06, A07, A20; affected: M13, M22, M23, M24, M38, M46, code bytes, sandbox scratch, run spool, backups
+- files_artifacts: APPLICABLE; references: A02, A05, A06, A07, A20, A26; affected: M13, M22, M23, M24, M38, M46, M48, code bytes, sandbox scratch, run spool, backups
 - concurrency: APPLICABLE; references: A09, A12, A14, A17, A18, A25; affected: M27, M40, M41, M42, M44, M47
-- dependencies: APPLICABLE; references: A06, A23, A25; affected: M22, M47, kernel release, sandbox runtime libraries, wall-clock and monotonic time primitives
+- dependencies: APPLICABLE; references: A06, A23, A25, A26; affected: M22, M47, M48, kernel release, sandbox runtime libraries, wall-clock and monotonic time primitives
 
 ## Accepted decision A26 — one release owns every global safety ceiling
 
