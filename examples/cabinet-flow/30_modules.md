@@ -127,16 +127,16 @@ mint_identity
 
 ### Owns
 
-A23: the installation record and its one owner principal; the selection of one
-manifest instance per service and the refusal of mixed production and
+A23 and A26: the installation record and its one owner principal; the selection
+of one manifest instance per service and the refusal of mixed production and
 non-production targets; resolution of credential references at the moment of
-use; the release ceilings for resource bounds, value size, fixture size and
-spool size; the configured manifest repository revision.
+use; the immutable ReleaseCeilings M48 shipped with the exact kernel release;
+the configured manifest repository revision.
 
 ### Knows
 
-M16, M39, instance classes of the manifest, and the host's protected
-configuration.
+M16, M39, M48, instance classes of the manifest, the exact kernel release
+identity and the host's protected configuration.
 
 ### Must not own
 
@@ -290,8 +290,8 @@ bytes; retirement of a slot.
 
 ### Knows
 
-M05, M19–M23; accepted term revisions through `semantic_vocabulary`; release
-ceilings and offered sandbox runtime revisions through `installation`; and
+M05, M19–M23 and injected M48; accepted term revisions through
+`semantic_vocabulary`; offered sandbox runtime revisions from the release; and
 `identity` for content-derived contract and implementation identities.
 
 ### Must not own
@@ -337,7 +337,8 @@ version.
 ### Knows
 
 M24, M38 of retention class `trial_corpus`, M41 and M46 as capture sources,
-exact contract versions through `slot_registry`, and the fixture size ceiling.
+exact contract versions through `slot_registry`, and the injected M48 trial
+fixture/text ceilings.
 
 ### Must not own
 
@@ -376,9 +377,9 @@ after an unconfirmed cleanup.
 
 ### Knows
 
-M21, M22 and the exact M23 implementation record/body fetched from
-`slot_registry`; the validated inputs of one execution; and the media type and
-size a file port accepts.
+M21, M22, injected M48 and the exact M23 implementation record/body fetched
+from `slot_registry`; the validated inputs of one execution; and the media
+type and size a file port accepts.
 
 ### Must not own
 
@@ -689,8 +690,9 @@ run spool.
 
 ### Knows
 
-The instance address and headers from `manifest_reader`, a credential reference
-from `installation`, and the three channels `http_api`, `mcp` and `operator`.
+Injected M48 transport timeout ceiling, the instance address and headers from
+`manifest_reader`, a credential reference from `installation`, and the three
+channels `http_api`, `mcp` and `operator`.
 
 ### Must not own
 
@@ -764,8 +766,8 @@ class according to the reader's ceiling.
 
 ### Knows
 
-M38, the retention periods of A20, run terminal states and the disclosure
-ceiling of the reading actor.
+M38, injected M48, the retention periods of A20, run terminal states and the
+disclosure ceiling of the reading actor.
 
 ### Must not own
 
@@ -802,8 +804,8 @@ preview, the per-run size bound, and release at the run's terminal state.
 
 ### Knows
 
-The media types and size ceiling of a `byte_stream` port, the run's state, and
-the leading bytes of a file.
+Injected M48, the media types and size ceiling of a `byte_stream` port, the
+run's state, and the leading bytes of a file.
 
 ### Must not own
 
@@ -840,8 +842,9 @@ of what executed; reads bounded by disclosure ceiling and, for repair, by slot.
 
 ### Knows
 
-M41, M18, the identities of implementations, runtime revisions, binding versions
-and service instances, and value digests.
+M41, M18, injected M48 failure-detail ceiling, the identities of
+implementations, runtime revisions, binding versions and service instances, and
+value digests.
 
 ### Must not own
 
@@ -919,8 +922,8 @@ agent-supplied text as data.
 
 ### Knows
 
-The operations of the deep modules it exposes and the ActorRef resolved by
-`access_control`.
+The operations of the deep modules it exposes, injected M48 surface/text/page
+ceilings and the ActorRef resolved by `access_control`.
 
 ### Must not own
 
@@ -1018,13 +1021,15 @@ serve_http
 ### Owns
 
 Composition of the kernel at start-up: construction of every module with its
-collaborators, start-up validation through `installation`, the manifest drift
-sweep, supervisor health, and resumption of non-terminal runs before the
-gateways accept requests.
+collaborators, one read of ReleaseCeilings M48 through `installation` and
+injection of that immutable value into every relevant consumer, start-up
+validation, the manifest drift sweep, supervisor health, and resumption of
+non-terminal runs before the gateways accept requests.
 
 ### Knows
 
-Every module's constructor dependencies and the start-up order.
+Every module's constructor dependencies, M48 injection targets and the start-up
+order.
 
 ### Must not own
 
