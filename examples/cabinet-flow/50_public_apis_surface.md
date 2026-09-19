@@ -58,8 +58,8 @@ reissue records, and recovery conclusions. It never creates business facts.
 
 ### Callers
 
-`boundary:mcp_client` sends an authenticated MCP request after the listener has
-been started by `module:bootstrap`.
+`boundary:mcp_client` sends an authenticated MCP request after kernel startup
+has opened the listener.
 
 ### Inputs
 
@@ -103,8 +103,8 @@ catalogue operation and carries the resolved ActorRef.
 
 ### Callers
 
-`boundary:http_client` sends an authenticated HTTP API request after the
-listener has been started by `module:bootstrap`.
+`boundary:http_client` sends an authenticated HTTP API request after kernel
+startup has opened the listener.
 
 ### Inputs
 
