@@ -146,13 +146,21 @@ verification. No Factory emitter was invoked outside Route B.
 
 ## State 7 data projection
 
-Before checking or assembling HTTP Notes, run
-`python tools/project_http_note_data.py --check` from this case directory.
-Without --check the utility regenerates only the derived HTTP data placements
-in 60_data_closure.json from the accepted route, wire and error catalogues.
-It never duplicates canonical Python signatures or the router backend IR and
-never changes a source catalogue. The failure-category/code association in
-60_http_errors.json makes the already accepted A22 refusal cases addressable.
+The HTTP data that Notes address lives under rules.http_transport in
+60_data_closure.json: the six operation bindings with their request model,
+result model and success status, the error catalogue with its fixed messages,
+the failure-category/code association that makes the accepted A22 refusal cases
+addressable, the framing codes, the unknown-error fallback, the runtime slot
+and the credential extractor. It repeats no canonical Python signature and no
+router backend IR.
+
+These rows restate 60_http_errors.json, 70_http_transport_closure.json,
+70_router_context.json and 70_router_closure.json. They were produced once by a
+project-local script that has been removed: Workbench tooling lives on main and
+never on an application branch. Until the platform checks derived placements
+against their source artifact, a change to any of those four files must be
+repeated under rules.http_transport by hand and reviewed as one change.
+
 Rules under rules.http_transport are data-provider input, not inline prompt
 content. The six endpoint bindings and fixed messages remain machine data.
 
