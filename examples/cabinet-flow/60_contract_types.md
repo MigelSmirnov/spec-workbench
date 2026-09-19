@@ -118,21 +118,124 @@ The author, issue time and rationale are absent from this result.
 
 ---
 
-## `CanonicalField`
+## `DefiningValueRef`
 
-Internal closed tree used only by `module:identity` while producing canonical
-bytes.
+Defining projection of one StoredValue M38 inside a trial case.
 
 Fields:
 
-- `name: str`;
-- `value: str | int | bool | bytes | None | tuple[CanonicalField, ...]`.
+- `value_digest: str` — the value's content digest;
+- `value_schema_ref: str`;
+- `semantic_term_revision_ref: str | None`.
 
-Sequences are represented by ordered child fields; mappings are represented by
-children already ordered by the record-kind canonicalization rule. Floating
-point, arbitrary objects, caller-provided identity values and unordered
-containers are not admitted to this internal representation.
+Disclosure class, retention class, size, media type and hold period are absent:
+they never define which value it is.
 
+---
+
+## `ContractVersionDefiningContent`
+
+Typed defining content of SlotContractVersion M20, built only by
+`module:identity`.
+
+Fields:
+
+- `record_kind: str` — always the contract-version record kind;
+- `canonicalization_version: str`;
+- `slot_id: str`;
+- `input_ports: tuple[SemanticPort, ...]` — order is defining;
+- `output_ports: tuple[SemanticPort, ...]` — order is defining;
+- `resource_bounds: ResourceBounds`;
+- `runtime_revision_ref: str`.
+
+---
+
+## `ImplementationDefiningContent`
+
+Typed defining content of Implementation M23.
+
+Fields:
+
+- `record_kind: str` — always the implementation record kind;
+- `canonicalization_version: str`;
+- `contract_version_ref: str`;
+- `entry_point: str`;
+- `code_digest: str` — the name `digest_bytes` gives the exact code bytes.
+
+The code bytes themselves are never a field of a typed value.
+
+---
+
+## `TrialCaseDefiningContent`
+
+Typed defining content of TrialCase M24.
+
+Fields:
+
+- `record_kind: str` — always the trial-case record kind;
+- `canonicalization_version: str`;
+- `contract_version_ref: str`;
+- `inputs: tuple[DefiningValueRef, ...]` — in contract port order;
+- `expected_outputs: tuple[DefiningValueRef, ...] | None` — absent evidence
+  stays distinct from empty evidence;
+- `protected_classification: str`.
+
+---
+
+## `BindingVersionDefiningContent`
+
+Typed defining content of OperationBindingVersion M30.
+
+Fields:
+
+- `record_kind: str` — always the binding-version record kind;
+- `canonicalization_version: str`;
+- `manifest_operation_ref: ManifestOperationRef`;
+- `input_ports: tuple[SemanticPort, ...]` — order is defining;
+- `output_ports: tuple[SemanticPort, ...]` — order is defining;
+- `effect_class: str`;
+- `replay: str`;
+- `idempotency_key_ports: tuple[str, ...]` — canonical order;
+- `preconditions: tuple[str, ...]` — canonical order;
+- `preview_ports: tuple[str, ...]` — canonical order;
+- `outcome_read_binding_ref: str | None`.
+
+---
+
+## `FlowVersionDefiningContent`
+
+Typed defining content of FlowVersion M32.
+
+Fields:
+
+- `record_kind: str` — always the flow-version record kind;
+- `canonicalization_version: str`;
+- `flow_id: str`;
+- `flow_inputs: tuple[SemanticPort, ...]` — order is defining;
+- `flow_outputs: tuple[SemanticPort, ...]` — order is defining;
+- `nodes: tuple[FlowNode, ...]` — canonical order, never request order;
+- `edges: tuple[FlowEdge, ...]` — canonical order, never request order;
+- `constants: tuple[FlowConstant, ...]` — canonical order, never request order.
+
+---
+
+## `StoredValueDefiningContent`
+
+Typed defining content of StoredValue M38.
+
+Fields:
+
+- `record_kind: str` — always the stored-value record kind;
+- `canonicalization_version: str`;
+- `content_digest: str` — the name `digest_bytes` gives the canonical value
+  bytes;
+- `value_schema_ref: str`;
+- `semantic_term_revision_ref: str | None`.
+
+All six defining-content types are immutable, admit no floating point, no byte
+payload, no timestamp, no author and no rationale, and are never persisted:
+they exist only between `module:identity` and
+`module:canonical_digest.digest_defining_content`.
 
 ---
 

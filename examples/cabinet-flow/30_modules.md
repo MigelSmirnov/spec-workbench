@@ -83,29 +83,76 @@ now
 - kind: deep
 - hidden mechanism: one injected wall clock with one integer representation and one production primitive
 
+## `canonical_digest`
+
+### Owns
+
+The digest half of A05: the one canonical byte form and the one digest
+algorithm under which every content identity of the kernel is computed. The
+supported canonical_digest_backend/v1 emitter owns this module's
+implementation.
+
+### Knows
+
+Nothing about any record kind. It receives either one typed value to serialize
+canonically or one byte sequence.
+
+### Must not own
+
+Which fields are defining, the order of a collection, the refusal of a
+caller-supplied identity, canonicalization versioning, minting, or storage.
+
+### Hides
+
+Canonical JSON with sorted keys, compact separators, preserved non-ASCII text
+and UTF-8 encoding; SHA-256 rendered as lowercase hexadecimal; raw bytes
+digested as they stand, with no decoding and no framing.
+
+### Direct consumers
+
+Only `identity`. No other module computes or compares a digest of its own.
+
+### Candidate public capabilities
+
+```text
+digest_defining_content
+digest_bytes
+```
+
+### Depth assessment
+
+- kind: deep
+- hidden mechanism: one canonical byte form and one digest algorithm behind every content identity
+
 ## `identity`
 
 ### Owns
 
-A05: the canonical serialization of every content-identified record kind and the
-digest computed over it; the minting of stable identities for entities that are
-not content-identified; the refusal of caller-supplied identities.
+A05: the defining content of every content-identified record kind, stated as
+one typed value per kind, and the identity named from it; the minting of stable
+identities for entities that are not content-identified; the refusal of
+caller-supplied identities.
 
 ### Knows
 
 Which fields of M20, M23, M24, M30, M32 and M38 are defining content, and that
-author, time and rationale never are.
+author, time and rationale never are. It knows the two operations of
+`canonical_digest` and nothing of how they serialize or digest.
 
 ### Must not own
 
-Storage of the identified records, idempotent lookup of an existing record, or
-the meaning of any field.
+Storage of the identified records, idempotent lookup of an existing record, the
+meaning of any field, or the canonical byte form and digest algorithm, which
+belong to `canonical_digest`.
 
 ### Hides
 
-Field ordering, number and text normalization, serialization versioning and its
-identity-preserving migration, the digest algorithm and the entropy source of
-minted identities.
+The selection of defining fields per record kind, the canonical order of every
+collection whose request order carries no meaning, admission of numbers and
+text, the record-kind and canonicalization-version markers that keep two kinds
+from sharing an identity, versioning with its identity-preserving migration,
+and the entropy source of minted identities. Byte payloads never enter a typed
+value: they are named first by `digest_bytes` and carried as that name.
 
 ### Candidate public capabilities
 
@@ -122,7 +169,7 @@ mint_identity
 ### Depth assessment
 
 - kind: deep
-- hidden mechanism: canonical serialization that makes equal content yield one identity
+- hidden mechanism: typed defining content that makes equal content yield one identity
 
 ## `installation`
 

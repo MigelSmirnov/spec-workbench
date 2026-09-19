@@ -249,7 +249,12 @@ authoring modules.
    `capability:trial_corpus.add_trial_case` adds typed cases, including fixture
    files, identified by `capability:identity.identify_trial_case` and stored
    through `capability:value_store.put_value` with
-   `capability:identity.digest_value`.
+   `capability:identity.digest_value`. Every identity of this flow is named by
+   `module:identity` from typed defining content through
+   `capability:canonical_digest.digest_defining_content`; code bytes, fixture
+   bytes and value bytes are named first by
+   `capability:canonical_digest.digest_bytes`. Both belong to
+   `module:canonical_digest`, which knows no record kind.
 5. Through `capability:kernel_surface.author`, a step that should never be used
    again is ended by `capability:slot_registry.retire_slot`; flow versions that
    pin it keep what they pinned. Slot/contract/implementation/corpus lifecycle
@@ -406,7 +411,10 @@ writes no network code.
    typed input and output ports, preview ports and the outcome-read binding;
    effect class,
    replay and idempotency key are copied from the manifest, and the identity
-   comes from `capability:identity.identify_binding_version`.
+   comes from `capability:identity.identify_binding_version`, which names the
+   typed defining content through
+   `capability:canonical_digest.digest_defining_content` of
+   `module:canonical_digest`.
 3. `capability:owner_authority.owner_statement` states in plain words what the
    operation does, in which service, what it may change and which disclosure
    class each input accepts.
@@ -455,7 +463,10 @@ to their owning modules.
    `capability:semantic_vocabulary.find_relation`.
 2. `capability:flow_registry.create_flow` and
    `capability:flow_registry.register_flow_version` record the graph under the
-   identity from `capability:identity.identify_flow_version`.
+   identity from `capability:identity.identify_flow_version`, which names the
+   typed defining content through
+   `capability:canonical_digest.digest_defining_content` of
+   `module:canonical_digest`.
 3. `capability:flow_proof.prove_flow` checks the whole graph — pinning, edge
    basis, carriage, cardinality, disclosure, inputs, cycles, reachability,
    guards — and reports every finding.
