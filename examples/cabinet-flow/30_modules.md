@@ -293,6 +293,8 @@ composed only at `module:kernel_surface`.
 create_slot
 issue_contract_version
 submit_implementation
+contract_version
+implementation_record
 retire_slot
 slot_authoring_view
 ```
@@ -314,8 +316,8 @@ version.
 
 ### Knows
 
-M24, M38 of retention class `trial_corpus`, M41 and M46 as capture sources, and
-the fixture size ceiling.
+M24, M38 of retention class `trial_corpus`, M41 and M46 as capture sources,
+exact contract versions through `slot_registry`, and the fixture size ceiling.
 
 ### Must not own
 
@@ -354,8 +356,9 @@ after an unconfirmed cleanup.
 
 ### Knows
 
-M21, M22, M23 code bytes, the validated inputs of one execution and the media
-type and size a file port accepts.
+M21, M22 and the exact M23 implementation record/body fetched from
+`slot_registry`; the validated inputs of one execution; and the media type and
+size a file port accepts.
 
 ### Must not own
 
@@ -389,7 +392,8 @@ deterministic verdict with every applicable refusal reason.
 
 ### Knows
 
-M25, M26, the active corpus from `trial_corpus`, and execution through
+M25, M26, exact contract/implementation metadata through `slot_registry`, the
+active corpus from `trial_corpus`, and execution through
 `sandbox_supervisor`.
 
 ### Must not own
@@ -427,7 +431,8 @@ contract version now".
 
 ### Knows
 
-M27, the current admission from `admission`, the exact active corpus from
+M27, exact contract/implementation metadata through `slot_registry`, the
+current admission from `admission`, the exact active corpus from
 `trial_corpus`, and slot-scoped concluded execution evidence from
 `trace_journal` needed to derive when the serving implementation is known to
 fail a captured regression case.
@@ -852,9 +857,10 @@ resumption after restart; cancellation.
 
 ### Knows
 
-M39, M40, the pinned flow version and proof, serving activations from
-`slot_activation`, bindings from `operation_bindings`, and the conclusions
-returned by `sandbox_supervisor` and `operation_invoker`.
+M39, M40, the pinned flow version and proof, exact function contract versions
+through `slot_registry`, serving activations from `slot_activation`, bindings
+from `operation_bindings`, and the conclusions returned by
+`sandbox_supervisor` and `operation_invoker`.
 
 ### Must not own
 
