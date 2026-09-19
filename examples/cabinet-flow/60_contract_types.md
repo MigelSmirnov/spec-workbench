@@ -696,3 +696,231 @@ Fields:
 `outcome_unknown` is a first-class status and is never coerced to success or
 failure.
 
+
+
+---
+
+## `TypedValueDraft`
+
+Strict typed value supplied at an authoring/run surface before it becomes a
+StoredValue.
+
+Fields:
+
+- `port_id: str`;
+- `semantic_term_revision_ref: str`;
+- `value_schema_ref: str`;
+- `canonical_bytes: bytes | None`;
+- `byte_stream: BoundedByteStream | None`;
+- `media_type: str | None`.
+
+Exactly one content representation is present. `byte_stream` is permitted only
+for the trial-fixture carriage accepted by the target contract; ordinary flow
+inputs are value carriage only.
+
+---
+
+## `TrialCopySkip`
+
+Fields:
+
+- `source_trial_case_ref: str`;
+- `reason: str`.
+
+## `TrialCopyReport`
+
+Fields:
+
+- `copied_trial_case_refs: tuple[str, ...]`;
+- `skipped: tuple[TrialCopySkip, ...]`.
+
+---
+
+## `ActiveCorpusSnapshot`
+
+Fields:
+
+- `contract_version_ref: str`;
+- `active_cases: tuple[TrialCase, ...]`;
+- `corpus_digest: str`;
+- `withdrawn_cases: tuple[TrialCase, ...]`.
+
+Surface serialization may reduce case contents according to disclosure; the
+internal admission/activation form names the exact evidence.
+
+---
+
+## `RunAdvanceResult`
+
+Fields:
+
+- `run: FlowRun`;
+- `node_execution_refs: tuple[str, ...]`;
+- `output_value_refs: tuple[str, ...]`.
+
+Only evidence appended during the bounded advance pass appears in the two
+reference lists.
+
+---
+
+## `RunRecoveryItem`
+
+Fields:
+
+- `run_id: str`;
+- `outcome: str`;
+- `waiting_reasons: tuple[str, ...]`;
+- `unknown_outcome_refs: tuple[str, ...]`;
+- `failure_reason: str | None`.
+
+## `RunRecoveryReport`
+
+Fields:
+
+- `items: tuple[RunRecoveryItem, ...]`.
+
+The report never resolves an unknown effect by assumption.
+
+---
+
+## `RunStatusView`
+
+Fields:
+
+- `run_id: str`;
+- `status: str`;
+- `waiting_on: tuple[str, ...]`;
+- `flow_activation_ref: str`;
+- `created_at: KernelInstant`;
+- `ended_at: KernelInstant | None`;
+- `output_value_refs: tuple[str, ...]`;
+- `partial: bool`.
+
+Content is fetched separately through disclosure-aware value reads.
+
+---
+
+## `NodeExecutionDraft`
+
+Exact append-only evidence supplied to `trace_journal.record_node_execution`
+after the owning execution path has concluded.
+
+Fields:
+
+- `run_id: str`;
+- `node_id: str`;
+- `map_index: int | None`;
+- `attempt_number: int`;
+- `executed_ref: str`;
+- `runtime_revision_ref: str | None`;
+- `enforced_bounds: ResourceBounds | None`;
+- `service_instance_ref: str | None`;
+- `idempotency_key_digest: str | None`;
+- `approval_ref: str | None`;
+- `grant_ref: str | None`;
+- `input_value_refs: tuple[str, ...]`;
+- `output_value_refs: tuple[str, ...]`;
+- `input_file_refs: tuple[SpooledBytes, ...]`;
+- `output_file_refs: tuple[SpooledBytes, ...]`;
+- `input_validation: tuple[str, ...]`;
+- `output_validation: tuple[str, ...]`;
+- `denied_attempts: tuple[DeniedAttemptEvidence, ...]`;
+- `resources_used: SandboxResourceUsage | None`;
+- `status: str`;
+- `failure_reason: str | None`;
+- `failure_detail: str | None`;
+- `started_at: KernelInstant`;
+- `ended_at: KernelInstant`.
+
+No credential, process log or service free text outside the bounded scrubbed
+failure detail is representable.
+
+---
+
+## `RunTracePage`
+
+Fields:
+
+- `executions: tuple[NodeExecution, ...]`;
+- `next_page_cursor: str | None`;
+- `partial: bool`.
+
+---
+
+## `SlotEvidencePage`
+
+Fields:
+
+- `executions: tuple[NodeExecution, ...]`;
+- `trial_execution_refs: tuple[str, ...]`;
+- `next_page_cursor: str | None`.
+
+The page is scoped to one exact slot/contract version.
+
+---
+
+## `ImplementationRecordView`
+
+Fields:
+
+- `implementation: Implementation`;
+- `code_digest: str`;
+- `code_ref: str`;
+- `code_bytes: bytes | None`.
+
+Code bytes are present only for the closed `sandbox_execution` purpose.
+
+---
+
+## `SlotAuthoringView`
+
+Fields:
+
+- `slot: Slot`;
+- `contract_versions: tuple[SlotContractVersion, ...]`;
+- `implementations: tuple[ImplementationRecordView, ...]`;
+- `next_page_cursor: str | None`.
+
+Corpus, activation and execution evidence are intentionally absent.
+
+---
+
+## `CompositionView`
+
+Fields:
+
+- `contract_versions: tuple[SlotContractVersion, ...]`;
+- `binding_versions: tuple[OperationBindingVersion, ...]`;
+- `vocabulary_revision_refs: tuple[str, ...]`;
+- `next_page_cursor: str | None`.
+
+Implementation bodies are never present.
+
+---
+
+## `ContractHealthView`
+
+Fields:
+
+- `contract_version_ref: str`;
+- `serving_activation: SlotActivation | None`;
+- `admission_fresh: bool`;
+- `known_failing: bool`;
+- `failing_trial_case_refs: tuple[str, ...]`;
+- `failing_execution_refs: tuple[str, ...]`.
+
+Stale admission without failure evidence is represented by
+`admission_fresh = false` and `known_failing = false`.
+
+---
+
+## `WaitingForOwnerPage`
+
+Fields:
+
+- `pending_approvals: tuple[EffectApproval, ...]`;
+- `active_grants: tuple[StandingGrant, ...]`;
+- `grant_execution_counts: tuple[tuple[str, int], ...]`;
+- `next_page_cursor: str | None`.
+
+Only the active owner may receive this page.
