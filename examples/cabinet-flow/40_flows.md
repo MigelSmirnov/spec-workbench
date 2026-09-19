@@ -141,31 +141,41 @@ and an agent or the owner proposes a new axis, term or relation.
 ### Boundary
 
 `module:semantic_vocabulary` owns the registry and proposals.
-`module:owner_authority` words the question for the owner.
+`module:owner_authority` generates the owner-facing statement.
+`module:kernel_surface` is the only channel-visible route for inspection,
+proposal authoring and owner decisions.
 
 ### Steps
 
-1. `capability:semantic_vocabulary.term_revision` and
-   `capability:semantic_vocabulary.find_relation` show that the needed meaning
-   or relation does not exist.
-2. `capability:semantic_vocabulary.submit_proposal` records the candidate with
-   its plain statement and the finding that motivated it.
-3. `capability:owner_authority.owner_statement` presents the question in the
-   owner's words, separate from any agent-supplied text.
-4. The owner's `capability:semantic_vocabulary.decide_proposal` accepts it,
-   issuing exactly one revision in one unit of work, or rejects it.
-5. `capability:semantic_vocabulary.retire_entry` retires a term or relation that
-   should no longer be cited, leaving recorded proofs intact.
+1. Through `capability:kernel_surface.inspect`,
+   `capability:semantic_vocabulary.term_revision` and
+   `capability:semantic_vocabulary.find_relation` show whether the needed
+   accepted meaning or relation already exists.
+2. Through `capability:kernel_surface.author`,
+   `capability:semantic_vocabulary.submit_proposal` records the complete
+   candidate and motivating finding. The vocabulary module obtains
+   `capability:owner_authority.owner_statement` so the stored owner-facing
+   question is kernel-generated and separate from agent-supplied text.
+3. Through `capability:kernel_surface.owner_decide`, the active owner's
+   `capability:semantic_vocabulary.decide_proposal` accepts the exact proposed
+   revision atomically or rejects it. Acceptance issues exactly one immutable
+   revision and links it from the proposal.
+4. Through `capability:kernel_surface.owner_decide`,
+   `capability:semantic_vocabulary.retire_entry` may retire an active axis,
+   term or relation so new contracts, bindings and proofs cannot cite it;
+   already-recorded proofs and pinned runs remain valid.
 
 ### Outcomes
 
-The vocabulary gains one accepted revision that edges may now cite, or stays
-unchanged. A proposal is never usable as a basis.
+The vocabulary gains one accepted revision that edges and ports may now cite,
+or stays unchanged. A proposal is never usable as composition evidence.
 
 ### Errors
 
-`module:semantic_vocabulary` owns duplicate-content refusal and the atomicity of
-acceptance. `module:access_control` refuses a decision by anyone but the owner.
+`module:semantic_vocabulary` owns duplicate-content refusal, exact revision
+issuance, retirement rules and acceptance atomicity. `module:access_control`
+refuses authoring without delegation and every vocabulary decision or retirement
+by anyone but the active owner.
 
 ## `flow:author_function`
 
