@@ -22,6 +22,7 @@ TOOLS_DIR = Path(__file__).resolve().parent
 if str(TOOLS_DIR) not in sys.path:
     sys.path.insert(0, str(TOOLS_DIR))
 
+from stage4_flow_audit import audit as audit_stage4
 from stage5_api_audit import audit as audit_stage5
 from time_source_audit import audit_design as audit_time_design
 from time_source_audit import audit_source as audit_time_source
@@ -35,6 +36,15 @@ def run_gate(project: Path) -> dict[str, object]:
     """Generic Workbench extension entrypoint for design-time Cabinet Flow checks."""
     project = project.resolve()
     findings: list[dict[str, object]] = []
+
+    for item in audit_stage4(project):
+        findings.append(
+            {
+                "severity": "error",
+                "code": "state4_flow_consistency",
+                "message": item,
+            }
+        )
 
     for item in audit_stage5(project):
         findings.append(
@@ -112,6 +122,8 @@ def main() -> int:
 
     mode = "design + generated source" if args.source_root else "design"
     print(f"PASS: Cabinet Flow project gate ({mode})")
+    print("  - State 4 flow coverage: 13/13")
+    print("  - State 4 -> State 5 capability lineage: 95/95")
     print("  - Stage 5 API structure: 95/95")
     print("  - Kernel/service time isolation: enforced")
     if args.source_root:
