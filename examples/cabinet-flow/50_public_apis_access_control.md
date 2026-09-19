@@ -1,5 +1,7 @@
 # State 5 — Cabinet Flow access-control operations
 
+A25 clock contract: every operational timestamp written by this module is KernelInstant M47 obtained from its injected `module:system_clock.now` at the atomic event it owns. No public operation accepts caller-, gateway- or surface-supplied current time.
+
 These operations implement the trusted entrance of A21. Authentication resolves
 who is acting; authorization decides whether that actor may request one closed
 catalogue action. Neither operation decides the business result of that action.
