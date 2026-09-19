@@ -191,21 +191,24 @@ identity.
    `capability:trace_journal.slot_evidence` for recent execution evidence, all
    within the actor's disclosure ceiling. No owning module fabricates the other
    modules' part of the view.
-2. For a new step, `capability:slot_registry.create_slot` records the slot and
-   `capability:slot_registry.issue_contract_version` issues its contract after
-   verifying every port against `module:semantic_vocabulary` and clamping bounds
-   to `capability:installation.release_ceilings`; the identity comes from
+2. Through `capability:kernel_surface.author`, a new step calls
+   `capability:slot_registry.create_slot` and
+   `capability:slot_registry.issue_contract_version` after every port is
+   verified against `module:semantic_vocabulary` and bounds are clamped to
+   `capability:installation.release_ceilings`; the identity comes from
    `capability:identity.identify_contract_version`.
-3. `capability:slot_registry.submit_implementation` stores the code bytes under
+3. Through `capability:kernel_surface.author`,
+   `capability:slot_registry.submit_implementation` stores the code bytes under
    the identity from `capability:identity.identify_implementation`. A caller's
    own identity is refused; equal bytes return the existing record.
-4. `capability:trial_corpus.add_trial_case` adds typed cases, including fixture
+4. Through `capability:kernel_surface.author`,
+   `capability:trial_corpus.add_trial_case` adds typed cases, including fixture
    files, identified by `capability:identity.identify_trial_case` and stored
    through `capability:value_store.put_value` with
    `capability:identity.digest_value`.
-5. A step that should never be used again is ended by
-   `capability:slot_registry.retire_slot`; flow versions that pin it keep what
-   they pinned.
+5. Through `capability:kernel_surface.author`, a step that should never be used
+   again is ended by `capability:slot_registry.retire_slot`; flow versions that
+   pin it keep what they pinned.
 
 ### Outcomes
 
@@ -281,13 +284,17 @@ failure permanent evidence. Authoring and admission then proceed as in
 
 ### Steps
 
-1. `capability:trace_journal.slot_evidence` gives the agent the recent node
+1. Through `capability:kernel_surface.inspect`,
+   `capability:trace_journal.slot_evidence` gives the agent the recent node
    executions and trial executions of that one slot, within its ceiling and
    without the rest of the run.
-2. `capability:trial_corpus.capture_trial_case` turns the failed execution into a
-   case, copying a file input out of the live run through
-   `capability:run_spool.describe_file`; a `personal_data` file needs the owner.
-3. After the captured case is committed,
+2. Through `capability:kernel_surface.author`,
+   `capability:trial_corpus.capture_trial_case` turns the failed execution into
+   a case, copying a file input out of the live run through
+   `capability:run_spool.describe_file`. A `personal_data` file is refused to
+   the agent and is completed only through
+   `capability:kernel_surface.owner_decide`.
+3. Through `capability:kernel_surface.inspect`,
    `capability:slot_activation.contract_health` derives the current serving
    contract's health from `capability:trial_corpus.active_corpus` and
    `capability:trace_journal.slot_evidence`. It reports `known_failing` with
@@ -295,12 +302,15 @@ failure permanent evidence. Authoring and admission then proceed as in
    health record is written.
 4. The agent authors a repaired implementation; it is admitted only by passing
    the grown corpus, and its activation clears `known_failing`.
-5. When the contract itself must change,
-   `capability:trial_corpus.copy_cases_to_version` carries the still-valid cases
-   to the new contract version.
-6. A wrong case is removed from effect only by
-   `capability:trial_corpus.withdraw_trial_case`, which needs the owner for a
-   protected case.
+5. When the contract itself must change, through
+   `capability:kernel_surface.author`,
+   `capability:trial_corpus.copy_cases_to_version` carries the still-valid
+   cases to the new contract version.
+6. Through `capability:kernel_surface.author`, a wrong unprotected case is
+   removed from effect only by
+   `capability:trial_corpus.withdraw_trial_case`; a protected case is refused
+   to the agent and withdrawn only through
+   `capability:kernel_surface.owner_decide`.
 
 ### Outcomes
 
