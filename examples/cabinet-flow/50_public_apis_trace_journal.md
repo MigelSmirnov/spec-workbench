@@ -47,10 +47,10 @@ journal never edits an earlier record to represent retry or reconciliation.
 Exact run pins; one record per attempt identity; executed implementation,
 runtime, binding and service identities are historical facts rather than current
 lookups; `started_at <= ended_at`; both timestamps are KernelInstant M47 and
-the journal never reads wall clock itself; status is explicit; output references
-exist only after validation; failure detail is bounded and stripped of secrets
-and values above `open`; credentials, tokens, source bytes and unrestricted
-logs are never persisted.
+the journal never reads wall clock itself; status is explicit; output references exist only after validation; failure
+detail is stripped of secrets and values above `open` and is no larger than
+injected M48 `failure_detail_bytes_max`; credentials, tokens, source bytes and
+unrestricted logs are never persisted.
 
 ### Errors
 
@@ -79,8 +79,10 @@ authenticated client asks for run trace evidence.
 ### Inputs
 
 The exact run identity; resolved ActorRef and disclosure ceiling; bounded page
-cursor and page size. The caller cannot request raw process logs, storage paths
-or secret fields.
+cursor and optional page size. Omitted page size uses injected M48
+`page_size_default`; a requested size above injected M48 `page_size_max` is
+refused. The caller cannot request raw process logs, storage paths or secret
+fields.
 
 ### Outputs
 
