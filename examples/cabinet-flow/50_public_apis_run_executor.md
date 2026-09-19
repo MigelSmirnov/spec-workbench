@@ -33,10 +33,13 @@ initial status. No node is reported as concluded merely because the run exists.
 
 ### Observable effect
 
-The operation resolves and pins every current dependency needed by the flow,
-validates every supplied flow input at its declared boundary, stores bounded
-input values through `module:value_store`, and appends one Run. It performs no
-function execution or external service effect itself.
+The operation resolves every function node's exact immutable contract through
+`module:slot_registry.contract_version`, resolves and pins the serving
+activation for that same contract, pins every accepted operation binding and
+installation target, validates every supplied flow input at its declared
+boundary, stores bounded input values through `module:value_store`, and
+appends one Run. It performs no function execution or external service effect
+itself.
 
 ### Enforces
 
