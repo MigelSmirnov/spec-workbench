@@ -223,8 +223,8 @@ authoring modules.
    `capability:slot_registry.create_slot` and
    `capability:slot_registry.issue_contract_version` after every port's
    semantic revision is verified through
-   `capability:semantic_vocabulary.term_revision` and bounds are clamped to
-   `capability:installation.release_ceilings`; the identity comes from
+   `capability:semantic_vocabulary.term_revision` and authored ResourceBounds
+   are clamped against the injected ReleaseCeilings M48; the identity comes from
    `capability:identity.identify_contract_version`. The exact issued contract
    is re-read through `capability:slot_registry.contract_version` before cases
    or implementations are attached to it.
