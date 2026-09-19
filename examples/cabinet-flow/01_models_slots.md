@@ -213,7 +213,7 @@ One immutable body of code that claims to realize one slot contract version.
 Candidate fields:
 
 - `implementation_id`: digest of the content, computed by the kernel over the
-  code bytes and the contract version it targets;
+  target contract version, exact entry point and code bytes;
 - `contract_version_ref`;
 - `code_ref`: bounded content-addressed reference to the code bytes;
 - `entry_point`: the single callable the sandbox invokes;
@@ -222,8 +222,9 @@ Candidate fields:
 - `rationale`: bounded text stating what gap or failure it answers, with the
   trace references that motivated it.
 
-An author never supplies the identity. Two submissions of the same bytes for the
-same contract version are the same implementation.
+An author never supplies the identity. Two submissions of the same bytes with
+the same entry point for the same contract version are the same implementation;
+changing the entry point is another implementation.
 
 ### Identity
 
