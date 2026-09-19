@@ -201,8 +201,11 @@ may change; manifest, flows and grants are not rewritten.
 
 ### Inputs
 
-The ActorRef, exact binding identity, expected current status/version, current
-UTC time and bounded retirement reason.
+The ActorRef, exact binding identity, expected current status/version and a
+bounded retirement reason. `module:operation_bindings` obtains `retired_at` as
+KernelInstant M47 from its injected `module:system_clock.now` at the successful
+compare-and-set. No caller-, gateway- or surface-supplied current time is
+accepted.
 
 ### Outputs
 
