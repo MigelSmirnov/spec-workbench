@@ -68,41 +68,49 @@ EXPECTED_RETRY = {
 
 EXPECTED_PERSISTENCE = {
     "SemanticAxis": "master",
-    "SemanticAxisRevision": "issued",
     "SemanticTerm": "master",
-    "SemanticTermRevision": "issued",
     "SemanticRelation": "master",
-    "SemanticRelationRevision": "issued",
     "OwnerPrincipal": "master",
     "AgentDelegation": "master",
     "AuthenticationThrottleState": "master",
     "OperationBinding": "master",
-    "OperationBindingVersion": "issued",
     "Flow": "master",
-    "FlowVersion": "issued",
-    "FlowProof": "issued",
-    "FlowActivation": "issued",
-    "StoredValue": "master",
     "FlowRun": "master",
-    "NodeExecution": "issued",
-    "EffectApproval": "issued",
     "StandingGrant": "master",
-    "OutcomeReconciliation": "issued",
     "VocabularyProposal": "master",
     "Slot": "master",
-    "SlotContractVersion": "issued",
-    "SandboxRuntimeRevision": "issued",
-    "Implementation": "issued",
     "TrialCase": "master",
-    "TrialExecution": "issued",
-    "AdmissionVerdict": "issued",
-    "SlotActivation": "issued",
 }
 
 
 def _compare(findings: list[str], label: str, actual: object, expected: object) -> None:
     if actual != expected:
         findings.append(f"{label}: expected {expected!r}, got {actual!r}")
+
+
+def _model_identities(project: Path) -> dict[str, str]:
+    identities: dict[str, str] = {}
+    for path in sorted(project.glob("01_models*.md")):
+        lines = path.read_text(encoding="utf-8").splitlines()
+        starts: list[tuple[str, int]] = []
+        for index, line in enumerate(lines):
+            if not line.startswith("## Model ") or " — " not in line:
+                continue
+            name = line.split(" — ", 1)[1].strip()
+            starts.append((name, index))
+        for offset, (name, start) in enumerate(starts):
+            end = starts[offset + 1][1] if offset + 1 < len(starts) else len(lines)
+            block = lines[start:end]
+            try:
+                identity_index = block.index("### Identity")
+            except ValueError:
+                continue
+            cursor = identity_index + 1
+            while cursor < len(block) and not block[cursor].strip():
+                cursor += 1
+            if cursor < len(block):
+                identities[name] = block[cursor].strip()
+    return identities
 
 
 def audit(project: Path) -> list[str]:
@@ -124,6 +132,14 @@ def audit(project: Path) -> list[str]:
         if isinstance(declaration, dict)
     }
     _compare(findings, "persistence classes", actual_persistence, EXPECTED_PERSISTENCE)
+
+    identities = _model_identities(project)
+    for name in sorted(actual_persistence):
+        identity = identities.get(name)
+        if identity != "entity":
+            findings.append(
+                f"persistence.{name}: standalone persistence requires identity entity; got {identity!r}"
+            )
 
     if payload.get("unresolved") != []:
         findings.append("60_data_closure.json: unresolved must be empty before State 6")
