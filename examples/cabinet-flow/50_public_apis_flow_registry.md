@@ -233,7 +233,10 @@ None.
 ### Inputs
 
 The owner or authoring-agent ActorRef, exact Flow identity, expected active
-status and current activation, current UTC time, and bounded retirement reason.
+status and current activation, and bounded retirement reason.
+`module:flow_registry` obtains the retirement KernelInstant from its injected
+`module:system_clock` at the successful compare-and-set; no current-time value
+is accepted from the caller.
 
 ### Outputs
 
