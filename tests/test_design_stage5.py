@@ -70,7 +70,7 @@ Archive errors.
 ### Owner
 `module:archive`
 ### Callers
-Transport boundary.
+`boundary:transport`
 ### Inputs
 Exact transfer.
 ### Outputs
@@ -109,6 +109,42 @@ def test_lint_requires_public_operation_sections(tmp_path: Path) -> None:
     path.write_text(path.read_text(encoding="utf-8").replace("### Errors\nInvalid transfer.\n", ""), encoding="utf-8")
     report = design_stage5.lint(project)
     assert any(f["code"] == "missing_public_op_section" and "Errors" in f["message"] for f in report["findings"])
+
+
+def test_lint_requires_owner_in_owner_section(tmp_path: Path) -> None:
+    project = _project(tmp_path)
+    path = project / "50_public_apis.md"
+    text = path.read_text(encoding="utf-8")
+    text = text.replace("### Owner\n`module:archive`\n", "### Owner\nArchive module.\n")
+    text = text.replace("### Enforces\nDurable acceptance.\n", "### Enforces\nDurable acceptance by `module:archive`.\n")
+    path.write_text(text, encoding="utf-8")
+    report = design_stage5.lint(project)
+    assert any(f["code"] == "missing_public_op_owner" for f in report["findings"])
+
+
+def test_lint_requires_documented_callers_to_match_plan(tmp_path: Path) -> None:
+    project = _project(tmp_path)
+    path = project / "50_public_apis.md"
+    path.write_text(
+        path.read_text(encoding="utf-8").replace("`boundary:transport`", "`boundary:http`"),
+        encoding="utf-8",
+    )
+    report = design_stage5.lint(project)
+    mismatch = [f for f in report["findings"] if f["code"] == "public_op_callers_mismatch"]
+    assert len(mismatch) == 1
+    assert "boundary:transport" in mismatch[0]["message"]
+    assert "boundary:http" in mismatch[0]["message"]
+
+
+def test_lint_rejects_placeholder_markers_in_public_operation(tmp_path: Path) -> None:
+    project = _project(tmp_path)
+    path = project / "50_public_apis.md"
+    path.write_text(
+        path.read_text(encoding="utf-8").replace("Durable acceptance.", "TODO: durable acceptance."),
+        encoding="utf-8",
+    )
+    report = design_stage5.lint(project)
+    assert any(f["code"] == "public_op_placeholder" for f in report["findings"])
 
 
 def test_legacy_adapter_caller_is_rejected(tmp_path: Path) -> None:
@@ -154,6 +190,55 @@ def test_next_reports_complete_when_plan_is_closed(tmp_path: Path) -> None:
     assert payload["complete"] is True
     assert payload["next"] is None
     assert payload["summary"]["remaining"] == 0
+
+
+def test_state5_lineage_rejects_extra_state4_flow_usage(tmp_path: Path) -> None:
+    project = _project(tmp_path)
+    flow_path = project / "40_flows.md"
+    flow_path.write_text(
+        flow_path.read_text(encoding="utf-8")
+        + """
+## `flow:accept_record_again`
+
+### Trigger
+Another transfer arrives.
+### Boundary
+`module:archive` through `capability:archive.accept_transfer`.
+### Steps
+1. Accept.
+### Outcomes
+Accepted or rejected.
+### Errors
+Archive errors.
+""",
+        encoding="utf-8",
+    )
+    report = design_stage5.coverage(project)
+    row = report["operations"][0]
+    assert row["actual_flow_usage"] == ["flow:accept_record", "flow:accept_record_again"]
+    assert row["extra_flow_evidence"] == ["flow:accept_record_again"]
+    assert report["summary"]["remaining"] == 1
+
+    lint = design_stage5.lint(project)
+    assert any(f["code"] == "public_op_flow_lineage_mismatch" for f in lint["findings"])
+
+
+def test_state4_capability_must_have_state5_public_operation(tmp_path: Path) -> None:
+    project = _project(tmp_path)
+    flow_path = project / "40_flows.md"
+    flow_path.write_text(
+        flow_path.read_text(encoding="utf-8").replace(
+            "`capability:archive.accept_transfer`.",
+            "`capability:archive.accept_transfer` and `capability:archive.get_record`.",
+        ),
+        encoding="utf-8",
+    )
+    report = design_stage5.coverage(project)
+    assert report["unowned_flow_capabilities"] == ["capability:archive.get_record"]
+    assert report["summary"]["unowned_flow_capabilities"] == 1
+
+    lint = design_stage5.lint(project)
+    assert any(f["code"] == "flow_capability_without_public_op" for f in lint["findings"])
 
 
 def test_current_cabinet_uses_closed_caller_vocabulary() -> None:

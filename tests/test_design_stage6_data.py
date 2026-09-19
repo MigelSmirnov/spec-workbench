@@ -91,3 +91,125 @@ def test_mirrored_persistence_requires_remote(tmp_path: Path) -> None:
     (tmp_path / "60_data_closure.json").write_text(json.dumps(payload), encoding="utf-8")
     report = design_stage6_data.lint(tmp_path)
     assert any(item["code"] == "missing_mirrored_remote" for item in report["findings"])
+
+
+def _write_identity_case(tmp_path: Path, *, identity: str, persistence_class: str) -> Path:
+    project = tmp_path / f"{identity}-{persistence_class}"
+    project.mkdir()
+    (project / "01_models.md").write_text(
+        f"""# State 1 — Models
+
+## Model M01 — Record
+
+### Identity
+
+{identity}
+""",
+        encoding="utf-8",
+    )
+    declaration = {"class": persistence_class}
+    placements = [{
+        "address": "persistence.Record.class",
+        "source_refs": ["model:M01"],
+        "reason": "test persistence identity compatibility",
+    }]
+    if persistence_class == "mirrored":
+        declaration["remote"] = "registry"
+        placements.append({
+            "address": "persistence.Record.remote",
+            "source_refs": ["model:M01"],
+            "reason": "test mirrored owner",
+        })
+    payload = {
+        "schema_version": "spec_workbench_state6_data_closure.v1",
+        "sections": {
+            "config": {},
+            "rules": {},
+            "persistence": {"Record": declaration},
+            "properties": {},
+            "determinism": {},
+        },
+        "placements": placements,
+        "unresolved": [],
+    }
+    (project / "60_data_closure.json").write_text(json.dumps(payload), encoding="utf-8")
+    return project
+
+
+def test_master_persistence_requires_entity_identity(tmp_path: Path) -> None:
+    report = design_stage6_data.lint(
+        _write_identity_case(tmp_path, identity="value", persistence_class="master")
+    )
+    assert any(
+        item["code"] == "persistence_identity_incompatible"
+        and "class=master requires identity entity" in item["message"]
+        for item in report["findings"]
+    )
+
+
+def test_mirrored_persistence_requires_entity_identity(tmp_path: Path) -> None:
+    report = design_stage6_data.lint(
+        _write_identity_case(tmp_path, identity="value", persistence_class="mirrored")
+    )
+    assert any(
+        item["code"] == "persistence_identity_incompatible"
+        and "class=mirrored requires identity entity" in item["message"]
+        for item in report["findings"]
+    )
+
+
+def test_issued_value_snapshot_remains_allowed(tmp_path: Path) -> None:
+    report = design_stage6_data.lint(
+        _write_identity_case(tmp_path, identity="value", persistence_class="issued")
+    )
+    assert not any(
+        item["code"] == "persistence_identity_incompatible"
+        for item in report["findings"]
+    )
+
+
+def test_closed_data_closure_status_rejects_unresolved_topics(tmp_path: Path) -> None:
+    payload = json.loads((CABINET / "60_data_closure.json").read_text(encoding="utf-8"))
+    payload["status"] = "closed"
+    payload["unresolved"] = [{"topic": "retention", "reason": "still open"}]
+    (tmp_path / "60_data_closure.json").write_text(json.dumps(payload), encoding="utf-8")
+    report = design_stage6_data.lint(tmp_path)
+    assert any(
+        item["code"] == "final_data_closure_has_unresolved"
+        for item in report["findings"]
+    )
+
+
+def test_accepted_data_closure_may_carry_later_unresolved_topics(tmp_path: Path) -> None:
+    payload = json.loads((CABINET / "60_data_closure.json").read_text(encoding="utf-8"))
+    payload["status"] = "accepted"
+    payload["unresolved"] = [{"topic": "determinism", "reason": "belongs to later closure"}]
+    (tmp_path / "60_data_closure.json").write_text(json.dumps(payload), encoding="utf-8")
+    report = design_stage6_data.lint(tmp_path)
+    assert not any(
+        item["code"] == "final_data_closure_has_unresolved"
+        for item in report["findings"]
+    )
+
+
+def test_in_progress_data_closure_may_carry_unresolved_topics(tmp_path: Path) -> None:
+    payload = json.loads((CABINET / "60_data_closure.json").read_text(encoding="utf-8"))
+    payload["status"] = "in_progress"
+    payload["unresolved"] = [{"topic": "retention", "reason": "belongs to later closure"}]
+    (tmp_path / "60_data_closure.json").write_text(json.dumps(payload), encoding="utf-8")
+    report = design_stage6_data.lint(tmp_path)
+    assert not any(
+        item["code"] == "final_data_closure_has_unresolved"
+        for item in report["findings"]
+    )
+
+
+def test_unknown_data_closure_status_is_rejected(tmp_path: Path) -> None:
+    payload = json.loads((CABINET / "60_data_closure.json").read_text(encoding="utf-8"))
+    payload["status"] = "done-ish"
+    (tmp_path / "60_data_closure.json").write_text(json.dumps(payload), encoding="utf-8")
+    report = design_stage6_data.lint(tmp_path)
+    assert any(
+        item["code"] == "invalid_data_closure_status"
+        for item in report["findings"]
+    )

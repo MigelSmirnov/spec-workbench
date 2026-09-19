@@ -53,6 +53,19 @@ def test_project_branch_touching_tools_is_rejected(tmp_path: Path) -> None:
     assert check.main(["--base", "main", "--branch", "agent/demo", "--repo", str(repo)]) == 1
 
 
+def test_project_branch_project_local_tools_are_rejected(tmp_path: Path) -> None:
+    repo = _repo(tmp_path)
+    _git(repo, "checkout", "-q", "-b", "agent/demo")
+    (repo / "examples" / "demo" / "tools").mkdir()
+    (repo / "examples" / "demo" / "tools" / "gate.py").write_text("def run(): return True\n")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", "project-local-tool")
+    paths = check.changed_paths(repo, "main")
+    assert paths == ["examples/demo/tools/gate.py"]
+    assert check.violations("agent/demo", paths) == ["examples/demo/tools/gate.py"]
+    assert check.main(["--base", "main", "--branch", "agent/demo", "--repo", str(repo)]) == 1
+
+
 def test_tooling_branch_may_change_anything(tmp_path: Path) -> None:
     repo = _repo(tmp_path)
     _git(repo, "checkout", "-q", "-b", "tools/land")
@@ -67,7 +80,7 @@ def test_tooling_branch_may_change_anything(tmp_path: Path) -> None:
 
 def test_ownership_patterns_are_exact() -> None:
     assert check.is_project_owned("examples/demo/global_spec.json")
-    assert check.is_project_owned("examples/demo/tools/backend.py")
+    assert not check.is_project_owned("examples/demo/tools/backend.py")
     assert check.is_project_owned("experiments/cabinet-vault/tools/kernel.py")
     assert not check.is_project_owned("tools/design_lint.py")
     assert not check.is_project_owned("skills/spec-authoring/SPEC_STANDARD.md")

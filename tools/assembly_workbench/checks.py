@@ -3,13 +3,13 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Callable
 
+import design_closure_gaps
 import design_decision_witness
 import design_stage3
 import fence
 import flow_closure
 import design_stage6_contracts
 import design_stage6_data
-import project_gates
 from external_contract_workbench import coverage as external_contract_coverage
 from identity_workbench import verify as verify_identity
 from model_surface_workbench import fields as model_fields
@@ -30,11 +30,7 @@ def _normalize(name: str, report: dict[str, Any]) -> CheckResult:
     findings = report.get("findings", [])
     if not isinstance(summary, dict) or not isinstance(findings, list):
         raise AssemblyWorkbenchError(f"{name} returned an invalid report shape.")
-    if name == "project_gates":
-        errors = int(summary.get("errors", len(findings)))
-        warnings = int(summary.get("warnings", 0))
-        ready = bool(report.get("ready")) and errors == 0 and warnings == 0
-    elif name == "language":
+    if name == "language":
         errors = int(summary.get("errors", len(findings)))
         warnings = 0
         ready = bool(report.get("ready")) and errors == 0
@@ -66,6 +62,10 @@ def _normalize(name: str, report: dict[str, Any]) -> CheckResult:
         errors = int(summary.get("blocks", 0))
         warnings = int(summary.get("reviews", 0))
         ready = bool(summary.get("handoff_ready"))
+    elif name == "closure_gaps":
+        errors = int(summary.get("errors", len(findings)))
+        warnings = 0
+        ready = errors == 0
     elif name == "router":
         errors = int(summary.get("errors", 0))
         warnings = _severity_count(findings, {"warning", "review"})
@@ -96,6 +96,24 @@ def _normalize(name: str, report: dict[str, Any]) -> CheckResult:
         findings=findings,
     )
 
+def _closure_gap_coverage(project: Path) -> dict[str, Any]:
+    report = design_closure_gaps.run(project)
+    findings = [
+        {**item, "severity": "error"}
+        for item in report.get("findings", [])
+        if isinstance(item, dict)
+    ]
+    return {
+        "schema_version": report.get("schema_version"),
+        "summary": {
+            **(report.get("summary") or {}),
+            "errors": len(findings),
+            "handoff_ready": len(findings) == 0,
+        },
+        "findings": findings,
+    }
+
+
 def _factory_storage_resolver():
     """The deterministic backend's version-bound storage registry, when the factory is reachable.
 
@@ -123,7 +141,6 @@ def _factory_storage_resolver():
 
 
 CHECKS: dict[str, ReportFunction] = {
-    "project_gates": project_gates.coverage,
     "language": verify_language,
     "modules": design_stage3.lint,
     "identity": verify_identity,
@@ -132,6 +149,7 @@ CHECKS: dict[str, ReportFunction] = {
     "contracts": design_stage6_contracts.lint,
     "external_contracts": external_contract_coverage,
     "notes": notes_gate.coverage,
+    "closure_gaps": _closure_gap_coverage,
     "router": router_service.coverage,
     "persistence": lambda project: persistence_coverage(project, storage_resolver=_factory_storage_resolver()),
     "witness": design_decision_witness.coverage,
