@@ -53,6 +53,10 @@ TYPES: dict[str, ObligationType] = {
            "declare in State 1 and 60_model_closure_*.json; it lives only in global_spec.json", "projection"),
         _t("model_identity_unresolved", "defining", "model interface",
            "decide value/entity identity consistently across State 1, closure and assembly", "check:identity"),
+        _t("model_shape_unresolved", "defining", "model",
+           "declare the exact runtime fields; an empty runtime model lets generation invent its content", "check:closure_gaps"),
+        _t("closed_value_type_unresolved", "defining", "model",
+           "move prose-only closed values into an explicit enum/type closure", "check:closure_gaps"),
         _t("contract_type_without_model", "defining", "contract",
            "the signature names a type that is not a closed model or interface", "projection"),
         _t("interface_without_provider", "defining", "contract module",
@@ -77,7 +81,9 @@ TYPES: dict[str, ObligationType] = {
         _t("public_op_undecided", "convergence", "public_op",
            "the public operation lacks flow evidence, a caller or a matching capability", "check:contracts"),
         _t("timestamp_without_time_source", "convergence", "contract",
-           "a mutating operation produces a timestamp with no declared time source", "check:contracts"),
+           "a mutating operation or note requires time with no declared time source", "check:closure_gaps"),
+        _t("producer_unresolved", "convergence", "model interface contract",
+           "declare the operation/provider that produces the value returned by readers", "check:closure_gaps"),
         _t("contract_undecided", "convergence", "contract function",
            "the contract plan or signature is not decided", "check:contracts"),
         _t("external_contract_undecided", "convergence", "contract",
@@ -118,6 +124,13 @@ FINDING_MAP: dict[str, str] = {
     # contracts (State 6)
     "interface_without_provider": "interface_without_provider",
     "fresh_timestamp_without_source": "timestamp_without_time_source",
+    # closure completeness
+    "ambient_time_note": "timestamp_without_time_source",
+    "model_without_fields": "model_shape_unresolved",
+    "orphan_read_entity": "producer_unresolved",
+    "external_interface_returned": "interface_without_provider",
+    "table_without_writer": "persistence_closure_unproven",
+    "prose_closure_leak": "closed_value_type_unresolved",
     # persistence
     "codec_registry_unavailable": "persistence_closure_unproven",
 }
