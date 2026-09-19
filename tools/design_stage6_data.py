@@ -27,6 +27,8 @@ REPORT_SCHEMA = "spec_workbench_state6_data_lint.v2"
 DEFAULT_FILE = "60_data_closure.json"
 ALLOWED_SECTIONS = {"config", "rules", "persistence", "properties", "determinism"}
 PERSISTENCE_CLASSES = {"master", "derived", "issued", "mirrored"}
+DATA_CLOSURE_STATUSES = {"in_progress", "accepted", "closed"}
+FINAL_DATA_CLOSURE_STATUSES = {"accepted", "closed"}
 CONTRACT_DEPENDENT_RULE_NAMESPACES = {"persistence_backend"}
 
 
@@ -164,9 +166,28 @@ def lint(project: Path) -> dict[str, Any]:
         findings.append({"severity":"error","code":"invalid_unresolved","message":"unresolved must be a list"})
         unresolved = []
     unresolved_topics = sorted({str(x.get("topic")) for x in unresolved if isinstance(x, dict) and x.get("topic")})
+
+    status = payload.get("status")
+    if status is not None and status not in DATA_CLOSURE_STATUSES:
+        findings.append({
+            "severity": "error",
+            "code": "invalid_data_closure_status",
+            "message": f"status must be one of {sorted(DATA_CLOSURE_STATUSES)} when present",
+        })
+    if status in FINAL_DATA_CLOSURE_STATUSES and unresolved:
+        findings.append({
+            "severity": "error",
+            "code": "final_data_closure_has_unresolved",
+            "message": (
+                f"status={status!r} declares final structured-data closure but unresolved still contains "
+                f"{len(unresolved)} item(s)"
+            ),
+        })
+
     return {
         "schema_version": REPORT_SCHEMA,
         "summary": {
+            "status": status,
             "placements": len(placements),
             "structured_values": len(leaves),
             "persistence_models": len(persistence) if isinstance(persistence, dict) else 0,
