@@ -166,3 +166,38 @@ def test_issued_value_snapshot_remains_allowed(tmp_path: Path) -> None:
         item["code"] == "persistence_identity_incompatible"
         for item in report["findings"]
     )
+
+
+def test_final_data_closure_status_rejects_unresolved_topics(tmp_path: Path) -> None:
+    payload = json.loads((CABINET / "60_data_closure.json").read_text(encoding="utf-8"))
+    payload["status"] = "closed"
+    payload["unresolved"] = [{"topic": "retention", "reason": "still open"}]
+    (tmp_path / "60_data_closure.json").write_text(json.dumps(payload), encoding="utf-8")
+    report = design_stage6_data.lint(tmp_path)
+    assert any(
+        item["code"] == "final_data_closure_has_unresolved"
+        for item in report["findings"]
+    )
+
+
+def test_in_progress_data_closure_may_carry_unresolved_topics(tmp_path: Path) -> None:
+    payload = json.loads((CABINET / "60_data_closure.json").read_text(encoding="utf-8"))
+    payload["status"] = "in_progress"
+    payload["unresolved"] = [{"topic": "retention", "reason": "belongs to later closure"}]
+    (tmp_path / "60_data_closure.json").write_text(json.dumps(payload), encoding="utf-8")
+    report = design_stage6_data.lint(tmp_path)
+    assert not any(
+        item["code"] == "final_data_closure_has_unresolved"
+        for item in report["findings"]
+    )
+
+
+def test_unknown_data_closure_status_is_rejected(tmp_path: Path) -> None:
+    payload = json.loads((CABINET / "60_data_closure.json").read_text(encoding="utf-8"))
+    payload["status"] = "done-ish"
+    (tmp_path / "60_data_closure.json").write_text(json.dumps(payload), encoding="utf-8")
+    report = design_stage6_data.lint(tmp_path)
+    assert any(
+        item["code"] == "invalid_data_closure_status"
+        for item in report["findings"]
+    )
