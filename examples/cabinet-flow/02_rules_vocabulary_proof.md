@@ -17,9 +17,12 @@
    a proposal or content that exists only inside one.
 5. Acceptance is atomic: the proposal becomes `accepted`, the revision is
    issued, and `resulting_revision_ref` names it, or nothing changes.
-6. Retiring a term or relation never invalidates a FlowProof M36 already
-   recorded against its revision and never alters a pinned run. It refuses new
-   contract versions, binding versions and proofs that would cite it.
+6. Retiring an axis, term or relation is final and never invalidates a
+   FlowProof M36 already recorded against an issued revision or alters a pinned
+   run. Retirement never cascades by rewriting child terms, relations or
+   revisions. New contract versions, binding versions and proofs refuse a
+   retired term or relation; they also refuse a term whose owning axis is
+   retired. Historical revisions remain readable as evidence.
 7. A proposal whose content equals an existing active revision is refused with
    a reference to that revision rather than accepted as a duplicate.
 
@@ -43,8 +46,9 @@ term_retired -/> existing_proof_invalidated
 2. An edge citing a `proposed` relation is refused by proof.
 3. Accepting a proposal issues exactly one revision and links it; a failure
    midway leaves the proposal `proposed` and the registry unchanged.
-4. After a term is retired, a run pinned to a flow proven on it completes, and a
-   new contract version citing it is refused.
+4. After a term or its owning axis is retired, a run pinned to a flow proven on
+   its issued revision completes, while a new contract version citing that term
+   is refused.
 5. A proposal equal to an active revision is refused with that revision's
    identity.
 
