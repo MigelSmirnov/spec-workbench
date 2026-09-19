@@ -393,9 +393,10 @@ Candidate fields:
 - `findings`: closed set, each naming the node, port or edge —
   `unknown_contract_version`, `unknown_binding_version`, `binding_not_accepted`,
   `untyped_port`, `edge_without_basis`, `shape_incompatible`,
-  `cardinality_incompatible`, `disclosure_exceeded`, `unsupplied_required_input`,
-  `cycle`,
-  `guard_on_open_value`, `map_on_non_collection` or `unreachable_node`;
+  `cardinality_incompatible`, `disclosure_exceeded`,
+  `unsupplied_required_input`, `multiple_edges_into_input`, `cycle`,
+  `guard_on_open_value`, `map_on_non_collection`,
+  `required_output_behind_guard` or `unreachable_node`;
 - `decided_at`.
 
 A refused proof names every finding, not the first. No one can record, override

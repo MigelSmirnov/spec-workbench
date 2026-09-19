@@ -120,7 +120,12 @@ Candidate fields:
 - `status`: `created`, `running`, `awaiting_approval`, `pending`, `succeeded`,
   `failed`, `refused` or `cancelled`;
 - `waiting_on`: the node identities the run is stopped at, with the reason —
-  `owner_approval`, `service_unreachable` or `outcome_unknown`;
+  `owner_approval`, `service_unreachable`, `binding_suspended` or
+  `outcome_unknown`;
+- `in_flight_effect_attempts`: for each non-read operation being invoked, the
+  node, map index, attempt number and idempotency-key digest, recorded durably
+  before the call and cleared only by the concluding NodeExecution. An entry
+  found at restart is an effect whose outcome is unknown (A14, A18);
 - `outputs`: one StoredValue per flow output port once produced;
 - `created_at`, `ended_at`.
 
@@ -147,10 +152,11 @@ The kernel's run registry.
 
 `created -> running`; `running <-> awaiting_approval`; `running <-> pending`;
 `running -> succeeded | failed | refused`; any non-terminal state `-> cancelled`
-by the owner. `succeeded` requires every flow output produced and validated.
+by the owner. `succeeded` requires every node concluded `succeeded` or
+`skipped_by_guard` and every non-optional flow output produced and validated.
 `refused` means the owner denied an approval. `pending` means a required service
-instance was unreachable or an effect's outcome is still undetermined. No state
-is entered by default or by timeout of a wait.
+instance was unreachable, a binding is suspended or an effect's outcome is still
+undetermined. No state is entered by default or by timeout of a wait.
 
 ### Persistence candidate
 
@@ -186,7 +192,11 @@ Candidate fields:
   `resource_exhausted`, `crashed`, `cleanup_failed`, `operation_refused`,
   `operation_failed`, `service_unreachable`, `outcome_unknown`,
   `skipped_by_guard` or `not_executed_upstream_failed`;
-- `failure_detail`: bounded text without secrets;
+- `failure_reason`: closed refinement where the status needs one, such as
+  `value_too_large` under `contract_violation` or `refused_by_owner` and
+  `refused_by_service` under `operation_refused`;
+- `failure_detail`: bounded text without secrets and without any value above
+  `open` class;
 - `started_at`, `ended_at`.
 
 `succeeded` is written only after output validation. `operation_refused` records
@@ -230,20 +240,21 @@ perform.
 Candidate fields:
 
 - `approval_id`;
-- `run_id`, `node_id`, `map_index`;
+- `run_id`, `node_id`;
 - `binding_version_ref`;
 - `service_instance`;
 - `preview_value_refs`: the StoredValues of the binding's preview ports, exactly
-  as shown;
-- `preview_digest`: digest over the binding version, instance and preview
-  values;
+  as shown; for a mapped node, those of every element of the collection;
+- `preview_digest`: digest over the binding version, the instance and the
+  digests of all input values of the node — for a mapped node, of every
+  element — not only the previewed ones;
 - `decision`: `approved` or `denied`;
 - `decided_by`: ActorRef, always of kind `owner`;
 - `decided_at`.
 
 The kernel invokes the operation only with inputs whose digest equals the
 approved preview. A different input is a different effect and needs another
-approval.
+approval. One approval of a mapped node covers the whole collection it listed.
 
 ### Identity
 

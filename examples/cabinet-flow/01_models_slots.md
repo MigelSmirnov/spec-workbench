@@ -48,6 +48,10 @@ The kernel's slot registry, written only through the kernel surface.
 implementation or activation. Flow versions that pin it keep running with what
 they pinned.
 
+Whether a contract version is `known_failing` is not a status anyone sets. It is
+derived from the active corpus and the serving implementation's trial
+executions (A09).
+
 ### Persistence candidate
 
 Durable entity of the kernel's operational store.

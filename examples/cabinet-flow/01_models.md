@@ -449,9 +449,5 @@ Models M01 through M45 have explicit identity, substitution and continuity
 evidence, source of truth, lifecycle and persistence candidates, and no open
 question. State 2 may be authored.
 
-State 2 must state as rules, among others, what the models only make possible:
-the exact edge-proof procedure; derivation of an output's disclosure class; the
-admission procedure and what happens to a serving implementation when a captured
-trial case shows it failing; the approval, grant and replay procedure of an
-operation node; resumption after restart; retention of stored values; and the
-suspension of bindings on manifest change.
+State 2 states as rules what these models only make possible; see the
+`02_rules_*.md` documents, decisions A01 through A24.
