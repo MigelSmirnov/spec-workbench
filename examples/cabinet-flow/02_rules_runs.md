@@ -296,3 +296,83 @@ retention(value) = max(retention(record) for record naming value)
 
 The kernel can always explain itself and can never become a second, stale copy
 of the business.
+
+## Accepted decision A25 — kernel wall time has exactly one source
+
+### Normative rules
+
+1. Every operational timestamp in State 1 is KernelInstant M47. Business event
+   time remains TemporalValue M08 and is never filled from the kernel clock.
+2. The only production code allowed to read host wall-clock time is
+   `module:system_clock`. Its `now()` implementation takes exactly one sample
+   with Python `time.time_ns()` and returns
+   `KernelInstant(epoch_us = sample_ns // 1_000)`.
+3. No other module may call or import a wall-clock source for a domain decision
+   or persisted timestamp: `datetime.now`, `datetime.utcnow`,
+   `date.today`, `time.time`, `time.time_ns`,
+   `time.clock_gettime(CLOCK_REALTIME)` and equivalent framework helpers are
+   forbidden outside `system_clock`.
+4. A module that owns a record with a timestamp receives `system_clock` as an
+   injected dependency and calls `now()` at the atomic event it owns. Public
+   requests, gateways and `kernel_surface` never supply "current time" to a
+   deep operation.
+5. A trusted internal module may pass an already-created KernelInstant as
+   evidence of an earlier event, for example a node-attempt start time. Such a
+   value must originate from `system_clock.now()`; it is not reinterpreted as
+   current time.
+6. Retention, retry/back-off, throttling and lifecycle arithmetic belong to the
+   consuming module. `system_clock` performs no policy arithmetic and elapsed
+   time alone never authorizes an effect or changes a decision.
+7. Local elapsed-duration enforcement is separate from wall time.
+   `sandbox_supervisor` and `service_transport` may use only
+   `time.monotonic_ns()` for non-persisted timeout measurement. A monotonic
+   reading is never stored as KernelInstant and never participates in domain
+   ordering across restart.
+8. Tests inject a deterministic clock. Tests that exercise time-dependent
+   behavior advance that clock explicitly; sleeping and monkeypatching global
+   wall-clock functions are not accepted as the semantic oracle.
+
+### Formal invariants
+
+```text
+kernel_timestamp -> KernelInstant
+KernelInstant.source -> system_clock.now
+
+host_wall_clock_read
+-> module = system_clock
+   AND primitive = time.time_ns
+
+current_time_request_field -> forbidden
+
+persisted_monotonic_value -> never
+
+elapsed_timeout_measurement
+-> module IN {sandbox_supervisor, service_transport}
+   AND primitive = time.monotonic_ns
+```
+
+### Required tests
+
+1. Static source audit fails when any generated module other than
+   `system_clock` calls `datetime.now`, `utcnow`, `date.today`,
+   `time.time`, `time.time_ns` or another realtime-clock helper.
+2. Static source audit fails when `system_clock.now` does not use exactly one
+   `time.time_ns()` sample or returns a float/string/naive datetime instead of
+   integer-microsecond KernelInstant.
+3. Static source audit permits `time.monotonic_ns()` only in
+   `sandbox_supervisor` and `service_transport`, and rejects other monotonic
+   or performance-clock APIs as sources of persisted/domain time.
+4. A fixed injected clock yields byte-for-byte identical operational timestamps
+   for the same deterministic test sequence.
+5. Advancing the injected clock across retry and retention boundaries changes
+   only the owning module's time-dependent decision; it never changes approval
+   authority, semantic meaning or pinned execution identity.
+6. A request containing a field intended to override current time is rejected
+   by its strict schema.
+
+### Consequence
+
+Generated modules have no freedom to invent their own clock. There is one wall
+time representation, one production wall-clock primitive and one dependency
+through which every owning module obtains it.
+
