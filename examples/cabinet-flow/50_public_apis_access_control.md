@@ -35,16 +35,20 @@ authentication refusal. Credential values are never returned.
 
 ### Observable effect
 
-A successful resolution has no durable domain effect. Failed authentication
-updates only bounded per-credential/channel throttling state and may produce a
-bounded owner-visible security report.
+A successful resolution resets the matching AuthenticationThrottleState M49
+after any active block has elapsed. Failed authentication atomically updates
+that exact credential/channel state under A27 and may produce a bounded
+owner-visible security report.
 
 ### Enforces
 
 Every request resolves to the sole owner XOR one active delegation; owner and
 agent credentials are distinct; revoked delegations fail before the next
-request; agent-channel failures cannot throttle the owner's access; existence
-of any requested record is not consulted or disclosed.
+request; the exact A27 schedule is enforced (counts 5..9 delay
+1/2/4/8/16 seconds and count >=10 blocks for 900 seconds); blocked attempts do
+not increment or extend the block; agent-channel failures cannot throttle the
+owner's access; throttle state survives restart; existence of any requested
+record is not consulted or disclosed.
 
 ### Errors
 
@@ -55,9 +59,10 @@ identity or stack trace.
 
 ### State impact
 
-No kernel record is created or changed on success. Only bounded authentication
-failure/throttle evidence may change on refusal; a historical ActorRef embedded
-in an earlier record is never rewritten after delegation revocation.
+Only the matching AuthenticationThrottleState M49 may reset on successful
+authentication or advance on failure/block expiry; no credential material is
+persisted. A historical ActorRef embedded in an earlier record is never
+rewritten after delegation revocation.
 
 ## `public_op:access_control.authorize_action`
 
