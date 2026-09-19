@@ -28,7 +28,7 @@ DEFAULT_FILE = "60_data_closure.json"
 ALLOWED_SECTIONS = {"config", "rules", "persistence", "properties", "determinism"}
 PERSISTENCE_CLASSES = {"master", "derived", "issued", "mirrored"}
 DATA_CLOSURE_STATUSES = {"in_progress", "accepted", "closed"}
-FINAL_DATA_CLOSURE_STATUSES = {"accepted", "closed"}
+FINAL_DATA_CLOSURE_STATUSES = {"closed"}
 CONTRACT_DEPENDENT_RULE_NAMESPACES = {"persistence_backend"}
 
 
