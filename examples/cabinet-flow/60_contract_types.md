@@ -202,6 +202,21 @@ Fields:
 
 ---
 
+## `DefiningFlowConstant`
+
+Defining projection of one FlowConstant M35.
+
+Fields:
+
+- `constant_id: str`;
+- `semantic_term_revision_ref: str`;
+- `value` — the FlowConstant M35 value, unchanged and of the same declared
+  type: one bounded value of the term's value family.
+
+The constant's explanation is rationale and never defines the flow version.
+
+---
+
 ## `FlowVersionDefiningContent`
 
 Typed defining content of FlowVersion M32.
@@ -215,7 +230,8 @@ Fields:
 - `flow_outputs: tuple[SemanticPort, ...]` — order is defining;
 - `nodes: tuple[FlowNode, ...]` — canonical order, never request order;
 - `edges: tuple[FlowEdge, ...]` — canonical order, never request order;
-- `constants: tuple[FlowConstant, ...]` — canonical order, never request order.
+- `constants: tuple[DefiningFlowConstant, ...]` — canonical order, never request
+  order.
 
 ---
 
@@ -284,6 +300,21 @@ from Request.stream(), build the exact existing request model and internal
 envelope, then run the synchronous runtime dispatcher through
 starlette.concurrency.run_in_threadpool. No synchronous body read or nested
 event-loop runner is allowed. Request is the only framework-injected parameter.
+
+## `KernelRefusal`
+
+The one exception by which a deep module refuses a request. It is owned by
+`models`, has base Exception and two fields:
+
+- `code: str` — exactly one refusal code of the closed catalogue;
+- `reason: str` — exactly one reason of the closed catalogue, whose row names
+  that same code.
+
+It carries no message, no submitted value, no record identity, no credential
+material and no host path; its string form reveals only the code and reason.
+A module constructs it from a reason it owns and never from caught exception
+text. A refusal that must not distinguish its causes uses the one reason the
+catalogue gives that code.
 
 ## `HttpCredentialError`
 
@@ -1354,9 +1385,14 @@ Fields:
 - `status_code: int`;
 - `result: SurfaceResponse | None`;
 - `error_code: str | None`;
-- `error_message: str | None`.
+- `error_message: str | None`;
+- `error_reason: str | None` — the refusal reason named by the refusing module;
+- `error_explanation: str | None` — the catalogue's fixed explanation of that
+  reason.
 
-Error text is bounded and sanitized.
+Error text is bounded and sanitized. Both reason fields are absent for a
+successful result, for a transport or framework refusal and for every
+authentication refusal.
 
 ---
 

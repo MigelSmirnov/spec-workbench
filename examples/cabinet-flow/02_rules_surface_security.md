@@ -146,6 +146,13 @@ name, visibly, and nothing an agent does can become the owner's decision.
     failed trial. A refusal has result=null and a fixed public error code/message;
     exception details, submitted values and framework validation bodies are
     never reflected. Public transport mappings are in `60_http_errors.json`.
+    A refusal raised by a deep module additionally names one reason from the
+    closed refusal-reason catalogue, and the response carries that reason with
+    the catalogue's fixed explanation, because the caller reading a refusal is
+    an agent that must learn which rule refused it. The explanation is release
+    data: no module composes it, so nothing submitted can be reflected through
+    it. An authentication refusal names no reason and carries no explanation;
+    every authentication failure stays indistinguishable under A21 and A27.
 19. Bootstrap installs the typed error boundary and the exact closed OpenAPI
     document before opening the listener. Framework default documentation routes
     and generic dispatch routes are not exposed. It verifies the six-route

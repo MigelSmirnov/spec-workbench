@@ -43,6 +43,8 @@ serve_http: [DEPENDENCY_BOUNDARY] Domain dispatch MUST remain confined to inspec
 serve_http: [SECURITY_BOUNDARY] MUST carry the authenticated ActorRef into the selected operation; local origin, a proxy header, a payload-supplied actor, agent text and a previous request's authorization MUST confer no authority. Owner decisions MUST require the active owner.
 serve_http: [RETURN_SHAPE] MUST return HttpResponseEnvelope containing either the matching bounded operation result with absent error fields or a declared refusal with absent result; pending work and unsuccessful trial verdicts MUST remain genuine typed results rather than fabricated transport success or failure.
 serve_http: [VALIDATION_ERROR] MUST make no kernel_surface invocation after framing, authentication or authorization refusal; missing, revoked, ambiguous, throttled and channel-mismatched credentials MUST share the public authentication refusal without resource existence disclosure.
+serve_http: [VALIDATION_ERROR] MUST translate a KernelRefusal raised by resolve_actor, authorize_action or the selected kernel_surface operation into a refusal envelope whose error_code is the refusal code and whose error_reason is the refusal reason; the exception's string form, arguments and cause MUST never be read into the envelope.
+serve_http: [RULE_REFERENCE] MUST accept a KernelRefusal only when its code is a member of = rules.refusal.codes; any other raised exception or an unlisted code MUST become the declared internal refusal with no reason.
 serve_http: [TEST_EVIDENCE] A denied owner action by an authenticated agent MUST invoke no domain operation; an accepted catalogue call MUST receive the resolved actor once and preserve the owning module's result without inventing evidence.
 
 ## Response formatting
@@ -51,6 +53,9 @@ format_http_response: [RULE_REFERENCE] For a successful result MUST select the u
 
 format_http_response: [RULE_REFERENCE] MUST match the envelope error code to exactly one row in = rules.http_transport.errors and obtain both status and fixed message from that row.
 format_http_response: [RULE_REFERENCE] MUST use = rules.http_transport.unknown_error for unrecognized error codes, invalid envelope combinations and serialization failures.
+format_http_response: [RULE_REFERENCE] For a refusal naming a reason MUST select the unique row in = rules.refusal.reasons whose reason matches and require that row's code to equal the envelope error code, then take error_explanation from that row's explanation; a reason with no row or a row naming another code MUST yield the declared internal refusal with no reason.
+format_http_response: [RULE_REFERENCE] MUST remove error_reason and error_explanation when the error code is listed in = rules.refusal.unexplained_codes, so every authentication refusal stays indistinguishable on the wire.
+format_http_response: [SECURITY_BOUNDARY] error_explanation MUST be only the catalogue text of the named reason; a module-composed sentence, a submitted value, a record identity and an exception string MUST never reach error_explanation.
 format_http_response: [SCHEMA_CONSTRAINT] MUST reject envelopes mixing a result with refusal fields or omitting both outcomes; a successful result MUST have its declared result type and absent error fields, while a refusal MUST have no result and a declared error code.
 format_http_response: [FIELD_ASSIGNMENT] MUST make the outer HTTP status agree with the validated envelope status and use the fixed catalogue message for a refusal; caller-selected messages and mismatched supplied statuses MUST not become wire authority.
 format_http_response: [RETURN_SHAPE] MUST return a framework JSON response containing the validated HttpResponseEnvelope; it MUST preserve the operation result and safe null fields and MUST not serialize an exception, credential handle or host path.
@@ -71,6 +76,7 @@ http_framework_error: [TEST_EVIDENCE] Framework missing-route and unsupported-me
 
 build_http_openapi: [RULE_REFERENCE] MUST use = rules.http_transport.operations to enumerate exactly the accepted method/path bindings and select each request model and result model by their declared identities.
 build_http_openapi: [RULE_REFERENCE] MUST use = rules.http_transport.errors for declared refusal statuses and the shared bounded error-envelope schema.
+build_http_openapi: [SCHEMA_CONSTRAINT] The shared error-envelope schema MUST declare error_reason and error_explanation as optional bounded text beside error_code and error_message, with error_reason constrained to the reasons in = rules.refusal.reasons.
 build_http_openapi: [SCHEMA_CONSTRAINT] MUST construct the release document from the actual strict request and envelope model schemas, including required credential security and variant constraints; raw Request introspection MUST not erase request bodies or add generic object inputs.
 build_http_openapi: [SECURITY_BOUNDARY] MUST exclude runtime callables, credential handles, internal APIs and documentation endpoints from the published schema; schema export MUST not open an unauthenticated network route.
 build_http_openapi: [RETURN_SHAPE] MUST return a valid framework OpenAPI document whose operation set exactly matches the accepted route catalogue; missing or unresolved request/result schemas MUST fail startup rather than yield a partial document.
@@ -90,3 +96,79 @@ request_trial_handler: [RULE_REFERENCE] MUST select the unique row in = rules.ht
 request_trial_handler: [ORCHESTRATION] MUST asynchronously delegate the received framework request and its selected operation to handle_http_request exactly once and return the produced Response unchanged; request_trial_handler MUST not add its own authentication, retry or domain policy.
 run_flow_handler: [RULE_REFERENCE] MUST select the unique row in = rules.http_transport.operations whose handler identity is run_flow_handler; the selected operation MUST originate from this release binding, never from the incoming body, query or forwarded identity.
 run_flow_handler: [ORCHESTRATION] MUST asynchronously delegate the received framework request and its selected operation to handle_http_request exactly once and return the produced Response unchanged; run_flow_handler MUST not add its own authentication, retry or domain policy.
+
+# State 7 — Identity notes
+
+## Content identity
+
+identify_contract_version: [RULE_REFERENCE] MUST take record_kind from = rules.identity.record_kind.contract_version and canonicalization_version from = rules.identity.canonicalization_version.
+identify_contract_version: [FIELD_ASSIGNMENT] MUST build exactly one ContractVersionDefiningContent carrying slot_id, input_ports, output_ports, resource_bounds and runtime_revision_ref unchanged from the arguments; the given order of each port sequence MUST be preserved because port order is defining.
+identify_contract_version: [ORCHESTRATION] MUST call digest_defining_content exactly once with that value and MUST perform no serialization or hashing of its own.
+identify_contract_version: [RETURN_SHAPE] MUST return ContractVersionIdentity whose contract_version_id is the returned digest and whose canonicalization_version equals the value placed in the defining content.
+identify_contract_version: [VALIDATION_ERROR] MUST raise KernelRefusal with reason identity_defining_field_missing whose code is that reason's code in = rules.refusal.reasons when slot_id or runtime_revision_ref is empty, and with reason identity_duplicate_port_id when two ports of one sequence share a port_id; nothing is digested after a refusal.
+identify_contract_version: [TEST_EVIDENCE] Two calls differing only in one resource bound MUST return different identities; two calls with equal arguments MUST return equal identities in separate processes.
+
+identify_implementation: [RULE_REFERENCE] MUST take record_kind from = rules.identity.record_kind.implementation and canonicalization_version from = rules.identity.canonicalization_version.
+identify_implementation: [CONFIG_REFERENCE] MUST compare the byte length of code_bytes with = config.release_ceilings.implementation_code_bytes_max before naming them and raise KernelRefusal with reason identity_content_above_ceiling whose code is that reason's code in = rules.refusal.reasons when it is larger.
+identify_implementation: [ORCHESTRATION] MUST call digest_bytes exactly once with code_bytes, place the returned name in code_digest of one ImplementationDefiningContent together with contract_version_ref and entry_point unchanged, and then call digest_defining_content exactly once with that value.
+identify_implementation: [SECURITY_BOUNDARY] MUST treat code_bytes only as bytes to be named: the code MUST never be decoded, imported, compiled, formatted or executed, and code_bytes MUST never become a field of the defining content.
+identify_implementation: [VALIDATION_ERROR] MUST raise KernelRefusal with reason identity_defining_field_missing whose code is that reason's code in = rules.refusal.reasons when contract_version_ref or entry_point is empty or code_bytes is empty.
+identify_implementation: [RETURN_SHAPE] MUST return the digest returned by digest_defining_content unchanged.
+identify_implementation: [TEST_EVIDENCE] Equal bytes under one contract version and entry point MUST yield one identity; a different entry point or contract version MUST yield another; bytes that are not valid UTF-8 MUST be named without error.
+
+identify_trial_case: [RULE_REFERENCE] MUST take record_kind from = rules.identity.record_kind.trial_case and canonicalization_version from = rules.identity.canonicalization_version.
+identify_trial_case: [ORCHESTRATION] MUST project every element of inputs, and of expected_outputs when it is present, through defining_value_ref in the given order, build one TrialCaseDefiningContent with contract_version_ref and protected_classification unchanged, and call digest_defining_content exactly once.
+identify_trial_case: [FIELD_ASSIGNMENT] MUST keep absent expected_outputs absent and an empty expected_outputs empty; the two MUST never be merged.
+identify_trial_case: [VALIDATION_ERROR] MUST raise KernelRefusal with reason identity_defining_field_missing whose code is that reason's code in = rules.refusal.reasons when contract_version_ref or protected_classification is empty or inputs is empty.
+identify_trial_case: [RETURN_SHAPE] MUST return the digest returned by digest_defining_content unchanged.
+identify_trial_case: [TEST_EVIDENCE] Changing one input value digest MUST change the identity; changing only the retention class or disclosure class of a StoredValue MUST NOT change it.
+
+identify_binding_version: [RULE_REFERENCE] MUST take record_kind from = rules.identity.record_kind.binding_version and canonicalization_version from = rules.identity.canonicalization_version.
+identify_binding_version: [ORCHESTRATION] MUST pass idempotency_key_ports, preconditions and preview_ports each through canonical_string_set, build one BindingVersionDefiningContent with manifest_operation_ref, input_ports, output_ports, effect_class, replay and outcome_read_binding_ref unchanged, and call digest_defining_content exactly once.
+identify_binding_version: [DETERMINISM_OR_ORDERING] The given order of input_ports and output_ports MUST be preserved; the three name collections MUST take only the order canonical_string_set returns.
+identify_binding_version: [VALIDATION_ERROR] MUST raise KernelRefusal with reason identity_defining_field_missing whose code is that reason's code in = rules.refusal.reasons when effect_class or replay is empty, and with reason identity_duplicate_port_id when two ports of one sequence share a port_id.
+identify_binding_version: [RETURN_SHAPE] MUST return the digest returned by digest_defining_content unchanged.
+identify_binding_version: [TEST_EVIDENCE] Permuting preconditions MUST NOT change the identity; changing effect_class, replay or one port MUST change it.
+
+identify_flow_version: [RULE_REFERENCE] MUST take record_kind from = rules.identity.record_kind.flow_version and canonicalization_version from = rules.identity.canonicalization_version.
+identify_flow_version: [ORCHESTRATION] MUST call canonical_flow_graph once with nodes, edges and constants, build one FlowVersionDefiningContent from flow_id, flow_inputs, flow_outputs and the three returned sequences, and call digest_defining_content exactly once.
+identify_flow_version: [DETERMINISM_OR_ORDERING] The given order of flow_inputs and flow_outputs MUST be preserved; nodes, edges and constants MUST take only the order canonical_flow_graph returns, never request order.
+identify_flow_version: [VALIDATION_ERROR] MUST raise KernelRefusal with reason identity_defining_field_missing whose code is that reason's code in = rules.refusal.reasons when flow_id is empty or nodes is empty.
+identify_flow_version: [RETURN_SHAPE] MUST return the digest returned by digest_defining_content unchanged.
+identify_flow_version: [TEST_EVIDENCE] Permuting nodes, edges or constants in the request MUST NOT change the identity; changing one constant value, one guard or one pinned version MUST change it; changing only a constant's explanation MUST NOT.
+
+digest_value: [RULE_REFERENCE] MUST take record_kind from = rules.identity.record_kind.stored_value and canonicalization_version from = rules.identity.canonicalization_version.
+digest_value: [CONFIG_REFERENCE] MUST compare the byte length of canonical_value_bytes with = config.release_ceilings.stored_value_bytes_max before naming them and raise KernelRefusal with reason identity_content_above_ceiling whose code is that reason's code in = rules.refusal.reasons when it is larger.
+digest_value: [ORCHESTRATION] MUST call digest_bytes exactly once with canonical_value_bytes, place the returned name in content_digest of one StoredValueDefiningContent together with value_schema_ref and semantic_term_revision_ref unchanged, and call digest_defining_content exactly once.
+digest_value: [FIELD_ASSIGNMENT] An absent semantic_term_revision_ref MUST stay absent in the defining content and MUST never be replaced by empty text.
+digest_value: [VALIDATION_ERROR] MUST raise KernelRefusal with reason identity_defining_field_missing whose code is that reason's code in = rules.refusal.reasons when value_schema_ref is empty.
+digest_value: [RETURN_SHAPE] MUST return the digest returned by digest_defining_content unchanged.
+digest_value: [TEST_EVIDENCE] Equal bytes under two value schemas MUST yield different digests; an absent term revision and an empty one MUST NOT be interchangeable.
+
+## Hidden identity mechanisms
+
+canonical_string_set: [DETERMINISM_OR_ORDERING] MUST return the given names in ascending order of their Unicode code points, comparing whole strings, with no case folding, trimming or normalization.
+canonical_string_set: [VALIDATION_ERROR] MUST raise KernelRefusal with reason identity_duplicate_name_in_set whose code is that reason's code in = rules.refusal.reasons when one name occurs twice, and with reason identity_defining_field_missing when a name is empty.
+canonical_string_set: [RETURN_SHAPE] MUST return a tuple; an empty input MUST return an empty tuple.
+
+canonical_flow_graph: [DETERMINISM_OR_ORDERING] MUST order nodes by ascending node_id and constants by ascending constant_id, comparing Unicode code points of whole strings.
+canonical_flow_graph: [DETERMINISM_OR_ORDERING] MUST order edges by ascending value of digest_defining_content applied to each edge, because an edge has no identifier of its own.
+canonical_flow_graph: [FIELD_PROJECTION] MUST project every FlowConstant to one DefiningFlowConstant carrying constant_id, semantic_term_revision_ref and value unchanged; the constant's explanation MUST be left out.
+canonical_flow_graph: [VALIDATION_ERROR] MUST raise KernelRefusal with reason identity_duplicate_graph_member whose code is that reason's code in = rules.refusal.reasons when two nodes share a node_id, two constants share a constant_id or two edges have equal digests.
+canonical_flow_graph: [RETURN_SHAPE] MUST return the ordered nodes, the ordered edges and the ordered projected constants, in that position order, changing no node and no edge.
+
+defining_value_ref: [FIELD_PROJECTION] MUST return one DefiningValueRef carrying value_digest, value_schema_ref and semantic_term_revision_ref of the given StoredValue unchanged; carriage, size, media_type, disclosure_class, retention_class and held_until MUST be left out.
+defining_value_ref: [VALIDATION_ERROR] MUST raise KernelRefusal with reason identity_defining_field_missing whose code is that reason's code in = rules.refusal.reasons when value_digest or value_schema_ref is empty.
+
+## Text admission shared by every identity
+
+identify_contract_version: [VALIDATION_ERROR] MUST let a text value that cannot be encoded as UTF-8 surface as KernelRefusal with reason identity_text_not_encodable whose code is that reason's code in = rules.refusal.reasons; text MUST never be repaired, trimmed, case-folded or Unicode-normalized before it is named.
+
+## Minted identity
+
+mint_identity: [RULE_REFERENCE] MUST accept entity_kind only when it is a member of = rules.identity.minted_entity_kinds and raise KernelRefusal with reason identity_unknown_entity_kind whose code is that reason's code in = rules.refusal.reasons otherwise.
+mint_identity: [PROVENANCE] MUST draw 128 bits from the operating system's cryptographic entropy source for every call; time, a counter, a label, the installation namespace and request data MUST never contribute entropy.
+mint_identity: [RETURN_SHAPE] MUST return entity_kind, installation_namespace and the lowercase hexadecimal rendering of those 128 bits joined by single colons, in that order, so identities of two entity kinds or two installations can never be equal.
+mint_identity: [VALIDATION_ERROR] MUST raise KernelRefusal with reason identity_defining_field_missing whose code is that reason's code in = rules.refusal.reasons when installation_namespace is empty or contains a colon, and with reason identity_entropy_unavailable when the entropy source fails; no fallback identity is ever produced.
+mint_identity: [FORBIDDEN_ACTION] MUST NOT read or write any record, reserve the identity or check it against stored identities; persistence and collision handling on insert belong to the calling module.
+mint_identity: [TEST_EVIDENCE] Two consecutive calls with equal arguments MUST return different identities; an unknown entity kind MUST be refused with no entropy drawn.
