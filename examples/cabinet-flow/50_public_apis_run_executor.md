@@ -79,10 +79,12 @@ state transition.
 
 ### Inputs
 
-The exact non-terminal Run reference and a bounded wake reason. All executable
-facts are re-read from the Run's immutable pins and durable evidence; callers
-cannot supply a ready-node list, success flag, approval result, retry decision
-or alternate dependency.
+The exact non-terminal Run reference and a bounded wake reason. The executor
+obtains current UTC time from `module:system_clock` when evaluating persisted
+retry/back-off deadlines. All executable facts are re-read from the Run's
+immutable pins and durable evidence; callers cannot supply a ready-node list,
+success flag, approval result, retry decision, clock value or alternate
+dependency.
 
 ### Outputs
 
