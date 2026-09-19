@@ -363,27 +363,6 @@ is the pre-push check and the CI gate. Project-owned deterministic backends are
 declared in `examples/<project>/workbench_extensions.json` and loaded through
 `tools/project_extensions.py`.
 
-The same manifest may declare project-local deterministic gates. A gate module
-stays under `examples/<project>/tools/`, exposes `run_gate(project)`, and
-returns the stable `spec_workbench_project_gate_result.v1` report shape.
-Generic tooling never imports a product by name:
-
-```json
-{
-  "schema_version": "spec_workbench_project_extensions.v1",
-  "project_gates": [
-    {"id": "domain_invariants", "module": "tools/project_gate.py"}
-  ]
-}
-```
-
-Run them directly with:
-
-```bash
-python tools/design_project_gates.py examples/<project>
-```
-
-Declared project gates are also run automatically by
-`python tools/authoring.py next <project>` on the canonical project ref and by
-the complete `tools/design_assembly.py` verification. Any error or warning
-blocks progress; malformed or crashing project gates fail closed.
+Project-local executable gates are not supported. A design invariant discovered
+on one project must be promoted to the shared root Workbench pipeline before it
+can become a mandatory gate for applications.

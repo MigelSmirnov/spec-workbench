@@ -28,7 +28,7 @@ def test_cabinet_assembly_stops_on_every_undecided_fact() -> None:
     assert report["schema_version"] == "spec_workbench_assembly_verification.v1"
     assert report["ready"] is False
     assert [check["name"] for check in report["checks"]] == [
-        "project_gates", "language", "modules", "identity", "fields", "data", "contracts", "external_contracts",
+        "language", "modules", "identity", "fields", "data", "contracts", "external_contracts",
         "notes", "closure_gaps", "router", "persistence", "witness", "flows",
     ]
     by_name = {check["name"]: check for check in report["checks"]}
@@ -38,7 +38,7 @@ def test_cabinet_assembly_stops_on_every_undecided_fact() -> None:
             assert by_name[name]["ready"] is True, name  # the factory registry proved the codec coverage
             continue
         assert by_name[name]["ready"] is False and by_name[name]["errors"] > 0, name
-    for name in ("project_gates", "language", "identity", "data", "external_contracts", "notes", "router"):
+    for name in ("language", "identity", "data", "external_contracts", "notes", "router"):
         assert by_name[name]["ready"] is True and by_name[name]["errors"] == 0, name
     assert by_name["contracts"]["errors"] == 2
     for check in inspect_check(CABINET, "contracts")["check"]["findings"]:
