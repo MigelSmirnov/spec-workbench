@@ -201,7 +201,8 @@ whose implementation must be replaced.
 ### Boundary
 
 `module:slot_registry` owns slots, contract versions and code.
-`module:trial_corpus` owns the cases. `module:identity` computes every
+`module:trial_corpus` owns the cases. `module:semantic_vocabulary` owns the
+accepted term revisions used to type ports. `module:identity` computes every
 identity. `module:kernel_surface` composes the authoring view from
 `module:slot_activation` and `module:trace_journal` without taking their
 ownership. `module:system_clock` supplies timestamps written by the owning
