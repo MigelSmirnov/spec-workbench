@@ -22,6 +22,7 @@ TOOLS_DIR = Path(__file__).resolve().parent
 if str(TOOLS_DIR) not in sys.path:
     sys.path.insert(0, str(TOOLS_DIR))
 
+from data_closure_audit import audit as audit_data_closure
 from stage4_flow_audit import audit as audit_stage4
 from stage5_api_audit import audit as audit_stage5
 from time_source_audit import audit_design as audit_time_design
@@ -61,6 +62,15 @@ def run_gate(project: Path) -> dict[str, object]:
                 "severity": "error",
                 "code": "time_source_design",
                 "message": item.render(project),
+            }
+        )
+
+    for item in audit_data_closure(project):
+        findings.append(
+            {
+                "severity": "error",
+                "code": "structured_data_consistency",
+                "message": item,
             }
         )
 
@@ -126,6 +136,7 @@ def main() -> int:
     print("  - State 4 -> State 5 capability lineage: 95/95")
     print("  - Stage 5 API structure: 95/95")
     print("  - Kernel/service time isolation: enforced")
+    print("  - Pre-contract structured data closure: exact")
     if args.source_root:
         print("  - Generated Python wall-clock source audit: enforced")
     return 0
