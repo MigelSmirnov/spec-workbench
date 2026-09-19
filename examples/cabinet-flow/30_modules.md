@@ -426,8 +426,10 @@ contract version now".
 
 ### Knows
 
-M27, the current admission from `admission`, and the corpus growth that makes a
-serving implementation known to fail.
+M27, the current admission from `admission`, the exact active corpus from
+`trial_corpus`, and slot-scoped concluded execution evidence from
+`trace_journal` needed to derive when the serving implementation is known to
+fail a captured regression case.
 
 ### Must not own
 
