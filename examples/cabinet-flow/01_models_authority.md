@@ -153,3 +153,54 @@ Embedded in every record that names an author, an approver or an initiator.
 ### Open questions
 
 None.
+
+## Model M49 — AuthenticationThrottleState
+
+### Meaning
+
+The durable abuse-control state for one protected credential binding on one
+surface channel. It contains no credential material and exists only so repeated
+failed authentication cannot be reset by restarting the kernel.
+
+Candidate fields:
+
+- `credential_binding_ref`: protected host reference, never the secret;
+- `channel`: `mcp` or `http_api`;
+- `consecutive_failures`: non-negative integer;
+- `last_failure_at`: KernelInstant M47 when at least one failure exists;
+- `blocked_until`: optional KernelInstant M47 while the credential/channel pair
+  is temporarily blocked.
+
+Owner and agent credentials have separate records. A failure on one agent
+credential never changes the owner's record or another agent's record.
+
+### Identity
+
+value
+
+### Identity evidence
+
+Substitution: equal credential-binding reference and channel address the same
+throttle state. Continuity: the counters/times change as authentication fails,
+succeeds or a temporary block expires.
+
+### Source of truth
+
+`module:access_control`, from authentication results and
+`module:system_clock.now` under A27.
+
+### Lifecycle candidate
+
+Absent until the first failure; updated on failure; reset to zero/unblocked on a
+successful authentication after any active block has elapsed. The record may be
+retained at zero so restart behavior remains deterministic.
+
+### Persistence candidate
+
+Durable master state of the kernel's operational store. It contains no reusable
+credential and is backed up with the rest of the kernel state.
+
+### Open questions
+
+None.
+
