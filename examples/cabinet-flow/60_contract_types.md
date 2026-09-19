@@ -924,3 +924,314 @@ Fields:
 - `next_page_cursor: str | None`.
 
 Only the active owner may receive this page.
+
+
+---
+
+## `CompositionFilter`
+
+Bounded exact-reference filter for the authoring composition view.
+
+Fields:
+
+- `slot_refs: tuple[str, ...]`;
+- `binding_refs: tuple[str, ...]`;
+- `semantic_term_revision_refs: tuple[str, ...]`;
+- `effect_classes: tuple[str, ...]`.
+
+Empty tuples mean no restriction for that dimension; arbitrary query languages
+are not accepted.
+
+---
+
+## `WaitingForOwnerFilter`
+
+Bounded exact-reference filter.
+
+Fields:
+
+- `run_refs: tuple[str, ...]`;
+- `flow_version_refs: tuple[str, ...]`;
+- `service_instance_refs: tuple[str, ...]`.
+
+No free-form query or store selector is accepted.
+
+---
+
+## `InspectRequest`
+
+Fields:
+
+- `inspection_kind: str`;
+- `resource_ref: str | None`;
+- `query_refs: tuple[str, ...]`;
+- `page_cursor: str | None`;
+- `page_size: int | None`.
+
+The inspection kind belongs to the release-fixed catalogue.
+
+## `SurfaceViewItem`
+
+Closed State 6 union of the views/records that `inspect` may return:
+
+`SemanticAxis | SemanticAxisRevision | SemanticTerm | SemanticTermRevision |
+SemanticRelation | SemanticRelationRevision | Slot | SlotContractVersion |
+ImplementationRecordView | TrialCase | ActiveCorpusSnapshot |
+OperationBinding | OperationBindingVersion | Flow | FlowVersion | FlowProof |
+FlowActivation | FlowRun | RunStatusView | RunTracePage | SlotEvidencePage |
+StoredValueRead | CompositionView | ContractHealthView`.
+
+## `InspectResult`
+
+Fields:
+
+- `inspection_kind: str`;
+- `items: tuple[SurfaceViewItem, ...]`;
+- `next_page_cursor: str | None`.
+
+---
+
+## `SlotDraft`
+
+Fields: `name: str`, `purpose: str`.
+
+## `ContractVersionDraft`
+
+Fields:
+
+- `slot_id: str`;
+- `input_ports: tuple[SemanticPort, ...]`;
+- `output_ports: tuple[SemanticPort, ...]`;
+- `resource_bounds: ResourceBounds`;
+- `runtime_revision: SandboxRuntimeRevision`.
+
+## `ImplementationDraft`
+
+Fields:
+
+- `contract_version_ref: str`;
+- `entry_point: str`;
+- `code_bytes: bytes`;
+- `rationale: str`;
+- `motivating_trace_refs: tuple[str, ...]`.
+
+## `TrialCaseDraft`
+
+Fields:
+
+- `contract_version_ref: str`;
+- `inputs: tuple[TypedValueDraft, ...]`;
+- `expected_outputs: tuple[TypedValueDraft, ...] | None`.
+
+## `BindingProposalDraft`
+
+Fields:
+
+- `operation_ref: ManifestOperationRef`;
+- `input_ports: tuple[SemanticPort, ...]`;
+- `output_ports: tuple[SemanticPort, ...]`;
+- `purpose: str`;
+- `preview_ports: tuple[str, ...]`;
+- `outcome_read_binding_ref: str | None`.
+
+## `FlowDraft`
+
+Fields: `name: str`, `purpose: str`.
+
+## `FlowVersionDraft`
+
+Fields:
+
+- `flow_id: str`;
+- `flow_inputs: tuple[SemanticPort, ...]`;
+- `flow_outputs: tuple[SemanticPort, ...]`;
+- `nodes: tuple[FlowNode, ...]`;
+- `edges: tuple[FlowEdge, ...]`;
+- `constants: tuple[FlowConstant, ...]`.
+
+## `VocabularyProposalDraft`
+
+Fields:
+
+- `content: VocabularyProposalContent`;
+- `motivating_refs: tuple[str, ...]`;
+- `agent_rationale: str | None`.
+
+## `AuthorPayload`
+
+Closed union:
+
+`SlotDraft | ContractVersionDraft | ImplementationDraft | TrialCaseDraft |
+BindingProposalDraft | FlowDraft | FlowVersionDraft | VocabularyProposalDraft`.
+
+## `AuthorRequest`
+
+Fields:
+
+- `command: str`;
+- `payload: AuthorPayload`.
+
+The command is release-fixed and must match the concrete payload variant.
+Caller-supplied content identities are not representable in these drafts.
+
+## `AuthorResult`
+
+Fields:
+
+- `record_kind: str`;
+- `record_ref: str`.
+
+---
+
+## `TrialRequest`
+
+Fields:
+
+- `contract_version_ref: str`;
+- `implementation_ref: str`.
+
+## `ActivationRequest`
+
+Fields:
+
+- `activation_kind: str`;
+- `contract_version_ref: str | None`;
+- `implementation_ref: str | None`;
+- `flow_id: str | None`;
+- `flow_version_ref: str | None`;
+- `proof_ref: str | None`;
+- `expected_current_activation_ref: str | None`;
+- `reason: str | None`.
+
+The activation kind fixes which reference set is valid; mixed slot/flow targets
+are refused.
+
+## `ActivationResult`
+
+Fields:
+
+- `activation: SlotActivation | FlowActivation`;
+- `current_activation_ref: str`.
+
+## `RunFlowRequest`
+
+Fields:
+
+- `flow_ref: str`;
+- `inputs: tuple[TypedValueDraft, ...]`.
+
+## `RunFlowResult`
+
+Fields:
+
+- `run: FlowRun`;
+- `status: RunStatusView`.
+
+## `OwnerDecisionRequest`
+
+Fields:
+
+- `decision_kind: str`;
+- `target_ref: str`;
+- `secondary_ref: str | None`;
+- `expected_status: str | None`;
+- `expected_revision_ref: str | None`;
+- `decision: str`;
+- `reason: str | None`;
+- `owner_statement_digest: str | None`.
+
+The decision kind is release-fixed and determines which target/reference/status
+fields are legal. Agent prose never substitutes for the kernel statement.
+
+## `OwnerDecisionResult`
+
+Fields:
+
+- `record_kind: str`;
+- `decision_record_ref: str`;
+- `resulting_state_ref: str`.
+
+---
+
+## `SurfaceRequest`
+
+Closed union:
+
+`InspectRequest | AuthorRequest | TrialRequest | ActivationRequest |
+RunFlowRequest | OwnerDecisionRequest`.
+
+## `SurfaceResponse`
+
+Closed union:
+
+`InspectResult | AuthorResult | AdmissionVerdict | ActivationResult |
+RunFlowResult | OwnerDecisionResult`.
+
+---
+
+## `HttpRequestContext`
+
+Fields:
+
+- `request_id: str`;
+- `credential: ChannelCredentialHandle`;
+- `body_size: int`.
+
+No caller-selected module/path target is represented after fixed-route parsing.
+
+## `HttpRequestEnvelope`
+
+Fields:
+
+- `context: HttpRequestContext`;
+- `operation: str`;
+- `payload: SurfaceRequest`.
+
+## `HttpResponseEnvelope`
+
+Fields:
+
+- `status_code: int`;
+- `result: SurfaceResponse | None`;
+- `error_code: str | None`;
+- `error_message: str | None`.
+
+Error text is bounded and sanitized.
+
+---
+
+## `McpRequestEnvelope`
+
+Fields:
+
+- `request_id: str`;
+- `credential: ChannelCredentialHandle`;
+- `operation: str`;
+- `payload: SurfaceRequest`.
+
+## `McpResponseEnvelope`
+
+Fields:
+
+- `request_id: str`;
+- `result: SurfaceResponse | None`;
+- `error_code: str | None`;
+- `error_message: str | None`.
+
+---
+
+## `KernelReadiness`
+
+Fields:
+
+- `manifest_revision: ManifestRevisionRef`;
+- `store_ready: bool`;
+- `sandbox_ready: bool`;
+- `binding_sweep_ready: bool`;
+- `runs_resumed: bool`;
+- `mcp_ready: bool`;
+- `http_ready: bool`;
+- `ready: bool`;
+- `failures: tuple[str, ...]`.
+
+No credential value or host path is present.
