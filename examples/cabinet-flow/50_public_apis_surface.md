@@ -86,8 +86,9 @@ identity cannot be supplied inside the payload; transport never bypasses
 
 ### Errors
 
-Malformed envelopes, unknown operations, unknown fields and oversized payloads
-are refused before delegation. Authentication, authorization and domain errors
+Malformed envelopes, unknown operations, unknown fields and payloads above
+injected M48 `surface_request_bytes_max` are refused before delegation.
+Authentication, authorization and domain errors
 remain owned by their modules and are mapped without revealing record existence.
 
 ### State impact
@@ -129,8 +130,9 @@ database proxy, filesystem, shell or free-form code-execution endpoint.
 
 ### Errors
 
-Unknown route, unsupported media type, malformed body, unknown field and size
-overflow are refused before delegation. Owned module errors are mapped to
+Unknown route, unsupported media type, malformed body, unknown field and body
+above injected M48 `surface_request_bytes_max` are refused before delegation.
+Owned module errors are mapped to
 stable public error forms without existence disclosure.
 
 ### State impact
@@ -167,9 +169,11 @@ by the selected deep module.
 
 ### Enforces
 
-Actor authorization, disclosure ceiling, slot-scoped authoring visibility,
-bounded pagination and the prohibition on exposing another actor's data,
-credentials, implementation bodies during composition, or raw storage layout.
+Actor authorization, disclosure ceiling, slot-scoped authoring visibility and
+injected M48 pagination bounds: omitted page size uses `page_size_default`
+and any requested size above `page_size_max` is refused; another actor's data,
+credentials, implementation bodies during composition and raw storage layout
+are never exposed.
 
 ### Errors
 
@@ -214,8 +218,9 @@ service.
 ### Enforces
 
 Authoring delegation, strict command variants, computed identities, immutable
-versions, accepted semantic references, installation ceilings and separation
-of proposal, proof, admission, activation and authority.
+versions, accepted semantic references, injected ReleaseCeilings M48 for code,
+fixture and bounded-text sizes, and separation of proposal, proof, admission,
+activation and authority.
 
 ### Errors
 
