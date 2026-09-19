@@ -424,3 +424,275 @@ Fields:
 
 An authorized value is scoped to the exact run/node/binding/instance/input set
 used to request it and is not reusable for another attempt.
+
+
+---
+
+## `BoundedByteStream`
+
+Opaque one-pass byte source whose maximum readable length is fixed before use.
+It exposes no host path and cannot be rewound into an unbounded buffer.
+
+## `BoundedByteSink`
+
+Opaque bounded destination supplied by an execution/transport boundary. It
+accepts bytes only up to its declared ceiling and exposes no arbitrary host
+path.
+
+## `BoundedReadLease`
+
+Opaque read-only lease over one already identified byte object. The lease is
+bound to one digest and byte length, is non-serializable, and cannot extend the
+source object's retention/lifetime.
+
+---
+
+## `RunFileAccess`
+
+Purpose-scoped result of `run_spool.describe_file`.
+
+Fields:
+
+- `descriptor: RunFileDescriptor`;
+- `read_lease: BoundedReadLease | None`.
+
+The lease is present only when the caller/purpose is authorized to read those
+exact bytes.
+
+---
+
+## `FileDeliveryResult`
+
+Fields:
+
+- `content_digest: str`;
+- `delivered_bytes: int`;
+- `observed_media_type: str`;
+- `complete: bool`.
+
+No destination or spool path is included.
+
+---
+
+## `RunSpoolCleanupResult`
+
+Fields:
+
+- `files_removed: int`;
+- `bytes_removed: int`;
+- `failures: tuple[str, ...]`.
+
+A non-empty failure list means cleanup was not reported complete.
+
+---
+
+## `StoredValueRead`
+
+Disclosure-aware read result.
+
+Fields:
+
+- `metadata: StoredValue`;
+- `content: bytes | BoundedReadLease | None`;
+- `content_unavailable_reason: str | None`.
+
+Exactly one of content or an unavailable reason is present. A `byte_stream`
+trial fixture is returned only as a bounded read lease.
+
+---
+
+## `DisclosureDerivation`
+
+Fields:
+
+- `disclosure_class: str`;
+- `input_value_refs: tuple[str, ...]`.
+
+The class is derived only from the exact execution inputs.
+
+---
+
+## `ValueExpiryResult`
+
+Fields:
+
+- `content_removed: int`;
+- `content_retained: int`;
+- `failures: tuple[str, ...]`.
+
+Removed bytes are never returned.
+
+---
+
+## `SandboxFileInput`
+
+Validated file input for one sandbox execution.
+
+Fields:
+
+- `port_id: str`;
+- `source: SpooledBytes | StoredValue`;
+- `content_digest: str`;
+- `size_bytes: int`;
+- `observed_media_type: str`.
+
+A StoredValue source is permitted only for a trial fixture.
+
+---
+
+## `SandboxCollectedValue`
+
+Fields:
+
+- `port_id: str`;
+- `canonical_bytes: bytes`.
+
+The bytes are bounded collection output and are not yet a StoredValue until the
+caller performs contract validation.
+
+---
+
+## `SandboxCollectedFile`
+
+Fields:
+
+- `port_id: str`;
+- `content_digest: str`;
+- `size_bytes: int`;
+- `observed_media_type: str`;
+- `spooled_ref: SpooledBytes | None`;
+- `read_lease: BoundedReadLease | None`.
+
+Real-run file output uses a run-spool reference; trial collection may expose
+only the bounded read lease needed by the caller to validate evidence.
+
+---
+
+## `SandboxResourceUsage`
+
+Fields:
+
+- `wall_time_ms: int`;
+- `cpu_time_ms: int`;
+- `memory_bytes_peak: int`;
+- `output_bytes: int`;
+- `scratch_bytes_peak: int`;
+- `process_count_peak: int`.
+
+These are observed usage facts, never authorization or timeout inputs.
+
+---
+
+## `DeniedAttemptEvidence`
+
+Fields:
+
+- `kind: str`;
+- `detail: str | None`.
+
+Detail is bounded and scrubbed; it contains no secret or business value above
+the permitted evidence class.
+
+---
+
+## `SandboxExecutionResult`
+
+Fields:
+
+- `outcome: str`;
+- `runtime_revision_ref: str`;
+- `enforced_bounds: ResourceBounds`;
+- `resources_used: SandboxResourceUsage`;
+- `denied_attempts: tuple[DeniedAttemptEvidence, ...]`;
+- `cleanup_confirmed: bool`;
+- `value_outputs: tuple[SandboxCollectedValue, ...]`;
+- `file_outputs: tuple[SandboxCollectedFile, ...]`.
+
+A completed result is still untrusted until the caller validates every output
+against the exact contract.
+
+---
+
+## `SandboxSupervisorHealth`
+
+Fields:
+
+- `healthy: bool`;
+- `supported_runtime_revision_refs: tuple[str, ...]`;
+- `reason: str | None`.
+
+An unresolved cleanup leak or unverifiable required runtime is unhealthy.
+
+---
+
+## `TransportMetadataField`
+
+One bounded request metadata field already declared by the accepted
+manifest/binding.
+
+Fields:
+
+- `name: str`;
+- `value: str`.
+
+It cannot introduce an undeclared header/channel/host selector.
+
+---
+
+## `ObservedHeader`
+
+One response header that the manifest contract explicitly permits to be
+reported.
+
+Fields:
+
+- `name: str`;
+- `value: str`.
+
+---
+
+## `TransportResult`
+
+Immutable result of one bounded service exchange.
+
+Fields:
+
+- `response_bytes: bytes | None`;
+- `response_file: SpooledBytes | None`;
+- `observed_status: str | int | None`;
+- `observed_headers: tuple[ObservedHeader, ...]`;
+- `service_instance_ref: str`;
+- `elapsed_ns: int`;
+- `request_bytes: int`;
+- `response_bytes_count: int`;
+- `send_classification: str | None`;
+- `failure_reason: str | None`.
+
+At most one response body representation is present. Service timestamps remain
+service data and never become KernelInstant.
+
+---
+
+## `OperationAttemptResult`
+
+Immutable conclusion of one exact operation attempt.
+
+Fields:
+
+- `run_id: str`;
+- `node_id: str`;
+- `map_index: int | None`;
+- `attempt_number: int`;
+- `binding_version_ref: str`;
+- `service_instance_ref: str`;
+- `input_digests: tuple[str, ...]`;
+- `idempotency_key_digest: str | None`;
+- `status: str`;
+- `output_value_refs: tuple[str, ...]`;
+- `output_file_refs: tuple[SpooledBytes, ...]`;
+- `transport: TransportResult | None`;
+- `failure_reason: str | None`.
+
+`outcome_unknown` is a first-class status and is never coerced to success or
+failure.
+
