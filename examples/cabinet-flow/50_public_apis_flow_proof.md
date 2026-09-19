@@ -18,10 +18,11 @@ before considering that version for activation.
 
 ### Inputs
 
-One exact FlowVersion reference. The operation resolves the pinned function
-contract versions through `module:slot_registry`, accepted operation-binding
-versions through `module:operation_bindings`, and the exact accepted semantic
-term and relation revisions through `module:semantic_vocabulary`. The caller
+One exact FlowVersion reference. The operation resolves every pinned function
+contract through `module:slot_registry.contract_version`, accepted
+operation-binding versions through `module:operation_bindings`, and the exact
+accepted semantic term and relation revisions through
+`module:semantic_vocabulary`. The caller
 cannot provide a verdict, suppress a check, substitute a newer dependency or
 ask the proof to choose an edge basis.
 
