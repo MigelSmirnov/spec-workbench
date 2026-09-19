@@ -22,8 +22,8 @@ mutations.
 
 A closed purpose/record-family discriminator, bounded correlation identity and
 the compare-and-set expectations required by the owning domain operation. No
-SQL, table name, query, host path or business payload outside typed M01–M46
-records is accepted.
+SQL, table name, query, host path or business payload outside typed durable
+M01–M49 kernel records is accepted.
 
 ### Outputs
 
