@@ -1,5 +1,7 @@
 # State 5 — Cabinet Flow slot-activation operations
 
+A25 clock contract: every operational timestamp written by this module is KernelInstant M47 obtained from its injected `module:system_clock.now` at the atomic event it owns. No public operation accepts caller-, gateway- or surface-supplied current time.
+
 Slot activation selects which admitted implementation serves one immutable
 contract version. Selection is append-only and compare-and-set; rollback is
 another activation. Contract health is derived from immutable evidence and is
