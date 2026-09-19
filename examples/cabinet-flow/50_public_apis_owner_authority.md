@@ -19,8 +19,9 @@ effectful-flow activation or grant statements.
 
 ### Inputs
 
-One closed statement kind and exact accepted facts: affected service,
-operation/binding or flow version, effect classes, non-read nodes, preview
+One closed statement kind and the exact facts needed by that decision:
+vocabulary proposal kind/content and motivating evidence; affected service and
+operation/binding; flow version and non-read nodes; effect classes, preview
 ports and decision target. Agent text may accompany the request only as clearly
 separate data.
 
