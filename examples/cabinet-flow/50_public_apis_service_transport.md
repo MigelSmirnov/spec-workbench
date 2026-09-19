@@ -47,8 +47,11 @@ performed here.
 The instance and operation still match the pinned manifest digest; channel and
 request framing come only from manifest facts; credentials are never exposed to
 the caller or persisted in evidence; redirects cannot cross to another host;
-request and response size/time bounds are enforced; file transfer is streaming;
-a timestamp or date returned by the service is carried only as response data
+request and response bounds are enforced; any manifest/binding-specific
+timeout may be lower but never exceeds injected M48
+`transport_timeout_ms_max`, measured only with `time.monotonic_ns()`; file
+transfer is streaming; a timestamp or date returned by the service is carried
+only as response data
 under the binding's declared representation and is never interpreted as kernel
 time; and a transport failure is classified conservatively according to whether
 the request might have reached the service.
