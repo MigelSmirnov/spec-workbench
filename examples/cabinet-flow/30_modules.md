@@ -36,7 +36,8 @@ execution, transport or any policy.
 ### Owns
 
 A25 and M47: the kernel's only source of current wall-clock time and its exact
-canonical representation as integer UTC epoch microseconds.
+canonical representation as integer UTC epoch microseconds. The supported
+system_clock_backend/v2 emitter owns this module's implementation.
 
 ### Knows
 
