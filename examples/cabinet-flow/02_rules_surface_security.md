@@ -220,14 +220,14 @@ loses its enforceable boundary.
 
 Security review: PERFORMED
 
-- authentication_credential_abuse: APPLICABLE; references: A21, A23; affected: M16, M17, M18, owner access, mcp channel, http_api channel
+- authentication_credential_abuse: APPLICABLE; references: A21, A23, A27; affected: M16, M17, M18, M49, owner access, mcp channel, http_api channel
 - secrets: APPLICABLE; references: A06, A19, A23; affected: M17, M38, M39, M41, host configuration, traces, previews, errors
 - authorization: APPLICABLE; references: A01, A10, A11, A12, A13, A21; affected: M16, M17, M29, M30, M37, M42, M43, M45
 - injection_interpreted_input: APPLICABLE; references: A02, A06, A17, A22; affected: M23, M32, M34, M35, agent-supplied text, submitted code, flow definitions
 - external_callbacks_webhooks: APPLICABLE; references: A10, A14, A15, A23; affected: M28, M30, M41, M44, outbound service invocation and untrusted service responses
 - browser_boundary: APPLICABLE; references: A03, A22; affected: http_api channel, owner-facing previews and statements
 - files_artifacts: APPLICABLE; references: A02, A05, A06, A07, A20, A26; affected: M13, M22, M23, M24, M38, M46, M48, code bytes, sandbox scratch, run spool, backups
-- concurrency: APPLICABLE; references: A09, A12, A14, A17, A18, A25; affected: M27, M40, M41, M42, M44, M47
+- concurrency: APPLICABLE; references: A09, A12, A14, A17, A18, A25, A28; affected: M27, M40, M41, M42, M44, M47
 - dependencies: APPLICABLE; references: A06, A23, A25, A26; affected: M22, M47, M48, kernel release, sandbox runtime libraries, wall-clock and monotonic time primitives
 
 ## Accepted decision A26 — one release owns every global safety ceiling
