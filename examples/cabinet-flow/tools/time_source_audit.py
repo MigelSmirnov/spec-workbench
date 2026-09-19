@@ -90,6 +90,8 @@ def audit_design(project: Path) -> list[Finding]:
         (rules_path, "## Accepted decision A25 — kernel wall time has exactly one source"),
         (rules_path, "time.time_ns()"),
         (rules_path, "time.monotonic_ns()"),
+        (rules_path, "service_timestamp -/> KernelInstant"),
+        (rules_path, "cross_service_ordering"),
         (clock_path, "KernelInstant M47"),
         (clock_path, "time.time_ns()"),
         (clock_path, "sample_ns // 1_000"),
