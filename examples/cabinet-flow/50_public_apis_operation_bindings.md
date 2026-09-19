@@ -1,5 +1,7 @@
 # State 5 — Cabinet Flow operation-binding operations
 
+A25 clock contract: every operational timestamp written by this module is KernelInstant M47 obtained from its injected `module:system_clock.now` at the atomic event it owns. No public operation accepts caller-, gateway- or surface-supplied current time.
+
 Bindings give one exact manifest operation typed semantic ports without
 changing what the manifest declares. Proposals may be authored by an agent;
 only the owner can accept a version. Invocation remains a separate module.
