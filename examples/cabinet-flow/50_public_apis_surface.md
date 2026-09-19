@@ -380,10 +380,11 @@ closed decision kind to the module that owns it.
 
 ### Inputs
 
-The resolved owner ActorRef, one closed decision kind, the exact proposal,
-activation, approval, grant, delegation or protected-corpus reference, its
-expected current revision, and the owner's decision. Agent-authored explanatory
-text is not used as the kernel's statement of effect.
+The resolved owner ActorRef, one closed decision kind, the exact vocabulary or
+binding proposal, vocabulary entry to retire, activation, approval, grant,
+delegation or protected-corpus reference, its expected current revision/status,
+and the owner's decision. Agent-authored explanatory text is not used as the
+kernel's statement of effect.
 
 ### Outputs
 
@@ -392,10 +393,11 @@ no partial mutation.
 
 ### Observable effect
 
-Depending on the closed kind, it may accept or reject vocabulary/binding data,
-activate an effectful flow, approve or deny one exact effect, grant or revoke a
-standing approval, issue or revoke a delegation, cancel a waiting run, or
-authorize a protected trial-corpus action.
+Depending on the closed kind, it may accept or reject a vocabulary or binding
+proposal, retire an active vocabulary entry for future use, activate an
+effectful flow, approve or deny one exact effect, grant or revoke a standing
+approval, issue or revoke a delegation, cancel a waiting run, or authorize a
+protected trial-corpus action.
 
 ### Enforces
 
