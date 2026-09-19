@@ -121,7 +121,8 @@ identify_trial_case: [ORCHESTRATION] MUST project every element of inputs, and o
 identify_trial_case: [FIELD_ASSIGNMENT] MUST keep absent expected_outputs absent and an empty expected_outputs empty; the two MUST never be merged.
 identify_trial_case: [VALIDATION_ERROR] MUST raise KernelRefusal with reason identity_defining_field_missing whose code is that reason's code in = rules.refusal.reasons when contract_version_ref or protected_classification is empty or inputs is empty.
 identify_trial_case: [RETURN_SHAPE] MUST return the digest returned by digest_defining_content unchanged.
-identify_trial_case: [TEST_EVIDENCE] Changing one input value digest MUST change the identity; changing only the retention class or disclosure class of a StoredValue MUST NOT change it.
+identify_trial_case: [VALIDATION_ERROR] MUST raise KernelRefusal with reason identity_duplicate_port_id when two values of inputs, or two values of expected_outputs, are bound to one port_id.
+identify_trial_case: [TEST_EVIDENCE] Changing one input value digest or the port a value is bound to MUST change the identity; changing only the retention class or disclosure class of a StoredValue MUST NOT change it.
 
 identify_binding_version: [RULE_REFERENCE] MUST take record_kind from = rules.identity.record_kind.binding_version and canonicalization_version from = rules.identity.canonicalization_version.
 identify_binding_version: [ORCHESTRATION] MUST pass idempotency_key_ports, preconditions and preview_ports each through canonical_string_set, build one BindingVersionDefiningContent with manifest_operation_ref, input_ports, output_ports, effect_class, replay and outcome_read_binding_ref unchanged, and call digest_defining_content exactly once.
@@ -157,7 +158,8 @@ canonical_flow_graph: [FIELD_PROJECTION] MUST project every FlowConstant to one 
 canonical_flow_graph: [VALIDATION_ERROR] MUST raise KernelRefusal with reason identity_duplicate_graph_member whose code is that reason's code in = rules.refusal.reasons when two nodes share a node_id, two constants share a constant_id or two edges have equal digests.
 canonical_flow_graph: [RETURN_SHAPE] MUST return the ordered nodes, the ordered edges and the ordered projected constants, in that position order, changing no node and no edge.
 
-defining_value_ref: [FIELD_PROJECTION] MUST return one DefiningValueRef carrying value_digest, value_schema_ref and semantic_term_revision_ref of the given StoredValue unchanged; carriage, size, media_type, disclosure_class, retention_class and held_until MUST be left out.
+defining_value_ref: [FIELD_PROJECTION] MUST return one DefiningValueRef carrying port_value.port_id together with value_digest, value_schema_ref and semantic_term_revision_ref of port_value.value unchanged; carriage, size, media_type, disclosure_class, retention_class and held_until MUST be left out.
+defining_value_ref: [VALIDATION_ERROR] MUST raise KernelRefusal with reason identity_trial_value_not_stored whose code is that reason's code in = rules.refusal.reasons when port_value.value is a SourceReference rather than a StoredValue, and with reason identity_defining_field_missing when port_value.port_id is empty.
 defining_value_ref: [VALIDATION_ERROR] MUST raise KernelRefusal with reason identity_defining_field_missing whose code is that reason's code in = rules.refusal.reasons when value_digest or value_schema_ref is empty.
 
 ## Text admission shared by every identity

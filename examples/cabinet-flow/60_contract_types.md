@@ -120,10 +120,11 @@ The author, issue time and rationale are absent from this result.
 
 ## `DefiningValueRef`
 
-Defining projection of one StoredValue M38 inside a trial case.
+Defining projection of one PortValue M62 inside a trial case.
 
 Fields:
 
+- `port_id: str` — the port the value is bound to;
 - `value_digest: str` — the value's content digest;
 - `value_schema_ref: str`;
 - `semantic_term_revision_ref: str | None`.
@@ -210,8 +211,9 @@ Fields:
 
 - `constant_id: str`;
 - `semantic_term_revision_ref: str`;
-- `value` — the FlowConstant M35 value, unchanged and of the same declared
-  type: one bounded value of the term's value family.
+- `value: TemporalValue | PlaceValue | MonetaryValue | PartyReference | WorkScopeReference | SourceReference | QuantityValue`
+  — the FlowConstant M35 value, unchanged: one bounded value of the term's
+  value family.
 
 The constant's explanation is rationale and never defines the flow version.
 

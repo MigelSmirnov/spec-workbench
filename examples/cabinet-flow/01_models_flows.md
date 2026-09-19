@@ -298,12 +298,13 @@ version, together with the evidence that the delivery is meaningful.
 
 Candidate fields:
 
-- `source`: one of a flow input port, a constant, or a node's output port;
-- `target`: one of a node's input port or a flow output port;
-- `composition_basis`: `same_term` with the shared semantic-term revision, or
-  `relation` with the exact SemanticRelationRevision;
-- `guard`: optional; one output port of the source node whose value schema is a
-  closed set, and the one value that enables this edge.
+- `source`: FlowEndpoint M51 — a flow input port, a constant, or a node's
+  output port;
+- `target`: FlowEndpoint M51 — a node's input port or a flow output port;
+- `composition_basis`: CompositionBasis M52 — `same_term` with the shared
+  semantic-term revision, or `relation` with the exact SemanticRelationRevision;
+- `guard`: optional FlowGuard M53; one output port of the source node whose
+  value schema is a closed set, and the one value that enables this edge.
 
 An edge whose basis is a relation that requires execution is not an edge; the
 required capability appears as a node between the two ports. A disabled guard
@@ -390,7 +391,8 @@ Candidate fields:
 - `flow_version_ref`;
 - `vocabulary_basis`: the exact term and relation revisions relied upon;
 - `verdict`: `proven` or `refused`;
-- `findings`: closed set, each naming the node, port or edge —
+- `findings`: ProofFinding M54 values; the finding code is a closed set, each
+  finding naming the node, port or edge —
   `unknown_contract_version`, `unknown_binding_version`, `binding_not_accepted`,
   `untyped_port`, `edge_without_basis`, `shape_incompatible`,
   `cardinality_incompatible`, `disclosure_exceeded`,

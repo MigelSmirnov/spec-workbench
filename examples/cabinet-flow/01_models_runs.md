@@ -122,8 +122,8 @@ The exact microservice instances one run is allowed to reach.
 
 Candidate fields:
 
-- `targets`: for each service the flow touches, the manifest instance name and
-  its instance class — `local_dev`, `disposable_rig` or `production`;
+- `targets`: ServiceInstanceTarget M57 values: for each service the flow
+  touches, the manifest instance name and its instance class — `local_dev`, `disposable_rig` or `production`;
 - `installation_ref`: the kernel installation whose configuration selected
   them.
 
@@ -172,20 +172,22 @@ Candidate fields:
 - `pinned_slot_activations`: for every function node, the SlotActivation in
   force when the run was created;
 - `service_target`: one ServiceTarget;
-- `inputs`: one StoredValue or SourceReference per flow input port;
+- `inputs`: PortValue M62 values: one StoredValue or SourceReference per flow
+  input port;
 - `initiated_by`: ActorRef;
 - `status`: `created`, `running`, `awaiting_approval`, `pending`, `succeeded`,
   `failed`, `refused` or `cancelled`;
-- `waiting_on`: the node identities the run is stopped at, each with the
-  reason — `owner_approval`, `service_unreachable`, `binding_suspended` or
+- `waiting_on`: RunWait M55 values: the node identities the run is stopped at,
+  each with the reason — `owner_approval`, `service_unreachable`, `binding_suspended` or
   `outcome_unknown`; for `service_unreachable` and `outcome_unknown` the
   entry also stores `retry_ordinal` and `retry_not_before` as KernelInstant
   M47, while non-timed reasons leave both absent;
-- `in_flight_effect_attempts`: for each non-read operation being invoked, the
-  node, map index, attempt number and idempotency-key digest, recorded durably
+- `in_flight_effect_attempts`: InFlightEffectAttempt M56 values: for each
+  non-read operation being invoked, the node, map index, attempt number and idempotency-key digest, recorded durably
   before the call and cleared only by the concluding NodeExecution. An entry
   found at restart is an effect whose outcome is unknown (A14, A18);
-- `outputs`: one StoredValue per flow output port once produced;
+- `outputs`: PortValue M62 values, one StoredValue per flow output port once
+  produced;
 - `created_at`, `ended_at`.
 
 Everything a run executes is pinned when it is created. An activation, a
@@ -240,13 +242,15 @@ Candidate fields:
 - `executed_ref`: the Implementation for a function node, the
   OperationBindingVersion for an operation node;
 - `runtime_revision_ref` and `enforced_bounds` for a function node;
-- `service_instance` and `idempotency_key_digest` for an operation node;
+- `service_instance_ref` and `idempotency_key_digest` for an operation node;
 - `approval_ref` or `grant_ref` when the node required the owner's authority;
 - `input_value_refs`, `output_value_refs`: StoredValue digests per port;
+- `input_file_refs`, `output_file_refs`: the SpooledBytes M46 entries the node
+  read and produced;
 - `input_validation`, `output_validation`: verdicts naming the violated port and
   rule;
 - `denied_attempts`: as in TrialExecution;
-- `resources_used`;
+- `resources_used`: SandboxResourceUsage, present for a function node;
 - `status`: `succeeded`, `contract_violation`, `denied_attempt`, `timeout`,
   `resource_exhausted`, `crashed`, `cleanup_failed`, `operation_refused`,
   `operation_failed`, `service_unreachable`, `outcome_unknown`,
@@ -303,7 +307,7 @@ Candidate fields:
 - `approval_id`: stable identity;
 - `run_id`, `node_id`;
 - `binding_version_ref`;
-- `service_instance`;
+- `service_instance_ref`;
 - `preview_value_refs`: the StoredValues of the binding's preview ports,
   exactly as shown; for a mapped node, those of every element of the collection;
 - `preview_digest`: digest over the binding version, the instance and the

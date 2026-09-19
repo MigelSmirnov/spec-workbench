@@ -20,9 +20,10 @@ Candidate fields:
 - `semantic_term_revision_ref`;
 - `representation`: `instant`, `local_date` or `interval`;
 - exactly one closed representation:
-  - `instant_utc` plus original offset when known;
-  - `local_date` plus timezone or a timezone-unknown marker;
-  - `start` and `end` with boundary inclusion;
+  - `instant_utc`, with `original_offset_minutes` when the offset is known;
+  - `local_date`, with `timezone` as an IANA zone name, absent when the zone
+    is unknown;
+  - `start` and `end`, with `start_inclusive` and `end_inclusive`;
 - `precision`;
 - `source_fact_ref`.
 
@@ -68,15 +69,20 @@ One typed place coordinate carrying an exact place semantic term.
 Candidate fields:
 
 - `semantic_term_revision_ref`;
-- `representation`: `work_site_ref`, `postal_address` or `geo_point`;
+- `representation`: `work_site_ref` or `postal_address`;
 - exactly one closed representation:
-  - stable work-object/site reference;
-  - structured postal-address value and country;
-  - latitude, longitude and coordinate reference system;
+  - `work_site_ref`: the stable work-object/site reference;
+  - `postal_address`: one PostalAddress M50;
 - `precision_or_scope`;
 - `source_fact_ref`.
 
-An address, site reference and coordinate are not equal merely because they
+A geographic point is deliberately not a representation of this release. Owner
+decision, 20 September 2026: no flow enters coordinates today. When a service
+that produces them is connected — a business-listing service is the expected
+case — `geo_point` with latitude, longitude and coordinate reference system is
+added as a model revision together with the term that types it.
+
+An address and a site reference are not equal merely because they
 refer to a place. Resolution requires an accepted relation and, when needed, the
 slot that relation names.
 

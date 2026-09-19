@@ -170,7 +170,7 @@ Candidate fields:
 - `runtime_id`: stable name of the runtime line;
 - `runtime_revision_id`: digest of the sealed environment image;
 - `language`;
-- `available_libraries`: names and exact versions;
+- `available_libraries`: LibraryVersion M59 values: names and exact versions;
 - `status`: `offered` or `withdrawn`;
 - `released_with`: the kernel release that introduced it.
 
@@ -270,13 +270,15 @@ Candidate fields:
 - `trial_case_id`: content-derived identity over contract version, inputs and
   expected outputs;
 - `contract_version_ref`;
-- `inputs`: one bounded value per input port, each carrying the port's exact
+- `inputs`: PortValue M62 values: one bounded value per input port, each carrying the port's exact
   semantic-term revision; for a `byte_stream` port, one fixture file held as a
   StoredValue of that carriage;
-- `expected_outputs`: optional; when present, one bounded value per output port,
+- `expected_outputs`: optional; when present, PortValue M62 values: one bounded
+  value per output port,
   a file output being compared by digest;
-- `origin`: `authored` or `captured_from_run`, with the node-execution reference
-  when captured;
+- `origin`: `authored` or `captured_from_run`;
+- `captured_from_node_execution_ref`: present when the origin is
+  `captured_from_run`;
 - `status`: `active` or `withdrawn`;
 - `added_by`: ActorRef; `added_at`;
 - `withdrawn_by`, `withdrawn_at`, `withdrawal_reason` when withdrawn.
@@ -326,12 +328,12 @@ Candidate fields:
 - `runtime_revision_ref`;
 - `enforced_bounds`: ResourceBounds;
 - `input_digest`, `output_digest`;
-- `input_validation`, `output_validation`: verdict with the violated port and
-  rule when not conforming;
+- `input_validation`, `output_validation`: PortValidation M58 — verdict with
+  the violated port and rule when not conforming;
 - `expected_output_match`: `matched`, `mismatched` or `not_stated`;
-- `denied_attempts`: each with a closed kind — `network`, `filesystem`,
+- `denied_attempts`: DeniedAttemptEvidence values, each with a closed kind — `network`, `filesystem`,
   `process`, `clock`, `entropy` or `environment` — and a bounded detail;
-- `resources_used`;
+- `resources_used`: SandboxResourceUsage;
 - `outcome`: `conforming`, `contract_violation`, `expected_output_mismatch`,
   `denied_attempt`, `timeout`, `resource_exhausted`, `crashed` or
   `cleanup_failed`;
@@ -381,9 +383,10 @@ Candidate fields:
 - `admission_id`;
 - `implementation_ref`;
 - `considered_trial_executions`: one reference per active trial case;
-- `withdrawn_trial_cases`: cases excluded because withdrawn, with reasons;
+- `withdrawn_trial_cases`: WithdrawnTrialCase M60 values: cases excluded
+  because withdrawn, with reasons;
 - `verdict`: `admitted` or `refused`;
-- `refusal_reasons`: closed set — `empty_corpus`, `missing_trial_execution`,
+- `refusal_reasons`: AdmissionRefusal M61 values; the reason is a closed set — `empty_corpus`, `missing_trial_execution`,
   `non_conforming_trial` with the execution reference, `runtime_withdrawn` or
   `slot_retired`;
 - `decided_at`.
