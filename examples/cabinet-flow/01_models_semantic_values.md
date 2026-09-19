@@ -27,7 +27,9 @@ Candidate fields:
 - `source_fact_ref`.
 
 Creation time is not substituted for event time. A local date is not silently
-promoted to an instant.
+promoted to an instant. A timestamp read from a microservice or external system
+remains TemporalValue/business data when semantically typed; it is never
+KernelInstant M47 and never becomes the kernel's source of current time.
 
 ### Identity
 
