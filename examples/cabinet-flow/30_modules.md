@@ -270,8 +270,9 @@ bytes; retirement of a slot.
 
 ### Knows
 
-M05, M19–M23, the offered sandbox runtime revisions, and `identity` for content
-identities.
+M05, M19–M23; accepted term revisions through `semantic_vocabulary`; release
+ceilings and offered sandbox runtime revisions through `installation`; and
+`identity` for content-derived contract and implementation identities.
 
 ### Must not own
 
@@ -503,7 +504,8 @@ suspension when the manifest operation changed or disappeared.
 
 ### Knows
 
-M28, M29, M30, M05, the manifest facts from `manifest_reader` and owner
+M28, M29, M30, M05; accepted term revisions through
+`semantic_vocabulary`; manifest facts from `manifest_reader`; and owner
 decisions through `owner_authority`.
 
 ### Must not own
