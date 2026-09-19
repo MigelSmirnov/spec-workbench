@@ -29,6 +29,12 @@ import design_trace
 from notes_workbench import gate as notes_gate
 from persistence_workbench import authoring as persistence_authoring
 from router_workbench import authoring as router_authoring
+from router_workbench.model import (
+    CATALOG_FILE as ROUTER_CLOSURE_FILE,
+    CATALOG_SCHEMA as ROUTER_CLOSURE_SCHEMA,
+    RouterClosureError,
+)
+from router_workbench.slice import exposure_boundary
 
 SCHEMA = "spec_workbench_authoring_next.v2"
 ROOT = Path(__file__).resolve().parents[1]
@@ -294,7 +300,26 @@ def _promoted_states_step(sequence: dict[str, Any], project: Path, project_text:
 
 def _post_state5_step(sequence: dict[str, Any], project: Path, project_text: str) -> dict[str, Any]:
     """Post-State-5 chain: data closure -> contracts -> backend closures -> notes -> assembly."""
-    data = design_stage6_data.lint(project)
+    data_path = project / design_stage6_data.DEFAULT_FILE
+    if not data_path.is_file():
+        return _result(
+            sequence=sequence, project=project, project_text=project_text,
+            phase="pre_contract_structured_data_closure", blocked=False,
+            reason=(
+                "State 5 is closed. Author the pre-contract structured-data closure "
+                f"{design_stage6_data.DEFAULT_FILE} before exact contracts."
+            ),
+            summary={"closure_exists": False},
+        )
+    try:
+        data = design_stage6_data.lint(project)
+    except ValueError as exc:
+        return _result(
+            sequence=sequence, project=project, project_text=project_text,
+            phase="pre_contract_structured_data_closure", blocked=True,
+            reason=f"Structured data closure could not be inspected deterministically: {exc}",
+            summary={"closure_exists": True, "errors": 1},
+        )
     if data["summary"]["errors"]:
         return _result(
             sequence=sequence, project=project, project_text=project_text,
@@ -303,7 +328,38 @@ def _post_state5_step(sequence: dict[str, Any], project: Path, project_text: str
             summary=data["summary"],
         )
 
-    contracts = design_stage6_contracts.handoff(project)
+    contract_plan = project / design_stage6_contracts.DEFAULT_PLAN_FILE
+    contract_catalog = project / design_stage6_contracts.DEFAULT_CATALOG_FILE
+    if not contract_plan.is_file() or not contract_catalog.is_file():
+        return _result(
+            sequence=sequence, project=project, project_text=project_text,
+            phase="state6_exact_contracts", blocked=False,
+            reason=(
+                "Pre-contract structured data is closed. Author the State 6 function inventory "
+                f"({design_stage6_contracts.DEFAULT_PLAN_FILE}) and exact signature catalog "
+                f"({design_stage6_contracts.DEFAULT_CATALOG_FILE})."
+            ),
+            summary={
+                "plan_exists": contract_plan.is_file(),
+                "catalog_exists": contract_catalog.is_file(),
+            },
+            unresolved_functions=[],
+            router_allowed=False,
+            persistence_allowed=False,
+        )
+
+    try:
+        contracts = design_stage6_contracts.handoff(project)
+    except design_stage6_contracts.DesignStage6ContractsError as exc:
+        return _result(
+            sequence=sequence, project=project, project_text=project_text,
+            phase="state6_exact_contracts", blocked=True,
+            reason=f"State 6 contracts could not be inspected deterministically: {exc}",
+            summary={"errors": 1},
+            unresolved_functions=[],
+            router_allowed=False,
+            persistence_allowed=False,
+        )
     if not contracts["ready"]:
         return _result(
             sequence=sequence, project=project, project_text=project_text,
@@ -324,7 +380,41 @@ def _post_state5_step(sequence: dict[str, Any], project: Path, project_text: str
             router_allowed=True, persistence_allowed=True,
         )
 
-    router = router_authoring.coverage(project)
+    if not (project / ROUTER_CLOSURE_FILE).is_file():
+        try:
+            external = list(exposure_boundary(project).external)
+        except RouterClosureError as exc:
+            return _result(
+                sequence=sequence, project=project, project_text=project_text,
+                phase="deterministic_http_router_closure", blocked=True,
+                reason=f"Router Closure cannot start: {exc}",
+                summary={"closure_exists": False, "errors": 1},
+                unresolved_operations=[],
+                router_allowed=True, persistence_allowed=True,
+            )
+        return _result(
+            sequence=sequence, project=project, project_text=project_text,
+            phase="deterministic_http_router_closure", blocked=False,
+            reason=(
+                "Canonical contracts are ready. Author the per-route Router Closure "
+                f"{ROUTER_CLOSURE_FILE} for the externally exposed operations: start it as "
+                f'{{"schema_version": "{ROUTER_CLOSURE_SCHEMA}", "items": []}} and close one operation at a time.'
+            ),
+            summary={"closure_exists": False, "external_operations": len(external)},
+            unresolved_operations=external,
+            router_allowed=True, persistence_allowed=True,
+        )
+    try:
+        router = router_authoring.coverage(project)
+    except RouterClosureError as exc:
+        return _result(
+            sequence=sequence, project=project, project_text=project_text,
+            phase="deterministic_http_router_closure", blocked=True,
+            reason=f"Router Closure could not be inspected deterministically: {exc}",
+            summary={"closure_exists": True, "errors": 1},
+            unresolved_operations=[],
+            router_allowed=True, persistence_allowed=True,
+        )
     if not router["summary"]["handoff_ready"]:
         return _result(
             sequence=sequence, project=project, project_text=project_text,
@@ -335,7 +425,29 @@ def _post_state5_step(sequence: dict[str, Any], project: Path, project_text: str
             router_allowed=True, persistence_allowed=True,
         )
 
-    context = design_router_context.coverage(project)
+    if not (project / design_router_context.FILE).is_file():
+        return _result(
+            sequence=sequence, project=project, project_text=project_text,
+            phase="deterministic_http_router_context_closure", blocked=False,
+            reason=(
+                "Per-route closure is ready. Author the global deterministic HTTP "
+                f"wiring/auth/error policy {design_router_context.FILE}."
+            ),
+            summary={"context_exists": False},
+            unresolved_topics=[],
+            router_allowed=True, persistence_allowed=True,
+        )
+    try:
+        context = design_router_context.coverage(project)
+    except design_router_context.RouterContextError as exc:
+        return _result(
+            sequence=sequence, project=project, project_text=project_text,
+            phase="deterministic_http_router_context_closure", blocked=True,
+            reason=f"Router context could not be inspected deterministically: {exc}",
+            summary={"context_exists": True, "errors": 1},
+            unresolved_topics=[],
+            router_allowed=True, persistence_allowed=True,
+        )
     if not context["summary"]["handoff_ready"]:
         return _result(
             sequence=sequence, project=project, project_text=project_text,

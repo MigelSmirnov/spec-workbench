@@ -21,32 +21,54 @@ class StandardBackend:
     rule_key: str
     scope_mapping_path: tuple[str, ...] | None = None
     concrete_methods: tuple[str, ...] = ()
+    function_wiring_key: str | None = None
 
     def _load(self, path: Path) -> Any:
         return json.loads(path.read_text(encoding="utf-8"))
 
-    def closed_backend(self, project: Path) -> dict[str, Any] | None:
+    def authored_backend(self, project: Path) -> dict[str, Any] | None:
+        """Return the backend IR of a closed closure file, whatever is assembled."""
         closure_path = project / self.closure_file
-        spec_path = project / "global_spec.json"
-        if not closure_path.is_file() or not spec_path.is_file():
+        if not closure_path.is_file():
             return None
         try:
             closure = self._load(closure_path)
-            spec = self._load(spec_path)
         except (OSError, TypeError, ValueError, json.JSONDecodeError):
             return None
-        if not isinstance(closure, dict) or not isinstance(spec, dict):
+        if not isinstance(closure, dict):
             return None
         backend = closure.get("backend_ir")
-        assembled = (spec.get("rules") or {}).get(self.rule_key)
         if (
             closure.get("schema_version") != self.closure_schema
             or closure.get("status") != "closed"
             or not isinstance(backend, dict)
-            or backend != assembled
         ):
             return None
         return backend
+
+    def closed_backend(self, project: Path) -> dict[str, Any] | None:
+        """Return the backend IR only while nothing assembled disagrees with it.
+
+        Before the first assembly there is no ``global_spec.json`` to disagree:
+        the closed closure is the only statement of the backend, and the spec
+        projection carries it into ``rules`` verbatim. Once a spec exists, any
+        difference is projection drift and the backend fails closed.
+        """
+        backend = self.authored_backend(project)
+        if backend is None:
+            return None
+        spec_path = project / "global_spec.json"
+        if not spec_path.is_file():
+            return backend
+        try:
+            spec = self._load(spec_path)
+        except (OSError, TypeError, ValueError, json.JSONDecodeError):
+            return None
+        if not isinstance(spec, dict):
+            return None
+        rules = spec.get("rules")
+        assembled = rules.get(self.rule_key) if isinstance(rules, dict) else None
+        return backend if backend == assembled else None
 
     def _mapping(self, backend: dict[str, Any]) -> dict[str, Any] | None:
         if self.scope_mapping_path is None:
@@ -78,8 +100,13 @@ class StandardBackend:
         mapping = self._mapping(backend)
         if mapping is not None:
             return set(mapping)
+        wiring = backend.get("wiring")
+        if self.function_wiring_key is not None and isinstance(wiring, dict):
+            # a backend wired to one module-level operation owns exactly it
+            function = wiring.get(self.function_wiring_key)
+            if isinstance(function, str) and function:
+                return {function}
         if self.concrete_methods:
-            wiring = backend.get("wiring")
             concrete = wiring.get("concrete_class") if isinstance(wiring, dict) else None
             if not isinstance(concrete, str) or not concrete:
                 return set()
@@ -114,6 +141,14 @@ STANDARD_BACKENDS = (
         closure_schema="spec_workbench_canonical_digest_backend_closure.v1",
         rule_key="canonical_digest_backend",
         scope_mapping_path=("recipes",),
+    ),
+    StandardBackend(
+        id="system_clock",
+        closure_file="70_system_clock_closure.json",
+        closure_schema="spec_workbench_system_clock_backend_closure.v1",
+        rule_key="system_clock_backend",
+        concrete_methods=("__init__", "now"),
+        function_wiring_key="function",
     ),
 )
 

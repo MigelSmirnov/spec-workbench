@@ -40,6 +40,8 @@ import re
 from pathlib import Path
 from typing import Any
 
+import design_stage5
+
 
 def load_spec(case: Path) -> dict[str, Any]:
     return json.loads((case / "global_spec.json").read_text(encoding="utf-8"))
@@ -252,26 +254,24 @@ def modules_with_clock(models: dict[str, Any], contracts: dict[str, Any], func_m
 
 
 def parse_state_impacts(case: Path) -> dict[str, dict[str, Any]]:
-    """Public operations and their State impact from 50_public_apis.md."""
-    path = case / "50_public_apis.md"
-    if not path.is_file():
-        return {}
+    """Public operations and their State impact from the State 5 documents."""
     impacts: dict[str, dict[str, Any]] = {}
-    current: str | None = None
-    in_impact = False
-    for line in path.read_text(encoding="utf-8").splitlines():
-        heading = PUBLIC_OP_HEADING_RE.match(line)
-        if heading:
-            current = heading.group(2)
-            impacts[current] = {"module": heading.group(1), "read_only": False, "impact": ""}
-            in_impact = False
-            continue
-        if line.startswith("### "):
-            in_impact = current is not None and line[4:].strip().casefold() == "state impact"
-            continue
-        if in_impact and current and line.strip() and not impacts[current]["impact"]:
-            impacts[current]["impact"] = line.strip()
-            impacts[current]["read_only"] = bool(READ_ONLY_IMPACT_RE.match(line.strip()))
+    for path in design_stage5.public_api_documents(case):
+        current: str | None = None
+        in_impact = False
+        for line in path.read_text(encoding="utf-8").splitlines():
+            heading = PUBLIC_OP_HEADING_RE.match(line)
+            if heading:
+                current = heading.group(2)
+                impacts[current] = {"module": heading.group(1), "read_only": False, "impact": ""}
+                in_impact = False
+                continue
+            if line.startswith("### "):
+                in_impact = current is not None and line[4:].strip().casefold() == "state impact"
+                continue
+            if in_impact and current and line.strip() and not impacts[current]["impact"]:
+                impacts[current]["impact"] = line.strip()
+                impacts[current]["read_only"] = bool(READ_ONLY_IMPACT_RE.match(line.strip()))
     return impacts
 
 

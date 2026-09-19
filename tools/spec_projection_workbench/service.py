@@ -13,6 +13,8 @@ import design_router_ir
 import design_stage6_contracts
 import design_stage6_data
 from persistence_workbench import authoring as persistence_authoring
+from project_extensions import declared_backends
+from standard_backends import standard_backends
 
 from spec_projection_workbench.model import (
     PLAN_SCHEMA,
@@ -616,6 +618,37 @@ def _project(project: Path) -> tuple[dict[str, Any], dict[str, Any], list[dict[s
                 "artifacts own it",
             )
         )
+
+    # A standard deterministic backend is authored once, in its closure file;
+    # the projection carries that IR into rules verbatim so no hand edit of the
+    # assembled spec is ever the way a backend arrives.
+    legacy_ids = {entry["id"] for entry in declared_backends(project)}
+    for standard in standard_backends(exclude_ids=legacy_ids):
+        if not (project / standard.closure_file).is_file():
+            continue
+        authored = standard.authored_backend(project)
+        source_checks.append(
+            _source_check(
+                standard.closure_file,
+                enabled=True,
+                ready=authored is not None,
+                status="closed" if authored is not None else "not_closed",
+                errors=0 if authored is not None else 1,
+            )
+        )
+        if authored is None:
+            findings.append(
+                _finding(
+                    "block",
+                    "standard_backend_closure_not_closed",
+                    f"{standard.closure_file} must be a closed "
+                    f"{standard.closure_schema} closure carrying backend_ir "
+                    "before projection",
+                    source=standard.closure_file,
+                )
+            )
+            continue
+        _set(projected, f"rules.{standard.rule_key}", authored)
 
     return current, projected, findings, source_checks
 

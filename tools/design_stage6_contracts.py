@@ -417,6 +417,22 @@ def lint(project: Path) -> dict[str, Any]:
 
 
 def next_function(project: Path) -> dict[str, Any]:
+    plan_path = project / DEFAULT_PLAN_FILE
+    catalog_path = project / DEFAULT_CATALOG_FILE
+    if not plan_path.is_file() or not catalog_path.is_file():
+        return {
+            "schema_version": NEXT_SCHEMA,
+            "project_root": project.resolve().name,
+            "complete": False,
+            "initialization_required": True,
+            "next": None,
+            "summary": {
+                "plan_exists": plan_path.is_file(),
+                "catalog_exists": catalog_path.is_file(),
+            },
+            "required_files": [DEFAULT_PLAN_FILE, DEFAULT_CATALOG_FILE],
+        }
+
     report = coverage(project)
     function = report["unresolved_functions"][0] if report["unresolved_functions"] else None
     row = next((item for item in report["functions"] if item["function"] == function), None)
@@ -424,6 +440,7 @@ def next_function(project: Path) -> dict[str, Any]:
         "schema_version": NEXT_SCHEMA,
         "project_root": report["project_root"],
         "complete": function is None and report["summary"]["handoff_ready"],
+        "initialization_required": False,
         "next": row,
         "summary": report["summary"],
     }
@@ -454,7 +471,10 @@ def handoff(project: Path) -> dict[str, Any]:
 def _human(action: str, payload: dict[str, Any]) -> str:
     summary = payload["summary"]
     if action == "next":
-        target = payload["next"]["function"] if payload["next"] else "complete"
+        if payload.get("initialization_required"):
+            target = f"initialize {DEFAULT_PLAN_FILE} and {DEFAULT_CATALOG_FILE}"
+        else:
+            target = payload["next"]["function"] if payload["next"] else "complete"
         return f"State 6 contracts next: {target}\n"
     return (
         f"State 6 contracts: {summary['resolved']}/{summary['planned_functions']} resolved; "

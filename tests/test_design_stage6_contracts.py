@@ -78,9 +78,19 @@ def test_declared_datetime_parameter_clears_time_source_warning(tmp_path: Path) 
     assert flagged == ["lookup_holded_purchase"]
 
 
+def test_next_function_before_state6_files_is_initialization_safe(tmp_path: Path) -> None:
+    report = design_stage6_contracts.next_function(tmp_path)
+    assert report["complete"] is False
+    assert report["initialization_required"] is True
+    assert report["next"] is None
+    assert report["summary"] == {"plan_exists": False, "catalog_exists": False}
+    assert report["required_files"] == [PLAN, CATALOG]
+
+
 def test_next_function_is_complete_after_state6_handoff(tmp_path: Path) -> None:
     report = design_stage6_contracts.next_function(_ready(tmp_path))
     assert report["complete"] is True
+    assert report["initialization_required"] is False
     assert report["next"] is None
     assert report["summary"]["handoff_ready"] is True
 

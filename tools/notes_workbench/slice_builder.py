@@ -6,24 +6,23 @@ from typing import Any
 
 import design_stage3
 import design_stage4
+import design_stage5
 
 from notes_workbench.markdown_sections import child_map, sections
 
 
 def _public_op_details(project: Path, module: str) -> list[dict[str, Any]]:
-    path = project / "50_public_apis.md"
-    if not path.is_file():
-        return []
     prefix = f"`public_op:{module}."
     result: list[dict[str, Any]] = []
-    for item in sections(path):
-        if item.level != 2 or not item.title.startswith(prefix):
-            continue
-        result.append({
-            "key": item.title.strip("`"),
-            "sections": child_map(path, item.title),
-            "source": {"path": path.name, "start_line": item.start_line, "end_line": item.end_line},
-        })
+    for path in design_stage5.public_api_documents(project):
+        for item in sections(path):
+            if item.level != 2 or not item.title.startswith(prefix):
+                continue
+            result.append({
+                "key": item.title.strip("`"),
+                "sections": child_map(path, item.title),
+                "source": {"path": path.name, "start_line": item.start_line, "end_line": item.end_line},
+            })
     return result
 
 

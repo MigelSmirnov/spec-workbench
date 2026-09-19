@@ -88,6 +88,7 @@ def test_ready_states_continue_into_post_state5_chain(
 ):
     (tmp_path / "00_product.md").write_text("# State 0 — Product frame\n", encoding="utf-8")
     (tmp_path / "30_trace.json").write_text("{}\n", encoding="utf-8")
+    (tmp_path / design_authoring_next.design_stage6_data.DEFAULT_FILE).write_text("{}\n", encoding="utf-8")
 
     def lint_project(project, state):
         if state == 1:
