@@ -126,6 +126,7 @@ Candidate fields:
 - `cpu_time_limit`;
 - `memory_limit`;
 - `output_size_limit`;
+- `scratch_size_limit`;
 - `process_count_limit`.
 
 Every field is required. The kernel release fixes an upper ceiling for each; a
@@ -467,3 +468,67 @@ Durable, referenced by flow runs to pin what each function node executed.
 ### Open questions
 
 None.
+
+## Model M48 — ReleaseCeilings
+
+### Meaning
+
+The immutable, kernel-release-owned upper bounds used wherever the kernel must
+refuse unbounded code, data, text, pagination, transport or sandbox resource
+use. The installation reads this one release record at startup and bootstrap
+injects it into every consumer; requests and authored artifacts can only choose
+values at or below the applicable ceiling.
+
+Candidate fields for release v1:
+
+- `sandbox_wall_time_ms_max`: 30000;
+- `sandbox_cpu_time_ms_max`: 20000;
+- `sandbox_memory_bytes_max`: 536870912;
+- `sandbox_output_bytes_max`: 67108864;
+- `sandbox_scratch_bytes_max`: 268435456;
+- `sandbox_process_count_max`: 8;
+- `implementation_code_bytes_max`: 4194304;
+- `stored_value_bytes_max`: 1048576;
+- `trial_fixture_bytes_max`: 67108864;
+- `run_spool_file_bytes_max`: 134217728;
+- `run_spool_total_bytes_max`: 536870912;
+- `surface_request_bytes_max`: 134217728;
+- `bounded_text_bytes_max`: 16384;
+- `failure_detail_bytes_max`: 4096;
+- `page_size_default`: 50;
+- `page_size_max`: 200;
+- `transport_timeout_ms_max`: 60000.
+
+Byte ceilings are exact integer bytes, not decimal megabytes. Time ceilings are
+integer milliseconds. A later kernel release may ship another ReleaseCeilings
+record; one running kernel uses exactly the record of its own release.
+
+### Identity
+
+value
+
+### Identity evidence
+
+Substitution: equal release identity and every field above are interchangeable.
+Continuity: one released ceilings record never changes.
+
+### Source of truth
+
+The kernel release metadata, read by `module:installation` during fail-closed
+startup and passed by `module:bootstrap` to consumers as immutable
+configuration.
+
+### Lifecycle candidate
+
+No independent lifecycle. A new set belongs to a new kernel release.
+
+### Persistence candidate
+
+Not domain persistence. The exact release identity and the specific enforced
+ResourceBounds are retained where execution evidence requires them; the
+canonical ceilings remain release metadata.
+
+### Open questions
+
+None.
+
