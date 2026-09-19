@@ -524,7 +524,9 @@ to execute a dependant on a guess.
 
 ### Trigger
 
-The retention period of stored content elapses.
+The long-lived `boundary:kernel_process` starts a bounded maintenance sweep
+when stored-content retention deadlines may have elapsed. The sweep is
+idempotent and may run again after restart.
 
 ### Boundary
 
