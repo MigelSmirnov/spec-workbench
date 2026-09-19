@@ -176,9 +176,11 @@ Candidate fields:
 - `initiated_by`: ActorRef;
 - `status`: `created`, `running`, `awaiting_approval`, `pending`, `succeeded`,
   `failed`, `refused` or `cancelled`;
-- `waiting_on`: the node identities the run is stopped at, with the reason —
-  `owner_approval`, `service_unreachable`, `binding_suspended` or
-  `outcome_unknown`;
+- `waiting_on`: the node identities the run is stopped at, each with the
+  reason — `owner_approval`, `service_unreachable`, `binding_suspended` or
+  `outcome_unknown`; for `service_unreachable` and `outcome_unknown` the
+  entry also stores `retry_ordinal` and `retry_not_before` as KernelInstant
+  M47, while non-timed reasons leave both absent;
 - `in_flight_effect_attempts`: for each non-read operation being invoked, the
   node, map index, attempt number and idempotency-key digest, recorded durably
   before the call and cleared only by the concluding NodeExecution. An entry
