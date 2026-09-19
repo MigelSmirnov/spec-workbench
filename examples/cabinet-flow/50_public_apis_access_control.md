@@ -19,10 +19,11 @@ and before any resource reference in the request is evaluated.
 
 ### Inputs
 
-The channel (`mcp` or `http_api`), the listener-established credential material
-or binding handle, and the current UTC time from `module:system_clock`. Actor
-kind, principal identity and delegation identity are not accepted from the
-request body.
+The channel (`mcp` or `http_api`) and the listener-established credential
+material or binding handle. `module:access_control` obtains KernelInstant M47
+directly from its injected `module:system_clock` for throttling evidence.
+Actor kind, principal identity, delegation identity and current time are not
+accepted from the request body or gateway.
 
 ### Outputs
 
@@ -121,8 +122,10 @@ represented by AgentDelegation M17.
 
 The owner ActorRef, bounded agent label, one channel (`mcp` or `http_api`), a
 protected installation credential-binding reference, `may_author`, disclosure
-ceiling, current UTC time and expected installation owner identity. No raw
-credential and no owner-only permission flag is accepted.
+ceiling and expected installation owner identity. `module:access_control`
+obtains `issued_at` from its injected `module:system_clock` at the atomic
+write. No raw credential, owner-only permission flag or caller-supplied current
+time is accepted.
 
 ### Outputs
 
@@ -169,9 +172,11 @@ AgentDelegation.
 
 ### Inputs
 
-The owner ActorRef, exact delegation identity, expected active status, current
-UTC time and a bounded owner reason. It accepts neither a credential value nor
-a request to cancel runs started under the delegation.
+The owner ActorRef, exact delegation identity, expected active status and a
+bounded owner reason. `module:access_control` obtains `revoked_at` from its
+injected `module:system_clock` at the successful compare-and-set. It accepts
+neither a credential value, a caller-supplied current time nor a request to
+cancel runs started under the delegation.
 
 ### Outputs
 
