@@ -29,6 +29,12 @@ import design_trace
 from notes_workbench import gate as notes_gate
 from persistence_workbench import authoring as persistence_authoring
 from router_workbench import authoring as router_authoring
+from router_workbench.model import (
+    CATALOG_FILE as ROUTER_CLOSURE_FILE,
+    CATALOG_SCHEMA as ROUTER_CLOSURE_SCHEMA,
+    RouterClosureError,
+)
+from router_workbench.slice import exposure_boundary
 
 SCHEMA = "spec_workbench_authoring_next.v2"
 ROOT = Path(__file__).resolve().parents[1]
@@ -374,7 +380,41 @@ def _post_state5_step(sequence: dict[str, Any], project: Path, project_text: str
             router_allowed=True, persistence_allowed=True,
         )
 
-    router = router_authoring.coverage(project)
+    if not (project / ROUTER_CLOSURE_FILE).is_file():
+        try:
+            external = list(exposure_boundary(project).external)
+        except RouterClosureError as exc:
+            return _result(
+                sequence=sequence, project=project, project_text=project_text,
+                phase="deterministic_http_router_closure", blocked=True,
+                reason=f"Router Closure cannot start: {exc}",
+                summary={"closure_exists": False, "errors": 1},
+                unresolved_operations=[],
+                router_allowed=True, persistence_allowed=True,
+            )
+        return _result(
+            sequence=sequence, project=project, project_text=project_text,
+            phase="deterministic_http_router_closure", blocked=False,
+            reason=(
+                "Canonical contracts are ready. Author the per-route Router Closure "
+                f"{ROUTER_CLOSURE_FILE} for the externally exposed operations: start it as "
+                f'{{"schema_version": "{ROUTER_CLOSURE_SCHEMA}", "items": []}} and close one operation at a time.'
+            ),
+            summary={"closure_exists": False, "external_operations": len(external)},
+            unresolved_operations=external,
+            router_allowed=True, persistence_allowed=True,
+        )
+    try:
+        router = router_authoring.coverage(project)
+    except RouterClosureError as exc:
+        return _result(
+            sequence=sequence, project=project, project_text=project_text,
+            phase="deterministic_http_router_closure", blocked=True,
+            reason=f"Router Closure could not be inspected deterministically: {exc}",
+            summary={"closure_exists": True, "errors": 1},
+            unresolved_operations=[],
+            router_allowed=True, persistence_allowed=True,
+        )
     if not router["summary"]["handoff_ready"]:
         return _result(
             sequence=sequence, project=project, project_text=project_text,
@@ -385,7 +425,29 @@ def _post_state5_step(sequence: dict[str, Any], project: Path, project_text: str
             router_allowed=True, persistence_allowed=True,
         )
 
-    context = design_router_context.coverage(project)
+    if not (project / design_router_context.FILE).is_file():
+        return _result(
+            sequence=sequence, project=project, project_text=project_text,
+            phase="deterministic_http_router_context_closure", blocked=False,
+            reason=(
+                "Per-route closure is ready. Author the global deterministic HTTP "
+                f"wiring/auth/error policy {design_router_context.FILE}."
+            ),
+            summary={"context_exists": False},
+            unresolved_topics=[],
+            router_allowed=True, persistence_allowed=True,
+        )
+    try:
+        context = design_router_context.coverage(project)
+    except design_router_context.RouterContextError as exc:
+        return _result(
+            sequence=sequence, project=project, project_text=project_text,
+            phase="deterministic_http_router_context_closure", blocked=True,
+            reason=f"Router context could not be inspected deterministically: {exc}",
+            summary={"context_exists": True, "errors": 1},
+            unresolved_topics=[],
+            router_allowed=True, persistence_allowed=True,
+        )
     if not context["summary"]["handoff_ready"]:
         return _result(
             sequence=sequence, project=project, project_text=project_text,
