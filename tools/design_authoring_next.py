@@ -294,7 +294,26 @@ def _promoted_states_step(sequence: dict[str, Any], project: Path, project_text:
 
 def _post_state5_step(sequence: dict[str, Any], project: Path, project_text: str) -> dict[str, Any]:
     """Post-State-5 chain: data closure -> contracts -> backend closures -> notes -> assembly."""
-    data = design_stage6_data.lint(project)
+    data_path = project / design_stage6_data.DEFAULT_FILE
+    if not data_path.is_file():
+        return _result(
+            sequence=sequence, project=project, project_text=project_text,
+            phase="pre_contract_structured_data_closure", blocked=False,
+            reason=(
+                "State 5 is closed. Author the pre-contract structured-data closure "
+                f"{design_stage6_data.DEFAULT_FILE} before exact contracts."
+            ),
+            summary={"closure_exists": False},
+        )
+    try:
+        data = design_stage6_data.lint(project)
+    except ValueError as exc:
+        return _result(
+            sequence=sequence, project=project, project_text=project_text,
+            phase="pre_contract_structured_data_closure", blocked=True,
+            reason=f"Structured data closure could not be inspected deterministically: {exc}",
+            summary={"closure_exists": True, "errors": 1},
+        )
     if data["summary"]["errors"]:
         return _result(
             sequence=sequence, project=project, project_text=project_text,
@@ -303,7 +322,38 @@ def _post_state5_step(sequence: dict[str, Any], project: Path, project_text: str
             summary=data["summary"],
         )
 
-    contracts = design_stage6_contracts.handoff(project)
+    contract_plan = project / design_stage6_contracts.DEFAULT_PLAN_FILE
+    contract_catalog = project / design_stage6_contracts.DEFAULT_CATALOG_FILE
+    if not contract_plan.is_file() or not contract_catalog.is_file():
+        return _result(
+            sequence=sequence, project=project, project_text=project_text,
+            phase="state6_exact_contracts", blocked=False,
+            reason=(
+                "Pre-contract structured data is closed. Author the State 6 function inventory "
+                f"({design_stage6_contracts.DEFAULT_PLAN_FILE}) and exact signature catalog "
+                f"({design_stage6_contracts.DEFAULT_CATALOG_FILE})."
+            ),
+            summary={
+                "plan_exists": contract_plan.is_file(),
+                "catalog_exists": contract_catalog.is_file(),
+            },
+            unresolved_functions=[],
+            router_allowed=False,
+            persistence_allowed=False,
+        )
+
+    try:
+        contracts = design_stage6_contracts.handoff(project)
+    except design_stage6_contracts.DesignStage6ContractsError as exc:
+        return _result(
+            sequence=sequence, project=project, project_text=project_text,
+            phase="state6_exact_contracts", blocked=True,
+            reason=f"State 6 contracts could not be inspected deterministically: {exc}",
+            summary={"errors": 1},
+            unresolved_functions=[],
+            router_allowed=False,
+            persistence_allowed=False,
+        )
     if not contracts["ready"]:
         return _result(
             sequence=sequence, project=project, project_text=project_text,
