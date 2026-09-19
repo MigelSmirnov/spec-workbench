@@ -35,21 +35,41 @@ execution, transport or any policy.
 
 ### Owns
 
-The kernel's only source of current time, in UTC.
+A25 and M47: the kernel's only source of current wall-clock time and its exact
+canonical representation as integer UTC epoch microseconds.
 
 ### Knows
 
-Nothing about the domain.
+Only KernelInstant M47 and the host wall-clock primitive required by A25.
 
 ### Must not own
 
-Time arithmetic of retention, back-off or throttling; those belong to the
-modules that apply them.
+Time arithmetic of retention, back-off, throttling, lifecycle policy or
+authorization; those belong to the modules that apply them. It does not own
+elapsed-duration timeout measurement.
 
 ### Hides
 
-The host time source and its normalization, so that every other module is
-deterministic given a time value and can be tested with a fixed one.
+The one production wall-clock primitive: `time.time_ns()`. One `now()` call
+takes exactly one sample and returns
+`KernelInstant(epoch_us = sample_ns // 1_000)`. Tests replace the entire
+clock dependency with a deterministic implementation; no consumer patches or
+reads host time.
+
+### Direct consumers
+
+The injected `system_clock` dependency is used by
+`access_control`, `semantic_vocabulary`, `slot_registry`,
+`trial_corpus`, `admission`, `slot_activation`,
+`operation_bindings`, `flow_proof`, `flow_registry`,
+`owner_authority`, `operation_invoker`, `run_executor` and
+`value_store`. These modules call `now()` only for timestamps or deadlines
+they own. `kernel_surface` and the gateways never manufacture or forward a
+"current time" value.
+
+`sandbox_supervisor` and `service_transport` do not consume wall time for
+domain state. Their local non-persisted timeout measurement uses only
+`time.monotonic_ns()` under A25.
 
 ### Candidate public capabilities
 
@@ -60,7 +80,7 @@ now
 ### Depth assessment
 
 - kind: deep
-- hidden mechanism: the single injectable time source
+- hidden mechanism: one injected wall clock with one integer representation and one production primitive
 
 ## `identity`
 
