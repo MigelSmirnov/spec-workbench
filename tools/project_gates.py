@@ -48,6 +48,28 @@ def _validate_result(gate_id: str, report: Any) -> tuple[dict[str, Any] | None, 
     gate_findings = report.get("findings")
     if not isinstance(gate_findings, list) or any(not isinstance(item, dict) for item in gate_findings):
         findings.append(_error_finding(gate_id, "invalid_gate_findings", "gate findings must be a list of objects"))
+        gate_findings = []
+    if isinstance(errors, int) and isinstance(warnings, int):
+        finding_errors = sum(item.get("severity", "error") == "error" for item in gate_findings)
+        finding_warnings = sum(item.get("severity") in {"warning", "review"} for item in gate_findings)
+        if errors != finding_errors or warnings != finding_warnings:
+            findings.append(
+                _error_finding(
+                    gate_id,
+                    "gate_summary_mismatch",
+                    f"summary says errors={errors}, warnings={warnings}; findings say "
+                    f"errors={finding_errors}, warnings={finding_warnings}",
+                )
+            )
+        expected_ready = errors == 0 and warnings == 0
+        if isinstance(report.get("ready"), bool) and report["ready"] != expected_ready:
+            findings.append(
+                _error_finding(
+                    gate_id,
+                    "gate_ready_mismatch",
+                    f"ready={report['ready']} but errors={errors}, warnings={warnings}",
+                )
+            )
     return report, findings
 
 
