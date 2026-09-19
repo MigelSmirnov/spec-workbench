@@ -199,3 +199,48 @@ Fields:
 - `already_rolled_back: bool`.
 
 A committed unit of work can never be represented as rolled back.
+
+
+---
+
+## `BindingAcceptanceResult`
+
+Exact owner-acceptance result for one proposed binding version.
+
+Fields:
+
+- `binding: OperationBinding`;
+- `version: OperationBindingVersion`;
+- `acceptance_record_ref: str`.
+
+The result names the immutable acceptance evidence; it cannot alter manifest
+facts or substitute another version.
+
+---
+
+## `BindingDriftItem`
+
+One deterministic manifest-drift result for an accepted binding version.
+
+Fields:
+
+- `binding_id: str`;
+- `binding_version_ref: str`;
+- `status: str` — exactly one of the accepted drift outcomes documented by
+  State 5;
+- `prior_manifest_record_digest: str`;
+- `current_manifest_record_digest: str | None`;
+- `changed_fact_names: tuple[str, ...]`;
+- `replacement_binding_version_ref: str | None`.
+
+A replacement reference is present only for the accepted automatic reissue case.
+
+---
+
+## `BindingDriftReport`
+
+Fields:
+
+- `items: tuple[BindingDriftItem, ...]`.
+
+Items are deterministically ordered by binding identity/version.
