@@ -23,9 +23,12 @@ a conclusion and every applicable input/output validation has completed.
 The exact run/node/map-index/attempt identity; the pinned implementation or
 binding identity; runtime or service-instance evidence; approval/grant reference
 when applicable; exact input/output StoredValue or SpooledBytes digests;
-validation verdicts; bounded resource and denied-attempt evidence; closed status
-and failure reason; and bounded candidate failure detail. No process log,
-credential, secret header or unbounded service text is accepted.
+validation verdicts; bounded resource and denied-attempt evidence;
+`started_at` and `ended_at` as KernelInstant M47 trusted internal evidence
+captured by `module:run_executor` through its injected clock; closed status and
+failure reason; and bounded candidate failure detail. No process log,
+caller-supplied timestamp, credential, secret header or unbounded service text
+is accepted.
 
 ### Outputs
 
@@ -43,9 +46,11 @@ journal never edits an earlier record to represent retry or reconciliation.
 
 Exact run pins; one record per attempt identity; executed implementation,
 runtime, binding and service identities are historical facts rather than current
-lookups; status is explicit; output references exist only after validation;
-failure detail is bounded and stripped of secrets and values above `open`;
-credentials, tokens, source bytes and unrestricted logs are never persisted.
+lookups; `started_at <= ended_at`; both timestamps are KernelInstant M47 and
+the journal never reads wall clock itself; status is explicit; output references
+exist only after validation; failure detail is bounded and stripped of secrets
+and values above `open`; credentials, tokens, source bytes and unrestricted
+logs are never persisted.
 
 ### Errors
 
