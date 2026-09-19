@@ -268,12 +268,16 @@ in the loop, because nothing it can write is able to do harm.
    required reason. The earlier implementation must be admitted over the present
    corpus; an implementation that fails a case captured since cannot be returned
    to.
-6. When the corpus grows and the serving implementation fails the new case, the
-   activation stands and the contract version is marked `known_failing` with the
-   failing case. It keeps serving, because on every other input it is exactly as
-   correct as before, and withdrawing it would break every flow that pins it.
-   `known_failing` is visible to every agent reading the slot and is cleared
-   only by activating an implementation admitted over the grown corpus.
+6. When the corpus grows and the serving implementation is evidenced as
+   failing a new captured case, the activation stands and
+   `slot_activation.contract_health` deterministically derives
+   `known_failing` with that case from the current activation, active corpus
+   and immutable slot-scoped execution evidence. No separate mutable health
+   record is created. The implementation keeps serving, because on every other
+   input it is exactly as correct as before, and withdrawing it would break
+   every flow that pins it. The derived `known_failing` view is visible to
+   every agent reading the slot and becomes healthy only when a later activation
+   names an implementation admitted over the grown corpus.
 7. A run pins, at creation, the SlotActivation of every function node. A later
    activation never changes a run already created.
 
