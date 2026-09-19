@@ -182,9 +182,15 @@ identity.
 
 ### Steps
 
-1. `capability:slot_registry.slot_authoring_view` gives the agent one slot's
-   contract, serving implementation, corpus and recent evidence, within its
-   disclosure ceiling, or nothing when the slot is new.
+1. Through `capability:kernel_surface.inspect`, the authoring view is
+   composed from `capability:slot_registry.slot_authoring_view` for the slot,
+   contract versions and submitted implementations,
+   `capability:trial_corpus.active_corpus` for cases,
+   `capability:slot_activation.serving_activation` and
+   `capability:slot_activation.contract_health` for the current selection, and
+   `capability:trace_journal.slot_evidence` for recent execution evidence, all
+   within the actor's disclosure ceiling. No owning module fabricates the other
+   modules' part of the view.
 2. For a new step, `capability:slot_registry.create_slot` records the slot and
    `capability:slot_registry.issue_contract_version` issues its contract after
    verifying every port against `module:semantic_vocabulary` and clamping bounds
