@@ -486,3 +486,54 @@ Durable entity of the kernel's operational store.
 ### Open questions
 
 None.
+
+## Model M47 — KernelInstant
+
+### Meaning
+
+One kernel-owned wall-clock instant used only for operational lifecycle,
+security, retry and retention timestamps. It is not a business temporal value
+and never substitutes for TemporalValue M08.
+
+Candidate fields:
+
+- `epoch_us`: non-negative integer microseconds since
+  `1970-01-01T00:00:00Z`, obtained by flooring the host wall-clock nanosecond
+  reading to microseconds.
+
+The representation is intentionally an integer: no naive `datetime`, local
+timezone, floating-point epoch seconds or free-form ISO string is persisted as
+the canonical kernel timestamp. Human-readable UTC rendering is a presentation
+concern.
+
+### Identity
+
+value
+
+### Identity evidence
+
+Substitution: equal `epoch_us` values are interchangeable as the same
+operational instant. Continuity: an instant never changes.
+
+### Source of truth
+
+Only `module:system_clock`. Production `now()` obtains one host wall-clock
+sample with Python `time.time_ns()` and returns
+`KernelInstant(epoch_us = sample_ns // 1_000)`. Tests inject a deterministic
+clock and never consult the host wall clock.
+
+### Lifecycle candidate
+
+No independent lifecycle.
+
+### Persistence candidate
+
+Embedded anywhere the kernel records operational timestamps such as
+`created_at`, `issued_at`, `submitted_at`, `decided_at`,
+`activated_at`, `revoked_at`, `started_at`, `ended_at`,
+`executed_at`, `determined_at` or a persisted retry/retention deadline.
+
+### Open questions
+
+None.
+
