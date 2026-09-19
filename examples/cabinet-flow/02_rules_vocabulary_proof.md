@@ -189,9 +189,10 @@ functions. Where it may go is a property of bindings the owner accepted.
 
 1. FlowProof M36 evaluates one exact flow version against the vocabulary
    revisions in force and records them as `vocabulary_basis`.
-2. Proof verifies, completely and in one pass: every node pins an existing
-   contract version or an `accepted` binding's version; every edge satisfies
-   A02 and A03; every required input port of every node has exactly one incoming
+2. Proof verifies, completely and in one pass: every function node pins an
+   existing contract version whose owning slot is active at proof time, every
+   operation node pins an `accepted` binding version; every edge satisfies A02
+   and A03; every required input port of every node has exactly one incoming
    edge; no input port has more than one; the graph is acyclic; every node
    reaches a flow output or is an operation node with an effect class other than
    `read`; every guard names an output port whose schema is a closed set and one
@@ -204,9 +205,10 @@ functions. Where it may go is a property of bindings the owner accepted.
    the same verdict and findings.
 6. No actor records, edits, overrides or waives a proof. A flow version without
    a `proven` proof cannot receive a FlowActivation M37.
-7. When a binding named by a proven flow version is later suspended, the proof
-   stands and runs stop at that node under A10. Proof is about meaning, not
-   about availability.
+7. When a binding named by a proven flow version is later suspended, or a slot
+   named by a proven function node is later retired, the existing proof stands.
+   Runs follow their pinned versions under A10/A16; retirement prevents new
+   proof from citing the slot but does not rewrite historical meaning.
 
 ### Formal invariants
 
