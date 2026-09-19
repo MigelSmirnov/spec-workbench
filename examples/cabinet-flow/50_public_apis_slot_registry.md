@@ -92,9 +92,9 @@ term reference resolves through
 axis; output without a term is allowed only as the explicit uncomposable-output
 case; every schema and carriage is known and permitted; `byte_stream` is
 limited to slot-contract ports with bounded accepted media types/size;
-ResourceBounds are deterministically clamped to
-`module:installation.release_ceilings`; the runtime revision is offered for
-new contracts; all normalized defining content participates in identity.
+ResourceBounds are deterministically clamped to the injected ReleaseCeilings
+M48; the runtime revision is offered for new contracts; all normalized defining
+content participates in identity.
 
 ### Errors
 
