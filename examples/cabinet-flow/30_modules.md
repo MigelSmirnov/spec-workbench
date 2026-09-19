@@ -282,7 +282,9 @@ implementation.
 
 Port verification against the vocabulary, clamping of resource bounds to the
 release ceilings, storage of code bytes under their digest, and the bounded
-slot-scoped read an authoring agent receives.
+slot/contract/implementation view an authoring agent receives. Corpus,
+activation and execution evidence remain owned by their modules and are
+composed only at `module:kernel_surface`.
 
 ### Candidate public capabilities
 
