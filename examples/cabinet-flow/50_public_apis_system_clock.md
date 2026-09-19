@@ -53,9 +53,11 @@ None. Reading the clock creates no kernel record and advances no domain state.
 A25 in full: `time.time_ns()` is the sole production wall-clock primitive and
 is used only inside the production implementation of this operation; one
 `now()` call samples it exactly once; consumers cannot supply or override
-current wall time; consumers perform their own retry, retention, throttling and
-lifecycle arithmetic; elapsed time alone never grants authority, decides an
-approval, completes a Run or resolves an unknown outcome.
+current wall time; no microservice/application timestamp is accepted as,
+converted to, synchronized with or compared as KernelInstant M47; consumers
+perform their own retry, retention, throttling and lifecycle arithmetic;
+elapsed time alone never grants authority, decides an approval, completes a Run
+or resolves an unknown outcome.
 
 Local elapsed-duration measurement is not wall time:
 `sandbox_supervisor` and `service_transport` may use only
