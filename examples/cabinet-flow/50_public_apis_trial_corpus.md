@@ -18,10 +18,11 @@ authorizing an authoring actor and obtaining kernel-computed identity evidence.
 
 ### Inputs
 
-The resolved ActorRef; exact contract-version reference; one complete typed set
-of inputs using the contract's semantic-term revisions and schemas; optional
-exact expected outputs; and, for a `byte_stream` input, one bounded fixture
-stream accepted under the fixture ceiling. No externally supplied trial-case ID,
+The resolved ActorRef; exact contract-version reference resolved through
+`module:slot_registry.contract_version`; one complete typed set of inputs
+using that contract's semantic-term revisions and schemas; optional exact
+expected outputs; and, for a `byte_stream` input, one bounded fixture stream
+accepted under the fixture ceiling. No externally supplied trial-case ID,
 digest, port substitution or expected-output wildcard is accepted.
 
 ### Outputs
@@ -174,8 +175,8 @@ contract version exists.
 ### Inputs
 
 The resolved authoring ActorRef; exact source and target contract versions of
-the same slot; bounded selection of source active cases or the complete active
-source corpus. No inheritance flag or implicit copy on contract creation is
+the same slot, each resolved through `module:slot_registry.contract_version`;
+bounded selection of source active cases or the complete active source corpus. No inheritance flag or implicit copy on contract creation is
 accepted.
 
 ### Outputs
