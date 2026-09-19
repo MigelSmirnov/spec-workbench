@@ -52,7 +52,10 @@ run pins and authorization; idempotency key is derived only from declared ports;
 `safe`, `refuses`, `returns_existing`, `overwrites` and `duplicates` replay
 rules are exact; duplicates runs at most once per approval; overwrites reuses
 only identical approved input; redirects and unvalidated responses are never
-used.
+used. Any service-origin timestamp remains typed binding data or exact
+service-owned precondition evidence: it is never converted to KernelInstant M47
+and never controls kernel retry, retention, authorization, run lifecycle or
+cross-service causal ordering.
 
 ### Errors
 
