@@ -30,7 +30,11 @@ def _normalize(name: str, report: dict[str, Any]) -> CheckResult:
     findings = report.get("findings", [])
     if not isinstance(summary, dict) or not isinstance(findings, list):
         raise AssemblyWorkbenchError(f"{name} returned an invalid report shape.")
-    if name == "language":
+    if name == "project_gates":
+        errors = int(summary.get("errors", len(findings)))
+        warnings = int(summary.get("warnings", 0))
+        ready = bool(report.get("ready")) and errors == 0 and warnings == 0
+    elif name == "language":
         errors = int(summary.get("errors", len(findings)))
         warnings = 0
         ready = bool(report.get("ready")) and errors == 0
