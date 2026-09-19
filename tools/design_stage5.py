@@ -35,7 +35,9 @@ PUBLIC_OP_RE = re.compile(
 HEADING_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*$")
 STATE5_RE = re.compile(r"\bState\s+5\b", re.IGNORECASE)
 MODULE_REF_RE = re.compile(r"`(module:[a-z][a-z0-9_]*)`")
+CALLER_REF_RE = re.compile(r"`((?:module|boundary):[a-z][a-z0-9_]*)`")
 BOUNDARY_REF_RE = re.compile(r"^boundary:[a-z][a-z0-9_]*$")
+PLACEHOLDER_RE = re.compile(r"\b(?:TODO|FIXME|TBD)\b|\?\?\?", re.IGNORECASE)
 REQUIRED_SECTIONS = (
     "Owner", "Callers", "Inputs", "Outputs", "Observable effect",
     "Enforces", "Errors", "State impact",
@@ -127,6 +129,28 @@ def parse_operations(project: Path) -> list[PublicOpItem]:
 def parse_apis(project: Path) -> list[PublicOpItem]:
     """Backward-compatible Python helper name; payload keys use public operations."""
     return parse_operations(project)
+
+
+def _operation_lines(project: Path, item: PublicOpItem) -> list[str]:
+    path = project / item.source.path
+    lines = path.read_text(encoding="utf-8").splitlines()
+    return lines[item.source.start_line - 1:item.source.end_line]
+
+
+def _subsection_text(project: Path, item: PublicOpItem, heading: str) -> str | None:
+    lines = _operation_lines(project, item)
+    marker = f"### {heading}"
+    for index, line in enumerate(lines):
+        if line != marker:
+            continue
+        start = index + 1
+        while start < len(lines) and not lines[start].strip():
+            start += 1
+        end = start
+        while end < len(lines) and not lines[end].startswith("### "):
+            end += 1
+        return "\n".join(lines[start:end]).strip()
+    return None
 
 
 def _payload(item: PublicOpItem) -> dict[str, object]:
@@ -308,10 +332,23 @@ def lint(project: Path) -> dict[str, object]:
             if required.casefold() not in sections:
                 findings.append(Finding("error", "missing_public_op_section", item.key,
                                         f"Required State 5 section {required!r} is absent.", item.source))
+
         expected_owner = "module:" + item.module
-        if expected_owner not in set(item.module_refs):
-            findings.append(Finding("error", "missing_public_op_owner", item.key,
-                                    f"Owner section must explicitly reference {expected_owner!r}.", item.source))
+        owner_text = _subsection_text(project, item, "Owner") or ""
+        owner_refs = set(MODULE_REF_RE.findall(owner_text))
+        if expected_owner not in owner_refs:
+            findings.append(Finding(
+                "error", "missing_public_op_owner", item.key,
+                f"Owner section must explicitly reference {expected_owner!r}.", item.source,
+            ))
+
+        body = "\n".join(_operation_lines(project, item))
+        placeholder = PLACEHOLDER_RE.search(body)
+        if placeholder:
+            findings.append(Finding(
+                "error", "public_op_placeholder", item.key,
+                f"Public operation contains placeholder marker {placeholder.group(0)!r}.", item.source,
+            ))
 
     if _load_plan(project, required=False) is not None:
         report = coverage(project)
@@ -329,12 +366,26 @@ def lint(project: Path) -> dict[str, object]:
                 "error", "invalid_plan_ref", invalid["operation"], message,
                 SourceRange(DEFAULT_PLAN_FILE, 1, 1),
             ))
+        items_by_key = {item.key: item for item in items}
+        plan_by_key = {entry["key"]: entry for entry in _load_plan(project, required=True)["operations"]}
         for row in report["operations"]:
             if row["flow_evidence_missing"]:
                 findings.append(Finding("error", "missing_flow_evidence", row["key"],
                                         "Planned public operation capability is not explicitly used by every declared State 4 flow: "
                                         + ", ".join(row["flow_evidence_missing"]),
                                         SourceRange(DEFAULT_PLAN_FILE, 1, 1)))
+            item = items_by_key.get(row["key"])
+            if item is not None:
+                callers_text = _subsection_text(project, item, "Callers") or ""
+                documented_callers = set(CALLER_REF_RE.findall(callers_text))
+                planned_callers = set(plan_by_key[row["key"]].get("callers") or [])
+                if documented_callers != planned_callers:
+                    findings.append(Finding(
+                        "error", "public_op_callers_mismatch", row["key"],
+                        "Callers section must exactly match the State 5 plan; "
+                        f"plan={sorted(planned_callers)} doc={sorted(documented_callers)}.",
+                        item.source,
+                    ))
         for key in report["unplanned_operations"]:
             item = next((candidate for candidate in items if candidate.key == key), None)
             if item is not None:
