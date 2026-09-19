@@ -229,3 +229,73 @@ Security review: PERFORMED
 - files_artifacts: APPLICABLE; references: A02, A05, A06, A07, A20; affected: M13, M22, M23, M24, M38, M46, code bytes, sandbox scratch, run spool, backups
 - concurrency: APPLICABLE; references: A09, A12, A14, A17, A18, A25; affected: M27, M40, M41, M42, M44, M47
 - dependencies: APPLICABLE; references: A06, A23, A25; affected: M22, M47, kernel release, sandbox runtime libraries, wall-clock and monotonic time primitives
+
+## Accepted decision A26 — one release owns every global safety ceiling
+
+### Normative rules
+
+1. ReleaseCeilings M48 is the only source of kernel-global maximum resource and
+   payload sizes. The exact release-v1 values are the values recorded in M48;
+   no module defines a second default.
+2. `module:installation` reads the immutable record from the running kernel
+   release during startup. `module:bootstrap` injects that same value object
+   into every consumer. No request, flow, contract, manifest or environment
+   variable may raise a ceiling.
+3. ResourceBounds M21 includes wall time, CPU time, memory, aggregate output,
+   scratch bytes and process count. An authored contract may request less than
+   or equal to each corresponding sandbox ceiling and never more.
+4. Implementation code, StoredValue content, trial fixture files, one run-spool
+   file and the total live spool of one run are each refused before exceeding
+   their M48 byte ceiling. No over-limit input or output is truncated into a
+   valid value.
+5. The fixed surface accepts no request above
+   `surface_request_bytes_max`. All caller-authored bounded text is at most
+   `bounded_text_bytes_max`; scrubbed failure detail is at most
+   `failure_detail_bytes_max`.
+6. List operations default to `page_size_default` and refuse a requested page
+   size above `page_size_max`; pagination never changes authorization or
+   disclosure filtering.
+7. One transport exchange may enforce a lower manifest/binding-specific
+   timeout, but never a wall timeout above `transport_timeout_ms_max`. Local
+   elapsed measurement follows A25 and therefore uses only
+   `time.monotonic_ns()`.
+8. A new release may change the ceilings, but existing contract versions and
+   execution evidence keep the exact ResourceBounds/release identity they
+   already pinned. A release change never rewrites historical evidence.
+
+### Formal invariants
+
+```text
+global_safety_ceiling -> from(ReleaseCeilings M48)
+
+authored_resource_bound <= release_ceiling
+request_size <= surface_request_bytes_max
+bounded_text_size <= bounded_text_bytes_max
+failure_detail_size <= failure_detail_bytes_max
+page_size <= page_size_max
+transport_timeout_ms <= transport_timeout_ms_max
+
+limit_exceeded -> explicit_refusal AND no_truncation
+caller_or_environment_override(release_ceiling) -> forbidden
+```
+
+### Required tests
+
+1. Every M21 field exactly at its release ceiling is accepted and one unit over
+   is refused before sandbox start.
+2. Code, value, fixture, spool-file and run-total sizes at the ceiling are
+   accepted; one byte over is refused without partial persistence.
+3. An oversized surface body, text field, failure detail or page-size request is
+   refused with its closed typed error.
+4. A transport-specific timeout below the release ceiling is enforced; an
+   attempt to configure a larger timeout is clamped/refused before send.
+5. Restart under the same release yields byte-for-byte equal ReleaseCeilings;
+   changing a host environment variable cannot alter any field.
+6. A later release with different ceilings does not alter recorded ResourceBounds
+   or the interpretation of an earlier NodeExecution.
+
+### Consequence
+
+Every generator sees one closed set of resource and payload maxima. Limits are
+release facts, not local implementation choices.
+
