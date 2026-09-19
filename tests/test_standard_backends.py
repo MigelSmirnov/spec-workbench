@@ -136,3 +136,100 @@ def test_standard_holded_transport_backend_needs_no_project_module(tmp_path: Pat
             "HttpxHoldedHttpClient.list_purchases",
         ],
     }
+
+
+_EPOCH_CLOCK = {
+    "kind": "system_clock_backend",
+    "schema_version": 2,
+    "backend": {"emitter": "python_host_epoch_clock_v1"},
+    "wiring": {"module": "system_clock", "function": "now", "models_module": "kernel.models"},
+    "time": {"policy": "rules.time_source_policy", "read": "per_call"},
+}
+
+
+def _write_clock(project: Path, backend_ir: dict, *, status: str = "closed") -> None:
+    project.mkdir()
+    (project / "70_system_clock_closure.json").write_text(
+        json.dumps(
+            {
+                "schema_version": "spec_workbench_system_clock_backend_closure.v1",
+                "status": status,
+                "backend_ir": backend_ir,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
+def _clock(project: Path):
+    return next(item for item in deterministic_backends(project) if item.id == "system_clock")
+
+
+def test_epoch_clock_owns_its_one_module_operation(tmp_path: Path) -> None:
+    project = tmp_path / "clock"
+    _write_clock(project, _EPOCH_CLOCK)
+    (project / "global_spec.json").write_text(
+        json.dumps({"rules": {"system_clock_backend": _EPOCH_CLOCK}}), encoding="utf-8"
+    )
+
+    backend = _clock(project)
+    assert backend.structured_addresses(project) == {"rules.system_clock_backend"}
+    assert backend.deterministic_method_scopes(project) == {"now"}
+    assert backend.module_slice(project, "system_clock") == {
+        "enabled": True,
+        "backend_ir": _EPOCH_CLOCK,
+        "deterministic_method_scopes": ["now"],
+    }
+    assert backend.module_slice(project, "run_executor") is None
+
+
+def test_class_clock_owns_its_concrete_methods(tmp_path: Path) -> None:
+    project = tmp_path / "clock"
+    backend_ir = {
+        "kind": "system_clock_backend",
+        "schema_version": 1,
+        "backend": {"emitter": "python_system_utc_clock_v1"},
+        "wiring": {
+            "module": "system_clock",
+            "concrete_class": "SystemClock",
+            "interface": "Clock",
+            "models_module": "app.models",
+        },
+        "time": {
+            "source": "system_utc",
+            "representation": "timezone_aware_utc_datetime",
+            "read": "per_call",
+        },
+    }
+    _write_clock(project, backend_ir)
+    (project / "global_spec.json").write_text(
+        json.dumps({"rules": {"system_clock_backend": backend_ir}}), encoding="utf-8"
+    )
+
+    assert _clock(project).deterministic_method_scopes(project) == {
+        "SystemClock.__init__",
+        "SystemClock.now",
+    }
+
+
+def test_closed_closure_counts_before_the_first_assembly(tmp_path: Path) -> None:
+    project = tmp_path / "clock"
+    _write_clock(project, _EPOCH_CLOCK)
+
+    assert not (project / "global_spec.json").exists()
+    assert _clock(project).deterministic_method_scopes(project) == {"now"}
+
+
+def test_open_closure_never_counts(tmp_path: Path) -> None:
+    project = tmp_path / "clock"
+    _write_clock(project, _EPOCH_CLOCK, status="open")
+
+    assert _clock(project).deterministic_method_scopes(project) == set()
+
+
+def test_assembled_spec_without_the_backend_fails_closed(tmp_path: Path) -> None:
+    project = tmp_path / "clock"
+    _write_clock(project, _EPOCH_CLOCK)
+    (project / "global_spec.json").write_text(json.dumps({"rules": {}}), encoding="utf-8")
+
+    assert _clock(project).deterministic_method_scopes(project) == set()
