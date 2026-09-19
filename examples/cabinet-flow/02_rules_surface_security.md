@@ -93,6 +93,70 @@ name, visibly, and nothing an agent does can become the owner's decision.
 8. The surface never returns a credential, a host path, a manifest secret
    reference's target or a stack trace.
 
+9. Deployment exposes one platform HTTPS entrance. Off-host HTTP is not an
+   accepted credential-bearing channel, including on the home LAN. TLS ends at
+   the platform reverse proxy; the kernel listener binds to loopback on the same
+   host. It is not published directly to the LAN or the Internet. A deployment
+   using containers must provide an equally isolated proxy-to-kernel network;
+   a private address alone does not establish that isolation.
+10. Moving the platform to a home server changes installation endpoint and
+    credential bindings, never flow definitions, function implementations or
+    the release-fixed operation catalogue. Platform ingress and certificate
+    lifecycle are deployment responsibilities, not kernel operations.
+11. A local connection, VPN, proxy header or TLS connection never establishes
+    owner authority. Every request still passes A21 authentication and
+    authorization, including owner-only checks; actor/delegation identities
+    are not accepted from forwarded headers or request fields.
+12. Each of the six accepted external kernel-surface operations has one POST
+    route under `/v1/kernel/`, with the canonical operation name as its last
+    path segment. Each body is the operation's existing State 6 request type;
+    no generic method/path dispatch is exposed. Inspection uses POST to keep
+    bounded filters and resource references out of URLs. POST alone grants no
+    replay safety, and the proxy must not automatically retry submitted calls.
+13. The authoritative route catalogue is `70_router_closure.json`. It contains
+    only the six operations accepted in `50_exposure_plan.json`. Each handler
+    resolves its listener-established credential through `access_control`,
+    authorizes the catalogue action, and invokes its corresponding
+    `kernel_surface` operation exactly once. A refusal invokes it zero times.
+14. HttpRequestContext and ChannelCredentialHandle remain internal to the
+    trusted entrance. HTTP handlers accept a framework Request and return a
+    framework Response; they construct the context after bounded framing.
+    The earlier handler signatures taking HttpRequestContext were internal
+    call shapes, not directly registerable endpoints. The irregular handlers
+    stay in `http_gateway`; `http_router` only registers them and owns the
+    deterministic app factory and header extractor. No business API changes.
+15. Credentials use one Authorization header with the Bearer scheme. Duplicate
+    authorization headers, query/cookie credentials, forwarded identities,
+    missing/empty credentials and wrong schemes are refused. Parsing establishes
+    no identity. Only access_control resolves the protected credential to an
+    owner or delegated agent. The handle exists for one request and is never
+    serialized, persisted, logged or passed to a function sandbox.
+16. Every irregular handler performs its own complete trusted-entrance path.
+    Router auth policies have no generated principal for these routes: v1
+    registers irregular handlers without wrapping authentication. This is not
+    public access. serve_http authenticates and authorizes once, before calling
+    kernel_surface, and owner_decide still requires the owner under A21.
+17. Request framing bounds actual streamed bytes before JSON parsing, regardless
+    of Content-Length; it refuses compressed bodies and unsupported media types.
+    Unknown fields, duplicate JSON keys, non-finite numbers and invalid request
+    variants are refused. A disconnected or timed-out request is never dispatched.
+    The request read deadline uses the injected transport_timeout_ms_max ceiling.
+18. The wire response is the existing HttpResponseEnvelope. Normal catalogue
+    results use HTTP 200 even when the typed result describes pending work or a
+    failed trial. A refusal has result=null and a fixed public error code/message;
+    exception details, submitted values and framework validation bodies are
+    never reflected. Public transport mappings are in `60_http_errors.json`.
+19. Bootstrap installs the typed error boundary and the exact closed OpenAPI
+    document before opening the listener. Framework default documentation routes
+    and generic dispatch routes are not exposed. It verifies the six-route
+    catalogue before serving; missing runtime wiring or default error handlers
+    prevent readiness. OpenAPI is a release artifact delivered to schema clients,
+    not an unauthenticated seventh route.
+20. The deterministic v1 empty-body error policy is only a last-resort fallback
+    if the typed boundary itself fails. Such a response reveals no details and
+    must not be interpreted by a client as success. It does not replace the
+    normal bounded typed refusals required by A22.
+
 ### Formal invariants
 
 ```text
@@ -102,6 +166,14 @@ authored_artifact -/> changes(surface_operations)
 request -> declared_schema AND bounded
 agent_text -> data   (never instruction, template or query)
 submitted_code_executed -> only_in_sandbox
+```
+
+```text
+off_host_kernel_access -> HTTPS_at_platform_ingress
+direct_kernel_listener -> isolated_proxy_to_kernel_path
+local_or_forwarded_identity -/> owner_authority
+accepted_http_call -> one_resolved_actor AND authorized_catalogue_action
+refused_http_call -> zero_kernel_surface_invocations
 ```
 
 ### Required tests
@@ -116,6 +188,29 @@ submitted_code_executed -> only_in_sandbox
 5. A composition request returns no implementation body.
 6. No response contains a credential, host path or stack trace, including on
    internal error.
+
+7. From a different LAN host, a direct connection to the kernel listener fails;
+   only the platform HTTPS entrance is reachable. Cleartext credential-bearing
+   requests are refused and never forwarded to the kernel.
+8. Missing credentials and forged forwarded owner/delegation headers fail
+   authentication even on loopback; an agent credential cannot call owner_decide.
+9. Each accepted route calls its matching catalogue operation exactly once;
+   invalid framing or refused authentication/authorization calls none. No
+   additional deep-module operation becomes externally addressable.
+10. Relocating installation endpoint bindings preserves operation paths and flow
+    definitions; certificates and private keys never enter domain records.
+
+11. Registering each canonical handler with the chosen framework succeeds;
+    Request is injected as transport context rather than parsed as a client body.
+12. All six routes reject missing/invalid credentials; owner_decide rejects an
+    authenticated agent. A payload-supplied actor never grants authority.
+13. An over-limit stream without Content-Length, compressed input, duplicate JSON
+    keys and a mismatched request variant cause no catalogue invocation.
+14. Framework 404/405, malformed input and an internal exception use bounded
+    typed errors with no reflected details; a broken error boundary fails with
+    a bodyless error, never a success status.
+15. Bootstrap refuses incomplete route/error/runtime wiring. The release OpenAPI
+    document names exactly the accepted request models and six external routes.
 
 ### Consequence
 

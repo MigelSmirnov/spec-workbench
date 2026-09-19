@@ -999,10 +999,19 @@ including files.
 HTTP, the surface catalogue and that its published schema never changes when a
 function, binding or flow is authored.
 
+A22 places the listener behind the platform HTTPS entrance on an isolated
+proxy-to-kernel path. This module owns the six canonical handlers declared by
+State 6 and the HTTP framing described in `70_http_transport.md`; their
+non-table ownership is explicit in `70_router_closure.json`.
+
 ### Must not own
 
 Authentication decisions, operations of its own, a browser application, or
 static serving of any stored content.
+
+TLS certificates, public ingress deployment and microservice address migration
+belong to platform installation, not to this module. Loopback, VPN and proxy
+headers never substitute for `access_control`.
 
 ### Hides
 
@@ -1012,12 +1021,46 @@ Nothing of its own beyond HTTP framing and the published schema document.
 
 ```text
 serve_http
+prepare_http_app
 ```
 
 ### Depth assessment
 
 - kind: facade
 - delegates to: `kernel_surface`, `access_control`
+
+## `http_router`
+
+### Owns
+
+Deterministic registration of the six accepted HTTP handlers and binding of
+the process-local HttpGatewayRuntime to app state under A22. The supported
+http_router_backend/v1 emitter owns this module's implementation.
+
+### Knows
+
+The closed route catalogue, the app-state binding and header extractor from
+70_router_context.json. It knows no domain operation or credential secret.
+
+### Must not own
+
+Authentication, authorization, typed refusal construction, body parsing, domain
+policy, public deployment, or the trusted listener's readiness decision.
+
+### Hides
+
+Framework app construction and deterministic route registration.
+
+### Public surface
+
+```text
+create_http_app
+```
+
+### Depth assessment
+
+- kind: facade
+- delegates to: `http_gateway`
 
 ## `bootstrap`
 
@@ -1032,7 +1075,9 @@ non-terminal runs before the gateways accept requests.
 ### Knows
 
 Every module's constructor dependencies, M48 injection targets and the start-up
-order.
+order. It builds HttpGatewayRuntime with the bound serve_http dispatcher, the
+generated header extractor and the same M48 value, calls http_router's app
+factory, and completes http_gateway's boundary installation before listening.
 
 ### Must not own
 
@@ -1051,4 +1096,4 @@ start_kernel
 ### Depth assessment
 
 - kind: facade
-- delegates to: `installation`, `operational_store`, `system_clock`, `operation_bindings`, `sandbox_supervisor`, `run_executor`, `mcp_gateway`, `http_gateway`
+- delegates to: `installation`, `operational_store`, `system_clock`, `operation_bindings`, `sandbox_supervisor`, `run_executor`, `mcp_gateway`, `http_gateway`, `http_router`

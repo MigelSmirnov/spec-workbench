@@ -2,7 +2,8 @@
 
 ## Status
 
-Open. These declarations make State 5 boundaries exact without adding product
+The State 6 function inventory is closed. These declarations make State 5
+boundaries exact without adding product
 behavior or changing any State 1 identity. They exist only where the exact
 Python contract needs a transport/configuration/result shape that is not itself
 a durable domain model.
@@ -140,6 +141,62 @@ containers are not admitted to this internal representation.
 Opaque listener-established credential material/binding handle used only by the
 trusted entrance to resolve an actor. It is non-serializable, never persisted,
 and has no public representation that can reveal credential material.
+
+For HTTP, http_gateway constructs it from the single extracted bearer value;
+it pins channel=http_api and owns the value only for the duration of the request.
+Construction is not validation or authentication. access_control alone checks
+the secret against installation-protected bindings and active delegations.
+
+---
+
+## `HttpGatewayRuntime`
+
+Immutable, non-serializable process-local composition value constructed by
+bootstrap; never a request body, Pydantic wire model or persisted entity.
+
+Fields:
+
+- `dispatch: Callable[[HttpRequestEnvelope], HttpResponseEnvelope]`;
+- `extract_credential: Callable[[Request], str]`;
+- `ceilings: ReleaseCeilings`.
+
+dispatch is the installation's bound http_gateway.serve_http, with its existing
+kernel_surface and access_control collaborators. extract_credential is the
+generated http_router.extract_http_bearer. No secrets are stored in this object.
+The single app-state slot is gateway_runtime. Neither module imports the other's
+private implementation: bootstrap injects the extractor and dispatcher.
+
+---
+
+## HTTP framework boundary types
+
+Request and Response are starlette.requests.Request and
+starlette.responses.Response; FastAPI is fastapi.FastAPI and OpenAPI is
+fastapi.openapi.models.OpenAPI. Callable is typing.Callable. These are external
+framework types, not domain entities or project-defined substitute models.
+
+The six HTTP handlers and handle_http_request are asynchronous functions. Their
+canonical signatures describe the awaited return value. They read bounded bytes
+from Request.stream(), build the exact existing request model and internal
+envelope, then run the synchronous runtime dispatcher through
+starlette.concurrency.run_in_threadpool. No synchronous body read or nested
+event-loop runner is allowed. Request is the only framework-injected parameter.
+
+## `HttpCredentialError`
+
+An exception owned by http_gateway, with base Exception and no public fields.
+The header extractor raises it for a missing/invalid bearer form. The transport
+maps it to the uniform authentication refusal, never its string representation.
+
+## `HttpFramingError`
+
+An exception owned by http_gateway, with base Exception and one field:
+
+- `code: str` — exactly one framing code in 60_http_errors.json.
+
+Only the gateway may construct it. Raw body fragments, exception strings and
+credential material are not fields. format_http_response applies the closed
+public mapping rather than forwarding a caller-selected status or message.
 
 ---
 

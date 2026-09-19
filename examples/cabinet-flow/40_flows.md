@@ -21,7 +21,8 @@ The operator starts the kernel process on the installation host.
 host configuration, `module:operational_store` opens durability,
 `module:semantic_vocabulary` holds the seed, `module:operation_bindings` checks
 bindings against the manifest, `module:sandbox_supervisor` reports its health,
-`module:run_executor` resumes work, and the two gateways open last.
+`module:run_executor` resumes work. `module:http_router` registers the HTTP app,
+`module:http_gateway` prepares its trusted boundary, and the two gateways open last.
 `module:system_clock` is injected before startup work so every module that
 writes startup/recovery timestamps uses the same KernelInstant source.
 
@@ -44,7 +45,13 @@ writes startup/recovery timestamps uses the same KernelInstant source.
    cleanup is unconfirmed.
 5. `capability:run_executor.resume_runs` reconstructs every non-terminal run
    from durable records.
-6. Only then `capability:mcp_gateway.serve_mcp` and
+6. `capability:http_router.create_http_app` registers the fixed HTTP catalogue
+   with the process-local runtime supplied by bootstrap. Bootstrap calls
+   `capability:http_gateway.prepare_http_app` to install the
+   typed error boundary and release OpenAPI, then verifies that
+   the complete runtime and only the six accepted routes are present. No network
+   listener opens if this preparation fails.
+7. Only then `capability:mcp_gateway.serve_mcp` and
    `capability:http_gateway.serve_http` begin accepting requests.
 
 ### Outcomes
@@ -74,6 +81,12 @@ closed operation catalogue and hands the request to the owning deep module.
 `module:system_clock` is used only by the owning security module for
 authentication/throttling time; the gateway and surface never forward a
 caller-supplied current time.
+
+For HTTP, A22 requires the platform HTTPS entrance and an isolated internal
+listener. A framework Request is injected into the registered handler, which
+establishes HttpRequestContext internally; no body field or forwarded identity
+header may supply it. The versioned route catalogue in
+`70_router_closure.json` selects the existing operation before the steps below.
 
 ### Steps
 

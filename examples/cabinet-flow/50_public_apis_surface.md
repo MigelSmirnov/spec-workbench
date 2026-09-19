@@ -128,6 +128,13 @@ catalogue request and maps its typed result to HTTP. It owns no retry or policy.
 The HTTP API is a transport of the same closed catalogue as MCP; it is not a
 database proxy, filesystem, shell or free-form code-execution endpoint.
 
+A22 requires one HTTPS platform entrance and an isolated internal listener.
+Only the six POST routes in `70_router_closure.json` are exposed. The listener
+constructs HttpRequestContext independently of the typed body, then the gateway
+authenticates and authorizes before one catalogue invocation. Proxy headers,
+local origin and VPN membership never grant authority. The proxy does not retry
+submitted calls. Relocation changes installation bindings, not these routes.
+
 ### Errors
 
 Unknown route, unsupported media type, malformed body, unknown field and body
@@ -420,4 +427,3 @@ decision are typed refusals and leave prior state unchanged.
 
 Exactly the decision record and owning aggregate named by the closed decision
 kind may change; no free-form command or cross-module partial write is allowed.
-
