@@ -70,7 +70,7 @@ Archive errors.
 ### Owner
 `module:archive`
 ### Callers
-Transport boundary.
+`boundary:transport`
 ### Inputs
 Exact transfer.
 ### Outputs
@@ -109,6 +109,42 @@ def test_lint_requires_public_operation_sections(tmp_path: Path) -> None:
     path.write_text(path.read_text(encoding="utf-8").replace("### Errors\nInvalid transfer.\n", ""), encoding="utf-8")
     report = design_stage5.lint(project)
     assert any(f["code"] == "missing_public_op_section" and "Errors" in f["message"] for f in report["findings"])
+
+
+def test_lint_requires_owner_in_owner_section(tmp_path: Path) -> None:
+    project = _project(tmp_path)
+    path = project / "50_public_apis.md"
+    text = path.read_text(encoding="utf-8")
+    text = text.replace("### Owner\n`module:archive`\n", "### Owner\nArchive module.\n")
+    text = text.replace("### Enforces\nDurable acceptance.\n", "### Enforces\nDurable acceptance by `module:archive`.\n")
+    path.write_text(text, encoding="utf-8")
+    report = design_stage5.lint(project)
+    assert any(f["code"] == "missing_public_op_owner" for f in report["findings"])
+
+
+def test_lint_requires_documented_callers_to_match_plan(tmp_path: Path) -> None:
+    project = _project(tmp_path)
+    path = project / "50_public_apis.md"
+    path.write_text(
+        path.read_text(encoding="utf-8").replace("`boundary:transport`", "`boundary:http`"),
+        encoding="utf-8",
+    )
+    report = design_stage5.lint(project)
+    mismatch = [f for f in report["findings"] if f["code"] == "public_op_callers_mismatch"]
+    assert len(mismatch) == 1
+    assert "boundary:transport" in mismatch[0]["message"]
+    assert "boundary:http" in mismatch[0]["message"]
+
+
+def test_lint_rejects_placeholder_markers_in_public_operation(tmp_path: Path) -> None:
+    project = _project(tmp_path)
+    path = project / "50_public_apis.md"
+    path.write_text(
+        path.read_text(encoding="utf-8").replace("Durable acceptance.", "TODO: durable acceptance."),
+        encoding="utf-8",
+    )
+    report = design_stage5.lint(project)
+    assert any(f["code"] == "public_op_placeholder" for f in report["findings"])
 
 
 def test_legacy_adapter_caller_is_rejected(tmp_path: Path) -> None:
