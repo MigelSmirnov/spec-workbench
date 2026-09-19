@@ -231,6 +231,10 @@ def coverage(project: Path) -> dict[str, object]:
     known_modules = {entry["key"] for entry in stage3["modules"]}
     known_capabilities = {entry["key"] for entry in stage3["capabilities"]}
     flows = {entry["key"]: entry for entry in stage4["flows"]}
+    capability_usage: dict[str, set[str]] = {}
+    for flow in stage4["flows"]:
+        for capability_ref in flow["capability_refs"]:
+            capability_usage.setdefault(capability_ref, set()).add(flow["key"])
     rows: list[dict[str, object]] = []
     invalid_refs: list[dict[str, str]] = []
 
@@ -258,6 +262,8 @@ def coverage(project: Path) -> dict[str, object]:
                 continue
             if capability not in set(flow["capability_refs"]):
                 missing_flow_evidence.append(flow_key)
+        actual_flow_usage = set(capability_usage.get(capability, set()))
+        extra_flow_evidence = sorted(actual_flow_usage - set(declared_flows))
         item = actual.get(key)
         expected_owner = "module:" + key.removeprefix("public_op:").split(".", 1)[0]
         owner_missing = bool(item is not None and expected_owner not in set(item.module_refs))
@@ -271,15 +277,21 @@ def coverage(project: Path) -> dict[str, object]:
             "expected_owner": expected_owner,
             "owner_missing": owner_missing,
             "flow_evidence_missing": missing_flow_evidence,
+            "actual_flow_usage": sorted(actual_flow_usage),
+            "extra_flow_evidence": extra_flow_evidence,
         })
 
     planned = {entry["key"] for entry in plan["operations"]}
     unplanned = sorted(set(actual) - planned)
+    planned_capabilities = {entry["capability"] for entry in plan["operations"]}
+    flow_capabilities = set(capability_usage)
+    unowned_flow_capabilities = sorted(flow_capabilities - planned_capabilities)
     complete = sum(
         1 for row in rows
         if row["implemented"]
         and not row["owner_missing"]
         and not row["flow_evidence_missing"]
+        and not row["extra_flow_evidence"]
         and not row["invalid_callers"]
     )
     return {
@@ -292,10 +304,12 @@ def coverage(project: Path) -> dict[str, object]:
             "remaining": len(rows) - complete,
             "invalid_refs": len(invalid_refs),
             "unplanned_operations": len(unplanned),
+            "unowned_flow_capabilities": len(unowned_flow_capabilities),
         },
         "operations": rows,
         "invalid_refs": invalid_refs,
         "unplanned_operations": unplanned,
+        "unowned_flow_capabilities": unowned_flow_capabilities,
     }
 
 
@@ -306,6 +320,7 @@ def next_operation(project: Path) -> dict[str, object]:
             not row["implemented"]
             or row["owner_missing"]
             or row["flow_evidence_missing"]
+            or row["extra_flow_evidence"]
             or row["invalid_callers"]
         ):
             return {"schema_version": COVERAGE_SCHEMA, "project_root": project.resolve().name,
@@ -366,6 +381,12 @@ def lint(project: Path) -> dict[str, object]:
                 "error", "invalid_plan_ref", invalid["operation"], message,
                 SourceRange(DEFAULT_PLAN_FILE, 1, 1),
             ))
+        for capability in report["unowned_flow_capabilities"]:
+            findings.append(Finding(
+                "error", "flow_capability_without_public_op", capability,
+                f"State 4 capability {capability!r} is used by a reviewed flow but has no State 5 public operation.",
+                SourceRange(DEFAULT_PLAN_FILE, 1, 1),
+            ))
         items_by_key = {item.key: item for item in items}
         plan_by_key = {entry["key"]: entry for entry in _load_plan(project, required=True)["operations"]}
         for row in report["operations"]:
@@ -374,6 +395,13 @@ def lint(project: Path) -> dict[str, object]:
                                         "Planned public operation capability is not explicitly used by every declared State 4 flow: "
                                         + ", ".join(row["flow_evidence_missing"]),
                                         SourceRange(DEFAULT_PLAN_FILE, 1, 1)))
+            if row["extra_flow_evidence"]:
+                findings.append(Finding(
+                    "error", "public_op_flow_lineage_mismatch", row["key"],
+                    "State 5 flow lineage must exactly match every reviewed State 4 flow that uses the capability; "
+                    f"declared={sorted(row['flows'])} actual={row['actual_flow_usage']}.",
+                    SourceRange(DEFAULT_PLAN_FILE, 1, 1),
+                ))
             item = items_by_key.get(row["key"])
             if item is not None:
                 callers_text = _subsection_text(project, item, "Callers") or ""
@@ -465,7 +493,11 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
     if args.lint and payload["summary"]["errors"]:
         return 1
-    if args.coverage and (payload["summary"]["invalid_refs"] or payload["summary"]["remaining"]):
+    if args.coverage and (
+        payload["summary"]["invalid_refs"]
+        or payload["summary"]["remaining"]
+        or payload["summary"]["unowned_flow_capabilities"]
+    ):
         return 1
     if args.handoff and payload["lint_summary"]["errors"]:
         return 1
