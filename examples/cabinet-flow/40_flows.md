@@ -22,6 +22,8 @@ host configuration, `module:operational_store` opens durability,
 `module:semantic_vocabulary` holds the seed, `module:operation_bindings` checks
 bindings against the manifest, `module:sandbox_supervisor` reports its health,
 `module:run_executor` resumes work, and the two gateways open last.
+`module:system_clock` is injected before startup work so every module that
+writes startup/recovery timestamps uses the same KernelInstant source.
 
 ### Steps
 
@@ -30,7 +32,8 @@ bindings against the manifest, `module:sandbox_supervisor` reports its health,
    `capability:installation.manifest_revision` and
    `capability:installation.resolve_service_target` to validate the whole
    configuration, including the refusal of mixed production and non-production
-   targets.
+   targets. Timestamp-owning startup modules obtain their event time only from
+   `capability:system_clock.now`.
 2. Within `capability:operational_store.begin_unit_of_work` and
    `capability:operational_store.commit_unit_of_work`,
    `capability:semantic_vocabulary.seed_vocabulary` installs the seed when the
@@ -68,6 +71,9 @@ Any request arrives on the `mcp` or `http_api` channel.
 `module:mcp_gateway` and `module:http_gateway` frame the channel.
 `module:access_control` decides who is asking. `module:kernel_surface` owns the
 closed operation catalogue and hands the request to the owning deep module.
+`module:system_clock` is used only by the owning security module for
+authentication/throttling time; the gateway and surface never forward a
+caller-supplied current time.
 
 ### Steps
 
@@ -108,16 +114,21 @@ The owner gives an agent access to the kernel, or takes it away.
 ### Boundary
 
 `module:access_control` owns delegations. `module:installation` holds the
-credential the delegation refers to.
+credential the delegation refers to. `module:system_clock` supplies the
+KernelInstant used for issuance and revocation timestamps.
 
 ### Steps
 
 1. Through `capability:kernel_surface.owner_decide`, the owner calls
    `capability:access_control.issue_delegation` with the agent's label, channel,
    authoring right and disclosure ceiling; the record stores a credential
-   reference and `capability:identity.mint_identity` gives it a stable identity.
+   reference and `capability:identity.mint_identity` gives it a stable identity;
+   `module:access_control` obtains `issued_at` from
+   `capability:system_clock.now`.
 2. `capability:access_control.revoke_delegation` ends a delegation before the
-   next request. Runs it started continue under `module:run_executor`.
+   next request, obtaining `revoked_at` from
+   `capability:system_clock.now`. Runs it started continue under
+   `module:run_executor`.
 3. Each change is one `capability:operational_store.begin_unit_of_work` and
    `capability:operational_store.commit_unit_of_work`.
 
@@ -143,7 +154,8 @@ and an agent or the owner proposes a new axis, term or relation.
 `module:semantic_vocabulary` owns the registry and proposals.
 `module:owner_authority` generates the owner-facing statement.
 `module:kernel_surface` is the only channel-visible route for inspection,
-proposal authoring and owner decisions.
+proposal authoring and owner decisions. `module:system_clock` supplies
+KernelInstant timestamps owned by the vocabulary registry.
 
 ### Steps
 
@@ -156,6 +168,8 @@ proposal authoring and owner decisions.
    candidate and motivating finding. The vocabulary module obtains
    `capability:owner_authority.owner_statement` so the stored owner-facing
    question is kernel-generated and separate from agent-supplied text.
+   Proposal and decision timestamps come only from
+   `capability:system_clock.now`.
 3. Through `capability:kernel_surface.owner_decide`, the active owner's
    `capability:semantic_vocabulary.decide_proposal` accepts the exact proposed
    revision atomically or rejects it. Acceptance issues exactly one immutable
@@ -188,7 +202,10 @@ whose implementation must be replaced.
 
 `module:slot_registry` owns slots, contract versions and code.
 `module:trial_corpus` owns the cases. `module:identity` computes every
-identity.
+identity. `module:kernel_surface` composes the authoring view from
+`module:slot_activation` and `module:trace_journal` without taking their
+ownership. `module:system_clock` supplies timestamps written by the owning
+authoring modules.
 
 ### Steps
 
@@ -206,7 +223,9 @@ identity.
    `capability:slot_registry.issue_contract_version` after every port is
    verified against `module:semantic_vocabulary` and bounds are clamped to
    `capability:installation.release_ceilings`; the identity comes from
-   `capability:identity.identify_contract_version`.
+   `capability:identity.identify_contract_version`. The exact issued contract
+   is re-read through `capability:slot_registry.contract_version` before cases
+   or implementations are attached to it.
 3. Through `capability:kernel_surface.author`,
    `capability:slot_registry.submit_implementation` stores the code bytes under
    the identity from `capability:identity.identify_implementation`. A caller's
@@ -218,7 +237,9 @@ identity.
    `capability:identity.digest_value`.
 5. Through `capability:kernel_surface.author`, a step that should never be used
    again is ended by `capability:slot_registry.retire_slot`; flow versions that
-   pin it keep what they pinned.
+   pin it keep what they pinned. Slot/contract/implementation/corpus lifecycle
+   timestamps are obtained by their owners through
+   `capability:system_clock.now`.
 
 ### Outcomes
 
@@ -242,19 +263,25 @@ activation.
 
 `module:admission` owns the verdict, `module:sandbox_supervisor` every
 execution, `module:trial_corpus` the corpus, `module:slot_activation` the
-selection.
+selection. `module:slot_registry` supplies the exact immutable contract and
+implementation records. `module:system_clock` supplies execution, verdict and
+activation timestamps to their owning modules.
 
 ### Steps
 
 1. Through `capability:kernel_surface.request_trial`,
-   `capability:admission.run_trial` takes `capability:trial_corpus.active_corpus`
-   and runs the implementation on every case with
-   `capability:sandbox_supervisor.execute_function`. A trial fixture remains a
+   `capability:admission.run_trial` resolves the exact contract through
+   `capability:slot_registry.contract_version`, the submitted implementation
+   through `capability:slot_registry.implementation_record`, takes
+   `capability:trial_corpus.active_corpus` and runs the implementation on every
+   case with `capability:sandbox_supervisor.execute_function`. A trial fixture remains a
    `StoredValue` of carriage `byte_stream`; admission supplies its validated
    bounded stream directly to the sandbox supervisor and never creates
    `SpooledBytes` for a trial.
-2. `capability:admission.decide_admission` records the verdict with every
-   applicable refusal reason. No actor can supply or alter it.
+2. The same `capability:admission.run_trial` appends one immutable
+   TrialExecution per attempted case and the resulting AdmissionVerdict with
+   every applicable refusal reason. Its owned timestamps come from
+   `capability:system_clock.now`; no actor can supply or alter them.
 3. Through `capability:kernel_surface.activate`,
    `capability:slot_activation.activate_implementation` re-checks
    `capability:admission.current_admission` against the corpus as it stands and
@@ -289,12 +316,17 @@ A function node failed or produced a wrong result in a real run.
 ### Boundary
 
 `module:trace_journal` holds what happened. `module:trial_corpus` makes the
-failure permanent evidence. Authoring and admission then proceed as in
-`flow:author_function` and `flow:admit_and_activate_function`.
+failure permanent evidence. `module:kernel_surface` composes the repair view,
+`module:slot_registry` supplies exact contract metadata,
+`module:slot_activation` derives serving health, and
+`module:system_clock` supplies timestamps owned by repair mutations.
+Authoring and admission then proceed as in `flow:author_function` and
+`flow:admit_and_activate_function`.
 
 ### Steps
 
-1. Through `capability:kernel_surface.inspect`,
+1. Through `capability:kernel_surface.inspect`, the exact contract is resolved
+   through `capability:slot_registry.contract_version` and
    `capability:trace_journal.slot_evidence` gives the agent the recent node
    executions and trial executions of that one slot, within its ceiling and
    without the rest of the run.
@@ -320,7 +352,8 @@ failure permanent evidence. Authoring and admission then proceed as in
    removed from effect only by
    `capability:trial_corpus.withdraw_trial_case`; a protected case is refused
    to the agent and withdrawn only through
-   `capability:kernel_surface.owner_decide`.
+   `capability:kernel_surface.owner_decide`. Capture/withdrawal timestamps are
+   obtained by the owning module through `capability:system_clock.now`.
 
 ### Outcomes
 
@@ -343,7 +376,9 @@ party's API — must become usable in flows, or the manifest changed.
 ### Boundary
 
 `module:manifest_reader` projects the manifest. `module:operation_bindings` owns
-bindings. `module:owner_authority` words the acceptance request. The agent
+bindings. `module:semantic_vocabulary` supplies accepted semantic-term
+revisions for typed ports. `module:owner_authority` words the acceptance
+request. `module:system_clock` supplies binding lifecycle timestamps. The agent
 writes no network code.
 
 ### Steps
@@ -351,15 +386,18 @@ writes no network code.
 1. `capability:manifest_reader.manifest_operation` returns the operation's
    facts at the record's digest, and `capability:manifest_reader.service_instance`
    the instance the installation targets.
-2. `capability:operation_bindings.propose_binding` records typed input and
-   output ports, preview ports and the outcome-read binding; effect class,
+2. `capability:operation_bindings.propose_binding` validates every semantic
+   port through `capability:semantic_vocabulary.term_revision`, then records
+   typed input and output ports, preview ports and the outcome-read binding;
+   effect class,
    replay and idempotency key are copied from the manifest, and the identity
    comes from `capability:identity.identify_binding_version`.
 3. `capability:owner_authority.owner_statement` states in plain words what the
    operation does, in which service, what it may change and which disclosure
    class each input accepts.
 4. The owner's `capability:operation_bindings.accept_binding_version` makes the
-   binding usable.
+   binding usable and obtains its acceptance KernelInstant from
+   `capability:system_clock.now`.
 5. On a manifest change, `capability:operation_bindings.sweep_manifest_drift`
    uses `capability:manifest_reader.operation_facts_changed` to suspend the
    binding or reissue an identical version.
@@ -386,13 +424,20 @@ An agent composes function nodes and operation nodes to answer a request.
 ### Boundary
 
 `module:flow_registry` owns flows and activations. `module:flow_proof` judges the
-graph. `module:owner_authority` and the owner decide when the flow can change
-anything.
+graph. `module:slot_registry` supplies exact function contracts and
+`module:semantic_vocabulary` supplies exact term/relation evidence.
+`module:owner_authority` and the owner decide when the flow can change
+anything. `module:system_clock` supplies proof/registry/activation timestamps
+to their owning modules.
 
 ### Steps
 
 1. `capability:flow_registry.composition_view` gives the agent contracts,
-   binding versions and the vocabulary, without implementation bodies.
+   binding versions and the vocabulary, without implementation bodies. Exact
+   function contracts are resolved through
+   `capability:slot_registry.contract_version`; semantic evidence comes from
+   `capability:semantic_vocabulary.term_revision` and
+   `capability:semantic_vocabulary.find_relation`.
 2. `capability:flow_registry.create_flow` and
    `capability:flow_registry.register_flow_version` record the graph under the
    identity from `capability:identity.identify_flow_version`.
@@ -400,7 +445,8 @@ anything.
    basis, carriage, cardinality, disclosure, inputs, cycles, reachability,
    guards — and reports every finding.
 4. `capability:flow_registry.activate_flow_version` activates a proven read-only
-   version by the kernel at once. For any other version it requires the owner,
+   version by the kernel at once. Flow/proof/activation lifecycle timestamps are
+   obtained from `capability:system_clock.now`. For any other version it requires the owner,
    who sees `capability:owner_authority.owner_statement` naming every non-read
    node.
 5. `capability:flow_registry.current_flow_activation` names the version that
@@ -426,15 +472,18 @@ such as taking third-party data and analysing it.
 
 ### Boundary
 
-`module:run_executor` owns the run. `module:sandbox_supervisor` executes function
-nodes, `module:operation_invoker` and `module:service_transport` operation
-nodes, `module:value_store` and `module:run_spool` carry data,
-`module:trace_journal` records.
+`module:run_executor` owns the run. `module:slot_registry` supplies exact
+function contract/implementation records. `module:sandbox_supervisor` executes
+function nodes, `module:operation_invoker` and `module:service_transport`
+operation nodes, `module:value_store` and `module:run_spool` carry data,
+`module:trace_journal` records, and `module:system_clock` supplies run/attempt
+timestamps and retry deadlines to their owning modules.
 
 ### Steps
 
 1. Through `capability:kernel_surface.run_flow`,
-   `capability:run_executor.create_run` pins the flow activation, every
+   `capability:run_executor.create_run` resolves each function contract through
+   `capability:slot_registry.contract_version`, pins the flow activation, every
    `capability:slot_activation.serving_activation`, every
    `capability:operation_bindings.binding_for_invocation` and the
    `capability:installation.resolve_service_target`, and validates each input.
@@ -442,16 +491,20 @@ nodes, `module:value_store` and `module:run_spool` carry data,
    goes to `capability:operation_invoker.invoke_operation`, which sends one
    bounded request through `capability:service_transport.send_request` and
    validates the response against the output ports.
-3. A function node goes to `capability:sandbox_supervisor.execute_function`.
-   Files reach it through `capability:run_spool.receive_file` and
+3. A function node goes to `capability:sandbox_supervisor.execute_function`,
+   which obtains the exact executable through
+   `capability:slot_registry.implementation_record`. Files reach it through
+   `capability:run_spool.receive_file` and
    `capability:run_spool.deliver_file`.
 4. Each validated output is stored by `capability:value_store.put_value` with
    the class from `capability:value_store.derive_output_class`, and each
    concluded attempt is written by
    `capability:trace_journal.record_node_execution`, all in one unit of work per
    node.
-5. `capability:run_executor.run_status` reports the run's state;
-   `capability:trace_journal.run_trace` and `capability:value_store.read_value`
+5. Run and attempt lifecycle timestamps are obtained from
+   `capability:system_clock.now`. `capability:run_executor.run_status` reports
+   the run's state; `capability:trace_journal.run_trace` and
+   `capability:value_store.read_value`
    return the result within the reader's disclosure ceiling.
 
 ### Outcomes
@@ -477,7 +530,8 @@ as taking an invoice photo from one service and giving it into custody.
 ### Boundary
 
 As in `flow:run_read_only_flow`, with `module:owner_authority` deciding whether
-each effect is authorized now.
+each effect is authorized now and `module:system_clock` supplying approval,
+grant and invocation timestamps to their owners.
 
 ### Steps
 
@@ -491,7 +545,8 @@ each effect is authorized now.
    `capability:run_spool.describe_file` — bound to the digest of all inputs; the
    run rests `awaiting_approval` and appears in
    `capability:owner_authority.waiting_for_owner`.
-3. The owner's `capability:owner_authority.decide_approval` approves or denies.
+3. The owner's `capability:owner_authority.decide_approval` approves or denies,
+   obtaining its decision KernelInstant from `capability:system_clock.now`.
    A mapped node receives one decision for the whole collection.
 4. `capability:operation_invoker.invoke_operation` records the in-flight attempt
    durably, derives the idempotency key, and sends exactly the approved inputs.
@@ -526,6 +581,8 @@ run's status or authorizes an effect.
 
 `module:run_executor` owns resumption and the run's state.
 `module:operation_invoker` finds out what happened by reading the owning service.
+`module:system_clock` supplies only retry/back-off KernelInstant values; service
+timestamps never become kernel time.
 
 ### Steps
 
@@ -566,7 +623,8 @@ idempotent and may run again after restart.
 ### Boundary
 
 `module:value_store` owns retention of values. `module:run_spool` owns files of
-runs that ended.
+runs that ended. `module:system_clock` supplies the KernelInstant used for
+retention comparisons; it owns no retention policy.
 
 ### Steps
 
