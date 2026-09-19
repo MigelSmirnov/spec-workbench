@@ -1,6 +1,7 @@
 """State 1 model fields must equal the model closure fields."""
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 from typing import Any
@@ -17,7 +18,8 @@ def design_models(project: Path) -> dict[str, dict[str, Any]]:
     declares an explicit ``Candidate fields:`` list. Prose-only sections are
     reported as unparsed, never judged."""
     result: dict[str, dict[str, Any]] = {}
-    for path in sorted(project.glob("01_models_*.md")):
+    # 01_models.md itself is a State 1 document, not only its split companions
+    for path in sorted(project.glob("01_models*.md")):
         current: dict[str, Any] | None = None
         in_fields = False
         for number, raw in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
@@ -52,9 +54,24 @@ def _normalize_type(text: str) -> str:
     return re.sub(r"\s+", " ", text.strip())
 
 
+def _assembled_model_names(project: Path) -> set[str]:
+    """Models the assembled specification already carries.
+
+    A model that reached ``global_spec.json`` without a closure file is visible
+    to the generator; it is a lineage debt of that case, not a lost model.
+    """
+    try:
+        spec = json.loads((project / "global_spec.json").read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return set()
+    models = spec.get("models") if isinstance(spec, dict) else None
+    return set(models) if isinstance(models, dict) else set()
+
+
 def lint(project: Path) -> dict[str, Any]:
     index = ModelIndex.load(project)
     designed = design_models(project)
+    assembled = _assembled_model_names(project)
     findings: list[dict[str, Any]] = []
     compared = 0
     unparsed: list[str] = []
@@ -67,14 +84,21 @@ def lint(project: Path) -> dict[str, Any]:
 
     for name, info in sorted(designed.items()):
         fields = info["fields"]
+        surface = index.surface(name)
+        # Existence is judged for every designed model. Whether its field list
+        # is typed or prose only decides if the fields can be compared: a case
+        # whose State 1 is all prose must not pass by having nothing to compare.
+        if surface is None:
+            if name in assembled:
+                unparsed.append(name)
+                continue
+            finding("model_missing_in_closure",
+                    f"{info['key']} {name} is designed in State 1 but neither a 60_model_closure*.json nor the "
+                    "assembled specification declares it; the generator will never see it.",
+                    name, info)
+            continue
         if fields is None:
             unparsed.append(name)
-            continue
-        surface = index.surface(name)
-        if surface is None:
-            finding("model_missing_in_closure",
-                    f"{info['key']} {name} is designed in State 1 but no 60_model_closure*.json declares it.",
-                    name, info)
             continue
         if surface.kind != "model":
             # enums and interfaces carry no field list to compare
