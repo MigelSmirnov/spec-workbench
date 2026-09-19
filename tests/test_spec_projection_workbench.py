@@ -267,3 +267,58 @@ def test_missing_authoring_sequence_fails_closed(tmp_path) -> None:
 
     with pytest.raises(SpecProjectionError, match="authoring_sequence.json"):
         service.build_plan(project)
+
+
+_EPOCH_CLOCK = {
+    "kind": "system_clock_backend",
+    "schema_version": 2,
+    "backend": {"emitter": "python_host_epoch_clock_v1"},
+    "wiring": {"module": "system_clock", "function": "now", "models_module": "kernel.models"},
+    "time": {"policy": "rules.time_source_policy", "read": "per_call"},
+}
+
+
+def _write_clock_closure(project, *, status: str) -> None:
+    (project / "70_system_clock_closure.json").write_text(
+        json.dumps(
+            {
+                "schema_version": "spec_workbench_system_clock_backend_closure.v1",
+                "status": status,
+                "backend_ir": _EPOCH_CLOCK,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
+def test_standard_backend_closure_is_projected_into_rules(tmp_path, monkeypatch) -> None:
+    project = _project(tmp_path)
+    _patch_ready_sources(monkeypatch)
+    _write_clock_closure(project, status="closed")
+
+    plan = service.build_plan(project)
+    _, projected, findings, source_checks = service._project(project)
+
+    assert findings == []
+    assert projected["rules"]["system_clock_backend"] == _EPOCH_CLOCK
+    assert "rules.system_clock_backend" in {row["address"] for row in plan["changes"]}
+    assert {
+        "source": "70_system_clock_closure.json",
+        "enabled": True,
+        "ready": True,
+        "status": "closed",
+        "errors": 0,
+    } in source_checks
+
+
+def test_open_standard_backend_closure_blocks_projection(tmp_path, monkeypatch) -> None:
+    project = _project(tmp_path)
+    _patch_ready_sources(monkeypatch)
+    _write_clock_closure(project, status="open")
+
+    plan = service.build_plan(project)
+
+    assert plan["ready_to_apply"] is False
+    assert [row["code"] for row in plan["findings"]] == ["standard_backend_closure_not_closed"]
+    _, projected, _, _ = service._project(project)
+    assert "system_clock_backend" not in projected["rules"]
