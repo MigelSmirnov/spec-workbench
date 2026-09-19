@@ -37,9 +37,11 @@ output validates against the binding ports.
 ### Observable effect
 
 For a non-read operation, the invoker first durably records the exact in-flight
-attempt, then sends one bounded request through `module:service_transport`, and
-finally records the immutable conclusion. A read needs no in-flight effect
-record. A service may change state only through the declared operation.
+attempt, then sends one bounded request through `module:service_transport` and
+returns the exact attempt conclusion to `module:run_executor`. A read needs no
+in-flight effect record. The immutable NodeExecution is appended separately by
+`module:trace_journal`; a service may change state only through the declared
+operation.
 
 ### Enforces
 
@@ -60,9 +62,10 @@ their exact typed conclusion. Ambiguity after possible send is always
 
 ### State impact
 
-In-flight and concluding NodeExecution evidence may be appended atomically in
-the required order. The run state is updated by `module:run_executor`; unknown
-outcomes trigger no automatic second effect.
+Only the durable in-flight attempt bookkeeping owned by invocation may change
+here. `module:run_executor` owns the run transition and hands the returned
+conclusion to `module:trace_journal` for the one immutable NodeExecution;
+unknown outcomes trigger no automatic second effect.
 
 ## `public_op:operation_invoker.reconcile_outcome`
 
@@ -115,7 +118,8 @@ the outcome.
 
 ### State impact
 
-One append-only OutcomeReconciliation and, when applied, the validated node
-conclusion may be recorded. The original in-flight/unknown evidence remains;
-the run transition and any later reattempt belong to `module:run_executor`.
+One append-only OutcomeReconciliation may be recorded and, when applied, the
+validated node conclusion is returned to `module:run_executor`. The original
+in-flight/unknown evidence remains; the run transition, immutable
+NodeExecution and any later reattempt belong to their owning modules.
 
