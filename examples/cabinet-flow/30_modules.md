@@ -187,6 +187,15 @@ fixtures.
 The database, its schema and migrations, transaction isolation, locking, and the
 mapping between records and rows.
 
+The public boundary remains the opaque UnitOfWork API below. Its SQLite
+implementation is one internal `SqliteOperationalStoreRepository` owned by this
+module and lowered from `persistence_backend/v3`. The repository exposes typed
+methods for the closed durable M01–M49 record families; it accepts no table
+name, SQL fragment, untyped payload or host path. Domain modules and
+agent-authored tools continue to compose the public kernel operations and never
+depend on the repository class. This keeps tool authoring stable while storage
+layout, migrations and codecs remain replaceable implementation details.
+
 ### Candidate public capabilities
 
 ```text
