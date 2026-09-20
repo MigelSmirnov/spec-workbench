@@ -95,7 +95,11 @@ def test_open_valid_closure_is_not_handoff_ready(tmp_path, monkeypatch) -> None:
     assert report["summary"]["errors"] == 0
     assert report["summary"]["closed"] is False
     assert report["summary"]["handoff_ready"] is False
-    assert report["deterministic_method_scopes"] == ["InvoiceRepository.get_invoice"]
+    assert report["deterministic_method_scopes"] == [
+        "InvoiceRepository.__init__",
+        "InvoiceRepository.get_invoice",
+        "create_invoice_schema",
+    ]
 
 
 def test_closed_contract_bound_closure_emits_exact_backend_ir(tmp_path, monkeypatch) -> None:
@@ -106,7 +110,11 @@ def test_closed_contract_bound_closure_emits_exact_backend_ir(tmp_path, monkeypa
     assert report["ready"] is True
     assert report["summary"]["handoff_ready"] is True
     assert report["backend_ir"] == _backend()
-    assert report["deterministic_method_scopes"] == ["InvoiceRepository.get_invoice"]
+    assert report["deterministic_method_scopes"] == [
+        "InvoiceRepository.__init__",
+        "InvoiceRepository.get_invoice",
+        "create_invoice_schema",
+    ]
 
 
 def test_closure_blocks_when_state6_is_not_ready(tmp_path, monkeypatch) -> None:

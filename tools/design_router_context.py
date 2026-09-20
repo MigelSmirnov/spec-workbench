@@ -39,6 +39,22 @@ def load(project: Path) -> dict[str, Any]:
     return payload
 
 
+def wiring_callables(wiring: Any) -> set[str]:
+    """Callables the router emitter lowers from ``wiring`` alone."""
+    if not isinstance(wiring, dict):
+        return set()
+    result: set[str] = set()
+    app_factory = wiring.get("app_factory")
+    if isinstance(app_factory, str) and app_factory:
+        result.add(app_factory)
+    extractors = wiring.get("credential_extractors")
+    for extractor in extractors.values() if isinstance(extractors, dict) else ():
+        function = extractor.get("function") if isinstance(extractor, dict) else None
+        if isinstance(function, str) and function:
+            result.add(function)
+    return result
+
+
 def coverage(project: Path) -> dict[str, Any]:
     payload = load(project)
     findings: list[dict[str, str]] = []
