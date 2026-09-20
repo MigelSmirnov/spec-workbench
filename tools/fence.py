@@ -16,6 +16,8 @@ SOFT_SEVERITIES = frozenset({"warning", "review", "warn", "advisory"})
 STOP = "error"
 
 HINTS: dict[str, str] = {
+    "opaque_runtime_carrier": "give the carrier an interface with the typed operations its consumers need and record who implements it in implementation_obligations",
+    "unreachable_repository": "name the interface the lowered repository implements (implementation_obligations, disposition local) or the contract that receives it",
     "module_surface_not_deep": "declare the hidden mechanism this module owns in State 3, or split it along the mechanism it hides",
     "contract_plan_open": "review the internal functions the mechanisms need and close the State 6 plan",
     "deep_module_declares_delegates": "a deep module owns its mechanism: remove the delegation or declare the module a facade",

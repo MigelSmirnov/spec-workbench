@@ -320,6 +320,110 @@ def _runtime_persistence_check(source_spec: object, case_root: Path | None) -> A
     )
 
 
+def _runtime_carrier_check(source_spec: object) -> AdmissionCheck:
+    """Refuse a runtime mechanism that no contract can carry.
+
+    Every other port check reacts to an interface the author chose to write, so
+    a case with no interface at all makes each of them stand aside.  This check
+    has no such condition.  It judges two shapes that hide a host mechanism
+    behind nothing:
+
+    - a model whose every field is typed ``object`` and that crosses a function
+      signature: the generator receives a value with no operations and invents
+      them (module-level dicts, method names probed in turn);
+    - a repository class lowered from ``rules.persistence_backend`` that no
+      interface names as its local implementation and no other contract
+      mentions: the emitted storage exists and nothing can reach it.
+    """
+    spec = source_spec if isinstance(source_spec, dict) else {}
+    contracts = spec.get("contracts", {})
+    models = spec.get("models", {})
+    if not isinstance(contracts, dict) or not isinstance(models, dict):
+        return AdmissionCheck(
+            "FA017",
+            CHECK_BLOCK,
+            "Runtime carriers cannot be checked on malformed contracts/models.",
+            {},
+        )
+    signatures = {
+        owner: signature
+        for owner, signature in contracts.items()
+        if isinstance(owner, str) and isinstance(signature, str)
+    }
+    findings: list[dict[str, Any]] = []
+
+    opaque = sorted(
+        name
+        for name, declaration in models.items()
+        if isinstance(name, str)
+        and isinstance(declaration, dict)
+        and isinstance(declaration.get("fields"), dict)
+        and declaration["fields"]
+        and all(field_type == "object" for field_type in declaration["fields"].values())
+    )
+    for name in opaque:
+        used_by = sorted(
+            owner for owner, signature in signatures.items() if _annotation_mentions(signature, name)
+        )
+        if used_by:
+            findings.append({
+                "code": "opaque_runtime_carrier",
+                "model": name,
+                "used_by": used_by,
+                "hint": fence.HINTS["opaque_runtime_carrier"],
+            })
+
+    rules = spec.get("rules")
+    backend = rules.get("persistence_backend") if isinstance(rules, dict) else None
+    repositories = sorted(
+        item["repository"]
+        for item in (backend.get("repositories") if isinstance(backend, dict) else None) or []
+        if isinstance(item, dict) and isinstance(item.get("repository"), str)
+    )
+    obligations = spec.get("implementation_obligations")
+    local_implementations = {
+        implementation
+        for disposition in (obligations.values() if isinstance(obligations, dict) else [])
+        if isinstance(disposition, dict) and disposition.get("disposition") == "local"
+        for implementation in disposition.get("implementations") or []
+        if isinstance(implementation, str)
+    }
+    for repository in repositories:
+        if repository in local_implementations:
+            continue
+        mentioned_by = sorted(
+            owner
+            for owner, signature in signatures.items()
+            if owner.split(".", 1)[0] != repository and _annotation_mentions(signature, repository)
+        )
+        if not mentioned_by:
+            findings.append({
+                "code": "unreachable_repository",
+                "repository": repository,
+                "hint": fence.HINTS["unreachable_repository"],
+            })
+
+    evidence = {
+        "models_examined": len(models),
+        "opaque_models": opaque,
+        "repositories_examined": repositories,
+        "local_implementations": sorted(local_implementations),
+    }
+    if findings:
+        return AdmissionCheck(
+            "FA017",
+            CHECK_BLOCK,
+            f"{len(findings)} runtime mechanism(s) have no contract that carries them; the generator would invent them.",
+            {**evidence, "findings": findings},
+        )
+    return AdmissionCheck(
+        "FA017",
+        CHECK_PASS,
+        "No opaque carrier crosses a signature and every lowered repository is reachable.",
+        evidence,
+    )
+
+
 def _assembly_check(case_root: Path | None, factory_root: Path) -> AdmissionCheck:
     if case_root is None:
         return AdmissionCheck(
@@ -999,6 +1103,7 @@ def check(
         _language_check(source),
         _implementation_obligations_check(source),
         _runtime_persistence_check(source_spec, case_root),
+        _runtime_carrier_check(source_spec),
         _external_contract_check(case_root),
         _closure_gaps_check(case_root),
         _projection_drift_check(case_root),

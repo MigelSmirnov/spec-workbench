@@ -8,6 +8,7 @@ from factory_admission_workbench import check
 from factory_admission_workbench.service import (
     _assembly_check,
     _review_check,
+    _runtime_carrier_check,
     _runtime_persistence_check,
     _target_identity_check,
 )
@@ -622,3 +623,81 @@ def test_projection_drift_passes_when_in_sync(monkeypatch, tmp_path: Path) -> No
     result = service._projection_drift_check(tmp_path)
     assert result.check_id == "FA016"
     assert result.status == "PASS"
+
+
+def _carrier_spec(*, obligations: dict | None = None, extra_contracts: dict | None = None) -> dict:
+    return {
+        "models": {
+            "Slot": {"identity": "entity", "fields": {"slot_id": "str"}},
+            "UnitOfWorkHandle": {"identity": "value", "fields": {"payload": "object"}},
+        },
+        "contracts": {
+            "begin_unit_of_work": "(purpose: str) -> UnitOfWorkHandle",
+            "SqliteStoreRepository.__init__": "(self, connection: object) -> None",
+            "SqliteStoreRepository.load_slot": "(self, slot_id: str) -> Slot | None",
+            **(extra_contracts or {}),
+        },
+        "rules": {
+            "persistence_backend": {
+                "repositories": [{"repository": "SqliteStoreRepository"}],
+            }
+        },
+        "implementation_obligations": obligations or {},
+    }
+
+
+def test_opaque_carrier_in_a_signature_blocks_admission_without_any_interface() -> None:
+    result = _runtime_carrier_check(_carrier_spec())
+
+    assert result.check_id == "FA017"
+    assert result.status == "BLOCK"
+    findings = {(item["code"], item.get("model") or item.get("repository")) for item in result.evidence["findings"]}
+    assert findings == {
+        ("opaque_runtime_carrier", "UnitOfWorkHandle"),
+        ("unreachable_repository", "SqliteStoreRepository"),
+    }
+    carrier = next(item for item in result.evidence["findings"] if item["code"] == "opaque_runtime_carrier")
+    assert carrier["used_by"] == ["begin_unit_of_work"]
+
+
+def test_opaque_model_that_crosses_no_signature_is_not_a_finding() -> None:
+    spec = _carrier_spec(
+        obligations={"StoreUnitOfWork": {"disposition": "local", "implementations": ["SqliteStoreRepository"]}}
+    )
+    spec["contracts"]["begin_unit_of_work"] = "(purpose: str) -> StoreUnitOfWork"
+
+    result = _runtime_carrier_check(spec)
+
+    assert result.status == "PASS"
+    assert result.evidence["opaque_models"] == ["UnitOfWorkHandle"]
+    assert result.evidence["repositories_examined"] == ["SqliteStoreRepository"]
+
+
+def test_repository_named_by_another_contract_is_reachable() -> None:
+    spec = _carrier_spec(extra_contracts={"open_store": "(repository: SqliteStoreRepository) -> None"})
+    spec["contracts"]["begin_unit_of_work"] = "(purpose: str) -> None"
+
+    assert _runtime_carrier_check(spec).status == "PASS"
+
+
+def test_repository_mentioned_only_by_its_own_methods_is_unreachable() -> None:
+    spec = _carrier_spec(extra_contracts={"SqliteStoreRepository.clone": "(self) -> SqliteStoreRepository"})
+    spec["contracts"]["begin_unit_of_work"] = "(purpose: str) -> None"
+
+    result = _runtime_carrier_check(spec)
+
+    assert result.status == "BLOCK"
+    assert [item["code"] for item in result.evidence["findings"]] == ["unreachable_repository"]
+
+
+def test_external_obligation_does_not_make_a_lowered_repository_reachable() -> None:
+    spec = _carrier_spec(
+        obligations={"StoreUnitOfWork": {"disposition": "external", "implementations": ["SqliteStoreRepository"]}}
+    )
+    spec["contracts"]["begin_unit_of_work"] = "(purpose: str) -> None"
+
+    assert _runtime_carrier_check(spec).status == "BLOCK"
+
+
+def test_runtime_carrier_check_blocks_malformed_spec() -> None:
+    assert _runtime_carrier_check({"contracts": [], "models": {}}).status == "BLOCK"
