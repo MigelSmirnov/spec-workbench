@@ -45,7 +45,10 @@ def load_closure(project: Path) -> tuple[dict[str, SourceIdentity], list[Finding
     records: dict[str, SourceIdentity] = {}
     findings: list[Finding] = []
     for path in sorted(project.glob("60_model_closure_*.json")):
-        models = _read_json(path).get("models", {})
+        payload = _read_json(path)
+        if payload.get("identity_scope") == "contract_only":
+            continue
+        models = payload.get("models", {})
         if not isinstance(models, dict):
             raise IdentityWorkbenchError(f"{path}: models must be an object.")
         for name, model in models.items():
@@ -58,6 +61,30 @@ def load_closure(project: Path) -> tuple[dict[str, SourceIdentity], list[Finding
             record = SourceIdentity(identity, path.name)
             if name in records:
                 findings.append(Finding("duplicate_closure_model", f"{name} appears in more than one model-closure file.", name, path.name))
+            records[name] = record
+    return records, findings
+
+def load_contract_closure(project: Path) -> tuple[dict[str, SourceIdentity], list[Finding]]:
+    """Load runtime-only DTO identities that deliberately have no State 1 record."""
+    records: dict[str, SourceIdentity] = {}
+    findings: list[Finding] = []
+    for path in sorted(project.glob("60_model_closure_*.json")):
+        payload = _read_json(path)
+        if payload.get("identity_scope") != "contract_only":
+            continue
+        models = payload.get("models", {})
+        if not isinstance(models, dict):
+            raise IdentityWorkbenchError(f"{path}: models must be an object.")
+        for name, model in models.items():
+            if not isinstance(model, dict) or model.get("kind"):
+                continue
+            identity = model.get("identity")
+            if identity not in {"value", "entity"}:
+                findings.append(Finding("invalid_contract_closure_identity", f"{name} has invalid contract-model identity {identity!r}.", name, path.name))
+                continue
+            record = SourceIdentity(identity, path.name)
+            if name in records:
+                findings.append(Finding("duplicate_contract_closure_model", f"{name} appears in more than one contract-model closure file.", name, path.name))
             records[name] = record
     return records, findings
 

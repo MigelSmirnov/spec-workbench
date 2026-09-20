@@ -32,6 +32,21 @@ def test_empty_model_orphan_entity_and_external_return_are_reported(tmp_path):
     assert codes(report) == ["external_interface_returned", "model_without_fields", "orphan_read_entity"]
 
 
+def test_discriminated_union_content_lives_in_its_variants(tmp_path):
+    spec = {
+        "models": {
+            "Choice": {"kind": "discriminated_union", "discriminator": "kind", "variants": ["TextChoice"]},
+            "TextChoice": {"identity": "value", "fields": {"kind": "Literal['text']", "value": "str"}},
+        },
+        "contracts": {},
+        "notes": [],
+    }
+
+    report = run(make_case(tmp_path, spec))
+
+    assert not [f for f in report["findings"] if f.get("model") == "Choice"]
+
+
 def test_prose_enumeration_without_enum_type_is_a_leak_and_withdrawn_sections_are_not(tmp_path):
     spec = {"models": {"Doc": {"identity": "entity", "fields": {"status": "str"}}}, "contracts": {}, "notes": []}
     md = (
