@@ -8,7 +8,8 @@ otherwise, and by then the decision is weeks old. This step runs the same
 rule at authoring time, through the factory's own catalog binder
 (``tools/emitter_catalog.py --spec``), and shows both decisions at once:
 that the port needs a deterministic block, and the exact closed IR form to
-author (the catalog card's ``ir_skeleton``).
+author (the catalog card's ``ir_skeleton``, or its ``catalog_form`` when the
+boundary is bound by capability rather than by interface).
 
 Authority stays with the factory: this tool never restates a schema. When
 the sibling factory checkout or its catalog tool is unavailable, the step
@@ -20,6 +21,7 @@ admission.
 from __future__ import annotations
 
 import argparse
+import fence
 import json
 import os
 import subprocess
@@ -85,7 +87,7 @@ def coverage(project: Path, factory: Path | None = None) -> dict[str, Any]:
         catalog_available = True
         for port in report.get("unbound_ports", []):
             unbound += 1
-            findings.append({
+            finding = {
                 "severity": "error",
                 "code": "local_port_without_deterministic_backend",
                 "interface": port.get("interface"),
@@ -94,9 +96,17 @@ def coverage(project: Path, factory: Path | None = None) -> dict[str, Any]:
                 "direction": port.get("direction"),
                 "catalog_card": port.get("catalog_card"),
                 "message": (
-                    f"{port.get('interface')}: {port.get('direction')}"
+                    f"{port.get('interface') or port.get('capability') or port.get('module')}: "
+                    f"{port.get('direction')}"
                 ),
-            })
+            }
+            # A boundary that is not a port class (the single host wall-clock
+            # source as a module-level operation) is bound by capability; the
+            # closed form to author is then the card's alternate form.
+            for key in ("capability", "catalog_form"):
+                if port.get(key) is not None:
+                    finding[key] = port[key]
+            findings.append(finding)
     return {
         "schema_version": SCHEMA_VERSION,
         "project_root": project.name,
@@ -106,7 +116,7 @@ def coverage(project: Path, factory: Path | None = None) -> dict[str, Any]:
             "errors": unbound,
             "handoff_ready": unbound == 0,
         },
-        "findings": findings,
+        "findings": fence.enforce(findings),
     }
 
 

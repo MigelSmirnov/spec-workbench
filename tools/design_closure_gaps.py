@@ -40,6 +40,8 @@ import re
 from pathlib import Path
 from typing import Any
 
+import design_stage5
+
 
 def load_spec(case: Path) -> dict[str, Any]:
     return json.loads((case / "global_spec.json").read_text(encoding="utf-8"))
@@ -101,9 +103,27 @@ def check_external_returns(spec: dict[str, Any]) -> list[dict[str, Any]]:
     interfaces = {n for n, d in (spec.get("models") or {}).items()
                   if isinstance(d, dict) and d.get("kind") in {"interface", "protocol"}}
     findings = []
-    for symbol, signature in (spec.get("contracts") or {}).items():
+    contracts = spec.get("contracts") or {}
+    owners = {f: m for m, fs in (spec.get("module_functions") or {}).items() for f in fs}
+
+    def _provided(interface: str) -> bool:
+        """A class outside models that carries every operation of the interface is its provider."""
+        operations = {k.split(".", 1)[1] for k in contracts if k.startswith(interface + ".")} - {"__init__"}
+        if not operations:
+            return False
+        classes = {k.split(".", 1)[0] for k in contracts if "." in k and k.split(".", 1)[0] != interface}
+        for cls in classes:
+            if owners.get(cls, "models") == "models":
+                continue
+            if operations <= {k.split(".", 1)[1] for k in contracts if k.startswith(cls + ".")}:
+                return True
+        return False
+
+    for symbol, signature in contracts.items():
         _, _, ret = str(signature).partition("->")
         for name in model_names_in(ret, interfaces):
+            if _provided(name):
+                continue  # PR #31: the provider is planned and contracted; the return is produced
             if (obligations.get(name) or {}).get("disposition") == "external":
                 findings.append({
                     "code": "external_interface_returned", "model": name, "contract": symbol,
@@ -234,26 +254,24 @@ def modules_with_clock(models: dict[str, Any], contracts: dict[str, Any], func_m
 
 
 def parse_state_impacts(case: Path) -> dict[str, dict[str, Any]]:
-    """Public operations and their State impact from 50_public_apis.md."""
-    path = case / "50_public_apis.md"
-    if not path.is_file():
-        return {}
+    """Public operations and their State impact from the State 5 documents."""
     impacts: dict[str, dict[str, Any]] = {}
-    current: str | None = None
-    in_impact = False
-    for line in path.read_text(encoding="utf-8").splitlines():
-        heading = PUBLIC_OP_HEADING_RE.match(line)
-        if heading:
-            current = heading.group(2)
-            impacts[current] = {"module": heading.group(1), "read_only": False, "impact": ""}
-            in_impact = False
-            continue
-        if line.startswith("### "):
-            in_impact = current is not None and line[4:].strip().casefold() == "state impact"
-            continue
-        if in_impact and current and line.strip() and not impacts[current]["impact"]:
-            impacts[current]["impact"] = line.strip()
-            impacts[current]["read_only"] = bool(READ_ONLY_IMPACT_RE.match(line.strip()))
+    for path in design_stage5.public_api_documents(case):
+        current: str | None = None
+        in_impact = False
+        for line in path.read_text(encoding="utf-8").splitlines():
+            heading = PUBLIC_OP_HEADING_RE.match(line)
+            if heading:
+                current = heading.group(2)
+                impacts[current] = {"module": heading.group(1), "read_only": False, "impact": ""}
+                in_impact = False
+                continue
+            if line.startswith("### "):
+                in_impact = current is not None and line[4:].strip().casefold() == "state impact"
+                continue
+            if in_impact and current and line.strip() and not impacts[current]["impact"]:
+                impacts[current]["impact"] = line.strip()
+                impacts[current]["read_only"] = bool(READ_ONLY_IMPACT_RE.match(line.strip()))
     return impacts
 
 

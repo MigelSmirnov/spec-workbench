@@ -10,6 +10,8 @@ contracts; see ROUTER_IR_GUIDE.
 """
 from __future__ import annotations
 
+import fence
+
 import argparse
 import json
 import re
@@ -33,7 +35,9 @@ PUBLIC_OP_RE = re.compile(
 HEADING_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*$")
 STATE5_RE = re.compile(r"\bState\s+5\b", re.IGNORECASE)
 MODULE_REF_RE = re.compile(r"`(module:[a-z][a-z0-9_]*)`")
+CALLER_REF_RE = re.compile(r"`((?:module|boundary):[a-z][a-z0-9_]*)`")
 BOUNDARY_REF_RE = re.compile(r"^boundary:[a-z][a-z0-9_]*$")
+PLACEHOLDER_RE = re.compile(r"\b(?:TODO|FIXME|TBD)\b|\?\?\?", re.IGNORECASE)
 REQUIRED_SECTIONS = (
     "Owner", "Callers", "Inputs", "Outputs", "Observable effect",
     "Enforces", "Errors", "State impact",
@@ -68,6 +72,25 @@ class Finding:
     operation_key: str
     message: str
     source: SourceRange
+
+
+PUBLIC_API_DOCUMENT = "50_public_apis.md"
+PUBLIC_API_SPLIT_GLOB = "50_public_apis_*.md"
+
+
+def public_api_documents(project: Path) -> list[Path]:
+    """The State 5 documents a post-State-5 reader takes operations from.
+
+    A case keeps its public operations either in the one canonical document or,
+    when that document is absent, split by module into ``50_public_apis_<x>.md``.
+    A case with the canonical document is read from it alone: its sibling
+    ``50_public_apis_*`` files are repairs and reviews, and module slices hashed
+    into Stage 8.1 must not change under them.
+    """
+    canonical = project / PUBLIC_API_DOCUMENT
+    if canonical.is_file():
+        return [canonical]
+    return sorted(path for path in project.glob(PUBLIC_API_SPLIT_GLOB) if path.is_file())
 
 
 def _iter_state5_files(project: Path) -> Iterable[Path]:
@@ -125,6 +148,28 @@ def parse_operations(project: Path) -> list[PublicOpItem]:
 def parse_apis(project: Path) -> list[PublicOpItem]:
     """Backward-compatible Python helper name; payload keys use public operations."""
     return parse_operations(project)
+
+
+def _operation_lines(project: Path, item: PublicOpItem) -> list[str]:
+    path = project / item.source.path
+    lines = path.read_text(encoding="utf-8").splitlines()
+    return lines[item.source.start_line - 1:item.source.end_line]
+
+
+def _subsection_text(project: Path, item: PublicOpItem, heading: str) -> str | None:
+    lines = _operation_lines(project, item)
+    marker = f"### {heading}"
+    for index, line in enumerate(lines):
+        if line != marker:
+            continue
+        start = index + 1
+        while start < len(lines) and not lines[start].strip():
+            start += 1
+        end = start
+        while end < len(lines) and not lines[end].startswith("### "):
+            end += 1
+        return "\n".join(lines[start:end]).strip()
+    return None
 
 
 def _payload(item: PublicOpItem) -> dict[str, object]:
@@ -205,6 +250,10 @@ def coverage(project: Path) -> dict[str, object]:
     known_modules = {entry["key"] for entry in stage3["modules"]}
     known_capabilities = {entry["key"] for entry in stage3["capabilities"]}
     flows = {entry["key"]: entry for entry in stage4["flows"]}
+    capability_usage: dict[str, set[str]] = {}
+    for flow in stage4["flows"]:
+        for capability_ref in flow["capability_refs"]:
+            capability_usage.setdefault(capability_ref, set()).add(flow["key"])
     rows: list[dict[str, object]] = []
     invalid_refs: list[dict[str, str]] = []
 
@@ -232,6 +281,8 @@ def coverage(project: Path) -> dict[str, object]:
                 continue
             if capability not in set(flow["capability_refs"]):
                 missing_flow_evidence.append(flow_key)
+        actual_flow_usage = set(capability_usage.get(capability, set()))
+        extra_flow_evidence = sorted(actual_flow_usage - set(declared_flows))
         item = actual.get(key)
         expected_owner = "module:" + key.removeprefix("public_op:").split(".", 1)[0]
         owner_missing = bool(item is not None and expected_owner not in set(item.module_refs))
@@ -245,15 +296,21 @@ def coverage(project: Path) -> dict[str, object]:
             "expected_owner": expected_owner,
             "owner_missing": owner_missing,
             "flow_evidence_missing": missing_flow_evidence,
+            "actual_flow_usage": sorted(actual_flow_usage),
+            "extra_flow_evidence": extra_flow_evidence,
         })
 
     planned = {entry["key"] for entry in plan["operations"]}
     unplanned = sorted(set(actual) - planned)
+    planned_capabilities = {entry["capability"] for entry in plan["operations"]}
+    flow_capabilities = set(capability_usage)
+    unowned_flow_capabilities = sorted(flow_capabilities - planned_capabilities)
     complete = sum(
         1 for row in rows
         if row["implemented"]
         and not row["owner_missing"]
         and not row["flow_evidence_missing"]
+        and not row["extra_flow_evidence"]
         and not row["invalid_callers"]
     )
     return {
@@ -266,10 +323,12 @@ def coverage(project: Path) -> dict[str, object]:
             "remaining": len(rows) - complete,
             "invalid_refs": len(invalid_refs),
             "unplanned_operations": len(unplanned),
+            "unowned_flow_capabilities": len(unowned_flow_capabilities),
         },
         "operations": rows,
         "invalid_refs": invalid_refs,
         "unplanned_operations": unplanned,
+        "unowned_flow_capabilities": unowned_flow_capabilities,
     }
 
 
@@ -280,6 +339,7 @@ def next_operation(project: Path) -> dict[str, object]:
             not row["implemented"]
             or row["owner_missing"]
             or row["flow_evidence_missing"]
+            or row["extra_flow_evidence"]
             or row["invalid_callers"]
         ):
             return {"schema_version": COVERAGE_SCHEMA, "project_root": project.resolve().name,
@@ -306,10 +366,23 @@ def lint(project: Path) -> dict[str, object]:
             if required.casefold() not in sections:
                 findings.append(Finding("error", "missing_public_op_section", item.key,
                                         f"Required State 5 section {required!r} is absent.", item.source))
+
         expected_owner = "module:" + item.module
-        if expected_owner not in set(item.module_refs):
-            findings.append(Finding("error", "missing_public_op_owner", item.key,
-                                    f"Owner section must explicitly reference {expected_owner!r}.", item.source))
+        owner_text = _subsection_text(project, item, "Owner") or ""
+        owner_refs = set(MODULE_REF_RE.findall(owner_text))
+        if expected_owner not in owner_refs:
+            findings.append(Finding(
+                "error", "missing_public_op_owner", item.key,
+                f"Owner section must explicitly reference {expected_owner!r}.", item.source,
+            ))
+
+        body = "\n".join(_operation_lines(project, item))
+        placeholder = PLACEHOLDER_RE.search(body)
+        if placeholder:
+            findings.append(Finding(
+                "error", "public_op_placeholder", item.key,
+                f"Public operation contains placeholder marker {placeholder.group(0)!r}.", item.source,
+            ))
 
     if _load_plan(project, required=False) is not None:
         report = coverage(project)
@@ -327,26 +400,54 @@ def lint(project: Path) -> dict[str, object]:
                 "error", "invalid_plan_ref", invalid["operation"], message,
                 SourceRange(DEFAULT_PLAN_FILE, 1, 1),
             ))
+        for capability in report["unowned_flow_capabilities"]:
+            findings.append(Finding(
+                "error", "flow_capability_without_public_op", capability,
+                f"State 4 capability {capability!r} is used by a reviewed flow but has no State 5 public operation.",
+                SourceRange(DEFAULT_PLAN_FILE, 1, 1),
+            ))
+        items_by_key = {item.key: item for item in items}
+        plan_by_key = {entry["key"]: entry for entry in _load_plan(project, required=True)["operations"]}
         for row in report["operations"]:
             if row["flow_evidence_missing"]:
                 findings.append(Finding("error", "missing_flow_evidence", row["key"],
                                         "Planned public operation capability is not explicitly used by every declared State 4 flow: "
                                         + ", ".join(row["flow_evidence_missing"]),
                                         SourceRange(DEFAULT_PLAN_FILE, 1, 1)))
+            if row["extra_flow_evidence"]:
+                findings.append(Finding(
+                    "error", "public_op_flow_lineage_mismatch", row["key"],
+                    "State 5 flow lineage must exactly match every reviewed State 4 flow that uses the capability; "
+                    f"declared={sorted(row['flows'])} actual={row['actual_flow_usage']}.",
+                    SourceRange(DEFAULT_PLAN_FILE, 1, 1),
+                ))
+            item = items_by_key.get(row["key"])
+            if item is not None:
+                callers_text = _subsection_text(project, item, "Callers") or ""
+                documented_callers = set(CALLER_REF_RE.findall(callers_text))
+                planned_callers = set(plan_by_key[row["key"]].get("callers") or [])
+                if documented_callers != planned_callers:
+                    findings.append(Finding(
+                        "error", "public_op_callers_mismatch", row["key"],
+                        "Callers section must exactly match the State 5 plan; "
+                        f"plan={sorted(planned_callers)} doc={sorted(documented_callers)}.",
+                        item.source,
+                    ))
         for key in report["unplanned_operations"]:
             item = next((candidate for candidate in items if candidate.key == key), None)
             if item is not None:
                 findings.append(Finding("warning", "unplanned_public_op", key,
                                         "Public operation exists but is not declared in the explicit State 5 plan.", item.source))
 
+    fenced_findings = fence.enforce([asdict(f) for f in findings])
     return {
         "schema_version": LINT_SCHEMA,
         "summary": {
             "operations": len(items),
-            "errors": sum(f.severity == "error" for f in findings),
-            "warnings": sum(f.severity == "warning" for f in findings),
+            "errors": fence.stops(fenced_findings),
+            "warnings": 0,
         },
-        "findings": [asdict(f) for f in findings],
+        "findings": fenced_findings,
     }
 
 
@@ -411,7 +512,11 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
     if args.lint and payload["summary"]["errors"]:
         return 1
-    if args.coverage and (payload["summary"]["invalid_refs"] or payload["summary"]["remaining"]):
+    if args.coverage and (
+        payload["summary"]["invalid_refs"]
+        or payload["summary"]["remaining"]
+        or payload["summary"]["unowned_flow_capabilities"]
+    ):
         return 1
     if args.handoff and payload["lint_summary"]["errors"]:
         return 1

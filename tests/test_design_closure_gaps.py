@@ -56,7 +56,7 @@ def test_table_without_writer(tmp_path):
     assert codes(report) == ["table_without_writer"]
 
 
-def test_admission_fa012_blocks_unwaived_findings_and_honours_waivers(tmp_path):
+def test_admission_fa012_blocks_findings_and_refuses_waivers(tmp_path):
     import json as _json
     from factory_admission_workbench.service import _closure_gaps_check
 
@@ -75,14 +75,12 @@ def test_admission_fa012_blocks_unwaived_findings_and_honours_waivers(tmp_path):
         "waivers": [{"code": "orphan_read_entity", "model": "Ghost",
                      "reason": "produced by the peer system; frozen jointly", "decided": "2026-08-24"}],
     }), encoding="utf-8")
+    # the fence: a waiver is a decision nobody made — it never silences anything
     waived = _closure_gaps_check(case)
-    assert waived.status == "PASS" and waived.evidence["waived"] == 1
-
-    # a waiver without a reason must not silence anything
-    (case / "closure_gap_waivers.json").write_text(_json.dumps({
-        "waivers": [{"code": "orphan_read_entity", "model": "Ghost"}],
-    }), encoding="utf-8")
-    assert _closure_gaps_check(case).status == "BLOCK"
+    assert waived.status == "BLOCK"
+    assert len(waived.evidence["waivers"]) == 1
+    assert "record each decision in State 2" in waived.summary
+    assert waived.evidence["hint"]
 
 
 def _time_case(tmp_path: Path, spec: dict, public_apis_md: str | None = None) -> Path:

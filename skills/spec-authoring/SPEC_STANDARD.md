@@ -941,6 +941,170 @@ Argon2id (`profile`) над `HMAC-SHA256(pepper, secret)`; проверка —
 `ValueError` при выпуске и проверке. Секрет и pepper никогда не входят в
 текст исключений.
 
+### 6.7 `canonical_digest_backend/v1`
+
+`rules.canonical_digest_backend` версии 1 — закрытый IR канонических
+дайджестов проекта: сохраняемых ключей, идентичностей содержимого и
+хешей запросов, которые прежде описывались прозой в notes каждого
+потребителя и переизобретались генерацией в каждом модуле (четыре
+написания «канонического JSON» в одном дереве, duck-typed `hasattr`
+перед `model_dump`). Единственный emitter — `python_canonical_json_digest_v1`.
+
+Форма закрыта:
+
+```json
+{
+  "kind": "canonical_digest_backend",
+  "schema_version": 1,
+  "backend": {"emitter": "python_canonical_json_digest_v1"},
+  "wiring": {"module": "<module>"},
+  "recipes": {
+    "<recipe_name>": {
+      "input": "model",
+      "exclude_fields": ["<field>"],
+      "datetime_normalization": "utc"
+    },
+    "<other_recipe>": {"input": "json_text"},
+    "<third_recipe>": {"input": "string_tuple"}
+  }
+}
+```
+
+Модуль `wiring.module` владеет ровно одной функцией на рецепт, в порядке
+объявления, с контрактом, фиксированным полем `input`:
+
+```text
+<recipe_name>(model: BaseModel) -> str          # input: model
+<recipe_name>(text: str) -> str                 # input: json_text
+<recipe_name>(values: tuple[str, ...]) -> str   # input: string_tuple
+```
+
+Процедура одна для всех рецептов и фиксирована версией: канонический JSON
+(ключи отсортированы, разделители компактные, `ensure_ascii` False,
+UTF-8) под SHA-256, строчный hex. Для `model` значение — сериализация
+модели в JSON-режиме после исключения `exclude_fields`; при
+`datetime_normalization: utc` каждый datetime нормализуется к UTC (наивный
+принимается как UTC, aware — конвертируется), при `none` — сериализуется
+как есть. Для `json_text` документ разбирается и сериализуется заново
+канонически. Для `string_tuple` дайджест берётся от JSON-массива строк.
+Ключи рецепта закрыты: `model` требует все три поля, остальные входы —
+только `input`. Потребитель называет рецепт по имени функции; note не
+воспроизводит процедуру. Фокусная проверка эмиттера — вектор на фикстуре
+с offset-aware datetime и не-ASCII строкой.
+
+### 6.8 `time_source_policy/v1`
+
+`rules.time_source_policy` версии 1 — единственное место, где спека
+объявляет, откуда сгенерированный код берёт время. Воркбенч доказывает, что
+источник времени объявлен; фабрика по этому блоку доказывает, что Python-код
+объявлению подчиняется (гейт `python_time_source_conformance`,
+`tools/python_time_source_gate.py`). Имена модулей, типа и поля — значения
+ячеек; словарь примитивов и конверсий закрыт версией
+(`tools/time_source_policy.py`).
+
+```json
+{
+  "kind": "time_source_policy",
+  "schema_version": 1,
+  "wall_clock": {
+    "authority_modules": ["<module>"],
+    "allowed_primitives": ["time.time_ns"],
+    "single_host_source": true,
+    "samples_per_read": 1
+  },
+  "elapsed_time": {
+    "authority_modules": ["<module>"],
+    "allowed_primitives": ["time.monotonic_ns"]
+  },
+  "representation": {
+    "type": "<Model>", "field": "<field>",
+    "unit": "epoch_us", "conversion": "floor_ns_to_us"
+  }
+}
+```
+
+- `wall_clock` обязателен; `elapsed_time`, `representation` и
+  `samples_per_read` — по необходимости. Отсутствующий `elapsed_time` означает,
+  что измерять длительность не вправе никто.
+- `authority_modules` — модули из `module_functions`. Пустой список вместе с
+  пустым `allowed_primitives` означает «настенные часы не читает никто».
+- `single_host_source: true` требует ровно одного модуля и ровно одного
+  примитива; этот модуль обязан принадлежать детерминированному backend-у
+  (§6.9), иначе `local_implementation_requires_deterministic_backend`.
+- `conversion` — из закрытого набора `identity_ns`, `floor_ns_to_us`,
+  `floor_ns_to_ms`, `floor_ns_to_s`; `unit` обязан совпадать с тем, что даёт
+  конверсия, единица примитива — с её входом, а `models.<type>.fields.<field>`
+  обязан быть `int`.
+
+Что блокирует гейт (любая находка = BLOCK, в черновике и в линкере):
+
+| код | смысл |
+|---|---|
+| `undeclared_wall_clock_access` | модуль без полномочия читает настенные часы |
+| `alternate_wall_clock_source` | второй читатель при едином источнике, либо неразрешённый примитив внутри полномочного модуля |
+| `clock_dependency_bypassed` | модуль, которому спека выдала часы (импорт полномочного модуля или его интерфейс в сигнатуре), читает часы хоста сам |
+| `undeclared_elapsed_clock_access` | модуль без полномочия измеряет длительность |
+| `disallowed_elapsed_clock_primitive` | полномочный модуль измеряет неразрешённым примитивом |
+| `wall_clock_used_for_elapsed_duration` | длительность как разность двух показаний настенных часов (в том числе полученных через выданные часы) |
+| `clock_representation_mismatch` | операция чтения возвращает не `<type>(<field>=<одно показание через conversion>)` |
+| `wall_clock_sample_count_mismatch` | число показаний за одно чтение отличается от `samples_per_read` |
+
+Кому выданы часы и через какие имена — выводится из спеки
+(`imports.module_internal`, `implementation_obligations`, сигнатуры
+контрактов) и в блоке не повторяется. Спека без блока находится вне гейта:
+необъявленное полномочие проверить нельзя. Код детерминированных backend-ов
+проверяется против политики уже в `validate_spec`, до Route B.
+
+### 6.9 `system_clock_backend/v1`, `/v2`
+
+Значение, которое возвращают часы, — внешнее наблюдение и от вызова к вызову
+различно; код адаптера часов полностью определён спекой. Поэтому модуль
+часов понижается детерминированно и в LLM-генерацию не попадает.
+`determinism.*: false` для показания часов этому не противоречит.
+
+Версия 1 (`python_system_utc_clock_v1`) — один конкретный класс порта `Clock`,
+чей `now` возвращает timezone-aware UTC `datetime`:
+
+```json
+{
+  "kind": "system_clock_backend",
+  "schema_version": 1,
+  "backend": {"emitter": "python_system_utc_clock_v1"},
+  "wiring": {"module": "<module>", "concrete_class": "<Class>",
+             "interface": "Clock", "models_module": "<models module>"},
+  "time": {"source": "system_utc",
+           "representation": "timezone_aware_utc_datetime",
+           "read": "per_call"}
+}
+```
+
+Версия 2 (`python_host_epoch_clock_v1`) — одна модульная операция,
+возвращающая каноническое целочисленное мгновение:
+
+```json
+{
+  "kind": "system_clock_backend",
+  "schema_version": 2,
+  "backend": {"emitter": "python_host_epoch_clock_v1"},
+  "wiring": {"module": "<module>", "function": "<function>",
+             "models_module": "<models module>"},
+  "time": {"policy": "rules.time_source_policy", "read": "per_call"}
+}
+```
+
+Примитив, число показаний и представление в backend-е не повторяются: они
+читаются из `rules.time_source_policy` (§6.8) — тех же ячеек, по которым гейт
+проверяет все остальные модули. Версия 2 требует: `single_host_source: true`
+с `wiring.module` как единственным полномочным модулем, примитив
+`time.time_ns`, `samples_per_read: 1`, объявленный `representation`;
+`module_functions[<module>] == ["<function>"]` и контракт
+`<function>: "() -> <representation.type>"`. Lowering фиксирован версией:
+одно показание, целочисленное деление вниз на делитель конверсии,
+конструирование `<type>(<field>=...)`; ни кеша, ни входного «текущего
+времени», ни арифметики повторов, хранения, троттлинга или авторизации.
+Любая иная ячейка, примитив или форма результата — дефект валидации, а не
+повод отдать модуль генерации.
+
 ---
 
 ## 7. imports

@@ -46,6 +46,28 @@ def test_gate_accepts_addressed_classified_notes(tmp_path):
     assert report["summary"]["handoff_ready"] is True
 
 
+def test_gate_resolves_model_construct_from_model_closure(tmp_path):
+    project = _project(
+        tmp_path,
+        "parse: [RETURN_SHAPE] MUST return the selected member from = models.ParseKind.\n",
+    )
+    (tmp_path / "60_model_closure_domain.json").write_text(
+        json.dumps({
+            "schema_version": "spec_workbench_model_closure.v1",
+            "status": "closed",
+            "models": {
+                "ParseKind": {"kind": "enum", "values": ["known", "unknown"]}
+            },
+        }),
+        encoding="utf-8",
+    )
+
+    report = gate.coverage(project)
+
+    assert "unresolved_structured_reference" not in _codes(report)
+    assert report["summary"]["handoff_ready"] is True
+
+
 def test_gate_blocks_unknown_scope_class_and_dangling_reference(tmp_path):
     project = _project(
         tmp_path,
@@ -79,7 +101,9 @@ def test_gate_requires_review_for_competing_failure_outcomes(tmp_path):
     )
     report = gate.coverage(project)
     assert "suspicious_note_class_pair" in _codes(report)
-    assert report["summary"]["reviews"] == 1
+    # the fence: a note that needs review blocks
+    assert report["summary"]["reviews"] == 0
+    assert report["summary"]["blocks"] >= 1
     assert report["summary"]["handoff_ready"] is False
 
 
@@ -180,3 +204,99 @@ def test_open_persistence_closure_does_not_suppress_note_requirement(tmp_path, m
     assert "missing_callable_note" in _codes(report)
     assert "InvoiceRepository.get_invoice" not in report["deterministic_callables"]
     assert report["summary"]["handoff_ready"] is False
+
+
+def _table_project(tmp_path, notes: str, contracts: dict | None = None):
+    project = _project(tmp_path, notes)
+    if contracts is not None:
+        (tmp_path / "60_contracts.json").write_text(
+            json.dumps({
+                "schema_version": "spec_workbench_state6_contracts.v1",
+                "contracts": contracts,
+            }),
+            encoding="utf-8",
+        )
+    (tmp_path / "60_model_closure_domain.json").write_text(
+        json.dumps({
+            "schema_version": "spec_workbench_model_closure.v1",
+            "status": "closed",
+            "models": {
+                "GrantRule": {
+                    "identity": "value",
+                    "fields": {"channel": "str", "capability": "str", "operation": "str"},
+                },
+            },
+        }),
+        encoding="utf-8",
+    )
+    (tmp_path / "global_spec.json").write_text(
+        json.dumps({
+            "standard_version": 2,
+            "rules": {
+                "data_provider_backend": {
+                    "kind": "data_provider_backend",
+                    "schema_version": 1,
+                    "backend": {"emitter": "python_constant_data_v1"},
+                    "wiring": {"module": "data_provider", "models_module": "app.models"},
+                    "constants": {
+                        "GRANTS": {
+                            "value_type": "record_tuple",
+                            "row_model": "GrantRule",
+                            "value": [{"channel": "plugin", "capability": "invoice.get",
+                                       "operation": "get_invoice"}],
+                        },
+                        "PREFIX": {"value_type": "string", "value": "man-"},
+                    },
+                }
+            },
+        }),
+        encoding="utf-8",
+    )
+    return project
+
+
+def test_table_named_without_access_is_blocked_with_prescription(tmp_path):
+    # the measured failure phrasing: the table is named, the match is not
+    project = _table_project(
+        tmp_path,
+        "parse: [SECURITY_BOUNDARY] MUST validate the exact pair against the imported GRANTS rows before granting.\n",
+    )
+    report = gate.coverage(project)
+    assert "table_access_unnamed" in _codes(report)
+    finding = next(f for f in report["findings"] if f["code"] == "table_access_unnamed")
+    assert "channel, capability, operation" in finding["hint"]
+    assert "GRANTS row whose" in finding["hint"]
+
+
+def test_table_access_named_in_row_vocabulary_passes(tmp_path):
+    project = _table_project(
+        tmp_path,
+        "parse: [SECURITY_BOUNDARY] MUST require one imported GRANTS row whose channel equals the request channel and capability equals the requested capability.\n",
+    )
+    report = gate.coverage(project)
+    assert "table_access_unnamed" not in _codes(report)
+
+
+def test_table_access_delegation_chain_passes(tmp_path):
+    project = _table_project(
+        tmp_path,
+        "outer: [ORCHESTRATION] MUST check every row of the imported GRANTS table through middle.\n"
+        "middle: [ORCHESTRATION] MUST delegate the exact match to owner once.\n"
+        "owner: [DETERMINISM_OR_ORDERING] MUST match the imported GRANTS row by capability and channel equality.\n",
+        contracts={
+            "outer": "(x: str) -> None",
+            "middle": "(x: str) -> None",
+            "owner": "(x: str) -> None",
+        },
+    )
+    report = gate.coverage(project)
+    assert "table_access_unnamed" not in _codes(report)
+
+
+def test_scalar_constants_stay_exempt(tmp_path):
+    project = _table_project(
+        tmp_path,
+        "parse: [PROVENANCE] MUST derive the identifier from the imported PREFIX constant.\n",
+    )
+    report = gate.coverage(project)
+    assert "table_access_unnamed" not in _codes(report)

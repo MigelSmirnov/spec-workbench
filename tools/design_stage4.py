@@ -8,6 +8,8 @@ The tool then reports coverage and the next missing flow without authoring it.
 """
 from __future__ import annotations
 
+import fence
+
 import argparse
 import json
 import re
@@ -194,18 +196,30 @@ def coverage(project: Path) -> dict[str, object]:
             if ref not in known_capabilities:
                 invalid_plan_refs.append({"flow": key, "ref": ref, "kind": "capability"})
         flow = actual.get(key)
+        actual_modules = set(flow.module_refs if flow else ())
+        actual_capabilities = set(flow.capability_refs if flow else ())
         rows.append({
             "key": key,
             "purpose": entry["purpose"],
             "implemented": flow is not None,
             "required_modules": required_modules,
             "candidate_capabilities": candidate_capabilities,
-            "missing_required_modules": sorted(set(required_modules) - set(flow.module_refs if flow else ())),
-            "missing_candidate_capabilities": sorted(set(candidate_capabilities) - set(flow.capability_refs if flow else ())),
+            "missing_required_modules": sorted(set(required_modules) - actual_modules),
+            "extra_module_refs": sorted(actual_modules - set(required_modules)),
+            "missing_candidate_capabilities": sorted(set(candidate_capabilities) - actual_capabilities),
+            "extra_capability_refs": sorted(actual_capabilities - set(candidate_capabilities)),
         })
     planned_keys = {entry["key"] for entry in plan["flows"]}
     unplanned = sorted(set(actual) - planned_keys)
-    complete = sum(1 for row in rows if row["implemented"] and not row["missing_required_modules"] and not row["missing_candidate_capabilities"])
+    complete = sum(
+        1
+        for row in rows
+        if row["implemented"]
+        and not row["missing_required_modules"]
+        and not row["extra_module_refs"]
+        and not row["missing_candidate_capabilities"]
+        and not row["extra_capability_refs"]
+    )
     return {
         "schema_version": COVERAGE_SCHEMA,
         "project_root": project.resolve().name,
@@ -226,7 +240,13 @@ def coverage(project: Path) -> dict[str, object]:
 def next_flow(project: Path) -> dict[str, object]:
     report = coverage(project)
     for row in report["flows"]:
-        if not row["implemented"] or row["missing_required_modules"] or row["missing_candidate_capabilities"]:
+        if (
+            not row["implemented"]
+            or row["missing_required_modules"]
+            or row["extra_module_refs"]
+            or row["missing_candidate_capabilities"]
+            or row["extra_capability_refs"]
+        ):
             return {
                 "schema_version": COVERAGE_SCHEMA,
                 "project_root": project.resolve().name,
@@ -273,18 +293,39 @@ def lint(project: Path) -> dict[str, object]:
         for invalid in coverage_report["invalid_plan_refs"]:
             source = SourceRange(DEFAULT_PLAN_FILE, 1, 1)
             findings.append(Finding("error", "invalid_plan_ref", invalid["flow"], f"Planned {invalid['kind']} reference {invalid['ref']!r} does not exist in State 3.", source))
+        rows_by_key = {row["key"]: row for row in coverage_report["flows"]}
+        flows_by_key = {flow.key: flow for flow in flows}
+        for key, row in rows_by_key.items():
+            flow = flows_by_key.get(key)
+            if flow is None:
+                continue
+            if row["missing_required_modules"] or row["extra_module_refs"]:
+                findings.append(Finding(
+                    "error", "flow_module_refs_mismatch", key,
+                    "Reviewed flow module references must exactly match the State 4 plan; "
+                    f"missing={row['missing_required_modules']} extra={row['extra_module_refs']}.",
+                    flow.source,
+                ))
+            if row["missing_candidate_capabilities"] or row["extra_capability_refs"]:
+                findings.append(Finding(
+                    "error", "flow_capability_refs_mismatch", key,
+                    "Reviewed flow capability references must exactly match the State 4 plan; "
+                    f"missing={row['missing_candidate_capabilities']} extra={row['extra_capability_refs']}.",
+                    flow.source,
+                ))
         for key in coverage_report["unplanned_flows"]:
-            flow = next((item for item in flows if item.key == key), None)
+            flow = flows_by_key.get(key)
             if flow is not None:
                 findings.append(Finding("warning", "unplanned_flow", key, "Flow exists but is not declared in the explicit State 4 flow plan.", flow.source))
+    fenced_findings = fence.enforce([asdict(f) for f in findings])
     return {
         "schema_version": LINT_SCHEMA,
         "summary": {
             "flows": len(flows),
-            "errors": sum(f.severity == "error" for f in findings),
-            "warnings": sum(f.severity == "warning" for f in findings),
+            "errors": fence.stops(fenced_findings),
+            "warnings": 0,
         },
-        "findings": [asdict(f) for f in findings],
+        "findings": fenced_findings,
     }
 
 

@@ -64,7 +64,7 @@ def test_flow_slice_collects_only_participating_contracts_and_notes(tmp_path, mo
         "request_publication",
     }
     assert {note["scope"] for note in payload["notes"]} == {"create_remote", "request_publication"}
-    assert payload["review_protocol"]["allowed_results"] == ["PASS", "PASS_INTERNAL_VARIATION", "AMBIGUITY"]
+    assert payload["review_protocol"]["allowed_results"] == ["PASS", "AMBIGUITY"]
 
 
 def test_flow_slice_rejects_unknown_flow(tmp_path, monkeypatch):

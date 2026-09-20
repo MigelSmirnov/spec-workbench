@@ -362,3 +362,7 @@ and `experiments/` only; `python tools/tools_ownership_check.py --base origin/ma
 is the pre-push check and the CI gate. Project-owned deterministic backends are
 declared in `examples/<project>/workbench_extensions.json` and loaded through
 `tools/project_extensions.py`.
+
+Project-local executable gates are not supported. A design invariant discovered
+on one project must be promoted to the shared root Workbench pipeline before it
+can become a mandatory gate for applications.

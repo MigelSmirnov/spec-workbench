@@ -6,8 +6,8 @@ from typing import Any
 REPORT_SCHEMA = "spec_workbench_assembly_verification.v1"
 INSPECTION_SCHEMA = "spec_workbench_assembly_check.v1"
 CHECK_ORDER = (
-    "language", "modules", "identity", "data", "contracts", "external_contracts",
-    "notes", "router", "persistence",
+    "language", "modules", "identity", "fields", "data", "contracts", "external_contracts",
+    "notes", "closure_gaps", "router", "persistence", "witness", "flows",
 )
 
 class AssemblyWorkbenchError(ValueError):

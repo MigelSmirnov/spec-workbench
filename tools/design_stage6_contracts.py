@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Any
 
 import design_closure_gaps
+import fence
 import design_stage3
 import design_stage5
 import design_stage5_exposure
@@ -200,6 +201,8 @@ def coverage(project: Path) -> dict[str, Any]:
     for item in _time_source_findings(project, rows):
         findings.append({**item, "severity": "warning"})
 
+    findings.extend(_interface_provider_findings(project, rows))
+
     plan_closed = plan["status"] == "closed"
     if not plan_closed:
         findings.append({
@@ -207,7 +210,8 @@ def coverage(project: Path) -> dict[str, Any]:
             "code":"contract_plan_open",
             "message":"State 6 function inventory remains open; review and add required internal functions before handoff.",
         })
-    errors = sum(item["severity"] == "error" for item in findings)
+    findings = fence.enforce(findings)
+    errors = fence.stops(findings)
     ready = plan_closed and not unresolved and errors == 0
     return {
         "schema_version": COVERAGE_SCHEMA,
@@ -289,17 +293,146 @@ def _time_source_findings(project: Path, rows: list[dict[str, Any]]) -> list[dic
     return design_closure_gaps.fresh_timestamp_findings(models, contracts, func_module, impacts)
 
 
+NOTES_FILE = "80_notes.md"
+MODULE_OWNED_RE = re.compile(r"module-owned")
+
+
+def _camel(module: str) -> str:
+    return "".join(part.capitalize() for part in module.split("_") if part)
+
+
+def _interface_provider_findings(project: Path, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """An interface a module hands out must have a declared implementation.
+
+    A class whose methods are planned only under ``module:models`` is a port:
+    it has operations and no constructor of its own. When a function returns
+    such a port and no planned class outside ``models`` carries the port's
+    operations, the concrete provider exists nowhere in the design — and a
+    note saying "construct the module-owned concrete InvoicePackageStream"
+    is an obligation without a surface. Every generation then invents a
+    private class or leaves the function a stub. The finding names the
+    provider the plan must declare, method by method, so the repair is a
+    plan edit and not a guess."""
+    classes: dict[str, dict[str, set[str]]] = {}
+    for row in rows:
+        function = row["function"]
+        if "." not in function:
+            continue
+        owner, method = function.split(".", 1)
+        bucket = classes.setdefault(owner, {"modules": set(), "methods": set()})
+        bucket["modules"].add(str(row.get("module") or ""))
+        bucket["methods"].add(method)
+    interfaces = {
+        name: bucket["methods"] - {"__init__"}
+        for name, bucket in classes.items()
+        if bucket["modules"] == {"module:models"} and bucket["methods"] - {"__init__"}
+    }
+    if not interfaces:
+        return []
+
+    signatures = {row["function"]: row["signature"] for row in rows if row["resolved"]}
+    notes_text = ""
+    notes_path = project / NOTES_FILE
+    if notes_path.is_file():
+        try:
+            notes_text = notes_path.read_text(encoding="utf-8")
+        except OSError:
+            notes_text = ""
+
+    findings: list[dict[str, Any]] = []
+    for interface in sorted(interfaces):
+        operations = sorted(interfaces[interface])
+        providers = sorted(
+            name for name, bucket in classes.items()
+            if name != interface and "module:models" not in bucket["modules"]
+            and set(operations) <= bucket["methods"]
+        )
+        if providers:
+            continue
+        returners: list[tuple[str, str]] = []
+        for row in rows:
+            function = row["function"]
+            signature = signatures.get(function)
+            if function.startswith(interface + ".") or not isinstance(signature, str) or "->" not in signature:
+                continue
+            if re.search(rf"\b{re.escape(interface)}\b", signature.rsplit("->", 1)[1]):
+                returners.append((str(row.get("module") or "").removeprefix("module:"), function))
+        owned_by_note = sorted({
+            module for module, function in returners
+            if any(
+                MODULE_OWNED_RE.search(line) and re.search(rf"\b{re.escape(interface)}\b", line)
+                for line in notes_text.splitlines()
+                if line.startswith(function + ":")
+            )
+        })
+        if not returners:
+            continue
+        modules = owned_by_note or sorted({module for module, _ in returners})
+        suggested = {module: f"{_camel(module)}{interface}" for module in modules}
+        plan_entries = [
+            {"function": f"{suggested[module]}.{method}", "module": f"module:{module}", "visibility": "internal"}
+            for module in modules
+            for method in ["__init__", *operations]
+        ]
+        contract_entries = {
+            f"{suggested[module]}.{method}": signatures.get(f"{interface}.{method}", "unresolved")
+            for module in modules
+            for method in operations
+        }
+        where = ", ".join(f"{module}.{function}" for module, function in returners)
+        findings.append({
+            "severity": "error",
+            "code": "interface_without_provider",
+            "message": (
+                f"{interface} is returned by {where}"
+                + (" (its note requires a module-owned concrete implementation)" if owned_by_note else "")
+                + f" and no planned class outside module:models implements {', '.join(operations)}. "
+                f"Declare the provider in {DEFAULT_PLAN_FILE}: internal functions "
+                + ", ".join(f"{suggested[m]}.__init__ and {suggested[m]}.{{{', '.join(operations)}}}" for m in modules)
+                + f" under {', '.join('module:' + m for m in modules)}; resolve them in {DEFAULT_CATALOG_FILE} "
+                f"(the interface signatures: {'; '.join(f'{op}: {signatures.get(interface + '.' + op, 'unresolved')}' for op in operations)}); "
+                f"then note each method in {NOTES_FILE}. Or return the interface from a provider another module declares."
+            ),
+            "interface": interface,
+            "operations": operations,
+            "returned_by": [f"{module}.{function}" for module, function in returners],
+            "modules": modules,
+            "prescription": {
+                "plan_entries": plan_entries,
+                "contract_entries": contract_entries,
+                "note_scopes": sorted(contract_entries),
+            },
+        })
+    return findings
+
+
 def lint(project: Path) -> dict[str, Any]:
     report = coverage(project)
     return {
         "schema_version": LINT_SCHEMA,
         "project_root": report["project_root"],
-        "summary": {**report["summary"], "warnings": sum(item["severity"] == "warning" for item in report["findings"])},
+        "summary": {**report["summary"], "warnings": 0},
         "findings": report["findings"],
     }
 
 
 def next_function(project: Path) -> dict[str, Any]:
+    plan_path = project / DEFAULT_PLAN_FILE
+    catalog_path = project / DEFAULT_CATALOG_FILE
+    if not plan_path.is_file() or not catalog_path.is_file():
+        return {
+            "schema_version": NEXT_SCHEMA,
+            "project_root": project.resolve().name,
+            "complete": False,
+            "initialization_required": True,
+            "next": None,
+            "summary": {
+                "plan_exists": plan_path.is_file(),
+                "catalog_exists": catalog_path.is_file(),
+            },
+            "required_files": [DEFAULT_PLAN_FILE, DEFAULT_CATALOG_FILE],
+        }
+
     report = coverage(project)
     function = report["unresolved_functions"][0] if report["unresolved_functions"] else None
     row = next((item for item in report["functions"] if item["function"] == function), None)
@@ -307,6 +440,7 @@ def next_function(project: Path) -> dict[str, Any]:
         "schema_version": NEXT_SCHEMA,
         "project_root": report["project_root"],
         "complete": function is None and report["summary"]["handoff_ready"],
+        "initialization_required": False,
         "next": row,
         "summary": report["summary"],
     }
@@ -337,7 +471,10 @@ def handoff(project: Path) -> dict[str, Any]:
 def _human(action: str, payload: dict[str, Any]) -> str:
     summary = payload["summary"]
     if action == "next":
-        target = payload["next"]["function"] if payload["next"] else "complete"
+        if payload.get("initialization_required"):
+            target = f"initialize {DEFAULT_PLAN_FILE} and {DEFAULT_CATALOG_FILE}"
+        else:
+            target = payload["next"]["function"] if payload["next"] else "complete"
         return f"State 6 contracts next: {target}\n"
     return (
         f"State 6 contracts: {summary['resolved']}/{summary['planned_functions']} resolved; "

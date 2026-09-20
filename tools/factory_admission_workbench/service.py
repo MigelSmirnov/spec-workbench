@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import fence
+
 import hashlib
 import json
 import re
@@ -21,7 +23,7 @@ from factory_admission_workbench.model import (
     CHECK_BLOCK,
     CHECK_NOT_APPLICABLE,
     CHECK_PASS,
-    CHECK_WARNING,
+    CHECK_BLOCK,
     REPORT_SCHEMA,
     AdmissionCheck,
 )
@@ -80,8 +82,8 @@ def _source_clean_check(metadata: dict[str, Any], allow_dirty_source: bool) -> A
         if allow_dirty_source:
             return AdmissionCheck(
                 "FA001",
-                CHECK_WARNING,
-                "Dirty Workbench source was explicitly allowed; handoff will be non-reproducible.",
+                CHECK_BLOCK,
+                "Workbench checkout is dirty; the fence accepts no dirty source even when asked — commit the accepted source first.",
                 metadata,
             )
         return AdmissionCheck(
@@ -93,7 +95,7 @@ def _source_clean_check(metadata: dict[str, Any], allow_dirty_source: bool) -> A
     if metadata.get("dirty") is None:
         return AdmissionCheck(
             "FA001",
-            CHECK_WARNING,
+            CHECK_BLOCK,
             "Workbench git cleanliness could not be determined.",
             metadata,
         )
@@ -114,7 +116,7 @@ def _target_identity_check(case_root: Path | None, project: str) -> AdmissionChe
     if not manifest_path.is_file():
         return AdmissionCheck(
             "FA014",
-            CHECK_WARNING,
+            CHECK_BLOCK,
             "Case has no pinned Factory target; the CLI project name is not independently verified.",
             {
                 "case": case_root.name,
@@ -168,6 +170,10 @@ def _review_check(case_root: Path | None) -> AdmissionCheck:
     ledger = _load_json(ledger_path)
     summary = ledger.get("summary", {})
     modules = ledger.get("modules", [])
+    not_passed = sorted(
+        item["module"] for item in modules
+        if isinstance(item, dict) and item.get("review_status") != "PASS"
+    )
     closed = (
         ledger.get("status") == "closed"
         and summary.get("reviewed") == summary.get("module_count")
@@ -175,7 +181,16 @@ def _review_check(case_root: Path | None) -> AdmissionCheck:
         and summary.get("ambiguities") == 0
         and summary.get("pending") == 0
         and summary.get("stale") == 0
+        and not not_passed
     )
+    if not_passed:
+        return AdmissionCheck(
+            "FA002",
+            CHECK_BLOCK,
+            f"{len(not_passed)} module review(s) are not PASS ({', '.join(not_passed[:6])}{'…' if len(not_passed) > 6 else ''}): "
+            "a mechanism that may vary is undecided.",
+            {"path": str(ledger_path), "not_passed": not_passed, "hint": fence.HINTS["review_not_passed"]},
+        )
     changed: list[str] = []
     if closed:
         for item in modules:
@@ -384,15 +399,18 @@ def _closure_gaps_check(case_root: Path | None) -> AdmissionCheck:
         if isinstance(loaded, dict):
             waivers = [w for w in loaded.get("waivers", []) if isinstance(w, dict)]
 
-    def waived(finding: dict[str, Any]) -> bool:
-        for waiver in waivers:
-            keys = {k: v for k, v in waiver.items() if k not in {"reason", "decided"}}
-            if keys and all(finding.get(k) == v for k, v in keys.items()):
-                return bool(waiver.get("reason"))
-        return False
-
-    open_findings = [f for f in report["findings"] if not waived(f)]
-    waived_count = len(report["findings"]) - len(open_findings)
+    # the fence: a waiver is a decision nobody made; nothing is waived
+    open_findings = fence.enforce(list(report["findings"]))
+    waived_count = 0
+    if waivers:
+        return AdmissionCheck(
+            "FA012",
+            CHECK_BLOCK,
+            f"{len(waivers)} closure-gap waiver(s) are present and none is accepted: "
+            "record each decision in State 2 and carry it in a contract, then delete closure_gap_waivers.json.",
+            {"waivers_file": str(waivers_path), "waivers": waivers, "open_findings": open_findings,
+             "hint": fence.HINTS["waiver_not_accepted"]},
+        )
     evidence = {
         "summary": report["summary"],
         "open_findings": open_findings,
@@ -943,10 +961,10 @@ def _factory_toolchain_check(factory_root: Path) -> AdmissionCheck:
         for path in required
         if path.is_file()
     }
-    status = CHECK_WARNING if metadata.get("dirty") else CHECK_PASS
+    status = CHECK_BLOCK if metadata.get("dirty") else CHECK_PASS
     summary = (
-        "Factory checkout is dirty; exact admission tool fingerprints will be recorded."
-        if status == CHECK_WARNING
+        "Factory checkout is dirty; commit or clean the admission toolchain before handoff."
+        if status == CHECK_BLOCK
         else "Factory admission toolchain is clean and fingerprinted."
     )
     return AdmissionCheck(
@@ -997,7 +1015,7 @@ def check(
         _factory_toolchain_check(factory_root),
     ])
     blocks = sum(item.status == CHECK_BLOCK for item in checks)
-    warnings = sum(item.status == CHECK_WARNING for item in checks)
+    warnings = sum(item.status == CHECK_BLOCK for item in checks)
     passes = sum(item.status == CHECK_PASS for item in checks)
     return {
         "schema_version": REPORT_SCHEMA,

@@ -171,6 +171,28 @@ These are modelled classes, not new detectors. Until an existing report emits
 structured evidence, the projection does not manufacture them from generated
 code or prose.
 
+## Product-data migration vocabulary
+
+The registry also accepts structured findings for the product-data seam:
+
+- `data_domain_mismatch` — accepted data is outside its canonical data domain;
+- `data_provider_missing` — the domain is known but has no deterministic typed
+  producer;
+- `runtime_settings_wiring_missing` — a config consumer bypasses the existing
+  runtime-settings producer or lacks its declared dependency edge;
+- `data_form_invalid` — the accepted value uses a forbidden formula, template,
+  operation sequence, or expression form;
+- `data_reference_overscoped` — a consumer addresses a parent wider than the
+  smallest complete data node it needs;
+- `data_owner_unresolved` — structured evidence cannot prove the data domain,
+  runtime consumer, or semantic owner.
+
+These names are a transport vocabulary, not permission to parse migration
+inventories as design truth. A report must supply a structured code and an
+address before the obligation projection will emit one. In particular, a known
+domain and an unknown runtime consumer remain two obligations; the projection
+does not guess the second from the first.
+
 ## Factory parity
 
 Parity uses Factory's existing `merged_dependency_graph` implementation. It
