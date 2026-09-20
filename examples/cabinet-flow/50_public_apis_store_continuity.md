@@ -52,8 +52,8 @@ counter.
 ### Callers
 
 `module:operation_invoker` after the unit that recorded an in-flight attempt
-committed and before the send; `module:owner_authority` when the owner ends a
-restored state.
+committed and before the send. Owner confirmation calls
+`public_op:store_continuity.confirm_continuity`, which owns its host write.
 
 ### Inputs
 
