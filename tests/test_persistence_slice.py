@@ -68,8 +68,10 @@ def test_module_slice_contains_only_referenced_persistence_ir() -> None:
     assert {row["table"] for row in report["tables"]} == {"parents", "children"}
     assert [row["aggregate"] for row in report["aggregates"]] == ["ParentAggregate"]
     assert report["deterministic_method_scopes"] == [
+        "ParentRepository.__init__",
         "ParentRepository.get_parent",
         "ParentRepository.get_parent_aggregate",
+        "create_parent_schema",
     ]
 
 

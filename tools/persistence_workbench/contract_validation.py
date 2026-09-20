@@ -26,7 +26,12 @@ def _method_contract(repository: str, method: str) -> tuple[str | None, str | No
 
 
 def deterministic_method_scopes(payload: dict[str, Any]) -> set[str]:
-    """Return canonical contract scopes owned by table-emitted repositories."""
+    """Return canonical contract scopes owned by table-emitted repositories.
+
+    The emitter writes the whole repository module, not only its query methods:
+    the constructor and the schema function are lowered from the same IR row, so
+    they are owned by it exactly as the methods are.
+    """
     result: set[str] = set()
     repositories = payload.get("repositories")
     if not isinstance(repositories, list):
@@ -38,6 +43,10 @@ def deterministic_method_scopes(payload: dict[str, Any]) -> set[str]:
         methods = row.get("methods")
         if not _text(repository) or not isinstance(methods, list):
             continue
+        result.add(f"{repository}.__init__")
+        schema_function = row.get("schema_function")
+        if _text(schema_function):
+            result.add(schema_function)
         for method_row in methods:
             method = method_row.get("method") if isinstance(method_row, dict) else None
             if not _text(method):

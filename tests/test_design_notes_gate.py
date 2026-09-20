@@ -168,6 +168,59 @@ def test_irregular_handler_still_requires_note(tmp_path):
     assert report["summary"]["handoff_ready"] is False
 
 
+def _router_wiring_project(tmp_path, monkeypatch, *, ready: bool):
+    project = _project(tmp_path, "parse: [BEHAVIOR] MUST return normalized content.\n")
+    contracts = json.loads((tmp_path / "60_contracts.json").read_text(encoding="utf-8"))
+    contracts["contracts"]["create_app"] = "(service: object) -> object"
+    contracts["contracts"]["extract_bearer"] = "(request: object) -> str"
+    (tmp_path / "60_contracts.json").write_text(json.dumps(contracts), encoding="utf-8")
+    (tmp_path / "70_router_context.json").write_text(
+        json.dumps({
+            "schema_version": "spec_workbench_router_context.v1",
+            "wiring": {
+                "app_factory": "create_app",
+                "credential_extractors": {"bearer": {"kind": "header_scheme", "function": "extract_bearer"}},
+            },
+        }),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        gate.design_router_context,
+        "coverage",
+        lambda project: {"summary": {"handoff_ready": ready}},
+    )
+    return project
+
+
+def test_closed_router_context_owns_app_factory_and_credential_extractors(tmp_path, monkeypatch):
+    project = _router_wiring_project(tmp_path, monkeypatch, ready=True)
+    report = gate.coverage(project)
+    assert "missing_callable_note" not in _codes(report)
+    assert report["deterministic_callables"] == ["create_app", "extract_bearer"]
+    assert report["summary"]["handoff_ready"] is True
+
+
+def test_open_router_context_does_not_suppress_note_requirement(tmp_path, monkeypatch):
+    project = _router_wiring_project(tmp_path, monkeypatch, ready=False)
+    report = gate.coverage(project)
+    assert "missing_callable_note" in _codes(report)
+    assert report["deterministic_callables"] == []
+    assert report["summary"]["handoff_ready"] is False
+
+
+def test_note_on_emitter_owned_callable_is_reported_not_judged(tmp_path, monkeypatch):
+    project = _router_wiring_project(tmp_path, monkeypatch, ready=True)
+    notes = tmp_path / "80_notes.md"
+    notes.write_text(
+        notes.read_text(encoding="utf-8") + "create_app: [BEHAVIOR] MUST register every route.\n",
+        encoding="utf-8",
+    )
+    report = gate.coverage(project)
+    assert report["noted_deterministic_callables"] == ["create_app"]
+    assert report["summary"]["noted_deterministic_callables"] == 1
+    assert report["summary"]["handoff_ready"] is True
+
+
 def test_closed_persistence_method_is_deterministic_completeness_exemption(tmp_path, monkeypatch):
     project = _project(tmp_path, "parse: [BEHAVIOR] MUST return normalized content.\n")
     contracts = json.loads((tmp_path / "60_contracts.json").read_text(encoding="utf-8"))

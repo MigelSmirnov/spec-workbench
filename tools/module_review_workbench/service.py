@@ -7,6 +7,7 @@ from notes_workbench import service as notes_service
 from persistence_workbench.slice import module_slice as persistence_module_slice
 from project_extensions import deterministic_backends
 from external_contract_workbench import module_evidence
+import design_router_context
 
 from module_review_workbench.model import MODULES_SCHEMA, REVIEW_SCHEMA, SLICE_SCHEMA, ModuleReviewError
 from module_review_workbench.sources import (
@@ -68,6 +69,9 @@ def build_slice(project: Path, module: str) -> dict[str, Any]:
     router_deterministic = {
         route["handler"] for route in routes
         if route.get("emission") == "table" and route.get("handler") in contracts
+    } | {
+        scope for scope in design_router_context.wiring_callables(router.get("wiring"))
+        if scope in contracts
     }
     persistence_backend = persistence_module_slice(spec, module_name)
     persistence_deterministic = {

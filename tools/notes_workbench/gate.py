@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import fence
+import design_router_context
 
 import json
 import re
@@ -97,6 +98,24 @@ def _load_router_deterministic_scopes(project: Path) -> set[str]:
     return result
 
 
+def _load_router_wiring_scopes(project: Path) -> set[str]:
+    """Return the router module's own callables from a closed Router context.
+
+    The router emitter writes the app factory and every credential extractor
+    from ``wiring`` whatever the emission of individual routes: an irregular
+    handler lives in the companion module, the router module is never partly
+    LLM-owned. An open or invalid context suppresses nothing.
+    """
+    try:
+        report = design_router_context.coverage(project)
+        if not report.get("summary", {}).get("handoff_ready"):
+            return set()
+        payload = design_router_context.load(project)
+    except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError):
+        return set()
+    return design_router_context.wiring_callables(payload.get("wiring"))
+
+
 def _load_persistence_deterministic_scopes(project: Path) -> set[str]:
     """Return scopes only from a fully closed, contract-bound persistence IR.
 
@@ -117,11 +136,14 @@ def _load_persistence_deterministic_scopes(project: Path) -> set[str]:
 def _load_deterministic_callable_scopes(project: Path) -> set[str]:
     """Return callables whose implementation is fully owned by deterministic IR.
 
-    State 7 prose is not required for table-emitted HTTP handlers or methods of
-    a closed table-emitted persistence repository. Irregular handlers and
-    irregular repositories remain LLM-owned and deliberately require notes.
+    State 7 prose is not required for anything an emitter lowers from closed
+    IR: table-emitted HTTP handlers, the router's app factory and credential
+    extractors, and the whole of a table-emitted persistence repository —
+    constructor, schema function and methods. Irregular handlers and irregular
+    repositories remain LLM-owned and deliberately require notes.
     """
-    scopes = _load_router_deterministic_scopes(project) | _load_persistence_deterministic_scopes(project)
+    scopes = _load_router_deterministic_scopes(project) | _load_router_wiring_scopes(project)
+    scopes |= _load_persistence_deterministic_scopes(project)
     for backend in deterministic_backends(project):
         scopes |= backend.deterministic_method_scopes(project)
     return scopes
@@ -352,6 +374,10 @@ def coverage(project: Path) -> dict[str, Any]:
             item["hint"] = fence.hint_for(item.get("code"), item.get("message"))
     blocks = sum(item["severity"] == "block" for item in findings)
     reviews = 0
+    # Prose on an emitter-owned callable constrains nothing: the emitter lowers
+    # the callable from its IR and never reads the note. Reported, not judged —
+    # accepted cases carry such notes from before the ownership was computed.
+    noted_deterministic = sorted(deterministic_scopes & contract_scopes & set(by_scope))
     return {
         "schema_version": "spec_workbench_state7_notes_gate.v1",
         "project_root": project.resolve().name,
@@ -359,12 +385,14 @@ def coverage(project: Path) -> dict[str, Any]:
             "notes": len(notes),
             "contract_callables": len(contract_scopes),
             "deterministic_callables": len(deterministic_scopes & contract_scopes),
+            "noted_deterministic_callables": len(noted_deterministic),
             "blocks": blocks,
             "reviews": reviews,
             "handoff_ready": blocks == 0 and reviews == 0,
         },
         "notes": notes,
         "deterministic_callables": sorted(deterministic_scopes & contract_scopes),
+        "noted_deterministic_callables": noted_deterministic,
         "findings": findings,
     }
 
