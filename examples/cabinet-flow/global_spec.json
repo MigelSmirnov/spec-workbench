@@ -66,7 +66,7 @@
     "owner_statement": "(request: OwnerStatementRequest, agent_context: str | None = None) -> OwnerStatement",
     "propose_binding": "(actor: ActorRef, operation_ref: ManifestOperationRef, input_ports: tuple[SemanticPort, ...], output_ports: tuple[SemanticPort, ...], purpose: str, preview_ports: tuple[str, ...], outcome_read_binding_ref: str | None = None) -> OperationBindingVersion",
     "prove_flow": "(flow_version_ref: str) -> FlowProof",
-    "put_value": "(content: bytes | BoundedByteStream, semantic_term_revision_ref: str, value_schema_ref: str, carriage: str, disclosure_class: str, retention_class: str, owner_context_ref: str) -> StoredValue",
+    "put_value": "(content: ValueContent, semantic_term_revision_ref: str, value_schema_ref: str, carriage: str, disclosure_class: str, retention_class: str, owner_context_ref: str) -> StoredValue",
     "read_value": "(value_ref: str, reader: ActorRef | None, purpose: str, disclosure_ceiling: str | None = None) -> StoredValueRead",
     "receive_file": "(run_id: str, producer_node_id: str, map_index: int | None, output_port: SemanticPort, stream: BoundedByteStream, accepted_media_types: tuple[str, ...], size_ceiling: int, disclosure_class: str) -> SpooledBytes",
     "reconcile_outcome": "(unknown_attempt: OperationAttemptResult, binding: OperationBindingVersion, target: ServiceTarget, input_values: tuple[StoredValue, ...], input_files: tuple[SpooledBytes, ...], prior_reconciliations: tuple[OutcomeReconciliation, ...]) -> OutcomeReconciliation",
@@ -82,7 +82,7 @@
     "resolve_service_target": "(service_id: str) -> ServiceTarget",
     "resume_runs": "() -> RunRecoveryReport",
     "retire_binding": "(actor: ActorRef, binding_id: str, expected_status: str, expected_version_ref: str, reason: str) -> OperationBinding",
-    "retire_entry": "(owner: ActorRef, entry_id: str, entry_kind: str, expected_status: str, current_revision_ref: str, reason: str) -> SemanticAxis | SemanticTerm | SemanticRelation",
+    "retire_entry": "(owner: ActorRef, entry_id: str, entry_kind: str, expected_status: str, current_revision_ref: str, reason: str) -> RetiredVocabularyEntry",
     "retire_flow": "(actor: ActorRef, flow_id: str, expected_status: str, expected_current_activation_ref: str | None, reason: str) -> Flow",
     "retire_slot": "(actor: ActorRef, slot_id: str, expected_status: str, reason: str) -> Slot",
     "revoke_delegation": "(owner: ActorRef, delegation_id: str, expected_status: str, reason: str) -> AgentDelegation",
@@ -152,7 +152,7 @@
     "revoke_delegation: [BEHAVIOR] MUST let only the sole active owner compare-and-set the named delegation from active to permanently revoked, sampling `module:system_clock.now` once for the immutable revocation time and recording the bounded owner reason. Exact replay returns the recorded revocation without changing its time or reason; a conflicting replay, stale state or owner mismatch changes nothing. Revocation takes effect on the next authentication and MUST NOT rewrite historical ActorRefs, cancel runs, revoke installation credentials or expose credential material.",
     "current_admission: [BEHAVIOR] MUST read the latest immutable AdmissionVerdict for the exact contract-version and implementation pair and return its corpus-snapshot identity, runtime revision, ordered TrialExecution references and complete refusal reasons, or explicit absence. It MUST distinguish an earlier admitted verdict from admission over the presently active corpus: corpus growth never rewrites old evidence and a verdict for another pair is never substituted. The lookup performs no trial, activation or state change, and missing, mismatched or unreadable evidence is never interpreted as admitted.",
     "run_trial: [BEHAVIOR] MUST resolve the exact immutable contract, implementation, pinned runtime and complete active-corpus snapshot, then execute every active case in deterministic order in a fresh disposable sandbox. Each attempted case appends one immutable TrialExecution; expected outputs are compared by digest after strict input/output validation, and only a non-empty corpus with one conforming execution for every case yields `admitted`. Empty corpus, absent execution and non-conformance produce `empty_corpus`, `missing_trial_execution` and `non_conforming_trial` reasons respectively, with all applicable reasons retained. After the complete run it samples `module:system_clock.now` and appends exactly one kernel-authored AdmissionVerdict; infrastructure failure cannot fabricate a verdict, and the operation never changes corpus membership, contracts, implementation bytes, authority or slot activation.",
-    "start_kernel: [BEHAVIOR] MUST compose one fail-closed start from the host-selected installation and protected configuration references, inject `module:system_clock` before any timestamped work, and reject missing credentials, incompatible releases or schemas, and mixed production/rig targets. It MUST open the durable store, idempotently seed only missing vocabulary in an explicit unit of work, sweep every accepted binding against the pinned manifest, require confirmed sandbox health, and reconstruct every non-terminal Run from durable evidence in that order. MCP and HTTP listeners open only after all checks and recovery succeed; any store, manifest, sweep, supervisor, recovery or listener failure returns a typed bounded refusal, closes anything already opened, and leaves no gateway serving. Success reports the manifest revision and readiness of every required component without credentials or host paths; startup may append only seed, binding-drift and recovery records and never creates business facts.",
+    "start_kernel: [BEHAVIOR] MUST compose one fail-closed start from the host-selected installation and protected configuration references, inject `module:system_clock` before any timestamped work, and reject missing credentials, incompatible releases or schemas, and mixed production/rig targets. It MUST open the durable store, idempotently seed only missing vocabulary in an explicit unit of work, sweep every accepted binding against the pinned manifest, require confirmed sandbox health, and reconstruct every non-terminal Run from durable evidence in that order. MCP and HTTP listeners open only after all checks and recovery succeed; any store, manifest, sweep, supervisor, recovery or listener failure returns a typed bounded refusal, closes anything already opened, and leaves no gateway serving. Success reports the manifest revision and readiness of every required component without credentials or host paths; startup may append only seed, binding-drift and recovery records and never creates business facts. The closed flow plan requires this coordinator path to reach the exact operations `advance_run`, `begin_unit_of_work`, `cancel_run`, `commit_unit_of_work`, `manifest_revision`, `now`, `reconcile_outcome`, `release_ceilings`, `resolve_service_target`, `resume_runs`, `seed_vocabulary`, `serve_http`, `serve_mcp`, `supervisor_health`, `sweep_manifest_drift`.",
     "prove_flow: [BEHAVIOR] MUST resolve one immutable FlowVersion and its exact pinned contract, accepted binding, semantic-term and relation revisions, without accepting caller verdicts, substituted dependencies, suppressed checks or guessed edge bases. It MUST judge the complete graph for pin validity, schema and semantic edge evidence without coercion, required conversion/resolution nodes, carriage and media, cardinality and mapping, disclosure propagation and ceilings, exactly-once required inputs, acyclicity, pure-node reachability, closed guards and required outputs outside guards. It returns every finding in stable graph order, including unavailable evidence as refusal rather than warning-only success, and derives each function output disclosure plus the highest operation effect class. For the same flow and vocabulary basis it appends one immutable content-consistent FlowProof or returns its equivalent; it never activates the flow, invokes a node or mutates dependencies, and later binding suspension does not rewrite the proof.",
     "activate_flow_version: [BEHAVIOR] MUST compare-and-set the current selection and append one immutable FlowActivation only when the exact version belongs to the active Flow and has a matching `proven` FlowProof. It derives the highest effect from pinned accepted bindings: the kernel may activate `read`, while every higher class requires the active owner and a complete kernel-generated statement naming every non-read node; agent prose grants nothing. Missing or mismatched proof, retirement, suspended owner, stale expected activation or concurrent selection changes no state. Selecting an earlier version appends new history, and no activation, approval or grant is inherited; the operation invokes no node or service.",
     "composition_view: [BEHAVIOR] MUST authorize the actor and return a bounded, deterministic page of composable accepted contract and operation-binding versions, semantic ports, effect classes and the accepted vocabulary evidence needed to connect them, filtered by the actor's disclosure ceiling. Retired or suspended facts are labelled rather than replaced, and implementation bodies, credentials and storage paths are absent. Invalid filters or cursors, unavailable required evidence and requests that would make a partial view look complete return typed refusal without changing state.",
@@ -162,7 +162,7 @@
     "register_flow_version: [BEHAVIOR] MUST authorize authoring, require an active exact Flow, and accept one complete bounded graph whose inputs, outputs, function and operation nodes, edges, constants, guards and mappings pin exact versions and contain no code or expressions. After `validate_flow_registration`, it obtains the content identity from `module:identity` and atomically appends the immutable FlowVersion, returning the existing equal version for identical content. Caller-selected identity, partial/inherited graph state, malformed variants and conflicting content are refused without persistence. Registration creates no proof, activation, approval or grant and does not make the version runnable.",
     "retire_flow: [BEHAVIOR] MUST authorize the actor and compare-and-set the exact active Flow and expected current activation to final `retired`, sampling `module:system_clock.now` only on the successful transition and preserving the bounded reason, actor and time. An exact replay returns the first result; unknown Flow, stale state or activation, conflicting repeat and transactional failure change nothing. Retirement blocks new versions, activations and Runs but never deletes or rewrites versions, proofs, activation history, existing Runs, traces, approvals or grants, and invokes no service.",
     "validate_flow_registration: [BEHAVIOR] MUST validate one complete bounded self-contained graph before identity or persistence: every declared collection and variant is well formed, identifiers and references are exact and unique where required, all local endpoints exist, and no graph, activation, approval or grant field is inherited or caller-generated outside the accepted shape. It refuses caller-supplied version identity, embedded code or expressions, unbounded payloads, missing structural parts and references to another Flow. This pure structural check neither proves semantic compatibility nor mutates state; whole-graph semantic findings remain the responsibility of `module:flow_proof`.",
-    "serve_http: [BEHAVIOR] MUST accept requests only after startup opens the loopback listener, map an exact fixed route to one of the six closed kernel-surface operations, and reject unknown routes, unsupported media types, malformed bodies, unknown fields and bodies above the injected `surface_request_bytes_max` before delegation. It extracts the listener-established credential handle, applies the strict operation schema, delegates exactly once through access control and the kernel surface, and maps the bounded typed result to HTTP. Authentication, policy, retry and domain effects remain with their owning modules; public refusals are stable and reveal no record existence, credential, stack trace or host path.",
+    "serve_http: [BEHAVIOR] MUST accept requests only after startup opens the loopback listener, map an exact fixed route to one of the six closed kernel-surface operations, and reject unknown routes, unsupported media types, malformed bodies, unknown fields and bodies above the injected `surface_request_bytes_max` before delegation. It extracts the listener-established credential handle, applies the strict operation schema, delegates exactly once through access control and the kernel surface, and maps the bounded typed result to HTTP. Authentication, policy, retry and domain effects remain with their owning modules; public refusals are stable and reveal no record existence, credential, stack trace or host path. The closed flow plan requires this coordinator path to reach the exact operations `activate`, `author`, `authorize_action`, `inspect`, `now`, `owner_decide`, `request_trial`, `resolve_actor`, `resolve_credential`, `run_flow`.",
     "canonicalize_fields: [BEHAVIOR] MUST serialize the already selected complete defining fields for a known record kind under an explicit supported canonicalization version, with type and length boundaries, fixed field and collection ordering, and unambiguous numeric, text, byte, optional and variant forms. Missing, duplicate, out-of-domain or non-canonicalizable fields and unknown versions are refused rather than normalized from ambient language or storage defaults. Provenance, lifecycle, timestamps and storage facts are included only when the record-kind definition declares them defining; the operation is deterministic and state-free.",
     "digest_canonical_bytes: [BEHAVIOR] MUST compute one deterministic content digest from the exact canonical byte sequence using the identity algorithm fixed by the kernel release and return it in the release-defined encoding. It neither reparses nor rewrites bytes, accepts no caller-selected algorithm or claimed digest, and refuses input beyond the release ceiling. Equal bytes produce equal digests and any byte difference participates; the operation has no state, entropy or storage effect.",
     "digest_value: [BEHAVIOR] MUST bind the exact declared schema identity and optional semantic-term revision to the schema-aware canonical bytes of a previously validated value, then return one deterministic content digest. Cross-schema equality, unvalidated or mismatched values, unsupported families, non-canonical number/text forms and content above the digest ceiling are refused. Retention, disclosure, producer, time and storage location do not perturb the digest, and the operation stores nothing.",
@@ -177,11 +177,11 @@
     "resolve_credential: [BEHAVIOR] MUST resolve at the moment of use one protected credential-binding reference for the exact expected purpose, channel or service instance, and authorized closed caller-component kind, returning only a short-lived component-local non-serializable handle. Unknown, expired or malformed references, purpose/target mismatch, unauthorized components and unavailable protected storage yield a uniform typed refusal without secret or host-location detail. Raw values, arbitrary secret names and paths are never inputs; credential material is never logged, traced, previewed, persisted, placed in process arguments or injected into a function environment, and protected-provider lookup writes no kernel record.",
     "resolve_service_target: [BEHAVIOR] MUST resolve an exact service identity through the host-selected installation configuration and pinned manifest revision to the single configured instance, returning only its immutable instance identity, environment class, declared channel and non-secret routing facts with a separate credential reference. Caller, flow, redirect and request data cannot supply or replace instance ID, address, headers, channel or class. Unknown services, absent or off-manifest instances, unsupported channels, invalid configuration and any mixture of production with non-production targets refuse startup or Run creation before execution; resolution changes no installation state, while a caller may pin the returned target in a new Run.",
     "activate: [BEHAVIOR] MUST authorize the resolved actor, validate one closed slot-or-flow activation variant and exact compare-and-set expectation, then delegate selection only to `module:slot_activation` or `module:flow_registry`. Slot activation requires current complete admission and refuses known-failing rollback targets; flow activation requires a matching complete proof, derives the highest effect class, and permits kernel policy only for `read` while higher effects require the active owner and generated statement. Success appends exactly one immutable activation, including rollback as new history; stale evidence, retirement, insufficient authority or lost compare-and-set changes no selection or immutable content.",
-    "author: [BEHAVIOR] MUST require an active authoring delegation, validate one closed bounded draft variant, and route it only to the owning vocabulary, slot, corpus, binding or flow module. It refuses supplied content identities, unknown commands, invalid semantic/schema references, retired owners, conflicting duplicates and code, fixture or text beyond injected M48 ceilings; identities are computed by `module:identity`. Success may append only the named proposal or immutable/versioned authoring record and returns its exact reference plus structural findings. It never runs code, proves or activates a version, grants authority or invokes a service.",
+    "author: [BEHAVIOR] MUST require an active authoring delegation, validate one closed bounded draft variant, and route it only to the owning vocabulary, slot, corpus, binding or flow module. It refuses supplied content identities, unknown commands, invalid semantic/schema references, retired owners, conflicting duplicates and code, fixture or text beyond injected M48 ceilings; identities are computed by `module:identity`. Success may append only the named proposal or immutable/versioned authoring record and returns its exact reference plus structural findings. It never runs code, proves or activates a version, grants authority or invokes a service. The closed flow plan requires this coordinator path to reach the exact operations `accept_binding_version`, `activate_flow_version`, `active_corpus`, `add_trial_case`, `capture_trial_case`, `composition_view`, `contract_health`, `contract_version`, `copy_cases_to_version`, `create_flow`, `create_slot`, `current_flow_activation`, `decide_proposal`, `describe_file`, `digest_value`, `find_relation`, `identify_binding_version`, `identify_contract_version`, `identify_flow_version`, `identify_implementation`, `identify_trial_case`, `inspect`, `issue_contract_version`, `manifest_operation`, `now`, `operation_facts_changed`, `owner_decide`, `owner_statement`, `propose_binding`, `prove_flow`, `put_value`, `register_flow_version`, `retire_binding`, `retire_entry`, `retire_flow`, `retire_slot`, `service_instance`, `serving_activation`, `slot_authoring_view`, `slot_evidence`, `submit_implementation`, `submit_proposal`, `sweep_manifest_drift`, `term_revision`, `withdraw_trial_case`.",
     "inspect: [BEHAVIOR] MUST authorize the resolved actor for one closed inspection kind and exact reference or bounded query, apply the actor's disclosure ceiling and M48 pagination defaults/maxima, and delegate the read to the module owning vocabulary, slots, bindings, flows, Runs or traces. Unknown kinds, malformed cursors/references, unauthorized views and unavailable evidence yield stable uniform refusal without record-existence leakage. Results are deterministic bounded typed views, reducing values to digest/reference form when required and excluding other actors' data, credentials, composition-time implementation bodies, stores, tables and host paths; inspection changes no state.",
-    "owner_decide: [BEHAVIOR] MUST accept only the active owner and one closed decision variant with its exact target revision or status, expected compare-and-set state and kernel-generated statement where required, then atomically route it to the single owning module. Allowed variants cover vocabulary/binding decisions and retirement, effectful flow activation, exact effect approval/denial, standing-grant grant/revoke, delegation issue/revoke, waiting-Run cancellation and protected-corpus action; no free-form or cross-module command exists. Stale inputs, changed digests, consumed authority, destructive standing grants, suspended targets, non-owner actors and concurrency conflicts leave all state unchanged; success mutates only the named decision record and owning aggregate.",
-    "request_trial: [BEHAVIOR] MUST authorize the actor and delegate the exact contract-version and implementation pair to `module:admission` without accepting a caller verdict, case subset, runtime or sandbox configuration. Admission resolves the complete non-empty active corpus, pinned runtime and bounds, runs every case in a fresh externally enforced sandbox with strict input/output validation and confirmed cleanup, and appends each TrialExecution plus one deterministic verdict only from complete evidence. Empty or changed corpus, mismatched references, denial, breach, crash, invalid/missing execution or unconfirmed cleanup remain explicit reasons; infrastructure failure cannot fabricate a verdict or activation, and the response is bounded by disclosure.",
-    "run_flow: [BEHAVIOR] MUST authorize the actor, validate strict values for every declared input and resolve the exact current activated proven FlowVersion, then delegate durable creation and advancement to `module:run_executor`. The Run pins all contract, implementation, binding and installation-selected service-target versions; requests cannot choose credentials, targets or alternate implementations. Ready function nodes run only in sandbox and operation nodes only through accepted bindings with exact authority, producing truthful waiting, partial, failed, unknown-outcome or completed state and bounded disclosure-safe results. All records belong to their owning modules, and business state can change only through an authorized operation node—not from transport success or guessed completion.",
+    "owner_decide: [BEHAVIOR] MUST accept only the active owner and one closed decision variant with its exact target revision or status, expected compare-and-set state and kernel-generated statement where required, then atomically route it to the single owning module. Allowed variants cover vocabulary/binding decisions and retirement, effectful flow activation, exact effect approval/denial, standing-grant grant/revoke, delegation issue/revoke, waiting-Run cancellation and protected-corpus action; no free-form or cross-module command exists. Stale inputs, changed digests, consumed authority, destructive standing grants, suspended targets, non-owner actors and concurrency conflicts leave all state unchanged; success mutates only the named decision record and owning aggregate. The closed flow plan requires this coordinator path to reach the exact operations `begin_unit_of_work`, `commit_unit_of_work`, `issue_delegation`, `mint_identity`, `now`, `revoke_delegation`.",
+    "request_trial: [BEHAVIOR] MUST authorize the actor and delegate the exact contract-version and implementation pair to `module:admission` without accepting a caller verdict, case subset, runtime or sandbox configuration. Admission resolves the complete non-empty active corpus, pinned runtime and bounds, runs every case in a fresh externally enforced sandbox with strict input/output validation and confirmed cleanup, and appends each TrialExecution plus one deterministic verdict only from complete evidence. Empty or changed corpus, mismatched references, denial, breach, crash, invalid/missing execution or unconfirmed cleanup remain explicit reasons; infrastructure failure cannot fabricate a verdict or activation, and the response is bounded by disclosure. The closed flow plan requires this coordinator path to reach the exact operations `activate`, `activate_implementation`, `active_corpus`, `contract_health`, `contract_version`, `current_admission`, `execute_function`, `implementation_record`, `now`, `rollback_activation`, `run_trial`, `serving_activation`.",
+    "run_flow: [BEHAVIOR] MUST authorize the actor, validate strict values for every declared input and resolve the exact current activated proven FlowVersion, then delegate durable creation and advancement to `module:run_executor`. The Run pins all contract, implementation, binding and installation-selected service-target versions; requests cannot choose credentials, targets or alternate implementations. Ready function nodes run only in sandbox and operation nodes only through accepted bindings with exact authority, producing truthful waiting, partial, failed, unknown-outcome or completed state and bounded disclosure-safe results. All records belong to their owning modules, and business state can change only through an authorized operation node—not from transport success or guessed completion. The closed flow plan requires this coordinator path to reach the exact operations `advance_run`, `authorization_for_effect`, `binding_for_invocation`, `contract_version`, `create_run`, `decide_approval`, `deliver_file`, `derive_output_class`, `describe_file`, `execute_function`, `grant_standing_approval`, `implementation_record`, `invoke_operation`, `now`, `put_value`, `read_value`, `receive_file`, `record_node_execution`, `release_run_files`, `request_approval`, `resolve_service_target`, `revoke_standing_approval`, `run_status`, `run_trace`, `send_request`, `serving_activation`, `waiting_for_owner`.",
     "manifest_operation: [BEHAVIOR] MUST read the exact configured manifest revision and select one service operation by stable identity and, when supplied, exact record digest; arbitrary paths, revisions, queries, aliases and caller-authored facts are forbidden. It validates bounded required fields and closed channel, effect, replay and idempotency values, then reports the declared identities, digest, channel, effect class, replay behavior, idempotency-key declaration, preconditions and purpose verbatim without inference or repair. Absence, duplicates, malformed records, digest mismatch, unknown enum or unavailable revision are typed refusals with no nearest-name/latest fallback; the projection contains no credential or binding policy and changes no state.",
     "operation_facts_changed: [BEHAVIOR] MUST resolve the prior and current exact records for the same service/operation identity from configured manifest revision history and deterministically compare the closed invocation-material set: channel, effect class, replay behavior, idempotency-key declaration and preconditions. It reports `absent`, `materially_changed`, or `digest_changed_with_equivalent_invocation_facts` plus every changed fact name in stable order; edits outside that operation do not count. Unknown digests, malformed records, identity mismatch or unavailable history are explicit uncertainty, never “unchanged.” The comparison is pure and neither suspends nor reissues a binding.",
     "service_instance: [BEHAVIOR] MUST read one exact service and installation-selected instance from the configured manifest revision and return its immutable identities, record digest, environment class, declared channel endpoints, required-header names and opaque credential-binding references. Base address, alternate instance, redirects and environment override cannot come from the request, and derived alternate hosts are never produced. Missing or mismatched service/instance, malformed endpoints, unknown channel/class and unavailable revision yield typed refusal; secret values are absent, and the lookup neither selects a target nor performs a request or mutation.",
@@ -191,8 +191,8 @@
     "propose_binding: [BEHAVIOR] MUST authorize authoring, resolve the exact manifest operation and digest, validate every typed port against accepted semantic/schema evidence, and copy channel, effect class, replay and idempotency facts verbatim rather than accepting them from the caller. Every non-read proposal must name valid preview ports and an accepted same-service `read` binding for outcome reconciliation. Missing/stale operations, manifest contradictions, invalid or duplicate ports, unsafe effectful shape, wrong reconciliation binding and caller identity are refused without a record. Otherwise `module:identity` computes the immutable version identity and one proposed version is appended; it remains non-invocable until exact owner acceptance.",
     "retire_binding: [BEHAVIOR] MUST authorize the actor and compare-and-set the exact binding, expected current lifecycle status and version to final retired, sampling `module:system_clock.now` only on success and preserving the bounded actor/reason evidence. An exact replay returns the first retirement; unknown binding, stale expectation, conflicting repeat or transaction failure changes nothing. Retirement blocks new flow references and invocation but never deletes or substitutes manifest records, immutable binding versions, FlowVersions, proofs, Runs, approvals or traces, and calls no service.",
     "sweep_manifest_drift: [BEHAVIOR] MUST deterministically reconcile either every accepted binding or one exact binding/version against the configured manifest revision using the fixed material set: channel, effect class, replay behavior, idempotency-key declaration and preconditions. Unchanged facts write nothing; an absent or materially changed operation atomically appends suspension, while a digest-only change with equivalent invocation facts appends an identical-ports version tied to the new digest and keeps the binding accepted. Each stable-ordered report names old/new digests, changed facts and outcome. Missing history, malformed/unavailable manifest, uncertain comparison or transaction failure is fail-closed; an incomplete all-binding startup sweep cannot report readiness, and suspended bindings invoke nothing.",
-    "invoke_operation: [BEHAVIOR] MUST re-resolve the exact accepted non-suspended binding pinned by the Run, require the pinned ServiceTarget and every validated value/file digest to match the node and any exact effect authorization, and derive the idempotency key only from declared ports. It applies `safe`, `refuses`, `returns_existing`, `overwrites` and `duplicates` replay semantics exactly: overwrites reuses authority only for identical approved input, and duplicates sends at most once per approval. Before any non-read send it durably records the exact in-flight run/node/element/attempt and key; without that write it sends nothing. It then makes one bounded transport request, rejects redirects and validates every successful output. Definitely-not-sent, possibly-sent, refusal, timeout, size/schema/semantic failure remain distinct; possible send is always `outcome_unknown`, triggers no automatic second effect, and service timestamps never become KernelInstant or kernel policy.",
-    "reconcile_outcome: [BEHAVIOR] MUST accept only one exact `outcome_unknown` non-read attempt and its original pinned binding, target, inputs, key and prior evidence, then invoke once only the declared accepted non-suspended same-service outcome-read binding. It never repeats the original effect and accepts no caller assertion, free text or alternate read operation as evidence. Only the read binding's validated closed output may yield `effect_applied`, `effect_not_applied` or `still_undetermined`; applied outputs must also validate against the original effect binding before dependants may run. Missing/invalid bindings, unreachable service, malformed or oversized response, ambiguity and output failure preserve unknown state. One immutable reconciliation is appended; retry timing belongs to `module:run_executor`, and a later reattempt requires confirmed not-applied plus original replay rules and fresh approval for `duplicates`.",
+    "invoke_operation: [BEHAVIOR] MUST re-resolve the exact accepted non-suspended binding pinned by the Run, require the pinned ServiceTarget and every validated value/file digest to match the node and any exact effect authorization, and derive the idempotency key only from declared ports. It applies `safe`, `refuses`, `returns_existing`, `overwrites` and `duplicates` replay semantics exactly: overwrites reuses authority only for identical approved input, and duplicates sends at most once per approval. Before any non-read send it durably records the exact in-flight run/node/element/attempt and key; without that write it sends nothing. It then makes one bounded transport request, rejects redirects and validates every successful output. Definitely-not-sent, possibly-sent, refusal, timeout, size/schema/semantic failure remain distinct; possible send always uses `rules.retry_backoff.timed_wait_reasons[1]`, triggers no automatic second effect, and service timestamps never become KernelInstant or kernel policy.",
+    "reconcile_outcome: [BEHAVIOR] MUST accept only one exact non-read attempt in `rules.retry_backoff.timed_wait_reasons[1]` and its original pinned binding, target, inputs, key and prior evidence, then invoke once only the declared accepted non-suspended same-service outcome-read binding. It never repeats the original effect and accepts no caller assertion, free text or alternate read operation as evidence. Only the read binding's validated closed output may yield `effect_applied`, `effect_not_applied` or `still_undetermined`; applied outputs must also validate against the original effect binding before dependants may run. Missing/invalid bindings, unreachable service, malformed or oversized response, ambiguity and output failure preserve unknown state. One immutable reconciliation is appended; retry timing belongs to `module:run_executor`, and a later reattempt requires confirmed not-applied plus original replay rules and fresh approval for `duplicates`.",
     "begin_unit_of_work: [BEHAVIOR] MUST validate a closed purpose/record-family discriminator, bounded correlation identity and complete compare-and-set expectations, then open one isolated single-use transaction handle scoped to the calling module and declared M01–M49 record kinds. SQL, table names, paths, credentials, business facts and untyped payloads are forbidden, as are nested or reused handles and unsupported persistence families. An unavailable/unmigrated store or invalid expectation fails before mutable access is exposed. The begin captures versions/locks but publishes no durable change; commit and rollback remain explicit operations.",
     "commit_unit_of_work: [BEHAVIOR] MUST validate every staged typed record, reference shape, append-only/immutable rule, uniqueness constraint and captured compare-and-set expectation, then publish the entire active UnitOfWork atomically with one durable transaction identity and resulting record versions. A closed/reused handle, stale expectation, conflict, invalid mutation/shape, durability failure or uncertain commit is explicit and never reported as success or partial publication; uncertainty requires store recovery evidence rather than caller replay by assumption. It commits only staged kernel records and never business-service or external-file state.",
     "rollback_unit_of_work: [BEHAVIOR] MUST discard all staged changes and release transaction-local resources for the exact active uncommitted UnitOfWork, leaving every previously committed record untouched. Repeating the same completed rollback is idempotent, while an unknown handle, a transaction already committed, rollback failure or unavailable store is explicit; rollback can never delete or reverse durable evidence. No staged retention or domain change may remain visible, and uncertain rollback prevents the kernel from serving until startup recovery establishes the transaction outcome.",
@@ -208,7 +208,7 @@
     "advance_run: [BEHAVIOR] MUST derive readiness only from the Run's immutable pins and durable evidence, validate every value at source and target, apply guards transitively, and execute mapped elements in stable index order with one NodeExecution per attempt. Independent branches may progress while another waits; failed required inputs stop only their dependants, and no effect executes ahead of failed, unknown or waiting upstream evidence. Function nodes use the pinned sandbox implementation, operation nodes use the pinned binding/target and current exact effect authority, and validated outputs pass through value store, spool and trace ownership. Service waits persist retry delays of 1, 2, 5, 10, 30 and then 60 seconds without jitter; waking early invokes nothing. Each transition commits before further work, unknown effect outcomes are never guessed, and success requires every node and non-optional output to satisfy the graph rules.",
     "cancel_run: [BEHAVIOR] MUST let only the active owner compare-and-set an exact non-terminal Run to final `cancelled`, record the bounded reason, prevent every later node attempt and release temporary Run files. It preserves all concluded NodeExecutions, approvals, reconciliations, partial outputs and any undetermined external effect as explicit history. Cancellation performs no compensation or business rollback; stale, concurrent, already-terminal or non-owner requests leave execution evidence and service state unchanged.",
     "create_run: [BEHAVIOR] MUST require one active non-retired proven FlowActivation and an exact input set with no missing or unknown fields, validate each value at its flow port, and store accepted inputs before any node executes. It resolves and permanently pins the flow version/proof, every function contract and serving SlotActivation, every accepted non-suspended operation binding and the installation-selected ServiceTarget; callers cannot supply identities, implementations, bindings, runtime or target. In one unit it samples the creation time and appends one distinct Run plus its input references. Any invalid input or unavailable pin refuses the whole creation, and later activation, vocabulary or installation changes cannot alter the pinned set.",
-    "resume_runs: [BEHAVIOR] MUST enumerate every non-terminal Run from durable storage and reconstruct its exact pins, inputs, NodeExecutions, approvals, in-flight effects, reconciliations, values, waiting reasons, retry ordinal and retry deadline. A pure function without a conclusion may execute again under the same runtime, and an unconcluded read may be invoked again; a non-read attempt recorded in flight becomes `outcome_unknown` and must pass `reconcile_outcome` before any further effect. Restart never resets backoff, loses supplied evidence, creates replacement pins or turns elapsed waiting into a decision. Inconsistent records, impossible attempt numbering or failed reconciliation stop recovery for that Run, while unknown remains unknown.",
+    "resume_runs: [BEHAVIOR] MUST enumerate every non-terminal Run from durable storage and reconstruct its exact pins, inputs, NodeExecutions, approvals, in-flight effects, reconciliations, values, waiting reasons, retry ordinal and retry deadline. A pure function without a conclusion may execute again under the same runtime, and an unconcluded read may be invoked again; a non-read attempt recorded in flight enters `rules.retry_backoff.timed_wait_reasons[1]` and must pass `reconcile_outcome` before any further effect. Restart never resets backoff, loses supplied evidence, creates replacement pins or turns elapsed waiting into a decision. Inconsistent records, impossible attempt numbering or failed reconciliation stop recovery for that Run, while unknown remains unknown.",
     "run_status: [BEHAVIOR] MUST return the exact persisted Run status, pinned flow identity, all waiting node/reason pairs, terminal times and bounded output references labelled complete or partial under the actor's disclosure ceiling. `pending`, `awaiting_approval`, `refused`, `failed`, `cancelled` and `succeeded` remain distinct; time passage, missing evidence and partial outputs cannot imply success. Unknown or invisible Runs, inconsistent state and unreadable required evidence are explicit, and the read neither advances execution nor exposes raw store or trace paths.",
     "deliver_file: [BEHAVIOR] MUST resolve one live SpooledBytes object, verify its stored digest while streaming, require the consuming node and mapped element to belong to the same Run, and require the exact input port to accept the observed media type and size. It streams read-only into the bounded sandbox or transport sink without unbounded buffering, host-path exposure, source mutation or custody transfer. Missing or released content, run mismatch, short transfer, destination failure or integrity mismatch yields no substitute bytes and leaves spool lifetime unchanged; trial fixtures and durable business files are not valid sources.",
     "describe_file: [BEHAVIOR] MUST verify the exact live run, producing node and port before returning digest, size, observed media type, disclosure class and producer identity, never a host path or filename-derived claim. A bounded read-only stream is issued only for `owner_preview` or `trial_capture`: full preview requires owner authority, and capture of personal-data bytes for installation-lifetime retention requires the owner decision. The lease cannot mutate or extend spool lifetime or cross into another Run; persistence occurs only if `trial_corpus` copies the stream into a StoredValue.",
@@ -238,16 +238,16 @@
     "slot_authoring_view: [BEHAVIOR] MUST return a bounded stable page containing only the named Slot lifecycle, its immutable contract versions and submitted implementation metadata. Code bodies are represented by digest unless the authorized author explicitly requests one exact body permitted by the authoring scope; no raw storage path is exposed. Corpus, admission, activation, health, Runs and traces are absent because their owners supply those projections, and missing data is never replaced with another Slot's records.",
     "submit_implementation: [BEHAVIOR] MUST require an exact contract of an active Slot, bounded non-empty code and entry point, and compute identity solely from contract reference, entry point and code bytes. It stores bytes once by digest and appends one immutable Implementation; equal defining content returns the existing record while author, time, rationale and trace references remain provenance rather than identity. It MUST NOT import, execute, trial, admit or activate code, and failed or conflicting content storage leaves neither partial bytes nor metadata.",
     "validate_contract_ports: [BEHAVIOR] MUST normalize ports into their canonical order while preserving declared identities, direction and cardinality; every input requires an active accepted semantic-term revision on an active axis, and a termless output is allowed only as the explicit uncomposable-output form. It rejects duplicate or missing port identities, unknown schemas, invalid direction/cardinality, and carriage not permitted for a slot contract. A `byte_stream` port must have bounded size and media types and cannot be coerced to or from a value port.",
-    "record_node_execution: [BEHAVIOR] MUST append exactly one immutable NodeExecution for a concluded attempt using the Run's pinned implementation/runtime or binding/service identities and the trusted KernelInstant interval supplied by `run_executor`; the journal never reads wall time or looks up what is current. `succeeded` is accepted only with validated output references, while every other closed outcome retains its bounded evidence. Failure detail is size-limited and scrubbed of credentials, tokens, source bytes and values above `open`; unrestricted process or service logs are never stored. Exact replay is idempotent, but conflicting content for an attempt identity, missing pins or partial evidence is refused rather than written as a degraded trace.",
+    "record_node_execution: [BEHAVIOR] MUST append exactly one immutable NodeExecution for a concluded attempt using the Run's pinned implementation/runtime or binding/service identities and the trusted KernelInstant interval supplied by the owning executor; the journal never reads wall time or looks up what is current. `succeeded` is accepted only with validated output references, while every other closed outcome retains its bounded evidence. Failure detail is size-limited and scrubbed of credentials, tokens, source bytes and values above `rules.disclosure.classes[0]`; unrestricted process or service logs are never stored. Exact replay is idempotent, but conflicting content for an attempt identity, missing pins or partial evidence is refused rather than written as a degraded trace.",
     "run_trace: [BEHAVIOR] MUST return only NodeExecutions belonging to the named Run in stable node, mapped-element, attempt and execution-time order with explicit bounded pagination. Immutable execution identities and digest/term/schema/class evidence remain visible, while value content is included only within the actor's disclosure ceiling and is never reconstructed after retention expiry. Credentials, headers, host paths, process environment and unrestricted external text are absent. Unknown or invisible Runs and unreadable evidence are explicit; a lower ceiling yields the same trace with redaction rather than an existence-revealing alternate error.",
     "slot_evidence: [BEHAVIOR] MUST return only concluded function attempts owned by the exact Slot and contract version, in deterministic bounded order and within the reader's disclosure ceiling; it MUST NOT broaden access to neighboring nodes or the rest of each Run. An exact capture query succeeds only when the referenced immutable NodeExecution matches that slot and contract, and health derivation receives only evidence for the named serving implementation. Unknown, cross-slot, non-concluded or unauthorized evidence is refused without a whole-run fallback. The view changes no trace or corpus state and cannot itself create or withdraw a TrialCase.",
     "active_corpus: [BEHAVIOR] MUST return a stable ordered snapshot of every active TrialCase for the exact contract version plus the content identity of that complete set; internal admission and health callers cannot filter or omit cases. Withdrawn cases never count as active but remain available as historical admission evidence. A surface reader receives full values only within its disclosure ceiling and otherwise receives digest-and-class views; unreadable evidence is an explicit failure and MUST NOT produce a partial snapshot labelled complete.",
     "add_trial_case: [BEHAVIOR] MUST resolve the exact active contract version, require one value for every required input and no extras, and validate term revision, schema, carriage, media type and bounds for inputs and optional expected outputs. It stores values and file fixtures with `trial_corpus` retention, derives the case identity from immutable content and appends one active TrialCase; identical content returns the existing case. Unknown or retired contracts, incompatible ports and failed storage leave no partial values or case, and the operation executes no implementation and changes no admission or activation.",
-    "capture_trial_case: [BEHAVIOR] MUST accept only a concluded function NodeExecution of the exact slot and contract, copy only the selected execution inputs whose values and digests match trace evidence, and record origin `captured_from_run`. A live spool file is verified and copied into a retained `byte_stream` StoredValue while the run keeps ownership of the original; inaccessible or released bytes cannot be captured by reference. Failed execution supplies no inferred expected output, and retaining a `personal_data` file requires the active owner. The append changes neither serving activation nor a stored health flag.",
+    "capture_trial_case: [BEHAVIOR] MUST accept only a concluded function NodeExecution of the exact slot and contract, copy only the selected execution inputs whose values and digests match trace evidence, and record origin `captured_from_run`. A live spool file is verified and copied into a retained `byte_stream` StoredValue while the run keeps ownership of the original; inaccessible or released bytes cannot be captured by reference. Failed execution supplies no inferred expected output, and retaining a file in `rules.disclosure.classes[2]` requires the active owner. The append changes neither serving activation nor a stored health flag.",
     "copy_cases_to_version: [BEHAVIOR] MUST operate only between exact versions of the same slot after verifying that the target corpus is empty. Each selected active source case is independently revalidated against target ports, term revisions, schemas, carriage and bounds; compatible cases receive new target-version identities while equal StoredValue content may be reused by digest, and incompatible cases appear as explicit skips with reasons. It MUST NOT copy withdrawn cases, coerce content, infer inheritance at contract creation or alter source cases, admission history or activations.",
     "withdraw_trial_case: [BEHAVIOR] MUST compare-and-set one active TrialCase to final withdrawn state, sampling `module:system_clock.now` once and recording the actor and bounded reason without editing or deleting case content. When a case has expected outputs and ever contributed to an admitted verdict, only the active owner may withdraw it; an author cannot remove a protected regression that blocks its implementation. Exact replay preserves the original withdrawal, conflicting or stale repeats change nothing, and all prior verdicts, executions, activations and retained references remain historical evidence.",
     "derive_output_class: [BEHAVIOR] MUST derive a function output's disclosure class as the maximum class of the exact StoredValues actually supplied to that execution and return the contributing class evidence. Caller labels and a requested lower class are ignored; missing references, inconsistent execution evidence, unknown classes or a non-function output context fail closed without a fallback. The calculation reads no unrelated run values, does not reclassify operation-service outputs and has no state impact.",
-    "expire_values: [BEHAVIOR] MUST sample `module:system_clock.now`, evaluate every live retention reference and terminal-run state, and atomically remove only eligible `run_evidence` bytes after 30 days for personal data or 90 days for other classes. Any non-terminal Run or longer retention reference protects the content; trial-corpus and approval evidence do not expire under this policy. Repeated sweeps are idempotent, and indeterminate run state, inconsistent references or unavailable store abort the affected unit rather than guessing. Digest, semantic/schema/carriage/class metadata, retention history and all records naming the value remain immutable after bytes are removed.",
+    "expire_values: [BEHAVIOR] MUST sample `module:system_clock.now`, evaluate every live retention reference and terminal-run state, and atomically remove only eligible `run_evidence` bytes after 30 days for personal data or 90 days for other classes. Any non-terminal Run or longer retention reference protects the content; trial-corpus and approval evidence do not expire under this policy. Repeated sweeps are idempotent, and indeterminate run state, inconsistent references or unavailable store abort the affected unit rather than guessing. Digest, semantic/schema/carriage/class metadata, retention history and all records naming the value remain immutable after bytes are removed. The closed flow plan requires this coordinator path to reach the exact operations `now`, `release_run_files`, `rollback_unit_of_work`.",
     "put_value: [BEHAVIOR] MUST consume canonical bounded bytes, validate the accepted semantic-term revision, schema and carriage, compute identity from content and store the object once under its digest with immutable metadata. Equal content reuses the object and may append a longer-lived retention reference; different bytes or metadata can never overwrite an existing digest. Durable `byte_stream` content is accepted only for a trial fixture and must satisfy both stored-value and fixture ceilings. Oversize, invalid references, unreadable streams, non-trial files or storage failure expose no partial StoredValue, and the operation writes no external-service business record.",
     "read_value: [BEHAVIOR] MUST resolve the exact digest within the reader's declared run, trial or inspection purpose and apply the disclosure ceiling before releasing content. When the value is above the ceiling or its bytes have expired, it returns only permitted digest, term, schema, carriage and class metadata with an explicit unavailable reason; it never reconstructs or fabricates content. Malformed references, wrong scope, integrity mismatch and unavailable storage are explicit without alternate-path existence leaks, and the read changes no retention or domain state."
   ],
@@ -286,7 +286,8 @@
       "vocabulary_proposal_table_name": "vocabulary_proposal_records",
       "slot_table_name": "slot_records",
       "trial_case_table_name": "trial_case_records"
-    }
+    },
+    "role": "data"
   },
   "models": {
     "SemanticAxis": {
@@ -907,6 +908,1496 @@
         "last_failure_at": "KernelInstant | None",
         "blocked_until": "KernelInstant | None"
       }
+    },
+    "ManifestRevisionRef": {
+      "identity": "value",
+      "fields": {
+        "repository_revision": "str",
+        "manifest_root_ref": "str"
+      }
+    },
+    "ManifestOperationProjection": {
+      "identity": "value",
+      "fields": {
+        "operation_ref": "ManifestOperationRef",
+        "effect_class": "str",
+        "replay": "str",
+        "idempotency_key_fields": "tuple[str, ...]",
+        "preconditions": "tuple[str, ...]",
+        "purpose": "str"
+      }
+    },
+    "ManifestOperationChange": {
+      "identity": "value",
+      "fields": {
+        "operation_absent": "bool",
+        "material_facts_changed": "bool",
+        "digest_changed_with_equivalent_invocation_facts": "bool",
+        "changed_fact_names": "tuple[str, ...]"
+      }
+    },
+    "ManifestChannelEndpoint": {
+      "identity": "value",
+      "fields": {
+        "channel": "str",
+        "base_address": "str",
+        "required_header_names": "tuple[str, ...]",
+        "credential_binding_refs": "tuple[str, ...]"
+      }
+    },
+    "ServiceInstanceProjection": {
+      "identity": "value",
+      "fields": {
+        "service_id": "str",
+        "instance_id": "str",
+        "manifest_record_digest": "str",
+        "environment_class": "str",
+        "endpoints": "tuple[ManifestChannelEndpoint, ...]"
+      }
+    },
+    "ContractVersionIdentity": {
+      "identity": "value",
+      "fields": {
+        "contract_version_id": "str",
+        "canonicalization_version": "str"
+      }
+    },
+    "CanonicalField": {
+      "identity": "value",
+      "fields": {
+        "name": "str",
+        "value": "CanonicalFieldValue"
+      }
+    },
+    "AuthorizationResult": {
+      "identity": "value",
+      "fields": {
+        "actor": "ActorRef",
+        "effective_disclosure_ceiling": "str"
+      }
+    },
+    "CompareAndSetExpectation": {
+      "identity": "value",
+      "fields": {
+        "record_family": "str",
+        "record_id": "str",
+        "expected_version": "RecordVersionValue"
+      }
+    },
+    "UnitOfWorkCommitResult": {
+      "identity": "value",
+      "fields": {
+        "transaction_id": "str",
+        "committed_record_versions": "tuple[tuple[str, CommittedRecordVersion], ...]"
+      }
+    },
+    "UnitOfWorkRollbackResult": {
+      "identity": "value",
+      "fields": {
+        "rolled_back": "bool",
+        "already_rolled_back": "bool"
+      }
+    },
+    "BindingAcceptanceResult": {
+      "identity": "value",
+      "fields": {
+        "binding": "OperationBinding",
+        "version": "OperationBindingVersion",
+        "acceptance_record_ref": "str"
+      }
+    },
+    "BindingDriftItem": {
+      "identity": "value",
+      "fields": {
+        "binding_id": "str",
+        "binding_version_ref": "str",
+        "status": "str",
+        "prior_manifest_record_digest": "str",
+        "current_manifest_record_digest": "str | None",
+        "changed_fact_names": "tuple[str, ...]",
+        "replacement_binding_version_ref": "str | None"
+      }
+    },
+    "BindingDriftReport": {
+      "identity": "value",
+      "fields": {
+        "items": "tuple[BindingDriftItem, ...]"
+      }
+    },
+    "VocabularySeedResult": {
+      "identity": "value",
+      "fields": {
+        "installed_entry_refs": "tuple[str, ...]",
+        "installed_revision_refs": "tuple[str, ...]",
+        "already_initialized": "bool"
+      }
+    },
+    "TermRevisionView": {
+      "identity": "value",
+      "fields": {
+        "revision": "SemanticTermRevision",
+        "term_id": "str",
+        "axis_id": "str",
+        "term_status": "str",
+        "axis_status": "str"
+      }
+    },
+    "AxisProposalContent": {
+      "identity": "value",
+      "fields": {
+        "axis_id": "str | None",
+        "display_name": "str",
+        "meaning": "str",
+        "value_family": "str",
+        "qualifier_contract_ref": "str | None"
+      }
+    },
+    "TermProposalContent": {
+      "identity": "value",
+      "fields": {
+        "term_id": "str | None",
+        "axis_id": "str",
+        "display_name": "str",
+        "meaning": "str",
+        "value_schema_ref": "str",
+        "required_qualifier_kind": "str | None",
+        "subject_kind": "str | None",
+        "temporal_role": "str | None"
+      }
+    },
+    "RelationProposalContent": {
+      "identity": "value",
+      "fields": {
+        "relation_id": "str | None",
+        "source_term_revision_ref": "str",
+        "target_term_revision_ref": "str",
+        "source_schema_ref": "str",
+        "target_schema_ref": "str",
+        "relation_kind": "str",
+        "loss_class": "str",
+        "required_slot_ref": "str | None"
+      }
+    },
+    "VocabularyDecisionResult": {
+      "identity": "value",
+      "fields": {
+        "proposal": "VocabularyProposal",
+        "governed_entry_ref": "str | None",
+        "issued_revision_ref": "str | None"
+      }
+    },
+    "RunFileDescriptor": {
+      "identity": "value",
+      "fields": {
+        "spooled_ref": "SpooledBytes",
+        "content_digest": "str",
+        "size_bytes": "int",
+        "observed_media_type": "str",
+        "disclosure_class": "str",
+        "producer_run_id": "str",
+        "producer_node_id": "str",
+        "producer_port_id": "str"
+      }
+    },
+    "OwnerStatementRequest": {
+      "identity": "value",
+      "fields": {
+        "statement_kind": "str",
+        "target_refs": "tuple[str, ...]",
+        "service_operation_refs": "tuple[str, ...]",
+        "effect_classes": "tuple[str, ...]",
+        "preview_port_ids": "tuple[str, ...]",
+        "motivating_refs": "tuple[str, ...]"
+      }
+    },
+    "OwnerStatement": {
+      "identity": "value",
+      "fields": {
+        "text": "str",
+        "digest": "str"
+      }
+    },
+    "EffectAuthorization": {
+      "identity": "value",
+      "fields": {
+        "status": "str",
+        "authority_kind": "str | None",
+        "authority_ref": "str | None",
+        "covered_input_digests": "tuple[str, ...]",
+        "reason": "str | None"
+      }
+    },
+    "RunFileAccess": {
+      "identity": "value",
+      "fields": {
+        "descriptor": "RunFileDescriptor",
+        "read_lease": "BoundedReadLease | None"
+      }
+    },
+    "FileDeliveryResult": {
+      "identity": "value",
+      "fields": {
+        "content_digest": "str",
+        "delivered_bytes": "int",
+        "observed_media_type": "str",
+        "complete": "bool"
+      }
+    },
+    "RunSpoolCleanupResult": {
+      "identity": "value",
+      "fields": {
+        "files_removed": "int",
+        "bytes_removed": "int",
+        "failures": "tuple[str, ...]"
+      }
+    },
+    "StoredValueRead": {
+      "identity": "value",
+      "fields": {
+        "metadata": "StoredValue",
+        "content": "StoredValueContent",
+        "content_unavailable_reason": "str | None"
+      }
+    },
+    "DisclosureDerivation": {
+      "identity": "value",
+      "fields": {
+        "disclosure_class": "str",
+        "input_value_refs": "tuple[str, ...]"
+      }
+    },
+    "ValueExpiryResult": {
+      "identity": "value",
+      "fields": {
+        "content_removed": "int",
+        "content_retained": "int",
+        "failures": "tuple[str, ...]"
+      }
+    },
+    "SandboxFileInput": {
+      "identity": "value",
+      "fields": {
+        "port_id": "str",
+        "source": "SandboxFileSource",
+        "content_digest": "str",
+        "size_bytes": "int",
+        "observed_media_type": "str"
+      }
+    },
+    "SandboxCollectedValue": {
+      "identity": "value",
+      "fields": {
+        "port_id": "str",
+        "canonical_bytes": "bytes"
+      }
+    },
+    "SandboxCollectedFile": {
+      "identity": "value",
+      "fields": {
+        "port_id": "str",
+        "content_digest": "str",
+        "size_bytes": "int",
+        "observed_media_type": "str",
+        "spooled_ref": "SpooledBytes | None",
+        "read_lease": "BoundedReadLease | None"
+      }
+    },
+    "SandboxResourceUsage": {
+      "identity": "value",
+      "fields": {
+        "wall_time_ms": "int",
+        "cpu_time_ms": "int",
+        "memory_bytes_peak": "int",
+        "output_bytes": "int",
+        "scratch_bytes_peak": "int",
+        "process_count_peak": "int"
+      }
+    },
+    "DeniedAttemptEvidence": {
+      "identity": "value",
+      "fields": {
+        "kind": "str",
+        "detail": "str | None"
+      }
+    },
+    "SandboxExecutionResult": {
+      "identity": "value",
+      "fields": {
+        "outcome": "str",
+        "runtime_revision_ref": "str",
+        "enforced_bounds": "ResourceBounds",
+        "resources_used": "SandboxResourceUsage",
+        "denied_attempts": "tuple[DeniedAttemptEvidence, ...]",
+        "cleanup_confirmed": "bool",
+        "value_outputs": "tuple[SandboxCollectedValue, ...]",
+        "file_outputs": "tuple[SandboxCollectedFile, ...]"
+      }
+    },
+    "SandboxSupervisorHealth": {
+      "identity": "value",
+      "fields": {
+        "healthy": "bool",
+        "supported_runtime_revision_refs": "tuple[str, ...]",
+        "reason": "str | None"
+      }
+    },
+    "TransportMetadataField": {
+      "identity": "value",
+      "fields": {
+        "name": "str",
+        "value": "str"
+      }
+    },
+    "ObservedHeader": {
+      "identity": "value",
+      "fields": {
+        "name": "str",
+        "value": "str"
+      }
+    },
+    "TransportResult": {
+      "identity": "value",
+      "fields": {
+        "response_bytes": "bytes | None",
+        "response_file": "SpooledBytes | None",
+        "observed_status": "ObservedStatus",
+        "observed_headers": "tuple[ObservedHeader, ...]",
+        "service_instance_ref": "str",
+        "elapsed_ns": "int",
+        "request_bytes": "int",
+        "response_bytes_count": "int",
+        "send_classification": "str | None",
+        "failure_reason": "str | None"
+      }
+    },
+    "OperationAttemptResult": {
+      "identity": "value",
+      "fields": {
+        "run_id": "str",
+        "node_id": "str",
+        "map_index": "int | None",
+        "attempt_number": "int",
+        "binding_version_ref": "str",
+        "service_instance_ref": "str",
+        "input_digests": "tuple[str, ...]",
+        "idempotency_key_digest": "str | None",
+        "status": "str",
+        "output_value_refs": "tuple[str, ...]",
+        "output_file_refs": "tuple[SpooledBytes, ...]",
+        "transport": "TransportResult | None",
+        "failure_reason": "str | None"
+      }
+    },
+    "TypedValueDraft": {
+      "identity": "value",
+      "fields": {
+        "port_id": "str",
+        "semantic_term_revision_ref": "str",
+        "value_schema_ref": "str",
+        "canonical_bytes": "bytes | None",
+        "byte_stream": "BoundedByteStream | None",
+        "media_type": "str | None"
+      }
+    },
+    "TrialCopySkip": {
+      "identity": "value",
+      "fields": {
+        "source_trial_case_ref": "str",
+        "reason": "str"
+      }
+    },
+    "TrialCopyReport": {
+      "identity": "value",
+      "fields": {
+        "copied_trial_case_refs": "tuple[str, ...]",
+        "skipped": "tuple[TrialCopySkip, ...]"
+      }
+    },
+    "ActiveCorpusSnapshot": {
+      "identity": "value",
+      "fields": {
+        "contract_version_ref": "str",
+        "active_cases": "tuple[TrialCase, ...]",
+        "corpus_digest": "str",
+        "withdrawn_cases": "tuple[TrialCase, ...]"
+      }
+    },
+    "RunAdvanceResult": {
+      "identity": "value",
+      "fields": {
+        "run": "FlowRun",
+        "node_execution_refs": "tuple[str, ...]",
+        "output_value_refs": "tuple[str, ...]"
+      }
+    },
+    "RunRecoveryItem": {
+      "identity": "value",
+      "fields": {
+        "run_id": "str",
+        "outcome": "str",
+        "waiting_reasons": "tuple[str, ...]",
+        "unknown_outcome_refs": "tuple[str, ...]",
+        "failure_reason": "str | None"
+      }
+    },
+    "RunRecoveryReport": {
+      "identity": "value",
+      "fields": {
+        "items": "tuple[RunRecoveryItem, ...]"
+      }
+    },
+    "RunStatusView": {
+      "identity": "value",
+      "fields": {
+        "run_id": "str",
+        "status": "str",
+        "waiting_on": "tuple[str, ...]",
+        "flow_activation_ref": "str",
+        "created_at": "KernelInstant",
+        "ended_at": "KernelInstant | None",
+        "output_value_refs": "tuple[str, ...]",
+        "partial": "bool"
+      }
+    },
+    "NodeExecutionDraft": {
+      "identity": "value",
+      "fields": {
+        "run_id": "str",
+        "node_id": "str",
+        "map_index": "int | None",
+        "attempt_number": "int",
+        "executed_ref": "str",
+        "runtime_revision_ref": "str | None",
+        "enforced_bounds": "ResourceBounds | None",
+        "service_instance_ref": "str | None",
+        "idempotency_key_digest": "str | None",
+        "approval_ref": "str | None",
+        "grant_ref": "str | None",
+        "input_value_refs": "tuple[str, ...]",
+        "output_value_refs": "tuple[str, ...]",
+        "input_file_refs": "tuple[SpooledBytes, ...]",
+        "output_file_refs": "tuple[SpooledBytes, ...]",
+        "input_validation": "tuple[str, ...]",
+        "output_validation": "tuple[str, ...]",
+        "denied_attempts": "tuple[DeniedAttemptEvidence, ...]",
+        "resources_used": "SandboxResourceUsage | None",
+        "status": "str",
+        "failure_reason": "str | None",
+        "failure_detail": "str | None",
+        "started_at": "KernelInstant",
+        "ended_at": "KernelInstant"
+      }
+    },
+    "RunTracePage": {
+      "identity": "value",
+      "fields": {
+        "executions": "tuple[NodeExecution, ...]",
+        "next_page_cursor": "str | None",
+        "partial": "bool"
+      }
+    },
+    "SlotEvidencePage": {
+      "identity": "value",
+      "fields": {
+        "executions": "tuple[NodeExecution, ...]",
+        "trial_execution_refs": "tuple[str, ...]",
+        "next_page_cursor": "str | None"
+      }
+    },
+    "ImplementationRecordView": {
+      "identity": "value",
+      "fields": {
+        "implementation": "Implementation",
+        "code_digest": "str",
+        "code_ref": "str",
+        "code_bytes": "bytes | None"
+      }
+    },
+    "SlotAuthoringView": {
+      "identity": "value",
+      "fields": {
+        "slot": "Slot",
+        "contract_versions": "tuple[SlotContractVersion, ...]",
+        "implementations": "tuple[ImplementationRecordView, ...]",
+        "next_page_cursor": "str | None"
+      }
+    },
+    "CompositionView": {
+      "identity": "value",
+      "fields": {
+        "contract_versions": "tuple[SlotContractVersion, ...]",
+        "binding_versions": "tuple[OperationBindingVersion, ...]",
+        "vocabulary_revision_refs": "tuple[str, ...]",
+        "next_page_cursor": "str | None"
+      }
+    },
+    "ContractHealthView": {
+      "identity": "value",
+      "fields": {
+        "contract_version_ref": "str",
+        "serving_activation": "SlotActivation | None",
+        "admission_fresh": "bool",
+        "known_failing": "bool",
+        "failing_trial_case_refs": "tuple[str, ...]",
+        "failing_execution_refs": "tuple[str, ...]"
+      }
+    },
+    "WaitingForOwnerPage": {
+      "identity": "value",
+      "fields": {
+        "pending_approvals": "tuple[EffectApproval, ...]",
+        "active_grants": "tuple[StandingGrant, ...]",
+        "grant_execution_counts": "tuple[tuple[str, int], ...]",
+        "next_page_cursor": "str | None"
+      }
+    },
+    "CompositionFilter": {
+      "identity": "value",
+      "fields": {
+        "slot_refs": "tuple[str, ...]",
+        "binding_refs": "tuple[str, ...]",
+        "semantic_term_revision_refs": "tuple[str, ...]",
+        "effect_classes": "tuple[str, ...]"
+      }
+    },
+    "WaitingForOwnerFilter": {
+      "identity": "value",
+      "fields": {
+        "run_refs": "tuple[str, ...]",
+        "flow_version_refs": "tuple[str, ...]",
+        "service_instance_refs": "tuple[str, ...]"
+      }
+    },
+    "InspectRequest": {
+      "identity": "value",
+      "fields": {
+        "inspection_kind": "str",
+        "resource_ref": "str | None",
+        "query_refs": "tuple[str, ...]",
+        "page_cursor": "str | None",
+        "page_size": "int | None"
+      }
+    },
+    "InspectResult": {
+      "identity": "value",
+      "fields": {
+        "inspection_kind": "str",
+        "items": "tuple[SurfaceViewItem, ...]",
+        "next_page_cursor": "str | None"
+      }
+    },
+    "SlotDraft": {
+      "identity": "value",
+      "fields": {
+        "name": "str",
+        "purpose": "str"
+      }
+    },
+    "ContractVersionDraft": {
+      "identity": "value",
+      "fields": {
+        "slot_id": "str",
+        "input_ports": "tuple[SemanticPort, ...]",
+        "output_ports": "tuple[SemanticPort, ...]",
+        "resource_bounds": "ResourceBounds",
+        "runtime_revision": "SandboxRuntimeRevision"
+      }
+    },
+    "ImplementationDraft": {
+      "identity": "value",
+      "fields": {
+        "contract_version_ref": "str",
+        "entry_point": "str",
+        "code_bytes": "bytes",
+        "rationale": "str",
+        "motivating_trace_refs": "tuple[str, ...]"
+      }
+    },
+    "TrialCaseDraft": {
+      "identity": "value",
+      "fields": {
+        "contract_version_ref": "str",
+        "inputs": "tuple[TypedValueDraft, ...]",
+        "expected_outputs": "tuple[TypedValueDraft, ...] | None"
+      }
+    },
+    "BindingProposalDraft": {
+      "identity": "value",
+      "fields": {
+        "operation_ref": "ManifestOperationRef",
+        "input_ports": "tuple[SemanticPort, ...]",
+        "output_ports": "tuple[SemanticPort, ...]",
+        "purpose": "str",
+        "preview_ports": "tuple[str, ...]",
+        "outcome_read_binding_ref": "str | None"
+      }
+    },
+    "FlowDraft": {
+      "identity": "value",
+      "fields": {
+        "name": "str",
+        "purpose": "str"
+      }
+    },
+    "FlowVersionDraft": {
+      "identity": "value",
+      "fields": {
+        "flow_id": "str",
+        "flow_inputs": "tuple[SemanticPort, ...]",
+        "flow_outputs": "tuple[SemanticPort, ...]",
+        "nodes": "tuple[FlowNode, ...]",
+        "edges": "tuple[FlowEdge, ...]",
+        "constants": "tuple[FlowConstant, ...]"
+      }
+    },
+    "VocabularyProposalDraft": {
+      "identity": "value",
+      "fields": {
+        "content": "VocabularyProposalContent",
+        "motivating_refs": "tuple[str, ...]",
+        "agent_rationale": "str | None"
+      }
+    },
+    "AuthorRequest": {
+      "identity": "value",
+      "fields": {
+        "command": "str",
+        "payload": "AuthorPayload"
+      }
+    },
+    "AuthorResult": {
+      "identity": "value",
+      "fields": {
+        "record_kind": "str",
+        "record_ref": "str"
+      }
+    },
+    "TrialRequest": {
+      "identity": "value",
+      "fields": {
+        "contract_version_ref": "str",
+        "implementation_ref": "str"
+      }
+    },
+    "ActivationRequest": {
+      "identity": "value",
+      "fields": {
+        "activation_kind": "str",
+        "contract_version_ref": "str | None",
+        "implementation_ref": "str | None",
+        "flow_id": "str | None",
+        "flow_version_ref": "str | None",
+        "proof_ref": "str | None",
+        "expected_current_activation_ref": "str | None",
+        "reason": "str | None"
+      }
+    },
+    "ActivationResult": {
+      "identity": "value",
+      "fields": {
+        "activation": "ActivationSelection",
+        "current_activation_ref": "str"
+      }
+    },
+    "RunFlowRequest": {
+      "identity": "value",
+      "fields": {
+        "flow_ref": "str",
+        "inputs": "tuple[TypedValueDraft, ...]"
+      }
+    },
+    "RunFlowResult": {
+      "identity": "value",
+      "fields": {
+        "run": "FlowRun",
+        "status": "RunStatusView"
+      }
+    },
+    "OwnerDecisionRequest": {
+      "identity": "value",
+      "fields": {
+        "decision_kind": "str",
+        "target_ref": "str",
+        "secondary_ref": "str | None",
+        "expected_status": "str | None",
+        "expected_revision_ref": "str | None",
+        "decision": "str",
+        "reason": "str | None",
+        "owner_statement_digest": "str | None"
+      }
+    },
+    "OwnerDecisionResult": {
+      "identity": "value",
+      "fields": {
+        "record_kind": "str",
+        "decision_record_ref": "str",
+        "resulting_state_ref": "str"
+      }
+    },
+    "HttpRequestContext": {
+      "identity": "value",
+      "fields": {
+        "request_id": "str",
+        "credential": "ChannelCredentialHandle",
+        "body_size": "int"
+      }
+    },
+    "HttpRequestEnvelope": {
+      "identity": "value",
+      "fields": {
+        "context": "HttpRequestContext",
+        "operation": "str",
+        "payload": "SurfaceRequest"
+      }
+    },
+    "HttpResponseEnvelope": {
+      "identity": "value",
+      "fields": {
+        "status_code": "int",
+        "result": "SurfaceResponse | None",
+        "error_code": "str | None",
+        "error_message": "str | None"
+      }
+    },
+    "McpRequestEnvelope": {
+      "identity": "value",
+      "fields": {
+        "request_id": "str",
+        "credential": "ChannelCredentialHandle",
+        "operation": "str",
+        "payload": "SurfaceRequest"
+      }
+    },
+    "McpResponseEnvelope": {
+      "identity": "value",
+      "fields": {
+        "request_id": "str",
+        "result": "SurfaceResponse | None",
+        "error_code": "str | None",
+        "error_message": "str | None"
+      }
+    },
+    "KernelReadiness": {
+      "identity": "value",
+      "fields": {
+        "manifest_revision": "ManifestRevisionRef",
+        "store_ready": "bool",
+        "sandbox_ready": "bool",
+        "binding_sweep_ready": "bool",
+        "runs_resumed": "bool",
+        "mcp_ready": "bool",
+        "http_ready": "bool",
+        "ready": "bool",
+        "failures": "tuple[str, ...]"
+      }
+    },
+    "CredentialHandle": {
+      "identity": "value",
+      "fields": {
+        "payload": "object"
+      }
+    },
+    "ChannelCredentialHandle": {
+      "identity": "value",
+      "fields": {
+        "payload": "object"
+      }
+    },
+    "UnitOfWorkHandle": {
+      "identity": "value",
+      "fields": {
+        "payload": "object"
+      }
+    },
+    "BoundedByteStream": {
+      "identity": "value",
+      "fields": {
+        "payload": "object",
+        "max_bytes": "int"
+      }
+    },
+    "BoundedByteSink": {
+      "identity": "value",
+      "fields": {
+        "payload": "object",
+        "max_bytes": "int"
+      }
+    },
+    "BoundedReadLease": {
+      "identity": "value",
+      "fields": {
+        "payload": "object",
+        "value_digest": "str",
+        "size_bytes": "int"
+      }
+    },
+    "VocabularyProposalContentAxisVariant": {
+      "identity": "value",
+      "fields": {
+        "kind": "Literal['axis']",
+        "value": "AxisProposalContent"
+      }
+    },
+    "VocabularyProposalContentTermVariant": {
+      "identity": "value",
+      "fields": {
+        "kind": "Literal['term']",
+        "value": "TermProposalContent"
+      }
+    },
+    "VocabularyProposalContentRelationVariant": {
+      "identity": "value",
+      "fields": {
+        "kind": "Literal['relation']",
+        "value": "RelationProposalContent"
+      }
+    },
+    "VocabularyProposalContent": {
+      "kind": "discriminated_union",
+      "discriminator": "kind",
+      "variants": [
+        "VocabularyProposalContentAxisVariant",
+        "VocabularyProposalContentTermVariant",
+        "VocabularyProposalContentRelationVariant"
+      ]
+    },
+    "AuthorPayloadSlotDraftVariant": {
+      "identity": "value",
+      "fields": {
+        "kind": "Literal['slot_draft']",
+        "value": "SlotDraft"
+      }
+    },
+    "AuthorPayloadContractVersionDraftVariant": {
+      "identity": "value",
+      "fields": {
+        "kind": "Literal['contract_version_draft']",
+        "value": "ContractVersionDraft"
+      }
+    },
+    "AuthorPayloadImplementationDraftVariant": {
+      "identity": "value",
+      "fields": {
+        "kind": "Literal['implementation_draft']",
+        "value": "ImplementationDraft"
+      }
+    },
+    "AuthorPayloadTrialCaseDraftVariant": {
+      "identity": "value",
+      "fields": {
+        "kind": "Literal['trial_case_draft']",
+        "value": "TrialCaseDraft"
+      }
+    },
+    "AuthorPayloadBindingProposalDraftVariant": {
+      "identity": "value",
+      "fields": {
+        "kind": "Literal['binding_proposal_draft']",
+        "value": "BindingProposalDraft"
+      }
+    },
+    "AuthorPayloadFlowDraftVariant": {
+      "identity": "value",
+      "fields": {
+        "kind": "Literal['flow_draft']",
+        "value": "FlowDraft"
+      }
+    },
+    "AuthorPayloadFlowVersionDraftVariant": {
+      "identity": "value",
+      "fields": {
+        "kind": "Literal['flow_version_draft']",
+        "value": "FlowVersionDraft"
+      }
+    },
+    "AuthorPayloadVocabularyProposalDraftVariant": {
+      "identity": "value",
+      "fields": {
+        "kind": "Literal['vocabulary_proposal_draft']",
+        "value": "VocabularyProposalDraft"
+      }
+    },
+    "AuthorPayload": {
+      "kind": "discriminated_union",
+      "discriminator": "kind",
+      "variants": [
+        "AuthorPayloadSlotDraftVariant",
+        "AuthorPayloadContractVersionDraftVariant",
+        "AuthorPayloadImplementationDraftVariant",
+        "AuthorPayloadTrialCaseDraftVariant",
+        "AuthorPayloadBindingProposalDraftVariant",
+        "AuthorPayloadFlowDraftVariant",
+        "AuthorPayloadFlowVersionDraftVariant",
+        "AuthorPayloadVocabularyProposalDraftVariant"
+      ]
+    },
+    "SurfaceRequestInspectRequestVariant": {
+      "identity": "value",
+      "fields": {
+        "kind": "Literal['inspect_request']",
+        "value": "InspectRequest"
+      }
+    },
+    "SurfaceRequestAuthorRequestVariant": {
+      "identity": "value",
+      "fields": {
+        "kind": "Literal['author_request']",
+        "value": "AuthorRequest"
+      }
+    },
+    "SurfaceRequestTrialRequestVariant": {
+      "identity": "value",
+      "fields": {
+        "kind": "Literal['trial_request']",
+        "value": "TrialRequest"
+      }
+    },
+    "SurfaceRequestActivationRequestVariant": {
+      "identity": "value",
+      "fields": {
+        "kind": "Literal['activation_request']",
+        "value": "ActivationRequest"
+      }
+    },
+    "SurfaceRequestRunFlowRequestVariant": {
+      "identity": "value",
+      "fields": {
+        "kind": "Literal['run_flow_request']",
+        "value": "RunFlowRequest"
+      }
+    },
+    "SurfaceRequestOwnerDecisionRequestVariant": {
+      "identity": "value",
+      "fields": {
+        "kind": "Literal['owner_decision_request']",
+        "value": "OwnerDecisionRequest"
+      }
+    },
+    "SurfaceRequest": {
+      "kind": "discriminated_union",
+      "discriminator": "kind",
+      "variants": [
+        "SurfaceRequestInspectRequestVariant",
+        "SurfaceRequestAuthorRequestVariant",
+        "SurfaceRequestTrialRequestVariant",
+        "SurfaceRequestActivationRequestVariant",
+        "SurfaceRequestRunFlowRequestVariant",
+        "SurfaceRequestOwnerDecisionRequestVariant"
+      ]
+    },
+    "SurfaceResponseInspectResultVariant": {
+      "identity": "value",
+      "fields": {
+        "kind": "Literal['inspect_result']",
+        "value": "InspectResult"
+      }
+    },
+    "SurfaceResponseAuthorResultVariant": {
+      "identity": "value",
+      "fields": {
+        "kind": "Literal['author_result']",
+        "value": "AuthorResult"
+      }
+    },
+    "SurfaceResponseAdmissionVerdictVariant": {
+      "identity": "value",
+      "fields": {
+        "kind": "Literal['admission_verdict']",
+        "value": "AdmissionVerdict"
+      }
+    },
+    "SurfaceResponseActivationResultVariant": {
+      "identity": "value",
+      "fields": {
+        "kind": "Literal['activation_result']",
+        "value": "ActivationResult"
+      }
+    },
+    "SurfaceResponseRunFlowResultVariant": {
+      "identity": "value",
+      "fields": {
+        "kind": "Literal['run_flow_result']",
+        "value": "RunFlowResult"
+      }
+    },
+    "SurfaceResponseOwnerDecisionResultVariant": {
+      "identity": "value",
+      "fields": {
+        "kind": "Literal['owner_decision_result']",
+        "value": "OwnerDecisionResult"
+      }
+    },
+    "SurfaceResponse": {
+      "kind": "discriminated_union",
+      "discriminator": "kind",
+      "variants": [
+        "SurfaceResponseInspectResultVariant",
+        "SurfaceResponseAuthorResultVariant",
+        "SurfaceResponseAdmissionVerdictVariant",
+        "SurfaceResponseActivationResultVariant",
+        "SurfaceResponseRunFlowResultVariant",
+        "SurfaceResponseOwnerDecisionResultVariant"
+      ]
+    },
+    "SurfaceViewItemSemanticAxisVariant": {
+      "identity": "value",
+      "fields": {
+        "kind": "Literal['semantic_axis']",
+        "value": "SemanticAxis"
+      }
+    },
+    "SurfaceViewItemSemanticAxisRevisionVariant": {
+      "identity": "value",
+      "fields": {
+        "kind": "Literal['semantic_axis_revision']",
+        "value": "SemanticAxisRevision"
+      }
+    },
+    "SurfaceViewItemSemanticTermVariant": {
+      "identity": "value",
+      "fields": {
+        "kind": "Literal['semantic_term']",
+        "value": "SemanticTerm"
+      }
+    },
+    "SurfaceViewItemSemanticTermRevisionVariant": {
+      "identity": "value",
+      "fields": {
+        "kind": "Literal['semantic_term_revision']",
+        "value": "SemanticTermRevision"
+      }
+    },
+    "SurfaceViewItemSemanticRelationVariant": {
+      "identity": "value",
+      "fields": {
+        "kind": "Literal['semantic_relation']",
+        "value": "SemanticRelation"
+      }
+    },
+    "SurfaceViewItemSemanticRelationRevisionVariant": {
+      "identity": "value",
+      "fields": {
+        "kind": "Literal['semantic_relation_revision']",
+        "value": "SemanticRelationRevision"
+      }
+    },
+    "SurfaceViewItemSlotVariant": {
+      "identity": "value",
+      "fields": {
+        "kind": "Literal['slot']",
+        "value": "Slot"
+      }
+    },
+    "SurfaceViewItemSlotContractVersionVariant": {
+      "identity": "value",
+      "fields": {
+        "kind": "Literal['slot_contract_version']",
+        "value": "SlotContractVersion"
+      }
+    },
+    "SurfaceViewItemImplementationRecordViewVariant": {
+      "identity": "value",
+      "fields": {
+        "kind": "Literal['implementation_record_view']",
+        "value": "ImplementationRecordView"
+      }
+    },
+    "SurfaceViewItemTrialCaseVariant": {
+      "identity": "value",
+      "fields": {
+        "kind": "Literal['trial_case']",
+        "value": "TrialCase"
+      }
+    },
+    "SurfaceViewItemActiveCorpusSnapshotVariant": {
+      "identity": "value",
+      "fields": {
+        "kind": "Literal['active_corpus_snapshot']",
+        "value": "ActiveCorpusSnapshot"
+      }
+    },
+    "SurfaceViewItemOperationBindingVariant": {
+      "identity": "value",
+      "fields": {
+        "kind": "Literal['operation_binding']",
+        "value": "OperationBinding"
+      }
+    },
+    "SurfaceViewItemOperationBindingVersionVariant": {
+      "identity": "value",
+      "fields": {
+        "kind": "Literal['operation_binding_version']",
+        "value": "OperationBindingVersion"
+      }
+    },
+    "SurfaceViewItemFlowVariant": {
+      "identity": "value",
+      "fields": {
+        "kind": "Literal['flow']",
+        "value": "Flow"
+      }
+    },
+    "SurfaceViewItemFlowVersionVariant": {
+      "identity": "value",
+      "fields": {
+        "kind": "Literal['flow_version']",
+        "value": "FlowVersion"
+      }
+    },
+    "SurfaceViewItemFlowProofVariant": {
+      "identity": "value",
+      "fields": {
+        "kind": "Literal['flow_proof']",
+        "value": "FlowProof"
+      }
+    },
+    "SurfaceViewItemFlowActivationVariant": {
+      "identity": "value",
+      "fields": {
+        "kind": "Literal['flow_activation']",
+        "value": "FlowActivation"
+      }
+    },
+    "SurfaceViewItemFlowRunVariant": {
+      "identity": "value",
+      "fields": {
+        "kind": "Literal['flow_run']",
+        "value": "FlowRun"
+      }
+    },
+    "SurfaceViewItemRunStatusViewVariant": {
+      "identity": "value",
+      "fields": {
+        "kind": "Literal['run_status_view']",
+        "value": "RunStatusView"
+      }
+    },
+    "SurfaceViewItemRunTracePageVariant": {
+      "identity": "value",
+      "fields": {
+        "kind": "Literal['run_trace_page']",
+        "value": "RunTracePage"
+      }
+    },
+    "SurfaceViewItemSlotEvidencePageVariant": {
+      "identity": "value",
+      "fields": {
+        "kind": "Literal['slot_evidence_page']",
+        "value": "SlotEvidencePage"
+      }
+    },
+    "SurfaceViewItemStoredValueReadVariant": {
+      "identity": "value",
+      "fields": {
+        "kind": "Literal['stored_value_read']",
+        "value": "StoredValueRead"
+      }
+    },
+    "SurfaceViewItemCompositionViewVariant": {
+      "identity": "value",
+      "fields": {
+        "kind": "Literal['composition_view']",
+        "value": "CompositionView"
+      }
+    },
+    "SurfaceViewItemContractHealthViewVariant": {
+      "identity": "value",
+      "fields": {
+        "kind": "Literal['contract_health_view']",
+        "value": "ContractHealthView"
+      }
+    },
+    "SurfaceViewItem": {
+      "kind": "discriminated_union",
+      "discriminator": "kind",
+      "variants": [
+        "SurfaceViewItemSemanticAxisVariant",
+        "SurfaceViewItemSemanticAxisRevisionVariant",
+        "SurfaceViewItemSemanticTermVariant",
+        "SurfaceViewItemSemanticTermRevisionVariant",
+        "SurfaceViewItemSemanticRelationVariant",
+        "SurfaceViewItemSemanticRelationRevisionVariant",
+        "SurfaceViewItemSlotVariant",
+        "SurfaceViewItemSlotContractVersionVariant",
+        "SurfaceViewItemImplementationRecordViewVariant",
+        "SurfaceViewItemTrialCaseVariant",
+        "SurfaceViewItemActiveCorpusSnapshotVariant",
+        "SurfaceViewItemOperationBindingVariant",
+        "SurfaceViewItemOperationBindingVersionVariant",
+        "SurfaceViewItemFlowVariant",
+        "SurfaceViewItemFlowVersionVariant",
+        "SurfaceViewItemFlowProofVariant",
+        "SurfaceViewItemFlowActivationVariant",
+        "SurfaceViewItemFlowRunVariant",
+        "SurfaceViewItemRunStatusViewVariant",
+        "SurfaceViewItemRunTracePageVariant",
+        "SurfaceViewItemSlotEvidencePageVariant",
+        "SurfaceViewItemStoredValueReadVariant",
+        "SurfaceViewItemCompositionViewVariant",
+        "SurfaceViewItemContractHealthViewVariant"
+      ]
+    },
+    "ActivationSelectionSlotVariant": {
+      "identity": "value",
+      "fields": {
+        "kind": "Literal['slot']",
+        "value": "SlotActivation"
+      }
+    },
+    "ActivationSelectionFlowVariant": {
+      "identity": "value",
+      "fields": {
+        "kind": "Literal['flow']",
+        "value": "FlowActivation"
+      }
+    },
+    "ActivationSelection": {
+      "kind": "discriminated_union",
+      "discriminator": "kind",
+      "variants": [
+        "ActivationSelectionSlotVariant",
+        "ActivationSelectionFlowVariant"
+      ]
+    },
+    "CanonicalFieldValueTextVariant": {
+      "identity": "value",
+      "fields": {
+        "kind": "Literal['text']",
+        "value": "str"
+      }
+    },
+    "CanonicalFieldValueIntegerVariant": {
+      "identity": "value",
+      "fields": {
+        "kind": "Literal['integer']",
+        "value": "int"
+      }
+    },
+    "CanonicalFieldValueBooleanVariant": {
+      "identity": "value",
+      "fields": {
+        "kind": "Literal['boolean']",
+        "value": "bool"
+      }
+    },
+    "CanonicalFieldValueBytesVariant": {
+      "identity": "value",
+      "fields": {
+        "kind": "Literal['bytes']",
+        "value": "bytes"
+      }
+    },
+    "CanonicalFieldValueNoneVariant": {
+      "identity": "value",
+      "fields": {
+        "kind": "Literal['none']",
+        "value": "None"
+      }
+    },
+    "CanonicalFieldValueChildrenVariant": {
+      "identity": "value",
+      "fields": {
+        "kind": "Literal['children']",
+        "value": "tuple[CanonicalField, ...]"
+      }
+    },
+    "CanonicalFieldValue": {
+      "kind": "discriminated_union",
+      "discriminator": "kind",
+      "variants": [
+        "CanonicalFieldValueTextVariant",
+        "CanonicalFieldValueIntegerVariant",
+        "CanonicalFieldValueBooleanVariant",
+        "CanonicalFieldValueBytesVariant",
+        "CanonicalFieldValueNoneVariant",
+        "CanonicalFieldValueChildrenVariant"
+      ]
+    },
+    "RecordVersionValueTextVariant": {
+      "identity": "value",
+      "fields": {
+        "kind": "Literal['text']",
+        "value": "str"
+      }
+    },
+    "RecordVersionValueIntegerVariant": {
+      "identity": "value",
+      "fields": {
+        "kind": "Literal['integer']",
+        "value": "int"
+      }
+    },
+    "RecordVersionValueNoneVariant": {
+      "identity": "value",
+      "fields": {
+        "kind": "Literal['none']",
+        "value": "None"
+      }
+    },
+    "RecordVersionValue": {
+      "kind": "discriminated_union",
+      "discriminator": "kind",
+      "variants": [
+        "RecordVersionValueTextVariant",
+        "RecordVersionValueIntegerVariant",
+        "RecordVersionValueNoneVariant"
+      ]
+    },
+    "ValueContentBytesVariant": {
+      "identity": "value",
+      "fields": {
+        "kind": "Literal['bytes']",
+        "value": "bytes"
+      }
+    },
+    "ValueContentStreamVariant": {
+      "identity": "value",
+      "fields": {
+        "kind": "Literal['stream']",
+        "value": "BoundedByteStream"
+      }
+    },
+    "ValueContent": {
+      "kind": "discriminated_union",
+      "discriminator": "kind",
+      "variants": [
+        "ValueContentBytesVariant",
+        "ValueContentStreamVariant"
+      ]
+    },
+    "RetiredVocabularyEntryAxisVariant": {
+      "identity": "value",
+      "fields": {
+        "kind": "Literal['axis']",
+        "value": "SemanticAxis"
+      }
+    },
+    "RetiredVocabularyEntryTermVariant": {
+      "identity": "value",
+      "fields": {
+        "kind": "Literal['term']",
+        "value": "SemanticTerm"
+      }
+    },
+    "RetiredVocabularyEntryRelationVariant": {
+      "identity": "value",
+      "fields": {
+        "kind": "Literal['relation']",
+        "value": "SemanticRelation"
+      }
+    },
+    "RetiredVocabularyEntry": {
+      "kind": "discriminated_union",
+      "discriminator": "kind",
+      "variants": [
+        "RetiredVocabularyEntryAxisVariant",
+        "RetiredVocabularyEntryTermVariant",
+        "RetiredVocabularyEntryRelationVariant"
+      ]
+    },
+    "SandboxFileSourceSpooledVariant": {
+      "identity": "value",
+      "fields": {
+        "kind": "Literal['spooled']",
+        "value": "SpooledBytes"
+      }
+    },
+    "SandboxFileSourceStoredVariant": {
+      "identity": "value",
+      "fields": {
+        "kind": "Literal['stored']",
+        "value": "StoredValue"
+      }
+    },
+    "SandboxFileSource": {
+      "kind": "discriminated_union",
+      "discriminator": "kind",
+      "variants": [
+        "SandboxFileSourceSpooledVariant",
+        "SandboxFileSourceStoredVariant"
+      ]
+    },
+    "StoredValueContentBytesVariant": {
+      "identity": "value",
+      "fields": {
+        "kind": "Literal['bytes']",
+        "value": "bytes"
+      }
+    },
+    "StoredValueContentLeaseVariant": {
+      "identity": "value",
+      "fields": {
+        "kind": "Literal['lease']",
+        "value": "BoundedReadLease"
+      }
+    },
+    "StoredValueContentNoneVariant": {
+      "identity": "value",
+      "fields": {
+        "kind": "Literal['none']",
+        "value": "None"
+      }
+    },
+    "StoredValueContent": {
+      "kind": "discriminated_union",
+      "discriminator": "kind",
+      "variants": [
+        "StoredValueContentBytesVariant",
+        "StoredValueContentLeaseVariant",
+        "StoredValueContentNoneVariant"
+      ]
+    },
+    "ObservedStatusTextVariant": {
+      "identity": "value",
+      "fields": {
+        "kind": "Literal['text']",
+        "value": "str"
+      }
+    },
+    "ObservedStatusIntegerVariant": {
+      "identity": "value",
+      "fields": {
+        "kind": "Literal['integer']",
+        "value": "int"
+      }
+    },
+    "ObservedStatusNoneVariant": {
+      "identity": "value",
+      "fields": {
+        "kind": "Literal['none']",
+        "value": "None"
+      }
+    },
+    "ObservedStatus": {
+      "kind": "discriminated_union",
+      "discriminator": "kind",
+      "variants": [
+        "ObservedStatusTextVariant",
+        "ObservedStatusIntegerVariant",
+        "ObservedStatusNoneVariant"
+      ]
+    },
+    "CommittedRecordVersionTextVariant": {
+      "identity": "value",
+      "fields": {
+        "kind": "Literal['text']",
+        "value": "str"
+      }
+    },
+    "CommittedRecordVersionIntegerVariant": {
+      "identity": "value",
+      "fields": {
+        "kind": "Literal['integer']",
+        "value": "int"
+      }
+    },
+    "CommittedRecordVersion": {
+      "kind": "discriminated_union",
+      "discriminator": "kind",
+      "variants": [
+        "CommittedRecordVersionTextVariant",
+        "CommittedRecordVersionIntegerVariant"
+      ]
     }
   },
   "implementation_obligations": {},
@@ -2042,7 +3533,7 @@
       "repositories": [
         {
           "repository": "SqliteOperationalStoreRepository",
-          "module": "operational_store",
+          "module": "operational_store_persistence",
           "schema_function": "create_operational_store_schema",
           "emission": "table",
           "transaction": "external",
@@ -2973,6 +4464,35 @@
         "policy": "rules.time_source_policy",
         "read": "per_call"
       }
+    },
+    "time_source_policy": {
+      "kind": "time_source_policy",
+      "schema_version": 1,
+      "wall_clock": {
+        "authority_modules": [
+          "system_clock"
+        ],
+        "allowed_primitives": [
+          "time.time_ns"
+        ],
+        "single_host_source": true,
+        "samples_per_read": 1
+      },
+      "elapsed_time": {
+        "authority_modules": [
+          "access_control",
+          "run_executor"
+        ],
+        "allowed_primitives": [
+          "time.monotonic_ns"
+        ]
+      },
+      "representation": {
+        "type": "KernelInstant",
+        "field": "epoch_us",
+        "unit": "epoch_us",
+        "conversion": "floor_ns_to_us"
+      }
     }
   },
   "persistence": {
@@ -3020,21 +4540,30 @@
     }
   },
   "properties": {
-    "kernel_instant_non_negative": "epoch_us >= 0",
-    "resource_bounds_never_exceed_release": "each ResourceBounds field <= matching ReleaseCeilings field",
-    "retention_uses_longest_reference": "retention(value) = max(retention(record) for record naming value)",
-    "retry_wake_is_deadline_guard": "now < retry_not_before -> no invocation"
+    "now": [
+      "result.epoch_us >= 0"
+    ],
+    "clamp_resource_bounds": [
+      "result.cpu_time_limit <= ceilings.sandbox_cpu_time_ms_max",
+      "result.memory_limit <= ceilings.sandbox_memory_bytes_max",
+      "result.output_size_limit <= ceilings.sandbox_output_bytes_max",
+      "result.process_count_limit <= ceilings.sandbox_process_count_max",
+      "result.scratch_size_limit <= ceilings.sandbox_scratch_bytes_max",
+      "result.wall_time_limit <= ceilings.sandbox_wall_time_ms_max"
+    ]
   },
   "determinism": {
-    "pure_function_reexecution": true,
-    "release_ceilings": true,
-    "authentication_throttle_schedule": true,
-    "retry_backoff_schedule": true,
-    "kernel_wall_clock_now": false
+    "now": false,
+    "clamp_resource_bounds": true
   },
   "imports": {
-    "stdlib": [],
-    "third_party": [],
+    "stdlib": [
+      "from datetime import date",
+      "from decimal import Decimal"
+    ],
+    "third_party": [
+      "from fastapi import FastAPI"
+    ],
     "internal": {
       "models": [
         "ActorRef",
@@ -3085,7 +4614,184 @@
         "TrialExecution",
         "UncomposableOutput",
         "VocabularyProposal",
-        "WorkScopeReference"
+        "WorkScopeReference",
+        "ManifestRevisionRef",
+        "ManifestOperationProjection",
+        "ManifestOperationChange",
+        "ManifestChannelEndpoint",
+        "ServiceInstanceProjection",
+        "ContractVersionIdentity",
+        "CanonicalField",
+        "AuthorizationResult",
+        "CompareAndSetExpectation",
+        "UnitOfWorkCommitResult",
+        "UnitOfWorkRollbackResult",
+        "BindingAcceptanceResult",
+        "BindingDriftItem",
+        "BindingDriftReport",
+        "VocabularySeedResult",
+        "TermRevisionView",
+        "AxisProposalContent",
+        "TermProposalContent",
+        "RelationProposalContent",
+        "VocabularyDecisionResult",
+        "RunFileDescriptor",
+        "OwnerStatementRequest",
+        "OwnerStatement",
+        "EffectAuthorization",
+        "RunFileAccess",
+        "FileDeliveryResult",
+        "RunSpoolCleanupResult",
+        "StoredValueRead",
+        "DisclosureDerivation",
+        "ValueExpiryResult",
+        "SandboxFileInput",
+        "SandboxCollectedValue",
+        "SandboxCollectedFile",
+        "SandboxResourceUsage",
+        "DeniedAttemptEvidence",
+        "SandboxExecutionResult",
+        "SandboxSupervisorHealth",
+        "TransportMetadataField",
+        "ObservedHeader",
+        "TransportResult",
+        "OperationAttemptResult",
+        "TypedValueDraft",
+        "TrialCopySkip",
+        "TrialCopyReport",
+        "ActiveCorpusSnapshot",
+        "RunAdvanceResult",
+        "RunRecoveryItem",
+        "RunRecoveryReport",
+        "RunStatusView",
+        "NodeExecutionDraft",
+        "RunTracePage",
+        "SlotEvidencePage",
+        "ImplementationRecordView",
+        "SlotAuthoringView",
+        "CompositionView",
+        "ContractHealthView",
+        "WaitingForOwnerPage",
+        "CompositionFilter",
+        "WaitingForOwnerFilter",
+        "InspectRequest",
+        "InspectResult",
+        "SlotDraft",
+        "ContractVersionDraft",
+        "ImplementationDraft",
+        "TrialCaseDraft",
+        "BindingProposalDraft",
+        "FlowDraft",
+        "FlowVersionDraft",
+        "VocabularyProposalDraft",
+        "AuthorRequest",
+        "AuthorResult",
+        "TrialRequest",
+        "ActivationRequest",
+        "ActivationResult",
+        "RunFlowRequest",
+        "RunFlowResult",
+        "OwnerDecisionRequest",
+        "OwnerDecisionResult",
+        "HttpRequestContext",
+        "HttpRequestEnvelope",
+        "HttpResponseEnvelope",
+        "McpRequestEnvelope",
+        "McpResponseEnvelope",
+        "KernelReadiness",
+        "CredentialHandle",
+        "ChannelCredentialHandle",
+        "UnitOfWorkHandle",
+        "BoundedByteStream",
+        "BoundedByteSink",
+        "BoundedReadLease",
+        "VocabularyProposalContentAxisVariant",
+        "VocabularyProposalContentTermVariant",
+        "VocabularyProposalContentRelationVariant",
+        "VocabularyProposalContent",
+        "AuthorPayloadSlotDraftVariant",
+        "AuthorPayloadContractVersionDraftVariant",
+        "AuthorPayloadImplementationDraftVariant",
+        "AuthorPayloadTrialCaseDraftVariant",
+        "AuthorPayloadBindingProposalDraftVariant",
+        "AuthorPayloadFlowDraftVariant",
+        "AuthorPayloadFlowVersionDraftVariant",
+        "AuthorPayloadVocabularyProposalDraftVariant",
+        "AuthorPayload",
+        "SurfaceRequestInspectRequestVariant",
+        "SurfaceRequestAuthorRequestVariant",
+        "SurfaceRequestTrialRequestVariant",
+        "SurfaceRequestActivationRequestVariant",
+        "SurfaceRequestRunFlowRequestVariant",
+        "SurfaceRequestOwnerDecisionRequestVariant",
+        "SurfaceRequest",
+        "SurfaceResponseInspectResultVariant",
+        "SurfaceResponseAuthorResultVariant",
+        "SurfaceResponseAdmissionVerdictVariant",
+        "SurfaceResponseActivationResultVariant",
+        "SurfaceResponseRunFlowResultVariant",
+        "SurfaceResponseOwnerDecisionResultVariant",
+        "SurfaceResponse",
+        "SurfaceViewItemSemanticAxisVariant",
+        "SurfaceViewItemSemanticAxisRevisionVariant",
+        "SurfaceViewItemSemanticTermVariant",
+        "SurfaceViewItemSemanticTermRevisionVariant",
+        "SurfaceViewItemSemanticRelationVariant",
+        "SurfaceViewItemSemanticRelationRevisionVariant",
+        "SurfaceViewItemSlotVariant",
+        "SurfaceViewItemSlotContractVersionVariant",
+        "SurfaceViewItemImplementationRecordViewVariant",
+        "SurfaceViewItemTrialCaseVariant",
+        "SurfaceViewItemActiveCorpusSnapshotVariant",
+        "SurfaceViewItemOperationBindingVariant",
+        "SurfaceViewItemOperationBindingVersionVariant",
+        "SurfaceViewItemFlowVariant",
+        "SurfaceViewItemFlowVersionVariant",
+        "SurfaceViewItemFlowProofVariant",
+        "SurfaceViewItemFlowActivationVariant",
+        "SurfaceViewItemFlowRunVariant",
+        "SurfaceViewItemRunStatusViewVariant",
+        "SurfaceViewItemRunTracePageVariant",
+        "SurfaceViewItemSlotEvidencePageVariant",
+        "SurfaceViewItemStoredValueReadVariant",
+        "SurfaceViewItemCompositionViewVariant",
+        "SurfaceViewItemContractHealthViewVariant",
+        "SurfaceViewItem",
+        "ActivationSelectionSlotVariant",
+        "ActivationSelectionFlowVariant",
+        "ActivationSelection",
+        "CanonicalFieldValueTextVariant",
+        "CanonicalFieldValueIntegerVariant",
+        "CanonicalFieldValueBooleanVariant",
+        "CanonicalFieldValueBytesVariant",
+        "CanonicalFieldValueNoneVariant",
+        "CanonicalFieldValueChildrenVariant",
+        "CanonicalFieldValue",
+        "RecordVersionValueTextVariant",
+        "RecordVersionValueIntegerVariant",
+        "RecordVersionValueNoneVariant",
+        "RecordVersionValue",
+        "ValueContentBytesVariant",
+        "ValueContentStreamVariant",
+        "ValueContent",
+        "RetiredVocabularyEntryAxisVariant",
+        "RetiredVocabularyEntryTermVariant",
+        "RetiredVocabularyEntryRelationVariant",
+        "RetiredVocabularyEntry",
+        "SandboxFileSourceSpooledVariant",
+        "SandboxFileSourceStoredVariant",
+        "SandboxFileSource",
+        "StoredValueContentBytesVariant",
+        "StoredValueContentLeaseVariant",
+        "StoredValueContentNoneVariant",
+        "StoredValueContent",
+        "ObservedStatusTextVariant",
+        "ObservedStatusIntegerVariant",
+        "ObservedStatusNoneVariant",
+        "ObservedStatus",
+        "CommittedRecordVersionTextVariant",
+        "CommittedRecordVersionIntegerVariant",
+        "CommittedRecordVersion"
       ],
       "operation_bindings": [
         "accept_binding_version",
@@ -3143,7 +4849,8 @@
         "authorize_action",
         "issue_delegation",
         "resolve_actor",
-        "revoke_delegation"
+        "revoke_delegation",
+        "AuthenticationRequiredError"
       ],
       "operational_store": [
         "begin_unit_of_work",
@@ -3235,7 +4942,38 @@
         "start_kernel"
       ]
     },
-    "module_internal": {}
+    "module_internal": {
+      "http_gateway": {
+        "access_control": [
+          "resolve_actor",
+          "AuthenticationRequiredError"
+        ],
+        "kernel_surface": [
+          "activate",
+          "author",
+          "inspect",
+          "owner_decide",
+          "request_trial",
+          "run_flow"
+        ],
+        "models": [
+          "ActivationRequest",
+          "ActivationResult",
+          "ActorRef",
+          "AdmissionVerdict",
+          "AuthorRequest",
+          "AuthorResult",
+          "ChannelCredentialHandle",
+          "InspectRequest",
+          "InspectResult",
+          "OwnerDecisionRequest",
+          "OwnerDecisionResult",
+          "RunFlowRequest",
+          "RunFlowResult",
+          "TrialRequest"
+        ]
+      }
+    }
   },
   "module_functions": {
     "models": [
@@ -3287,7 +5025,184 @@
       "SpooledBytes",
       "KernelInstant",
       "ReleaseCeilings",
-      "AuthenticationThrottleState"
+      "AuthenticationThrottleState",
+      "ManifestRevisionRef",
+      "ManifestOperationProjection",
+      "ManifestOperationChange",
+      "ManifestChannelEndpoint",
+      "ServiceInstanceProjection",
+      "ContractVersionIdentity",
+      "CanonicalField",
+      "AuthorizationResult",
+      "CompareAndSetExpectation",
+      "UnitOfWorkCommitResult",
+      "UnitOfWorkRollbackResult",
+      "BindingAcceptanceResult",
+      "BindingDriftItem",
+      "BindingDriftReport",
+      "VocabularySeedResult",
+      "TermRevisionView",
+      "AxisProposalContent",
+      "TermProposalContent",
+      "RelationProposalContent",
+      "VocabularyDecisionResult",
+      "RunFileDescriptor",
+      "OwnerStatementRequest",
+      "OwnerStatement",
+      "EffectAuthorization",
+      "RunFileAccess",
+      "FileDeliveryResult",
+      "RunSpoolCleanupResult",
+      "StoredValueRead",
+      "DisclosureDerivation",
+      "ValueExpiryResult",
+      "SandboxFileInput",
+      "SandboxCollectedValue",
+      "SandboxCollectedFile",
+      "SandboxResourceUsage",
+      "DeniedAttemptEvidence",
+      "SandboxExecutionResult",
+      "SandboxSupervisorHealth",
+      "TransportMetadataField",
+      "ObservedHeader",
+      "TransportResult",
+      "OperationAttemptResult",
+      "TypedValueDraft",
+      "TrialCopySkip",
+      "TrialCopyReport",
+      "ActiveCorpusSnapshot",
+      "RunAdvanceResult",
+      "RunRecoveryItem",
+      "RunRecoveryReport",
+      "RunStatusView",
+      "NodeExecutionDraft",
+      "RunTracePage",
+      "SlotEvidencePage",
+      "ImplementationRecordView",
+      "SlotAuthoringView",
+      "CompositionView",
+      "ContractHealthView",
+      "WaitingForOwnerPage",
+      "CompositionFilter",
+      "WaitingForOwnerFilter",
+      "InspectRequest",
+      "InspectResult",
+      "SlotDraft",
+      "ContractVersionDraft",
+      "ImplementationDraft",
+      "TrialCaseDraft",
+      "BindingProposalDraft",
+      "FlowDraft",
+      "FlowVersionDraft",
+      "VocabularyProposalDraft",
+      "AuthorRequest",
+      "AuthorResult",
+      "TrialRequest",
+      "ActivationRequest",
+      "ActivationResult",
+      "RunFlowRequest",
+      "RunFlowResult",
+      "OwnerDecisionRequest",
+      "OwnerDecisionResult",
+      "HttpRequestContext",
+      "HttpRequestEnvelope",
+      "HttpResponseEnvelope",
+      "McpRequestEnvelope",
+      "McpResponseEnvelope",
+      "KernelReadiness",
+      "CredentialHandle",
+      "ChannelCredentialHandle",
+      "UnitOfWorkHandle",
+      "BoundedByteStream",
+      "BoundedByteSink",
+      "BoundedReadLease",
+      "VocabularyProposalContentAxisVariant",
+      "VocabularyProposalContentTermVariant",
+      "VocabularyProposalContentRelationVariant",
+      "VocabularyProposalContent",
+      "AuthorPayloadSlotDraftVariant",
+      "AuthorPayloadContractVersionDraftVariant",
+      "AuthorPayloadImplementationDraftVariant",
+      "AuthorPayloadTrialCaseDraftVariant",
+      "AuthorPayloadBindingProposalDraftVariant",
+      "AuthorPayloadFlowDraftVariant",
+      "AuthorPayloadFlowVersionDraftVariant",
+      "AuthorPayloadVocabularyProposalDraftVariant",
+      "AuthorPayload",
+      "SurfaceRequestInspectRequestVariant",
+      "SurfaceRequestAuthorRequestVariant",
+      "SurfaceRequestTrialRequestVariant",
+      "SurfaceRequestActivationRequestVariant",
+      "SurfaceRequestRunFlowRequestVariant",
+      "SurfaceRequestOwnerDecisionRequestVariant",
+      "SurfaceRequest",
+      "SurfaceResponseInspectResultVariant",
+      "SurfaceResponseAuthorResultVariant",
+      "SurfaceResponseAdmissionVerdictVariant",
+      "SurfaceResponseActivationResultVariant",
+      "SurfaceResponseRunFlowResultVariant",
+      "SurfaceResponseOwnerDecisionResultVariant",
+      "SurfaceResponse",
+      "SurfaceViewItemSemanticAxisVariant",
+      "SurfaceViewItemSemanticAxisRevisionVariant",
+      "SurfaceViewItemSemanticTermVariant",
+      "SurfaceViewItemSemanticTermRevisionVariant",
+      "SurfaceViewItemSemanticRelationVariant",
+      "SurfaceViewItemSemanticRelationRevisionVariant",
+      "SurfaceViewItemSlotVariant",
+      "SurfaceViewItemSlotContractVersionVariant",
+      "SurfaceViewItemImplementationRecordViewVariant",
+      "SurfaceViewItemTrialCaseVariant",
+      "SurfaceViewItemActiveCorpusSnapshotVariant",
+      "SurfaceViewItemOperationBindingVariant",
+      "SurfaceViewItemOperationBindingVersionVariant",
+      "SurfaceViewItemFlowVariant",
+      "SurfaceViewItemFlowVersionVariant",
+      "SurfaceViewItemFlowProofVariant",
+      "SurfaceViewItemFlowActivationVariant",
+      "SurfaceViewItemFlowRunVariant",
+      "SurfaceViewItemRunStatusViewVariant",
+      "SurfaceViewItemRunTracePageVariant",
+      "SurfaceViewItemSlotEvidencePageVariant",
+      "SurfaceViewItemStoredValueReadVariant",
+      "SurfaceViewItemCompositionViewVariant",
+      "SurfaceViewItemContractHealthViewVariant",
+      "SurfaceViewItem",
+      "ActivationSelectionSlotVariant",
+      "ActivationSelectionFlowVariant",
+      "ActivationSelection",
+      "CanonicalFieldValueTextVariant",
+      "CanonicalFieldValueIntegerVariant",
+      "CanonicalFieldValueBooleanVariant",
+      "CanonicalFieldValueBytesVariant",
+      "CanonicalFieldValueNoneVariant",
+      "CanonicalFieldValueChildrenVariant",
+      "CanonicalFieldValue",
+      "RecordVersionValueTextVariant",
+      "RecordVersionValueIntegerVariant",
+      "RecordVersionValueNoneVariant",
+      "RecordVersionValue",
+      "ValueContentBytesVariant",
+      "ValueContentStreamVariant",
+      "ValueContent",
+      "RetiredVocabularyEntryAxisVariant",
+      "RetiredVocabularyEntryTermVariant",
+      "RetiredVocabularyEntryRelationVariant",
+      "RetiredVocabularyEntry",
+      "SandboxFileSourceSpooledVariant",
+      "SandboxFileSourceStoredVariant",
+      "SandboxFileSource",
+      "StoredValueContentBytesVariant",
+      "StoredValueContentLeaseVariant",
+      "StoredValueContentNoneVariant",
+      "StoredValueContent",
+      "ObservedStatusTextVariant",
+      "ObservedStatusIntegerVariant",
+      "ObservedStatusNoneVariant",
+      "ObservedStatus",
+      "CommittedRecordVersionTextVariant",
+      "CommittedRecordVersionIntegerVariant",
+      "CommittedRecordVersion"
     ],
     "system_clock": [
       "now"
@@ -3312,15 +5227,14 @@
     "operational_store": [
       "begin_unit_of_work",
       "commit_unit_of_work",
-      "rollback_unit_of_work",
-      "SqliteOperationalStoreRepository",
-      "create_operational_store_schema"
+      "rollback_unit_of_work"
     ],
     "access_control": [
       "authorize_action",
       "issue_delegation",
       "resolve_actor",
-      "revoke_delegation"
+      "revoke_delegation",
+      "AuthenticationRequiredError"
     ],
     "semantic_vocabulary": [
       "decide_proposal",
@@ -3455,6 +5369,10 @@
     ],
     "bootstrap": [
       "start_kernel"
+    ],
+    "operational_store_persistence": [
+      "SqliteOperationalStoreRepository",
+      "create_operational_store_schema"
     ]
   },
   "module_order": [
@@ -3484,7 +5402,8 @@
     "kernel_surface",
     "mcp_gateway",
     "http_gateway",
-    "bootstrap"
+    "bootstrap",
+    "operational_store_persistence"
   ],
   "function_order": [
     "accept_binding_version",
@@ -3658,7 +5577,8 @@
     "kernel_surface": "cabinet_flow/kernel_surface",
     "mcp_gateway": "cabinet_flow/mcp_gateway",
     "http_gateway": "cabinet_flow/http_gateway",
-    "bootstrap": "cabinet_flow/bootstrap"
+    "bootstrap": "cabinet_flow/bootstrap",
+    "operational_store_persistence": "cabinet_flow/operational_store_persistence"
   },
   "default_module": "bootstrap"
 }

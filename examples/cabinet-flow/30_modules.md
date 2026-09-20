@@ -188,8 +188,9 @@ The database, its schema and migrations, transaction isolation, locking, and the
 mapping between records and rows.
 
 The public boundary remains the opaque UnitOfWork API below. Its SQLite
-implementation is one internal `SqliteOperationalStoreRepository` owned by this
-module and lowered from `persistence_backend/v3`. The repository exposes typed
+implementation is one internal `SqliteOperationalStoreRepository` owned by the
+`operational_store_persistence` companion module and lowered from
+`persistence_backend/v3`. The repository exposes typed
 methods for the closed durable M01–M49 record families; it accepts no table
 name, SQL fragment, untyped payload or host path. Domain modules and
 agent-authored tools continue to compose the public kernel operations and never
@@ -208,6 +209,38 @@ rollback_unit_of_work
 
 - kind: deep
 - hidden mechanism: transactional durability with append-only and compare-and-set guarantees
+
+## `operational_store_persistence`
+
+### Owns
+
+Only the deterministic SQLite repository class and schema function lowered from
+`persistence_backend/v3` for the closed operational-store tables.
+
+### Knows
+
+The versioned persistence IR, typed durable models and configured table names.
+
+### Must not own
+
+Unit-of-work policy, domain authorization, business decisions or any public
+kernel capability.
+
+### Hides
+
+SQLite schema creation, row codecs and typed load/upsert statements.
+
+### Candidate public capabilities
+
+```text
+SqliteOperationalStoreRepository
+create_operational_store_schema
+```
+
+### Depth assessment
+
+- kind: deep
+- hidden mechanism: version-bound SQLite lowering from persistence_backend/v3
 
 ## `access_control`
 

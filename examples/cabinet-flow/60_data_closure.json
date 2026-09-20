@@ -37,7 +37,8 @@
         "vocabulary_proposal_table_name": "vocabulary_proposal_records",
         "slot_table_name": "slot_records",
         "trial_case_table_name": "trial_case_records"
-      }
+      },
+      "role": "data"
     },
     "rules": {
       "retention": {
@@ -126,6 +127,35 @@
         "ambient_credentials": false,
         "output_truncation_allowed": false,
         "confirmed_cleanup_required": true
+      },
+      "time_source_policy": {
+        "kind": "time_source_policy",
+        "schema_version": 1,
+        "wall_clock": {
+          "authority_modules": [
+            "system_clock"
+          ],
+          "allowed_primitives": [
+            "time.time_ns"
+          ],
+          "single_host_source": true,
+          "samples_per_read": 1
+        },
+        "elapsed_time": {
+          "authority_modules": [
+            "access_control",
+            "run_executor"
+          ],
+          "allowed_primitives": [
+            "time.monotonic_ns"
+          ]
+        },
+        "representation": {
+          "type": "KernelInstant",
+          "field": "epoch_us",
+          "unit": "epoch_us",
+          "conversion": "floor_ns_to_us"
+        }
       }
     },
     "persistence": {
@@ -173,17 +203,21 @@
       }
     },
     "properties": {
-      "kernel_instant_non_negative": "epoch_us >= 0",
-      "resource_bounds_never_exceed_release": "each ResourceBounds field <= matching ReleaseCeilings field",
-      "retention_uses_longest_reference": "retention(value) = max(retention(record) for record naming value)",
-      "retry_wake_is_deadline_guard": "now < retry_not_before -> no invocation"
+      "now": [
+        "result.epoch_us >= 0"
+      ],
+      "clamp_resource_bounds": [
+        "result.cpu_time_limit <= ceilings.sandbox_cpu_time_ms_max",
+        "result.memory_limit <= ceilings.sandbox_memory_bytes_max",
+        "result.output_size_limit <= ceilings.sandbox_output_bytes_max",
+        "result.process_count_limit <= ceilings.sandbox_process_count_max",
+        "result.scratch_size_limit <= ceilings.sandbox_scratch_bytes_max",
+        "result.wall_time_limit <= ceilings.sandbox_wall_time_ms_max"
+      ]
     },
     "determinism": {
-      "pure_function_reexecution": true,
-      "release_ceilings": true,
-      "authentication_throttle_schedule": true,
-      "retry_backoff_schedule": true,
-      "kernel_wall_clock_now": false
+      "now": false,
+      "clamp_resource_bounds": true
     }
   },
   "placements": [
@@ -324,41 +358,6 @@
       "reason": "Exact release-v1 safety ceiling fixed by A26 and carried by ReleaseCeilings M48."
     },
     {
-      "address": "determinism.authentication_throttle_schedule",
-      "source_refs": [
-        "decision:A27"
-      ],
-      "reason": "Accepted State 1/2 fact projected into structured pre-contract data."
-    },
-    {
-      "address": "determinism.kernel_wall_clock_now",
-      "source_refs": [
-        "decision:A25"
-      ],
-      "reason": "Accepted State 1/2 fact projected into structured pre-contract data."
-    },
-    {
-      "address": "determinism.pure_function_reexecution",
-      "source_refs": [
-        "decision:A06"
-      ],
-      "reason": "Accepted State 1/2 fact projected into structured pre-contract data."
-    },
-    {
-      "address": "determinism.release_ceilings",
-      "source_refs": [
-        "decision:A26"
-      ],
-      "reason": "Accepted State 1/2 fact projected into structured pre-contract data."
-    },
-    {
-      "address": "determinism.retry_backoff_schedule",
-      "source_refs": [
-        "decision:A28"
-      ],
-      "reason": "Accepted State 1/2 fact projected into structured pre-contract data."
-    },
-    {
       "address": "persistence.AgentDelegation.class",
       "source_refs": [
         "model:M17"
@@ -456,38 +455,6 @@
         "model:M45"
       ],
       "reason": "State 1 continuing entity owns independent durable lifecycle; value/evidence models remain embedded immutable snapshots and are not assigned standalone persistence."
-    },
-    {
-      "address": "properties.kernel_instant_non_negative",
-      "source_refs": [
-        "decision:A25",
-        "model:M47"
-      ],
-      "reason": "Accepted State 1/2 fact projected into structured pre-contract data."
-    },
-    {
-      "address": "properties.resource_bounds_never_exceed_release",
-      "source_refs": [
-        "decision:A26",
-        "model:M21",
-        "model:M48"
-      ],
-      "reason": "Accepted State 1/2 fact projected into structured pre-contract data."
-    },
-    {
-      "address": "properties.retention_uses_longest_reference",
-      "source_refs": [
-        "decision:A20"
-      ],
-      "reason": "Accepted State 1/2 fact projected into structured pre-contract data."
-    },
-    {
-      "address": "properties.retry_wake_is_deadline_guard",
-      "source_refs": [
-        "decision:A28",
-        "model:M40"
-      ],
-      "reason": "Accepted State 1/2 fact projected into structured pre-contract data."
     },
     {
       "address": "rules.authentication_throttle.block_after_failures",
@@ -928,6 +895,125 @@
         "module:operational_store"
       ],
       "reason": "SQLite table identifier owned by the operational store and referenced only by persistence_backend/v3."
+    },
+    {
+      "address": "config.role",
+      "source_refs": [
+        "standard:SPEC_STANDARD.config.role"
+      ],
+      "reason": "SPEC_STANDARD v2 requires the configuration container to declare its data role."
+    },
+    {
+      "address": "properties.now",
+      "source_refs": [
+        "decision:A25"
+      ],
+      "reason": "Accepted time/ceiling invariant attached to the exact contracted callable."
+    },
+    {
+      "address": "properties.clamp_resource_bounds",
+      "source_refs": [
+        "decision:A26"
+      ],
+      "reason": "Accepted time/ceiling invariant attached to the exact contracted callable."
+    },
+    {
+      "address": "determinism.now",
+      "source_refs": [
+        "decision:A25"
+      ],
+      "reason": "The host wall-clock observation is intentionally non-deterministic."
+    },
+    {
+      "address": "determinism.clamp_resource_bounds",
+      "source_refs": [
+        "decision:A26"
+      ],
+      "reason": "Release-bound clamping is pure for equal requested bounds and ceilings."
+    },
+    {
+      "address": "rules.time_source_policy.kind",
+      "source_refs": [
+        "decision:A25"
+      ],
+      "reason": "Accepted kernel-time authority and representation lowered into time_source_policy/v1."
+    },
+    {
+      "address": "rules.time_source_policy.schema_version",
+      "source_refs": [
+        "decision:A25"
+      ],
+      "reason": "Accepted kernel-time authority and representation lowered into time_source_policy/v1."
+    },
+    {
+      "address": "rules.time_source_policy.wall_clock.authority_modules",
+      "source_refs": [
+        "decision:A25"
+      ],
+      "reason": "Accepted kernel-time authority and representation lowered into time_source_policy/v1."
+    },
+    {
+      "address": "rules.time_source_policy.wall_clock.allowed_primitives",
+      "source_refs": [
+        "decision:A25"
+      ],
+      "reason": "Accepted kernel-time authority and representation lowered into time_source_policy/v1."
+    },
+    {
+      "address": "rules.time_source_policy.wall_clock.single_host_source",
+      "source_refs": [
+        "decision:A25"
+      ],
+      "reason": "Accepted kernel-time authority and representation lowered into time_source_policy/v1."
+    },
+    {
+      "address": "rules.time_source_policy.wall_clock.samples_per_read",
+      "source_refs": [
+        "decision:A25"
+      ],
+      "reason": "Accepted kernel-time authority and representation lowered into time_source_policy/v1."
+    },
+    {
+      "address": "rules.time_source_policy.elapsed_time.authority_modules",
+      "source_refs": [
+        "decision:A25"
+      ],
+      "reason": "Accepted kernel-time authority and representation lowered into time_source_policy/v1."
+    },
+    {
+      "address": "rules.time_source_policy.elapsed_time.allowed_primitives",
+      "source_refs": [
+        "decision:A25"
+      ],
+      "reason": "Accepted kernel-time authority and representation lowered into time_source_policy/v1."
+    },
+    {
+      "address": "rules.time_source_policy.representation.type",
+      "source_refs": [
+        "decision:A25"
+      ],
+      "reason": "Accepted kernel-time authority and representation lowered into time_source_policy/v1."
+    },
+    {
+      "address": "rules.time_source_policy.representation.field",
+      "source_refs": [
+        "decision:A25"
+      ],
+      "reason": "Accepted kernel-time authority and representation lowered into time_source_policy/v1."
+    },
+    {
+      "address": "rules.time_source_policy.representation.unit",
+      "source_refs": [
+        "decision:A25"
+      ],
+      "reason": "Accepted kernel-time authority and representation lowered into time_source_policy/v1."
+    },
+    {
+      "address": "rules.time_source_policy.representation.conversion",
+      "source_refs": [
+        "decision:A25"
+      ],
+      "reason": "Accepted kernel-time authority and representation lowered into time_source_policy/v1."
     }
   ],
   "unresolved": []

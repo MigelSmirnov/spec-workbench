@@ -2,7 +2,7 @@
 
 ## Status
 
-Open. These declarations make State 5 boundaries exact without adding product
+Closed. These declarations make State 5 boundaries exact without adding product
 behavior or changing any State 1 identity. They exist only where the exact
 Python contract needs a transport/configuration/result shape that is not itself
 a durable domain model.
@@ -1235,3 +1235,16 @@ Fields:
 - `failures: tuple[str, ...]`.
 
 No credential value or host path is present.
+
+---
+
+## Structured closure
+
+`60_model_closure_contract_types.json` is the machine-readable closure for all
+contract-only DTOs, opaque runtime carriers and tagged sum types in this
+document. These are runtime boundary types rather than State 1 domain identity
+records; `identity_scope: contract_only` records that distinction explicitly.
+Every closed union is lowered as a `discriminated_union` with a `kind` Literal
+tag and one typed `value`, so no untagged or free-form alternative is admitted.
+Opaque credential, transaction and bounded-byte carriers hold a non-serializable
+runtime payload plus only the bounded metadata stated by their declarations.

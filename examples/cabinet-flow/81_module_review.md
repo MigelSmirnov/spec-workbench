@@ -2,7 +2,7 @@
 
 ## Verdict
 
-All 27 assembled module slices are `PASS`. Each slice was checked against the four Workbench adversarial questions: no materially different observable behavior, trivial implementation, missing accepted refusal/effect/invariant, or source-free behavior remains admissible. Exact packet hashes are recorded in `81_module_review_status.json`.
+All 28 assembled module slices are `PASS`. Each slice was checked against the four Workbench adversarial questions: no materially different observable behavior, trivial implementation, missing accepted refusal/effect/invariant, or source-free behavior remains admissible. Exact packet hashes are recorded in `81_module_review_status.json`.
 
 ## Module results
 
@@ -12,7 +12,7 @@ All 27 assembled module slices are `PASS`. Each slice was checked against the fo
 | `system_clock` | 1 | 0 | 0 | PASS |
 | `identity` | 9 | 9 | 0 | PASS |
 | `installation` | 4 | 4 | 0 | PASS |
-| `operational_store` | 33 | 3 | 0 | PASS |
+| `operational_store` | 3 | 3 | 0 | PASS |
 | `access_control` | 4 | 4 | 0 | PASS |
 | `semantic_vocabulary` | 8 | 8 | 0 | PASS |
 | `slot_registry` | 9 | 9 | 0 | PASS |
@@ -35,7 +35,8 @@ All 27 assembled module slices are `PASS`. Each slice was checked against the fo
 | `mcp_gateway` | 1 | 1 | 0 | PASS |
 | `http_gateway` | 9 | 1 | 0 | PASS |
 | `bootstrap` | 1 | 1 | 0 | PASS |
+| `operational_store_persistence` | 30 | 0 | 0 | PASS |
 
 ## Deterministic surfaces
 
-Models, SQLite persistence, the fixed HTTP router, and the system clock are closed by their versioned backend IR. The remaining modules have exact contracts and assembled behavioral constraints; internal implementation choices cannot change their declared outputs, refusals, effects, ordering, identity, authorization, or time-source rules.
+Domain and contract-only models, SQLite persistence, the fixed HTTP router, and the system clock are closed by versioned structured IR. The SQLite emitter owns only `operational_store_persistence`; the behavioral UnitOfWork boundary remains in `operational_store`. Tagged union wrappers preserve every closed State 6 variant without untagged unions.
