@@ -18,3 +18,9 @@ These gaps were exposed while wiring State 7 notes to the closed `OperationalUni
 
 - `advance_run` — needs a durable in-flight effect-attempt record. Required because the executor must persist the pre-send attempt, but no record model or port operation exists.
 - `resume_runs` — needs a durable in-flight effect-attempt record. Required because recovery must reconcile the pre-send attempt, but no record model or port operation exists.
+
+## semantic_vocabulary
+
+- `seed_vocabulary` — needs an unfiltered empty-registry probe and the installation-seed actor/time. Required because the note requires installation only when the governed registry is empty, while the port exposes only filtered lists; State 1 revisions require issued_at and accepted_by.
+- `find_duplicate_revision` — needs content-keyed revision lookup without a stable entry id. Required because the note requires a registry-wide exact-content duplicate search, while the port lists revisions only by axis_id, term_id, or relation_id.
+- `retire_entry` — needs durable retirement actor, instant, and reason fields. Required because the note requires exact replay of the first retirement, but SemanticAxis, SemanticTerm, and SemanticRelation persist only status for retirement.
