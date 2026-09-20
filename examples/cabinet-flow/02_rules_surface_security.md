@@ -46,6 +46,8 @@ record_of_action -> actor_ref_present AND actor_kind IN {owner, agent, kernel}
 
 ### Required tests
 
+[witness: workbench:notes]
+
 1. Each owner-only action attempted under a full authoring delegation is
    refused.
 2. An unauthenticated request for an existing and for a non-existing run yields
@@ -105,6 +107,8 @@ submitted_code_executed -> only_in_sandbox
 ```
 
 ### Required tests
+
+[witness: workbench:router]
 
 1. A flow authored after the `http_api` schema was published is run through that
    unchanged schema.
@@ -167,6 +171,8 @@ service_response_used -> bounded AND validated_against_output_ports
 
 ### Required tests
 
+[witness: workbench:external_contracts]
+
 1. A canary credential configured for a service appears in no record, trace,
    preview, error or log after a run that used it.
 2. A request naming another instance is refused; the run reaches the configured
@@ -206,6 +212,8 @@ State_2_security_gate_pass
 ```
 
 ### Required tests
+
+[witness: workbench:notes]
 
 1. The deterministic State 2 lint accepts exactly one complete review record.
 2. Every reference resolves to an indexed State 2 decision.
@@ -280,6 +288,8 @@ caller_or_environment_override(release_ceiling) -> forbidden
 ```
 
 ### Required tests
+
+[witness: workbench:closure_gaps]
 
 1. Every M21 field exactly at its release ceiling is accepted and one unit over
    is refused before sandbox start.
@@ -356,6 +366,8 @@ restart -/> resets_throttle
 ```
 
 ### Required tests
+
+[witness: workbench:persistence]
 
 1. Counts one through nine produce exactly the delay table above.
 2. The tenth failed authentication creates a block exactly 900 seconds after

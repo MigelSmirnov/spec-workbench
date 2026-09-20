@@ -41,6 +41,8 @@ term_retired -/> existing_proof_invalidated
 
 ### Required tests
 
+[witness: workbench:notes]
+
 1. An agent's authoring request that names an unknown term is refused and
    creates no term.
 2. An edge citing a `proposed` relation is refused by proof.
@@ -111,6 +113,8 @@ same_axis OR same_primitive_type -/> edge_valid
 
 ### Required tests
 
+[witness: workbench:flows]
+
 1. Invoice issue date wired to delivery occurrence date, both local dates, is
    refused as `edge_without_basis`.
 2. The same wiring with an accepted `role_binding` relation is proven.
@@ -167,6 +171,8 @@ value_returned_to_agent -> class(value) <= delegation.disclosure_ceiling
 ```
 
 ### Required tests
+
+[witness: workbench:flows]
 
 1. A function that receives a `personal_data` value and returns one unrelated
    integer yields an output of class `personal_data`.
@@ -225,6 +231,8 @@ same(flow_version, vocabulary_basis) -> same(verdict, findings)
 ```
 
 ### Required tests
+
+[witness: workbench:flows]
 
 1. A flow with a cycle, an unsupplied required input and an invalid edge is
    refused with all three findings.

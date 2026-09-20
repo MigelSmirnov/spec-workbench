@@ -47,6 +47,8 @@ manifest_fact_changed(operation) -> binding.status = suspended
 
 ### Required tests
 
+[witness: workbench:contracts]
+
 1. A proposal declaring a `state-transition` operation as `read` is refused.
 2. An effectful binding without an outcome-read binding or without preview ports
    cannot be accepted.
@@ -96,6 +98,8 @@ new_flow_version -/> inherits(activation OR approval OR grant)
 ```
 
 ### Required tests
+
+[witness: workbench:external_contracts]
 
 1. A proven read-only flow is runnable immediately after proof with no owner
    action.
@@ -153,6 +157,8 @@ no_decision -> run.status = awaiting_approval   (unbounded)
 
 ### Required tests
 
+[witness: workbench:external_contracts]
+
 1. A run reaching a `state-transition` node stops and performs nothing until the
    owner approves.
 2. An upstream value changing between preview and invocation discards the
@@ -204,6 +210,8 @@ grant_covers(node_execution)
 ```
 
 ### Required tests
+
+[witness: workbench:external_contracts]
 
 1. A grant request on a `destructive` node is refused.
 2. With a grant, a photo-upload flow performs its `state-transition` node
@@ -260,6 +268,8 @@ attempts_exhausted -/> run.status = failed
 
 ### Required tests
 
+[witness: workbench:external_contracts]
+
 1. Killing the kernel between the in-flight record and the call's return leaves
    an in-flight record that restart turns into `outcome_unknown`.
 2. A `duplicates` operation that timed out is not invoked again; the run rests
@@ -313,6 +323,8 @@ assumed_outcome -> never
 ```
 
 ### Required tests
+
+[witness: workbench:persistence]
 
 1. A lost response followed by a reconciliation of `effect_applied` continues
    the run with the service's outputs and performs no second call.
@@ -377,6 +389,8 @@ retry_count -/> run_failed
 ```
 
 ### Required tests
+
+[witness: workbench:external_contracts]
 
 1. Six consecutive unsuccessful retries produce delays
    `1, 2, 5, 10, 30, 60` seconds and the seventh also produces 60 seconds.

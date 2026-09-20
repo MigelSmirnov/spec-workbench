@@ -39,6 +39,8 @@ binding_suspended -> run_stops_at_node AND no_substitution
 
 ### Required tests
 
+[witness: workbench:flows]
+
 1. A run created before a new slot activation executes the earlier
    implementation throughout, including after a long wait for approval.
 2. A run with an input of the wrong term revision or above the port's
@@ -104,6 +106,8 @@ run.succeeded
 
 ### Required tests
 
+[witness: workbench:flows]
+
 1. A function returning an extra or mistyped field concludes
    `contract_violation` and its dependants do not execute.
 2. A duplicate-check node whose guard disables the save branch yields
@@ -162,6 +166,8 @@ service_absent -> run.status = pending   (never succeeded, never failed)
 
 ### Required tests
 
+[witness: workbench:flows]
+
 1. With the local service down, a flow needing it rests `pending`, its
    independent read branch completes, and the run completes after the service
    returns without any input being supplied again.
@@ -214,6 +220,8 @@ secret OR source_bytes IN trace -> never
 ```
 
 ### Required tests
+
+[witness: workbench:flows]
 
 1. No surface or internal operation can alter a written node execution.
 2. A function that raises after printing a secret-shaped string leaves a
@@ -278,6 +286,8 @@ retention(value) = max(retention(record) for record naming value)
 ```
 
 ### Required tests
+
+[witness: workbench:flows]
 
 1. A flow that reads a photo from one service, normalizes it in a function and
    gives it to another service holds both files in the run's spool only, shows
@@ -381,6 +391,8 @@ elapsed_timeout_measurement
 ```
 
 ### Required tests
+
+[witness: workbench:notes]
 
 1. Static source audit fails when any generated module other than
    `system_clock` calls `datetime.now`, `utcnow`, `date.today`,

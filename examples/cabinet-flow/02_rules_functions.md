@@ -35,6 +35,8 @@ issued OR submitted -> never_mutated AND never_deleted
 
 ### Required tests
 
+[witness: workbench:identity]
+
 1. The same implementation bytes submitted by two delegations at different times
    yield one implementation.
 2. A submission carrying its own `implementation_id` is refused.
@@ -107,6 +109,8 @@ same(implementation, input, runtime_revision) -> same(output)
 ```
 
 ### Required tests
+
+[witness: workbench:notes]
 
 1. Code that opens a socket, reads a path outside scratch, reads the clock,
    reads an environment variable or requests entropy fails as `denied_attempt`
@@ -183,6 +187,8 @@ withdraw(case) AND case.has_expected AND case.contributed_to_admission
 
 ### Required tests
 
+[witness: workbench:notes]
+
 1. A case with an input of the wrong term revision is refused.
 2. A failed production execution is captured; the repaired implementation must
    pass it to be admitted.
@@ -233,6 +239,8 @@ human_approval -/> admitted
 ```
 
 ### Required tests
+
+[witness: workbench:notes]
 
 1. An implementation for a contract version with no cases is refused as
    `empty_corpus`.
@@ -297,6 +305,8 @@ run.pinned_activations -> fixed_at_creation
 ```
 
 ### Required tests
+
+[witness: workbench:notes]
 
 1. Activating an implementation admitted before a new case was added triggers
    re-evaluation and is refused when it fails that case.
