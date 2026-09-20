@@ -9,6 +9,21 @@ import pytest
 import export_to_factory
 
 
+def test_project_paths_resolves_relative_structure_root_from_factory(tmp_path: Path) -> None:
+    factory = tmp_path / "relocated-factory"
+    structure = {
+        "root": ".",
+        "projects_dir": "projects",
+        "dirs": {"working": "specs/working"},
+        "files": {"global_spec": "specs/base/global_spec.json"},
+    }
+
+    paths = export_to_factory.project_paths(factory, structure, "demo")
+
+    assert paths["root"] == factory / "projects/demo"
+    assert paths["canonical"] == factory / "projects/demo/specs/base/global_spec.json"
+
+
 def _write(path: Path, content: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(content, encoding="utf-8")
