@@ -705,6 +705,15 @@ constraint или storage representation требует новой поддер�
 драйвер (`sqlite3` или `psycopg`) и форма блокировки принадлежат emitter-у
 названной версии. Неизвестная пара останавливает сборку fail-closed.
 
+Пара выбирает producer целиком, а не по содержимому IR: то, что emitter
+названной версии из v3 не понижает, — DEFECT внутри него с перечнем ячеек, а
+не повод отдать объявленную table-строку генерации. Текущие границы:
+
+| emitter | понижает из v3 | DEFECT |
+|---|---|---|
+| `postgres_sync_v1` | `transaction: "owned"`, `lock`, оба новых bind-а, `json_model`, `json_value`, `path`, `upsert_many`, `list_all` | `transaction: "external"`, агрегаты |
+| `sqlite_sync_v2` | всё из v2 (включая агрегаты), `transaction: "external"`, `json_model`, `json_value` | `transaction: "owned"`, `lock`, `argument_set`, `optional_argument`, `path` в фильтре и в `unique`, `upsert_many`, `list_all` |
+
 #### Владение транзакцией
 
 Repository row в deterministic-форме v3 содержит ровно `repository`,
@@ -712,7 +721,14 @@ Repository row в deterministic-форме v3 содержит ровно `repos
 Irregular-форма получает ту же ячейку `transaction`. Значение закрыто:
 
 - `"external"` — как в v2: конструктор принимает открытое соединение, backend
-  не владеет `begin`/`commit`/`rollback`/`close`;
+  не владеет `begin`/`commit`/`rollback`/`close`. В v3 форму guard-а выбирает
+  контракт конструктора, и других форм нет:
+  `(self, connection, context)` — guard версии 2 по `conventions`
+  (`context.assert_open()`, `context.translate_error(error)`);
+  `(self, connection)` — контекста нет, спрашивать и транслировать не через
+  что: методы выполняются на переданном соединении без `try`, ошибка драйвера
+  доходит до владельца транзакции как есть, а `conventions.assert_open` и
+  `conventions.guard_reraise` не имеют цели lowering-а;
 - `"owned"` — репозиторий сам открывает одну транзакцию на одну операцию
   сервиса. Конструктор обязан иметь контракт
   `(self, database_url: str) -> None`; класс обязан объявить в `contracts`
@@ -773,12 +789,32 @@ Lowering в PostgreSQL — `pg_advisory_xact_lock` над детерминиро
   обязателен и называет её. Lowering — JSON-объект, кодек — сериализация
   модели (`model_dump(mode="json")` / `model_validate`); вложенные
   коллекции и модели внутри неё не перечисляются в IR;
-- `json_value` — JSON-значение без модели: кортеж скаляров или
-  `dict[str, object]`; `element_model` равен `null`. Кодек — `json.dumps` /
-  `json.loads`; модель-владелец приводит список к кортежу сама.
+- `json_value` — JSON-значение без одной элементной модели: кортеж скаляров,
+  `dict[str, object]` или коллекция моделей (`tuple[<Model>, ...]`);
+  `element_model` равен `null`, тип значения берётся из
+  `models.<table model>.fields.<field>`.
 
 Форма `json` по-прежнему означает список record-моделей. Все три формы
-хранятся как TEXT; движок не меняет их кодек.
+хранятся как TEXT.
+
+Кодек `json_model` у обоих emitter-ов один: `model_dump_json()` /
+`model_validate_json()`. Кодек `json_value` принадлежит emitter-у:
+
+- `sqlite_sync_v2` — `pydantic.TypeAdapter` объявленного типа поля: один
+  адаптер уровня модуля на колонку, тип берётся без значения по умолчанию и
+  без `None` (nullable принадлежит колонке), запись `dump_json`, чтение
+  `validate_json`. Такой кодек несёт и коллекцию моделей, и возвращает кортеж
+  кортежем;
+- `postgres_sync_v1` — `json.dumps` / `json.loads`; он несёт скаляры,
+  `str`-enum и `dict`, список к кортежу приводит модель-владелец, а коллекцию
+  record-моделей не несёт вовсе. Для кортежа скаляров сохранённый текст у
+  обоих кодеков совпадает.
+
+Кодек называет вложенные модели, которых нет в сигнатурах контрактов
+(`element_model`, модели внутри типа `json_value`). Модуль репозитория обязан
+импортировать их через `imports.module_internal.<module>`; иначе emitter
+останавливается с перечнем недостающих имён — файл с несвязанным именем не
+собрался бы.
 
 #### Ключи внутри вложенных значений
 
