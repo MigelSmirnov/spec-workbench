@@ -1,0 +1,491 @@
+# State 2 — Cabinet Flow operation, authority and effect rules
+
+## Accepted decision A10 — a binding is the owner's, and follows the manifest
+
+### Normative rules
+
+1. An operation node invokes a microservice only through an OperationBinding
+   M29 in status `accepted`, at the exact OperationBindingVersion M30 pinned by
+   the flow node. The kernel has no other way to reach a service.
+2. A binding version's `effect_class`, `replay` and opaque idempotency-key
+   declaration are copied by the kernel from the manifest record at
+   `manifest_record_digest`. The proposed `idempotency_key_ports` must be an
+   unambiguous typed-port interpretation of that declaration; otherwise the
+   proposal is refused. A proposal that restates any manifest fact differently
+   is refused.
+3. A binding version whose effect class is not `read` must name an
+   `outcome_read_binding_ref` to an accepted `read` binding of the same service
+   and must name at least one preview port. Without them it cannot be accepted.
+4. Only the owner accepts a binding version. The acceptance request shows the
+   owner the binding's purpose in plain words, the service and operation, the
+   effect class, the disclosure class each input accepts, and the preview ports.
+5. The kernel compares every accepted binding's manifest reference with the
+   current manifest at start-up, on every manifest change it is notified of, and
+   before each invocation. When the operation is absent, or its record digest
+   differs and the operation's channel, effect class, replay, idempotency key or
+   preconditions changed, the binding becomes `suspended`.
+6. A digest change that alters none of those facts for this operation issues a
+   new binding version automatically with identical ports, keeps the binding
+   `accepted`, and is recorded with the old and new digests.
+7. A suspended binding invokes nothing. A run reaching it rests `pending` with
+   reason `binding_suspended`. Standing grants on it authorize nothing while the
+   suspension lasts, and a grant names a binding version, so a new version
+   needs a new grant.
+8. The manifest is read from the Factory repository revision configured for the
+   installation. The kernel never writes the manifest.
+
+### Formal invariants
+
+```text
+operation_invoked -> binding.status = accepted AND pinned_binding_version
+
+binding_version.effect_class = manifest(record_digest).effect_class
+binding_version.replay       = manifest(record_digest).replay
+
+effect_class != read
+-> outcome_read_binding_ref present AND preview_ports != empty
+
+manifest_fact_changed(operation) -> binding.status = suspended
+```
+
+### Required tests
+
+[witness: workbench:contracts]
+
+1. A proposal declaring a `state-transition` operation as `read` is refused.
+2. An effectful binding without an outcome-read binding or without preview ports
+   cannot be accepted.
+3. An agent's attempt to accept a binding is refused.
+4. Changing an operation's replay in the manifest suspends its binding; a run
+   stops at the node and resumes after the owner accepts the new version.
+5. A manifest edit touching only another capability of the same service issues a
+   new binding version with identical ports and suspends nothing.
+6. Removing the operation from the manifest suspends the binding and no
+   invocation is attempted.
+
+### Consequence
+
+The kernel's picture of what a service can do cannot drift from the manifest
+silently, and cannot be redrawn by an agent.
+
+## Accepted decision A31 — the Factory manifest is an exact, legacy external contract
+
+### Normative rules
+
+1. At the immutable Factory repository revision selected by installation, a
+   service record is exactly `<manifest_root>/<service_id>.json`; its UTF-8
+   bytes are parsed as JSON and its `service` field must equal `service_id`.
+   Mutable revisions, path search, nearest-name lookup and filename fallback
+   are forbidden.
+2. `manifest_record_digest` is lowercase SHA-256 of those exact file bytes. It
+   is not a digest of parsed or reserialized JSON. Any byte change therefore
+   changes the record digest even when invocation facts remain equivalent.
+3. The accepted legacy record shape and closed vocabularies are
+   `rules.platform_manifest_contract`. Unknown required shapes, duplicate
+   capability identities, duplicate exposed operations, malformed optional
+   fields and values outside the closed vocabularies are refused; unknown
+   additional descriptive fields are retained as non-normative and never
+   acquire invocation meaning by inference.
+4. A capability's `idempotency_key` is an opaque `string | null`. The manifest
+   reader reports it verbatim. Only `module:operation_bindings` may map a
+   non-null declaration to typed input ports, and it must refuse the binding
+   unless every component has one unambiguous exact port mapping. `null` maps
+   to an empty port tuple. Punctuation, prose and field-name similarity are not
+   mapping evidence.
+5. Capability `note`, when present, is optional non-normative manifest text. A
+   binding's required owner-facing purpose remains M29 data authored for and
+   accepted by the owner; it is never copied or inferred from `note`.
+6. A manifest instance contributes only its declared `class`, optional
+   `api_base_url` and optional `required_headers`. `api_base_url` denotes the
+   `http_api` endpoint only. Required-header names are non-secret. Credential
+   binding references and secret material come only from installation
+   configuration and are never projected from the manifest. No endpoint is
+   invented for `mcp` or `operator`.
+7. To resolve a prior record digest, the reader considers only committed
+   versions of the same `<service_id>.json` path reachable through ancestors of
+   the configured revision, hashes each candidate's exact bytes, and requires
+   exactly one matching byte value. No other branch, path or service record is
+   searched. An absent or ambiguous match is an explicit refusal.
+8. The committed sanitized evidence artifact and its content-addressed evidence
+   manifest are the authority for this external contract. A changed Factory
+   shape is unsupported until new evidence supersedes it and this decision is
+   deliberately revised.
+
+### Formal invariants
+
+```text
+manifest_record_digest = sha256(exact_file_bytes_at_pinned_revision)
+
+manifest.idempotency_key = null
+-> binding.idempotency_key_ports = empty
+
+manifest.idempotency_key != null AND NOT unambiguous_exact_port_mapping
+-> binding_proposal_refused
+
+credential_binding_ref -> installation_configuration
+prior_digest_lookup -> same_path AND ancestor_of(configured_revision)
+```
+
+### Required tests
+
+[witness: workbench:external_contracts]
+
+1. Reformatting a record without changing parsed JSON changes its digest and is
+   classified as digest-changed with equivalent invocation facts.
+2. A record whose filename and `service` disagree is refused.
+3. A prose idempotency declaration such as a composite expression is refused
+   until the proposal supplies one unambiguous exact typed-port mapping.
+4. A missing `note` does not invalidate a capability and cannot remove the
+   binding's owner-authored purpose.
+5. An instance's required header names are projected without values; credential
+   references are taken only from installation configuration.
+6. A digest found only on another branch or under another service path is
+   reported unknown, not reused.
+
+### Consequence
+
+The kernel can consume the manifest that exists today without pretending its
+legacy prose is a typed binding contract, and drift comparison remains
+reproducible from immutable repository evidence.
+
+## Accepted decision A11 — a flow that changes anything is activated by the owner
+
+### Normative rules
+
+1. `highest_effect_class` of a flow version is derived from its pinned binding
+   versions in the order `read < draft-write < state-transition <
+   external-effect < destructive`.
+2. A proven flow version whose highest class is `read` is activated by the
+   kernel without a request. Any agent may then run it within A21.
+3. A proven flow version with any higher class is activated only by the owner.
+   The activation request shows an `owner_statement` in plain words naming every
+   non-read node: what it will change, in which service, and whether it will ask
+   each time.
+4. The statement is generated by the kernel from the binding purposes and effect
+   classes. An agent may add context and cannot replace or shorten the generated
+   part.
+5. A new flow version never inherits the activation, approvals or grants of an
+   earlier version, however small the difference.
+6. Returning a flow to an earlier version is a new FlowActivation M37 under the
+   same rule 2 or 3.
+7. An agent can never activate an effectful flow, and no delegation field can
+   express that permission.
+
+### Formal invariants
+
+```text
+flow_activation.activated_by = kernel <-> highest_effect_class = read
+highest_effect_class > read -> flow_activation.activated_by = owner
+
+new_flow_version -/> inherits(activation OR approval OR grant)
+```
+
+### Required tests
+
+[witness: workbench:external_contracts]
+
+1. A proven read-only flow is runnable immediately after proof with no owner
+   action.
+2. Adding one `draft-write` node produces a version that cannot run until the
+   owner activates it.
+3. An agent's activation request for that version is refused.
+4. The owner statement lists every non-read node; an agent-supplied statement
+   omitting one is rejected in favour of the generated text.
+5. Editing a constant in an activated effectful flow yields a version with no
+   activation and no grants.
+
+### Consequence
+
+Reading and computing cost the owner nothing. The moment a flow can change
+something, the owner has seen it in plain words before it can ever run.
+
+## Accepted decision A12 — an effect runs only on the exact input the owner saw
+
+### Normative rules
+
+1. Before invoking a node whose binding's effect class is `state-transition`,
+   `external-effect` or `destructive`, the run rests `awaiting_approval` unless
+   an active StandingGrant M43 covers that node under A13.
+2. A `draft-write` node asks no per-run approval. Its authority is the owner's
+   activation of the flow version under A11.
+3. The approval preview contains the binding's purpose, the service instance,
+   the effect class and the values of the binding's preview ports. Its
+   `preview_digest` covers the binding version, the instance and the digests of
+   all input values of the node, not only the previewed ones.
+4. For a node with `map_over_port`, one approval covers the whole collection.
+   The preview lists every element and the digest covers every element's inputs.
+5. Only the owner decides. The kernel invokes the operation only when the digest
+   of the inputs at invocation time equals the approved `preview_digest`. Any
+   difference discards the approval and asks again.
+6. An approval authorizes exactly one node execution — or, for a mapped node,
+   one execution per element of the approved collection — and is never reused
+   by another run, node, attempt after `effect_not_applied` on a `duplicates`
+   operation, or flow version.
+7. `denied` concludes the node as `operation_refused` by the owner and the run
+   as `refused`. Absence of a decision is not a decision: the run waits without
+   limit and no timeout approves or denies.
+8. The preview is returned to an agent only within its disclosure ceiling; the
+   owner always sees it in full.
+
+### Formal invariants
+
+```text
+invoke(node) AND effect_class IN {state-transition, external-effect, destructive}
+-> (approved_approval(node) AND digest(inputs_at_invocation) = preview_digest)
+   OR active_grant(flow_version, node)
+
+approval -> used_by_at_most_one_node_execution_per_element
+no_decision -> run.status = awaiting_approval   (unbounded)
+```
+
+### Required tests
+
+[witness: workbench:external_contracts]
+
+1. A run reaching a `state-transition` node stops and performs nothing until the
+   owner approves.
+2. An upstream value changing between preview and invocation discards the
+   approval and produces a new preview.
+3. A mapped node over nine photos produces one preview listing nine elements and
+   one approval.
+4. A denied approval ends the run `refused` and the service receives no call.
+5. A run left waiting for a long period is still `awaiting_approval`, with no
+   effect performed.
+6. An agent's approval request is refused.
+
+### Consequence
+
+The owner never approves "a flow" in the abstract. The owner approves this
+change, to this place, with these values, and the kernel performs that and
+nothing else.
+
+## Accepted decision A13 — a standing grant names one node of one flow version
+
+### Normative rules
+
+1. A StandingGrant M43 names one flow version, one node and the binding version
+   that node pins. Only the owner grants and revokes.
+2. A grant cannot name a node whose binding's effect class is `destructive`.
+   Such a node asks every time.
+3. A grant is requested and shown in plain words: what will happen without
+   asking, in which service, for which flow. The kernel generates the statement
+   as in A11.
+4. A node execution performed under a grant records `grant_ref` and the same
+   input digests an approval would have covered, so it is as explainable
+   afterwards as an approved one.
+5. A grant authorizes nothing while its binding is suspended, while the owner
+   principal is suspended, or for any other flow version.
+6. Revocation is final and takes effect before the next invocation. A run
+   already waiting at that node then asks for approval.
+7. Every active grant is listed for the owner in one place with the count of
+   executions performed under it.
+
+### Formal invariants
+
+```text
+grant.binding.effect_class != destructive
+grant_covers(node_execution)
+<-> grant.status = active
+    AND grant.flow_version = run.flow_version
+    AND grant.node_id = node_execution.node_id
+    AND binding.status = accepted
+    AND owner.status = active
+```
+
+### Required tests
+
+[witness: workbench:external_contracts]
+
+1. A grant request on a `destructive` node is refused.
+2. With a grant, a photo-upload flow performs its `state-transition` node
+   without stopping and the execution records the grant.
+3. The next version of that flow stops for approval at the same node.
+4. Revoking the grant makes the next run stop; a run already in flight past the
+   node is unaffected.
+5. Suspending the binding makes a granted node rest rather than run.
+
+### Consequence
+
+Routine work stops interrupting the owner, exactly as far as the owner said and
+no further. Deletion is never routine.
+
+## Accepted decision A14 — the kernel honours the declared replay behavior
+
+### Normative rules
+
+1. For a binding with `idempotency_key_ports`, the kernel derives the key from
+   the values of those ports and sends it as the manifest declares. The key's
+   digest is recorded on the node execution.
+2. Before invoking any operation that is not `read`, the kernel durably records
+   an in-flight attempt on the run: node, element, attempt number and key
+   digest. The record is cleared only by writing the concluding NodeExecution.
+3. An operation declared `safe`, `refuses` or `returns_existing` may be invoked
+   again by the kernel, under the same approval or grant, after
+   `service_unreachable` or after a reconciliation of `effect_not_applied`.
+4. An operation declared `overwrites` may be invoked again only with inputs of
+   the same digest as the approved ones.
+5. An operation declared `duplicates` is invoked at most once per approval.
+   After any conclusion other than a confirmed `effect_not_applied` with a fresh
+   approval, the kernel does not invoke it again within that run.
+6. A service's own refusal of a replay is recorded as `operation_refused` with
+   the service's bounded reason, and is reconciled through A15 when the binding
+   is `refuses`: a refusal because the effect already exists is an applied
+   effect, not a failure.
+7. `read` operations are retried on `service_unreachable` without approval and
+   without an in-flight record.
+8. Retry timing is bounded back-off while the run rests `pending`. No number of
+   failed attempts converts `pending` into `failed`; the owner may cancel.
+
+### Formal invariants
+
+```text
+invoke(non_read_operation) -> in_flight_record_durable_before_call
+
+replay = duplicates
+-> invocations_per_approval <= 1
+
+replay = overwrites AND reinvoke -> digest(inputs) = approved_digest
+
+attempts_exhausted -/> run.status = failed
+```
+
+### Required tests
+
+[witness: workbench:external_contracts]
+
+1. Killing the kernel between the in-flight record and the call's return leaves
+   an in-flight record that restart turns into `outcome_unknown`.
+2. A `duplicates` operation that timed out is not invoked again; the run rests
+   for reconciliation.
+3. A `returns_existing` operation invoked twice under one approval yields one
+   effect and two node executions with the same key digest.
+4. A `refuses` operation answering "already exists" on retry is reconciled as
+   applied and the run continues.
+5. A `read` operation against an unreachable instance is retried and the run is
+   `pending`, never `failed`, until the instance returns or the owner cancels.
+
+### Consequence
+
+Re-running is safe by the service's own declaration, not by hope. The second
+invoice in Holded is prevented by construction.
+
+## Accepted decision A15 — an unknown outcome is reconciled, never assumed
+
+### Normative rules
+
+1. A non-read invocation whose result the kernel cannot determine — connection
+   lost after send, ambiguous response, restart with an in-flight record —
+   concludes as `outcome_unknown`. The run rests `pending` with reason
+   `outcome_unknown`.
+2. The kernel then invokes the binding's `outcome_read_binding_ref`, a `read`
+   operation, with inputs derived from the original inputs and key, and records
+   an OutcomeReconciliation M44.
+3. `effect_applied`: the outputs read from the service are validated against the
+   original binding's output ports and become the node's outputs; the run
+   continues.
+4. `effect_not_applied`: the node may be attempted again under A14. For a
+   `duplicates` operation the owner is asked again with a preview stating that a
+   previous attempt is confirmed not to have applied.
+5. `still_undetermined`: the run keeps resting and reconciliation is repeated
+   with back-off. Dependants of the node do not execute on a guess.
+6. The owner may cancel a run resting on an unknown outcome. The cancellation
+   records that the effect's outcome was undetermined at that time; the kernel
+   does not claim either way.
+7. Reconciliation never uses free text of a service's error message as
+   evidence; it uses only the validated output of the declared read operation.
+
+### Formal invariants
+
+```text
+outcome_unknown -> run.status = pending AND dependants_not_executed
+
+continue_after_unknown -> reconciliation.determination = effect_applied
+reattempt_after_unknown -> reconciliation.determination = effect_not_applied
+
+assumed_outcome -> never
+```
+
+### Required tests
+
+[witness: workbench:persistence]
+
+1. A lost response followed by a reconciliation of `effect_applied` continues
+   the run with the service's outputs and performs no second call.
+2. A reconciliation of `effect_not_applied` on a `duplicates` operation asks the
+   owner again and states that the previous attempt did not apply.
+3. While the read operation is itself unreachable, the run rests and nothing
+   downstream executes.
+4. Cancelling such a run records the undetermined outcome explicitly.
+5. A service error text containing "created" is not treated as evidence.
+
+### Consequence
+
+The kernel says "I do not know" when it does not know, finds out by asking the
+service that owns the fact, and only then moves.
+
+## Accepted decision A28 — pending service retries use one persisted back-off schedule
+
+### Normative rules
+
+1. `module:run_executor` owns retry timing for waits caused by
+   `service_unreachable` and `outcome_unknown`. `operation_invoker` performs
+   one requested attempt/reconciliation and never chooses the next retry time.
+2. When a node enters or remains in one of those timed waits after an
+   unsuccessful attempt, the executor increments that wait entry's
+   `retry_ordinal` and writes `retry_not_before` using this exact schedule:
+
+   ```text
+   ordinal 1 -> 1 second
+   ordinal 2 -> 2 seconds
+   ordinal 3 -> 5 seconds
+   ordinal 4 -> 10 seconds
+   ordinal 5 -> 30 seconds
+   ordinal >=6 -> 60 seconds
+   ```
+
+3. There is no jitter and no host-local sleep state. The durable deadline is
+   `system_clock.now + delay`; a kernel-process wake-up before the deadline
+   re-evaluates nothing and starts no request.
+4. Restart preserves `retry_ordinal` and `retry_not_before`. It never resets
+   the sequence or immediately retries merely because the process restarted.
+5. A successful node conclusion, terminal run transition or owner cancellation
+   removes the timed wait entry. A fresh later wait for another attempt begins
+   again at ordinal 1.
+6. `binding_suspended` and `owner_approval` are not timed by this schedule.
+   They wait for their owning external/state change and have no
+   `retry_not_before`.
+7. Reaching ordinal 6 never changes `pending` into failure. Later retries
+   remain capped at 60 seconds until success, cancellation or another truthful
+   state transition.
+
+### Formal invariants
+
+```text
+retry_delay_seconds(1..6) = [1, 2, 5, 10, 30, 60]
+retry_delay_seconds(n > 6) = 60
+
+timed_wait_reason IN {service_unreachable, outcome_unknown}
+timed_wait -> retry_not_before = KernelInstant
+wake_before(retry_not_before) -/> invocation
+restart -/> retry_ordinal_reset
+retry_count -/> run_failed
+```
+
+### Required tests
+
+[witness: workbench:external_contracts]
+
+1. Six consecutive unsuccessful retries produce delays
+   `1, 2, 5, 10, 30, 60` seconds and the seventh also produces 60 seconds.
+2. A wake one microsecond before `retry_not_before` causes no invocation; a
+   wake at the deadline may re-evaluate the run.
+3. Restart after ordinal 4 preserves both ordinal and exact deadline.
+4. Success clears the wait; a later unrelated service wait starts at ordinal 1.
+5. An approval wait lasting hours receives no retry deadline.
+6. Repeated failures for days never make the run `failed` without another
+   failure rule.
+
+### Consequence
+
+Retry timing is deterministic durable run state, not an implementation-local
+timer or a policy invented by operation transport code.
