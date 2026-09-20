@@ -28,3 +28,7 @@ These gaps were exposed while wiring State 7 notes to the closed `OperationalUni
 ## slot_registry
 
 - `submit_implementation` — needs a named durable carrier for implementation code bytes. Required because Implementation stores only code_ref, while the note requires storing and later resolving verified executable bytes.
+
+## trace_journal
+
+- `record_node_execution` — needs the slot/contract evidence fields and the node-execution identity recipe. Required because the note requires slot-scoped evidence and idempotent attempt identity, but NodeExecution lacks the slot/contract fields and no identity recipe is stated.
