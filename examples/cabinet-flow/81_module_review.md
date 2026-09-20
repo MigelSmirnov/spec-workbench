@@ -301,3 +301,34 @@ Still owed by A30: the counter advance and the restored-store refusal in
 `operation_invoker.invoke_operation`, the owner decision that ends a restored state
 (`kernel_surface.owner_decide`, `owner_authority`, `store_continuity`), and value bytes in the
 content-addressed area. Ledger: 29 modules, 10 PASS, 19 AMBIGUITY.
+
+## A30, second part, and the records the notes were missing (2026-09-20)
+
+PR #62 wired 62 record-owning notes to the port and recorded 17 points where a note needs a record,
+a field or an operation that did not exist. This revision decides the ones that are model shape.
+
+- **M51 EffectAttempt** — the in-flight effect attempt was an untyped string inside
+  `FlowRun.in_flight_effect_attempts`. It is a record now: identity is run, node, map index and
+  attempt number joined, status `in_flight -> concluded`, written before the send.
+- **M52 BindingLifecycleEvent** — append-only evidence of `accepted`, `suspended`, `reissued`,
+  `retired` with actor, statement, manifest digest and instant. It carries the acceptance record, the
+  drift-sweep records and the retirement facts of a binding, so `OperationBinding` needs no new
+  field and `OperationBindingVersion` stays immutable.
+- Retirement actor, instant and reason on `SemanticAxis`, `SemanticTerm`, `SemanticRelation`, as
+  `Slot` and `Flow` already had; their `update_*_status` port operations became `update_*_retirement`.
+- `EffectApproval` carries what `request_approval` is given: flow version, mapped elements, file
+  preview digests, the owner statement and the request instant; the note names the source of each.
+- `NodeExecution.contract_version_ref` for slot evidence; revisions can be listed by `meaning` for
+  the duplicate search; `authorization_for_effect` receives the map index and attempt number it
+  needs to name the attempt it consumes.
+- **A30 rules 5, 7, 8** — `store_continuity.advance_effect_counter` advances the counter inside the
+  caller's unit or answers that effects are closed; `invoke_operation` records the EffectAttempt in
+  that same unit, writes the host counter after commit and before the send, and on a restored store
+  returns `operation_refused` / `refused_by_restored_store` without sending;
+  `store_continuity.confirm_continuity` is the owner-only decision, routed from `owner_decide`.
+
+Not decided here and still open: value bytes, code bytes of an implementation, the retention
+reference and removal of expired content — all one boundary (6), and the available byte-store
+emitter has no removal; the node-execution identity is stated as the same joined key as the attempt
+and still has to reach the note of `record_node_execution`. The remaining notes are briefed in
+`TASK_RECORD_NOTES_SECOND_BATCH.md`. Ledger unchanged in kind: 29 modules, 10 PASS, 19 AMBIGUITY.

@@ -17,7 +17,8 @@ counter, kept in the host state directory, outside the data directory.
 
 ### Inputs
 
-The host state directory from the loaded installation facts.
+The host state directory and the installation identity from the loaded
+installation facts.
 
 ### Outputs
 
@@ -79,3 +80,81 @@ Continuity not opened, a lower value, write or flush failure.
 ### State impact
 
 None in the kernel store.
+
+## `public_op:store_continuity.advance_effect_counter`
+
+### Owner
+
+`module:store_continuity` owns the StoreContinuity M50 counter.
+
+### Callers
+
+`module:operation_invoker`, inside the unit of work that records an in-flight
+EffectAttempt M51, before any send above `read`.
+
+### Inputs
+
+The caller's open unit of work.
+
+### Outputs
+
+The advanced counter, or nothing when effects are closed because the store is
+restored.
+
+### Observable effect
+
+The counter of this installation's StoreContinuity grows by one inside the
+caller's unit; with effects closed nothing is written.
+
+### Enforces
+
+A30 rules 5 and 7: the counter advances in the same unit as the attempt record;
+a restored store advances nothing, so the caller sends nothing.
+
+### Errors
+
+Continuity not opened, a missing StoreContinuity record and a store failure are
+errors; closed effects are an answer, not an error.
+
+### State impact
+
+StoreContinuity M50 `effect_counter` plus one, or none.
+
+## `public_op:store_continuity.confirm_continuity`
+
+### Owner
+
+`module:store_continuity` owns the end of a restored state (A30 rule 8).
+
+### Callers
+
+`module:kernel_surface`, for the owner-only decision of that kind.
+
+### Inputs
+
+The resolved owner ActorRef M18 and the owner's own statement that the services
+were reconciled.
+
+### Outputs
+
+The StoreContinuity M50 after the decision.
+
+### Observable effect
+
+In one unit of work the counter becomes one more than the larger of the store's
+and the host's, effects open, and the owner, instant and statement are
+recorded; after commit the host copy is written with the same value.
+
+### Enforces
+
+Only the active owner; only a restored store; the statement is bounded text
+and is data, never interpreted.
+
+### Errors
+
+A non-owner actor, a store that is not restored, an empty or oversized
+statement and a failed host write are refusals that leave effects closed.
+
+### State impact
+
+StoreContinuity M50 confirmation fields and counter; the host copy.

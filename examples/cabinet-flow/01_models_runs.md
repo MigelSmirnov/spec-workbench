@@ -254,11 +254,14 @@ Candidate fields:
   `operation_failed`, `service_unreachable`, `outcome_unknown`,
   `skipped_by_guard` or `not_executed_upstream_failed`;
 - `failure_reason`: closed refinement where the status needs one, such as
-  `value_too_large` under `contract_violation` or `refused_by_owner` and
-  `refused_by_service` under `operation_refused`;
+  `value_too_large` under `contract_violation` or `refused_by_owner`,
+  `refused_by_service` and `refused_by_restored_store` (A30) under
+  `operation_refused`;
 - `failure_detail`: bounded text without secrets and without any value above
   `open` class;
-- `started_at`, `ended_at`.
+- `started_at`, `ended_at`;
+- `contract_version_ref`: the slot contract version a function node executed
+  under, absent for an operation node.
 
 `succeeded` is written only after output validation. `operation_refused` records
 a service's own refusal, such as a replay it rejects; `outcome_unknown` records
@@ -319,6 +322,12 @@ Candidate fields:
   node it contains at most one item. For a mapped node it grows only within the
   previewed element set and the approval reaches `consumed` when every covered
   element attempt has taken its one authority.
+- `flow_version_ref`: the proven flow version the approval was requested for;
+- `map_indexes`: the mapped elements of the node this approval covers, empty for
+  an unmapped node;
+- `file_preview_refs`: digests of the spooled files shown to the owner;
+- `owner_statement`: the kernel-generated statement shown to the owner;
+- `requested_at`: KernelInstant M47 of the request.
 
 The kernel invokes the operation only with inputs whose digest equals the
 approved preview. A different input is a different effect and needs another
@@ -609,6 +618,53 @@ make it continuous again.
 ### Persistence candidate
 
 Durable single record of the kernel's operational store.
+
+### Open questions
+
+None.
+
+## Model M51 — EffectAttempt
+
+### Meaning
+
+The kernel's durable record that it is about to send, or has sent, one effect of
+one node element. It is written before the send (A14) so that a crash, a restart
+or a restored store (A30) finds the attempt instead of repeating it.
+
+Candidate fields:
+
+- `attempt_id`: the run, node, map index and attempt number joined in that order;
+- `run_id`, `node_id`, `map_index`, `attempt_number`;
+- `binding_version_ref` and `service_instance`: what is invoked and where;
+- `idempotency_key_digest`: present when the binding declares key ports;
+- `authority_kind` and `authority_ref`: the approval or the standing grant that
+  authorized it, absent for a `read`;
+- `status`: `in_flight` or `concluded`;
+- `recorded_at`: KernelInstant M47 of the record, before the send;
+- `concluded_at` and `concluding_node_execution_ref`: present once the
+  NodeExecution M41 that concludes the attempt exists.
+
+### Identity
+
+entity
+
+### Identity evidence
+
+Substitution: two attempts of the same element differ by attempt number and are
+never interchangeable. Continuity: the same attempt passes from in flight to
+concluded.
+
+### Source of truth
+
+The kernel, at the moment it decides to send.
+
+### Lifecycle candidate
+
+`in_flight -> concluded`. Nothing deletes it.
+
+### Persistence candidate
+
+Durable entity of the kernel's operational store.
 
 ### Open questions
 

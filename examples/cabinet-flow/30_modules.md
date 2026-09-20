@@ -180,8 +180,9 @@ its state, and nothing of credentials, manifest or business records.
 
 ### Must not own
 
-Opening the store, deciding an approval, sending anything, or the owner's
-identity.
+Opening the store, deciding an approval, sending anything, the owner's identity,
+or the record of an effect attempt itself — it counts them, it does not keep
+them.
 
 ### Hides
 
@@ -192,7 +193,9 @@ what a missing, stale or unreadable copy means.
 
 ```text
 open_continuity
+advance_effect_counter
 record_host_continuity_counter
+confirm_continuity
 ```
 
 ### Depth assessment

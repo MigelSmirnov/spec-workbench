@@ -484,3 +484,51 @@ Durable, referenced by runs.
 ### Open questions
 
 None.
+
+## Model M52 — BindingLifecycleEvent
+
+### Meaning
+
+Immutable evidence of one thing that happened to an operation binding: the owner
+accepted a version, the drift sweep suspended the binding or reissued a version,
+or an actor retired it. The binding and its versions say what is; these events
+say who made it so, when and why, and let a repeated request be answered with
+the first outcome.
+
+Candidate fields:
+
+- `event_id`: the binding, the event kind and the version joined in that order;
+- `binding_id` and `binding_version_ref`;
+- `event_kind`: `accepted`, `suspended`, `reissued` or `retired`;
+- `actor`: ActorRef M18 of the owner or retiring actor, absent for the kernel's
+  own drift sweep;
+- `statement`: the owner's statement of an acceptance or the bounded reason of a
+  retirement or suspension;
+- `manifest_record_digest`: the manifest record the sweep compared, for
+  `suspended` and `reissued`;
+- `occurred_at`: KernelInstant M47.
+
+### Identity
+
+value
+
+### Identity evidence
+
+Substitution: equal events are the same fact. Continuity: none; an event never
+changes.
+
+### Source of truth
+
+The kernel, in the unit of work that changed the binding.
+
+### Lifecycle candidate
+
+No independent lifecycle.
+
+### Persistence candidate
+
+Durable, append-only evidence of the kernel's operational store.
+
+### Open questions
+
+None.

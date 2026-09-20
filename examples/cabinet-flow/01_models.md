@@ -73,7 +73,9 @@ Candidate fields:
 - `meaning`: bounded human-readable definition;
 - `value_family`: one accepted value-model family;
 - `status`: `active` or `retired`;
-- `current_revision_id`.
+- `current_revision_id`;
+- `retired_by`, `retired_at`, `retirement_reason`: who retired the entry, when and why,
+  present only after retirement and never rewritten.
 
 ### Identity
 
@@ -160,7 +162,9 @@ Candidate fields:
 - `axis_id`;
 - `display_name`;
 - `status`: `active` or `retired`;
-- `current_revision_id`.
+- `current_revision_id`;
+- `retired_by`, `retired_at`, `retirement_reason`: who retired the entry, when and why,
+  present only after retirement and never rewritten.
 
 A term identifies what a value means, not the source field that happened to
 carry it.
@@ -319,7 +323,9 @@ Candidate fields:
 - `source_term_id`;
 - `target_term_id`;
 - `status`: `active` or `retired`;
-- `current_revision_id`.
+- `current_revision_id`;
+- `retired_by`, `retired_at`, `retirement_reason`: who retired the entry, when and why,
+  present only after retirement and never rewritten.
 
 A relation that is only proposed is a VocabularyProposal (M45) and is not in
 this registry. The relation is explicit evidence. Sharing an axis or primitive type does not
