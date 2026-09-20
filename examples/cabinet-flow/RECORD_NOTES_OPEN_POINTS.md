@@ -20,10 +20,6 @@ These gaps were exposed while wiring State 7 notes to the closed `OperationalUni
 
 - `slot_evidence` — needs an `OperationalUnitOfWork` list operation keyed by `contract_version_ref`. Required because the note must select every concluded function attempt for the exact contract version, while the port exposes no list by that field; the existing load-by-id and lists by executed/grant/run reference cannot provide that bounded set.
 
-## trial_corpus
-
-- `capture_trial_case` — needs a durable origin reference on TrialCase. Required because the note requires captured_from_run, but TrialCase has no origin field.
-- `withdraw_trial_case` — needs a lookup proving whether the case contributed to an admitted verdict. Required because the note requires this owner-only guard, but no port operation links a TrialCase to admitted evidence.
 
 ## value_store
 
