@@ -44,6 +44,18 @@ nobody made.
 - `FA006` — closed, byte-addressable semantic-test handoff, when declared;
 - `FA007` — target create/no-op or explicit replacement authorization;
 - `FA008` — Factory admission-tool fingerprints and checkout state.
+- `FA017` — runtime carriers: no model whose every field is `object` crosses a
+  function signature, and every repository lowered from
+  `rules.persistence_backend` is reachable — named as the `local`
+  implementation of an interface or mentioned by another contract.
+
+`FA017` is unconditional on purpose. `FA010` and the port gates before it react
+to an interface the author chose to write; a case with no interface at all makes
+each of them report "not applicable", and the first Cabinet Flow runs were
+admitted that way with the store, the secrets and the channel credential hidden
+behind `payload: object`. The generator then kept records in module-level dicts
+and never reached the emitted repository. The check reads only the projected
+spec and names the carrier and the functions that use it.
 
 Only `READY_TO_EXPORT` authorizes export. A successful export writes
 `spec_workbench_factory_admission.json`, `spec_workbench_validation.json`,
