@@ -116,6 +116,9 @@ Candidate fields:
   copied likewise;
 - `idempotency_key_ports`: the input ports whose values form the manifest's
   idempotency key, empty when the manifest declares none;
+- `preconditions`: the manifest record's preconditions at that digest, copied
+  like the effect class, so that a later manifest change can be judged material
+  or not (A10);
 - `outcome_read_binding_ref`: the `read` binding through which an undetermined
   outcome of this operation is reconciled; required unless `effect_class` is
   `read`;

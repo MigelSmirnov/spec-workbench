@@ -266,6 +266,10 @@ Candidate fields:
   of an operation binding version. A flow input, a flow output and a flow
   constant are always `value`: a file enters a flow from a service and leaves it
   into a service;
+- `accepted_media_types`, `size_ceiling_bytes`: present exactly on a
+  `byte_stream` port — the closed set of media types it accepts and the largest
+  file it accepts, never above the release ceiling for one spooled file. A
+  `value` port carries neither;
 - `disclosure_class`: `open`, `business_confidential` or `personal_data`. On an
   input port it is the highest class the port accepts. On an operation binding's
   output port it is declared. On a function's output port it is never authored:

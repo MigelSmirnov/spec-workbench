@@ -100,3 +100,28 @@ build fell on `ceilings.transport_timeout_ms_max`. The closure now carries exact
 State 1 names, each `int`, equal to the `config.release_ceilings` keys. No contract, note or rule
 used the seven names. Slices moved only where the model surface is shown; all 28 modules remain PASS.
 
+## Attributes the notes demanded and no model carried (2026-09-20, after the build of run 2)
+
+Factory run on `a5935cce…` generated all 28 modules; the build rejected nine on fields that do not
+exist. For the generated modules each was a note demanding an attribute with no carrier. Decided
+from the accepted design, not invented:
+
+- **File ports** (M05: "a closed set of accepted media types and a size ceiling"): `SemanticPort`
+  carries `accepted_media_types` and `size_ceiling_bytes`, present exactly on a `byte_stream` port
+  and never above `config.release_ceilings.run_spool_file_bytes_max`. `value_schema_ref` had no
+  model and no resolver behind it. `trial_corpus`, `run_spool` and `validate_contract_ports` name them.
+- **Transport timeout** (rule "may enforce a lower manifest/binding-specific timeout"): neither the
+  manifest projection nor a binding carries one, so this release has exactly one timeout,
+  `config.release_ceilings.transport_timeout_ms_max`. The note no longer asks for a binding-specific value.
+- **Preconditions** (A10.5–A10.6): judging a manifest change material requires the stored facts;
+  `OperationBindingVersion.preconditions` is copied like the effect class, and `sweep_manifest_drift`
+  names the five compared facts.
+- **Admission verdict**: `contract_version_ref`, `runtime_revision_ref`, `corpus_digest` — what the
+  note of `current_admission` already promised to return.
+- **Carrier named in the note**: the effect class is `FlowVersion.highest_effect_class`, read with
+  `flow_registry.flow_version`; the pinned runtime is `runtime_revision_ref`; the corpus identity is
+  `corpus_digest`; a trial copy reports the draft's target version; a contract version has no status.
+
+Adversarial question per changed slice — can two faithful implementations still differ observably
+on these points? No: every sentence names the field or the address. All 28 modules remain PASS.
+

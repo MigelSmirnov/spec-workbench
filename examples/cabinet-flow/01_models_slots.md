@@ -383,6 +383,9 @@ Candidate fields:
 
 - `admission_id`;
 - `implementation_ref`;
+- `contract_version_ref`, `runtime_revision_ref`: the exact contract version the
+  trial ran under and its pinned runtime revision;
+- `corpus_digest`: the identity of the active-corpus snapshot the verdict covers;
 - `considered_trial_executions`: one reference per active trial case;
 - `withdrawn_trial_cases`: cases excluded because withdrawn, with reasons;
 - `verdict`: `admitted` or `refused`;
