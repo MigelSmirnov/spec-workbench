@@ -146,3 +146,45 @@ outcome is uncertain.
 
 No committed domain state changes. Transaction-local staged state is removed.
 
+## `public_op:operational_store.open_store`
+
+### Owner
+
+`module:operational_store` owns the one opening of the data directory (A30).
+
+### Callers
+
+`module:bootstrap`, once per process start, before any unit of work.
+
+### Inputs
+
+The data directory and installation identity from the loaded installation facts
+and the host copy of the effect counter, or nothing when the host holds none.
+
+### Outputs
+
+Whether the store is a new installation, continuous or restored, and the
+store's effect counter.
+
+### Observable effect
+
+The directory, the database file, the value area and the schema are created
+when absent; the write-ahead journal is enabled. A new installation writes its
+StoreContinuity M50 with counter zero and effects open. A restored store has
+`effects_open` set false and the detection instant recorded.
+
+### Enforces
+
+A30 rules 3 and 6: one opening per process; `begin_unit_of_work` is refused
+before it; an empty store with no host copy is new, equal counters are
+continuous, anything else is restored. A store of another installation is
+refused.
+
+### Errors
+
+Relative or unusable directory, schema that cannot be created, a store of
+another installation and a second opening are typed startup refusals.
+
+### State impact
+
+At most the StoreContinuity M50 record.

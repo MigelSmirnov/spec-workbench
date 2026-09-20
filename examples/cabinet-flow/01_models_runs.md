@@ -564,3 +564,52 @@ Embedded anywhere the kernel records operational timestamps such as
 
 None.
 
+
+## Model M50 — StoreContinuity
+
+### Meaning
+
+The kernel's own evidence that its operational store remembers every effect it
+ever began to send. One record per installation. It exists so that a store put
+back from an older copy is recognized as such (A30) instead of being trusted.
+
+Candidate fields:
+
+- `installation_id`: the installation the store belongs to;
+- `effect_counter`: how many in-flight effect attempts this store has ever
+  recorded; it only grows, in the same unit of work that records the attempt;
+- `effects_open`: whether the kernel may send an effect above `read`;
+- `restored_detected_at`: KernelInstant M47 of the start that found the store
+  behind the host's copy of the counter, absent while the store is continuous;
+- `confirmed_by`, `confirmed_at`, `owner_statement`: the owner's decision that
+  ended a restored state, with the owner's own statement that the services were
+  reconciled; absent until such a decision exists.
+
+### Identity
+
+entity
+
+### Identity evidence
+
+Substitution: the record of one installation is never interchangeable with
+another's. Continuity: the same record persists while its counter grows and
+while it passes from continuous to restored and back.
+
+### Source of truth
+
+The kernel itself: the counter from its own recorded attempts, the restored
+state from the comparison at start, the confirmation from the owner's decision.
+
+### Lifecycle candidate
+
+`continuous -> restored -> continuous`. It begins continuous with counter zero
+on a new installation. Only a start can make it restored; only the owner can
+make it continuous again.
+
+### Persistence candidate
+
+Durable single record of the kernel's operational store.
+
+### Open questions
+
+None.

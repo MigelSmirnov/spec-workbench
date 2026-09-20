@@ -18,7 +18,9 @@ The operator starts the kernel process on the installation host.
 ### Boundary
 
 `module:bootstrap` composes the kernel. `module:installation` validates the
-host configuration, `module:operational_store` opens durability,
+host configuration, `module:store_continuity` reads the host copy of the effect
+counter, `module:operational_store` opens durability, `module:access_control`
+establishes the owner,
 `module:semantic_vocabulary` holds the seed, `module:operation_bindings` checks
 bindings against the manifest, `module:sandbox_supervisor` reports its health,
 `module:run_executor` resumes work, and the two gateways open last.
@@ -27,7 +29,12 @@ writes startup/recovery timestamps uses the same KernelInstant source.
 
 ### Steps
 
-1. `capability:bootstrap.start_kernel` constructs every module and asks
+1. `capability:bootstrap.start_kernel` first asks
+   `capability:installation.load_installation` to read and validate the
+   protected configuration, then `capability:store_continuity.open_continuity`
+   and `capability:operational_store.open_store` to open the one data directory
+   and learn whether the store is new, continuous or restored (A30), then
+   `capability:access_control.establish_owner`. It constructs every module and asks
    `capability:installation.release_ceilings`,
    `capability:installation.manifest_revision` and
    `capability:installation.resolve_service_target` to validate the whole

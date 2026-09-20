@@ -272,3 +272,32 @@ surface is written here, and the modules it touches stay AMBIGUITY until it exis
   restored state, with the owner's statement.
 - `value_store`: value bytes in the content-addressed area of the data directory
   (`source_byte_store_backend` is the available emitter), metadata in the database.
+
+## A30, first part: the installation is read, the store is opened, the owner exists (2026-09-20)
+
+- State 1 **M50 StoreContinuity** — the effect counter, whether effects are open, the detection
+  instant of a restored store and the owner's confirmation — with a table and five port operations.
+- `installation.load_installation` reads the operator-written protected configuration once. Its
+  closed format lives in `rules.installation_configuration`, key names by role; the note names the
+  library calls (`Path.read_text`, `json.loads`, `os.stat`) and reads no environment variable.
+- `operational_store.open_store` is the only function that creates or prepares the database: data
+  directory, value area, schema, write-ahead journal, and the A30 rule 6 comparison that returns
+  new / continuous / restored. `begin_unit_of_work` is refused before it.
+- `access_control.establish_owner` writes the one OwnerPrincipal when the store holds none; until now
+  nothing in the design created it.
+- New module **`store_continuity`** owns the host copy of the counter (`open_continuity`,
+  `record_host_continuity_counter`). It was first placed in `installation`; the State 6 depth gate
+  refused that — eight public functions of eight — and the split follows the mechanism: recognizing a
+  store put back from an older copy is not configuration reading.
+- `start_kernel` composes them in order and reports `store_continuity` in `KernelReadiness`; a
+  restored store is a successful start.
+
+Three refusals of the Factory validator shaped the data: a `schema_version` key under `rules` is
+reserved, a key name containing `secret` is refused, and a note may not repeat a literal that lives
+in `rules` — so the configuration key names are distinct from model field names and the note points
+at their addresses.
+
+Still owed by A30: the counter advance and the restored-store refusal in
+`operation_invoker.invoke_operation`, the owner decision that ends a restored state
+(`kernel_surface.owner_decide`, `owner_authority`, `store_continuity`), and value bytes in the
+content-addressed area. Ledger: 29 modules, 10 PASS, 19 AMBIGUITY.

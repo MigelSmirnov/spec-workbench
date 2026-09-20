@@ -184,3 +184,49 @@ configuration refuse startup or run creation before any node executes.
 None inside `module:installation`; the caller may embed the immutable resolved
 target in a newly created run.
 
+## `public_op:installation.load_installation`
+
+### Owner
+
+`module:installation` owns the one reading of the operator-written protected
+configuration.
+
+### Callers
+
+`module:bootstrap`, first of all startup work.
+
+### Inputs
+
+The installation identity the operator started the process for and the
+reference of the protected configuration file. Nothing from a request, a flow
+or a record.
+
+### Outputs
+
+The installation facts the rest of startup needs: installation identity, owner
+identity and display name, the data directory and the host state directory.
+No secret, no credential
+binding and no manifest detail.
+
+### Observable effect
+
+The file is read and validated once and its content is kept for this process;
+no kernel record is written.
+
+### Enforces
+
+The closed format of `rules.installation_configuration`: exactly the declared
+keys, a file mode no wider than the declared one, an absolute data directory,
+an installation identity equal to the one started, a secret location per
+credential binding and exactly one purpose per binding (A29). A second loading
+in the same process is refused.
+
+### Errors
+
+Missing or unreadable file, wider file mode, unknown or missing key, identity
+mismatch, relative path and malformed binding are one typed startup refusal
+without host path or secret.
+
+### State impact
+
+None in the kernel store.

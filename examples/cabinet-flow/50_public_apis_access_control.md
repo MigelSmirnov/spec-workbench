@@ -215,3 +215,42 @@ Exactly one delegation changes from `active` to `revoked` with an immutable
 revocation time and reason. No historical action record, run or credential is
 rewritten or deleted.
 
+## `public_op:access_control.establish_owner`
+
+### Owner
+
+`module:access_control` owns the establishment of the installation's single
+OwnerPrincipal M16 at start (A30 rule 4).
+
+### Callers
+
+`module:bootstrap`, after the store is open.
+
+### Inputs
+
+The owner identity and display name `module:bootstrap` took from the loaded
+installation facts. Nothing from a request.
+
+### Outputs
+
+The OwnerPrincipal M16 of the installation.
+
+### Observable effect
+
+When the store holds no owner, one `active` OwnerPrincipal is written in one
+unit of work; otherwise nothing is written.
+
+### Enforces
+
+Exactly one owner per installation; a stored owner whose identity differs from
+the configured one refuses startup; the surface cannot create, rename or
+replace the owner.
+
+### Errors
+
+Configuration not loaded, store not open, identity conflict and store failure
+are typed startup refusals.
+
+### State impact
+
+At most one OwnerPrincipal M16 inserted, once in the life of the installation.

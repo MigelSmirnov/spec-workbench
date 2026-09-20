@@ -1182,6 +1182,33 @@ Fields:
 
 ---
 
+## `InstallationFacts`
+
+Fields:
+
+- `installation_id: str`;
+- `owner_principal_id: str`;
+- `owner_display_name: str`;
+- `data_directory: str` — absolute host path, used only by `module:bootstrap` to
+  open the store; it never reaches a surface response, a record or a trace;
+- `host_state_directory: str` — the directory of the protected configuration
+  file, where the host copy of the effect counter lives, outside the data
+  directory; same confinement.
+
+What startup needs from the protected configuration and nothing more: no
+secret, no credential binding, no manifest detail.
+
+---
+
+## `StoreOpening`
+
+Fields:
+
+- `continuity: str` — one of `rules.store_continuity.states`;
+- `effect_counter: int` — the StoreContinuity M50 counter of the opened store.
+
+---
+
 ## `KernelReadiness`
 
 Fields:
@@ -1193,6 +1220,7 @@ Fields:
 - `runs_resumed: bool`;
 - `mcp_ready: bool`;
 - `http_ready: bool`;
+- `store_continuity: str` — one of `rules.store_continuity.states`; `restored` is a successful start (A30);
 - `ready: bool`;
 - `failures: tuple[str, ...]`.
 

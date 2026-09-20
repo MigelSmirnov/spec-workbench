@@ -157,12 +157,48 @@ resolve_service_target
 resolve_credential
 release_ceilings
 manifest_revision
+load_installation
 ```
 
 ### Depth assessment
 
 - kind: deep
 - hidden mechanism: host-held configuration and secret resolution that no record or request can influence
+
+## `store_continuity`
+
+### Owns
+
+A30 rules 5 to 8: the evidence that the operational store remembers every effect
+it began to send — the host's copy of the StoreContinuity M50 effect counter,
+kept outside the data directory.
+
+### Knows
+
+M50, the closed continuity states, the host directory the installation names for
+its state, and nothing of credentials, manifest or business records.
+
+### Must not own
+
+Opening the store, deciding an approval, sending anything, or the owner's
+identity.
+
+### Hides
+
+The host file that carries the counter, its atomic replacement and flushing, and
+what a missing, stale or unreadable copy means.
+
+### Candidate public capabilities
+
+```text
+open_continuity
+record_host_continuity_counter
+```
+
+### Depth assessment
+
+- kind: deep
+- hidden mechanism: recognizing a store that was put back from an older copy
 
 ## `operational_store`
 
@@ -214,6 +250,7 @@ them.
 begin_unit_of_work
 commit_unit_of_work
 rollback_unit_of_work
+open_store
 ```
 
 ### Depth assessment
@@ -287,6 +324,7 @@ resolve_actor
 authorize_action
 issue_delegation
 revoke_delegation
+establish_owner
 ```
 
 ### Depth assessment
