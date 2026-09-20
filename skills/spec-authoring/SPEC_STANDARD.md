@@ -1024,7 +1024,9 @@ Argon2id (`profile`) над `HMAC-SHA256(pepper, secret)`; проверка —
   },
   "elapsed_time": {
     "authority_modules": ["<module>"],
-    "allowed_primitives": ["time.monotonic_ns"]
+    "allowed_primitives": ["time.monotonic_ns"],
+    "samples_per_read": 1,
+    "persisted": false
   },
   "representation": {
     "type": "<Model>", "field": "<field>",
@@ -1033,9 +1035,24 @@ Argon2id (`profile`) над `HMAC-SHA256(pepper, secret)`; проверка —
 }
 ```
 
-- `wall_clock` обязателен; `elapsed_time`, `representation` и
+- `wall_clock` обязателен; `elapsed_time`, `representation` и оба
   `samples_per_read` — по необходимости. Отсутствующий `elapsed_time` означает,
   что измерять длительность не вправе никто.
+- `elapsed_time.samples_per_read` и `elapsed_time.persisted` необязательны;
+  версия блока от них не меняется, спека без них читается как прежде.
+  `samples_per_read` привязывает каждую операцию полномочного модуля, читающую
+  примитив, к объявленному числу показаний. `persisted: false` объявляет, что
+  показание длительности не покидает процесс: оно не понижается в
+  `representation.type`, не сохраняется и не участвует в доменном порядке.
+  Статически гейт доказывает первое — показание (прямое или полученное через
+  выданную операцию) не попадает в конструктор `representation.type`;
+  хранение и порядок остаются обязательством дизайна.
+- Полномочие на длительность может принадлежать тому же модулю, что и
+  настенные часы: тогда он единственный читатель обоих часов хоста и обязан
+  принадлежать backend-у §6.9 версии 3, а потребители получают длительность
+  через его операцию (`wiring.elapsed_clock_function`). Разность двух таких
+  показаний — законная длительность, а не
+  `wall_clock_used_for_elapsed_duration`.
 - `authority_modules` — модули из `module_functions`. Пустой список вместе с
   пустым `allowed_primitives` означает «настенные часы не читает никто».
 - `single_host_source: true` требует ровно одного модуля и ровно одного
@@ -1058,6 +1075,8 @@ Argon2id (`profile`) над `HMAC-SHA256(pepper, secret)`; проверка —
 | `wall_clock_used_for_elapsed_duration` | длительность как разность двух показаний настенных часов (в том числе полученных через выданные часы) |
 | `clock_representation_mismatch` | операция чтения возвращает не `<type>(<field>=<одно показание через conversion>)` |
 | `wall_clock_sample_count_mismatch` | число показаний за одно чтение отличается от `samples_per_read` |
+| `elapsed_clock_sample_count_mismatch` | при объявленном `elapsed_time.samples_per_read`: операция читает примитив иное число раз, либо чтение стоит вне операции |
+| `elapsed_reading_used_as_instant` | при `elapsed_time.persisted: false`: показание длительности передано в конструктор `representation.type` |
 
 Кому выданы часы и через какие имена — выводится из спеки
 (`imports.module_internal`, `implementation_obligations`, сигнатуры
@@ -1065,7 +1084,7 @@ Argon2id (`profile`) над `HMAC-SHA256(pepper, secret)`; проверка —
 необъявленное полномочие проверить нельзя. Код детерминированных backend-ов
 проверяется против политики уже в `validate_spec`, до Route B.
 
-### 6.9 `system_clock_backend/v1`, `/v2`
+### 6.9 `system_clock_backend/v1`, `/v2`, `/v3`
 
 Значение, которое возвращают часы, — внешнее наблюдение и от вызова к вызову
 различно; код адаптера часов полностью определён спекой. Поэтому модуль
@@ -1114,6 +1133,39 @@ Argon2id (`profile`) над `HMAC-SHA256(pepper, secret)`; проверка —
 времени», ни арифметики повторов, хранения, троттлинга или авторизации.
 Любая иная ячейка, примитив или форма результата — дефект валидации, а не
 повод отдать модуль генерации.
+
+Версия 3 (`python_host_clock_v1`) — тот же модуль как единственный читатель
+обоих часов хоста: операция настенных часов версии 2 и одна операция
+длительности.
+
+```json
+{
+  "kind": "system_clock_backend",
+  "schema_version": 3,
+  "backend": {"emitter": "python_host_clock_v1"},
+  "wiring": {"module": "<module>", "wall_clock_function": "<function>",
+             "elapsed_clock_function": "<function>",
+             "models_module": "<models module>"},
+  "time": {"policy": "rules.time_source_policy", "read": "per_call"}
+}
+```
+
+Сверх требований версии 2 к `wall_clock` и `representation` версия 3
+требует от `elapsed_time`: `authority_modules == ["<module>"]` (раздать
+полномочие конечным модулям нельзя — это дефект валидации), ровно один
+примитив `time.monotonic_ns`, `samples_per_read: 1`, `persisted: false`.
+`module_functions[<module>]` — ровно две операции (порядок списка не значим),
+контракты `<wall_clock_function>: "() -> <representation.type>"` и
+`<elapsed_clock_function>: "() -> int"`. Lowering: операция настенных часов
+побайтно та же, что в версии 2; операция длительности возвращает показание
+примитива как есть — одно чтение, без пересчёта единиц, без обёртки. Иных
+функций и классов модуль не содержит; обе операции принадлежат эмиттеру и
+нот не требуют, покрытие подтверждает обе. Фокусная проверка дополнительно
+доказывает, что показания длительности — целые, неубывающие и лежат между
+двумя чтениями того же примитива проверяющим.
+
+Версия 2 не расширяется: она по-прежнему владеет только операцией настенных
+часов и служит спекам, где длительность измеряют другие модули.
 
 ---
 

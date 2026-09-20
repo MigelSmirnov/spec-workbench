@@ -146,6 +146,19 @@ _EPOCH_CLOCK = {
     "time": {"policy": "rules.time_source_policy", "read": "per_call"},
 }
 
+_HOST_CLOCK = {
+    "kind": "system_clock_backend",
+    "schema_version": 3,
+    "backend": {"emitter": "python_host_clock_v1"},
+    "wiring": {
+        "module": "system_clock",
+        "wall_clock_function": "now",
+        "elapsed_clock_function": "monotonic_ns",
+        "models_module": "kernel.models",
+    },
+    "time": {"policy": "rules.time_source_policy", "read": "per_call"},
+}
+
 
 def _write_clock(project: Path, backend_ir: dict, *, status: str = "closed") -> None:
     project.mkdir()
@@ -181,6 +194,22 @@ def test_epoch_clock_owns_its_one_module_operation(tmp_path: Path) -> None:
         "deterministic_method_scopes": ["now"],
     }
     assert backend.module_slice(project, "run_executor") is None
+
+
+def test_host_clock_owns_both_module_operations(tmp_path: Path) -> None:
+    project = tmp_path / "clock"
+    _write_clock(project, _HOST_CLOCK)
+    (project / "global_spec.json").write_text(
+        json.dumps({"rules": {"system_clock_backend": _HOST_CLOCK}}), encoding="utf-8"
+    )
+
+    backend = _clock(project)
+    assert backend.deterministic_method_scopes(project) == {"now", "monotonic_ns"}
+    assert backend.module_slice(project, "system_clock") == {
+        "enabled": True,
+        "backend_ir": _HOST_CLOCK,
+        "deterministic_method_scopes": ["monotonic_ns", "now"],
+    }
 
 
 def test_class_clock_owns_its_concrete_methods(tmp_path: Path) -> None:
