@@ -172,3 +172,46 @@ restart. Twelve modules are AMBIGUITY and Stage 8.1 is open until State 3/5/6 de
 path (a typed port over the repository methods, staged through the unit of work) and the notes of
 the record-owning functions name its operations. The durable record families also need checking
 against M01–M49: the persistence closure has 14 tables.
+
+## The unit of work becomes the typed record port (2026-09-20, boundary 1 of the runtime inventory)
+
+Admission check FA017 (spec-workbench PR #61) named four places where Cabinet Flow hid a runtime
+mechanism behind nothing; two of them were the store. This revision closes those two in the form
+Cabinet Web already uses — an interface model, a local implementation obligation, a closed
+persistence IR — instead of a new mechanism.
+
+- `UnitOfWorkHandle` (`payload: object`) is gone. `begin_unit_of_work` returns
+  `OperationalUnitOfWork`, an interface of 107 typed record operations; `SqliteOperationalStoreRepository`
+  is its `local` implementation. `CompareAndSetExpectation` and its version unions are gone with it:
+  no model carries a version and no decision stood behind the type. Compare-and-set is the owning
+  function comparing the expected value with the record it loaded inside the unit, which holds the
+  store's one write transaction.
+- The closure had 14 tables because an earlier placement reason treated every version and evidence
+  kind as "embedded immutable snapshots". State 1 names them durable records of the store
+  (`NodeExecution`, `FlowVersion`, `AdmissionVerdict`, …). They are now tables of class `issued`
+  (§15.5: append-only, no update, no delete) — 29 tables, and an append-only kind is immutable
+  because the port has no update for it. `load`/`upsert` pairs are replaced by what
+  `RECORD_ACCESS_MAP_20260920.json` shows the functions need: load by key, find by unique field,
+  list by equality filter in a declared order, insert, update of exactly the named fields.
+- Two gates corrected the first draft. The data lint refused class `master` for the value-identity
+  kinds `OperationBindingVersion` and `SandboxRuntimeRevision`: the binding version is `issued` and
+  its acceptance facts need their own record (open, below); the runtime revision is release data
+  and leaves the store. The Factory validator refused a list with an empty filter; the four
+  whole-table lists became lists by `status` / `axis_id`, and `seed_vocabulary` loads by key.
+- Measured against the Factory emitter, not assumed: `generate_repository_draft.py` assembles the
+  repository deterministically from this IR (29 tables, 107 methods), and the emitted module passed
+  a round trip on a real SQLite file — insert, load equal to the inserted record, duplicate key
+  refused, named update, state present after reopening, ordered list.
+- `imports.stdlib` gains `import sqlite3`, `imports.third_party` gains the emitter's
+  `from pydantic import TypeAdapter`; the codec models of the new tables are declared for
+  `operational_store_persistence`.
+
+Still open inside this boundary, so `operational_store` and the record-owning modules stay
+AMBIGUITY: the operation that establishes the database location at startup and its caller (arrives
+with the installation boundary); the records and fields listed in
+`RECORD_PORT_REQUIREMENTS_20260920.md` — the acceptance record of a binding version first; and the
+notes of the record-owning functions, which do not yet name the port operations they use.
+Slice hashes are refreshed. The six modules whose host mechanism the runtime inventory found
+undecided (`installation`, `manifest_reader`, `service_transport`, `sandbox_supervisor`, `run_spool`,
+`bootstrap`) are recorded AMBIGUITY as well, so the ledger says what the inventory says: 10 PASS,
+18 AMBIGUITY.

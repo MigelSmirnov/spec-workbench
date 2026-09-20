@@ -20,14 +20,15 @@ mutations.
 
 ### Inputs
 
-A closed purpose/record-family discriminator, bounded correlation identity and
-the compare-and-set expectations required by the owning domain operation. No
+A closed purpose/record-family discriminator and a bounded correlation identity.
+Compare-and-set is the owning function comparing an expected value with the
+record it loaded inside the unit. No
 SQL, table name, query, host path or business payload outside typed durable
 M01–M49 kernel records is accepted.
 
 ### Outputs
 
-An opaque single-use UnitOfWork handle scoped to the calling module and one
+One single-use `OperationalUnitOfWork` — the typed record port — scoped to the calling module and one
 transaction, with read/write access only to declared kernel record kinds.
 
 ### Observable effect
@@ -39,13 +40,13 @@ for later atomic commit. No durable domain change is visible yet.
 
 One active transaction per handle; declared durable record families only;
 append-only record kinds cannot be updated/deleted; immutable versions remain
-immutable; compare-and-set expectations are captured; credentials and business
+immutable; one writer at a time, so a loaded record cannot change before commit; credentials and business
 facts are not persistable.
 
 ### Errors
 
 Unavailable or unmigrated store, unknown record family, nested/reused handle,
-invalid compare-and-set expectation and attempt to open unsupported persistence
+and attempt to open unsupported persistence
 are refused before a mutable transaction is exposed.
 
 ### State impact
@@ -68,7 +69,7 @@ The domain module that successfully completed the operation begun through
 
 ### Inputs
 
-The exact active UnitOfWork handle and its staged typed record changes. Domain
+The exact open unit of work and the typed record changes made through it. Domain
 authorization or semantic validity is not supplied to or inferred by the
 store.
 
@@ -116,7 +117,7 @@ pre-commit failure.
 
 ### Inputs
 
-The exact active UnitOfWork handle and a bounded internal failure category. No
+The exact open unit of work and a bounded internal failure category. No
 request can use rollback to delete previously committed evidence.
 
 ### Outputs

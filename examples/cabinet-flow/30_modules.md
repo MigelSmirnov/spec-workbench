@@ -188,15 +188,25 @@ fixtures.
 The database, its schema and migrations, transaction isolation, locking, and the
 mapping between records and rows.
 
-The public boundary remains the opaque UnitOfWork API below. Its SQLite
-implementation is one internal `SqliteOperationalStoreRepository` owned by the
-`operational_store_persistence` companion module and lowered from
-`persistence_backend/v3`. The repository exposes typed
-methods for the closed durable M01–M49 record families; it accepts no table
-name, SQL fragment, untyped payload or host path. Domain modules and
-agent-authored tools continue to compose the public kernel operations and never
-depend on the repository class. This keeps tool authoring stable while storage
-layout, migrations and codecs remain replaceable implementation details.
+The public boundary is the unit of work, and the unit of work is the typed
+record port. `begin_unit_of_work` returns one `OperationalUnitOfWork`: an
+interface whose operations are the typed record operations of the closed
+durable kinds — load by the complete key, find by a declared unique field, list
+by an equality filter in a declared order, insert, update of exactly the named
+fields — and nothing else. It accepts no table name, SQL fragment, untyped
+payload or host path. Its one local implementation is
+`SqliteOperationalStoreRepository`, owned by the `operational_store_persistence`
+companion module and lowered from `persistence_backend/v3`
+(`implementation_obligations`, disposition `local`). Domain modules and
+agent-authored tools depend on the interface and never on the class, so storage
+layout, migrations and codecs stay replaceable.
+
+Every read and every write of a durable record goes through a unit. The unit
+holds the store's one write transaction, which is how compare-and-set is kept:
+the owning function compares the caller's expected value with the record it
+loaded inside the unit, and nothing can change that record before commit.
+Append-only kinds are immutable because the port offers no update or delete for
+them.
 
 ### Candidate public capabilities
 

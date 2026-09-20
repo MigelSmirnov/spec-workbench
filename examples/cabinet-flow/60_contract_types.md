@@ -157,26 +157,27 @@ permission, approval, admission, proof or business result.
 
 ---
 
-## `CompareAndSetExpectation`
+## `OperationalUnitOfWork`
 
-Immutable store-level expectation captured when a unit of work begins.
+Interface. One open transaction of the operational store and, at the same time,
+the only way a domain module reads or writes a durable kernel record. Its
+operations are the typed record operations closed in
+`70_persistence_closure.json` — `load_*` by the complete durable key, `find_*`
+by a declared unique field, `list_*` by an equality filter in a declared order,
+`insert_*`, `update_*` of exactly the named fields, and `upsert_*` where a
+record is replaced whole. It accepts no table name, SQL fragment, untyped
+payload or host path.
 
-Fields:
+It is implemented locally by `SqliteOperationalStoreRepository`
+(`implementation_obligations`, disposition `local`). Domain modules depend on
+this interface and never on the class. It is single-use: after
+`commit_unit_of_work` or `rollback_unit_of_work` it is closed and cannot be
+serialized, stored or reused.
 
-- `record_family: str`;
-- `record_id: str`;
-- `expected_version: str | int | None`.
-
-It is persistence concurrency evidence only and never a domain authorization
-decision.
-
----
-
-## `UnitOfWorkHandle`
-
-Opaque, single-use transaction handle scoped to one calling module, one closed
-record-family purpose and one transaction. It cannot be serialized, reused after
-commit/rollback, or used to address SQL/table/path details.
+Compare-and-set is not a store mechanism. The unit holds the store's one write
+transaction, so a record loaded inside it cannot change before commit; the
+owning function compares the caller's expected value with the loaded record and
+refuses on a mismatch. No record carries a generic version.
 
 ---
 
@@ -184,8 +185,7 @@ commit/rollback, or used to address SQL/table/path details.
 
 Fields:
 
-- `transaction_id: str`;
-- `committed_record_versions: tuple[tuple[str, str | int], ...]`.
+- `transaction_id: str`.
 
 The result exists only after an all-or-nothing durable commit.
 
