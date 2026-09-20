@@ -192,8 +192,8 @@
     "propose_binding: [BEHAVIOR] MUST authorize authoring, resolve the exact manifest operation and digest, validate every typed port against accepted semantic/schema evidence, and copy channel, effect class, replay and idempotency facts verbatim rather than accepting them from the caller. Every non-read proposal must name valid preview ports and an accepted same-service `read` binding for outcome reconciliation. Missing/stale operations, manifest contradictions, invalid or duplicate ports, unsafe effectful shape, wrong reconciliation binding and caller identity are refused without a record. Otherwise `module:identity` computes the immutable version identity and one proposed version is appended; it remains non-invocable until exact owner acceptance.",
     "retire_binding: [BEHAVIOR] MUST authorize the actor and compare-and-set the exact binding, expected current lifecycle status and version to final retired, sampling `module:system_clock.now` only on success and preserving the bounded actor/reason evidence. An exact replay returns the first retirement; unknown binding, stale expectation, conflicting repeat or transaction failure changes nothing. Retirement blocks new flow references and invocation but never deletes or substitutes manifest records, immutable binding versions, FlowVersions, proofs, Runs, approvals or traces, and calls no service.",
     "sweep_manifest_drift: [BEHAVIOR] MUST deterministically reconcile either every accepted binding or one exact binding/version against the configured manifest revision using the fixed material set: channel, effect class, replay behavior, idempotency-key declaration and preconditions. Unchanged facts write nothing; an absent or materially changed operation atomically appends suspension, while a digest-only change with equivalent invocation facts appends an identical-ports version tied to the new digest and keeps the binding accepted. Each stable-ordered report names old/new digests, changed facts and outcome. Missing history, malformed/unavailable manifest, uncertain comparison or transaction failure is fail-closed; an incomplete all-binding startup sweep cannot report readiness, and suspended bindings invoke nothing.",
-    "invoke_operation: [BEHAVIOR] MUST re-resolve the exact accepted non-suspended binding pinned by the Run, require the pinned ServiceTarget and every validated value/file digest to match the node and any exact effect authorization, and derive the idempotency key only from declared ports. It applies `safe`, `refuses`, `returns_existing`, `overwrites` and `duplicates` replay semantics exactly: overwrites reuses authority only for identical approved input, and duplicates sends at most once per approval. Before any non-read send it durably records the exact in-flight run/node/element/attempt and key; without that write it sends nothing. It then makes one bounded transport request, rejects redirects and validates every successful output. Definitely-not-sent, possibly-sent, refusal, timeout, size/schema/semantic failure remain distinct; possible send always uses `rules.retry_backoff.timed_wait_reasons[1]`, triggers no automatic second effect, and service timestamps never become KernelInstant or kernel policy.",
-    "reconcile_outcome: [BEHAVIOR] MUST accept only one exact non-read attempt in `rules.retry_backoff.timed_wait_reasons[1]` and its original pinned binding, target, inputs, key and prior evidence, then invoke once only the declared accepted non-suspended same-service outcome-read binding. It never repeats the original effect and accepts no caller assertion, free text or alternate read operation as evidence. Only the read binding's validated closed output may yield `effect_applied`, `effect_not_applied` or `still_undetermined`; applied outputs must also validate against the original effect binding before dependants may run. Missing/invalid bindings, unreachable service, malformed or oversized response, ambiguity and output failure preserve unknown state. The immutable reconciliation records `determined_at` from exactly one call to the injected `system_clock.now`; it never reads a host clock directly. Retry timing belongs to `module:run_executor`, and a later reattempt requires confirmed not-applied plus original replay rules and fresh approval for `duplicates`.",
+    "invoke_operation: [BEHAVIOR] MUST call `operation_bindings.binding_for_invocation` to re-resolve the exact accepted non-suspended binding pinned by the Run, require the pinned ServiceTarget and every validated value/file digest to match the node, and call `owner_authority.authorization_for_effect` for the exact effect authority. It derives the idempotency key only from declared ports and applies `safe`, `refuses`, `returns_existing`, `overwrites` and `duplicates` replay semantics exactly: overwrites reuses authority only for identical approved input, and duplicates sends at most once per approval. Before any non-read send it uses `operational_store.begin_unit_of_work` and `operational_store.commit_unit_of_work` to durably record the exact in-flight run/node/element/attempt and key; any failed unit is closed with `operational_store.rollback_unit_of_work`, and without a confirmed commit it sends nothing. It then calls `service_transport.send_request` exactly once, rejects redirects, validates every successful output and stores accepted value output only through `value_store.put_value`. Definitely-not-sent, possibly-sent, refusal, timeout, size/schema/semantic failure remain distinct; possible send always uses `rules.retry_backoff.timed_wait_reasons[1]`, triggers no automatic second effect, and service timestamps never become KernelInstant or kernel policy.",
+    "reconcile_outcome: [BEHAVIOR] MUST accept only one exact non-read attempt in `rules.retry_backoff.timed_wait_reasons[1]` and its original pinned binding, target, inputs, key and prior evidence, call `operation_bindings.binding_for_invocation` for the declared accepted non-suspended same-service outcome-read binding, and call `service_transport.send_request` exactly once for that read. It never repeats the original effect and accepts no caller assertion, free text or alternate read operation as evidence. Only the read binding's validated closed output may yield `effect_applied`, `effect_not_applied` or `still_undetermined`; applied value outputs are validated against the original effect binding and stored only through `value_store.put_value` before dependants may run. Missing/invalid bindings, unreachable service, malformed or oversized response, ambiguity and output failure preserve unknown state. The immutable reconciliation records `determined_at` from exactly one call to the injected `system_clock.now` and is appended atomically through `operational_store.begin_unit_of_work` plus `operational_store.commit_unit_of_work`; failure calls `operational_store.rollback_unit_of_work`, never reads a host clock directly and publishes no partial reconciliation. Retry timing belongs to `module:run_executor`, and a later reattempt requires confirmed not-applied plus original replay rules and fresh approval for `duplicates`.",
     "begin_unit_of_work: [BEHAVIOR] MUST validate a closed purpose/record-family discriminator, bounded correlation identity and complete compare-and-set expectations, then open one isolated single-use transaction handle scoped to the calling module and declared M01–M49 record kinds. SQL, table names, paths, credentials, business facts and untyped payloads are forbidden, as are nested or reused handles and unsupported persistence families. An unavailable/unmigrated store or invalid expectation fails before mutable access is exposed. The begin captures versions/locks but publishes no durable change; commit and rollback remain explicit operations.",
     "commit_unit_of_work: [BEHAVIOR] MUST validate every staged typed record, reference shape, append-only/immutable rule, uniqueness constraint and captured compare-and-set expectation, then publish the entire active UnitOfWork atomically with one durable transaction identity and resulting record versions. A closed/reused handle, stale expectation, conflict, invalid mutation/shape, durability failure or uncertain commit is explicit and never reported as success or partial publication; uncertainty requires store recovery evidence rather than caller replay by assumption. It commits only staged kernel records and never business-service or external-file state.",
     "rollback_unit_of_work: [BEHAVIOR] MUST discard all staged changes and release transaction-local resources for the exact active uncommitted UnitOfWork, leaving every previously committed record untouched. Repeating the same completed rollback is idempotent, while an unknown handle, a transaction already committed, rollback failure or unavailable store is explicit; rollback can never delete or reverse durable evidence. No staged retention or domain change may remain visible, and uncertain rollback prevents the kernel from serving until startup recovery establishes the transaction outcome.",
@@ -4992,6 +4992,27 @@
       "service_transport": {
         "system_clock": [
           "monotonic_ns"
+        ],
+        "installation": [
+          "resolve_credential"
+        ],
+        "manifest_reader": [
+          "manifest_operation"
+        ],
+        "run_spool": [
+          "deliver_file",
+          "receive_file"
+        ],
+        "models": [
+          "BoundedByteSink",
+          "BoundedByteStream",
+          "CredentialHandle",
+          "FileDeliveryResult",
+          "ManifestOperationProjection",
+          "ManifestOperationRef",
+          "ManifestRevisionRef",
+          "SemanticPort",
+          "SpooledBytes"
         ]
       },
       "operational_store_persistence": {
@@ -5005,6 +5026,359 @@
       "operation_invoker": {
         "system_clock": [
           "now"
+        ],
+        "models": [
+          "CompareAndSetExpectation",
+          "EffectAuthorization",
+          "KernelInstant",
+          "ManifestOperationProjection",
+          "ManifestRevisionRef",
+          "OperationBindingVersion",
+          "ServiceTarget",
+          "SpooledBytes",
+          "StoredValue",
+          "TransportMetadataField",
+          "TransportResult",
+          "UnitOfWorkCommitResult",
+          "UnitOfWorkHandle",
+          "UnitOfWorkRollbackResult",
+          "ValueContent"
+        ],
+        "operation_bindings": [
+          "binding_for_invocation"
+        ],
+        "operational_store": [
+          "begin_unit_of_work",
+          "commit_unit_of_work",
+          "rollback_unit_of_work"
+        ],
+        "owner_authority": [
+          "authorization_for_effect"
+        ],
+        "service_transport": [
+          "send_request"
+        ],
+        "value_store": [
+          "put_value"
+        ]
+      },
+      "value_store": {
+        "identity": [
+          "digest_value"
+        ],
+        "operational_store": [
+          "begin_unit_of_work",
+          "commit_unit_of_work",
+          "rollback_unit_of_work"
+        ],
+        "run_spool": [
+          "release_run_files"
+        ],
+        "semantic_vocabulary": [
+          "term_revision"
+        ],
+        "system_clock": [
+          "now"
+        ],
+        "models": [
+          "CompareAndSetExpectation",
+          "KernelInstant",
+          "RunSpoolCleanupResult",
+          "TermRevisionView",
+          "UnitOfWorkCommitResult",
+          "UnitOfWorkHandle",
+          "UnitOfWorkRollbackResult"
+        ]
+      },
+      "run_spool": {
+        "operational_store": [
+          "begin_unit_of_work",
+          "commit_unit_of_work",
+          "rollback_unit_of_work"
+        ],
+        "models": [
+          "CompareAndSetExpectation",
+          "UnitOfWorkCommitResult",
+          "UnitOfWorkHandle",
+          "UnitOfWorkRollbackResult"
+        ]
+      },
+      "trace_journal": {
+        "operational_store": [
+          "begin_unit_of_work",
+          "commit_unit_of_work",
+          "rollback_unit_of_work"
+        ],
+        "value_store": [
+          "read_value"
+        ],
+        "models": [
+          "ActorRef",
+          "CompareAndSetExpectation",
+          "StoredValueRead",
+          "UnitOfWorkCommitResult",
+          "UnitOfWorkHandle",
+          "UnitOfWorkRollbackResult"
+        ]
+      },
+      "run_executor": {
+        "flow_registry": [
+          "current_flow_activation"
+        ],
+        "installation": [
+          "resolve_service_target"
+        ],
+        "operation_bindings": [
+          "binding_for_invocation"
+        ],
+        "operation_invoker": [
+          "invoke_operation",
+          "reconcile_outcome"
+        ],
+        "operational_store": [
+          "begin_unit_of_work",
+          "commit_unit_of_work",
+          "rollback_unit_of_work"
+        ],
+        "owner_authority": [
+          "authorization_for_effect",
+          "request_approval"
+        ],
+        "run_spool": [
+          "release_run_files"
+        ],
+        "sandbox_supervisor": [
+          "execute_function"
+        ],
+        "slot_activation": [
+          "serving_activation"
+        ],
+        "system_clock": [
+          "now"
+        ],
+        "trace_journal": [
+          "record_node_execution"
+        ],
+        "value_store": [
+          "derive_output_class",
+          "put_value",
+          "read_value"
+        ],
+        "models": [
+          "ActorRef",
+          "CompareAndSetExpectation",
+          "DisclosureDerivation",
+          "EffectApproval",
+          "EffectAuthorization",
+          "FlowActivation",
+          "KernelInstant",
+          "ManifestRevisionRef",
+          "NodeExecution",
+          "NodeExecutionDraft",
+          "OperationAttemptResult",
+          "OperationBindingVersion",
+          "OutcomeReconciliation",
+          "OwnerStatement",
+          "ResourceBounds",
+          "RunFileDescriptor",
+          "RunSpoolCleanupResult",
+          "SandboxExecutionResult",
+          "SandboxFileInput",
+          "SandboxRuntimeRevision",
+          "SemanticPort",
+          "ServiceTarget",
+          "SlotActivation",
+          "SpooledBytes",
+          "StoredValue",
+          "StoredValueRead",
+          "UnitOfWorkCommitResult",
+          "UnitOfWorkHandle",
+          "UnitOfWorkRollbackResult",
+          "ValueContent"
+        ]
+      },
+      "kernel_surface": {
+        "access_control": [
+          "authorize_action"
+        ],
+        "admission": [
+          "current_admission",
+          "run_trial"
+        ],
+        "flow_registry": [
+          "activate_flow_version",
+          "composition_view",
+          "create_flow",
+          "current_flow_activation",
+          "register_flow_version",
+          "retire_flow"
+        ],
+        "operation_bindings": [
+          "accept_binding_version",
+          "propose_binding",
+          "retire_binding"
+        ],
+        "owner_authority": [
+          "decide_approval",
+          "grant_standing_approval",
+          "revoke_standing_approval",
+          "waiting_for_owner"
+        ],
+        "run_executor": [
+          "cancel_run",
+          "create_run",
+          "run_status"
+        ],
+        "semantic_vocabulary": [
+          "decide_proposal",
+          "retire_entry",
+          "submit_proposal"
+        ],
+        "slot_activation": [
+          "activate_implementation",
+          "contract_health",
+          "rollback_activation"
+        ],
+        "slot_registry": [
+          "create_slot",
+          "issue_contract_version",
+          "slot_authoring_view",
+          "submit_implementation"
+        ],
+        "trace_journal": [
+          "run_trace",
+          "slot_evidence"
+        ],
+        "trial_corpus": [
+          "add_trial_case",
+          "capture_trial_case",
+          "withdraw_trial_case"
+        ],
+        "value_store": [
+          "read_value"
+        ],
+        "models": [
+          "ActorRef",
+          "AdmissionVerdict",
+          "AuthorizationResult",
+          "BindingAcceptanceResult",
+          "CompositionFilter",
+          "CompositionView",
+          "ContractHealthView",
+          "EffectApproval",
+          "Flow",
+          "FlowActivation",
+          "FlowConstant",
+          "FlowEdge",
+          "FlowNode",
+          "FlowProof",
+          "FlowRun",
+          "FlowVersion",
+          "Implementation",
+          "ManifestOperationRef",
+          "OperationBinding",
+          "OperationBindingVersion",
+          "OwnerStatement",
+          "ResourceBounds",
+          "RetiredVocabularyEntry",
+          "RunStatusView",
+          "RunTracePage",
+          "SandboxRuntimeRevision",
+          "SemanticPort",
+          "Slot",
+          "SlotActivation",
+          "SlotAuthoringView",
+          "SlotContractVersion",
+          "SlotEvidencePage",
+          "StandingGrant",
+          "StoredValueRead",
+          "TrialCase",
+          "TypedValueDraft",
+          "VocabularyDecisionResult",
+          "VocabularyProposal",
+          "VocabularyProposalContent",
+          "WaitingForOwnerFilter",
+          "WaitingForOwnerPage"
+        ]
+      },
+      "mcp_gateway": {
+        "access_control": [
+          "resolve_actor"
+        ],
+        "kernel_surface": [
+          "activate",
+          "author",
+          "inspect",
+          "owner_decide",
+          "request_trial",
+          "run_flow"
+        ],
+        "models": [
+          "ActivationRequest",
+          "ActivationResult",
+          "ActorRef",
+          "AdmissionVerdict",
+          "AuthorRequest",
+          "AuthorResult",
+          "ChannelCredentialHandle",
+          "InspectRequest",
+          "InspectResult",
+          "OwnerDecisionRequest",
+          "OwnerDecisionResult",
+          "RunFlowRequest",
+          "RunFlowResult",
+          "TrialRequest"
+        ]
+      },
+      "bootstrap": {
+        "http_gateway": [
+          "serve_http"
+        ],
+        "installation": [
+          "manifest_revision",
+          "release_ceilings",
+          "resolve_service_target"
+        ],
+        "mcp_gateway": [
+          "serve_mcp"
+        ],
+        "operation_bindings": [
+          "sweep_manifest_drift"
+        ],
+        "operational_store": [
+          "begin_unit_of_work",
+          "commit_unit_of_work",
+          "rollback_unit_of_work"
+        ],
+        "run_executor": [
+          "resume_runs"
+        ],
+        "sandbox_supervisor": [
+          "supervisor_health"
+        ],
+        "semantic_vocabulary": [
+          "seed_vocabulary"
+        ],
+        "system_clock": [
+          "now"
+        ],
+        "models": [
+          "BindingDriftReport",
+          "CompareAndSetExpectation",
+          "HttpRequestEnvelope",
+          "HttpResponseEnvelope",
+          "KernelInstant",
+          "ManifestRevisionRef",
+          "McpRequestEnvelope",
+          "McpResponseEnvelope",
+          "ReleaseCeilings",
+          "RunRecoveryReport",
+          "SandboxSupervisorHealth",
+          "ServiceTarget",
+          "UnitOfWorkCommitResult",
+          "UnitOfWorkHandle",
+          "UnitOfWorkRollbackResult",
+          "VocabularySeedResult"
         ]
       }
     }
