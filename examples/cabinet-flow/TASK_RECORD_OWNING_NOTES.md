@@ -5,6 +5,31 @@ branch `agent/cabinet-flow`. Work on your own branch cut from it (`agent/cabinet
 and open a pull request into `agent/cabinet-flow`. Do not export to the Factory and do not start
 Route B.
 
+## Where
+
+The case lives in the **Spec Workbench** repository, not in the Factory:
+`/home/smirnov/jestor_VBC/exp_vbc/demo/spec-workbench`
+(`origin` = `https://github.com/MigelSmirnov/spec-workbench.git`). The Factory repository
+(`code_factory`, `panelforge-sandbox`) has a branch `agent/cabinet-flow-export`; that is the export
+side and is not where this work happens.
+
+The main checkout of the Workbench is on another branch and must not be switched. Work in your own
+worktree:
+
+```bash
+cd /home/smirnov/jestor_VBC/exp_vbc/demo/spec-workbench
+git fetch origin
+git worktree add -b agent/cabinet-flow-record-notes \
+    ../spec-workbench-worktrees/cabinet-flow-record-notes origin/agent/cabinet-flow
+cd ../spec-workbench-worktrees/cabinet-flow-record-notes
+git merge origin/main
+```
+
+Run the tools with `/home/smirnov/jestor_VBC/venv/bin/python`.
+
+The note of `invoke_operation` is out of scope: the case owner rewrites it for decision A30
+(the store-continuity counter and the restored-store refusal). Leave it as it is.
+
 ## Why
 
 Factory run 2 generated ten modules that keep their records in module-level dicts, because no note
@@ -87,8 +112,6 @@ whose operation the module's notes name. See `access_control` there as the examp
 ## Mechanics
 
 ```bash
-git fetch origin && git switch -c agent/cabinet-flow-record-notes origin/agent/cabinet-flow
-git merge origin/main                      # tools are only as fresh as the branch
 git branch --show-current                  # check before every commit
 
 # after editing 80_notes.md
