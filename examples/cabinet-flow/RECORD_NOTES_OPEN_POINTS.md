@@ -13,3 +13,8 @@ These gaps were exposed while wiring State 7 notes to the closed `OperationalUni
 - `authorization_for_effect` — needs an attempt identity for single-use approval consumption and an atomic active-grant absence guard. Required because the contract lacks map index/attempt identity and the port cannot guard insertion on absence of an active grant.
 - `request_approval` — needs fields for flow version, mapped elements, file previews, owner statement, and request time. Required because the note requires the complete approval preview to remain bound, but EffectApproval has no carrier for these facts.
 - `waiting_for_owner` — needs bounded set-filtered pagination across approvals and grants. Required because the view requires IN-set filters and one cursor across two record families, while the port offers only single-field lists.
+
+## run_executor
+
+- `advance_run` — needs a durable in-flight effect-attempt record. Required because the executor must persist the pre-send attempt, but no record model or port operation exists.
+- `resume_runs` — needs a durable in-flight effect-attempt record. Required because recovery must reconcile the pre-send attempt, but no record model or port operation exists.
