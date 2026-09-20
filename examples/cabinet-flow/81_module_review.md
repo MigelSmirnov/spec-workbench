@@ -216,6 +216,24 @@ undecided (`installation`, `manifest_reader`, `service_transport`, `sandbox_supe
 `bootstrap`) are recorded AMBIGUITY as well, so the ledger says what the inventory says: 10 PASS,
 18 AMBIGUITY.
 
+## The platform manifest is now a content-addressed external contract (2026-09-20)
+
+The real `platform/manifest/` README and all service records at immutable Factory
+revision `b25b523358b3371f81ced7c1ad78dc6f5feb8af3` were inspected and captured in
+`PLATFORM_MANIFEST_EXTERNAL_CONTRACT_20260920.md`. A31 and
+`rules.platform_manifest_contract` now fix the record path, exact-byte digest,
+legacy field shapes and vocabularies, same-path ancestor history lookup and the
+fail-closed interpretation of fields the source leaves informal.
+
+The three manifest-reader contracts and notes now agree: idempotency is opaque
+`string | null` until operation binding proves an exact typed-port mapping;
+`note` is optional and is not the owner's purpose; instances provide only class,
+optional HTTP base URL and header names; credentials remain installation-owned.
+The content-addressed evidence gate is closed and required by
+`70_manifest_reader_closure.json`. This removes the runtime-inventory boundary-3
+ambiguity, so `manifest_reader` advances to PASS. Transport, sandbox and
+value-byte/spool host mechanisms remain outside this review.
+
 ## The credential stops being an opaque carrier; the HTTP edge takes the emitter's form (2026-09-20)
 
 The two remaining FA017 blocks were `CredentialHandle` and `ChannelCredentialHandle`, both

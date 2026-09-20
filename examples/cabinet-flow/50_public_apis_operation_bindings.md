@@ -20,9 +20,12 @@ manifest facts.
 ### Inputs
 
 The ActorRef, exact ManifestOperationRef and digest, typed input/output
-SemanticPorts, purpose, preview-port selection and, for a non-read operation,
-an accepted read binding proposed as `outcome_read_binding_ref`. Effect class,
-channel, replay and idempotency facts are not caller-authored.
+SemanticPorts, purpose, preview-port selection, an exact proposed mapping from
+the manifest's opaque non-null idempotency-key declaration to input ports, and,
+for a non-read operation, an accepted read binding proposed as
+`outcome_read_binding_ref`. Effect class, channel, replay and the opaque
+idempotency declaration are not caller-authored. A manifest `null` declaration
+accepts only an empty mapping.
 
 ### Outputs
 
@@ -38,15 +41,18 @@ acceptance.
 ### Enforces
 
 Ports name accepted term revisions and schemas; proposal facts match the exact
-manifest digest; non-read bindings have preview ports and a same-service
-accepted read binding for outcome reconciliation; agent text remains data.
+manifest digest; every non-null idempotency declaration has one unambiguous
+exact mapping to typed input ports; non-read bindings have preview ports and a
+same-service accepted read binding for outcome reconciliation; agent text
+remains data.
 
 ### Errors
 
 Missing operation, stale digest, caller contradiction of manifest facts,
-invalid ports, effectful binding without preview/outcome-read, wrong-service or
-non-read reconciliation binding and caller-supplied version identity are
-refused.
+invalid ports, absent/ambiguous idempotency mapping, non-empty mapping for a
+`null` declaration, effectful binding without preview/outcome-read,
+wrong-service or non-read reconciliation binding and caller-supplied version
+identity are refused.
 
 ### State impact
 
@@ -231,4 +237,3 @@ conflicting repeat and transaction failure are refused atomically.
 
 Exactly one binding lifecycle status changes to retired; no manifest record,
 FlowVersion, run, approval or historical binding version is deleted.
-

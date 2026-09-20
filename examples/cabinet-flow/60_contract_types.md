@@ -32,9 +32,10 @@ Fields:
 - `operation_ref: ManifestOperationRef`;
 - `effect_class: str` — the manifest-owned closed effect class;
 - `replay: str` — the manifest-owned closed replay behavior;
-- `idempotency_key_fields: tuple[str, ...]`;
+- `idempotency_key_declaration: str | None` — opaque legacy manifest text,
+  reported verbatim and never parsed into ports by this module;
 - `preconditions: tuple[str, ...]`;
-- `purpose: str` — bounded manifest purpose text.
+- `manifest_note: str | None` — optional bounded, non-normative manifest text.
 
 The projection contains no credential and no Cabinet binding/approval policy.
 
@@ -66,10 +67,10 @@ Fields:
 
 - `channel: str`;
 - `base_address: str`;
-- `required_header_names: tuple[str, ...]`;
-- `credential_binding_refs: tuple[str, ...]`.
+- `required_header_names: tuple[str, ...]`.
 
-Header values and credential values are forbidden.
+Header values, credential-binding references and credential values are
+forbidden. Credential binding belongs to installation configuration.
 
 ---
 
@@ -85,8 +86,9 @@ Fields:
 - `environment_class: str`;
 - `endpoints: tuple[ManifestChannelEndpoint, ...]`.
 
-The projection contains only non-secret routing facts and protected credential
-binding references; no resolved credential value is representable.
+The projection contains only non-secret routing facts. An `api_base_url`, when
+present, produces only an `http_api` endpoint; no `mcp` or `operator` endpoint
+is inferred.
 
 
 ---

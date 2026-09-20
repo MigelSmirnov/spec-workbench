@@ -401,9 +401,10 @@ writes no network code.
 2. `capability:operation_bindings.propose_binding` validates every semantic
    port through `capability:semantic_vocabulary.term_revision`, then records
    typed input and output ports, preview ports and the outcome-read binding;
-   effect class,
-   replay and idempotency key are copied from the manifest, and the identity
-   comes from `capability:identity.identify_binding_version`.
+   effect class, replay and the opaque idempotency-key declaration are copied
+   from the manifest. The proposal must supply one unambiguous exact mapping of
+   a non-null declaration to typed input ports; `null` maps to no ports. The
+   identity comes from `capability:identity.identify_binding_version`.
 3. `capability:owner_authority.owner_statement` states in plain words what the
    operation does, in which service, what it may change and which disclosure
    class each input accepts.
