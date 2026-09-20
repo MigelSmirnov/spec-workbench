@@ -22,6 +22,7 @@ class StandardBackend:
     scope_mapping_path: tuple[str, ...] | None = None
     concrete_methods: tuple[str, ...] = ()
     function_wiring_key: str | None = None
+    function_wiring_keys: tuple[str, ...] = ()
 
     def _load(self, path: Path) -> Any:
         return json.loads(path.read_text(encoding="utf-8"))
@@ -101,6 +102,14 @@ class StandardBackend:
         if mapping is not None:
             return set(mapping)
         wiring = backend.get("wiring")
+        if self.function_wiring_keys and isinstance(wiring, dict):
+            functions = {
+                wiring[key]
+                for key in self.function_wiring_keys
+                if isinstance(wiring.get(key), str) and wiring[key]
+            }
+            if functions:
+                return functions
         if self.function_wiring_key is not None and isinstance(wiring, dict):
             # a backend wired to one module-level operation owns exactly it
             function = wiring.get(self.function_wiring_key)
@@ -149,6 +158,7 @@ STANDARD_BACKENDS = (
         rule_key="system_clock_backend",
         concrete_methods=("__init__", "now"),
         function_wiring_key="function",
+        function_wiring_keys=("wall_clock_function", "elapsed_clock_function"),
     ),
 )
 
