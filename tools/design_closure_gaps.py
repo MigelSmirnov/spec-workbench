@@ -56,7 +56,7 @@ def check_models(spec: dict[str, Any]) -> list[dict[str, Any]]:
     for name, decl in (spec.get("models") or {}).items():
         if not isinstance(decl, dict):
             continue
-        if decl.get("kind") in {"enum", "interface", "protocol"}:
+        if decl.get("kind"):
             continue
         if not decl.get("fields"):
             findings.append({
@@ -68,7 +68,7 @@ def check_models(spec: dict[str, Any]) -> list[dict[str, Any]]:
 
 def check_orphan_reads(spec: dict[str, Any]) -> list[dict[str, Any]]:
     models = {n for n, d in (spec.get("models") or {}).items()
-              if isinstance(d, dict) and d.get("kind") not in {"enum", "interface", "protocol"}}
+              if isinstance(d, dict) and not d.get("kind")}
     field_types = " ".join(
         " ".join(str(t) for t in d.get("fields", {}).values())
         for d in (spec.get("models") or {}).values() if isinstance(d, dict)
