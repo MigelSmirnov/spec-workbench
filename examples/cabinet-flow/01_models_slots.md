@@ -329,8 +329,8 @@ Candidate fields:
 - `input_validation`, `output_validation`: verdict with the violated port and
   rule when not conforming;
 - `expected_output_match`: `matched`, `mismatched` or `not_stated`;
-- `denied_attempts`: each with a closed kind — `network`, `filesystem`,
-  `process`, `clock`, `entropy` or `environment` — and a bounded detail;
+- `denied_attempts`: each with a bounded closed denial kind defined by the
+  sandbox policy and a bounded detail;
 - `resources_used`;
 - `outcome`: `conforming`, `contract_violation`, `expected_output_mismatch`,
   `denied_attempt`, `timeout`, `resource_exhausted`, `crashed` or
@@ -383,9 +383,8 @@ Candidate fields:
 - `considered_trial_executions`: one reference per active trial case;
 - `withdrawn_trial_cases`: cases excluded because withdrawn, with reasons;
 - `verdict`: `admitted` or `refused`;
-- `refusal_reasons`: closed set — `empty_corpus`, `missing_trial_execution`,
-  `non_conforming_trial` with the execution reference, `runtime_withdrawn` or
-  `slot_retired`;
+- `refusal_reasons`: the closed refusal reasons defined by admission policy,
+  including any required execution reference;
 - `decided_at`.
 
 An empty active corpus refuses. No human or agent can record, override or waive
@@ -531,4 +530,3 @@ canonical ceilings remain release metadata.
 ### Open questions
 
 None.
-
