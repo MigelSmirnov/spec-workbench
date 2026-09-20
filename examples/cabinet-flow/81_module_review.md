@@ -125,3 +125,50 @@ from the accepted design, not invented:
 Adversarial question per changed slice — can two faithful implementations still differ observably
 on these points? No: every sentence names the field or the address. All 28 modules remain PASS.
 
+
+## Everyday words that are also function names (2026-09-20, reading run 2 before the next export)
+
+`kernel_surface` exports `inspect`, `author` and `activate`. The Factory slicer derives an import
+from any whole-word match of another module's function name in positive note text, so twelve
+ordinary sentences ("may inspect, run and read traces", "while author, time, rationale …", "the
+actor may activate implementations") gave `access_control`, `flow_registry`, `identity`,
+`sandbox_supervisor`, `slot_activation`, `slot_registry` and `trial_corpus` an import of
+`kernel_surface`, which imports all of them: one cycle of fourteen modules in the accepted local
+specs of run 2, and `from cabinet_flow.kernel_surface import author` at the top of the generated
+files. The run never reached the link, so nothing reported it.
+
+The twelve sentences now say the same thing without the three words (authoring actor, view records,
+put into service, examine). Meaning is unchanged. Measured with the Factory's own rule
+(`symbol_reference_requires_import` over `positive_note_reference_text`) on the projected spec:
+97 induced edges and one cycle before, 90 edges and no cycle after. The Workbench has no gate for
+this; the probe is a candidate lens.
+
+## The path from a domain module to a durable record is undecided (2026-09-20, same reading)
+
+State 3 gives `operational_store` the public boundary `begin_unit_of_work`, `commit_unit_of_work`,
+`rollback_unit_of_work` and says domain modules never depend on the repository class. State 5 says
+the handle gives "read/write access only to declared kernel record kinds" and that commit validates
+"every staged typed record". No contract, note or model says how a record is staged or read:
+`UnitOfWorkHandle` is `payload: object`, and the 28 typed methods of
+`SqliteOperationalStoreRepository` are reachable from no module.
+
+The accepted code of run 2 shows what two faithful implementations do with that:
+
+- `access_control`, `admission`, `flow_registry`, `operation_bindings`, `owner_authority`,
+  `run_executor`, `semantic_vocabulary`, `slot_registry`, `trial_corpus`, `value_store` keep their
+  records in module-level dicts and lists (up to twelve per module);
+- `operational_store` keeps committed records in a module-level dict and never constructs the
+  SQLite repository; `bootstrap` never creates one either;
+- `trace_journal` guesses methods on the opaque payload — `get_node_execution`, then
+  `read_node_execution`, then `fetch_node_execution`;
+- `access_control.resolve_actor` reads `kind`, `principal_id` and `delegation_id` out of the
+  presented credential's payload: the caller names its own actor. State 5 already says
+  `access_control` resolves channel credentials through `installation.resolve_credential`; the note
+  names no such call and says nothing about what the payload of a `ChannelCredentialHandle` is.
+
+Every one of these passed every gate, because nothing names the missing mechanism. Adversarial
+question — can two faithful implementations differ observably? Yes: one keeps nothing across a
+restart. Twelve modules are AMBIGUITY and Stage 8.1 is open until State 3/5/6 decide the record
+path (a typed port over the repository methods, staged through the unit of work) and the notes of
+the record-owning functions name its operations. The durable record families also need checking
+against M01–M49: the persistence closure has 14 tables.
