@@ -74,3 +74,20 @@ Adversarial question per module — can two faithful implementations now differ 
 answered no for every changed slice: each added sentence removes a choice (which operation,
 which clock, which field), none adds one. All 28 modules remain PASS.
 
+## Instants a module handles but does not produce (2026-09-20, after the run stopped at `run_spool`)
+
+Factory run `cabinet_flow-route-b-20260920T140105Z` generated 20 modules and stopped at
+`run_spool`: the candidate defined a host-clock helper it never called, because
+`SpooledBytes.released_at` exists and no note said where an instant of this module comes from.
+The value-flow lens judges required instants of returned records; an optional instant of a
+handled record is outside it. Reviewed and closed in the three modules that handle
+instant-bearing records without reaching the clock: `run_spool` (`receive_file`,
+`release_run_files`), `trace_journal` (`record_node_execution` takes the draft's instants) and
+`kernel_surface` (`run_flow`, `inspect` return stored instants). Each note now states the origin
+and that no clock is read — a statement of source, not of style. No behaviour changed; slices
+moved by the added sentences and by shifted line anchors only. All 28 modules remain PASS.
+
+Open design question, not decided here: `SpooledBytes.released_at` ("when the spool entry was
+emptied") has no writer in any contract — `release_run_files` deletes the objects and returns
+counts. The field is only ever read as a liveness check.
+
