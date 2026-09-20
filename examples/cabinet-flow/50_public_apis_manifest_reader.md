@@ -26,9 +26,10 @@ facts are not accepted.
 ### Outputs
 
 A typed immutable operation projection containing service/operation identity,
-manifest-record digest, channel, effect class, replay behavior, idempotency-key
-declaration, preconditions and bounded purpose facts. It contains no credential
-or kernel binding policy.
+the exact-file-byte manifest-record digest, channel, effect class, replay
+behavior, opaque `string | null` idempotency-key declaration, preconditions and
+optional non-normative manifest note. It contains no credential, typed-port
+mapping, owner purpose or kernel binding policy.
 
 ### Observable effect
 
@@ -36,9 +37,10 @@ None; the manifest repository is read only.
 
 ### Enforces
 
-Facts come from the configured revision and exact record digest; closed enums
-and required manifest fields are validated; effect/replay/idempotency facts are
-reported verbatim rather than inferred or repaired.
+Facts come from `<service_id>.json` at the configured immutable revision and
+the digest is SHA-256 of its exact bytes; closed enums and required manifest
+fields are validated; effect/replay/idempotency facts are reported verbatim
+rather than inferred or repaired.
 
 ### Errors
 
@@ -65,8 +67,9 @@ manifest change and before invocation.
 ### Inputs
 
 Exact service and operation identities, prior and current manifest-record
-digests, all resolved through the configured manifest revision/history. A
-caller cannot select which fields count as material.
+digests. The prior digest is resolved only among committed versions of the same
+service-record path in ancestors of the configured revision. A caller cannot
+select a path, branch or which fields count as material.
 
 ### Outputs
 
@@ -86,9 +89,9 @@ unrelated service facts.
 
 ### Errors
 
-Unknown prior digest, malformed either record, mismatched service/operation
-identity and unavailable manifest history are explicit; uncertainty is never
-reported as “unchanged”.
+Unknown or ambiguous prior digest, malformed either record, mismatched
+service/operation identity and unavailable manifest history are explicit;
+uncertainty is never reported as “unchanged”.
 
 ### State impact
 
@@ -116,8 +119,9 @@ address, alternate instance or environment override.
 ### Outputs
 
 A typed immutable instance projection containing service/instance identity,
-manifest-record digest, environment class, channel endpoints, required-header
-names and credential-binding references. Secret values are absent.
+exact-file-byte manifest-record digest, environment class and, when declared,
+one `http_api` endpoint from `api_base_url` with required-header names. Both
+credential-binding references and secret values are absent.
 
 ### Observable effect
 
@@ -126,8 +130,9 @@ None.
 ### Enforces
 
 The instance belongs to the named service at the configured revision; routing
-facts and environment class come only from the manifest; credential references
-remain opaque; redirects or derived alternate hosts are not produced.
+facts and environment class come only from the manifest; credentials come only
+from installation configuration; redirects, inferred `mcp`/`operator`
+endpoints and derived alternate hosts are not produced.
 
 ### Errors
 
@@ -139,4 +144,3 @@ typed refusals.
 
 None; target selection belongs to `module:installation` and request execution
 belongs to `module:service_transport`.
-

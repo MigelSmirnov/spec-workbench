@@ -7,9 +7,12 @@
 1. An operation node invokes a microservice only through an OperationBinding
    M29 in status `accepted`, at the exact OperationBindingVersion M30 pinned by
    the flow node. The kernel has no other way to reach a service.
-2. A binding version's `effect_class`, `replay` and idempotency key are copied
-   by the kernel from the manifest record at `manifest_record_digest`. A
-   proposal that states them differently from the manifest is refused.
+2. A binding version's `effect_class`, `replay` and opaque idempotency-key
+   declaration are copied by the kernel from the manifest record at
+   `manifest_record_digest`. The proposed `idempotency_key_ports` must be an
+   unambiguous typed-port interpretation of that declaration; otherwise the
+   proposal is refused. A proposal that restates any manifest fact differently
+   is refused.
 3. A binding version whose effect class is not `read` must name an
    `outcome_read_binding_ref` to an accepted `read` binding of the same service
    and must name at least one preview port. Without them it cannot be accepted.
@@ -64,6 +67,86 @@ manifest_fact_changed(operation) -> binding.status = suspended
 
 The kernel's picture of what a service can do cannot drift from the manifest
 silently, and cannot be redrawn by an agent.
+
+## Accepted decision A31 — the Factory manifest is an exact, legacy external contract
+
+### Normative rules
+
+1. At the immutable Factory repository revision selected by installation, a
+   service record is exactly `<manifest_root>/<service_id>.json`; its UTF-8
+   bytes are parsed as JSON and its `service` field must equal `service_id`.
+   Mutable revisions, path search, nearest-name lookup and filename fallback
+   are forbidden.
+2. `manifest_record_digest` is lowercase SHA-256 of those exact file bytes. It
+   is not a digest of parsed or reserialized JSON. Any byte change therefore
+   changes the record digest even when invocation facts remain equivalent.
+3. The accepted legacy record shape and closed vocabularies are
+   `rules.platform_manifest_contract`. Unknown required shapes, duplicate
+   capability identities, duplicate exposed operations, malformed optional
+   fields and values outside the closed vocabularies are refused; unknown
+   additional descriptive fields are retained as non-normative and never
+   acquire invocation meaning by inference.
+4. A capability's `idempotency_key` is an opaque `string | null`. The manifest
+   reader reports it verbatim. Only `module:operation_bindings` may map a
+   non-null declaration to typed input ports, and it must refuse the binding
+   unless every component has one unambiguous exact port mapping. `null` maps
+   to an empty port tuple. Punctuation, prose and field-name similarity are not
+   mapping evidence.
+5. Capability `note`, when present, is optional non-normative manifest text. A
+   binding's required owner-facing purpose remains M29 data authored for and
+   accepted by the owner; it is never copied or inferred from `note`.
+6. A manifest instance contributes only its declared `class`, optional
+   `api_base_url` and optional `required_headers`. `api_base_url` denotes the
+   `http_api` endpoint only. Required-header names are non-secret. Credential
+   binding references and secret material come only from installation
+   configuration and are never projected from the manifest. No endpoint is
+   invented for `mcp` or `operator`.
+7. To resolve a prior record digest, the reader considers only committed
+   versions of the same `<service_id>.json` path reachable through ancestors of
+   the configured revision, hashes each candidate's exact bytes, and requires
+   exactly one matching byte value. No other branch, path or service record is
+   searched. An absent or ambiguous match is an explicit refusal.
+8. The committed sanitized evidence artifact and its content-addressed evidence
+   manifest are the authority for this external contract. A changed Factory
+   shape is unsupported until new evidence supersedes it and this decision is
+   deliberately revised.
+
+### Formal invariants
+
+```text
+manifest_record_digest = sha256(exact_file_bytes_at_pinned_revision)
+
+manifest.idempotency_key = null
+-> binding.idempotency_key_ports = empty
+
+manifest.idempotency_key != null AND NOT unambiguous_exact_port_mapping
+-> binding_proposal_refused
+
+credential_binding_ref -> installation_configuration
+prior_digest_lookup -> same_path AND ancestor_of(configured_revision)
+```
+
+### Required tests
+
+[witness: workbench:external_contracts]
+
+1. Reformatting a record without changing parsed JSON changes its digest and is
+   classified as digest-changed with equivalent invocation facts.
+2. A record whose filename and `service` disagree is refused.
+3. A prose idempotency declaration such as a composite expression is refused
+   until the proposal supplies one unambiguous exact typed-port mapping.
+4. A missing `note` does not invalidate a capability and cannot remove the
+   binding's owner-authored purpose.
+5. An instance's required header names are projected without values; credential
+   references are taken only from installation configuration.
+6. A digest found only on another branch or under another service path is
+   reported unknown, not reused.
+
+### Consequence
+
+The kernel can consume the manifest that exists today without pretending its
+legacy prose is a typed binding contract, and drift comparison remains
+reproducible from immutable repository evidence.
 
 ## Accepted decision A11 — a flow that changes anything is activated by the owner
 
@@ -406,4 +489,3 @@ retry_count -/> run_failed
 
 Retry timing is deterministic durable run state, not an implementation-local
 timer or a policy invented by operation transport code.
-

@@ -21,8 +21,8 @@ Candidate fields:
 - `channel`: `mcp`, `http_api` or `operator`;
 - `operation`: the tool name, method and path, or entry-point name on that
   channel;
-- `manifest_record_digest`: digest of the service's manifest record the
-  reference was taken from.
+- `manifest_record_digest`: lowercase SHA-256 of the exact bytes of the
+  service's `<service_id>.json` record at the pinned repository revision (A31).
 
 ### Identity
 
@@ -114,8 +114,9 @@ Candidate fields:
   or `destructive`, copied from the manifest record at that digest;
 - `replay`: `safe`, `refuses`, `returns_existing`, `overwrites` or `duplicates`,
   copied likewise;
-- `idempotency_key_ports`: the input ports whose values form the manifest's
-  idempotency key, empty when the manifest declares none;
+- `idempotency_key_ports`: the input ports proven to be the one unambiguous
+  typed interpretation of the manifest's opaque idempotency-key declaration;
+  empty only when the manifest declares `null` (A31);
 - `preconditions`: the manifest record's preconditions at that digest, copied
   like the effect class, so that a later manifest change can be judged material
   or not (A10);

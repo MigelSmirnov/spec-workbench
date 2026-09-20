@@ -26,7 +26,7 @@ persistence emitter for a third, which no module can reach.
 |---|---|---|---|---|---|
 | 1 | Durable records | `operational_store`, `operational_store_persistence` | the database, schema, transactions, record↔row mapping | committed records in a module-level dict; SQLite repository never constructed; ten domain modules keep their own records in module-level dicts; `trace_journal` probes `get_`/`read_`/`fetch_node_execution` on `payload: object` | `persistence_backend/v3` on `sqlite_sync_v2` (emitted, 14 of 29 durable kinds) — unreachable: no typed port, no `open`, no composition |
 | 2 | Installation configuration and secrets | `installation` | where and how secrets are kept, how a reference becomes a usable credential | `os.environ` with invented names (`CABINET_FLOW_CREDENTIAL_BINDINGS`), invented JSON shape, invented default path in run 1 | none: no external contract for the protected configuration |
-| 3 | Platform manifest at a pinned revision | `manifest_reader` | the manifest record format and revision history | `Path(revision.manifest_root_ref)` and an invented file layout | none recorded; the real format exists in `code_factory/platform/manifest/` and is not cited as external-contract evidence |
+| 3 | Platform manifest at a pinned revision | `manifest_reader` | the manifest record format and revision history | `Path(revision.manifest_root_ref)` and an invented file layout | **closed 2026-09-20:** A31, `rules.platform_manifest_contract`, `PLATFORM_MANIFEST_EXTERNAL_CONTRACT_20260920.md` and active content-addressed evidence fix exact paths/bytes, legacy shapes and same-path ancestor history |
 | 4 | Requests to microservices | `service_transport` | channel framing, TLS, redirects, timeouts | no network library imported; a `TransportResult` is assembled from constants | none: no HTTP/MCP client port |
 | 5 | Execution of agent-authored code | `sandbox_supervisor` | the isolation backend and resource enforcement | a `tempfile.TemporaryDirectory()`; nothing is executed | none: no isolation backend is named anywhere |
 | 6 | Value bytes and run files | `value_store`, `run_spool` | content-addressed area, run-scoped spool | bytes in module-level dicts, `io.BytesIO` | `source_byte_store_backend` (content-addressed, staged, verified) fits M38; spool needs a decision |
@@ -49,6 +49,11 @@ persistence emitter for a third, which no module can reach.
 7. **Sandbox execution.** The isolation backend is a deployment fact of the owner's machine and is
    decided last, with the owner, in terms of what it may and may not do.
 8. **Listeners and launch.**
+
+Boundary 3 was closed after this ordering was recorded. Its legacy free-text
+idempotency declaration remains opaque and fail-closed until a binding proves
+one exact typed-port mapping; credentials remain owned by installation rather
+than the manifest.
 
 Pending from the build of run 2 and folded into the boundaries they touch: the HTTP handler form
 the router emitter requires (8), `ServiceTarget.targets` as instance records (2, 6), the emitter's
