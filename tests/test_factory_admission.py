@@ -6,6 +6,7 @@ from pathlib import Path
 
 from factory_admission_workbench import check
 from factory_admission_workbench.service import (
+    _assembly_check,
     _review_check,
     _runtime_persistence_check,
     _target_identity_check,
@@ -20,6 +21,25 @@ CLEAN_GIT = {
     "remote": "https://example.test/spec-workbench.git",
     "dirty": False,
 }
+
+
+def test_assembly_check_uses_selected_factory_root(tmp_path: Path, monkeypatch) -> None:
+    case = tmp_path / "case"
+    case.mkdir()
+    factory = tmp_path / "selected-factory"
+    captured: dict[str, Path] = {}
+
+    def fake_verify(project: Path, *, factory_root: Path | None = None) -> dict:
+        captured["project"] = project
+        captured["factory_root"] = factory_root
+        return {"ready": True, "summary": {"checks": 13, "ready_checks": 13, "errors": 0, "warnings": 0}}
+
+    monkeypatch.setattr("factory_admission_workbench.service.verify_assembly", fake_verify)
+
+    result = _assembly_check(case, factory)
+
+    assert result.status == "PASS"
+    assert captured == {"project": case, "factory_root": factory}
 
 
 def _write(path: Path, content: str) -> None:

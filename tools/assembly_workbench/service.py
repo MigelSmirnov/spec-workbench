@@ -19,9 +19,9 @@ def inspect_check(project: Path, name: str) -> dict[str, Any]:
         "check": check.to_dict(),
     }
 
-def verify(project: Path) -> dict[str, Any]:
+def verify(project: Path, *, factory_root: Path | None = None) -> dict[str, Any]:
     _validate_project(project)
-    checks = [run(project, name) for name in CHECK_ORDER]
+    checks = [run(project, name, factory_root=factory_root) for name in CHECK_ORDER]
     ready_checks = sum(check.ready for check in checks)
     errors = sum(check.errors for check in checks)
     warnings = sum(check.warnings for check in checks)

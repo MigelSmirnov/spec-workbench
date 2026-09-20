@@ -114,7 +114,7 @@ def _closure_gap_coverage(project: Path) -> dict[str, Any]:
     }
 
 
-def _factory_storage_resolver():
+def _factory_storage_resolver(factory_root: Path | None = None):
     """The deterministic backend's version-bound storage registry, when the factory is reachable.
 
     Codec coverage is proven against the emitter that will lower the closure;
@@ -123,7 +123,7 @@ def _factory_storage_resolver():
     import os
     import sys as _sys
     root = Path(__file__).resolve().parents[2]
-    candidates = []
+    candidates = [factory_root] if factory_root is not None else []
     if os.environ.get("SPEC_WORKBENCH_FACTORY_ROOT"):
         candidates.append(Path(os.environ["SPEC_WORKBENCH_FACTORY_ROOT"]))
     candidates += [root.parent / "code_factory", root.parent.parent / "code_factory"]
@@ -156,12 +156,18 @@ CHECKS: dict[str, ReportFunction] = {
     "flows": flow_closure.coverage,
 }
 
-def run(project: Path, name: str) -> CheckResult:
+def run(project: Path, name: str, *, factory_root: Path | None = None) -> CheckResult:
     function = CHECKS.get(name)
     if function is None:
         raise AssemblyWorkbenchError(f"Unknown assembly check: {name}")
     try:
-        report = function(project)
+        if name == "persistence":
+            report = persistence_coverage(
+                project,
+                storage_resolver=_factory_storage_resolver(factory_root),
+            )
+        else:
+            report = function(project)
     except (OSError, ValueError, KeyError, TypeError) as error:
         raise AssemblyWorkbenchError(f"{name} check failed to load: {error}") from error
     return _normalize(name, report)
