@@ -7,6 +7,7 @@ before any assembly:
     outputs        a required instant of a result has a source
     inputs         a scalar argument of a constructing function has a sink
     collaborators  a module this module is said to know is reachable from its notes
+    carriers       every fact State 1 claims and every field a rule, flow or operation names is in the model closure
 
     python tools/design_value_flow.py examples/<case> --coverage [--json]
 """
@@ -47,6 +48,9 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  outputs        not judged: {out['reason']}")
         print(f"  inputs         {inp['resolved']} of {inp['pairs']} scalar arguments of {inp['constructing_functions']} constructing functions have a sink")
         print(f"  collaborators  {col['reachable']} of {col['edges']} known collaborators reachable")
+        car = summary["carriers"]
+        print(f"  carriers       {car['facts']} State 1 facts of {car['state1_models']} models and {car['references']} "
+              f"named fields checked against the closure; {car['without_carrier']} without a carrier")
         for finding in report["findings"]:
             print(f"  ✗ [{finding['code']}] {finding['message']}")
     return 1 if report["summary"]["errors"] else 0

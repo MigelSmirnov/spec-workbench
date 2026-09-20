@@ -237,7 +237,20 @@ module design.
 
 Design the concepts and data shapes that the application actually needs.
 
-Start with domain meaning, then define fields and types.
+Start with domain meaning. State 1 is written before any module, flow or
+operation exists, so it cannot know the final field list and does not try to:
+it names the **facts the concept carries** — its identity, its status
+vocabulary, its relations to other concepts, and the facts written once (who
+created it and when, who retired it and why). Types, optionality and the
+complete list of fields belong to the State 6 model closure, which is the one
+field list of the case. Fields that only an operation reveals (State 5) are
+added there, not back-filled here as guesses.
+
+Write each fact as a name that leads a clause of the model's bullet list
+(`- `created_by`: ActorRef; `created_at`.`). The name is a claim the closure
+must honour: `python tools/design_value_flow.py <case> --coverage` stops the
+case when a fact State 1 claims has no field of that name in the closure, and
+when a closed model has no named fact at all.
 
 For each model determine:
 
@@ -248,7 +261,8 @@ For each model determine:
 - who may modify it;
 - whether it persists;
 - its lifecycle or states;
-- the source of every required field;
+- the facts it carries, by name (their producer is decided with the modules
+  and operations, in States 3 to 6, and checked by the value-flow closure);
 - whether partial construction is valid;
 - which invariants apply.
 
@@ -276,7 +290,7 @@ the accepted identity decision. Use the State 1 route in
 
 Readiness questions:
 
-- Does every required field have a known producer or source?
+- Is every fact the concept carries named, in domain words?
 - Can each model be explained without mentioning future helper functions?
 - Are domain states represented explicitly where they affect behavior?
 - Are distinct concepts separated because they change for different reasons?
@@ -284,7 +298,8 @@ Readiness questions:
 
 Expected specification output at this stage:
 
-- draft `models`;
+- concepts with their identity, lifecycle and named facts (not a typed field
+  list: that is the State 6 model closure);
 - candidate domain constants and catalogs;
 - unresolved model questions.
 
