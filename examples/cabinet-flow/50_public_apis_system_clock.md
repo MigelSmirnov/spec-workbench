@@ -1,7 +1,7 @@
 # State 5 — Cabinet Flow system-clock operations
 
-The system clock is the kernel's single injectable source of current wall-clock
-time. It owns neither domain deadlines nor retry, retention, throttling,
+The system clock is the kernel's single injectable source of wall-clock and
+monotonic time. It owns neither domain deadlines nor retry, retention, throttling,
 lifecycle or authorization policy. All canonical operational timestamps are
 KernelInstant M47.
 
@@ -59,9 +59,8 @@ perform their own retry, retention, throttling and lifecycle arithmetic;
 elapsed time alone never grants authority, decides an approval, completes a Run
 or resolves an unknown outcome.
 
-Local elapsed-duration measurement is not wall time:
-`sandbox_supervisor` and `service_transport` may use only
-`time.monotonic_ns()` for non-persisted timeout enforcement.
+Local elapsed-duration measurement is not wall time. `sandbox_supervisor` and
+`service_transport` obtain it only through `system_clock.monotonic_ns()`.
 
 ### Errors
 
@@ -74,3 +73,42 @@ fallback is fabricated.
 
 None. The consuming module writes any resulting KernelInstant into the record
 or persisted deadline it owns at that module's atomic state transition.
+
+## `public_op:system_clock.monotonic_ns`
+
+### Owner
+
+`module:system_clock` owns the only production read of the host monotonic clock.
+
+### Callers
+
+`module:sandbox_supervisor` and `module:service_transport` use the injected
+operation solely to enforce local, non-persisted timeouts.
+
+### Inputs
+
+None. Callers cannot supply a clock, sample, offset or conversion.
+
+### Outputs
+
+Exactly one integer returned unchanged from one `time.monotonic_ns()` sample.
+The result is not a KernelInstant and has no meaning across process restart.
+
+### Observable effect
+
+None. The reading creates no record and advances no domain state.
+
+### Enforces
+
+A25: all host clocks are read in one module. Consumers may subtract two readings
+to enforce a local timeout, but cannot persist a reading, derive a timestamp,
+order domain events or grant authority from elapsed time.
+
+### Errors
+
+Unavailable or non-integer host-clock data is a typed clock failure. No wall
+clock or caller value is used as a fallback.
+
+### State impact
+
+None.

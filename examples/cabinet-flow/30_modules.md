@@ -35,8 +35,9 @@ execution, transport or any policy.
 
 ### Owns
 
-A25 and M47: the kernel's only source of current wall-clock time and its exact
-canonical representation as integer UTC epoch microseconds.
+A25 and M47: the kernel's only source of current wall-clock and monotonic time,
+including the exact canonical wall-clock representation as integer UTC epoch
+microseconds.
 
 ### Knows
 
@@ -45,16 +46,16 @@ Only KernelInstant M47 and the host wall-clock primitive required by A25.
 ### Must not own
 
 Time arithmetic of retention, back-off, throttling, lifecycle policy or
-authorization; those belong to the modules that apply them. It does not own
-elapsed-duration timeout measurement.
+authorization; those belong to the modules that apply them. It supplies raw
+clock readings and does not own elapsed-duration timeout policy.
 
 ### Hides
 
-The one production wall-clock primitive: `time.time_ns()`. One `now()` call
-takes exactly one sample and returns
+The two production clock primitives: `time.time_ns()` and
+`time.monotonic_ns()`. One `now()` call takes exactly one wall-clock sample and returns
 `KernelInstant(epoch_us = sample_ns // 1_000)`. Tests replace the entire
-clock dependency with a deterministic implementation; no consumer patches or
-reads host time.
+clock dependency with a deterministic implementation; `monotonic_ns()` returns
+one raw integer sample, and no consumer patches or reads host time.
 
 ### Direct consumers
 
@@ -67,20 +68,20 @@ The injected `system_clock` dependency is used by
 they own. `kernel_surface` and the gateways never manufacture or forward a
 "current time" value.
 
-`sandbox_supervisor` and `service_transport` do not consume wall time for
-domain state. Their local non-persisted timeout measurement uses only
-`time.monotonic_ns()` under A25.
+`sandbox_supervisor` and `service_transport` consume
+`system_clock.monotonic_ns()` only for local non-persisted timeout measurement.
 
 ### Candidate public capabilities
 
 ```text
 now
+monotonic_ns
 ```
 
 ### Depth assessment
 
 - kind: deep
-- hidden mechanism: one injected wall clock with one integer representation and one production primitive
+- hidden mechanism: one injected clock module owning both host primitives and their distinct representations
 
 ## `identity`
 

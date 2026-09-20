@@ -307,21 +307,23 @@ retention(value) = max(retention(record) for record naming value)
 The kernel can always explain itself and can never become a second, stale copy
 of the business.
 
-## Accepted decision A25 — kernel wall time has exactly one source
+## Accepted decision A25 — kernel time has exactly one source
 
 ### Normative rules
 
 1. Every operational timestamp in State 1 is KernelInstant M47. Business event
    time remains TemporalValue M08 and is never filled from the kernel clock.
-2. The only production code allowed to read host wall-clock time is
-   `module:system_clock`. Its `now()` implementation takes exactly one sample
-   with Python `time.time_ns()` and returns
-   `KernelInstant(epoch_us = sample_ns // 1_000)`.
-3. No other module may call or import a wall-clock source for a domain decision
-   or persisted timestamp: `datetime.now`, `datetime.utcnow`,
+2. The only production code allowed to read either host wall-clock or monotonic
+   time is `module:system_clock`. Its `now()` implementation takes exactly one
+   sample with Python `time.time_ns()` and returns
+   `KernelInstant(epoch_us = sample_ns // 1_000)`; its `monotonic_ns()`
+   implementation takes exactly one `time.monotonic_ns()` sample and returns
+   that integer unchanged.
+3. No other module may call or import a clock source: `datetime.now`, `datetime.utcnow`,
    `date.today`, `time.time`, `time.time_ns`,
-   `time.clock_gettime(CLOCK_REALTIME)` and equivalent framework helpers are
-   forbidden outside `system_clock`.
+   `time.monotonic`, `time.monotonic_ns`, `time.perf_counter`,
+   `time.clock_gettime` and equivalent framework helpers are forbidden outside
+   `system_clock`.
 4. A module that owns a record with a timestamp receives `system_clock` as an
    injected dependency and calls `now()` at the atomic event it owns. Public
    requests, gateways and `kernel_surface` never supply "current time" to a
@@ -334,10 +336,10 @@ of the business.
    consuming module. `system_clock` performs no policy arithmetic and elapsed
    time alone never authorizes an effect or changes a decision.
 7. Local elapsed-duration enforcement is separate from wall time.
-   `sandbox_supervisor` and `service_transport` may use only
-   `time.monotonic_ns()` for non-persisted timeout measurement. A monotonic
-   reading is never stored as KernelInstant and never participates in domain
-   ordering across restart.
+   `sandbox_supervisor` and `service_transport` call only the injected
+   `module:system_clock.monotonic_ns` for non-persisted timeout measurement.
+   A monotonic reading is never stored, wrapped as KernelInstant or used in
+   domain ordering across restart.
 8. Tests inject a deterministic clock. Tests that exercise time-dependent
    behavior advance that clock explicitly; sleeping and monkeypatching global
    wall-clock functions are not accepted as the semantic oracle.
@@ -387,6 +389,10 @@ persisted_monotonic_value -> never
 
 elapsed_timeout_measurement
 -> module IN {sandbox_supervisor, service_transport}
+   AND source = system_clock.monotonic_ns
+
+host_monotonic_clock_read
+-> module = system_clock
    AND primitive = time.monotonic_ns
 ```
 
@@ -400,9 +406,9 @@ elapsed_timeout_measurement
 2. Static source audit fails when `system_clock.now` does not use exactly one
    `time.time_ns()` sample or returns a float/string/naive datetime instead of
    integer-microsecond KernelInstant.
-3. Static source audit permits `time.monotonic_ns()` only in
-   `sandbox_supervisor` and `service_transport`, and rejects other monotonic
-   or performance-clock APIs as sources of persisted/domain time.
+3. Static source audit permits `time.monotonic_ns()` only in `system_clock` and
+   requires `sandbox_supervisor` and `service_transport` to call the injected
+   `system_clock.monotonic_ns()` operation instead.
 4. A fixed injected clock yields byte-for-byte identical operational timestamps
    for the same deterministic test sequence.
 5. Advancing the injected clock across retry and retention boundaries changes
@@ -424,4 +430,3 @@ elapsed_timeout_measurement
 Generated modules have no freedom to invent their own clock. There is one wall
 time representation, one production wall-clock primitive and one dependency
 through which every owning module obtains it.
-

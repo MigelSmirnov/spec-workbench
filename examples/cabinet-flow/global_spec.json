@@ -60,6 +60,7 @@
     "manifest_revision": "() -> ManifestRevisionRef",
     "mint_identity": "(entity_kind: str, installation_namespace: str) -> str",
     "now": "() -> KernelInstant",
+    "monotonic_ns": "() -> int",
     "operation_facts_changed": "(manifest_revision: ManifestRevisionRef, prior: ManifestOperationRef, current: ManifestOperationRef | None) -> ManifestOperationChange",
     "owner_decide": "(owner: ActorRef, request: OwnerDecisionRequest) -> OwnerDecisionResult",
     "owner_decide_handler": "(context: HttpRequestContext, request: OwnerDecisionRequest) -> OwnerDecisionResult",
@@ -214,7 +215,7 @@
     "describe_file: [BEHAVIOR] MUST verify the exact live run, producing node and port before returning digest, size, observed media type, disclosure class and producer identity, never a host path or filename-derived claim. A bounded read-only stream is issued only for `owner_preview` or `trial_capture`: full preview requires owner authority, and capture of personal-data bytes for installation-lifetime retention requires the owner decision. The lease cannot mutate or extend spool lifetime or cross into another Run; persistence occurs only if `trial_corpus` copies the stream into a StoredValue.",
     "receive_file: [BEHAVIOR] MUST accept bytes only for a live Run and its exact producing execution, stream them into private run-scoped storage while computing digest, size and media type from content, and publish SpooledBytes only after the stream completes. Both the output-port ceiling and release per-file ceiling apply, and the live Run's aggregate spool ceiling is enforced during streaming. Overflow, media mismatch, broken input, stale producer or unavailable storage discards the partial object. The kernel reads only enough bytes to identify media type and MUST NOT decode, render or interpret business content.",
     "release_run_files: [BEHAVIOR] MUST require authoritative terminal Run state and delete every remaining spool object owned by that Run as one bounded cleanup operation; callers cannot retain or select individual files. Repetition after complete cleanup succeeds with an empty result, enabling restart recovery. A non-terminal or unknown Run, ownership inconsistency, unavailable storage or incomplete deletion is explicit and never reported complete. Cleanup removes only temporary SpooledBytes; trial fixtures, StoredValues, service-owned files and durable run, trace and approval descriptors remain unchanged.",
-    "execute_function: [BEHAVIOR] MUST obtain the exact immutable code and entry point through `slot_registry.implementation_record`, create a fresh disposable environment containing only the pinned runtime, validated values, read-only file inputs and one bounded scratch directory, and enforce process, CPU, memory, monotonic wall-time, scratch and aggregate-output limits from outside that environment. Network, host paths, clock, entropy, credentials, environment and kernel-store access are absent; every denied attempt is recorded and makes the outcome `denied_attempt` even if code later returns. Outputs cross one bounded exchange, oversized output fails without truncation, and file media type is observed from bytes. Completion terminates every descendant and destroys the environment; unconfirmed cleanup discards all output, yields `cleanup_failed` and makes the supervisor refuse further work. The result reports the closed outcome, bounds, usage, denied attempts and cleanup evidence, while semantic contract validation and domain records remain the caller's responsibility.",
+    "execute_function: [BEHAVIOR] MUST obtain the exact immutable code and entry point through `slot_registry.implementation_record`, create a fresh disposable environment containing only the pinned runtime, validated values, read-only file inputs and one bounded scratch directory, and enforce process, CPU, memory, monotonic wall-time, scratch and aggregate-output limits from outside that environment. It MUST obtain each elapsed-time reading only from the injected `module:system_clock.monotonic_ns`; direct host-clock access is forbidden, readings are not persisted, and only their difference may enforce the local timeout. Network, host paths, clock, entropy, credentials, environment and kernel-store access are absent; every denied attempt is recorded and makes the outcome `denied_attempt` even if code later returns. Outputs cross one bounded exchange, oversized output fails without truncation, and file media type is observed from bytes. Completion terminates every descendant and destroys the environment; unconfirmed cleanup discards all output, yields `cleanup_failed` and makes the supervisor refuse further work. The result reports the closed outcome, bounds, usage, denied attempts and cleanup evidence, while semantic contract validation and domain records remain the caller's responsibility.",
     "supervisor_health: [BEHAVIOR] MUST inspect the isolation backend, required runtime images and supervisor-owned cleanup/leak evidence and return a bounded readiness result without starting user code. Any previously unconfirmed sandbox or descendant cleanup, unavailable backend, unverifiable runtime or failed self-check is unhealthy and blocks kernel startup; a caller cannot override it and the check cannot clear a leak by assertion. The response exposes only closed safe reasons and supported runtime revisions, never host paths, process dumps or credentials, and performs no domain-state change.",
     "decide_proposal: [BEHAVIOR] MUST let only the active owner compare-and-set one exact `proposed` VocabularyProposal to final `accepted` or `rejected`, requiring unchanged candidate content and the exact kernel-generated owner-statement digest. Rejection issues no meaning; acceptance first rejects equal active accepted content, then atomically invokes `issue_accepted_revision`, advances the stable entry's current pointer and links the resulting revision from the proposal. Non-owner/suspended owner, stale or decided proposal, changed statement/content, invalid references, duplicate or transaction failure creates no partial revision. The decision is final, and earlier revisions remain immutable.",
     "find_duplicate_revision: [BEHAVIOR] MUST canonicalize the complete proposed axis, term or relation defining content using the same revision identity rules and search all seeded/owner-accepted immutable revisions for exact content equality. It returns the one exact revision reference or explicit absence in deterministic order; labels, provenance, rationale, proposal status and fuzzy semantic similarity do not constitute equality. Malformed/incomplete content, ambiguous conflicting matches or unavailable evidence are refused rather than treated as no duplicate, and the lookup changes no state.",
@@ -224,7 +225,7 @@
     "seed_vocabulary: [BEHAVIOR] MUST run inside the durable startup UnitOfWork and, only when the governed registry is empty, atomically install the exact axis, term and relation entries and content-derived immutable revisions shipped in the running release. Host configuration, requests, services and external “latest” sources cannot extend or override the seed. Malformed/inconsistent content, unsupported families/schemas, conflicting identities or transaction failure refuses startup with no partial registry; an already initialized registry is a deterministic no-op that never creates, revises, retires or reactivates entries.",
     "submit_proposal: [BEHAVIOR] MUST authorize authoring and validate one structurally complete axis, term or relation candidate plus exact motivating FlowProof/UncomposableOutput evidence, allowing a stable namespaced entry identity where the kind requires it but no revision identity, status or decision. It refuses invalid references, unsupported kinds, malformed content and equality with an active accepted revision, returning that duplicate reference. It obtains a deterministic owner statement from `module:owner_authority`, keeps bounded agent rationale separate, and atomically appends one `proposed` VocabularyProposal. Submission creates no governed entry/revision and supplies no port or edge evidence.",
     "term_revision: [BEHAVIOR] MUST resolve one exact namespaced term and either its explicitly named immutable revision or the current issued revision, returning the owning term/axis identities plus both stable entities' active/retired status. Only seeded or owner-accepted revisions are visible; proposals, free text, field names, primitive types and similar terms are never substitutes. Malformed identity, cross-term revision, unknown/corrupt chain or unavailable registry is explicit; historical issued revisions remain readable after retirement, and the lookup changes no state.",
-    "send_request: [BEHAVIOR] MUST revalidate that the pinned ServiceTarget, manifest operation and digest still agree, construct exactly one request using only the declared `http_api`, `mcp` or `operator` channel and manifest framing, and resolve the opaque credential reference immediately before send through `module:installation`. Callers cannot supply raw secrets, hosts, redirects, channels or timeout overrides; redirects cannot cross host. It enforces request/response ceilings, streams outbound/inbound files through `module:run_spool`, performs no retry, and measures a binding-specific timeout capped by M48 solely with `time.monotonic_ns()`. Failures are typed by transport stage: anything not proven undelivered after the send boundary is `possibly_sent`, otherwise `definitely_not_sent`. The bounded result carries allowed status/headers, instance, size/timing and payload/spool reference but makes no semantic success, replay or Run decision; service dates remain ordinary typed response data, and credentials never enter evidence.",
+    "send_request: [BEHAVIOR] MUST revalidate that the pinned ServiceTarget, manifest operation and digest still agree, construct exactly one request using only the declared `http_api`, `mcp` or `operator` channel and manifest framing, and resolve the opaque credential reference immediately before send through `module:installation`. Callers cannot supply raw secrets, hosts, redirects, channels or timeout overrides; redirects cannot cross host. It enforces request/response ceilings, streams outbound/inbound files through `module:run_spool`, performs no retry, and measures a binding-specific timeout capped by `config.release_ceilings.transport_timeout_ms_max` using only readings from the injected `module:system_clock.monotonic_ns`. Direct host-clock access is forbidden, readings are not persisted, and only their difference may enforce the local timeout. Failures are typed by transport stage: anything not proven undelivered after the send boundary is `possibly_sent`, otherwise `definitely_not_sent`. The bounded result carries allowed status/headers, instance, size/timing and payload/spool reference but makes no semantic success, replay or Run decision; service dates remain ordinary typed response data, and credentials never enter evidence.",
     "activate_implementation: [BEHAVIOR] MUST verify that the implementation belongs to the exact non-retired contract, that its latest verdict is admitted for the required runtime and the complete active corpus as it stands now, and that the actor may activate implementations. It compare-and-sets the expected current activation, samples `module:system_clock.now`, and appends one immutable SlotActivation containing the admitted-verdict and previous-activation references; a losing writer receives the actual current activation. Corpus growth makes older admission stale and forces a new trial. The selection affects only new Runs: earlier activations, evidence and Runs already pinned to them remain unchanged, and activation creates no flow or service-effect authority.",
     "contract_health: [BEHAVIOR] MUST recompute a bounded health view from the current serving activation, its admission, the exact active corpus and immutable slot execution evidence on every read; it writes no health record and never changes serving selection. `known_failing` is true only when an active case and concrete execution evidence show that the currently serving implementation fails it. Stale admission without such evidence is reported as stale rather than failing, withdrawn cases cannot prove current failure, and a later implementation admitted over the grown corpus inherits no old failing flag. Missing or inconsistent evidence is explicit and MUST NOT be guessed as healthy or failing.",
     "rollback_activation: [BEHAVIOR] MUST treat rollback as a new activation, requiring a non-empty bounded reason, an earlier implementation of the exact contract and a fresh admitted verdict for that implementation over the present active corpus. It compare-and-sets the expected current activation and appends one immutable SlotActivation linked to the immediately previous record; it never edits or deletes activation history and never repins an existing Run. An earlier implementation that fails a newer active case, a stale verdict, a retired slot or a lost compare-and-set is refused without changing the serving selection.",
@@ -4451,13 +4452,14 @@
     },
     "system_clock_backend": {
       "kind": "system_clock_backend",
-      "schema_version": 2,
+      "schema_version": 3,
       "backend": {
-        "emitter": "python_host_epoch_clock_v1"
+        "emitter": "python_host_clock_v1"
       },
       "wiring": {
         "module": "system_clock",
-        "function": "now",
+        "wall_clock_function": "now",
+        "elapsed_clock_function": "monotonic_ns",
         "models_module": "cabinet_flow.models"
       },
       "time": {
@@ -4480,12 +4482,13 @@
       },
       "elapsed_time": {
         "authority_modules": [
-          "sandbox_supervisor",
-          "service_transport"
+          "system_clock"
         ],
         "allowed_primitives": [
           "time.monotonic_ns"
-        ]
+        ],
+        "samples_per_read": 1,
+        "persisted": false
       },
       "representation": {
         "type": "KernelInstant",
@@ -4980,6 +4983,16 @@
         "models": [
           "KernelInstant"
         ]
+      },
+      "sandbox_supervisor": {
+        "system_clock": [
+          "monotonic_ns"
+        ]
+      },
+      "service_transport": {
+        "system_clock": [
+          "monotonic_ns"
+        ]
       }
     }
   },
@@ -5213,7 +5226,8 @@
       "CommittedRecordVersion"
     ],
     "system_clock": [
-      "now"
+      "now",
+      "monotonic_ns"
     ],
     "identity": [
       "canonicalize_fields",
@@ -5473,6 +5487,7 @@
     "manifest_revision",
     "mint_identity",
     "now",
+    "monotonic_ns",
     "operation_facts_changed",
     "owner_decide",
     "owner_decide_handler",
