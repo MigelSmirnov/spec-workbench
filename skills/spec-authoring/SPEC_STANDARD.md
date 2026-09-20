@@ -965,7 +965,8 @@ Argon2id (`profile`) над `HMAC-SHA256(pepper, secret)`; проверка —
       "datetime_normalization": "utc"
     },
     "<other_recipe>": {"input": "json_text"},
-    "<third_recipe>": {"input": "string_tuple"}
+    "<third_recipe>": {"input": "string_tuple"},
+    "<fourth_recipe>": {"input": "bytes"}
   }
 }
 ```
@@ -977,20 +978,29 @@ Argon2id (`profile`) над `HMAC-SHA256(pepper, secret)`; проверка —
 <recipe_name>(model: BaseModel) -> str          # input: model
 <recipe_name>(text: str) -> str                 # input: json_text
 <recipe_name>(values: tuple[str, ...]) -> str   # input: string_tuple
+<recipe_name>(data: bytes) -> str               # input: bytes
 ```
 
-Процедура одна для всех рецептов и фиксирована версией: канонический JSON
-(ключи отсортированы, разделители компактные, `ensure_ascii` False,
-UTF-8) под SHA-256, строчный hex. Для `model` значение — сериализация
+Дайджест один для всех рецептов и фиксирован версией: SHA-256, строчный hex.
+Входы `model`, `json_text` и `string_tuple` приходят к нему через одну
+процедуру — канонический JSON (ключи отсортированы, разделители компактные,
+`ensure_ascii` False, UTF-8). Для `model` значение — сериализация
 модели в JSON-режиме после исключения `exclude_fields`; при
 `datetime_normalization: utc` каждый datetime нормализуется к UTC (наивный
 принимается как UTC, aware — конвертируется), при `none` — сериализуется
 как есть. Для `json_text` документ разбирается и сериализуется заново
 канонически. Для `string_tuple` дайджест берётся от JSON-массива строк.
+Вход `bytes` уже каноничен и хешируется как есть — без декодирования и без
+обрамления; байтовой нагрузке нет места в JSON-документе, поэтому потребитель
+хеширует её этим рецептом и несёт полученную строку в рецепт `model` или
+`string_tuple`. Новый вход — значение закрытого словаря, а не параметр
+процедуры: описать рецептом, какие поля записи определяющие и в каком порядке
+их обходить, нельзя и не предполагается — это остаётся типом входной модели.
 Ключи рецепта закрыты: `model` требует все три поля, остальные входы —
 только `input`. Потребитель называет рецепт по имени функции; note не
 воспроизводит процедуру. Фокусная проверка эмиттера — вектор на фикстуре
-с offset-aware datetime и не-ASCII строкой.
+с offset-aware datetime и не-ASCII строкой, а для `bytes` — на
+последовательности, не являющейся UTF-8 и содержащей NUL.
 
 ### 6.8 `time_source_policy/v1`
 
