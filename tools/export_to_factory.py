@@ -128,6 +128,8 @@ def run_factory_validator(validator: Path, source: Path) -> dict[str, Any]:
 
 def project_paths(factory_root: Path, structure: dict[str, Any], project: str) -> dict[str, Path]:
     configured_root = Path(structure.get("root", factory_root))
+    if not configured_root.is_absolute():
+        configured_root = factory_root / configured_root
     if configured_root.resolve() != factory_root.resolve():
         raise SystemExit(f"factory structure root points elsewhere: {configured_root} != {factory_root}")
     project_root = factory_root / structure["projects_dir"] / project
