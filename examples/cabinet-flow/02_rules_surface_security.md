@@ -383,3 +383,75 @@ restart -/> resets_throttle
 Authentication abuse control is reproducible across implementations and
 restart; no generated access-control module invents thresholds or sleep logic.
 
+
+## Accepted decision A29 — a presented credential names its binding and proves its secret
+
+### Normative rules
+
+1. A channel credential is presented as one bounded text
+   `<credential_binding_ref>.<secret>`: the binding reference is everything
+   before the first `.`, the secret is everything after it. A text without a
+   `.`, with an empty part, or longer than the release bound for text is a
+   malformed credential.
+2. The gateways carry the presented text to `module:access_control` unparsed.
+   Only `module:access_control` splits it, and only
+   `module:installation` knows the secret of a binding.
+3. The installation's protected configuration gives every credential binding
+   exactly one purpose out of the closed set `owner_channel_authentication`,
+   `agent_channel_authentication`, `service_invocation`, and the channel or
+   service instance it is valid for. `installation.resolve_credential` refuses a
+   binding asked for another purpose or channel exactly as it refuses an unknown
+   one.
+4. `module:access_control` resolves the named binding for the arriving channel
+   at the moment of use, first for `owner_channel_authentication` and, when the
+   installation refuses that, for `agent_channel_authentication`, and compares
+   the resolved secret with the presented one in constant time.
+5. A matching owner binding resolves to the installation's single active
+   OwnerPrincipal M16. A matching agent binding resolves to the one
+   AgentDelegation M17 that is `active` and carries that binding reference and
+   that channel; none or more than one is a refusal.
+6. A27 throttling is keyed by the named binding and the channel, and exists only
+   for a binding the installation resolved for that channel. An active block
+   refuses before any comparison; a wrong secret advances the state; a match
+   resets it. A malformed credential and a binding the installation does not
+   resolve write nothing.
+7. Every failure has the one public refusal of A21 rule 2. The presented text and
+   the resolved secret travel only as function arguments and results between the
+   gateway, `module:access_control` and `module:installation`; they are never a
+   field of a persisted or returned record and never appear in a log, trace,
+   preview or error (A23 rule 1).
+
+### Formal invariants
+
+```text
+presented = binding_ref "." secret
+actor_resolved -> installation_resolved(binding_ref, channel, purpose) AND constant_time_equal(secret)
+
+purpose = owner_channel_authentication -> actor = the_active_owner
+purpose = agent_channel_authentication -> actor = the_one_active_delegation(binding_ref, channel)
+
+throttle_state_written -> installation_resolved(binding_ref, channel)
+malformed OR unresolved_binding -/> any_write
+caller_named_actor_kind OR caller_named_principal -> never
+```
+
+### Required tests
+
+[witness: workbench:notes]
+
+1. A well-formed credential with the right secret of the owner binding resolves
+   to the owner on its channel and to a refusal on the other channel.
+2. A well-formed credential of an agent binding resolves to its one active
+   delegation; after revocation the same text is refused.
+3. A wrong secret for a known binding advances exactly that binding's throttle
+   state; ten of them block it without touching the owner's state.
+4. A malformed text and an unknown binding reference are refused and leave the
+   store unchanged.
+5. A presented text that names `owner` anywhere in its content yields nothing:
+   only the binding the installation resolves decides the actor.
+
+### Consequence
+
+Who is asking is decided by a secret the host holds and a binding the owner
+issued, never by anything the caller says about itself; the generated entrance
+has nothing left to invent.

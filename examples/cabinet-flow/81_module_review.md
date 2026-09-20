@@ -215,3 +215,34 @@ Slice hashes are refreshed. The six modules whose host mechanism the runtime inv
 undecided (`installation`, `manifest_reader`, `service_transport`, `sandbox_supervisor`, `run_spool`,
 `bootstrap`) are recorded AMBIGUITY as well, so the ledger says what the inventory says: 10 PASS,
 18 AMBIGUITY.
+
+## The credential stops being an opaque carrier; the HTTP edge takes the emitter's form (2026-09-20)
+
+The two remaining FA017 blocks were `CredentialHandle` and `ChannelCredentialHandle`, both
+`payload: object`. Behind them the generated `resolve_actor` read `kind`, `principal_id` and
+`delegation_id` out of the payload — the caller named its own actor — because no text said how a
+presented credential is verified or which throttle key a failed attempt has.
+
+- **A29** decides it: the presented text is `<credential_binding_ref>.<secret>`; the installation
+  gives every binding one purpose of the closed `rules.credential_purposes`; `access_control`
+  resolves the named binding for the arriving channel, owner purpose first, and compares in constant
+  time; the owner binding resolves to the one active owner, an agent binding to the one active
+  delegation of that binding and channel; throttle state exists only for a binding the installation
+  resolved; a malformed text and an unknown binding write nothing. Trace and witness recorded.
+- The credential is a `str` that travels only as a function argument or result, as in Cabinet Web:
+  `resolve_actor(channel, presented_credential: str)`, `resolve_credential(...) -> str`,
+  `McpRequestEnvelope.credential: str`. Both handle models, `HttpRequestContext` and
+  `HttpRequestEnvelope` leave the closure.
+- The note of `resolve_actor` now names every call it makes: `installation.resolve_credential`, the
+  unit of work, `load_authentication_throttle_state` / `upsert_authentication_throttle_state`,
+  `list_owner_principal_by_status`, `list_agent_delegation_by_credential_binding_ref_and_channel`,
+  `system_clock.now`, `hmac.compare_digest`, and the A27 delay and block read from `rules`.
+- HTTP edge (build finding of run 2): handlers are `(request: Request, body: <DTO>)`, the extractor
+  is `(request: Request) -> str`, the delegate argument is `body`, `imports.third_party` declares
+  `FastAPI, Request, Response`. Probed against the Factory router emitter in a scratch folder: six
+  routes assembled deterministically, `resolve_actor('http_api', extract_http_credential(request))`
+  and `activate(actor, body)` — the string now meets a `str` parameter.
+
+FA017 passes. `access_control` stays AMBIGUITY until `issue_delegation`, `revoke_delegation` and
+`authorize_action` name their port operations; `installation` stays AMBIGUITY until the protected
+configuration has an external contract (boundary 2).

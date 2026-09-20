@@ -23,18 +23,6 @@ No credential value, host path or mutable "latest" selector is representable.
 
 ---
 
-## `CredentialHandle`
-
-Opaque, non-serializable process-local capability returned by
-`module:installation.resolve_credential`.
-
-It has no public data fields. It cannot be persisted, logged, traced, placed in
-an error, converted to a response model or passed to a sandbox. Only the
-authorized component that requested it may use it for the stated purpose. Its
-string/repr form must not reveal credential material.
-
----
-
 ## `ManifestOperationProjection`
 
 Immutable projection of one exact manifest operation.
@@ -132,14 +120,6 @@ children already ordered by the record-kind canonicalization rule. Floating
 point, arbitrary objects, caller-provided identity values and unordered
 containers are not admitted to this internal representation.
 
-
----
-
-## `ChannelCredentialHandle`
-
-Opaque listener-established credential material/binding handle used only by the
-trusted entrance to resolve an actor. It is non-serializable, never persisted,
-and has no public representation that can reveal credential material.
 
 ---
 
@@ -1169,24 +1149,6 @@ RunFlowResult | OwnerDecisionResult`.
 
 ---
 
-## `HttpRequestContext`
-
-Fields:
-
-- `request_id: str`;
-- `credential: ChannelCredentialHandle`;
-- `body_size: int`.
-
-No caller-selected module/path target is represented after fixed-route parsing.
-
-## `HttpRequestEnvelope`
-
-Fields:
-
-- `context: HttpRequestContext`;
-- `operation: str`;
-- `payload: SurfaceRequest`.
-
 ## `HttpResponseEnvelope`
 
 Fields:
@@ -1205,7 +1167,7 @@ Error text is bounded and sanitized.
 Fields:
 
 - `request_id: str`;
-- `credential: ChannelCredentialHandle`;
+- `credential: str` — the presented credential text of A29, carried unparsed to `module:access_control`; never persisted, logged or returned;
 - `operation: str`;
 - `payload: SurfaceRequest`.
 
@@ -1246,5 +1208,7 @@ document. These are runtime boundary types rather than State 1 domain identity
 records; `identity_scope: contract_only` records that distinction explicitly.
 Every closed union is lowered as a `discriminated_union` with a `kind` Literal
 tag and one typed `value`, so no untagged or free-form alternative is admitted.
-Opaque credential, transaction and bounded-byte carriers hold a non-serializable
-runtime payload plus only the bounded metadata stated by their declarations.
+Bounded-byte carriers hold a non-serializable runtime payload plus only the
+bounded metadata stated by their declarations. A credential is a text that
+travels only as a function argument or result (A29 rule 7); the unit of work is
+the `OperationalUnitOfWork` interface.
