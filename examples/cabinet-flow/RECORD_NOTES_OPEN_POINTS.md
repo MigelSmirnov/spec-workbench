@@ -37,3 +37,8 @@ These gaps were exposed while wiring State 7 notes to the closed `OperationalUni
 
 - `capture_trial_case` — needs a durable origin reference on TrialCase. Required because the note requires captured_from_run, but TrialCase has no origin field.
 - `withdraw_trial_case` — needs a lookup proving whether the case contributed to an admitted verdict. Required because the note requires this owner-only guard, but no port operation links a TrialCase to admitted evidence.
+
+## value_store
+
+- `put_value` — needs a durable retention-reference record and durable content bytes. Required because the note appends retention independently of immutable StoredValue metadata, but no retention record exists and content bytes have no named carrier.
+- `expire_values` — needs retention-reference access and a delete operation for eligible value bytes. Required because the note evaluates every live retention reference and removes bytes, but the record and delete operation do not exist.
