@@ -72,7 +72,9 @@ Candidate fields:
 - `disclosure_ceiling`: the highest disclosure class of a value the surface
   returns to this agent (D0-047);
 - `status`: `active` or `revoked`;
-- `issued_at`, `revoked_at`.
+- `issued_at`, `revoked_at`;
+- `revocation_reason`: the owner's bounded reason, absent while the delegation is
+  active; written once with `revoked_at` and never rewritten.
 
 A delegation never includes approving an effect, granting a standing approval,
 accepting vocabulary or accepting an operation binding. Those belong to the

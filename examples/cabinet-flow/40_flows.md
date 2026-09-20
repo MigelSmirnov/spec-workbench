@@ -267,7 +267,10 @@ activation.
 execution, `module:trial_corpus` the corpus, `module:slot_activation` the
 selection. `module:slot_registry` supplies the exact immutable contract and
 implementation records. `module:system_clock` supplies execution, verdict and
-activation timestamps to their owning modules.
+activation timestamps to their owning modules, and the elapsed readings by
+which `module:sandbox_supervisor` enforces wall-time bounds through
+`capability:system_clock.monotonic_ns`; an elapsed reading is never stored and
+never becomes a timestamp.
 
 ### Steps
 
@@ -479,7 +482,11 @@ function contract/implementation records. `module:sandbox_supervisor` executes
 function nodes, `module:operation_invoker` and `module:service_transport`
 operation nodes, `module:value_store` and `module:run_spool` carry data,
 `module:trace_journal` records, and `module:system_clock` supplies run/attempt
-timestamps and retry deadlines to their owning modules.
+timestamps and retry deadlines to their owning modules. Wall-time bounds of a
+function execution and the timeout of a transport request are measured by
+`module:sandbox_supervisor` and `module:service_transport` through
+`capability:system_clock.monotonic_ns`; an elapsed reading is never stored and
+never becomes a timestamp.
 
 ### Steps
 

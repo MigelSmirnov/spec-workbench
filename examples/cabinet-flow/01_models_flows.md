@@ -120,7 +120,9 @@ Candidate fields:
   outcome of this operation is reconciled; required unless `effect_class` is
   `read`;
 - `preview_ports`: the input ports shown to the owner in an approval preview;
-- `accepted_by`: ActorRef of the owner; `accepted_at`.
+- `accepted_by`: ActorRef of the owner; `accepted_at`. Both are absent on a
+  proposed version: only the owner accepts (A10), so acceptance facts exist only
+  once `accept_binding_version` has written them, exactly once.
 
 Effect class and replay are never authored. They are copied from the manifest so
 that a binding cannot present a write as a read.
@@ -162,9 +164,12 @@ its versions.
 Candidate fields:
 
 - `flow_id`: stable namespaced identity;
+- `name`: bounded human-readable name the flow is known by;
 - `purpose`: bounded human-readable statement in the owner's words;
 - `status`: `active` or `retired`;
-- `created_by`: ActorRef; `created_at`.
+- `created_by`: ActorRef; `created_at`;
+- `retired_by`: ActorRef, `retired_at` and `retirement_reason`: absent while the
+  flow is active; written once by retirement and never rewritten.
 
 ### Identity
 

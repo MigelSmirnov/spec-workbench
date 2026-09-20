@@ -22,10 +22,13 @@ contract version and implementation it will ever have.
 Candidate fields:
 
 - `slot_id`: stable namespaced identity, never reused;
+- `name`: bounded human-readable name the slot is known by;
 - `purpose`: bounded human-readable statement of the one responsibility;
 - `status`: `active` or `retired`;
 - `created_by`: ActorRef;
-- `created_at`.
+- `created_at`;
+- `retired_by`: ActorRef, `retired_at` and `retirement_reason`: absent while the
+  slot is active; written once by retirement and never rewritten.
 
 ### Identity
 

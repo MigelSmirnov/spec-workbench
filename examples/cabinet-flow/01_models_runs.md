@@ -186,7 +186,9 @@ Candidate fields:
   before the call and cleared only by the concluding NodeExecution. An entry
   found at restart is an effect whose outcome is unknown (A14, A18);
 - `outputs`: one StoredValue per flow output port once produced;
-- `created_at`, `ended_at`.
+- `created_at`, `ended_at`;
+- `cancellation_reason`: the owner's bounded reason, present only on a run
+  whose status is `cancelled`.
 
 Everything a run executes is pinned when it is created. An activation, a
 binding version or a vocabulary change made while the run waits does not alter
@@ -374,7 +376,9 @@ Candidate fields:
 - `binding_version_ref`: the version pinned by that node;
 - `owner_statement`: bounded text the owner approved, in plain words;
 - `status`: `active` or `revoked`;
-- `granted_by`: ActorRef of kind `owner`; `granted_at`, `revoked_at`.
+- `granted_by`: ActorRef of kind `owner`; `granted_at`, `revoked_at`;
+- `revocation_reason`: the owner's bounded reason, absent while the grant is
+  active; written once with `revoked_at` and never rewritten.
 
 A grant names a flow version, so any edit of the flow leaves the new version
 without it. A grant cannot name a `destructive` binding; such a node always
@@ -472,6 +476,8 @@ Candidate fields:
   goods arrived the same thing as the day on the invoice?";
 - `motivating_refs`: the flow proof finding or uncomposable output that exposed
   the gap;
+- `agent_rationale`: the proposing agent's optional bounded rationale, kept
+  apart from `plain_statement` and never shown as the owner's question;
 - `status`: `proposed`, `accepted` or `rejected`;
 - `proposed_by`: ActorRef; `decided_by`: ActorRef of kind `owner`;
 - `proposed_at`, `decided_at`;
