@@ -20,7 +20,7 @@ These gaps were exposed while wiring State 7 notes to the closed `OperationalUni
 
 ## trace_journal
 
-- `record_node_execution` — needs the slot/contract evidence fields and the node-execution identity recipe. Required because the note requires slot-scoped evidence and idempotent attempt identity, but NodeExecution lacks the slot/contract fields and no identity recipe is stated.
+- `slot_evidence` — needs an `OperationalUnitOfWork` list operation keyed by `contract_version_ref`. Required because the note must select every concluded function attempt for the exact contract version, while the port exposes no list by that field; the existing load-by-id and lists by executed/grant/run reference cannot provide that bounded set.
 
 ## trial_corpus
 
