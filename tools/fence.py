@@ -30,6 +30,13 @@ HINTS: dict[str, str] = {
     "flow_capability_unreached": "the flow step is not wired: a route delegate or a note of the calling module must name this operation",
     "waiver_not_accepted": "a waiver is a decision nobody made: record the decision in State 2 and carry it in a contract, then delete the waiver",
     "review_not_passed": "read the module slice and record PASS, or split the mechanism that may vary",
+    "instant_without_source": "say where the instant comes from: name the wall-clock accessor in the note of this function, or declare the source (clock, argument, stored, callee) in 70_value_flow_closure.json",
+    "argument_without_sink": "say what the argument becomes: add the field to the constructed model, or declare the sink (field, derived, key, guard, forwarded) in 70_value_flow_closure.json",
+    "known_collaborator_unreachable": "name the collaborator's operation in a note of this module so the module receives it, or remove the collaborator from State 3 Knows",
+    "value_flow_lens_judged_nothing": "give the lens what it judges: declare rules.time_source_policy with its representation, and name the modules a module calls in backticks under State 3 Knows",
+    "declared_clock_not_named": "a clock the note does not name is not handed to the module: name the wall-clock accessor in the note of this function",
+    "declared_callee_not_named": "name the callee in a note of the calling module so the module receives it",
+    "declared_sink_unknown": "the declared sink does not exist in the design: add the model field or contract first, then declare it",
     "table_access_unnamed": "a note naming a record table names its access: spell the match in the row model's field vocabulary, or name the contract that owns it (NOTE_GATE.md 'Table access must be named')",
 }
 
