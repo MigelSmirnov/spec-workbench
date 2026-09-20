@@ -320,7 +320,7 @@ def _runtime_persistence_check(source_spec: object, case_root: Path | None) -> A
     )
 
 
-def _assembly_check(case_root: Path | None) -> AdmissionCheck:
+def _assembly_check(case_root: Path | None, factory_root: Path) -> AdmissionCheck:
     if case_root is None:
         return AdmissionCheck(
             "FA003",
@@ -328,7 +328,7 @@ def _assembly_check(case_root: Path | None) -> AdmissionCheck:
             "Explicit --spec admission has no Workbench assembly project.",
             {},
         )
-    report = verify_assembly(case_root)
+    report = verify_assembly(case_root, factory_root=factory_root)
     return AdmissionCheck(
         "FA003",
         CHECK_PASS if report["ready"] else CHECK_BLOCK,
@@ -994,7 +994,7 @@ def check(
         _source_clean_check(metadata, allow_dirty_source),
         _target_identity_check(case_root, project),
         _review_check(case_root),
-        _assembly_check(case_root),
+        _assembly_check(case_root, factory_root),
         _standard_check(workbench_root, factory_root),
         _language_check(source),
         _implementation_obligations_check(source),
