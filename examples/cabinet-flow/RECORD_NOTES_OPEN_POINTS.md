@@ -7,10 +7,6 @@ These gaps were exposed while wiring State 7 notes to the closed `OperationalUni
 
 - `request_approval` — needs fields for flow version, mapped elements, file previews, owner statement, and request time. Required because the note requires the complete approval preview to remain bound, but EffectApproval has no carrier for these facts.
 
-## run_executor
-
-- `advance_run` — needs a durable in-flight effect-attempt record. Required because the executor must persist the pre-send attempt, but no record model or port operation exists.
-- `resume_runs` — needs a durable in-flight effect-attempt record. Required because recovery must reconcile the pre-send attempt, but no record model or port operation exists.
 
 ## semantic_vocabulary
 
