@@ -246,3 +246,29 @@ presented credential is verified or which throttle key a failed attempt has.
 FA017 passes. `access_control` stays AMBIGUITY until `issue_delegation`, `revoke_delegation` and
 `authorize_action` name their port operations; `installation` stays AMBIGUITY until the protected
 configuration has an external contract (boundary 2).
+
+## A30 is decided and has no carrier yet (2026-09-20)
+
+The owner chose: a kernel started on a store restored from a copy serves reading and analysis and
+applies no effect until the owner confirms the services were reconciled. A30 records that together
+with where the store lives, who opens it and who establishes the owner record. Assembly and the
+witness gate stay green with A30 in place although no contract carries it — a decision tagged
+`workbench:notes` is witnessed by the existence of notes, not by a note that names it. So the owed
+surface is written here, and the modules it touches stay AMBIGUITY until it exists:
+
+- State 1: `StoreContinuity` (the counter, whether effects are open, who confirmed and when) as a
+  durable kernel record with a table and port operations.
+- `installation`: the external contract of the protected configuration (data directory, owner
+  identity and name, manifest pin, selected instances, credential bindings with purpose and secret
+  location), one loading operation called by `start_kernel`, and the host copy of the counter —
+  read at start, written before a send.
+- `operational_store`: the one opening operation (directory, schema, write-ahead journal, the
+  comparison of rule 6) and its result; `begin_unit_of_work` refuses before it.
+- `bootstrap.start_kernel`: load the installation, open the store, establish the owner, report
+  `restored` in `KernelReadiness`.
+- `operation_invoker.invoke_operation`: advance the counter in the unit that records the in-flight
+  attempt, write the host copy before the send, refuse a node above `read` on a restored store.
+- `kernel_surface.owner_decide` and `owner_authority`: the owner-only decision that ends the
+  restored state, with the owner's statement.
+- `value_store`: value bytes in the content-addressed area of the data directory
+  (`source_byte_store_backend` is the available emitter), metadata in the database.

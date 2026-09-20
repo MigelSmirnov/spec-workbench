@@ -430,3 +430,82 @@ host_monotonic_clock_read
 Generated modules have no freedom to invent their own clock. There is one wall
 time representation, one production wall-clock primitive and one dependency
 through which every owning module obtains it.
+
+## Accepted decision A30 — one data directory, opened once, and a restored store applies no effect until the owner confirms
+
+### Normative rules
+
+1. The operational store is one data directory of the installation: one SQLite
+   database file holding every kernel record, and beside it the
+   content-addressed area of stored value bytes and trial fixtures, one file per
+   digest. The directory is the backup unit of A20 rule 8. The run spool M46 is
+   not part of it.
+2. The location of the data directory comes only from the installation's
+   protected configuration. No request, flow, record or environment variable can
+   name or change it.
+3. `module:bootstrap` opens the store exactly once per process start, before any
+   unit of work: the directory and schema are created when absent, and nothing
+   else in the kernel opens, creates or migrates the database. Every unit of
+   work afterwards opens its own connection to that one file.
+4. The installation's single OwnerPrincipal M16 is established at start from the
+   protected configuration when the store holds none. It is never created,
+   renamed or replaced through the surface.
+5. The store keeps one StoreContinuity record: a counter that advances in the
+   same unit of work that durably records an in-flight effect attempt under
+   A14, before the send. The host keeps a copy of that counter outside the data
+   directory, written after that unit commits and before the send.
+6. At start the two counters are compared. An empty store with no host copy is a
+   new installation and the counters begin. Equal counters are a continuous
+   store. Any other outcome — a store behind the host copy, a missing host copy
+   beside a store that holds records, an unreadable copy — is a restored store.
+7. A restored store serves everything that changes nothing outside the kernel:
+   inspection, authoring, trial, admission, activation, proof and flows whose
+   highest effect class is `read`. Every node of a higher effect class is
+   refused before any send, as a policy refusal that names the restored store,
+   and its run waits; nothing is repeated and nothing is assumed.
+8. Only the owner ends that state, by one owner-only decision recorded with the
+   owner's statement that the services were reconciled. The decision sets both
+   counters to a new common value. Until then A15 reconciliation may read
+   outcomes but applies nothing.
+9. Runs resumed under A18 on a restored store are reconstructed as A20 rule 8
+   says; rule 7 applies to them before their next effect.
+
+### Formal invariants
+
+```text
+data_directory.location FROM protected_configuration ONLY
+store_opened -> by_bootstrap AND once_per_process
+
+in_flight_attempt_recorded -> store_counter_advanced IN same_unit
+send(effect) -> host_counter = store_counter
+
+start: store_empty AND host_copy_absent -> new_installation
+start: host_counter = store_counter -> continuous
+start: otherwise -> restored
+
+restored AND effect_class > read -> refused_before_send
+restored -> continuous ONLY BY owner_decision
+owner_principal_created -> at_start FROM protected_configuration
+```
+
+### Required tests
+
+[witness: workbench:notes]
+
+1. A new installation starts with an empty directory, creates the schema and the
+   owner, and applies an approved effect.
+2. After an effect, the store is replaced by a copy taken before it; the kernel
+   starts, answers inspection and runs a read-only flow, and refuses the next
+   effectful node with the restored-store refusal without sending anything.
+3. The data directory is copied to a machine with no host copy of the counter;
+   the kernel starts as restored.
+4. After the owner's decision the same effectful node is applied once.
+5. A request, a flow constant and an environment variable naming another
+   directory change nothing.
+6. A second opening in the same process is refused.
+
+### Consequence
+
+Losing the machine costs at most the records since the last copy, never a
+repeated effect: a kernel that cannot prove it remembers everything it sent
+sends nothing until the owner has looked.
