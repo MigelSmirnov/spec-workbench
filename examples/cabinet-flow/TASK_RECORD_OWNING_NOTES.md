@@ -120,7 +120,7 @@ python tools/design_spec_projection.py --verify examples/cabinet-flow
 python tools/design_notes.py examples/cabinet-flow --gate --json          # 0 findings
 python tools/design_value_flow.py examples/cabinet-flow                   # 0 errors
 python tools/design_assembly.py examples/cabinet-flow --json              # 13/13 ready
-python tools/design_decision_witness.py examples/cabinet-flow --coverage  # 29/29
+python tools/design_decision_witness.py examples/cabinet-flow --coverage  # every decision witnessed, 0 unresolved
 ```
 
 Before the pull request also run the import-cycle probe with the Factory's own matching rule; it
