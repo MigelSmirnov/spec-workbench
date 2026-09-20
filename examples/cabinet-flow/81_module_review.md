@@ -91,3 +91,12 @@ Open design question, not decided here: `SpooledBytes.released_at` ("when the sp
 emptied") has no writer in any contract — `release_run_files` deletes the objects and returns
 counts. The field is only ever read as a liveness check.
 
+## ReleaseCeilings brought back to State 1 (2026-09-20)
+
+The closure of `ReleaseCeilings` (M48) carried seven names found nowhere else in the case
+(`max_value_bytes`, …, `max_resource_bounds`), while State 1 and `config.release_ceilings` list
+seventeen ceilings by name and `service_transport` names `transport_timeout_ms_max`. The Factory
+build fell on `ceilings.transport_timeout_ms_max`. The closure now carries exactly the seventeen
+State 1 names, each `int`, equal to the `config.release_ceilings` keys. No contract, note or rule
+used the seven names. Slices moved only where the model surface is shown; all 28 modules remain PASS.
+
