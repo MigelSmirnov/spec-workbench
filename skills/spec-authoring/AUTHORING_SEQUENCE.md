@@ -5,7 +5,9 @@ This document defines the ordering contract for Spec Workbench authoring.
 this Markdown explains the same contract for people and agents.
 
 `SPEC_STANDARD.md` remains normative for the serialized `global_spec.json` format.
-`SKILL.md` remains normative for the semantic meaning of design states.
+The semantic meaning of each design state is the `purpose` of its phase in
+`authoring_sequence.json`; what judgement the phase needs is its `questions`
+(at most five); `SKILL.md` is only the entry page.
 
 ## One pipeline for every project
 
@@ -27,7 +29,7 @@ pipeline API used by the CLI rather than reimplementing routing.
 ## No warnings, no waivers
 
 Every phase of the sequence stops on any finding that is not clean: the
-fence (`tools/fence.py`, "The fence" in SKILL.md) raises warnings and review
+fence (`tools/fence.py`) raises warnings and review
 findings to stops with a hint, refuses closure-gap waivers, and adds the
 `witness` and `flows` assembly checks. A phase that reports a stop is not
 "ready with remarks"; it is not ready.
@@ -59,7 +61,7 @@ State 0  Product frame
 The intermediate structured-data closure is **not State 6**. Existing artifacts
 and schemas named `60_data_closure.json` / `spec_workbench_state6_data_*` are
 retained for compatibility only; their numeric name does not redefine the
-semantic state numbering in `SKILL.md`.
+semantic state numbering of this sequence.
 
 Likewise, `70_persistence_closure.json`, `70_router_closure.json`, and
 `70_router_context.json` are workbench artifact names, not statements that any
@@ -194,8 +196,7 @@ reviewed State 4 flow
 9. A deterministic backend present but invalid is a defect. Do not remove it or
    silently fall back to an LLM path.
 10. Artifact filename prefixes are storage conventions, not semantic state
-    authority. When a filename conflicts with this sequence, this sequence and
-    `SKILL.md` win.
+    authority. When a filename conflicts with this sequence, this sequence wins.
 
 ## Deterministic authoring entrypoint
 
