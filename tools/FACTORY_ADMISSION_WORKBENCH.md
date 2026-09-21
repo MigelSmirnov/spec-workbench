@@ -49,6 +49,11 @@ nobody made.
   `rules.persistence_backend` is reachable — named as the `local`
   implementation of an interface or mentioned by another contract.
 
+- `FA018` — the Factory's own local specifications: `normalize_spec.py` and
+  `build_local_spec.py` cut every module in a temporary directory, the
+  data/code seam is asked about every cut, and a declared data-provider
+  lowering is held to its sources. See `FACTORY_SLICE_WORKBENCH.md`.
+
 `FA017` is unconditional on purpose. `FA010` and the port gates before it react
 to an interface the author chose to write; a case with no interface at all makes
 each of them report "not applicable", and the first Cabinet Flow runs were

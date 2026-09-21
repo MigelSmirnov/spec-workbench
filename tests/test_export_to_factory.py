@@ -103,6 +103,22 @@ shutil.copyfile(a.spec, project / s['files']['global_spec'])
 """,
     )
     _write(
+        factory / "tools/normalize_spec.py",
+        """import json, sys
+spec = json.load(open(sys.argv[1], encoding='utf-8'))
+spec['modules'] = {name: {} for name in spec.get('module_functions', {})}
+open(sys.argv[2], 'w', encoding='utf-8').write(json.dumps(spec))
+""",
+    )
+    _write(
+        factory / "tools/build_local_spec.py",
+        """import json, pathlib, sys
+module, _spec, _call_graph, out_dir = sys.argv[1:5]
+local_spec = {'standard_version': 2, 'module_name': module, 'imports': {'internal': {}}}
+(pathlib.Path(out_dir) / f'{module}.json').write_text(json.dumps(local_spec), encoding='utf-8')
+""",
+    )
+    _write(
         factory / "tools/project_spec_delta.py",
         """import argparse, json
 p = argparse.ArgumentParser()
