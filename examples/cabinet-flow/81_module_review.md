@@ -403,3 +403,67 @@ Left open, same class, not failing today: `manifest_reader.service_instance` and
 purpose, so the imports are correct; the first record-port note that lists one of those fields would
 repeat this stop. The Workbench still has no gate for the class: "a callable name equals a model field
 or a contract parameter name" is a candidate lens next to the induced-import probe.
+
+## Rule values reach generated code as imported constants, never as addresses (2026-09-21, after the run stopped at `installation`)
+
+Route B run `cabinet_flow-route-b-20260921T183252Z` on spec `bba2c648…` passed `models`, `system_clock`
+and `identity` and stopped at `installation` before any model call: `DataInModelContextError`, the
+slice carried `rules.credential_purposes` and `rules.installation_configuration`. The Factory slicer
+dereferences a note's `= rules.x` into the local spec, and the data/code seam (SPEC_STANDARD §15.9)
+refuses to build a prompt that contains a value. Asking the same Factory rule about every slice gave
+the whole size at once: nine modules, seven rule namespaces and `config.persistence`.
+
+A second, quieter form of the same gap was found while reading the notes: an address written in
+backticks without `=` (`rules.authentication_throttle.block_seconds`, `rules.disclosure.classes[0]`,
+`rules.retry_backoff.timed_wait_reasons[1]`) is not dereferenced at all. No seam refuses it, and the
+generator receives neither a value nor a symbol — it can only invent the number. Both forms are
+closed together.
+
+Shape. The design home of every value stays where A23, A27 and A29–A34 put it: its `rules` address in
+`60_data_closure.json`, with its decision trace and, for the manifest contract, its content-addressed
+external evidence. None of that changes. `70_data_provider_closure.json` lowers the values generated
+code must read into one deterministic module, `data_provider` (State 3), emitted by the Factory's
+`python_constant_data_v1`; `lowered_from` names the rules address of each of the 32 constants and the
+value must equal the value there. Following the Factory's own literal-leak rule, a consumer that needs
+one exact entry gets a scalar constant — the two channel purposes, the three continuity states, the
+fourteen configuration key names — rather than a tuple index or a mapping key. The A27 back-off table is
+a record table over the contract-only row model `AuthenticationFailureDelayRule`. The A31 contract is one
+mapping, and `manifest_operation` names the five entries it reads.
+
+Notes changed in nine consuming modules say "the imported X constant" where they gave an address;
+each declares `data_provider` in `imports.module_internal`. `open_store` no longer addresses
+`config.persistence`: the schema is applied by the emitted `create_operational_store_schema` and the
+note needs no table name.
+
+The three runtime profile identifiers (`rules.host_byte_storage`, `rules.sandbox_runtime`,
+`rules.service_transport_runtime`) are one string each naming a profile; generated code has no use
+for the string, and the six notes that addressed it already spell the mechanism in full. The address
+is removed from those notes and the fact stays in `rules` and in A32–A34.
+
+Review. Fourteen slices changed and `data_provider` is new; all fifteen were read as diffs against
+`b2dea58`. Outside the changed note sentences, the declared provider imports, the row model and the
+resolved rule values that left the packets, nothing differs. Two points were decided in the reading:
+
+- `resolve_actor` looked the delay up by list position; by row it needed a rule for a count the table
+  does not hold. A27 rule 2 gives counts of ten and above to the block and rule 4 says the attempt
+  after an elapsed block is evaluated normally, so the note says "no delay when no row has that
+  count" and nothing more.
+- `load_installation` keeps the parsed content for the other functions of `installation`; the note now
+  says they name its keys only through the same imported constants, so a copied key literal is a
+  stated violation rather than a guess the literal-leak gate later rejects.
+
+Measured with the Factory's own tools on the projected spec: `build_local_spec` slices 30 of 30
+modules; the data/code seam refuses 0 (was 9); no slice contains a lowered value (`900` is absent from
+the `access_control` slice, which carries `AUTHENTICATION_BLOCK_SECONDS: int`); the constant-data
+emitter assembles `data_provider`. Ledger: 30 modules, 30 PASS.
+
+Left open, met on the way and not decided here:
+
+- `service_transport.send_request` resolves its credential "through `module:installation`" without
+  naming `resolve_credential` or the `service_invocation` purpose; no note passes that purpose at all.
+- A34 rule 1 says the exact `bwrap` arguments are fixed by `rules.sandbox_runtime`, whose value is a
+  profile identifier; the arguments themselves exist only as note prose.
+- `config.release_ceilings.*` reaches consumers only because the bare word inside the backticked
+  address induces an import of `installation.release_ceilings`. It works and is accidental.
+- Nothing in the Workbench compares a lowered constant with its `rules` source, slices a module the way
+  the Factory does, or asks the seam; the pre-export probe that does all three is a `tools/*` change.
