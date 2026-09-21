@@ -12,10 +12,12 @@ structurally valid but leave important engineering decisions unresolved.
 
 - `README.md` explains the project to people.
 - `AGENTS.md` tells agents how to work in the repository.
-- `SPEC_STANDARD.md` defines the existing factory specification format.
-- `SKILL.md` defines the specification-authoring methodology.
-- `BEHAVIORAL_NOTES.md` explains how to design effective notes without
-  changing the factory specification language.
+- `skills/spec-authoring/SPEC_STANDARD.md` defines the existing factory
+  specification format.
+- `skills/spec-authoring/SKILL.md` defines the specification-authoring
+  methodology.
+- `skills/spec-authoring/NOTE_GATE.md` defines the notes gate; note-writing
+  guidance lives in `SKILL.md` (State 7) and `tools/NOTES_PROPAGATION_WORKBENCH.md`.
 
 ## Repository entry point
 
@@ -100,17 +102,20 @@ runs `python tools/tools_ownership_check.py --base origin/main` on every pull
 request and fails when a non-`tools/*` branch touches a generic path. Run the
 same command before pushing.
 
-## Read first
+## What to read
 
-Before changing the methodology, read:
+Reading is phase-scoped. `python tools/authoring.py next <project> --json`
+returns `read`: the methodology documents that apply to the current phase.
+Read this file and those documents; a longer global reading list is not
+required to act on a phase.
 
-1. `skills/spec-authoring/SKILL.md`
-2. `skills/spec-authoring/SPEC_STANDARD.md`
-3. `skills/spec-authoring/BEHAVIORAL_NOTES.md`
-4. `skills/spec-authoring/AUTHORING_SEQUENCE.md`
+Before changing the methodology itself (`skills/`, `tools/`), read
+`skills/spec-authoring/AUTHORING_SEQUENCE.md` and the phase docs of every
+phase your change touches.
 
 When working on a case study, read its design-state documents in numerical
-order before modifying its assembled `global_spec.json`.
+order (the `Project read order` printed by `workbench.py show`) before
+modifying its assembled `global_spec.json`.
 
 Later design-state documents may refine earlier conceptual decisions.
 
