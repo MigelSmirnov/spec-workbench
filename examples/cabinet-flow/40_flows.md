@@ -36,7 +36,7 @@ writes startup/recovery timestamps uses the same KernelInstant source.
    and learn whether the store is new, continuous or restored (A30), then
    `capability:access_control.establish_owner`. It constructs every module and asks
    `capability:installation.release_ceilings`,
-   `capability:installation.manifest_revision` and
+   `capability:installation.pinned_manifest_revision` and
    `capability:installation.resolve_service_target` to validate the whole
    configuration, including the refusal of mixed production and non-production
    targets. Timestamp-owning startup modules obtain their event time only from
@@ -173,7 +173,7 @@ KernelInstant timestamps owned by the vocabulary registry.
 2. Through `capability:kernel_surface.author`,
    `capability:semantic_vocabulary.submit_proposal` records the complete
    candidate and motivating finding. The vocabulary module obtains
-   `capability:owner_authority.owner_statement` so the stored owner-facing
+   `capability:owner_authority.generate_owner_statement` so the stored owner-facing
    question is kernel-generated and separate from agent-supplied text.
    Proposal and decision timestamps come only from
    `capability:system_clock.now`.
@@ -405,7 +405,7 @@ writes no network code.
    from the manifest. The proposal must supply one unambiguous exact mapping of
    a non-null declaration to typed input ports; `null` maps to no ports. The
    identity comes from `capability:identity.identify_binding_version`.
-3. `capability:owner_authority.owner_statement` states in plain words what the
+3. `capability:owner_authority.generate_owner_statement` states in plain words what the
    operation does, in which service, what it may change and which disclosure
    class each input accepts.
 4. The owner's `capability:operation_bindings.accept_binding_version` makes the
@@ -460,7 +460,7 @@ to their owning modules.
 4. `capability:flow_registry.activate_flow_version` activates a proven read-only
    version by the kernel at once. Flow/proof/activation lifecycle timestamps are
    obtained from `capability:system_clock.now`. For any other version it requires the owner,
-   who sees `capability:owner_authority.owner_statement` naming every non-read
+   who sees `capability:owner_authority.generate_owner_statement` naming every non-read
    node.
 5. `capability:flow_registry.current_flow_activation` names the version that
    runs by default, and `capability:flow_registry.retire_flow` ends a flow.

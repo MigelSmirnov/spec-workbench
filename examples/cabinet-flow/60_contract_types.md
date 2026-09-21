@@ -11,7 +11,7 @@ a durable domain model.
 
 ## `ManifestRevisionRef`
 
-Immutable value returned by `module:installation.manifest_revision`.
+Immutable value returned by `module:installation.pinned_manifest_revision`.
 
 Fields:
 

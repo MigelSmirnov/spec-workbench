@@ -178,7 +178,7 @@ decision.
 One durable VocabularyProposal in `proposed` state with stable proposal
 identity, complete proposed content, motivating references and a deterministic
 plain owner-facing statement obtained from
-`module:owner_authority.owner_statement`.
+`module:owner_authority.generate_owner_statement`.
 
 ### Observable effect
 
