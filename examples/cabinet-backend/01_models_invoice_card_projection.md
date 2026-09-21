@@ -130,7 +130,7 @@ Fields:
 
 - `payment_id: str`;
 - `method: str`;
-- `paid_at: datetime`;
+- `paid_at: datetime | None`;
 - `currency: str`;
 - `tendered_amount: Decimal | None`;
 - `applied_amount: Decimal`;
@@ -170,11 +170,12 @@ Equal status and transactions are the same payment evidence.
 ## Model M86 — InvoiceCardSourceBlock
 
 The capture-evidence block of the card (Cabinet_web `invoice-card-v1.schema.json`, `$defs.source`).
-It names no source identity: the sources of an invoice are `InvoiceTransferManifest.source_references`
-and locally attached `SourceBinary` rows.
+Its `source_id` is preserved card content (A78): the required sources of an invoice are
+`InvoiceTransferManifest.source_references` and locally attached `SourceBinary` rows, never this field.
 
 Fields:
 
+- `source_id: str`;
 - `kind: str`;
 - `file_ref: str | None`;
 - `file_status: str`;
@@ -186,7 +187,7 @@ value
 
 ### Identity evidence
 
-Equal kind, file reference and status are the same capture evidence.
+Equal source id, kind, file reference and status are the same capture evidence.
 
 ---
 
@@ -218,8 +219,8 @@ The complete Version 1 card as the typed projection of `StoredInvoiceCardRevisio
 - `card_version: int`;
 - `id: str`;
 - `status: str`;
-- `invoice_number: str`;
-- `issue_date: date`;
+- `invoice_number: str | None`;
+- `issue_date: date | None`;
 - `service_date: date | None`;
 - `due_date: date | None`;
 - `currency: str`;

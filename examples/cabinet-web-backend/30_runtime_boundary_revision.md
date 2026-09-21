@@ -38,6 +38,9 @@ create_cabinet_schema
 
 ### Depth assessment
 
+kind: deep
+hidden mechanism: one SQL unit-of-work over the closed table registry
+
 One deep persistence module supplies a shared transaction authority for effects
 that cross Card, journal, custody, and synchronization records. Its methods are
 mechanical storage operations; application modules retain every transition and
@@ -75,16 +78,99 @@ recover_source_publications
 
 ### Depth assessment
 
+kind: deep
+hidden mechanism: confined content-addressed filesystem custody with atomic publication
+
 The byte store is a narrow mechanism. PostgreSQL journal state and
 `source_custody` decide when a verified candidate may become logically
 available; a filesystem observation alone is never authority.
+
+## `system_clock`
+
+### Owns
+
+Exactly the concrete `SystemClock` implementation of the `Clock` port.
+
+### Knows
+
+Only the `Clock` interface and the host timezone-aware UTC wall clock.
+
+### Must not own
+
+Business policy, persistence, configuration loading, scheduling, cached time,
+or service construction.
+
+### Hides
+
+The per-call `datetime.now(timezone.utc)` wall-clock read behind the narrow
+`Clock.now` interface.
+
+### Candidate public capabilities
+
+```text
+SystemClock
+```
+
+### Depth assessment
+
+kind: deep
+hidden mechanism: deterministic binding of the process UTC wall clock to Clock
+
+The adapter is deliberately separate from the composition root so services
+depend only on `Clock`, while `bootstrap` constructs and shares one concrete
+instance.
+
+## `canonical_digest`
+
+### Owns
+
+Exactly the canonical digest recipes of the application, one function per
+entry of `rules.canonical_digest_backend.recipes`: `request_hash`,
+`catalogue_content_digest`, `manifest_hash`, `canonical_json_text_digest`,
+`string_tuple_digest`.
+
+### Knows
+
+Only the closed procedure of `canonical_digest_backend/v1`: canonical JSON
+(sorted keys, compact separators, `ensure_ascii` False, UTF-8) under SHA-256,
+with the declared field exclusions and UTC normalization per recipe.
+
+### Must not own
+
+Which value is digested when, business policy, persistence, or any stored
+record; the consumer names the recipe and supplies the exact value.
+
+### Hides
+
+Serialization, exclusion and datetime normalization of the digested value so
+that no consumer module re-spells the procedure (the promoted tree carried
+four spellings and a duck-typed `hasattr` before `model_dump`, 2026-09-05).
+
+### Candidate public capabilities
+
+```text
+request_hash
+catalogue_content_digest
+manifest_hash
+canonical_json_text_digest
+string_tuple_digest
+```
+
+### Depth assessment
+
+kind: deep
+hidden mechanism: deterministic canonical serialization under one digest procedure
+
+Emitted, never generated: a digest is a persisted key — data plus a witnessed
+vector — and the A09 catalogue vector is reproduced by the emitter exactly.
 
 ## `bootstrap`
 
 ### Owns
 
 The only environment/configuration read, construction of
-`PostgresCabinetUnitOfWork` and `LocalFilesystemSourceByteStore`, migration and
+`PostgresCabinetUnitOfWork`, `LocalFilesystemSourceByteStore`, and one shared
+`SystemClock` supplied by `system_clock`, migration and
 startup recovery before traffic, construction of all application services and
 gateways, and delivery of the complete graph to `create_app`.
 
@@ -102,7 +188,7 @@ missing protected configuration.
 ### Hides
 
 Deployment configuration loading, adapter construction order, health startup
-ordering, and teardown.
+ordering, wiring of one shared timezone-aware UTC clock, and teardown.
 
 ### Candidate public capabilities
 
@@ -111,6 +197,9 @@ create_cabinet_web_app
 ```
 
 ### Depth assessment
+
+kind: deep
+hidden mechanism: protected composition of the service graph from closed deployment settings
 
 One composition root makes the runtime graph reviewable and prevents domain
 modules from inventing adapters or silently coupling Web availability to the
@@ -122,7 +211,8 @@ intermittent local backend.
 bootstrap
   -> cabinet_persistence -> models
   -> source_byte_store -> models
-  -> application services -> models + CabinetUnitOfWork
+  -> system_clock -> models.Clock
+  -> application services -> models + CabinetUnitOfWork + Clock
   -> source_custody -> CabinetUnitOfWork + SourceByteStore
   -> gateways -> application services
   -> api.create_app
@@ -132,3 +222,39 @@ local backend (intermittent)
   -/> bootstrap, PostgreSQL, filesystem, or ordinary Web operations
 ```
 
+## `validation_rules`
+
+### Owns
+
+The retained deterministic evaluation mechanism for A02/A17 Invoice checks.
+This generation unit is restored from the accepted Factory bb77c05d baseline;
+source registration must not retire it or return formula evaluation to LLM code.
+Invoice validation remains the public capability owner.
+
+### Knows
+
+The closed validation backend IR, typed InvoiceCardV1 fields, exact Decimal
+comparison and the declared validation catalogue.
+
+### Must not own
+
+Custody, source registration, admission, product writes, duplicate discovery,
+credentials, arbitrary expression evaluation or network access.
+
+### Hides
+
+Ordered field expansion, finite check dispatch and exact issue projection.
+
+### Candidate public capabilities
+
+```text
+evaluate_validation_checks
+```
+
+### Depth assessment
+
+kind: deep
+hidden mechanism: deterministic compilation of the closed Invoice check IR
+
+The public invoice_validation capability delegates this mechanism and retains
+its existing duplicate-discovery and proposal behavior.

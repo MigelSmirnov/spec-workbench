@@ -31,7 +31,7 @@ read or change, without embedding a credential or ChatGPT account object.
 
 Candidate fields:
 
-- `actor_type`: `human`, `agent`, `service`, `operator`, or `system`;
+- `actor_type`: the closed M136 `ActorType`;
 - `principal_id`;
 - `channel`: `chatgpt_plugin`, `browser`, `local_backend`, or `operator`;
 - `interaction_id` optional;
@@ -75,7 +75,7 @@ for participating local Backend nodes, and a protected operator boundary.
 Candidate fields:
 
 - `principal_id`;
-- `principal_kind`: `cabinet_owner`, `local_backend_node`, or `operator`;
+- `principal_kind`: the closed M137 `PrincipalKind`;
 - `status`: `active` or `revoked`;
 - `created_at`;
 - `revoked_at` optional.

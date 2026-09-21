@@ -101,6 +101,12 @@ A one-time `IssuedServiceCredential` for the replacement credential.
 Atomically revokes the prior active credential, issues its replacement, and
 records rotation evidence.
 
+### Enforces
+
+Linux-owner-only offline administration, exact active-principal targeting,
+atomic revoke-then-issue with no window of two active credentials, one-time
+secret disclosure, and no HTTP/MCP exposure.
+
 ### Errors
 
 Rejects a non-owner invocation, unknown/revoked principal, missing deployment
@@ -133,6 +139,12 @@ None after the revocation transaction commits.
 
 Atomically revokes the principal and every active credential and records audit
 evidence.
+
+### Enforces
+
+Linux-owner-only offline administration, exact active-principal targeting,
+terminal one-way revocation covering every active credential, append-only audit
+history, and no HTTP/MCP exposure.
 
 ### Errors
 

@@ -161,3 +161,211 @@ The exact current slice SHA-256 values and per-module results are recorded in `8
 ## Stage 9 handoff condition
 
 Stage 8.1 is closed. Factory admission may proceed only against the clean committed source and must independently re-check assembly, current slice hashes, persistence closure, closure-completeness fuses, target identity, Factory compatibility, and the remaining Stage 9 checks.
+
+## Invoice module split (2026-08-26)
+
+`invoice_workspace` was accepted as one module because every operation was
+"about Invoice". Its accepted implementation had no private helper, no
+dependency shared by all functions, and 11 of 12 owned functions public; the
+generator collapsed it to stubs on the largest generation packet of the case.
+The State 3 cohesion test now splits it along its mechanisms:
+
+- `invoice_catalogue` — the revision-exact read model (`load_invoice_revisions`,
+  `parse_invoice_revision`) behind `search_invoices`, `get_invoice`,
+  `find_invoice_duplicates`; owns `ValidationRejectedError` as the lowest
+  Invoice module in dependency order.
+- `invoice_validation` — declared-order rule evaluation
+  (`evaluate_validation_checks`) behind `prepare_invoice_draft` and
+  `validate_invoice`; duplicate reuse goes through the retained catalogue.
+- `invoice_lifecycle` — the lifecycle state machine
+  (`require_mutation_authorization`, `load_expected_draft`,
+  `commit_invoice_successor`, `derive_transfer_records`) behind the six
+  mutations; depends on `card_workspace`, the catalogue and the validator.
+
+Every public note keeps its accepted behaviour and now names the internal
+mechanism it goes through, so the depth is declared rather than assumed. The
+three slices report zero blocks; `api`, `chatgpt_interaction` and `bootstrap`
+consume the three modules directly, without a façade.
+
+
+## Re-slice 2026-08-28: measured invoice arithmetic
+
+`rules.invoice_workspace.validation_checks` now mirrors the live-data
+contract (`LIVE_INVOICE_DATA_EVIDENCE_20260828.md`): `line_net` gains
+explicit `round_half_up`, while `line_tax`, `total_net` and `total_tax`
+leave the blocking set — no formula over the 109 observed lines supports
+them, and the live validator does not enforce them. Slice hashes for
+`models`, `invoice_validation` and `invoice_lifecycle` are recomputed;
+review statuses are unchanged because no note, contract, or model shape
+moved — only the declared rule data the notes already reference
+generically.
+
+## Re-slice 2026-08-31: prepare_invoice_draft reference scope
+
+The `prepare_invoice_draft` orchestration note now addresses
+`rules.invoice_workspace.card_type` and
+`rules.invoice_workspace.card_version` directly instead of dereferencing the
+whole `rules.invoice_workspace` block. The `invoice_validation` slice was
+rebuilt and re-reviewed with 4 contracts, 8 assembled notes, and no structural
+findings. This is a reference-scope repair only; accepted behavior and review
+status are unchanged.
+
+## Re-slice 2026-08-28 (2): prepare_card_revision pinned against drift
+
+Route B regeneration drifted on `prepare_card_revision`: one closure parsed
+canonically with a sorted-JSON content hash (the OTK-verified behaviour), the
+next narrowed the function to a project/provider whitelist and a raw-string
+hash, breaking every invoice commit at runtime smoke. The note now pins the
+generic parse (no enumerated card_type subset), the id/type identity check,
+and the sha256-over-canonical-JSON hash closed as
+`rules.card_workspace.revision_hash_algorithm`. Only the `card_workspace`
+slice hash is recomputed; review statuses are unchanged.
+
+## Re-slice 2026-08-28 (3): the byte store gains its read port
+
+`open_verified_source` demanded re-reading published bytes, but the
+SourceByteStore port had no read operation — an obligation without a
+surface. Generation therefore alternated between stubbing the function and
+faking custody with a module-private in-memory byte dict (the currently
+promoted closure does the latter, so stored bytes do not survive a process
+restart). The port now declares `read_stored` (verified read of published
+final bytes), the custody notes route every byte through the port and forbid
+byte retention in module state. Slice hashes recomputed for the changed
+modules; statuses unchanged.
+
+## Re-slice 2026-08-28 (4): access_control is cut along its named mechanisms
+
+The depth invariant (PR #26) exposed `access_control` as a bucket: nine
+responsibilities enumerated in Owns, 695 generated lines, and the evening's
+Route B failures all clustered on it. The cut follows the mechanisms the
+declaration could not name as one: `credential_vault` (peppered bearer-secret
+custody: mint, timing-safe verification, retirement) and `abuse_throttle`
+(the failure-window throttle state machine). Both operate over the
+caller-owned UoW, own no transaction and no transport, and the public
+admission surface of `access_control` is unchanged — its notes now name the
+delegate mechanisms instead of describing their internals.
+
+Reviewed finding recorded on the way: the promoted closure's throttle latch
+set `blocked_until` to the observation instant, so no throttle ever became
+active after the same instant — the smoke never restarts or replays, so OTK
+missed it. The `register_authentication_failure` note now closes the
+thresholds over `config.authentication` (block after
+`failures_before_throttle` failures for `throttle_seconds`).
+
+Every module now carries a structured Depth assessment (`kind: deep` with one
+hidden mechanism, or `kind: facade` with delegates); `api` remains outside
+State 3 — a declared gap for a follow-up, not silently waived.
+
+## Re-slice 2026-08-28 (5): unscoped grants carry unscoped authority
+
+The router rules never build an EntityScope for effect authorizations while
+require_mutation_authorization demanded a scoped decision for every
+revision-bearing mutation — confirm, update, payment, source attach, and
+archive were unreachable through the transport (the smoke stops at
+create-draft, which needs no scope, so no gate saw it; the live-data replay
+did). The note now states the Q1 semantics explicitly: an absent entity_scope
+carries unscoped capability authority; a present scope must match its target.
+Slice hashes recomputed; statuses unchanged.
+
+## Re-slice 2026-08-29: access_control closes the authenticated node boundary
+
+Ten independent Microscope samples exposed one deterministic type break and
+several correlated depth leaks: the local resolver returned raw M17 while
+authorization required M39; caller-supplied or constant abuse contexts leaked
+the throttle mechanism; lifecycle commands carried asserted M01 provenance as
+if it were authentication; scope keys could omit fields or collide; audit
+primary keys could reuse stable domain identities; and unexpected exception
+rollback was not closed.
+
+The accepted A03/A11 design is now lowered as one complete admission mechanism.
+M17 has an exact `principal_id` binding to its M02 machine principal. M39 carries
+that bound M17 only for `local_node`; authorization consumes M39, and the typed
+`require_authenticated_local_node` seam projects M17 into Invoice/Registry
+domain calls without reflection or cross-module auth leakage. Access control
+internally derives bounded known/unknown abuse contexts, canonical complete M65
+scope hashes, and fresh audit UUIDs. Enrollment bootstrap is closed to the sole
+empty-installation owner case; later enrollment, rotation, revocation, and grant
+provisioning require a separately authenticated owner/operator M39. Every
+unexpected failure and lifecycle/authorization refusal rolls back explicitly.
+
+All 23 final module slices were recomputed because M39 and router/persistence
+closure participate in downstream packets. `design_module_review --review`
+reported zero blocks and zero review findings for every slice; access_control
+retains `PASS_INTERNAL_VARIATION` because its observable behavior is now closed
+while local implementation structure may still vary behind the named seams.
+
+## Re-slice 2026-08-30: access control becomes a facade over deep mechanisms
+
+The next official Route B run still produced stubs in all ten Microscope
+samples. The earlier `credential_vault` and `abuse_throttle` extraction was
+correct but insufficient: the residual module still owned three independent
+stateful mechanisms — authentication admission, capability-grant evaluation
+and provisioning, and principal/credential lifecycle. This correlated directly
+with the generator's repeated stub and missing-contract failures.
+
+The accepted A03/A11 boundary is retained as the public `access_control`
+facade, while its mechanisms are now closed in `authentication_admission`,
+`capability_grants`, and `principal_lifecycle`. `security_evidence` owns fresh
+M111 identity issuance, and contract-only `access_control_errors` preserves one
+cycle-free refusal taxonomy. The facade performs typed delegation only; it may
+not open a UoW, reproduce transaction policy, use reflection, or invent a
+fallback implementation.
+
+All 28 assembled module slices were recomputed. Structural review reports zero
+blocks and zero review findings for every slice. The four behavioral mechanism
+modules and the facade remain `PASS_INTERNAL_VARIATION`; the contract-only error
+module is `PASS` because it owns no behavior that may vary.
+
+## Re-hash 2026-08-30: design labels leave the notes, the principal kind gets a catalogue
+
+The split's own route reached verification and the runtime smoke rejected a
+freshly enrolled owner: the generated `authentication_admission` compared
+`principal_kind == 'M02'` and `capability_grants` required
+`contract_version == "M02"`. The notes named subjects by their design labels
+("exact M02/M17 subject", "complete M39") and the generator turned a label
+into vocabulary the specification never declared; the pre-split
+`access_control` never compared the kind at all, which is why it passed.
+
+`rules.principal_catalogue` is now the single machine-readable home of the
+principal-kind vocabulary (`cabinet_owner`, `operator`, `local_backend_node`,
+the owner/operator set, and the `cabinet-web-sync-v1` node contract version),
+placed under A03/A11 in the data closure. Fifteen notes name
+`CabinetPrincipal`, `CabinetNodeIdentity`, `AuthenticatedPrincipal`,
+`InvoiceWorkPage` and the catalogue values instead of labels; the State 1
+vocabulary `cabinet_owner` replaces the prose kind `owner`.
+
+The changed module slices were re-hashed. Structural review reports zero
+blocks and zero findings for every re-hashed slice; review statuses are
+unchanged because no contract, ownership or mechanism moved — only the words
+the generator reads.
+
+## Re-hash 2026-08-30: the ports get their declared providers
+
+`pull_invoice_package` and `open_verified_source` returned ports whose
+concrete implementation existed nowhere in the design; fifteen generated
+candidates invented a private stream class and the rest left the function a
+stub. The State 6 lint `interface_without_provider` (spec-workbench PR #31)
+now names that gap and its repair. `InvoiceExchangeInvoicePackageStream`
+(parts in manifest order, read in order until exhausted) and
+`SourceCustodySourceDownload` (retained ContentReference and verified payload)
+are planned, contracted and noted method by method; the notes name them
+instead of "module-owned concrete". The manifest source reference is a
+ContentReference whose content_id is the source identity, matching the local
+Backend wire model; the SourceContentReference for custody lookup comes from
+the resolved working set. Structural review reports zero blocks and zero
+findings; statuses unchanged.
+
+## Re-slice 2026-08-31: runtime settings become a typed startup boundary
+
+A18 is closed by one deterministic `runtime_settings` provider. The provider
+compiles only the project-declared runtime-settings IR into one typed
+`RuntimeSettings` snapshot. `bootstrap` is the sole caller of
+`load_runtime_settings`; behavioral modules receive typed fields and do not
+receive environment names, defaults, configuration tables, or configuration
+values in their notes or local LLM slices.
+
+All 29 module slices were recomputed after the A18 model, provider, startup
+boundary, consumer wiring, and prompt-data cleanup. Structural review reports
+zero blocks and zero findings for the refreshed slices. The accepted product
+constraints remain project data: they are not prerequisites baked into the
+generic producer.

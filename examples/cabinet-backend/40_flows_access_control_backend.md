@@ -15,7 +15,8 @@ the deterministic `module:api` owns HTTP assembly.
 ### Steps
 
 1. `module:bootstrap` resolves the required database URL and credential pepper
-   from the configured environment-variable names.
+   from the configured environment-variable names and builds the application
+   through `capability:bootstrap.create_local_app`.
 2. It constructs `PostgresAccessControlBackend`; missing or unusable secure
    configuration stops startup.
 3. It passes the concrete object through the `AccessControlBackend` port to
@@ -50,8 +51,11 @@ transactions, throttling state, and audit evidence. No HTTP/MCP route participat
 ### Steps
 
 1. The offline command verifies that it runs as the configured deployment owner.
-2. Enrollment supplies a distinct display name and explicit non-empty exact
-   capability set; rotation/revocation supplies one exact principal identity.
+2. Enrollment through `capability:bootstrap.enroll_local_agent` supplies a
+   distinct display name and an explicit non-empty exact capability set;
+   `capability:bootstrap.rotate_local_agent_credential` and
+   `capability:bootstrap.revoke_local_agent` supply one exact principal
+   identity.
 3. `PostgresAccessControlBackend` performs the requested lifecycle transition in
    one PostgreSQL transaction and appends security evidence.
 4. Enrollment or rotation returns the new plaintext credential exactly once;

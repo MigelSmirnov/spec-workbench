@@ -10,7 +10,7 @@ Plaintext bearer material remains one-time output/input data and is never a tabl
 
 ## Model M108 — AccessCredentialRecord
 
-Fields: `credential_id: str`, `subject_kind: str`, `subject_id: str`, `channel: str`, `secret_hash: str`, `status: str`, `issued_at: datetime`, `rotated_from_credential_id: str | None`, `revoked_at: datetime | None`, `last_authenticated_at: datetime | None`.
+Fields: `credential_id: str`, `subject_kind: CredentialSubjectKind`, `subject_id: str`, `channel: str`, `secret_hash: str`, `status: str`, `issued_at: datetime`, `rotated_from_credential_id: str | None`, `revoked_at: datetime | None`, `last_authenticated_at: datetime | None`.
 
 Stores one credential verifier without the reusable bearer secret. `subject_kind` separates human/plugin principals from local-node credentials without changing M02/M17 identity.
 
@@ -66,7 +66,7 @@ Every `evidence_id` names one immutable security event. Equal projected fields a
 
 ## Model M112 — SourceUploadHandoffRecord
 
-Fields: `handoff_id: str`, `card_id: str`, `source_id: str`, `expected_revision: CardRevisionReference`, `principal_id: str`, `actor: ActorReference`, `secret_hash: str`, `status: str`, `issued_at: datetime`, `expires_at: datetime`, `consumed_at: datetime | None`, `revoked_at: datetime | None`.
+Fields: `handoff_id: str`, `card_id: str`, `source_id: str`, `expected_revision: CardRevisionReference`, `principal_id: str`, `actor: ActorReference`, `secret_verifier: str`, `status: str`, `issued_at: datetime`, `expires_at: datetime`, `consumed_at: datetime | None`, `revoked_at: datetime | None`.
 
 Durable upload-handoff row containing the public M15 facts plus the protected verifier; the returned `SourceUploadHandoff` remains verifier-free.
 

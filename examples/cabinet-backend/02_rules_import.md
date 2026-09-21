@@ -1,6 +1,6 @@
 # State 2 — Cabinet Backend import and durable-acceptance rules
 
-## Accepted decision
+## Accepted decision A20 — VPS-to-local import and durable acceptance
 
 ### Status
 
@@ -26,6 +26,25 @@ transport delivery
 ```
 
 ---
+
+### Normative rules
+
+The lettered sections below are the normative rules of this decision: core
+invariants (A), accepted Card lifecycle policy (B), manifest completeness and
+atomic acceptance (C), validation outcomes (D), quarantine rules (E),
+duplicate handling (F), state transitions (G), reconciliation and retention
+consequences (H), archive visibility and downstream eligibility (I), and the
+primary enforcement ownership for later State 3 (J).
+
+### Formal invariants
+
+```text
+invoice_id AND content_hash <-> one_accepted_revision
+accepted_revision = immutable
+same_manifest_replayed -> same_import
+business_acceptance = atomic(card, required_sources)
+transport_outcome -/> business_acceptance
+```
 
 ### A. Core invariants
 
@@ -416,6 +435,7 @@ state machine has several records.
 ### Required tests
 
 1. Replaying the same idempotency key with the same manifest returns the same
+   [witness: verification:witness_A20]
    logical outcome and creates no duplicate records.
 2. Reusing an idempotency key with a different manifest is rejected as an
    idempotency conflict.
@@ -441,6 +461,13 @@ state machine has several records.
 12. VPS source bytes remain ineligible for retention release until the exact Card
     revisions and required sources have durable accepted evidence and no blocking
     quarantine remains.
+
+### Consequence
+
+Import is a deterministic, idempotent, and atomic acceptance boundary: the
+archive holds exactly what Cabinet published, quarantine absorbs everything
+questionable without loss, and downstream eligibility flows only from durable
+verified custody.
 
 ### K. Remaining import-policy questions
 

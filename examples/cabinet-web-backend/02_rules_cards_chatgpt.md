@@ -39,6 +39,7 @@ duplicate_candidate -/> automatic_merge_or_confirmation
 ### Required tests
 
 1. Stale revision updates fail without changing the current Card.
+   [witness: verification:witness_A01]
 2. Equal titles, contacts, invoice numbers, or totals do not collapse distinct
    Card IDs.
 3. Confirmed Invoice facts cannot be edited through the draft operation.
@@ -74,6 +75,15 @@ identity, validation, revision, duplicate, or source semantics.
 9. The plugin exposes only named typed capabilities backed by existing Cabinet
    application behavior; it cannot accept arbitrary operation names or generic
    executable payloads.
+10. Full line capture is a product invariant (D0-011): every commercial source
+    row is one Invoice Line and a synthetic aggregate line is forbidden; totals
+    and arithmetic checks never replace lines. Confirmation carries the
+    caller's `source_line_count` and `line_capture_complete`; the trusted check
+    before the confirmation effect refuses an incomplete statement, a count
+    that differs from the Card lines, or a missing statement, and warning
+    acknowledgement never bypasses it. The proof is recorded as M180 evidence
+    bound to the exact committed card hash, separate from the Card; the lines
+    of a confirmed Invoice change only through a separate explicit revision.
 
 ### Formal invariants
 
@@ -90,6 +100,7 @@ confirmation_absent_or_declined -> no_effect
 ### Required tests
 
 1. Extraction uncertainty is returned for review and does not get filled by a
+   [witness: verification:witness_A02]
    backend default.
 2. Read-only searches leave all durable state unchanged.
 3. Confirmation of revision A cannot authorize revision B after a concurrent
@@ -137,6 +148,37 @@ identity, or truthful partial-outcome rules.
     synchronization entity, and current lifecycle state on every request.
 11. Revocation prevents new actions immediately without changing Card or node
     business identity.
+12. Every active M17 node is bound to exactly one active M02
+    `local_backend_node` principal. Local-node authentication returns one M39
+    containing both identities; authorization is evaluated against the M02
+    principal, while synchronization operations receive only the bound M17.
+13. M39 is the only accepted authentication proof for capability provisioning,
+    enrollment after bootstrap, rotation, and revocation. An M01
+    `ActorReference` carried in a command or request is provenance only and
+    grants no authority.
+14. The nullable entity scope has one collision-resistant canonical key: the
+    lowercase SHA-256 digest of domain tag `cabinet-scope-v1` (the data
+    provider's `ENTITY_SCOPE_DOMAIN_TAG`) immediately followed by the canonical
+    UTF-8 JSON object. The object has one key `scope`: null when unscoped, and
+    when scoped an object with exactly `entity_id`, `entity_kind`, and
+    `revision` — null or the JSON-mode dump of the complete M65 revision with
+    `observed_at` normalized to timezone-aware UTC; keys are sorted, separators
+    are compact, non-ASCII is preserved. Delimiter concatenation, another
+    prefix, and omitted scope fields are forbidden; a generation that changes
+    the key orphans every persisted grant.
+15. Initial owner enrollment is the sole unauthenticated lifecycle exception:
+    it is allowed only at the protected operator boundary when no owner or
+    operator exists. Every later enrollment, rotation, revocation, and grant
+    provisioning requires an active owner/operator M39 supplied as a separate
+    operation argument.
+16. Local-node enrollment is one protected operator operation under an active
+    owner/operator M39. In one transaction it creates the M02
+    `local_backend_node` principal, the M17 node bound to it under the
+    negotiated node contract version, and the node-subject local-node
+    credential; it returns the node-subject bearer exactly once. Principal
+    enrollment never accepts the `local_backend_node` kind and never mints a
+    principal-subject credential for a node; an existing node identity is
+    never re-bound or updated — re-enrollment is another node.
 
 ### Formal invariants
 
@@ -157,11 +199,40 @@ identifier_known -/> authorization
 private_grant_store_access -/> accepted_composition
 local_node_credential -/> human_or_operator_capability
 human_browser_credential -/> synchronization_capability
+local_node_context
+-> active_M02_machine_principal
+AND active_bound_M17_node
+AND node.principal_id = principal.principal_id
+
+authenticated_lifecycle_actor = M39 -/> asserted_M01
+local_node_enrollment
+-> active_owner_or_operator_M39
+   AND new_M02_local_backend_node
+   AND new_M17_bound_to_that_principal
+   AND node_subject_local_node_credential
+principal_enrollment(local_backend_node) -/> accepted
+scope_key = sha256("cabinet-scope-v1" || canonical_complete_M65_json)
 ```
+
+The machine-readable single home for the closed identity form is the State 1
+model vocabulary: M136 `ActorType`, M137 `PrincipalKind`, M138
+`CredentialSubjectKind`, and M139 `CabinetNodeKind`. Notes and runtime code use
+only the generated typed symbols. Owner/operator membership is the exact pair
+of corresponding `PrincipalKind` members; it is not copied into a second
+catalogue. The synchronization contract version remains policy in
+`rules.principal_catalogue.node_contract_version` until a deterministic policy
+provider owns it.
+
+This paragraph deliberately supersedes A03's earlier placement of the closed
+kind vocabulary in `rules.principal_catalogue`; the authorization invariants and
+the contract-version rule are unchanged. The revision applies the accepted
+State 1 taxonomy and removes product values from LLM context rather than
+changing who may authenticate or authorize an operation.
 
 ### Required tests
 
 1. Each channel is rejected when presenting another channel's credential.
+   [witness: verification:witness_A03]
 2. A valid ID without exact capability authorization cannot read or mutate the
    entity.
 3. Revoked principals and node credentials cannot start new operations.
@@ -174,6 +245,15 @@ human_browser_credential -/> synchronization_capability
 8. The runtime composition and verification harness provision grants only
    through the public operation and remain independent of private storage
    names or layouts.
+9. Every local-node credential resolves an M39 whose M02 and M17 binding is
+   exact; missing, inactive, cross-installation, or contract-incompatible
+   bindings fail before authorization or domain dispatch.
+10. Scope-key tests include delimiter-confusable values, null versus populated
+    scopes, and revisions differing in every constituent field; no pair
+    collides or inherits authority.
+11. An asserted M01 cannot enroll, rotate, revoke, or provision. Bootstrap is
+    accepted exactly once only when the protected installation has no owner or
+    operator.
 
 ### Consequence
 
@@ -217,6 +297,7 @@ unknown_outcome -> reconcile_same_identity_before_mutation_retry
 ### Required tests
 
 1. Concurrent identical effects yield one logical result.
+   [witness: verification:witness_A04]
 2. Concurrent updates from the same expected revision cannot both commit.
 3. Conflicting idempotency reuse is rejected before mutation.
 4. Failure between preparation and commit exposes no false success.

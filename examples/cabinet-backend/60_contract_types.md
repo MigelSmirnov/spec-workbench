@@ -27,6 +27,15 @@ references. It never accepts embedded mutable invoice/estimate replacements.
 
 ---
 
+## `Clock`
+
+`kind: interface` Protocol owned by `domain_models`:
+
+- Clock.now(self) -> datetime
+
+The one time source every service that stamps evidence retains at
+construction; implementations return timezone-aware UTC.
+
 ## `AccessControlBackend`
 
 Kind: interface.
