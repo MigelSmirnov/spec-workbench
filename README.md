@@ -324,7 +324,7 @@ the checks available when changes are authored through a GitHub connector
 that cannot execute local commands.
 
 The cross-repository admission job additionally checks out the private
-`MigelSmirnov/panelforge-sandbox` repository and runs the real Factory
+`MigelSmirnov/code-factory` repository (branch `main`) and runs the real Factory
 validator. It authenticates with a dedicated read-only deploy key whose
 private half is stored in `spec-workbench` as the Actions secret
 `FACTORY_REPO_DEPLOY_KEY`; no personal GitHub token is exposed to the job.
