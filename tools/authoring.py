@@ -31,6 +31,8 @@ def _print_next(payload: dict[str, object]) -> None:
     for doc in authoring.get("read") or []:
         where = f"{doc['path']}#{doc['section']}" if doc.get("section") else doc["path"]
         print(f"Read:    {where}")
+    for question in authoring.get("ask") or []:
+        print(f"Ask:     {question}")
 
 
 def build_parser() -> argparse.ArgumentParser:

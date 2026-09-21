@@ -130,7 +130,9 @@ def _result(
         "blocked": blocked,
         "reason": reason,
         "action": _action(sequence, phase, project_text, use_next=use_next),
+        "purpose": str(_phase(sequence, phase).get("purpose") or ""),
         "read": _read(sequence, phase),
+        "ask": [str(item) for item in _phase(sequence, phase).get("questions") or []],
         "summary": summary or {},
         "findings": findings or [],
     }
@@ -544,11 +546,15 @@ def main(argv: list[str] | None = None) -> int:
     else:
         print(f"Authoring next: {payload['phase']}")
         print(payload["reason"])
+        if payload.get("purpose"):
+            print(f"purpose: {payload['purpose']}")
         if payload.get("action"):
             print(payload["action"]["command"])
         for doc in payload.get("read", []):
             where = f"{doc['path']}#{doc['section']}" if doc.get("section") else doc["path"]
             print(f"read: {where}")
+        for question in payload.get("ask", []):
+            print(f"ask: {question}")
     return 1 if payload["blocked"] else 0
 
 

@@ -14,10 +14,12 @@ structurally valid but leave important engineering decisions unresolved.
 - `AGENTS.md` tells agents how to work in the repository.
 - `skills/spec-authoring/SPEC_STANDARD.md` defines the existing factory
   specification format.
-- `skills/spec-authoring/SKILL.md` defines the specification-authoring
-  methodology.
+- `skills/spec-authoring/SKILL.md` is the entry page. The methodology itself is
+  delivered phase by phase by `authoring next`: the purpose, reading and questions
+  of each phase live in `skills/spec-authoring/authoring_sequence.json`.
 - `skills/spec-authoring/NOTE_GATE.md` defines the notes gate; note-writing
-  guidance lives in `SKILL.md` (State 7) and `tools/NOTES_PROPAGATION_WORKBENCH.md`.
+  guidance is what `authoring next` returns for `state7_notes`, and
+  `tools/NOTES_PROPAGATION_WORKBENCH.md`.
 
 ## Repository entry point
 
