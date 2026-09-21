@@ -115,7 +115,7 @@ editor, deploy, handoff, verification и terminal OTK записывают ег�
 ### Обязательный префикс
 ```
 ПРАВИЛЬНО: "parse_response: [VALIDATION_ERROR] MUST raise ValueError when JSON cannot be parsed"
-ПРАВИЛЬНО: "Database.__init__: [CONFIG_REFERENCE] MUST read db path from = config.storage.db_path"
+ПРАВИЛЬНО: "Database.__init__: [BEHAVIOR] MUST open the file named by the imported DATABASE_FILE_NAME constant"
 
 НЕПРАВИЛЬНО: "opens sqlite3.connect and calls _create_tables"
 НЕПРАВИЛЬНО: "__init__: opens sqlite3.connect"  ← неоднозначно, чей __init__?
@@ -144,9 +144,13 @@ editor, deploy, handoff, verification и terminal OTK записывают ег�
 
 Текущий реестр:
 - `[BEHAVIOR]` — доменное поведение, когда более точный generic-класс не подходит.
-- `[CONFIG_REFERENCE]` — требование ссылается на `= config.*`.
-- `[MODEL_REFERENCE]` — требование ссылается на `= models.*`.
-- `[RULE_REFERENCE]` — требование ссылается на `= rules.*`.
+- `[CONFIG_REFERENCE]` — требование ссылается на `= config.*`. Адрес законен только для листа, который
+  читает детерминированный backend (§15.3.1); настройку, которую читает генерируемый код, note называет
+  полем объекта настроек (§6.11).
+- `[MODEL_REFERENCE]` — требование ссылается на `= models.*`: закрытое перечисление или схему модели.
+- `[RULE_REFERENCE]` — требование ссылается на `= rules.*`. Адрес законен только внутри IR
+  детерминированного backend-а (§15.3.1); значение политики, которое читает генерируемый код, note
+  называет именем импортируемой константы (§6.10).
 - `[FORBIDDEN_ACTION]` — запрет действия: MUST NOT, never, no file I/O, no direct access.
 - `[SCHEMA_CONSTRAINT]` — форма модели/DTO/полей, required/optional/no extra fields.
 - `[VALIDATION_ERROR]` — invalid/unsupported/missing input, raise/reject/error response.
@@ -193,7 +197,11 @@ editor, deploy, handoff, verification и terminal OTK записывают ег�
 - Очевидные вещи: `"save_result: saves result to database"` — это и так понятно из имени
 - Реализацию: не пиши алгоритм построчно, пиши требования к поведению
 - Дублирование contracts: сигнатура уже есть в contracts, не повторяй
-- Inline-данные: таблицы соответствий, allow-lists, пороги, TTL, пути, рейтинги, размеры, словари alias'ов. Для них используй `config`, `models` или `rules`, а note оставляй address-only: `MUST use = rules.some_policy`.
+- Inline-данные: таблицы соответствий, allow-lists, пороги, TTL, пути, рейтинги, размеры, словари alias'ов. Значение размещается процедурой 15.2 и доходит до кода одним из трёх путей §15.3.1; note называет
+  перечисление адресом `= models.SomeStatus`, константу — именем импортируемого символа
+  (`the imported RETRY_LIMIT constant`), настройку — полем объекта настроек. Форма
+  `MUST use = rules.some_policy` для значения, которое читает генерируемый код, невалидна: модель не
+  получает значений (§15.9).
 
 **Несовпадение форм на стыке вызова:**
 
@@ -237,7 +245,10 @@ process_upload: [ORCHESTRATION] MUST call validate_file with the uploaded byte c
 - `role` имеет служебное значение `"data"`; `schema_version` на верхнем уровне — целое число версии секции.
 - Имена `role` и `schema_version` зарезервированы и не используются внутри вложенных namespace.
 - В `config` идут небольшие runtime/product knobs, которые могут меняться независимо от моделей предметной области.
-- Notes ссылаются на config адресно: `"calc_generate_endpoint: [CONFIG_REFERENCE] MUST enforce rate limit using = config.public_calc.rate_limit"`.
+- Значение `config`, которое читает генерируемый код, доходит до него через модуль настроек запуска
+  (§6.11), а не адресом в note: note называет поле объекта настроек. Адрес `= config.*` в note законен
+  только для листа, который читает детерминированный backend, — сегодня это
+  `= config.persistence.<имя>_table_name` и `= config.persistence.storage_schema_revision` (§15.3.1).
 - Не клади в `config` большие структурные доменные таблицы, enum definitions или Pydantic schema semantics.
 
 ---
@@ -422,7 +433,10 @@ project policy data и зарезервированные versioned backend IR.
   наследовать поля другой версии.
 - Не смешивай `rules` с `config`: config — runtime knobs, rules — domain/policy semantics.
 - Не переносись сюда schema/model definitions.
-- Notes ссылаются на rules адресно: `"derive_policy: [RULE_REFERENCE] MUST use = rules.example_policy.threshold"`.
+- Значение политики, которое читает генерируемый код, живёт константой поставщика данных (§6.10), и note
+  называет импортируемый символ. Адрес `= rules.*` в note законен только внутри IR детерминированного
+  backend-а, например `"request_hash: [DETERMINISM_OR_ORDERING] MUST return the canonical digest under
+  = rules.canonical_digest_backend.recipes.request_hash"` (§15.3.1).
 
 ### 6.0 Закрытый словарь backend IR
 
@@ -1203,6 +1217,157 @@ Argon2id (`profile`) над `HMAC-SHA256(pepper, secret)`; проверка —
 Версия 2 не расширяется: она по-прежнему владеет только операцией настенных
 часов и служит спекам, где длительность измеряют другие модули.
 
+### 6.10 `data_provider_backend/v1`
+
+Поставщик данных — детерминированный provider-модуль §15.9: единственный дом
+значений политики, которые читает генерируемый код. Модуль состоит только из
+типизированных констант; поведения, выборок, проверок и значений по умолчанию в
+нём нет.
+
+```json
+{
+  "rules": {
+    "data_provider_backend": {
+      "kind": "data_provider_backend",
+      "schema_version": 1,
+      "backend": {"emitter": "python_constant_data_v1"},
+      "wiring": {"module": "data_provider", "models_module": "app.models"},
+      "constants": {
+        "RETRY_LIMIT": {"value_type": "positive_integer", "value": 5},
+        "WAIT_REASONS": {"value_type": "string_tuple", "value": ["service_unreachable", "outcome_unknown"]},
+        "FAILURE_DELAYS": {
+          "value_type": "record_tuple",
+          "row_model": "FailureDelayRule",
+          "value": [{"failure_count": 1, "delay_seconds": 0}]
+        }
+      }
+    }
+  }
+}
+```
+
+**Закрытая форма (нарушение = DEFECT эмиттера):**
+
+- Корень содержит ровно `kind`, `schema_version`, `backend`, `wiring`,
+  `constants`; `backend` равен `{"emitter": "python_constant_data_v1"}`;
+  `wiring` содержит ровно `module` и `models_module`.
+- `module_functions[wiring.module]` перечисляет ровно объявленные константы и
+  ничего больше; модуль, владеющий чем-то ещё, этим backend-ом не эмитируется.
+- Имя константы — идентификатор `UPPER_SNAKE`; `constants` не пуст.
+- Строка константы содержит ровно `value_type` и `value`, а для `record_tuple` —
+  ровно `value_type`, `row_model`, `value`.
+
+**Типы значений и сигнатура доступа, которую получает consumer:**
+
+| `value_type` | значение | тип символа |
+|---|---|---|
+| `string` | непустая строка | `str` |
+| `positive_integer` | целое больше нуля | `int` |
+| `boolean` | `true` или `false` | `bool` |
+| `string_tuple` | непустой список непустых строк без повторов | `tuple[str, ...]` |
+| `string_mapping` | непустой объект строка → строка | `Mapping[str, str]` (только для чтения) |
+| `record_tuple` | непустой список записей `row_model` | `tuple[RowModel, ...]` |
+
+`row_model` — объявленная модель с полями, каждое из которых `str` или `int`;
+ключи каждой записи в точности равны полям модели; строковая ячейка непуста,
+целая ячейка — целое (ноль допустим). Модуль импортирует `row_model` из
+`wiring.models_module`. Константы эмитируются в алфавитном порядке имён.
+
+**Правила для автора спеки:**
+
+- У значения один дом (§15.4): константа. То же значение не остаётся в другом
+  namespace `rules` или `config` и не повторяется в contracts и notes.
+- Consumer объявляет ребро `module_internal[consumer][wiring.module]` со списком
+  символов, которые называет; note называет символ по имени: `the imported
+  RETRY_LIMIT constant`. В локальную спеку consumer-а попадают имя и тип символа,
+  значение — никогда.
+- **Одна точная запись — одна скалярная константа.** Consumer, которому нужен
+  один элемент набора или одно значение отображения, получает отдельную
+  константу `string`, а не позицию в `string_tuple` и не ключ `string_mapping`:
+  позиция в массиве идентификатором не является (§15.4).
+- Note, называющая `record_tuple`, в той же note называет хотя бы одно поле
+  `row_model`, по которому выбирается запись, либо контракт, чьи notes это
+  делают.
+- **Literal-check.** Значение константы `string`, импортированной consumer-ом, не
+  встречается литералом в его коде. Проверяются значения длиной от трёх символов,
+  не совпадающие с именем поля какой-либо модели. `string_tuple`,
+  `string_mapping` и `record_tuple` — структурный словарь, который код consumer-а
+  законно называет; их шов — сам типизированный импорт.
+- Адрес `rules.data_provider_backend.constants.<SYMBOL>` достижим (§15.3) через
+  `wiring.module`; ссылка из note ему не нужна и не пишется.
+
+### 6.11 Модуль настроек запуска (`runtime_settings`)
+
+Настройки запуска — второй детерминированный provider §15.9: значения `config`,
+которые зависят от окружения процесса. Backend выбирается владением: модуль
+`runtime_settings`, которому принадлежит ровно одна функция
+`load_runtime_settings`, эмитируется детерминированно; отсутствие таблицы тогда
+является DEFECT, а не поводом генерировать модуль моделью.
+
+```json
+{
+  "config": {
+    "runtime_environment_variables": {
+      "kind": "runtime_environment_variables",
+      "schema": {
+        "closed": true,
+        "entry_fields": ["target", "value_type", "requiredness", "normalization",
+                         "default_when_absent", "accepted_values", "validation_reference"],
+        "value_types": ["string", "positive_integer"],
+        "requiredness_values": ["required", "optional"],
+        "normalization_values": ["none", "base10_integer"],
+        "default_environments": ["development", "test", "production"],
+        "constraint_kinds": ["less_than_or_equal"]
+      },
+      "variables": {
+        "SEARCH_MAX_LIMIT": {
+          "target": "RuntimeSettings.search_max_limit",
+          "value_type": "positive_integer",
+          "requiredness": "optional",
+          "normalization": "base10_integer",
+          "default_when_absent": {
+            "development": "= config.search.max_limit",
+            "test": "= config.search.max_limit",
+            "production": "= config.search.max_limit"
+          },
+          "accepted_values": null,
+          "validation_reference": null
+        }
+      },
+      "constraints": []
+    }
+  }
+}
+```
+
+**Закрытая форма:**
+
+- `kind` равен `runtime_environment_variables`; `schema.closed` равен `true`;
+  `schema.entry_fields` содержит все семь полей записи; `value_types`,
+  `requiredness_values`, `normalization_values` и `constraint_kinds` — непустые
+  подмножества закрытых наборов backend-а: типы `string`,
+  `runtime_environment`, `origin`, `comma_separated_list`, `positive_integer`,
+  `boolean`; обязательность `required`, `optional`, `required_in_production`;
+  нормализации `none`, `trim_lowercase`, `canonical_origin`, `split_comma_trim`,
+  `base10_integer`; ограничение `less_than_or_equal`. `default_environments` —
+  ровно `development`, `test`, `production`.
+- Ключ `variables` — имя переменной окружения; `target` называет поле объявленной
+  модели настроек, которую возвращает `load_runtime_settings`.
+- Значение по умолчанию записывается ссылкой `= config.<namespace>.<лист>` на
+  единственный дом значения; операнды `constraints` — ссылки на строки этой же
+  таблицы. Это ссылки блока данных на блок данных, которые §15.3 засчитывает как
+  достижимость; весь `config` считается потребляемым модулем настроек.
+
+**Правила для автора спеки:**
+
+- Настройку, которую читает генерируемый код, note называет полем объекта
+  настроек, полученного от `load_runtime_settings`, а не адресом `= config.*`.
+- Второго поставщика настроек не бывает: чтение окружения и значения по умолчанию
+  вне этого модуля — дефект.
+- Спека без модуля настроек не имеет пути от листа `config` к генерируемому
+  коду; такой лист либо читает детерминированный backend (§15.3.1), либо он
+  недостижим и является ошибкой спеки (§15.3).
+
 ---
 
 ## 7. imports
@@ -1244,8 +1409,26 @@ Argon2id (`profile`) над `HMAC-SHA256(pepper, secret)`; проверка —
 - `internal` — модуль → список экспортируемых символов (функции, классы, константы)
 - `module_internal` — явный граф зависимостей: consumer → provider → список
   импортируемых символов. Имена consumer/provider — логические ключи из
-  `module_functions`; каждый символ обязан принадлежать provider. Эта запись
-  имеет приоритет над эвристическим выводом зависимости из сигнатур и notes
+  `module_functions`; каждый символ обязан принадлежать provider. Объявленные
+  символы входят в локальную спеку consumer-а всегда
+- Проектор локальной спеки дополнительно выводит импорт из текста: имя символа,
+  экспортируемого другим модулем, встреченное **целым словом** в позитивном
+  тексте notes или в тексте contracts consumer-а, становится его обязательным
+  импортом. Выведенные символы **добавляются** к объявленным в `module_internal`,
+  а не заменяются ими; сгенерированный модуль без такого импорта отвергается.
+  Вывод применяется ко всем модулям, включая `models`. Отсюда правила имён:
+  - экспортируемая функция не носит имя параметра ни одного контракта: параметр
+    в сигнатуре consumer-а становится импортом функции, а внутри тела затеняет её;
+  - экспортируемая функция, носящая имя поля модели, превращает каждое упоминание
+    этого поля в note или contract любого модуля в импорт функции; для `models`,
+    который функций не импортирует, это остановка генерации. Такое имя допустимо,
+    только пока поле называют лишь модули, действительно вызывающие функцию;
+    новой функции такое имя не дают;
+  - экспортируемая функция не носит обиходное слово, которым notes пользуются
+    как словом (`inspect`, `author`, `activate`): такая фраза в note чужого
+    модуля становится ребром зависимости и может замкнуть цикл импортов;
+  - note, которая не должна создавать ребро, не называет чужой экспорт целым
+    словом
 - `module_internal[consumer][provider]` содержит **минимальный прямой runtime
   import surface** consumer-модуля, а не копию публичного API provider-а.
   Добавляй символ только если consumer обязан импортировать его для своих
@@ -1417,6 +1600,10 @@ Argon2id (`profile`) над `HMAC-SHA256(pepper, secret)`; проверка —
   валидации, не warning.
 - **Коллизия происхождения — всегда BLOCK:** builtin, модель, import,
   interface и union не могут неоднозначно владеть одним локальным именем.
+- Совпадение имени экспортируемой функции с именем поля модели или параметра
+  контракта коллизией происхождения типов не является и этой таблицей не
+  ловится; его регулируют правила имён раздела 7, потому что оно создаёт
+  выведенный импорт.
 - Таблицу происхождения строит один общий resolver; validator, inspector,
   slicing и generator обязаны использовать его, а не собственные списки.
   Проектные allowlist'ы известных типов запрещены.
@@ -1729,6 +1916,42 @@ Note обращается к данным **только адресом**. Во�
 - Таблицу достижимости строит тот же resolver, что и таблицу происхождения
   типов (§12). Отдельные проектные списки известных ключей запрещены.
 
+#### 15.3.1 Как значение доходит до кода
+
+Модель не получает значений (§15.9), поэтому адрес в note сам по себе ничего не
+доставляет. У значения, которое читает генерируемый код, ровно три пути; путь
+выбирается по тому, что это за значение, и у значения один дом (§15.4).
+
+| что это | дом значения | как note его называет | что видит модель |
+|---|---|---|---|
+| закрытый список вариантов: статусы, виды, коды | `models`, перечисление | `= models.ИмяПеречисления` | перечисление как тип |
+| константа или таблица политики: пороги, имена, префиксы, закрытые наборы, таблицы правил | константа поставщика данных (§6.10) | `the imported X constant` | имя символа и его тип |
+| настройка запуска, зависящая от окружения | `config`, через модуль настроек (§6.11) | поле объекта настроек | поле модели настроек и его тип |
+
+**Когда адрес `= …` в note законен:**
+
+- `= models.*` — перечисление или схема модели;
+- `= rules.<backend>.*` — лист IR зарегистрированного детерминированного
+  backend-а (§6.0–§6.10), например рецепт канонического дайджеста;
+- `= config.persistence.<имя>_table_name` и
+  `= config.persistence.storage_schema_revision` — листы, которые читает
+  persistence backend.
+
+Любой другой адрес `= rules.*` или `= config.*` помещает значение в локальную
+спеку модуля, и построение промпта останавливается как нарушение шва §15.9. Адрес,
+записанный без `=` — в обратных кавычках или словами, — не разыменовывается
+вовсе: до модели не доходит ни значение, ни символ, и она вынуждена значение
+сочинить. Обе формы невалидны для значения, которое читает генерируемый код.
+
+**Что считается достижимостью листа (§15.3):** ссылка `= …` из note или
+`properties` модуля; ссылка `= …` из другого блока данных, от которого есть путь
+к модулю; принадлежность листа блоку с `wiring.module` (так достижимы константы
+поставщика и IR backend-ов); для листов `config` — наличие модуля настроек
+(§6.11). Namespace `rules` или `config`, который не достижим ни одним из этих
+путей, — мёртвые данные: факт остаётся решением дизайна и в спецификацию не
+кладётся, либо получает один из трёх путей.
+
+
 ---
 
 ### 15.4 Каноническая форма блоков данных
@@ -1973,7 +2196,9 @@ deterministic persistence backend. LLM-module не получает это ут�
 - **Модель не видит значений.** В контекст модуля подаётся сигнатура доступа —
   имя модуля-носителя, имя символа и его тип, — но не значение. Блок данных
   является обычным provider-модулем; доступ к нему объявляется ребром
-  `module_internal` наравне с любой другой зависимостью (§7).
+  `module_internal` наравне с любой другой зависимостью (§7). Закрытая форма
+  provider-модуля — §6.10, модуля настроек запуска — §6.11; какой путь
+  принадлежит какому значению — §15.3.1.
 - **Literal-check.** Значение, объявленное в блоке данных, не должно
   встречаться литералом в коде модуля-потребителя. При эмиссии мимо модели это
   инвариант по построению; проверка сохраняется как ассерт сборки и ловит
@@ -2173,30 +2398,21 @@ deterministic persistence backend. LLM-module не получает это ут�
 {
   "standard_version": 2,
   "contracts": {
-    "fetch_data": "(url: str, timeout: int = 30) -> dict",
+    "fetch_data": "(url: str) -> dict",
     "transform": "(data: dict) -> list[Item]",
     "save": "(items: list[Item], path: str) -> None"
   },
   "notes": [
-    "fetch_data: [CONFIG_REFERENCE] MUST call requests.get using timeout from = config.fetch.timeout_seconds",
+    "fetch_data: [BEHAVIOR] MUST call requests.get with the timeout given by the imported FETCH_TIMEOUT_SECONDS constant",
     "fetch_data: [VALIDATION_ERROR] MUST raise on non-200 HTTP status",
     "fetch_data: [RETURN_SHAPE] MUST return response.json()",
     "transform: [BEHAVIOR] MUST filter items where status is active",
     "transform: [DETERMINISM_OR_ORDERING] MUST sort by created_at descending",
-    "save: [CONFIG_REFERENCE] MUST write JSON using = config.output.json_format"
+    "save: [BEHAVIOR] MUST write JSON indented by the imported JSON_INDENT constant and escape non-ASCII characters exactly when the imported JSON_ENSURE_ASCII constant is true"
   ],
   "config": {
     "role": "data",
-    "schema_version": 1,
-    "fetch": {
-      "timeout_seconds": 30
-    },
-    "output": {
-      "json_format": {
-        "indent": 2,
-        "ensure_ascii": false
-      }
-    }
+    "schema_version": 1
   },
   "models": {
     "role": "data",
@@ -2213,7 +2429,18 @@ deterministic persistence backend. LLM-module не получает это ут�
   },
   "rules": {
     "role": "data",
-    "schema_version": 1
+    "schema_version": 1,
+    "data_provider_backend": {
+      "kind": "data_provider_backend",
+      "schema_version": 1,
+      "backend": {"emitter": "python_constant_data_v1"},
+      "wiring": {"module": "data_provider", "models_module": "models"},
+      "constants": {
+        "FETCH_TIMEOUT_SECONDS": {"value_type": "positive_integer", "value": 30},
+        "JSON_INDENT": {"value_type": "positive_integer", "value": 2},
+        "JSON_ENSURE_ASCII": {"value_type": "boolean", "value": false}
+      }
+    }
   },
   "persistence": {},
   "properties": {
@@ -2229,30 +2456,39 @@ deterministic persistence backend. LLM-module не получает это ут�
     "third_party": ["import requests"],
     "internal": {
       "models": ["Item"],
+      "data_provider": ["FETCH_TIMEOUT_SECONDS", "JSON_ENSURE_ASCII", "JSON_INDENT"],
       "fetcher": ["fetch_data"],
       "transformer": ["transform"]
     },
     "module_internal": {
+      "fetcher": {
+        "data_provider": ["FETCH_TIMEOUT_SECONDS"]
+      },
       "transformer": {
         "models": ["Item"]
       },
       "saver": {
-        "models": ["Item"]
+        "models": ["Item"],
+        "data_provider": ["JSON_ENSURE_ASCII", "JSON_INDENT"]
       }
     }
   },
   "module_functions": {
     "models": ["Item"],
+    "data_provider": ["FETCH_TIMEOUT_SECONDS", "JSON_INDENT", "JSON_ENSURE_ASCII"],
     "fetcher": ["fetch_data"],
     "transformer": ["transform"],
     "saver": ["save"]
   },
-  "module_order": ["models", "fetcher", "transformer", "saver"],
+  "module_order": ["models", "data_provider", "fetcher", "transformer", "saver"],
   "module_paths": {},
   "default_module": "main"
 }
 ```
 
 **Примечания к примеру:**
+- значения `30`, `2` и `false` живут только в константах поставщика данных (§6.10): в сигнатуре
+  контракта и в notes их нет, потребители объявляют ребро `module_internal` и называют импортируемый
+  символ; адресов `= config.*` и `= rules.*` в notes нет (§15.3.1)
 - `module_paths` — пустой означает плоскую структуру (все файлы в корне)
 - `default_module` — `"main"` вместо `"app"`, потому что точка входа в этом проекте называется `main.py`
