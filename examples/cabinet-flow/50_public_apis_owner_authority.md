@@ -6,7 +6,7 @@ Authority binds the sole owner's decision to an exact effect. It does not
 authenticate the owner, schedule a run or invoke a service. Draft writes rely
 on flow activation; destructive operations can never receive a standing grant.
 
-## `public_op:owner_authority.owner_statement`
+## `public_op:owner_authority.generate_owner_statement`
 
 ### Owner
 

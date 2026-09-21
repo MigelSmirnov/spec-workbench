@@ -156,7 +156,7 @@ whole configuration.
 resolve_service_target
 resolve_credential
 release_ceilings
-manifest_revision
+pinned_manifest_revision
 load_installation
 ```
 
@@ -766,7 +766,7 @@ decide_approval
 authorization_for_effect
 grant_standing_approval
 revoke_standing_approval
-owner_statement
+generate_owner_statement
 waiting_for_owner
 ```
 

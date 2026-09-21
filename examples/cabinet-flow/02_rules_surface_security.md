@@ -455,3 +455,155 @@ caller_named_actor_kind OR caller_named_principal -> never
 Who is asking is decided by a secret the host holds and a binding the owner
 issued, never by anything the caller says about itself; the generated entrance
 has nothing left to invent.
+
+## Accepted decision A32 — value bytes and run spool are private files below the installation data root
+
+### Normative rules
+
+1. `module:value_store` keeps bytes below the installation `data_root` in the
+   content-addressed layout fixed by `rules.host_byte_storage`; StoredValue
+   metadata remains in the operational store. A completed object is named only
+   by its lowercase SHA-256 digest and is never overwritten.
+2. A write is streamed to a staging file created with exclusive permissions,
+   flushed with `os.fsync`, verified for digest and size, and published with
+   `os.replace` on the same filesystem. The containing directory is then
+   flushed. Failure removes only the incomplete staging file.
+3. `module:run_spool` keeps temporary bytes below the same `data_root`, in one
+   private directory per Run. A spool object is staged and atomically published
+   by digest by the same sequence, but is never part of a value-store backup or
+   promoted to StoredValue implicitly.
+4. All opened files use no-follow semantics where the host offers them; every
+   resolved path is checked to remain below its fixed root. Raw paths never
+   cross a module boundary. Startup refuses a root with group/other access or a
+   value/spool path that is a symlink.
+5. Terminal-run cleanup removes only the exact run directory after verifying
+   its ownership marker and containment. A crash may leave staging files; the
+   next open removes only incomplete staging files and terminal-run spool
+   directories confirmed from durable Run state.
+
+### Formal invariants
+
+```text
+published_bytes -> complete AND sha256_verified AND beneath_fixed_root
+spool_object -> belongs_to(exactly_one_live_run)
+raw_host_path_crosses_module_boundary -> never
+terminal_cleanup -/> stored_value OR sibling_run
+```
+
+### Required tests
+
+[witness: workbench:notes]
+
+1. A crash before and after publish exposes either no object or the complete
+   digest-verified object, never partial bytes.
+2. A symlink at any storage component is refused without reading or deleting
+   its target.
+3. Equal value bytes reuse one object; equal bytes in different live Runs remain
+   isolated in their run directories.
+4. Cleanup cannot remove a non-terminal Run, a StoredValue or a sibling Run.
+
+### Consequence
+
+Durable value bytes survive process restart and temporary run files remain
+isolated and reclaimable without turning host paths into product data.
+
+## Accepted decision A33 — service transport is HTTP-only in this release
+
+### Normative rules
+
+1. `module:service_transport` implements only manifest operations exposed on
+   `http_api`, using the pinned `httpx` dependency and the exact policy in
+   `rules.service_transport_runtime`. An operation exposed only through `mcp`
+   or `operator` is a typed unsupported-channel refusal before credential
+   resolution or any send.
+2. The manifest supplies the pinned instance base URL and operation HTTP
+   exposure. The transport may join only the declared relative path to that
+   base; an absolute operation URL, authority change, userinfo or fragment is
+   refused. Redirect following is disabled.
+3. One `httpx.Client` is created with environment trust disabled. The request
+   uses explicit connect/read/write/pool timeouts no greater than M48, bounded
+   streaming request and response bodies, and the installation-resolved header
+   values. No automatic retry occurs.
+4. TLS verification is mandatory for HTTPS. Plain HTTP is accepted only for a
+   manifest instance of class `local_dev` or `disposable_rig`; a production
+   target without HTTPS is refused before send.
+5. A failure before request bytes can be written is `definitely_not_sent`; once
+   any request bytes may have crossed the socket it is conservatively
+   `possibly_sent`. Response status never by itself establishes business
+   success.
+
+### Formal invariants
+
+```text
+transport_channel = http_api
+channel IN {mcp, operator} -> refusal_before_send
+production_target -> scheme = https
+transport_attempts_per_call <= 1
+redirect_followed -> never
+```
+
+### Required tests
+
+[witness: workbench:notes]
+
+1. MCP-only and operator-only operations perform no DNS, credential lookup or
+   socket call.
+2. A cross-host redirect, absolute exposure and production HTTP target are
+   refused.
+3. Proxy environment variables and ambient certificates cannot redirect the
+   client; no retry follows timeout or disconnect.
+4. Request and response overflow fail without returning truncated valid data.
+
+### Consequence
+
+The release can perform bounded HTTP integration while every transport without
+an accepted adapter stays visibly and safely unavailable.
+
+## Accepted decision A34 — untrusted functions run under bubblewrap and kernel-owned rlimits
+
+### Normative rules
+
+1. Linux `bubblewrap` is the only isolation backend for this release. Startup
+   requires the executable and exact arguments fixed by
+   `rules.sandbox_runtime`; absence or a failed self-test keeps the supervisor
+   unhealthy.
+2. Each execution uses fresh user, PID, IPC, UTS, cgroup and network namespaces,
+   a read-only runtime and input mount, an empty environment, a private proc/dev,
+   and one bounded writable scratch/output exchange. No host directory is
+   mounted except those exact read-only inputs and private exchange paths.
+3. The kernel launches bubblewrap with `subprocess.Popen` without a shell and
+   applies `resource.setrlimit` before execution for CPU, address space, file
+   size, open files and process count. The parent additionally enforces the
+   monotonic wall deadline and aggregate output/scratch ceilings and kills the
+   whole process group on any breach.
+4. Entropy devices are absent, network is unshared, environment is cleared and
+   the runtime contains no clock API offered to submitted code. A denied access
+   or limit signal is a non-successful closed outcome, never a warning.
+5. Success requires reaping every descendant, unmounting the namespace and
+   deleting the private execution directory. Failure to prove cleanup marks the
+   supervisor unhealthy and discards all outputs.
+
+### Formal invariants
+
+```text
+function_execution -> bubblewrap AND external_rlimits
+function_network = absent
+function_environment = empty
+cleanup_unconfirmed -> output_discarded AND supervisor_unhealthy
+```
+
+### Required tests
+
+[witness: workbench:notes]
+
+1. Network, host filesystem, environment, clock and entropy probes fail inside
+   the sandbox and yield denied evidence.
+2. CPU, memory, process, file-size, scratch, output and wall limits each stop an
+   adversarial implementation externally.
+3. A forked descendant is gone after completion and after timeout.
+4. Missing bubblewrap, a changed runtime digest and failed cleanup block startup.
+
+### Consequence
+
+Submitted code executes only inside one named, testable Linux isolation
+mechanism whose resource and cleanup failures are closed outcomes.
