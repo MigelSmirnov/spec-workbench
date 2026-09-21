@@ -917,7 +917,7 @@ def _factory_inspector_check(
 
 
 def _factory_slices_check(
-    factory_root: Path, source: Path, case_root: Path | None
+    factory_root: Path, source: Path, case_root: Path | None, project: str | None = None
 ) -> AdmissionCheck:
     """FA018: what the Factory cuts for each module, before it is asked to generate.
 
@@ -926,7 +926,7 @@ def _factory_slices_check(
     import or a dereferenced value first exists. A stop found there costs a
     started Route B run; the Factory's own slicer and seam name it here.
     """
-    report = probe_factory_slices(source, factory_root, case_root)
+    report = probe_factory_slices(source, factory_root, case_root, project)
     if not report["applicable"] and not report["findings"]:
         return AdmissionCheck(
             "FA018",
@@ -938,7 +938,8 @@ def _factory_slices_check(
     return AdmissionCheck(
         "FA018",
         CHECK_PASS if ready else CHECK_BLOCK,
-        "The Factory cuts every module; no induced import collides with a name and no slice carries a value."
+        "The Factory cuts every module; no induced import collides with a name, no slice carries a value, and "
+        "every changed data address reaches a module."
         if ready
         else "The Factory's own local specifications would stop generation.",
         {"summary": report["summary"], "findings": report["findings"]},
@@ -1148,7 +1149,7 @@ def check(
     checks.extend([
         validation_check,
         inspector_check,
-        _factory_slices_check(factory_root, source, case_root),
+        _factory_slices_check(factory_root, source, case_root, project),
         _semantic_check(case_root),
         _target_check(factory_root, project, source, update_existing),
         _factory_toolchain_check(factory_root),

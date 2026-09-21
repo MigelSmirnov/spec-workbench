@@ -17,6 +17,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--factory-root", type=Path, default=workbench_root.parent / "code_factory"
     )
+    parser.add_argument(
+        "--project",
+        help="Factory project this case targets: also ask about the changed data Route B will resolve",
+    )
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args(argv)
     case_root = args.case.resolve()
@@ -24,7 +28,7 @@ def main(argv: list[str] | None = None) -> int:
     if not source.is_file():
         print(f"design_factory_slices: error: source specification not found: {source}", file=sys.stderr)
         return 2
-    report = probe(source, args.factory_root, case_root)
+    report = probe(source, args.factory_root, case_root, args.project)
     if args.json:
         print(json.dumps(report, indent=2, ensure_ascii=False, sort_keys=True))
     else:
@@ -33,7 +37,7 @@ def main(argv: list[str] | None = None) -> int:
             f"Factory slices: {summary['modules_sliced']} of {summary['modules_declared']} modules cut; "
             f"{summary['imports_examined']} induced imports examined; "
             f"{summary['seam_checked']} slices asked at the data/code seam; "
-            f"{summary['constants_compared']} lowered constants compared; "
+            f"{summary['changed_addresses_asked']} changed data addresses asked for a consumer; "
             f"findings={len(report['findings'])}; ready={str(report['ready']).lower()}"
         )
         for item in report["findings"]:

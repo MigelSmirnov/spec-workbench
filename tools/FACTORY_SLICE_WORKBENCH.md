@@ -10,7 +10,7 @@ defect that exists only in the cut passes the validator, the inspector and
 admission, and is met by a started Route B run — one defect per run, because a
 run stops at the first module that fails.
 
-Three stops of Cabinet Flow runs were of this kind:
+Four stops of Cabinet Flow runs were of this kind:
 
 - `models` was told to import `owner_authority.owner_statement`: the operation
   shared its name with a model field, and the slicer derives an import from any
@@ -18,7 +18,11 @@ Three stops of Cabinet Flow runs were of this kind:
 - `store_continuity`, `operation_bindings` and `manifest_reader` were told to
   import a function whose name was one of their own contract parameters;
 - nine modules carried the value of a `= rules.x` address, and the data/code
-  seam (SPEC_STANDARD §15.9) refuses to build a prompt that contains a value.
+  seam (SPEC_STANDARD §15.9) refuses to build a prompt that contains a value;
+- twenty-five changed data addresses reached no module and Route B preflight
+  blocked with `affected_data_graph_incomplete`: the export had asked the Factory
+  about the delta of two specifications, the route asks about the whole scope no
+  passing run has carried.
 
 ## Public operation
 
@@ -42,21 +46,24 @@ All findings block.
 - `factory_slicer_missing`, `factory_normalization_failed`,
   `factory_slice_failed`, `factory_slices_empty`, `factory_seam_failed` — the
   Factory could not be asked;
-- `data_provider_not_assembled`, `data_provider_constant_without_source`,
-  `data_provider_source_unresolved`, `data_provider_lowering_drift` — a
-  `70_data_provider_closure.json` that declares `lowered_from` is held to it:
-  the assembled `rules.data_provider_backend` equals the closure, every constant
-  names its `rules` or `config` address, and the constant still equals the value
-  there. A record table lowered from a plain list is compared as that list.
+- `changed_data_without_consumer` — when the Factory project is named: the data
+  addresses Route B will resolve (the delta of this handoff **united with the scope
+  of every accepted handoff no passing route has carried**, built by the export's
+  own `project_change_scope` and `carry_pending_scope`) are given to the Factory's
+  own `tools/spec_data_reachability.py`; an address that exists and reaches no
+  module is reported, grouped by namespace (SPEC_STANDARD §15.3, §15.3.1). A
+  missing address is a deletion the accepting delta classifies and is not reported.
+  `factory_change_scope_refused` and `factory_reachability_failed` mean the Factory
+  could not be asked.
 
-A case whose values live only in the provider declares no `lowered_from` and is
-not compared.
+The probe does not judge data the Factory does not ask about: a namespace nobody
+consumes and nobody changed is reported by the Factory when it changes.
 
 ## Workflow
 
 ```bash
-python tools/design_factory_slices.py examples/<case> --factory-root ../code_factory
-python tools/design_factory_slices.py examples/<case> --factory-root ../code_factory --json
+python tools/design_factory_slices.py examples/<case> --factory-root ../code_factory --project <factory_project>
+python tools/design_factory_slices.py examples/<case> --factory-root ../code_factory --project <factory_project> --json
 ```
 
 Stage 9 admission runs the same probe as `FA018`. Run it alone while authoring

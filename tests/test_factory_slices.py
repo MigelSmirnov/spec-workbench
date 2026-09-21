@@ -105,7 +105,7 @@ def test_clean_cuts_are_ready_and_counted(tmp_path: Path) -> None:
         "modules_sliced": 4,
         "imports_examined": 1,
         "seam_checked": 4,
-        "constants_compared": 0,
+        "changed_addresses_asked": 0,
     }
 
 
@@ -192,78 +192,127 @@ def test_factory_without_a_seam_still_checks_imports(tmp_path: Path) -> None:
     assert report["summary"]["seam_checked"] == 0
 
 
-def _provider_case(tmp_path: Path, *, rule_value: object, lowered_from: object) -> tuple[Path, dict]:
-    case = tmp_path / "case"
-    backend = {
-        "kind": "data_provider_backend",
-        "schema_version": 1,
-        "wiring": {"module": "data_provider"},
-        "constants": {
-            "STORE_FILE_NAME": {"value_type": "string", "value": "db.sqlite"},
-            "RESTORED_STATE": {"value_type": "string", "value": "restored"},
-            "DELAYS": {
-                "value_type": "record_tuple",
-                "row_model": "DelayRule",
-                "value": [
-                    {"failure_count": 2, "delay_seconds": 4},
-                    {"failure_count": 1, "delay_seconds": 0},
-                ],
-            },
-        },
-    }
-    _write_json(case / "70_data_provider_closure.json", {"lowered_from": lowered_from, "backend_ir": backend})
-    spec = _spec(rules={
-        "store_layout": {"file": rule_value, "states": ["new", "continuous", "restored"]},
-        "throttle": {"delays": [0, 4]},
-        "data_provider_backend": backend,
+def _factory_with_project(tmp_path: Path, *, previous_spec: dict, carried: list[str] | None) -> Path:
+    """A Factory that already holds the project, with a delta tool and a reachability resolver.
+
+    The fake resolver calls an address reachable exactly when some note names it
+    with `= <address>`; the fake delta reports `_changed_addresses` of the new spec.
+    """
+    root = _factory(tmp_path)
+    _write(root / "SPEC_STANDARD.md", "standard")
+    _write(root / "tools/validate_spec.py", "")
+    _write(root / "tools/bootstrap_project.py", "")
+    _write_json(root / "project_index/structure.json", {
+        "projects_dir": "projects",
+        "files": {"global_spec": "specs/base/global_spec.json"},
+        "dirs": {"working": "specs/working"},
     })
-    return case, spec
+    _write(
+        root / "tools/project_spec_delta.py",
+        """import argparse, json
+p = argparse.ArgumentParser()
+p.add_argument('--project'); p.add_argument('--old-spec'); p.add_argument('--new-spec')
+a = p.parse_args()
+new = json.load(open(a.new_spec, encoding='utf-8'))
+print(json.dumps({'status': 'pass', 'changed_modules': ['store'],
+                  'changed_addresses': new.get('_changed_addresses', []), 'unresolved_addresses': []}))
+""",
+    )
+    _write(
+        root / "tools/spec_data_reachability.py",
+        """def resolve_data_addresses(spec, changed):
+    text = ' '.join(spec.get('notes') or [])
+    out = []
+    for address in changed:
+        cursor, found = spec, True
+        for segment in address.split('.'):
+            if isinstance(cursor, dict) and segment in cursor:
+                cursor = cursor[segment]
+            else:
+                found = False
+        if not found:
+            out.append({'address': address, 'reason': 'address_missing'})
+        elif ('= ' + address) not in text:
+            out.append({'address': address, 'reason': 'no_module_consumer'})
+    return {'unresolved_addresses': out}
+""",
+    )
+    canonical = root / "projects/demo/specs/base/global_spec.json"
+    _write_json(canonical, previous_spec)
+    if carried is not None:
+        import hashlib
+        sha = hashlib.sha256(canonical.read_bytes()).hexdigest()
+        _write_json(root / "projects/demo/specs/working/spec_editor_manifest.json", {
+            "accepted": True, "status": "pass",
+            "outputs": {"base_spec_sha256_after": sha},
+            "change_summary": {"changed_addresses": carried},
+        })
+    return root
 
 
-LOWERED_FROM = {
-    "STORE_FILE_NAME": "rules.store_layout.file",
-    "RESTORED_STATE": "rules.store_layout.states[2]",
-    "DELAYS": "rules.throttle.delays",
-}
+def _reach(tmp_path: Path, spec: dict, *, carried: list[str] | None, project: str | None = "demo") -> dict:
+    factory = _factory_with_project(tmp_path, previous_spec=_spec(), carried=carried)
+    source = tmp_path / "case/global_spec.json"
+    _write_json(source, spec)
+    return probe(source, factory, None, project)
 
 
-def test_lowering_equal_to_its_sources_is_ready(tmp_path: Path) -> None:
-    case, spec = _provider_case(tmp_path, rule_value="db.sqlite", lowered_from=LOWERED_FROM)
-    report = _probe(tmp_path, spec, case=case)
+RULES = {"store_layout": {"file_name": "db.sqlite", "mode": "strict"}, "retention": {"days": "30"}}
+
+
+def test_changed_address_with_a_consumer_is_ready(tmp_path: Path) -> None:
+    report = _reach(
+        tmp_path,
+        _spec(rules=RULES, notes=["open_store: [RULE_REFERENCE] MUST use = rules.store_layout.file_name"],
+              _changed_addresses=["rules.store_layout.file_name"]),
+        carried=None,
+    )
     assert report["findings"] == []
-    assert report["summary"]["constants_compared"] == 3
+    assert report["summary"]["changed_addresses_asked"] == 1
 
 
-def test_lowering_drift_names_the_constant_and_its_address(tmp_path: Path) -> None:
-    case, spec = _provider_case(tmp_path, rule_value="store.sqlite", lowered_from=LOWERED_FROM)
-    report = _probe(tmp_path, spec, case=case)
-    assert _codes(report) == [("data_provider_lowering_drift", "data_provider")]
-    assert report["findings"][0]["symbol"] == "STORE_FILE_NAME"
-    assert report["findings"][0]["address"] == "rules.store_layout.file"
+def test_address_carried_from_an_uncarried_handoff_is_asked_too(tmp_path: Path) -> None:
+    # This handoff changes nothing in data; the previous accepted one, which no
+    # passing route carried, changed two addresses that no module consumes now.
+    report = _reach(
+        tmp_path,
+        _spec(rules=RULES, notes=[], _changed_addresses=[]),
+        carried=["rules.store_layout.file_name", "rules.store_layout.mode", "rules.retention.days"],
+    )
+    assert _codes(report) == [("changed_data_without_consumer", ""), ("changed_data_without_consumer", "")]
+    by_namespace = {item["namespace"]: item["addresses"] for item in report["findings"]}
+    assert by_namespace == {
+        "rules.retention": ["rules.retention.days"],
+        "rules.store_layout": ["rules.store_layout.file_name", "rules.store_layout.mode"],
+    }
+    assert "SPEC_STANDARD 15.3" in report["findings"][0]["message"]
+    assert report["summary"]["changed_addresses_asked"] == 3
 
 
-def test_constant_without_a_source_and_unresolved_source_are_blocked(tmp_path: Path) -> None:
-    lowered = {"STORE_FILE_NAME": "rules.store_layout.absent", "DELAYS": "rules.throttle.delays"}
-    case, spec = _provider_case(tmp_path, rule_value="db.sqlite", lowered_from=lowered)
-    report = _probe(tmp_path, spec, case=case)
-    assert _codes(report) == [
-        ("data_provider_constant_without_source", "data_provider"),
-        ("data_provider_source_unresolved", "data_provider"),
-    ]
-
-
-def test_closure_that_is_not_the_assembled_backend_is_blocked(tmp_path: Path) -> None:
-    case, spec = _provider_case(tmp_path, rule_value="db.sqlite", lowered_from=LOWERED_FROM)
-    spec["rules"]["data_provider_backend"] = {"kind": "data_provider_backend", "constants": {}}
-    report = _probe(tmp_path, spec, case=case)
-    assert ("data_provider_not_assembled", "data_provider") in _codes(report)
-
-
-def test_provider_without_declared_sources_is_not_compared(tmp_path: Path) -> None:
-    case, spec = _provider_case(tmp_path, rule_value="other", lowered_from=None)
-    report = _probe(tmp_path, spec, case=case)
+def test_deleted_address_is_not_an_orphan(tmp_path: Path) -> None:
+    report = _reach(
+        tmp_path, _spec(rules={}, notes=[], _changed_addresses=[]), carried=["rules.store_layout.file_name"]
+    )
     assert report["findings"] == []
-    assert report["summary"]["constants_compared"] == 0
+    assert report["summary"]["changed_addresses_asked"] == 1
+
+
+def test_without_a_project_nothing_is_asked(tmp_path: Path) -> None:
+    report = _reach(
+        tmp_path, _spec(rules=RULES, notes=[], _changed_addresses=["rules.retention.days"]),
+        carried=None, project=None,
+    )
+    assert report["findings"] == []
+    assert report["summary"]["changed_addresses_asked"] == 0
+
+
+def test_project_the_factory_does_not_hold_yet_is_not_asked(tmp_path: Path) -> None:
+    report = _reach(
+        tmp_path, _spec(rules=RULES, notes=[], _changed_addresses=["rules.retention.days"]),
+        carried=None, project="brand-new",
+    )
+    assert report["findings"] == []
+    assert report["summary"]["changed_addresses_asked"] == 0
 
 
 def test_admission_check_reports_not_applicable_pass_and_block(tmp_path: Path) -> None:

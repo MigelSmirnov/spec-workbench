@@ -1,3 +1,3 @@
-from factory_slice_workbench.service import REPORT_SCHEMA, lowering_findings, probe
+from factory_slice_workbench.service import REPORT_SCHEMA, probe, reachability_findings
 
-__all__ = ["REPORT_SCHEMA", "lowering_findings", "probe"]
+__all__ = ["REPORT_SCHEMA", "probe", "reachability_findings"]

@@ -2,20 +2,26 @@
 
 Every gate before this one reads the assembled specification. The Factory does
 not generate from that document: it normalizes it, cuts one local specification
-per module, and builds a prompt from the cut. Three stops of paid Route B runs
-were decided in that cut and nowhere earlier:
+per module, builds a prompt from the cut, and resolves the changed data of the
+whole uncarried scope. Four stops of Route B runs were decided there and nowhere
+earlier:
 
 - an operation sharing its name with a model field made the deterministic
   ``models`` module import a domain operation;
 - an operation sharing its name with a contract parameter of the importing
   module was imported and then shadowed inside the body that must call it;
 - a note's ``= rules.x`` put a value into the local specification, and the
-  data/code seam (SPEC_STANDARD 15.9) refused to build the prompt.
+  data/code seam (SPEC_STANDARD 15.9) refused to build the prompt;
+- a changed data address that reaches no module stopped Route B at preflight
+  (``affected_data_graph_incomplete``): the export asked the Factory about the
+  delta of two specifications, the route asks about the whole scope no passing
+  run has carried yet.
 
 The probe runs the Factory's own normalizer, slicer and seam over every module
-in a temporary directory and reports all of them at once, before export. It
-also holds a declared data-provider lowering to its sources. Authority stays
-with the Factory tools; nothing here re-implements their rules.
+in a temporary directory, asks the Factory's own reachability resolver about
+exactly the addresses Route B will ask about, and reports everything at once,
+before export. Authority stays with the Factory tools; nothing here
+re-implements their rules.
 """
 from __future__ import annotations
 
@@ -29,15 +35,23 @@ from pathlib import Path
 from typing import Any
 
 REPORT_SCHEMA = "spec_workbench_factory_slice_probe.v1"
-DATA_PROVIDER_CLOSURE = "70_data_provider_closure.json"
 NORMALIZER = "tools/normalize_spec.py"
 SLICER = "tools/build_local_spec.py"
 SEAM = "tools/data_code_seam.py"
+REACHABILITY = "tools/spec_data_reachability.py"
 # The Factory names the deterministic model module literally (tools/data_code_seam.py).
 MODELS_MODULE = "models"
 
 _PARAMETER_RE = re.compile(r"[(,]\s*\*{0,2}([A-Za-z_][A-Za-z0-9_]*)\s*:")
-_ADDRESS_SEGMENT_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*|\[\d+\]")
+
+_REACHABILITY_SCRIPT = """
+import json, sys
+sys.path.insert(0, 'tools')
+import spec_data_reachability as reach
+spec = json.load(open(sys.argv[1], encoding='utf-8'))
+addresses = json.load(open(sys.argv[2], encoding='utf-8'))
+print(json.dumps(reach.resolve_data_addresses(spec, addresses)['unresolved_addresses']))
+"""
 
 _SEAM_SCRIPT = """
 import json, sys
@@ -117,92 +131,87 @@ def _import_findings(
     return findings, examined
 
 
-def _resolve(spec: dict[str, Any], address: str) -> Any:
-    current: Any = spec
-    for segment in _ADDRESS_SEGMENT_RE.findall(address):
-        current = current[int(segment[1:-1])] if segment.startswith("[") else current[segment]
-    return current
+def reachability_findings(
+    source: Path, factory_root: Path, project: str | None
+) -> tuple[list[dict[str, Any]], int]:
+    """Ask the Factory about the data addresses Route B will ask about.
 
-
-def _comparable(row: dict[str, Any], source: Any) -> Any:
-    """The lowered value in the shape of its source.
-
-    A record table lowered from a plain list carries the list position as its
-    single other integer field; everything else is compared as written.
+    Route B resolves the lineage manifest's cumulative ``changed_addresses`` against
+    the current specification and blocks (``affected_data_graph_incomplete``) when
+    one reaches no module. The export's own delta is pairwise, so an address that
+    lost its last consumer in this handoff but changed in an earlier, never-carried
+    one passes the export and stops the route. The scope is built by the export's
+    own functions and judged by the Factory's own resolver
+    (SPEC_STANDARD 15.3: a leaf no reference reaches is dead data).
     """
-    value = row.get("value")
-    if row.get("value_type") != "record_tuple" or not isinstance(source, list):
-        return value
-    if not (isinstance(value, list) and all(isinstance(item, dict) and len(item) == 2 for item in value)):
-        return value
-    if any(isinstance(item, dict) for item in source):
-        return value
-    keys = sorted(value[0]) if value else []
-    for position_key in keys:
-        value_key = next(key for key in keys if key != position_key)
-        ordered = sorted(value, key=lambda item: item[position_key])
-        if [item[position_key] for item in ordered] == list(range(1, len(ordered) + 1)):
-            return [item[value_key] for item in ordered]
-    return value
-
-
-def lowering_findings(spec: dict[str, Any], case_root: Path | None) -> tuple[list[dict[str, Any]], int]:
-    """Hold a declared data-provider lowering to the values it was lowered from."""
-    if case_root is None:
+    if not project or not (factory_root / REACHABILITY).is_file():
         return [], 0
-    path = case_root / DATA_PROVIDER_CLOSURE
-    if not path.is_file():
+    # export_to_factory imports the admission workbench, which imports this module.
+    import export_to_factory as export
+
+    try:
+        required = export.require_factory(factory_root)
+        structure = json.loads(required["structure"].read_text(encoding="utf-8"))
+        paths = export.project_paths(factory_root, structure, project)
+    except (SystemExit, OSError, ValueError, KeyError):
         return [], 0
-    closure = json.loads(path.read_text(encoding="utf-8"))
-    lowered_from = closure.get("lowered_from")
-    backend = closure.get("backend_ir") if isinstance(closure.get("backend_ir"), dict) else {}
-    constants = backend.get("constants") if isinstance(backend.get("constants"), dict) else {}
-    module = str((backend.get("wiring") or {}).get("module") or "data_provider")
-    findings: list[dict[str, Any]] = []
-    assembled = (spec.get("rules") or {}).get("data_provider_backend")
-    if assembled != backend:
-        findings.append(_finding(
-            "data_provider_not_assembled",
-            module,
-            f"rules.data_provider_backend of the assembled specification is not the backend_ir of {DATA_PROVIDER_CLOSURE}.",
-        ))
-    if not isinstance(lowered_from, dict):
-        return findings, 0
-    compared = 0
-    for symbol, row in constants.items():
-        address = lowered_from.get(symbol)
-        if not isinstance(address, str):
-            findings.append(_finding(
-                "data_provider_constant_without_source",
-                module,
-                f"Constant {symbol} names no lowered_from address: its value has no design home.",
-                symbol=symbol,
-            ))
-            continue
-        try:
-            source = _resolve(spec, address)
-        except (KeyError, IndexError, TypeError):
-            findings.append(_finding(
-                "data_provider_source_unresolved",
-                module,
-                f"Constant {symbol} is lowered from {address}, which the assembled specification does not hold.",
-                symbol=symbol,
-                address=address,
-            ))
-            continue
-        compared += 1
-        if _comparable(row, source) != source:
-            findings.append(_finding(
-                "data_provider_lowering_drift",
-                module,
-                f"Constant {symbol} no longer equals {address}: change the value at its rules address and lower it again.",
-                symbol=symbol,
-                address=address,
-            ))
-    return findings, compared
+    canonical = paths["canonical"]
+    if not canonical.is_file():
+        return [], 0
+    try:
+        scope = export.project_change_scope(
+            delta_tool=required["delta"], project=project, previous=canonical, source=source
+        )
+    except SystemExit as exc:
+        return [_finding(
+            "factory_change_scope_refused", "",
+            f"The Factory's change-scope projector refuses this handoff: {exc}",
+        )], 0
+    scope = export.carry_pending_scope(scope, paths["working"], export.sha256_file(canonical))
+    addresses = sorted({str(item) for item in scope.get("changed_addresses") or []})
+    if not addresses:
+        return [], 0
+    with tempfile.TemporaryDirectory(prefix="spec-workbench-reach-") as temp:
+        asked = Path(temp) / "addresses.json"
+        asked.write_text(json.dumps(addresses), encoding="utf-8")
+        result = _run(factory_root, ["-c", _REACHABILITY_SCRIPT, str(source), str(asked)])
+    try:
+        unresolved = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return [_finding(
+            "factory_reachability_failed", "", "The Factory reachability resolver could not be asked.",
+            detail=_tail(result),
+        )], len(addresses)
+    # A missing address is a deletion the accepting delta classifies; only an address
+    # that exists and reaches no module stops the route.
+    orphans = sorted(
+        item["address"] for item in unresolved
+        if isinstance(item, dict) and item.get("reason") == "no_module_consumer"
+    )
+    by_namespace: dict[str, list[str]] = {}
+    for address in orphans:
+        by_namespace.setdefault(".".join(address.split(".")[:2]), []).append(address)
+    findings = [
+        _finding(
+            "changed_data_without_consumer",
+            "",
+            f"{namespace}: {len(items)} changed address(es) reach no module, and Route B preflight will block with "
+            "affected_data_graph_incomplete. SPEC_STANDARD 15.3: a leaf no reference reaches is dead data; 15.3.1 "
+            "names the three paths a value has to generated code. Give the value its path or take it out of the "
+            "specification.",
+            namespace=namespace,
+            addresses=items,
+        )
+        for namespace, items in sorted(by_namespace.items())
+    ]
+    return findings, len(addresses)
 
-
-def probe(source: Path, factory_root: Path, case_root: Path | None = None) -> dict[str, Any]:
+def probe(
+    source: Path,
+    factory_root: Path,
+    case_root: Path | None = None,
+    project: str | None = None,
+) -> dict[str, Any]:
     source = source.resolve()
     factory_root = factory_root.resolve()
     spec = json.loads(source.read_text(encoding="utf-8"))
@@ -218,14 +227,14 @@ def probe(source: Path, factory_root: Path, case_root: Path | None = None) -> di
             "modules_sliced": 0,
             "imports_examined": 0,
             "seam_checked": 0,
-            "constants_compared": 0,
+            "changed_addresses_asked": 0,
         },
         "findings": [],
     }
     findings: list[dict[str, Any]] = report["findings"]
-    lowering, compared = lowering_findings(spec, case_root)
-    findings.extend(lowering)
-    report["summary"]["constants_compared"] = compared
+    unreachable, asked = reachability_findings(source, factory_root, project)
+    findings.extend(unreachable)
+    report["summary"]["changed_addresses_asked"] = asked
     if not declared:
         report["ready"] = not findings
         return report
