@@ -614,3 +614,15 @@ Seventh addendum (2026-09-23). The ninth run assembled 29 of 30 modules; `owner_
 `spooled`, `run_id`, `node_id` and `port_id` off a RunFileDescriptor whose origin fields are `producer_run_id`,
 `producer_node_id`, `producer_port_id` and whose object is `spooled_ref`. The note now names them as the arguments of
 `describe_file`. One slice reread: PASS. Ledger: 30 modules, 30 PASS.
+
+Eighth addendum (2026-09-23). The tenth run assembled all thirty modules; the linker reported 73 problems. Sixty-four
+are one Factory limitation: the linker's type gate does not expand a discriminated union into its variants and
+does not accept a string constant for a `Literal['…']` field, and the accepted Cabinet_web has neither construct
+(tools branch `tools/linker-discriminated-unions`). The other nine are the case's: `invoke_operation` read a
+flow-version reference and file references off a NodeExecution that has neither; the `outcome_unknown` status was
+written as a literal beside the imported wait-reason constant (the same word names the status and the reason —
+the notes now route both through the constant); `slot_evidence` invented a list of in-progress statuses, while A19
+makes every NodeExecution a concluded attempt; the draft's verdict tuples and SandboxResourceUsage were passed into
+the record's string fields with no rendering rule (now canonical JSON with sorted keys and `; `-joined verdicts,
+in `record_node_execution` and `run_trial`); `active_corpus` omitted `withdrawn_cases`. Four slices reread: PASS.
+Ledger: 30 modules, 30 PASS.
