@@ -547,3 +547,13 @@ Left open, unchanged from the previous entry: `send_request` does not name `reso
 `service_invocation` purpose; A34 speaks of exact `bwrap` arguments that exist only as note prose;
 `SpooledBytes.released_at` has no writer. New: ten `rules` namespaces remain design records without a consumer
 (the owner's question 3b in the parity memo); `advance_run` spells the A28 delays in prose.
+
+Addendum, after the third run stopped at `operational_store_persistence` (2026-09-22, evening). The run generated
+and accepted `identity`, `installation` and `store_continuity` and stopped at the emitted repository, before any
+further model call: the Factory's coverage gate requires the concrete class named in `implementation_obligations`
+to inherit its port (`SqliteOperationalStoreRepository must inherit OperationalUnitOfWork`, a rule of 2026-08-21),
+the postgres emitter writes that base class and requires the module to import the port, and the sqlite emitter
+writes none. The Factory side is a tools change (`tools/sqlite-emitter-implements-interface`, not the case). The
+case side is one declared import: `operational_store_persistence` now imports `OperationalUnitOfWork` from
+`models`, as `cabinet_persistence` of the accepted Cabinet_web imports `CabinetUnitOfWork`. One slice changed by
+that import alone; the verdict is carried and the hash refreshed. Ledger: 30 modules, 30 PASS.
