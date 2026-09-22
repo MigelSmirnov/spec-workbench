@@ -54,6 +54,73 @@ def _lookup(root: Any, dotted: str) -> tuple[bool, Any]:
     return True, cur
 
 
+DATA_PROVIDER_CLOSURE = "70_data_provider_closure.json"
+# A scalar this long is a file name, an identifier or a profile, not a coincidence.
+DISTINCTIVE_SCALAR_LENGTH = 12
+
+
+def _data_nodes(prefix: str, value: Any):
+    yield prefix, value
+    if isinstance(value, dict):
+        for key, item in value.items():
+            if isinstance(key, str):
+                yield from _data_nodes(f"{prefix}.{key}", item)
+    elif isinstance(value, list):
+        for index, item in enumerate(value):
+            yield from _data_nodes(f"{prefix}[{index}]", item)
+
+
+def _distinctive(value: Any) -> bool:
+    if isinstance(value, (list, dict)):
+        return len(value) >= 2
+    return isinstance(value, str) and len(value) >= DISTINCTIVE_SCALAR_LENGTH
+
+
+def _two_home_findings(project: Path, sections: Any) -> list[dict[str, Any]]:
+    """SPEC_STANDARD 15.4: a leaf has one home.
+
+    A value that generated code reads lives in a data-provider constant
+    (SPEC_STANDARD 6.10). The same value left at a `rules` or `config` address is a
+    second home: the two drift apart, and the address has no module consumer
+    (SPEC_STANDARD 15.3), which stops Route B once that address changes. Only a
+    distinctive value is judged - a structure of two or more entries or a long
+    string - because short scalars do coincide.
+    """
+    path = project / DATA_PROVIDER_CLOSURE
+    if not path.is_file() or not isinstance(sections, dict):
+        return []
+    try:
+        closure = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+    backend = closure.get("backend_ir") if isinstance(closure, dict) else None
+    constants = backend.get("constants") if isinstance(backend, dict) else None
+    if not isinstance(constants, dict):
+        return []
+    homes: dict[str, list[str]] = {}
+    for root in ("rules", "config"):
+        for address, value in _data_nodes(root, sections.get(root)):
+            if address != root and _distinctive(value):
+                homes.setdefault(json.dumps(value, sort_keys=True, ensure_ascii=False), []).append(address)
+    findings: list[dict[str, Any]] = []
+    for symbol, row in constants.items():
+        value = row.get("value") if isinstance(row, dict) else None
+        if not _distinctive(value):
+            continue
+        for address in homes.get(json.dumps(value, sort_keys=True, ensure_ascii=False), []):
+            findings.append({
+                "severity": "error",
+                "code": "value_in_two_homes",
+                "message": (
+                    f"{address} holds the same value as data-provider constant {symbol}. SPEC_STANDARD 15.4: a leaf "
+                    "has one home. Keep the constant and remove the value from the data closure, or remove the constant."
+                ),
+                "address": address,
+                "symbol": symbol,
+            })
+    return findings
+
+
 def lint(project: Path) -> dict[str, Any]:
     payload = load(project)
     findings: list[dict[str, str]] = []
@@ -160,6 +227,8 @@ def lint(project: Path) -> dict[str, Any]:
             walk(section, sections[section])
     for address in sorted(set(leaves) - seen):
         findings.append({"severity":"error","code":"untraced_structured_value","message":f"structured value lacks placement evidence: {address}"})
+
+    findings.extend(_two_home_findings(project, sections))
 
     unresolved = payload.get("unresolved", [])
     if not isinstance(unresolved, list):

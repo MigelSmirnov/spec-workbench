@@ -1,56 +1,36 @@
 # Spec Workbench — agent entry point
 
-## STOP: resolve the working project first
-
-Do **not** search the repository for `list_projects`, project tools, MCP tools, Factory projects, Registry projects, or Cabinet projects.
-
-Those are different concepts and may return unrelated application data.
-
-For **Spec Workbench project navigation**, always start with:
+Three commands, in this order. Do not search the repository, scan branches, or
+choose tools from memory or filename prefixes.
 
 ```bash
-python tools/workbench.py list
-```
-
-If the user has already named a project, resolve it with:
-
-```bash
-python tools/workbench.py show <project>
-```
-
-`PROJECT_INDEX.json` is the curated source of Spec Workbench project identity.
-Never substitute external plugin operations such as Cabinet/Registry/Factory
-`list_projects` for this repository command.
-
-## STOP: ask the common authoring pipeline what comes next
-
-After the project is resolved, do **not** reconstruct the design-state workflow
-from filenames, search for project-local tooling, or choose a gate from memory.
-Run:
-
-```bash
+python tools/workbench.py list            # curated projects + pipeline-resolved phase
+python tools/workbench.py show <project>  # ref, path, phase, reading list, read order
 python tools/authoring.py next <project> --json
 ```
 
-The authoring CLI resolves the project's canonical ref, materializes it for
-read-only deterministic inspection, and returns the first not-ready authoring
-phase plus its gate/findings.
+`authoring next` returns:
 
-The machine source of truth for ordering is:
+- `phase` — the first not-ready authoring phase;
+- `action` — the gate tool and args the pipeline will run;
+- `findings` — deterministic blockers to resolve;
+- `read` — the methodology documents that apply to this phase.
 
-```text
-skills/spec-authoring/authoring_sequence.json
-```
+Read `AGENTS.md` and the documents in `read`. Nothing else is required before
+acting on a phase. `PROJECT_INDEX.json` is the only source of project identity;
+`skills/spec-authoring/authoring_sequence.json` is the only source of ordering
+and per-phase reading. Future MCP wrappers call `tools/authoring_pipeline.py`
+and must not implement a second sequence.
 
-The transport-neutral API is `tools/authoring_pipeline.py`. Future MCP wrappers
-must call that same API; they must not implement a second authoring sequence.
+`ARTIFACTS` / `Artifacts:` in `workbench.py` output is a file-layout hint
+(highest numbered design file, `global_spec.json` present). It is not the
+authoring phase; an assembled project can still be blocked at State 7.
 
-The generic pipeline promoted to `main` covers State 0 through Stage 9. Tools
-under `tools/` change only on `main`; project branches own only their
-`examples/<project>/` data.
+External plugin operations named `list_projects` (Cabinet, Registry, Factory)
+are unrelated application data, never Spec Workbench project navigation.
 
-`python tools/workbench.py status` is only for explicit repository/index
-diagnostics. Do not use exhaustive branch scanning for normal project discovery.
+`python tools/workbench.py status` is repository/index diagnostics only.
 
-After pipeline resolution, follow `AGENTS.md` and any project-local `AGENTS.md`
-for semantic design and change rules.
+Generic tooling (`tools/`, `tests/`, `skills/`, `.github/`, `PROJECT_INDEX.json`)
+changes only on `main` via a `tools/<topic>` branch. Project branches
+(`agent/<project>`) own `examples/<project>/` and `experiments/` only.

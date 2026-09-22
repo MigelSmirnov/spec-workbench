@@ -22,6 +22,7 @@ It delegates semantic validation to the existing owners:
 | `contracts` | `design_stage6_contracts` |
 | `notes` | `notes_workbench.gate` |
 | `router` | `router_workbench.service` |
+| `factory` | the Factory's own `tools/validate_spec.py`, found beside this repository or at `SPEC_WORKBENCH_FACTORY_ROOT`; not ready without it |
 
 The aggregate service must not parse design files, reinterpret findings, or
 invent missing semantic decisions.
