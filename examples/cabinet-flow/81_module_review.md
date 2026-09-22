@@ -609,3 +609,8 @@ were unchanged but whose accesses the build gate now judged: `operation_bindings
 and hedged between `statement` and `text` of the OwnerStatement (`text`); `operation_invoker` read `service_id` off
 the ServiceTarget (the `targets` entry for the binding's service, which is the attempt's `service_instance`). Three
 slices reread: PASS. Ledger: 30 modules, 30 PASS.
+
+Seventh addendum (2026-09-23). The ninth run assembled 29 of 30 modules; `owner_authority.request_approval` read
+`spooled`, `run_id`, `node_id` and `port_id` off a RunFileDescriptor whose origin fields are `producer_run_id`,
+`producer_node_id`, `producer_port_id` and whose object is `spooled_ref`. The note now names them as the arguments of
+`describe_file`. One slice reread: PASS. Ledger: 30 modules, 30 PASS.
