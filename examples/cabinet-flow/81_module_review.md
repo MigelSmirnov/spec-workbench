@@ -570,3 +570,12 @@ point of the first entry of 2026-09-21: `send_request` now names `module:install
 imported `SERVICE_INVOCATION_PURPOSE` constant (the third A23/A29 purpose, a scalar as §6.10 requires), the pinned
 service instance and its caller component. Two slices changed and were reread: `data_provider` (one string constant)
 and `service_transport` (one sentence, one declared import). PASS both. Ledger: 30 modules, 30 PASS.
+
+Third addendum (2026-09-23, after the fifth run stopped at `value_store`). The run reused every accepted module
+without a provider call, generated `service_transport` and `operation_invoker`, and rejected `value_store` on the
+static gate `reflective_attribute_access`: the candidate probed `hasattr(os, "O_NOFOLLOW")` before opening the
+staging file. The note said "create-exclusive, write-only and no-follow flags"; it now names the exact flags and
+says the A32 Linux profile guarantees them, so no runtime probe is written. One slice changed by that sentence;
+reread, PASS. Observed in the same candidate and left open: the value root and staging directory are read from
+environment variables the design never names ("configured value root"); the installation's data directory is the
+only source A32 allows, and neither `put_value` nor `receive_file` says how the module obtains it.
