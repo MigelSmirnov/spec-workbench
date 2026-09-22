@@ -467,3 +467,83 @@ Left open, met on the way and not decided here:
   address induces an import of `installation.release_ceilings`. It works and is accidental.
 - Nothing in the Workbench compares a lowered constant with its `rules` source, slices a module the way
   the Factory does, or asks the seam; the pre-export probe that does all three is a `tools/*` change.
+
+## One home per value; the release ceilings reach code through the ReleaseCeilings record (2026-09-22, before the third run)
+
+Route B preflight on spec `48c31f7f…` blocked with `affected_data_graph_incomplete`: 25 accumulated addresses
+had no module consumer (seven `rules.*` namespaces the data provider had lowered, and eighteen new
+`config.persistence.*_table_name` leaves). The Workbench gates merged on 2026-09-22 name the same causes before
+any export: `value_in_two_homes` (18, SPEC_STANDARD §15.4), `undereferenced_data_address` (6, §15.3.1) and the
+slicer probe FA018 (8 blocks). The shape of the previous entry — the value stays at its `rules` address and
+`lowered_from` points at it — is the form §15.4 forbids and the Factory resolver rejects: a leaf has one home.
+
+Shape. The seven namespaces (`credential_purposes`, `installation_configuration`, `platform_manifest_contract`,
+`store_continuity`, `host_byte_storage`, `sandbox_runtime`, `service_transport_runtime`) leave
+`60_data_closure.json` with their placements; `70_data_provider_closure.json` drops `lowered_from` and its
+`source_refs` name the deciding decisions (A03, A23, A26, A27, A29, A30, A31; M48–M50). A32–A34 are not
+listed: no constant lowers them — each profile is one identifier, generated code has no use for the string, and
+the six notes already spell the mechanism — so the fact stays in the decision text, which now names the profile
+identifier instead of the removed address (rule 1 of A31–A34; no normative rule changes). The external-contract
+binding moves to `rules.data_provider_backend.constants.PLATFORM_MANIFEST_CONTRACT.value`; the mapping is the
+same bytes, so the verified digest is unchanged (`design_external_contracts`: 0 errors). Three leaves of
+`rules.authentication_throttle` that the A27 constants already carry (`block_after_failures`, `block_seconds`,
+`delay_seconds_by_failure_count_1_to_9`) are removed on the same rule; the gate does not see them because the
+scalars are short and the table has another shape, but they are two homes all the same. Its four boolean
+leaves stay: no constant carries them.
+
+Two leaves in two homes, decided here. `rules.disclosure.classes` and `rules.retry_backoff.timed_wait_reasons`
+are removed from the closure; the scalar constants stay. `DISCLOSURE_CLASSES` is added as an ordered tuple,
+because `derive_output_class` takes "the maximum class" and A03 fixes the order
+`open < business_confidential < personal_data`, yet nothing gave the generator that order; `value_store` imports
+it. `timed_wait_reasons` has no consumer beyond `OUTCOME_UNKNOWN_WAIT_REASON`; the closed set stays in A28. The
+remaining leaves of `rules.disclosure` and `rules.retry_backoff`, like `retention`, `kernel_time`, `authority`,
+`sandbox` and `service_targets`, are unchanged and still have no consumer — a design record, not this change.
+
+Release ceilings. The assignment proposed the config path: `config.release_ceilings` read by
+`installation.release_ceilings` through `= config.release_ceilings.<leaf>`. The Factory's seam
+(`tools/data_code_seam.py`) classifies every `config` leaf except persistence table names as product data, so
+such a note would stop the prompt at `installation` exactly as run 18 did; the case has no `runtime_settings`
+module (§6.11); and A26/M48 fix the ceilings per kernel release, not per environment. That is row two of
+§15.3.1 — a threshold — so the seventeen values are `RELEASE_CEILING_*` constants (`positive_integer`, checked
+equal to the M48 list) and `config.release_ceilings` is gone. `installation.release_ceilings` builds the
+`ReleaseCeilings` record field by field from them and states the A26 consistency it checks. The six consumers
+(`resolve_actor`, `receive_file`, `send_request`, `validate_contract_ports`, `confirm_continuity`,
+`add_trial_case`) name "the `<field>` field of the ReleaseCeilings returned by
+`module:installation.release_ceilings`" where they carried a backticked address, and declare
+`installation.release_ceilings` and the `ReleaseCeilings` model in `imports.module_internal` (the Spec Inspector
+requires the model, SI-0001–SI-0006). A26 rule 2 has bootstrap inject the same record; that wiring is bootstrap's
+note and does not change.
+
+Table names. `open_store` names the thirty-two `= config.persistence.<table>_table_name` leaves that
+`create_operational_store_schema` creates — exactly the `table_name_ref` rows of the persistence closure; a
+reference to the whole `config.persistence` key is refused by the seam. The probe no longer reports
+`changed_data_without_consumer` for `config.persistence`, and no leaf is left unread, so none is removed.
+
+Review. Seventeen slices changed against `683b270` (the branch was merged with `main` at `921e5e0` first; no
+slice hash changed by that merge). Seven changed mechanically — `admission`, `bootstrap`, `manifest_reader`,
+`operation_bindings`, `operation_invoker`, `run_executor`, `sandbox_supervisor`: only the reworded rule 1 of
+A31–A34, the line shift that follows, and the binding address; substituting the old wording back gives the
+reviewed decision text byte for byte. Their verdicts are carried and the hashes refreshed. Ten were read as
+diffs against `683b270` with the four protocol questions:
+
+- `data_provider`: eighteen new symbols; a deterministic emitter, no behaviour; the seventeen values equal
+  M48 and the tuple equals the A03 order (checked programmatically). PASS.
+- `installation`: `release_ceilings` names every field with its constant; a stub returning zeros violates
+  positivity, a record built from anything else violates "and nothing else"; the two consistency checks make
+  the existing "internally consistent" clause checkable (A26 rules 4 and 6). PASS.
+- `access_control`, `run_spool`, `service_transport`, `slot_registry`, `store_continuity`, `trial_corpus`: one
+  sentence each; the ceiling now has a source and a declared dependency, every other sentence is unchanged;
+  the record's model and contract enter the slice. PASS.
+- `operational_store`: `open_store` lists exactly the persistence closure's tables; nothing else changes.
+  PASS.
+- `value_store`: `derive_output_class` takes its order from the tuple. PASS.
+
+Measured on the projected spec: assembly 14/14 (including the Factory validator); `design_stage6_data --lint` 0
+findings (was 18); `design_notes --gate` 0 blocks (was 6); `design_lint --state 2` clean; Factory slicer probe
+30 of 30 modules, 290 induced imports examined, 30 slices at the seam, 122 changed data addresses asked, 0
+findings (was 8). Ledger: 30 modules, 30 PASS.
+
+Left open, unchanged from the previous entry: `send_request` does not name `resolve_credential` or the
+`service_invocation` purpose; A34 speaks of exact `bwrap` arguments that exist only as note prose;
+`SpooledBytes.released_at` has no writer. New: ten `rules` namespaces remain design records without a consumer
+(the owner's question 3b in the parity memo); `advance_run` spells the A28 delays in prose.

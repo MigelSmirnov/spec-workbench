@@ -35,13 +35,15 @@ execution, transport or any policy.
 
 ### Owns
 
-The single deterministic home, for generated code, of the accepted rule values
-that code has to read: the A23/A29 credential purposes, the A29 installation
-configuration key names, format version and file-mode bound, the A30 store
-layout names and continuity states, the A31 platform manifest contract, the A27
-authentication block thresholds and back-off table, the open and personal-data
-disclosure classes, and the outcome-unknown wait reason — emitted as typed
-module constants from the closed `rules.data_provider_backend` IR.
+The one home (SPEC_STANDARD §15.4) of every accepted policy value that
+generated code has to read: the A23/A29 credential purposes, the A29
+installation configuration key names, format version and file-mode bound, the
+A30 store layout names and continuity states, the A31 platform manifest
+contract, the A27 authentication block thresholds and back-off table, the A26
+release ceilings, the ordered A03 disclosure classes with the open and
+personal-data classes as scalars, and the outcome-unknown wait reason —
+emitted as typed module constants from the closed `rules.data_provider_backend`
+IR.
 
 ### Knows
 
@@ -53,9 +55,9 @@ their declared values, and the contract-only row model
 
 Behavior of any kind: no lookups, no validation, no interpretation, no
 authorization, no defaults beyond the declared values. It is not a second
-design home: every value is decided at its `rules` address with its decision
-trace, and the provider carries exactly that value (`lowered_from` in
-`70_data_provider_closure.json`).
+home: the State 2 decision that fixed each value is named by `source_refs` of
+`70_data_provider_closure.json`, and no `rules` or `config` address repeats the
+value.
 
 ### Hides
 
@@ -65,9 +67,11 @@ signature; the values never enter an LLM prompt (SPEC_STANDARD §15.9).
 ### Direct consumers
 
 `access_control`, `installation`, `manifest_reader`, `operational_store`,
-`store_continuity`, `operation_invoker`, `run_executor`, `trace_journal` and
-`trial_corpus` import the constants their notes name. A consumer that needs one
-exact entry imports a scalar constant, never a tuple index or a mapping key.
+`store_continuity`, `operation_invoker`, `run_executor`, `trace_journal`,
+`trial_corpus` and `value_store` import the constants their notes name;
+`installation` assembles ReleaseCeilings M48 from the release-ceiling constants
+and every other consumer of a ceiling reads that record. A consumer that needs
+one exact entry imports a scalar constant, never a tuple index or a mapping key.
 
 ### Public surface
 
@@ -104,6 +108,24 @@ OUTCOME_UNKNOWN_WAIT_REASON
 AUTHENTICATION_BLOCK_AFTER_FAILURES
 AUTHENTICATION_BLOCK_SECONDS
 AUTHENTICATION_FAILURE_DELAYS
+RELEASE_CEILING_SANDBOX_WALL_TIME_MS_MAX
+RELEASE_CEILING_SANDBOX_CPU_TIME_MS_MAX
+RELEASE_CEILING_SANDBOX_MEMORY_BYTES_MAX
+RELEASE_CEILING_SANDBOX_OUTPUT_BYTES_MAX
+RELEASE_CEILING_SANDBOX_SCRATCH_BYTES_MAX
+RELEASE_CEILING_SANDBOX_PROCESS_COUNT_MAX
+RELEASE_CEILING_IMPLEMENTATION_CODE_BYTES_MAX
+RELEASE_CEILING_STORED_VALUE_BYTES_MAX
+RELEASE_CEILING_TRIAL_FIXTURE_BYTES_MAX
+RELEASE_CEILING_RUN_SPOOL_FILE_BYTES_MAX
+RELEASE_CEILING_RUN_SPOOL_TOTAL_BYTES_MAX
+RELEASE_CEILING_SURFACE_REQUEST_BYTES_MAX
+RELEASE_CEILING_BOUNDED_TEXT_BYTES_MAX
+RELEASE_CEILING_FAILURE_DETAIL_BYTES_MAX
+RELEASE_CEILING_PAGE_SIZE_DEFAULT
+RELEASE_CEILING_PAGE_SIZE_MAX
+RELEASE_CEILING_TRANSPORT_TIMEOUT_MS_MAX
+DISCLOSURE_CLASSES
 ```
 
 ### Depth assessment
