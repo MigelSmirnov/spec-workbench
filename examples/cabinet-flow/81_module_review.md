@@ -579,3 +579,8 @@ says the A32 Linux profile guarantees them, so no runtime probe is written. One 
 reread, PASS. Observed in the same candidate and left open: the value root and staging directory are read from
 environment variables the design never names ("configured value root"); the installation's data directory is the
 only source A32 allows, and neither `put_value` nor `receive_file` says how the module obtains it.
+
+Fourth addendum (2026-09-23). The sixth run accepted `value_store` and rejected `run_spool` on the same static gate,
+four `getattr(os, "O_NOFOLLOW", 0)` probes across `receive_file`, `deliver_file` and `describe_file`: the phrase
+"no-follow" in two notes was generalised by the generator to every open in the module. The four notes now name the
+exact flags and the A32 guarantee. One slice changed by those sentences; reread, PASS.
