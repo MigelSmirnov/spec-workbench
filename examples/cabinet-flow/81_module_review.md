@@ -584,3 +584,18 @@ Fourth addendum (2026-09-23). The sixth run accepted `value_store` and rejected 
 four `getattr(os, "O_NOFOLLOW", 0)` probes across `receive_file`, `deliver_file` and `describe_file`: the phrase
 "no-follow" in two notes was generalised by the generator to every open in the module. The four notes now name the
 exact flags and the A32 guarantee. One slice changed by those sentences; reread, PASS.
+
+Fifth addendum (2026-09-23). The seventh run generated all thirty modules; the assembler's build gates rejected five
+(`model_attribute_unknown` / `model_constructor_unknown_field`, 25 findings): the code touched fields the models do not
+have — the class of entries 13–14, each finding a note that states a fact without naming its carrier. Carriers
+named now: slot retirement is the owning Slot's `status` (read with `load_slot`, added to two port lists), an
+Implementation and a SlotContractVersion carry no status, the admission verdict is read with
+`module:admission.current_admission` (new declared edge; `admission` does not import `slot_activation`, no cycle)
+and judged by `verdict`, `runtime_revision_ref` and `corpus_digest`, an execution belongs to an implementation by
+`executed_ref`; the manifest's opaque idempotency-key declaration lives in `idempotency_key_fields` (empty for null,
+otherwise the string verbatim as its single element — a reading of the model closure recorded here, since no
+decision names the field); a FlowRun pins its flow as `flow_activation_ref` and the approval's `service_instance` is
+the ServiceTarget's `targets` entry for the binding's service; `waiting_for_owner` lists `pending` approvals and
+`active` grants and applies the filter's three reference tuples; `owner_context_ref` names the record that holds a
+retention reference (A20 rule 7) and is not a StoredValue field; the trace record's `service_instance` is the draft's
+`service_instance_ref`. Five slices reread with the four questions: PASS. Ledger: 30 modules, 30 PASS.
