@@ -599,3 +599,13 @@ the ServiceTarget's `targets` entry for the binding's service; `waiting_for_owne
 `active` grants and applies the filter's three reference tuples; `owner_context_ref` names the record that holds a
 retention reference (A20 rule 7) and is not a StoredValue field; the trace record's `service_instance` is the draft's
 `service_instance_ref`. Five slices reread with the four questions: PASS. Ledger: 30 modules, 30 PASS.
+
+Sixth addendum (2026-09-23). The eighth run accepted four of the five reread modules at the assembler and rejected
+three: `manifest_reader` again (the note promised an optional non-normative `manifest_note` verbatim; the projection
+has no field for it — the note now says it is validated for shape and not carried; the State 5 text of the reader
+still says "reports the note", left as an open point since the note is non-normative), and two modules whose drafts
+were unchanged but whose accesses the build gate now judged: `operation_bindings` read a status off the ActorRef
+(the owner's activeness is the OwnerPrincipal's `status`, read with `load_owner_principal`, added to the port list)
+and hedged between `statement` and `text` of the OwnerStatement (`text`); `operation_invoker` read `service_id` off
+the ServiceTarget (the `targets` entry for the binding's service, which is the attempt's `service_instance`). Three
+slices reread: PASS. Ledger: 30 modules, 30 PASS.
