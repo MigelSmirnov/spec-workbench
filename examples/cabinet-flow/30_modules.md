@@ -67,8 +67,8 @@ signature; the values never enter an LLM prompt (SPEC_STANDARD §15.9).
 ### Direct consumers
 
 `access_control`, `installation`, `manifest_reader`, `operational_store`,
-`store_continuity`, `operation_invoker`, `run_executor`, `trace_journal`,
-`trial_corpus` and `value_store` import the constants their notes name;
+`store_continuity`, `operation_invoker`, `run_executor`, `service_transport`,
+`trace_journal`, `trial_corpus` and `value_store` import the constants their notes name;
 `installation` assembles ReleaseCeilings M48 from the release-ceiling constants
 and every other consumer of a ceiling reads that record. A consumer that needs
 one exact entry imports a scalar constant, never a tuple index or a mapping key.
@@ -79,6 +79,7 @@ one exact entry imports a scalar constant, never a tuple index or a mapping key.
 CREDENTIAL_PURPOSES
 OWNER_CHANNEL_AUTHENTICATION_PURPOSE
 AGENT_CHANNEL_AUTHENTICATION_PURPOSE
+SERVICE_INVOCATION_PURPOSE
 INSTALLATION_FORMAT_VERSION
 INSTALLATION_FILE_MODE_MAX
 INSTALLATION_FORMAT_VERSION_KEY

@@ -557,3 +557,16 @@ writes none. The Factory side is a tools change (`tools/sqlite-emitter-implement
 case side is one declared import: `operational_store_persistence` now imports `OperationalUnitOfWork` from
 `models`, as `cabinet_persistence` of the accepted Cabinet_web imports `CabinetUnitOfWork`. One slice changed by
 that import alone; the verdict is carried and the hash refreshed. Ledger: 30 modules, 30 PASS.
+
+Second addendum, after the fourth run stopped at `service_transport` (2026-09-22, night). With the emitter change
+on `main`, the run passed `operational_store_persistence` and generated and accepted fourteen more modules through
+`owner_authority`; `service_transport` was rejected by the static gate `unknown_top_level_import` at `import httpx`:
+A33 names the pinned `httpx` dependency, the note builds an `httpx.Client`, and `imports.third_party` declared only
+fastapi and pydantic. `import httpx` is now in the catalogue and in `third_party_by_module.service_transport`
+(SPEC_STANDARD §7). The Factory's delta projector owns changes to notes, contracts, `module_functions`,
+`module_internal` and `module_paths` but not to the import tables, so an import-only handoff is refused as a diff
+without an owner; that projector is the resolver the owner keeps unchanged. The change that carries it is the open
+point of the first entry of 2026-09-21: `send_request` now names `module:installation.resolve_credential` with the
+imported `SERVICE_INVOCATION_PURPOSE` constant (the third A23/A29 purpose, a scalar as §6.10 requires), the pinned
+service instance and its caller component. Two slices changed and were reread: `data_provider` (one string constant)
+and `service_transport` (one sentence, one declared import). PASS both. Ledger: 30 modules, 30 PASS.
