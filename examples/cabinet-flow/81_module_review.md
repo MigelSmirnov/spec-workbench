@@ -633,3 +633,11 @@ assembler — itself a model call, re-run for every module on every run — hit 
 names in two modules that had assembled before: `authorization_for_effect` for the binding's and owner's currency,
 `send_request` for the manifest revision, which no note sourced (now `module:installation.pinned_manifest_revision`,
 declared). Two slices reread: PASS. Ledger: 30 modules, 30 PASS.
+
+Tenth addendum (2026-09-23). The thirteenth run stopped when the provider's credits ran out during assembly (five
+modules, `429 insufficient_quota`). Before that the assembler rejected two more hedges: `owner_authority` matched the
+owner by an `owner_principal_id` the OwnerPrincipal does not have (`principal_id`), and `run_executor.create_run`
+read status, inputs, pins and a service off a FlowActivation that carries none — the note now names
+`flow_registry.current_flow_activation` and `flow_registry.flow_version` (declared) and where each pin lives. Two
+slices reread: PASS. Ledger: 30 modules, 30 PASS. The line is exported and preflighted; the next run waits only for
+credits.
