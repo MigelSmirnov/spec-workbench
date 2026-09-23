@@ -626,3 +626,10 @@ makes every NodeExecution a concluded attempt; the draft's verdict tuples and Sa
 the record's string fields with no rendering rule (now canonical JSON with sorted keys and `; `-joined verdicts,
 in `record_node_execution` and `run_trial`); `active_corpus` omitted `withdrawn_cases`. Four slices reread: PASS.
 Ledger: 30 modules, 30 PASS.
+
+Ninth addendum (2026-09-23). With the linker change on `main` the twelfth run reached the linker's neighbours: the
+assembler — itself a model call, re-run for every module on every run — hit its output limit on
+`operation_invoker` (raised by `ASSEMBLY_MAX_TOKENS=20000`, a run setting) and then hedged with invented fallback
+names in two modules that had assembled before: `authorization_for_effect` for the binding's and owner's currency,
+`send_request` for the manifest revision, which no note sourced (now `module:installation.pinned_manifest_revision`,
+declared). Two slices reread: PASS. Ledger: 30 modules, 30 PASS.
