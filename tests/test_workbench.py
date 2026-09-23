@@ -65,8 +65,8 @@ def test_global_spec_marks_assembly_complete():
         ["00_product.md", "70_notes.md", "global_spec.json"],
     )
     assert state.assembled
-    assert state.stage_name == "Assembly complete"
-    assert next_primary_state(state) == "done"
+    assert state.stage_name == "Assembled artifacts"
+    assert next_primary_state(state) == "verify with authoring next"
 
 
 def test_list_finds_case_that_exists_only_on_another_branch(tmp_path: Path):

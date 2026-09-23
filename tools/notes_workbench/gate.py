@@ -22,6 +22,11 @@ from project_extensions import deterministic_backends
 
 NOTE_RE = re.compile(r"^(?P<scope>[A-Za-z_][A-Za-z0-9_.]*):\s*\[(?P<class>[A-Z_]+)\]\s*(?P<text>.+?)\s*$")
 ADDRESS_RE = re.compile(r"=\s*(?P<address>(?:config|models|rules)(?:\.[A-Za-z_][A-Za-z0-9_]*)+)")
+# SPEC_STANDARD 15.4: a position in an array is not an identifier.
+POSITIONAL_ADDRESS_RE = re.compile(r"\b(?:config|models|rules)(?:\.[A-Za-z_][A-Za-z0-9_]*)+\[\d+\]")
+# SPEC_STANDARD 15.3.1: a data address written without `=` is not dereferenced at
+# all - the generator receives neither the value nor a symbol and has to invent it.
+BARE_DATA_ADDRESS_RE = re.compile(r"(?<![=\w.])(?<!= )\b(?P<address>(?:config|rules)(?:\.[A-Za-z_][A-Za-z0-9_]*)+)")
 STUB_PATTERNS = (
     r"^todo\b",
     r"^tbd\b",
@@ -321,6 +326,32 @@ def coverage(project: Path) -> dict[str, Any]:
             for address in addresses:
                 if not _address_resolves(address, known_addresses):
                     findings.append(_finding("block", "unresolved_structured_reference", f"Structured reference does not resolve: {address}", line=number, scope=scope))
+            for positional in sorted({item.group(0) for item in POSITIONAL_ADDRESS_RE.finditer(text)}):
+                findings.append(_finding(
+                    "block",
+                    "array_position_reference",
+                    f"{positional} names a value by its position in an array. SPEC_STANDARD 15.4: a position is not an "
+                    "identifier. Give the entry its own data-provider constant and name the imported symbol "
+                    "(SPEC_STANDARD 6.10: one exact entry - one scalar constant).",
+                    line=number,
+                    scope=scope,
+                ))
+            referenced = {item.start("address") for item in ADDRESS_RE.finditer(text)}
+            bare = sorted({
+                item.group("address")
+                for item in BARE_DATA_ADDRESS_RE.finditer(text)
+                if item.start("address") not in referenced
+            })
+            for address in bare:
+                findings.append(_finding(
+                    "block",
+                    "undereferenced_data_address",
+                    f"{address} is written without `=`: the Factory does not dereference it, so the generator receives "
+                    "neither the value nor a symbol and has to invent it. SPEC_STANDARD 15.3.1: name the imported "
+                    "data-provider constant, the settings field, or `= models.<Enum>`.",
+                    line=number,
+                    scope=scope,
+                ))
 
     findings.extend(
         _table_access_findings(notes, _load_provider_tables(project), contract_scopes)

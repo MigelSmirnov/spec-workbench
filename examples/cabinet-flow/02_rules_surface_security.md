@@ -461,9 +461,10 @@ has nothing left to invent.
 ### Normative rules
 
 1. `module:value_store` keeps bytes below the installation `data_root` in the
-   content-addressed layout fixed by `rules.host_byte_storage`; StoredValue
-   metadata remains in the operational store. A completed object is named only
-   by its lowercase SHA-256 digest and is never overwritten.
+   content-addressed layout this decision fixes as the
+   `linux_private_files_atomic_replace_v1` profile; StoredValue metadata
+   remains in the operational store. A completed object is named only by its
+   lowercase SHA-256 digest and is never overwritten.
 2. A write is streamed to a staging file created with exclusive permissions,
    flushed with `os.fsync`, verified for digest and size, and published with
    `os.replace` on the same filesystem. The containing directory is then
@@ -512,10 +513,10 @@ isolated and reclaimable without turning host paths into product data.
 ### Normative rules
 
 1. `module:service_transport` implements only manifest operations exposed on
-   `http_api`, using the pinned `httpx` dependency and the exact policy in
-   `rules.service_transport_runtime`. An operation exposed only through `mcp`
-   or `operator` is a typed unsupported-channel refusal before credential
-   resolution or any send.
+   `http_api`, using the pinned `httpx` dependency and the exact policy this
+   decision fixes as the `httpx_http_only_fail_closed_v1` profile. An
+   operation exposed only through `mcp` or `operator` is a typed
+   unsupported-channel refusal before credential resolution or any send.
 2. The manifest supplies the pinned instance base URL and operation HTTP
    exposure. The transport may join only the declared relative path to that
    base; an absolute operation URL, authority change, userinfo or fragment is
@@ -564,9 +565,9 @@ an accepted adapter stays visibly and safely unavailable.
 ### Normative rules
 
 1. Linux `bubblewrap` is the only isolation backend for this release. Startup
-   requires the executable and exact arguments fixed by
-   `rules.sandbox_runtime`; absence or a failed self-test keeps the supervisor
-   unhealthy.
+   requires the executable and exact arguments this decision fixes as the
+   `linux_bubblewrap_rlimit_v1` profile; absence or a failed self-test keeps
+   the supervisor unhealthy.
 2. Each execution uses fresh user, PID, IPC, UTS, cgroup and network namespaces,
    a read-only runtime and input mount, an empty environment, a private proc/dev,
    and one bounded writable scratch/output exchange. No host directory is

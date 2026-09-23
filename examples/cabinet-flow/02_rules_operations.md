@@ -80,12 +80,12 @@ silently, and cannot be redrawn by an agent.
 2. `manifest_record_digest` is lowercase SHA-256 of those exact file bytes. It
    is not a digest of parsed or reserialized JSON. Any byte change therefore
    changes the record digest even when invocation facts remain equivalent.
-3. The accepted legacy record shape and closed vocabularies are
-   `rules.platform_manifest_contract`. Unknown required shapes, duplicate
-   capability identities, duplicate exposed operations, malformed optional
-   fields and values outside the closed vocabularies are refused; unknown
-   additional descriptive fields are retained as non-normative and never
-   acquire invocation meaning by inference.
+3. The accepted legacy record shape and closed vocabularies are the
+   data-provider constant `PLATFORM_MANIFEST_CONTRACT`. Unknown required
+   shapes, duplicate capability identities, duplicate exposed operations,
+   malformed optional fields and values outside the closed vocabularies are
+   refused; unknown additional descriptive fields are retained as
+   non-normative and never acquire invocation meaning by inference.
 4. A capability's `idempotency_key` is an opaque `string | null`. The manifest
    reader reports it verbatim. Only `module:operation_bindings` may map a
    non-null declaration to typed input ports, and it must refuse the binding

@@ -29,7 +29,7 @@ def test_cabinet_assembly_stops_on_every_undecided_fact() -> None:
     assert report["ready"] is False
     assert [check["name"] for check in report["checks"]] == [
         "language", "modules", "identity", "fields", "data", "contracts", "external_contracts",
-        "notes", "closure_gaps", "router", "persistence", "witness", "flows",
+        "notes", "closure_gaps", "router", "persistence", "witness", "flows", "factory",
     ]
     by_name = {check["name"]: check for check in report["checks"]}
     assert all(check["warnings"] == 0 for check in report["checks"])
@@ -117,3 +117,46 @@ def test_unknown_check_fails_closed() -> None:
         assert str(error) == "Unknown assembly check: invented"
     else:
         raise AssertionError("Unknown check must fail closed.")
+
+
+def test_factory_check_is_the_factory_validator(tmp_path: Path, monkeypatch) -> None:
+    """SPEC_STANDARD 12-14 are held by the Factory validator; assembly asks it, not Stage 9 alone."""
+    from assembly_workbench.checks import factory_validation
+
+    case = tmp_path / "case"
+    case.mkdir()
+    spec = {"standard_version": 2, "contracts": {}}
+    (case / "global_spec.json").write_text(json.dumps(spec), encoding="utf-8")
+
+    without = factory_validation(case, factory_root=None)
+    assert without["summary"]["errors"] == 1
+    assert without["findings"][0]["code"] == "factory_unavailable"
+
+    factory = tmp_path / "code_factory"
+    (factory / "tools").mkdir(parents=True)
+    (factory / "tools" / "validate_spec.py").write_text(
+        """import argparse, hashlib, json
+p = argparse.ArgumentParser()
+p.add_argument('spec'); p.add_argument('--out', required=True); p.add_argument('--quiet', action='store_true')
+a = p.parse_args()
+s = json.load(open(a.spec, encoding='utf-8'))
+sha = 'sha256:' + hashlib.sha256(json.dumps(s, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+bad = s.get('_reject')
+open(a.out, 'w', encoding='utf-8').write(json.dumps({
+    'status': 'FINDINGS_PRESENT' if bad else 'PASS',
+    'summary': {'error': 1 if bad else 0, 'warning': 0},
+    'spec_sha': sha,
+    'findings': [{'id': 'SV-TEST', 'severity': 'error', 'message': 'unknown type Foo'}] if bad else [],
+}))
+raise SystemExit(1 if bad else 0)
+""",
+        encoding="utf-8",
+    )
+    clean = factory_validation(case, factory_root=factory)
+    assert clean["summary"]["errors"] == 0 and clean["summary"]["status"] == "PASS"
+
+    (case / "global_spec.json").write_text(json.dumps({**spec, "_reject": True}), encoding="utf-8")
+    rejected = factory_validation(case, factory_root=factory)
+    assert rejected["summary"]["errors"] == 1
+    assert rejected["findings"][0]["code"] == "SV-TEST"
+    assert "unknown type Foo" in rejected["findings"][0]["message"]

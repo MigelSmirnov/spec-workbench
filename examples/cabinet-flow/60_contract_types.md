@@ -1230,6 +1230,19 @@ No credential value or host path is present.
 
 ---
 
+## `AuthenticationFailureDelayRule`
+
+One row of the A27 authentication back-off table, as the deterministic data
+provider carries it. It is a data row, not a record: it has no identity and is
+never stored.
+
+Fields:
+
+- `failure_count: int` — the consecutive-failure count the row applies to;
+- `delay_seconds: int` — the delay before the next comparison is allowed.
+
+---
+
 ## Structured closure
 
 `60_model_closure_contract_types.json` is the machine-readable closure for all

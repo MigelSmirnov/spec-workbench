@@ -31,6 +31,109 @@ execution, transport or any policy.
 - kind: deep
 - hidden mechanism: type validity of the kernel's shared vocabulary
 
+## `data_provider`
+
+### Owns
+
+The one home (SPEC_STANDARD §15.4) of every accepted policy value that
+generated code has to read: the A23/A29 credential purposes, the A29
+installation configuration key names, format version and file-mode bound, the
+A30 store layout names and continuity states, the A31 platform manifest
+contract, the A27 authentication block thresholds and back-off table, the A26
+release ceilings, the ordered A03 disclosure classes with the open and
+personal-data classes as scalars, and the outcome-unknown wait reason —
+emitted as typed module constants from the closed `rules.data_provider_backend`
+IR.
+
+### Knows
+
+Only the closed data-provider IR: constant names, their declared value types,
+their declared values, and the contract-only row model
+`AuthenticationFailureDelayRule` the back-off table instantiates.
+
+### Must not own
+
+Behavior of any kind: no lookups, no validation, no interpretation, no
+authorization, no defaults beyond the declared values. It is not a second
+home: the State 2 decision that fixed each value is named by `source_refs` of
+`70_data_provider_closure.json`, and no `rules` or `config` address repeats the
+value.
+
+### Hides
+
+The literal values themselves. Consumers import symbols and receive the access
+signature; the values never enter an LLM prompt (SPEC_STANDARD §15.9).
+
+### Direct consumers
+
+`access_control`, `installation`, `manifest_reader`, `operational_store`,
+`store_continuity`, `operation_invoker`, `run_executor`, `service_transport`,
+`trace_journal`, `trial_corpus` and `value_store` import the constants their notes name;
+`installation` assembles ReleaseCeilings M48 from the release-ceiling constants
+and every other consumer of a ceiling reads that record. A consumer that needs
+one exact entry imports a scalar constant, never a tuple index or a mapping key.
+
+### Public surface
+
+```text
+CREDENTIAL_PURPOSES
+OWNER_CHANNEL_AUTHENTICATION_PURPOSE
+AGENT_CHANNEL_AUTHENTICATION_PURPOSE
+SERVICE_INVOCATION_PURPOSE
+INSTALLATION_FORMAT_VERSION
+INSTALLATION_FILE_MODE_MAX
+INSTALLATION_FORMAT_VERSION_KEY
+INSTALLATION_IDENTITY_KEY
+INSTALLATION_OWNER_KEY
+INSTALLATION_OWNER_IDENTITY_KEY
+INSTALLATION_OWNER_NAME_KEY
+INSTALLATION_DATA_DIRECTORY_KEY
+INSTALLATION_MANIFEST_KEY
+INSTALLATION_MANIFEST_ROOT_KEY
+INSTALLATION_MANIFEST_REVISION_KEY
+INSTALLATION_SERVICE_INSTANCES_KEY
+INSTALLATION_BINDINGS_KEY
+INSTALLATION_BINDING_PURPOSE_KEY
+INSTALLATION_BINDING_TARGET_KEY
+INSTALLATION_BINDING_MATERIAL_FILE_KEY
+PLATFORM_MANIFEST_CONTRACT
+STORE_CONTINUITY_NEW_INSTALLATION_STATE
+STORE_CONTINUITY_CONTINUOUS_STATE
+STORE_CONTINUITY_RESTORED_STATE
+STORE_VALUE_AREA_DIRECTORY_NAME
+STORE_DATABASE_FILE_NAME
+HOST_CONTINUITY_COUNTER_FILE_NAME
+OPEN_DISCLOSURE_CLASS
+PERSONAL_DATA_DISCLOSURE_CLASS
+OUTCOME_UNKNOWN_WAIT_REASON
+AUTHENTICATION_BLOCK_AFTER_FAILURES
+AUTHENTICATION_BLOCK_SECONDS
+AUTHENTICATION_FAILURE_DELAYS
+RELEASE_CEILING_SANDBOX_WALL_TIME_MS_MAX
+RELEASE_CEILING_SANDBOX_CPU_TIME_MS_MAX
+RELEASE_CEILING_SANDBOX_MEMORY_BYTES_MAX
+RELEASE_CEILING_SANDBOX_OUTPUT_BYTES_MAX
+RELEASE_CEILING_SANDBOX_SCRATCH_BYTES_MAX
+RELEASE_CEILING_SANDBOX_PROCESS_COUNT_MAX
+RELEASE_CEILING_IMPLEMENTATION_CODE_BYTES_MAX
+RELEASE_CEILING_STORED_VALUE_BYTES_MAX
+RELEASE_CEILING_TRIAL_FIXTURE_BYTES_MAX
+RELEASE_CEILING_RUN_SPOOL_FILE_BYTES_MAX
+RELEASE_CEILING_RUN_SPOOL_TOTAL_BYTES_MAX
+RELEASE_CEILING_SURFACE_REQUEST_BYTES_MAX
+RELEASE_CEILING_BOUNDED_TEXT_BYTES_MAX
+RELEASE_CEILING_FAILURE_DETAIL_BYTES_MAX
+RELEASE_CEILING_PAGE_SIZE_DEFAULT
+RELEASE_CEILING_PAGE_SIZE_MAX
+RELEASE_CEILING_TRANSPORT_TIMEOUT_MS_MAX
+DISCLOSURE_CLASSES
+```
+
+### Depth assessment
+
+- kind: deep
+- hidden mechanism: deterministic compilation of declared rule values into typed importable constants, never generated and never shown to a generator
+
 ## `system_clock`
 
 ### Owns
