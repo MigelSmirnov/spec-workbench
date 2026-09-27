@@ -74,7 +74,7 @@ def _normalize(name: str, report: dict[str, Any]) -> CheckResult:
         errors = int(summary.get("errors", 0))
         warnings = _severity_count(findings, {"warning", "review"})
         ready = bool(summary.get("handoff_ready"))
-    elif name in {"witness", "flows"}:
+    elif name in {"witness", "flows", "factory"}:
         errors = int(summary.get("errors", len(findings)))
         warnings = 0
         ready = errors == 0
@@ -154,7 +154,84 @@ CHECKS: dict[str, ReportFunction] = {
     "persistence": lambda project: persistence_coverage(project, storage_resolver=_factory_storage_resolver()),
     "witness": design_decision_witness.coverage,
     "flows": flow_closure.coverage,
+    "factory": lambda project: factory_validation(project, factory_root=_factory_root()),
 }
+
+
+def _factory_root() -> Path | None:
+    """The sibling Factory checkout, or the one SPEC_WORKBENCH_FACTORY_ROOT names.
+
+    An explicit root that is not a Factory is reported as such, never replaced
+    by another copy.
+    """
+    import os
+    override = os.environ.get("SPEC_WORKBENCH_FACTORY_ROOT")
+    if override:
+        return Path(override)
+    root = Path(__file__).resolve().parents[2]
+    for candidate in (root.parent / "code_factory", root.parent.parent / "code_factory"):
+        if (candidate / "tools" / "validate_spec.py").is_file():
+            return candidate
+    return None
+
+
+def factory_validation(project: Path, *, factory_root: Path | None) -> dict[str, Any]:
+    """The Factory's canonical validator, at assembly rather than at Stage 9.
+
+    SPEC_STANDARD sections 12-14 (type origin, properties, determinism) are
+    checked by no Workbench gate; before this they reached an author only at
+    admission, after the whole specification was written. The verdict is the
+    Factory's: no rule is implemented here. Without a Factory the check says so
+    and is not ready - aggregate readiness is not available offline.
+    """
+    source = project / "global_spec.json"
+    summary: dict[str, Any] = {"errors": 0, "factory_root": str(factory_root) if factory_root else None}
+    if not source.is_file():
+        return {"summary": {**summary, "errors": 1}, "findings": [{
+            "severity": "error", "code": "assembled_spec_missing",
+            "message": "global_spec.json is not assembled yet.",
+        }]}
+    validator = factory_root / "tools" / "validate_spec.py" if factory_root else None
+    if validator is None or not validator.is_file():
+        return {"summary": {**summary, "errors": 1}, "findings": [{
+            "severity": "error", "code": "factory_unavailable",
+            "message": "No Factory checkout with tools/validate_spec.py: pass SPEC_WORKBENCH_FACTORY_ROOT or place "
+                       "code_factory beside this repository. Aggregate readiness is not decided without it.",
+        }]}
+    import hashlib, json as _json, subprocess, sys as _sys, tempfile
+    with tempfile.TemporaryDirectory(prefix="spec-workbench-assembly-") as temp:
+        report_path = Path(temp) / "validation.json"
+        result = subprocess.run(
+            [_sys.executable, str(validator), str(source), "--out", str(report_path), "--quiet"],
+            text=True, capture_output=True, check=False,
+        )
+        if not report_path.is_file():
+            return {"summary": {**summary, "errors": 1}, "findings": [{
+                "severity": "error", "code": "factory_validator_failed",
+                "message": f"The Factory validator produced no report (exit {result.returncode}): "
+                           + (result.stderr.strip().splitlines() or [""])[-1][:300],
+            }]}
+        report = _json.loads(report_path.read_text(encoding="utf-8"))
+    spec = _json.loads(source.read_text(encoding="utf-8"))
+    canonical = "sha256:" + hashlib.sha256(
+        _json.dumps(spec, sort_keys=True, ensure_ascii=False).encode("utf-8")
+    ).hexdigest()
+    findings = []
+    if report.get("spec_sha") != canonical:
+        findings.append({"severity": "error", "code": "factory_report_unbound",
+                         "message": "The validator report is not bound to this global_spec.json."})
+    for item in report.get("findings") or []:
+        if str(item.get("severity", "")).lower() in {"error", "block"}:
+            findings.append({
+                "severity": "error", "code": str(item.get("id") or item.get("code") or "factory_validation"),
+                "message": f"Factory validator: {item.get('message', '')}"[:500],
+            })
+    summary.update({
+        "errors": len(findings),
+        "status": report.get("status"),
+        "factory_summary": report.get("summary"),
+    })
+    return {"summary": summary, "findings": findings}
 
 def run(project: Path, name: str, *, factory_root: Path | None = None) -> CheckResult:
     function = CHECKS.get(name)

@@ -17,6 +17,7 @@ from spec_projection_workbench.model import SpecProjectionError
 from module_review_workbench import build_slice
 from external_contract_workbench import coverage as external_contract_coverage
 from notes_workbench.language import signature_parameters
+from factory_slice_workbench import probe as probe_factory_slices
 from spec_language_workbench import SpecLanguageError, verify_payload as verify_language_payload
 
 from factory_admission_workbench.model import (
@@ -915,6 +916,36 @@ def _factory_inspector_check(
     ), report
 
 
+def _factory_slices_check(
+    factory_root: Path, source: Path, case_root: Path | None, project: str | None = None
+) -> AdmissionCheck:
+    """FA018: what the Factory cuts for each module, before it is asked to generate.
+
+    The validator and the inspector read the whole specification. Generation
+    reads one local specification per module, and that cut is where an induced
+    import or a dereferenced value first exists. A stop found there costs a
+    started Route B run; the Factory's own slicer and seam name it here.
+    """
+    report = probe_factory_slices(source, factory_root, case_root, project)
+    if not report["applicable"] and not report["findings"]:
+        return AdmissionCheck(
+            "FA018",
+            CHECK_NOT_APPLICABLE,
+            "The source specification declares no modules to cut.",
+            {"summary": report["summary"]},
+        )
+    ready = bool(report["ready"])
+    return AdmissionCheck(
+        "FA018",
+        CHECK_PASS if ready else CHECK_BLOCK,
+        "The Factory cuts every module; no induced import collides with a name, no slice carries a value, and "
+        "every changed data address reaches a module."
+        if ready
+        else "The Factory's own local specifications would stop generation.",
+        {"summary": report["summary"], "findings": report["findings"]},
+    )
+
+
 def _semantic_check(case_root: Path | None) -> AdmissionCheck:
     if case_root is None:
         return AdmissionCheck(
@@ -1057,6 +1088,9 @@ def _factory_toolchain_check(factory_root: Path) -> AdmissionCheck:
         factory_root / "SPEC_STANDARD.md",
         factory_root / "tools/validate_spec.py",
         factory_root / "tools/run_spec_inspector_preflight.py",
+        factory_root / "tools/normalize_spec.py",
+        factory_root / "tools/build_local_spec.py",
+        factory_root / "tools/data_code_seam.py",
         factory_root / "tools/bootstrap_project.py",
         factory_root / "project_index/structure.json",
     ]
@@ -1115,6 +1149,7 @@ def check(
     checks.extend([
         validation_check,
         inspector_check,
+        _factory_slices_check(factory_root, source, case_root, project),
         _semantic_check(case_root),
         _target_check(factory_root, project, source, update_existing),
         _factory_toolchain_check(factory_root),

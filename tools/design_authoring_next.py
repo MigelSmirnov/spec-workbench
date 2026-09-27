@@ -91,6 +91,24 @@ def _action(
     }
 
 
+def _read(sequence: dict[str, Any], phase_id: str) -> list[dict[str, str]]:
+    """Phase-scoped methodology reading list.
+
+    The sequence owns which documents apply to a phase, so an agent reads what
+    the pipeline returns instead of a global "read first" list.
+    """
+    phase = _phase(sequence, phase_id)
+    result: list[dict[str, str]] = []
+    for doc in phase.get("docs", []):
+        entry = {"path": str(doc["path"])}
+        if doc.get("section"):
+            entry["section"] = str(doc["section"])
+        if doc.get("why"):
+            entry["why"] = str(doc["why"])
+        result.append(entry)
+    return result
+
+
 def _result(
     *,
     sequence: dict[str, Any],
@@ -112,6 +130,9 @@ def _result(
         "blocked": blocked,
         "reason": reason,
         "action": _action(sequence, phase, project_text, use_next=use_next),
+        "purpose": str(_phase(sequence, phase).get("purpose") or ""),
+        "read": _read(sequence, phase),
+        "ask": [str(item) for item in _phase(sequence, phase).get("questions") or []],
         "summary": summary or {},
         "findings": findings or [],
     }
@@ -525,8 +546,15 @@ def main(argv: list[str] | None = None) -> int:
     else:
         print(f"Authoring next: {payload['phase']}")
         print(payload["reason"])
+        if payload.get("purpose"):
+            print(f"purpose: {payload['purpose']}")
         if payload.get("action"):
             print(payload["action"]["command"])
+        for doc in payload.get("read", []):
+            where = f"{doc['path']}#{doc['section']}" if doc.get("section") else doc["path"]
+            print(f"read: {where}")
+        for question in payload.get("ask", []):
+            print(f"ask: {question}")
     return 1 if payload["blocked"] else 0
 
 

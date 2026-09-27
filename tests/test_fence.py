@@ -26,8 +26,8 @@ def test_enforce_raises_every_soft_finding_to_a_stop_with_a_hint():
     assert fence.stops(findings) == 3
 
 
-def test_assembly_runs_the_witness_and_flow_checks():
-    assert CHECK_ORDER[-2:] == ("witness", "flows")
+def test_assembly_runs_the_witness_flow_and_factory_checks():
+    assert CHECK_ORDER[-3:] == ("witness", "flows", "factory")
 
 
 def test_flow_closure_stops_on_capabilities_nothing_reaches():

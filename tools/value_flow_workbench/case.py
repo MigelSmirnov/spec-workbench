@@ -23,6 +23,14 @@ _IDENTIFIER = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 _MODULE_SECTION = re.compile(r"^## `([A-Za-z_][A-Za-z0-9_]*)`\s*$", re.MULTILINE)
 _KNOWS = re.compile(r"^### Knows\s*$(.*?)(?=^### |\Z)", re.MULTILINE | re.DOTALL)
 _BACKTICKED = re.compile(r"`(?:module:)?([A-Za-z_][A-Za-z0-9_]*)`")
+_MODEL_SECTION = re.compile(r"^## Model \S+ — (\S+)[^\n]*$", re.MULTILINE)
+_FACT_BLOCK = re.compile(r"^Candidate (?:fields|facts)[^\n]*:\s*\n(.*?)(?=^### |\Z)", re.MULTILINE | re.DOTALL)
+_BULLET = re.compile(r"^- (.*?)(?=^- |\Z)", re.MULTILINE | re.DOTALL)
+_LEADING_NAMES = re.compile(r"\s*((?:`[a-z_][a-z0-9_]*`(?:\s*,\s*|\s+and\s+)?)+)")
+_FENCED = re.compile(r"^```.*?^```", re.MULTILINE | re.DOTALL)
+_INLINE_FIELD = re.compile(r"`([A-Z][A-Za-z0-9]*)\.([a-z_][a-z0-9_]*)`")
+# Documents whose prose names a model field outright: rules, flows and public operations.
+_REFERENCE_DOCUMENTS = ("02_rules*.md", "40_flows*.md", "50_public_apis*.md")
 _DELEGATES = re.compile(r"^[-*\s]*\**delegates to\**\s*:\s*(.*?)\s*$", re.MULTILINE | re.IGNORECASE)
 
 
@@ -71,6 +79,9 @@ class Case:
     instant_type: str | None
     wall_clock: tuple[str, str] | None          # (module, function) that hands out the instant
     deterministic_modules: set[str]
+    state1_facts: dict[str, tuple[str, list[str]]] = field(default_factory=dict)   # model -> (document, fact names)
+    state1_nameless: dict[str, str] = field(default_factory=dict)                  # model -> document
+    field_references: list[tuple[str, int, str, str]] = field(default_factory=list)  # (document, line, model, field)
 
     def record_models(self, annotation: str) -> list[str]:
         """Models with declared fields that the annotation names, in order."""
@@ -126,6 +137,50 @@ def _knows(project: Path, modules: set[str]) -> dict[str, list[str]]:
     return result
 
 
+def _state1_facts(project: Path, index: ModelIndex) -> tuple[dict[str, tuple[str, list[str]]], dict[str, str]]:
+    """The facts State 1 says a model carries: the names that lead a clause of its bullet list.
+
+    ``- `created_by`: ActorRef; `created_at`.`` names two facts; a backticked word later in a
+    clause is a value or a reference, not a fact of this model. Whether a type, a value or prose
+    follows the name does not matter — the name is the claim.
+    """
+    facts: dict[str, tuple[str, list[str]]] = {}
+    nameless: dict[str, str] = {}
+    for path in sorted(project.glob("01_models*.md")):
+        parts = _MODEL_SECTION.split(path.read_text(encoding="utf-8"))
+        for position in range(1, len(parts), 2):
+            model, body = parts[position], parts[position + 1]
+            surface = index.classes.get(model)
+            if surface is None or not surface.fields:
+                continue
+            block = _FACT_BLOCK.search(body)
+            names: list[str] = []
+            for bullet in _BULLET.findall(block.group(1)) if block else []:
+                for clause in bullet.split("\n\n")[0].split(";"):
+                    lead = _LEADING_NAMES.match(clause)
+                    if lead:
+                        names.extend(re.findall(r"`([a-z_][a-z0-9_]*)`", lead.group(1)))
+            if names:
+                facts[model] = (path.name, list(dict.fromkeys(names)))
+            else:
+                nameless[model] = path.name
+    return facts, nameless
+
+
+def _field_references(project: Path, index: ModelIndex) -> list[tuple[str, int, str, str]]:
+    """Inline `Model.field` references in prose. Fenced blocks are formal pseudo-code and are not judged."""
+    found: list[tuple[str, int, str, str]] = []
+    for pattern in _REFERENCE_DOCUMENTS:
+        for path in sorted(project.glob(pattern)):
+            text = _FENCED.sub(lambda match: "\n" * match.group(0).count("\n"), path.read_text(encoding="utf-8"))
+            for number, line in enumerate(text.split("\n"), start=1):
+                for model, name in _INLINE_FIELD.findall(line):
+                    surface = index.classes.get(model)
+                    if surface is not None and surface.fields:
+                        found.append((path.name, number, model, name))
+    return found
+
+
 def load(project: Path) -> Case:
     contracts_path, plan_path = project / "60_contracts.json", project / "60_contract_plan.json"
     if not contracts_path.is_file() or not plan_path.is_file():
@@ -157,7 +212,9 @@ def load(project: Path) -> Case:
     impacts = design_closure_gaps.parse_state_impacts(project)
     instant, accessor = _time_policy(project)
     modules = set(index.modules) | set(module_functions)
+    facts, nameless = _state1_facts(project, index)
     return Case(
+        state1_facts=facts, state1_nameless=nameless, field_references=_field_references(project, index),
         project=project, index=index, functions=functions, modules=modules, module_functions=module_functions,
         knows=_knows(project, modules), read_only={name for name, row in impacts.items() if row["read_only"]},
         mutating={name for name, row in impacts.items() if not row["read_only"]},
