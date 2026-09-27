@@ -641,3 +641,16 @@ read status, inputs, pins and a service off a FlowActivation that carries none �
 `flow_registry.current_flow_activation` and `flow_registry.flow_version` (declared) and where each pin lives. Two
 slices reread: PASS. Ledger: 30 modules, 30 PASS. The line is exported and preflighted; the next run waits only for
 credits.
+
+Eleventh addendum (2026-09-27). The fourteenth run generated 30 of 30 and the assembler rejected three modules on
+`model_attribute_unknown`, the entries 13-14 class: `admission.run_trial` read an `implementation_ref` off an
+ImplementationRecordView that carries `implementation` (an Implementation with `implementation_id`) and no reference of
+its own; `send_request` searched `input_ports` and `output_ports` on a ManifestOperationProjection that has no ports;
+`invoke_operation` read a `port_id` off StoredValue and SpooledBytes, which carry none. The notes now name the carriers:
+run_trial's implementation identity; the projection carries no ports and port matching belongs to the caller;
+invoke_operation and advance_run fix the value/file-to-port correspondence positionally, by the binding's declared port
+order per carriage — the convention identify_trial_case already states for the trial corpus, engaging A14.1 (the key is
+derived from the values of the named ports). Four slices reread: PASS. Ledger: 30 modules, 30 PASS. Open observation,
+not blocking: send_request holds no run, node or port identity with which `run_spool.receive_file` or `deliver_file`
+could be called, although its note says files stream through `module:run_spool`, and `TransportResult.response_file`
+has no writer — an owner's point beside the `SpooledBytes.released_at` one.
