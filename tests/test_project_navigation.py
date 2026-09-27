@@ -72,7 +72,7 @@ def test_list_projects_uses_curated_index_not_arbitrary_cases(tmp_path: Path):
 
     assert [row.id for row in rows] == ["demo"]
     assert rows[0].canonical_ref == "agent/demo"
-    assert rows[0].stage_name == "Assembly complete"
+    assert rows[0].stage_name == "Assembled artifacts"
     assert "examples/unindexed" not in rows[0].read_order
 
 
@@ -157,3 +157,53 @@ def test_single_branch_clone_fetches_only_missing_canonical_ref(tmp_path: Path):
         clone, "for-each-ref", "--format=%(refname:short)", "refs/remotes"
     ).splitlines()
     assert "origin/agent/demo" in remote_refs_after
+
+
+def _repo_with_origin(tmp_path: Path) -> tuple[Path, Path]:
+    """A clone whose local `agent/demo` exists, with origin holding the same branch."""
+    source = tmp_path / "source"
+    source.mkdir()
+    git(source, "init", "-b", "main")
+    git(source, "config", "user.email", "test@example.com")
+    git(source, "config", "user.name", "Spec Workbench Test")
+    write_index(source)
+    commit_all(source, "index")
+    git(source, "checkout", "-b", "agent/demo")
+    write(source / "examples" / "demo" / "00_product.md")
+    commit_all(source, "demo state 0")
+    git(source, "checkout", "main")
+    origin = tmp_path / "origin.git"
+    subprocess.run(["git", "clone", "--bare", str(source), str(origin)], check=True, capture_output=True)
+    clone = tmp_path / "clone"
+    subprocess.run(["git", "clone", str(origin), str(clone)], check=True, capture_output=True)
+    git(clone, "config", "user.email", "test@example.com")
+    git(clone, "config", "user.name", "Spec Workbench Test")
+    git(clone, "branch", "agent/demo", "origin/agent/demo")
+    return clone, source
+
+
+def test_stale_local_branch_does_not_hide_the_canonical_state(tmp_path: Path):
+    clone, source = _repo_with_origin(tmp_path)
+    # the branch moves on origin: State 1 is authored and pushed elsewhere
+    git(source, "checkout", "agent/demo")
+    write(source / "examples" / "demo" / "10_models.md")
+    commit_all(source, "demo state 1")
+    subprocess.run(["git", "push", "-q", str(tmp_path / "origin.git"), "agent/demo"], cwd=source, check=True, capture_output=True)
+
+    view = project_view(clone, "demo")
+
+    assert view.resolved_ref == "origin/agent/demo"
+    assert view.stage_name == "Domain models"
+
+
+def test_local_branch_ahead_of_origin_is_the_authors_view(tmp_path: Path):
+    clone, _source = _repo_with_origin(tmp_path)
+    git(clone, "checkout", "-q", "agent/demo")
+    write(clone / "examples" / "demo" / "10_models.md")
+    commit_all(clone, "unpushed state 1")
+    git(clone, "checkout", "-q", "main")
+
+    view = project_view(clone, "demo")
+
+    assert view.resolved_ref == "agent/demo"
+    assert view.stage_name == "Domain models"

@@ -150,17 +150,39 @@ def _fetch_canonical_ref(repo_root: Path, ref: str) -> None:
     )
 
 
-def _resolve_ref(repo_root: Path, ref: str) -> str:
-    for candidate in (ref, f"origin/{ref}"):
-        if _has_commit(repo_root, candidate):
-            return candidate
+def _is_ancestor(repo_root: Path, ancestor: str, descendant: str) -> bool:
+    proc = subprocess.run(
+        ["git", "-C", str(repo_root), "merge-base", "--is-ancestor", ancestor, descendant],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    return proc.returncode == 0
 
+
+def _resolve_ref(repo_root: Path, ref: str) -> str:
+    """The freshest commit of the canonical branch this checkout can see.
+
+    The canonical branch lives on origin. A local branch of the same name is a
+    working copy that may be stale: on 2026-09-21 the MCP answered from a local
+    `agent/cabinet-flow` 123 commits behind origin and reported 97 State 7
+    blocks that the real branch had closed. So the indexed ref is fetched once
+    per call (only that ref, never a scan of the repository), `origin/<ref>` is
+    preferred, and the local branch is used only when it is ahead of origin -
+    unpushed work the author is looking at - or when origin cannot be reached.
+    """
     # Agent sandboxes and external readers often use --single-branch clones.
     # Fetch only the curated canonical ref needed by PROJECT_INDEX.json; do not
     # scan or fetch arbitrary repository branches for normal project discovery.
     _fetch_canonical_ref(repo_root, ref)
-    if _has_commit(repo_root, f"origin/{ref}"):
-        return f"origin/{ref}"
+    remote = f"origin/{ref}"
+    has_local = _has_commit(repo_root, ref)
+    has_remote = _has_commit(repo_root, remote)
+    if has_remote and has_local and not _is_ancestor(repo_root, ref, remote):
+        return ref
+    if has_remote:
+        return remote
+    if has_local:
+        return ref
 
     remote_refs = _git(
         repo_root,
@@ -187,6 +209,9 @@ def _files(repo_root: Path, ref: str, path: str) -> list[str]:
 
 
 def _stage(files: list[str]) -> tuple[int | None, str, str | None, bool]:
+    """Highest numbered artifact present. This is a file-layout hint, not the
+    authoring phase: `global_spec.json` may exist while later gates still block.
+    The authoring phase is resolved by tools/authoring_pipeline.py."""
     labels = dict(PRIMARY_STATES)
     primary: list[tuple[int, str]] = []
     for rel in files:
@@ -198,13 +223,14 @@ def _stage(files: list[str]) -> tuple[int | None, str, str | None, bool]:
     assembled = "global_spec.json" in files
     if primary:
         code, rel = max(primary, key=lambda item: item[0])
-        return code, "Assembly complete" if assembled else labels[code], rel, assembled
-    return None, "Assembly complete" if assembled else "No primary state", None, assembled
+        return code, "Assembled artifacts" if assembled else labels[code], rel, assembled
+    return None, "Assembled artifacts" if assembled else "No primary state", None, assembled
 
 
 def _next(stage_code: int | None, assembled: bool) -> str:
+    """Artifact-prefix hint only. Semantic readiness is owned by `authoring next`."""
     if assembled:
-        return "done"
+        return "verify with authoring next"
     if stage_code is None:
         return "00 Product boundary"
     for code, label in PRIMARY_STATES:

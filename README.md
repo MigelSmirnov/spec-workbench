@@ -17,7 +17,7 @@ For normal repository navigation, do not search branches or `examples/` manually
 python tools/workbench.py
 ```
 
-With no arguments the command runs `list`. It shows only the curated working projects and resolves their canonical refs, paths, and current design stages.
+With no arguments the command runs `list`. It shows only the curated working projects and resolves their canonical refs, authoring phases (through the common pipeline), and file-layout hints.
 
 Equivalent explicit command:
 
@@ -33,7 +33,7 @@ After choosing a project, resolve its working context with:
 python tools/workbench.py show <project>
 ```
 
-`show` returns the canonical ref, project path, current stage, next stage, and a minimal read order. Both `list` and `show` support `--json` for agents and other tooling:
+`show` returns the canonical ref, project path, the pipeline-resolved authoring phase, the documents to read for that phase, and the project's design-state read order. The `Artifacts` line is only a file-layout hint. Both `list` and `show` support `--json` for agents and other tooling:
 
 ```bash
 python tools/workbench.py list --json
@@ -324,7 +324,7 @@ the checks available when changes are authored through a GitHub connector
 that cannot execute local commands.
 
 The cross-repository admission job additionally checks out the private
-`MigelSmirnov/panelforge-sandbox` repository and runs the real Factory
+`MigelSmirnov/code-factory` repository (branch `main`) and runs the real Factory
 validator. It authenticates with a dedicated read-only deploy key whose
 private half is stored in `spec-workbench` as the Actions secret
 `FACTORY_REPO_DEPLOY_KEY`; no personal GitHub token is exposed to the job.

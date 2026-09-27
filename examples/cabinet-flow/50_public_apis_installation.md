@@ -4,7 +4,7 @@ The installation boundary is host-controlled. These operations reveal only
 typed configuration facts or a component-local credential handle; no request,
 flow, binding or persisted record can select another target, secret or ceiling.
 
-## `public_op:installation.manifest_revision`
+## `public_op:installation.pinned_manifest_revision`
 
 ### Owner
 

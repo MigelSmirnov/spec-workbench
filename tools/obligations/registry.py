@@ -97,6 +97,8 @@ TYPES: dict[str, ObligationType] = {
            "the router closure cannot be proven for this operation yet", "check:router"),
         _t("persistence_closure_unproven", "implementation", "module",
            "the persistence closure cannot be proven yet", "check:persistence"),
+        _t("factory_validation_rejected", "implementation", "check",
+           "the Factory's canonical validator rejects the assembled specification; its finding names the rule", "check:factory"),
         # ---- derived cost --------------------------------------------------------
         _t("model_closure_radius", "derived_cost", "model interface",
            "contracts in N modules reference this model; closing it regenerates them", "projection"),
@@ -148,6 +150,7 @@ CHECK_FALLBACK: dict[str, str] = {
     "persistence": "persistence_closure_unproven",
     "witness": "decision_without_witness",
     "flows": "capability_unreachable",
+    "factory": "factory_validation_rejected",
 }
 
 

@@ -36,7 +36,7 @@ writes startup/recovery timestamps uses the same KernelInstant source.
    and learn whether the store is new, continuous or restored (A30), then
    `capability:access_control.establish_owner`. It constructs every module and asks
    `capability:installation.release_ceilings`,
-   `capability:installation.manifest_revision` and
+   `capability:installation.pinned_manifest_revision` and
    `capability:installation.resolve_service_target` to validate the whole
    configuration, including the refusal of mixed production and non-production
    targets. Timestamp-owning startup modules obtain their event time only from
@@ -173,7 +173,7 @@ KernelInstant timestamps owned by the vocabulary registry.
 2. Through `capability:kernel_surface.author`,
    `capability:semantic_vocabulary.submit_proposal` records the complete
    candidate and motivating finding. The vocabulary module obtains
-   `capability:owner_authority.owner_statement` so the stored owner-facing
+   `capability:owner_authority.generate_owner_statement` so the stored owner-facing
    question is kernel-generated and separate from agent-supplied text.
    Proposal and decision timestamps come only from
    `capability:system_clock.now`.
@@ -405,7 +405,7 @@ writes no network code.
    from the manifest. The proposal must supply one unambiguous exact mapping of
    a non-null declaration to typed input ports; `null` maps to no ports. The
    identity comes from `capability:identity.identify_binding_version`.
-3. `capability:owner_authority.owner_statement` states in plain words what the
+3. `capability:owner_authority.generate_owner_statement` states in plain words what the
    operation does, in which service, what it may change and which disclosure
    class each input accepts.
 4. The owner's `capability:operation_bindings.accept_binding_version` makes the
@@ -460,7 +460,7 @@ to their owning modules.
 4. `capability:flow_registry.activate_flow_version` activates a proven read-only
    version by the kernel at once. Flow/proof/activation lifecycle timestamps are
    obtained from `capability:system_clock.now`. For any other version it requires the owner,
-   who sees `capability:owner_authority.owner_statement` naming every non-read
+   who sees `capability:owner_authority.generate_owner_statement` naming every non-read
    node.
 5. `capability:flow_registry.current_flow_activation` names the version that
    runs by default, and `capability:flow_registry.retire_flow` ends a flow.
@@ -548,7 +548,8 @@ as taking an invoice photo from one service and giving it into custody.
 
 As in `flow:run_read_only_flow`, with `module:owner_authority` deciding whether
 each effect is authorized now and `module:system_clock` supplying approval,
-grant and invocation timestamps to their owners.
+grant and invocation timestamps to their owners. `module:store_continuity`
+closes effects when host/store continuity is not proven.
 
 ### Steps
 
@@ -565,8 +566,11 @@ grant and invocation timestamps to their owners.
 3. The owner's `capability:owner_authority.decide_approval` approves or denies,
    obtaining its decision KernelInstant from `capability:system_clock.now`.
    A mapped node receives one decision for the whole collection.
-4. `capability:operation_invoker.invoke_operation` records the in-flight attempt
-   durably, derives the idempotency key, and sends exactly the approved inputs.
+4. `capability:operation_invoker.invoke_operation` advances the durable counter
+   with `capability:store_continuity.advance_effect_counter`, records the
+   in-flight attempt in the same unit, persists the host copy with
+   `capability:store_continuity.record_host_continuity_counter`, derives the
+   idempotency key, and only then sends exactly the approved inputs.
 5. `capability:owner_authority.grant_standing_approval` and
    `capability:owner_authority.revoke_standing_approval` let the owner stop or
    resume being asked for one non-destructive node of one flow version.
@@ -599,7 +603,8 @@ run's status or authorizes an effect.
 `module:run_executor` owns resumption and the run's state.
 `module:operation_invoker` finds out what happened by reading the owning service.
 `module:system_clock` supplies only retry/back-off KernelInstant values; service
-timestamps never become kernel time.
+timestamps never become kernel time. `module:store_continuity` keeps effects
+closed after a restored-store detection until the owner confirms continuity.
 
 ### Steps
 
@@ -617,6 +622,9 @@ timestamps never become kernel time.
    reconciliation repeats with back-off timed by `capability:system_clock.now`.
 4. `capability:run_executor.cancel_run` lets the owner end a waiting run; the
    record states whether an effect's outcome was still undetermined.
+5. When startup detected restored state, only the owner may reopen effects with
+   `capability:store_continuity.confirm_continuity`; recovery and inspection
+   remain available while effects are closed.
 
 ### Outcomes
 

@@ -37,6 +37,45 @@ M01.
 Nothing.
 """
 
+STATE1 = """# Models
+
+## Model M01 — Entry
+
+### Meaning
+
+One ledger entry.
+
+Candidate fields:
+
+- `entry_id`: stable identity;
+- `title`: bounded text;
+- `opened_by`: Actor; `opened_at`;
+- `closed_at`: absent while the entry is `open`.
+
+### Identity
+
+entity
+
+## Model M02 — EntryDraft
+
+Candidate facts for release v1:
+
+- `title`: 64;
+- `opened_at`.
+
+## Model M03 — Actor
+
+Candidate fields:
+
+- `actor_id`.
+
+## Model M04 — Instant
+
+Candidate fields:
+
+- `epoch_us`: microseconds.
+"""
+
 PUBLIC = """# Public operations
 
 ## `public_op:ledger.open_entry`
@@ -99,6 +138,7 @@ def write_case(root: Path, *, notes: dict[str, str] | None = None, contracts: di
     (case / "80_notes.md").write_text("# Notes\n\n" + "\n".join(
         f"{scope}: [BEHAVIOR] {text}" for scope, text in lines.items() if text) + "\n", encoding="utf-8")
     (case / "30_modules.md").write_text(MODULES, encoding="utf-8")
+    (case / "01_models.md").write_text(STATE1, encoding="utf-8")
     (case / "50_public_apis.md").write_text(PUBLIC, encoding="utf-8")
     if closure is not None:
         (case / CLOSURE_FILE).write_text(json.dumps({"schema_version": CLOSURE_SCHEMA, "status": "closed",
@@ -120,6 +160,8 @@ def test_a_closed_case_reports_its_denominators(tmp_path):
     # actor is a record and is judged through its own model; title is a field; memo is declared
     assert summary["inputs"] == {"constructing_functions": 1, "pairs": 2, "resolved": 2, "unresolved": 0}
     assert summary["collaborators"] == {"edges": 2, "reachable": 2, "unreachable": 0}
+    # a name leads a clause of a bullet (`opened_by`: Actor; `opened_at`); `open` later in a clause is a value
+    assert summary["carriers"] == {"state1_models": 4, "facts": 9, "references": 0, "without_carrier": 0}
 
 
 def test_a_required_instant_without_a_source_stops_the_case(tmp_path):
@@ -265,3 +307,39 @@ def test_a_facade_reaches_the_modules_it_delegates_to(tmp_path):
     report = coverage(case)
     assert codes(report) == [("known_collaborator_unreachable", "ledger")]
     assert report["findings"][0]["collaborator"] == "entry_store"
+
+
+def test_a_fact_state_1_claims_must_exist_in_the_closure_whatever_follows_its_name(tmp_path):
+    """The closure regrouped the release limits under other names; State 1 lists them with values, not types."""
+    case = write_case(tmp_path, closure={"inputs": {"open_entry": {"memo": {"sink": "guard"}}}},
+                      models={"EntryDraft": {"identity": "value", "fields": {"headline": "str", "opened_at": "Instant"}}})
+    report = coverage(case)
+    assert [item["code"] for item in report["findings"]] == ["state1_fact_without_carrier"]
+    finding = report["findings"][0]
+    assert finding["model"] == "EntryDraft" and finding["facts"] == ["title"] and "headline" in finding["message"]
+    assert report["summary"]["carriers"]["without_carrier"] == 1
+
+
+def test_a_field_named_outright_in_prose_is_checked_and_formal_pseudo_code_is_not(tmp_path):
+    case = write_case(tmp_path, closure={"inputs": {"open_entry": {"memo": {"sink": "guard"}}}})
+    (case / "02_rules.md").write_text(
+        "# Rules\n\nAn entry is closed once `Entry.closed_at` is present; its label is `Entry.headline`.\n\n"
+        "```text\nEntry.is_open -> Entry.closed_at = none\n```\n", encoding="utf-8")
+    report = coverage(case)
+    assert [(item["code"], item["field"], item["line"]) for item in report["findings"]] == [
+        ("named_field_without_carrier", "headline", 3)]
+    assert report["summary"]["carriers"]["references"] == 2
+
+
+def test_a_closed_model_state_1_describes_without_naming_a_fact_stops_the_case(tmp_path):
+    case = write_case(tmp_path, closure={"inputs": {"open_entry": {"memo": {"sink": "guard"}}}})
+    (case / "01_models.md").write_text(STATE1.replace("Candidate fields:\n\n- `actor_id`.", "Whoever acts."), encoding="utf-8")
+    report = coverage(case)
+    assert [(item["code"], item["model"]) for item in report["findings"]] == [("state1_model_without_named_facts", "Actor")]
+
+
+def test_a_closure_with_no_state_1_behind_it_has_not_passed_the_carrier_lens(tmp_path):
+    case = write_case(tmp_path, closure={"inputs": {"open_entry": {"memo": {"sink": "guard"}}}})
+    (case / "01_models.md").unlink()
+    report = coverage(case)
+    assert [(item["code"], item["lens"]) for item in report["findings"]] == [("value_flow_lens_judged_nothing", "carriers")]

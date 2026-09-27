@@ -27,9 +27,9 @@ persistence emitter for a third, which no module can reach.
 | 1 | Durable records | `operational_store`, `operational_store_persistence` | the database, schema, transactions, record↔row mapping | committed records in a module-level dict; SQLite repository never constructed; ten domain modules keep their own records in module-level dicts; `trace_journal` probes `get_`/`read_`/`fetch_node_execution` on `payload: object` | `persistence_backend/v3` on `sqlite_sync_v2` (emitted, 14 of 29 durable kinds) — unreachable: no typed port, no `open`, no composition |
 | 2 | Installation configuration and secrets | `installation` | where and how secrets are kept, how a reference becomes a usable credential | `os.environ` with invented names (`CABINET_FLOW_CREDENTIAL_BINDINGS`), invented JSON shape, invented default path in run 1 | none: no external contract for the protected configuration |
 | 3 | Platform manifest at a pinned revision | `manifest_reader` | the manifest record format and revision history | `Path(revision.manifest_root_ref)` and an invented file layout | **closed 2026-09-20:** A31, `rules.platform_manifest_contract`, `PLATFORM_MANIFEST_EXTERNAL_CONTRACT_20260920.md` and active content-addressed evidence fix exact paths/bytes, legacy shapes and same-path ancestor history |
-| 4 | Requests to microservices | `service_transport` | channel framing, TLS, redirects, timeouts | no network library imported; a `TransportResult` is assembled from constants | none: no HTTP/MCP client port |
-| 5 | Execution of agent-authored code | `sandbox_supervisor` | the isolation backend and resource enforcement | a `tempfile.TemporaryDirectory()`; nothing is executed | none: no isolation backend is named anywhere |
-| 6 | Value bytes and run files | `value_store`, `run_spool` | content-addressed area, run-scoped spool | bytes in module-level dicts, `io.BytesIO` | `source_byte_store_backend` (content-addressed, staged, verified) fits M38; spool needs a decision |
+| 4 | Requests to microservices | `service_transport` | channel framing, TLS, redirects, timeouts | no network library imported; a `TransportResult` is assembled from constants | **closed 2026-09-20:** A33 fixes one bounded `httpx` HTTP send; MCP/operator refuse before send until adapters exist |
+| 5 | Execution of agent-authored code | `sandbox_supervisor` | the isolation backend and resource enforcement | a `tempfile.TemporaryDirectory()`; nothing is executed | **closed 2026-09-20:** A34 fixes Linux bubblewrap, external rlimits, bounded exchange and proven cleanup |
+| 6 | Value bytes and run files | `value_store`, `run_spool` | content-addressed area, run-scoped spool | bytes in module-level dicts, `io.BytesIO` | **closed 2026-09-20:** A32 fixes private files below `data_root`, same-filesystem atomic publish and terminal-run cleanup |
 | 7 | Listeners | `http_gateway`, `mcp_gateway`, `bootstrap` | listener lifecycle, MCP framing | HTTP routes emitted; nothing starts a server; `serve_mcp` receives an envelope no component constructs | `http_router_backend` (emitted); launch and the MCP host adapter are undesigned |
 | 8 | Channel authentication | `access_control` | credential verification per channel | the presented credential's payload names its own `kind`, `principal_id`, `delegation_id`; throttling is `time.sleep` over module-level dicts | depends on 1 and 2 |
 | — | Wall and elapsed time | `system_clock` | host clock | emitted, correct | `system_clock_backend/v3` — closed |
@@ -50,7 +50,7 @@ persistence emitter for a third, which no module can reach.
    decided last, with the owner, in terms of what it may and may not do.
 8. **Listeners and launch.**
 
-Boundary 3 was closed after this ordering was recorded. Its legacy free-text
+Boundaries 3–6 were closed after this ordering was recorded. The manifest's legacy free-text
 idempotency declaration remains opaque and fail-closed until a binding proves
 one exact typed-port mapping; credentials remain owned by installation rather
 than the manifest.

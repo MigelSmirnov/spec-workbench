@@ -3,6 +3,7 @@
     outputs        a required instant of a result has a source
     inputs         a scalar argument of a constructing function has a sink
     collaborators  a module State 3 says this module knows is reachable from its notes
+    carriers       a fact State 1 claims, and a field a rule, flow or operation names, exists in the model closure
 
 What the design states already imply is resolved without an author; only the
 residue is asked for, in ``70_value_flow_closure.json``. Every lens returns its
@@ -216,5 +217,48 @@ def collaborators(case: Case) -> tuple[dict[str, Any], list[dict[str, Any]]]:
                 f"{module} -> {other}: State 3 says {module} knows {other}, but no note of {module} names it or any "
                 f"of its operations ({operations}); a module that cannot call its collaborator invents what it would have returned",
                 module=module, collaborator=other,
+            ))
+    return summary, findings
+
+
+def carriers(case: Case) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    """The typed model closure is the one field list; everything that names a field is checked against it.
+
+    State 1 claims the facts a concept carries before any module exists, and rules, flows and
+    operations name fields outright. Both are written by hand, apart from the closure: a closure
+    that silently renames or regroups them leaves notes and contracts speaking two vocabularies.
+    """
+    summary = {"state1_models": len(case.state1_facts) + len(case.state1_nameless), "facts": 0,
+               "references": len(case.field_references), "without_carrier": 0}
+    findings: list[dict[str, Any]] = []
+    for model in sorted(case.state1_nameless):
+        summary["without_carrier"] += 1
+        findings.append(_finding(
+            "state1_model_without_named_facts",
+            f"{case.state1_nameless[model]}: State 1 describes {model} without naming a single fact it carries, "
+            f"so whoever wrote the closure chose its {len(case.index.classes[model].fields)} fields alone",
+            model=model, document=case.state1_nameless[model],
+        ))
+    for model in sorted(case.state1_facts):
+        document, names = case.state1_facts[model]
+        declared = case.index.classes[model].fields
+        summary["facts"] += len(names)
+        lost = [name for name in names if name not in declared]
+        if lost:
+            summary["without_carrier"] += len(lost)
+            findings.append(_finding(
+                "state1_fact_without_carrier",
+                f"{document}: State 1 says {model} carries {', '.join(lost)}; the model closure declares "
+                f"{', '.join(sorted(declared))}",
+                model=model, document=document, facts=lost,
+            ))
+    for document, line, model, name in case.field_references:
+        if name not in case.index.classes[model].fields and name not in case.index.classes[model].methods:
+            summary["without_carrier"] += 1
+            findings.append(_finding(
+                "named_field_without_carrier",
+                f"{document}:{line} names {model}.{name}; the model closure declares "
+                f"{', '.join(sorted(case.index.classes[model].fields))}",
+                model=model, document=document, line=line, field=name,
             ))
     return summary, findings
