@@ -57,6 +57,20 @@ python tools/workbench.py status
 only when an exhaustive checkout/history view is explicitly needed. Normal
 project discovery must not use exhaustive ref scanning.
 
+## Where the work lives
+
+Every case has one canonical ref (`python tools/workbench.py show <project>`), and
+the Workbench MCP reads that ref from `origin`, never a local branch or a stacked
+branch above it. Work on a case is visible to `workbench_state` and
+`design_provenance` only once it is on the canonical ref: a stack of branches
+with open pull requests into it (Cabinet Flow, 22–27 September 2026) leaves the
+MCP answering about a state the case has left. Either author on the canonical
+branch or merge the stack before handing the case to the next session. The MCP
+server runs from the worktree `spec-workbench-worktrees/workbench-mcp`, which must
+stay on current `main`: its gates are only as fresh as that checkout. Before any
+work, compare `resolved_ref` in `workbench_state` with the handoff you follow; if
+they differ, stop and report the discrepancy instead of reading the branch by hand.
+
 ## Authoring pipeline entry point
 
 After resolving a logical project, do not choose design-state tools by memory,
