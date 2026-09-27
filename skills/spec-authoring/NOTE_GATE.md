@@ -35,8 +35,18 @@ The gate checks all non-heading, non-empty lines in `80_notes.md` and blocks whe
    fixpoint over the naming graph). See "Table access must be named" below;
 7. the prose is an explicit semantic stub such as `TODO`, `TBD`, `implement ...`, `handle errors appropriately`, `validate input correctly`, or equivalent registered placeholder form;
 8. a State 6 callable has neither a State 7 note nor a deterministic implementation owner.
+9. a callable returns a spec-declared interface, or a transport handler's note
+   exposes a transport-to-interface adaptation boundary, but its State 7 notes do not
+   both identify concrete implementation/adapter ownership and explicitly
+   prohibit instantiating the interface itself.
 
 Malformed or unknown notes are never silently skipped.
+
+The interface-construction check does not apply merely because a callable
+receives an interface-typed parameter. Those injected dependencies are closed
+structurally by `implementation_obligations`. It applies where generated code
+must produce the runtime object, preventing Python `Protocol` declarations from
+being called as if they were concrete classes.
 
 ## Table access must be named
 
