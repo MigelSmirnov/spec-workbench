@@ -36,11 +36,13 @@ or redeployment.
 ## Actors and trust boundaries
 
 - **Owner** — the one human principal. Approves effects, accepts operation
-  bindings, activates effectful flows, grants standing approvals, edits the term
-  list. Reaches the kernel through the agent channel with the owner's token.
+  bindings, activates effectful flows, grants standing approvals, and is the only
+  reader of personal data. Reaches the kernel through the agent channel with the owner's token.
 - **Agent** — any language-model agent acting for the owner. Reads, authors
   functions and flows, requests trials, runs flows. Holds an agent token
   configured in the installation; the token says whether the agent may author.
+- **Personal data** — values of class `personal_data` (K-14) reach an agent
+  only as digest and class; the owner alone reads them.
 - **Microservices** — known only as records of the platform manifest. The kernel
   calls their declared operations and nothing else; their answers are untrusted
   data until validated at the port.
@@ -60,7 +62,7 @@ Each action names its observable output and its failure.
 
 | action | who | output | failure |
 |---|---|---|---|
-| inspect functions, flows, runs, terms, bindings | owner, agent | typed description | unknown reference |
+| inspect functions, flows, runs, bindings | owner, agent | typed description; to an agent, personal-data values only as digest and class | unknown reference |
 | author a function contract or implementation | agent with author right | new version with its identity | invalid contract or code refused with the reason |
 | try an implementation | agent | trial evidence per case | sandbox violation, timeout, contract violation are failures, never success |
 | admit and activate | kernel on conforming evidence | activation by hash | empty corpus or any failing case refuses |
@@ -112,12 +114,19 @@ repaired slot stays repaired. Admission is a deterministic verdict over the whol
 active corpus; an empty corpus refuses. Cases are not copied between contract
 versions and not withdrawn.
 
-### K-06 — Edges are proven by declared terms (replaces D0-038)
+### K-06 — Edges are proven by schemas (replaces D0-038)
 
-Every port carries a value schema and one term: a name from the installation's
-term list, which only the owner edits. An edge is valid when both ports carry the
-same term and compatible schemas. Different terms connect only through a function
-node that converts them. Terms have no revisions, relations or proposals.
+Every port carries a value schema. An edge is valid when the source schema is
+accepted by the target schema without coercion. The kernel has no semantic
+vocabulary: nobody would maintain it, and the protection it offered against
+wiring equal shapes of different meaning is carried where harm can happen — the
+owner activates every flow that changes anything and approves each risky effect
+on its exact input. A read-only flow wired wrongly yields a wrong analysis and
+changes nothing. If agents confuse meanings in practice, meaning labels can be
+added later as data.
+
+A file port accepts exactly one media type; a function that can produce two
+kinds of file has two ports. A file's media type is therefore its port's.
 
 ### K-07 — A flow is versioned data, proven before it runs (keeps D0-039)
 
@@ -152,13 +161,14 @@ it. Traces carry no secret and no unbounded payload.
 
 ### K-10 — The kernel keeps its own records and files for one run (narrows D0-042)
 
-The kernel stores its own records only: terms, contracts, implementations, trial
+The kernel stores its own records only: contracts, implementations, trial
 evidence, activations, bindings, flow versions, approvals and grants, runs and
 traces, and bounded values that edges carry. It stores no business fact. A file
 moves between nodes through a spool that belongs to its run and is emptied when
 the run ends; a file that must last is handed to the service that owns it. A
-file's media type is the one its producer declares, checked against the receiving
-port as a name; the kernel does not inspect file content. Backup and restore of
+file's media type is its producing port's single media type (K-06), and an edge
+between file ports requires the same type; the kernel does not inspect file
+content. Backup and restore of
 the kernel's store are an operational procedure outside the kernel.
 
 ### K-11 — One fixed surface over MCP (narrows D0-043)
@@ -173,7 +183,7 @@ kernel; it is not stubbed.
 
 For repair an agent receives one contract, its current implementation and that
 slot's recent traces and trial evidence; for composition, contracts, bindings and
-terms, not implementation bodies.
+not implementation bodies.
 
 ### K-13 — Knowledge lives in the kernel and the platform (keeps D0-045)
 
@@ -185,9 +195,12 @@ records, the platform manifest and the repositories alone.
 Every value carries `open`, `business_confidential` or `personal_data`. A binding
 declares the class a service returns and the highest class each input accepts; a
 function's output takes the highest class its execution received. The flow proof
-refuses an edge that would deliver a value to an input accepting less. Agents
-are not given per-agent disclosure ceilings, and answers are not redacted per
-reader.
+refuses an edge that would deliver a value to an input accepting less.
+
+An agent never receives a `personal_data` value: wherever the surface would
+return one to an agent, it returns the value's digest and class instead. The
+owner receives every value. This is one rule of the surface, not a per-agent
+ceiling and not a redaction inside each operation.
 
 ### K-15 — One owner, agent tokens (narrows D0-046)
 
@@ -220,8 +233,8 @@ caller acts on the difference; otherwise one refusal with a reason for the trace
 - No business data store, reporting database or search index.
 - No management of microservice deployment, scaling or configuration.
 - No agent-to-agent trust.
-- No `http_api` channel, no automatic outcome reconciliation, no term governance
-  workflow, no store-continuity mechanism in this kernel.
+- No `http_api` channel, no automatic outcome reconciliation, no semantic
+  vocabulary, no store-continuity mechanism in this kernel.
 
 ## Acceptance
 
@@ -244,13 +257,21 @@ at the text that answers it, by data, or by the owner's decision, and closed
 means the question no longer comes back. After generation the code is checked
 against the obligations of its notes, not only against gates of form.
 
+## Questions of 2026-09-29
+
+4. **Sandbox language.** Functions are written in Python only. Confirmed by the
+   owner, 2026-09-29.
+
+Recommended by the designing agent after the owner asked for them, and written
+into K-06 and K-14; awaiting the owner's confirmation:
+
+1. **Meaning labels (terms).** None in this kernel; edges are proven by schema
+   (K-06).
+2. **Media type of a function's file output.** A file port has exactly one media
+   type (K-06).
+3. **Agents and personal data.** An agent receives personal-data values only as
+   digest and class (K-14).
+
 ## Open questions
 
-1. **Term list.** Does the first term list ship with the kernel, or does the
-   owner start empty and add terms as the acceptance cases need them?
-2. **Declared media type of a function output.** When an output port accepts
-   more than one media type, how does a function declare which one it produced?
-3. **Agent access to personal data.** With per-agent ceilings gone (K-14), an
-   agent reading a run or a trace sees every value it contains. Is that
-   acceptable for the first application?
-4. **Sandbox language.** Functions are written in Python only — confirm.
+None.
