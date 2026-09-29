@@ -27,7 +27,8 @@ Cabinet Kernel runs flows over the platform's microservices. A flow is a small
 proven graph of two kinds of node: a pure function an agent wrote, and a declared
 operation of a microservice. The agent writes a function, the kernel tries it in
 a sandbox and admits it; the agent composes a flow; the kernel proves the flow,
-runs it, asks the owner before any effect, and records what happened.
+runs it, asks the owner before any effect that changes a service's state (K-08),
+and records what happened.
 
 The stable part of the platform lives in the microservices. The changing part
 lives in functions and flows, and changing it needs no new application, module
@@ -46,14 +47,19 @@ or redeployment.
 - **Microservices** — known only as records of the platform manifest. The kernel
   calls their declared operations and nothing else; their answers are untrusted
   data until validated at the port.
+- **Kernel** — acts on its own only where a decision says so (admission and
+  activation on conforming evidence, activation of a proven read-only flow); its
+  records name it as the actor, so no automatic step looks like a human decision.
 - **Agent-written code** — untrusted forever; runs only inside the sandbox.
 - **Outside senders** (employee, supplier, client) — never reach the kernel.
   Their material stays at a microservice's own intake until the owner or an agent
-  submits it; the kernel records only provenance.
+  submits it. Who sent it stays in that service's intake record and reaches a flow
+  only as data; the kernel records the owner or agent who submitted it.
 - **Secrets** — service credentials and tokens live in the installation's
   protected configuration; they never enter a function, a flow, a trace or an
   answer.
-- **Network surface** — one channel, `mcp`, behind the host's reverse proxy.
+- **Network surface** — one inbound channel, `mcp`, behind the host's reverse
+  proxy. Outbound, the kernel calls microservices over their HTTP APIs.
   Brute-force protection is the proxy's, not the kernel's.
 
 ## Primary actions
@@ -63,16 +69,23 @@ Each action names its observable output and its failure.
 | action | who | output | failure |
 |---|---|---|---|
 | inspect functions, flows, runs, bindings | owner, agent | typed description; to an agent, personal-data values only as digest and class | unknown reference |
-| author a function contract or implementation | agent with author right | new version with its identity | invalid contract or code refused with the reason |
+| author a function contract or implementation | agent with author right | the version with its identity — an existing one when the content is equal; the first contract of a new slot name creates the slot | invalid contract or code refused with the reason |
+| add a trial case | agent with author right | the case — an existing one when the content is equal | a case whose values do not fit the contract's ports is refused |
 | try an implementation | agent | trial evidence per case | sandbox violation, timeout, contract violation are failures, never success |
-| admit and activate | kernel on conforming evidence | activation by hash | empty corpus or any failing case refuses |
+| admit and activate | kernel, when an implementation is submitted | admission over the whole corpus and, when admitted, activation at once | empty corpus or any failing case refuses |
+| capture a failed execution into the trial corpus | owner, agent with author right | the trial case every later implementation must pass — an existing one when equal | an execution that succeeded, was skipped, or belongs to another contract version is refused |
+| release a failed run | owner, agent | the run's spooled files are removed | a run that is not `failed`, or already released, is refused |
+| roll a slot back | owner, agent with author right | an earlier implementation of the slot's current contract version, admitted over its current corpus, is activated again | an implementation not admitted over the current corpus is refused |
 | propose an operation binding | agent | proposed binding | manifest mismatch refused |
-| accept a binding | owner | accepted binding | — |
-| compose and prove a flow | agent | proven flow version or the first failing edge | unproven flow cannot run |
-| activate a flow | kernel for read-only flows; owner for effectful ones | active flow version | — |
-| run a flow | owner, agent | run with outputs, or resting `awaiting_approval` / `pending` | failed node stops its dependants |
-| approve or refuse an effect; grant standing approval | owner | the effect runs on the exact input shown, or does not | — |
-| resolve an unknown outcome; resume a pending run | owner (resolve), owner or agent (resume) | run continues | — |
+| accept a binding | owner | accepted binding; accepting an accepted binding returns it | — |
+| compose and prove a flow | agent | the flow version and its proof result — proven, or the first failing edge; the version is kept either way, and the first version of a new flow name creates the flow | an unproven version cannot be activated or run |
+| activate a flow | agent asks; the kernel activates a proven read-only version at once, the owner activates any other | active flow version | an unproven version is refused |
+| run a flow | owner, agent | run with outputs, or resting `awaiting_approval` / `pending` | failed node stops its dependants; a function node whose contract version has no current activation refuses the start |
+| approve or refuse an effect | owner | the effect runs on the exact input shown; a refusal ends the run `refused` | — |
+| grant or revoke a standing approval for a node of a flow's active version | owner | the node of that flow version stops asking, or asks again; granting an already granted node returns the active grant | a `destructive` node cannot be granted |
+| cancel a run | owner | the run ends `cancelled`; nothing further is sent | a finished run cannot be cancelled |
+| resolve an unknown outcome | owner | the effect is recorded applied, or not applied; the run continues, and a resend needs a fresh approval | — |
+| resume a run | owner, agent | the nodes waiting on an unreachable service are tried again, whatever else the run waits for | a run with no node waiting on an unreachable service is refused; nodes waiting on an unknown outcome or on approval are not touched |
 | read a trace | owner, agent | trace records | — |
 
 ## Decisions
@@ -102,7 +115,7 @@ refused until a new binding is accepted; nothing is reissued automatically.
 
 A contract is an immutable versioned declaration of typed ports and resource
 bounds. An implementation is immutable code for one contract version, identified
-by the digest of its content. An activation binds a contract version to one
+by the digest of the code together with its contract version. An activation binds a contract version to one
 admitted implementation; rollback is another activation. A run pins what it uses.
 
 ### K-05 — Sandbox, trial, admission (narrows D0-037)
@@ -116,8 +129,8 @@ versions and not withdrawn.
 
 ### K-06 — Edges are proven by schemas (replaces D0-038)
 
-Every port carries a value schema. An edge is valid when the source schema is
-accepted by the target schema without coercion. The kernel has no semantic
+Every port carries a value schema. An edge is valid when both ports carry the
+same schema. The kernel has no semantic
 vocabulary: nobody would maintain it, and the protection it offered against
 wiring equal shapes of different meaning is carried where harm can happen — the
 owner activates every flow that changes anything and approves each risky effect
@@ -146,8 +159,10 @@ for that node; `destructive` never takes a grant. The kernel supplies the declar
 idempotency key and never repeats an effect without a fresh approval.
 
 When the kernel cannot tell whether an effect happened, the run rests `pending`
-with reason `outcome_unknown` and the owner decides: applied, or not applied and
-may be sent again. The kernel does not reconcile outcomes on its own.
+with reason `outcome_unknown` and only the owner's resolution moves it: applied,
+or not applied. An effect resolved as not applied is sent again only with a fresh
+approval, even where a standing approval exists. The kernel does not reconcile
+outcomes on its own. When the owner refuses an effect, the run ends `refused`.
 
 ### K-09 — The trace is data; waiting is truthful (narrows D0-041)
 
@@ -156,8 +171,10 @@ versions, input and output by digest, verdicts, status, failure, resources, time
 Nothing is successful by default. A failed node stops only its dependants. A run
 rests `awaiting_approval`, or `pending` when a service is unreachable or an
 outcome unknown, and ends `succeeded`, `failed`, `refused` or `cancelled`. No wait
-ends by itself: a pending run continues only when the owner or an agent resumes
-it. Traces carry no secret and no unbounded payload.
+ends by itself: a run pending on an unreachable service continues only when the
+owner or an agent resumes it; a run pending on an unknown outcome continues only
+on the owner's resolution. `refused` means the owner refused an effect;
+`cancelled` means the owner cancelled the run. Traces carry no secret and no unbounded payload.
 
 ### K-10 — The kernel keeps its own records and files for one run (narrows D0-042)
 
@@ -165,19 +182,28 @@ The kernel stores its own records only: contracts, implementations, trial
 evidence, activations, bindings, flow versions, approvals and grants, runs and
 traces, and bounded values that edges carry. It stores no business fact. A file
 moves between nodes through a spool that belongs to its run and is emptied when
-the run ends; a file that must last is handed to the service that owns it. A
+the run ends — except a `failed` run, whose spool stays until the owner or an
+agent releases the run, so that its failures can be captured into trial corpora
+(K-05); a file that must last is handed to the service that owns it. The only files the
+kernel keeps beyond a run are the file fixtures of trial cases. A flow's own
+inputs and outputs are values, never files: a file enters a flow from a service
+through an operation node and leaves it into a service, so a caller never hands
+the kernel a file and never receives one. A
 file's media type is its producing port's single media type (K-06), and an edge
 between file ports requires the same type; the kernel does not inspect file
-content. Backup and restore of
-the kernel's store are an operational procedure outside the kernel.
+content. Values and the records
+that name them are kept for as long as the kernel keeps its traces; this kernel
+expires nothing. Backup and restore of the kernel's store are an operational
+procedure outside the kernel.
 
 ### K-11 — One fixed surface over MCP (narrows D0-043)
 
 The kernel exposes one fixed set of typed operations over `mcp`: inspect,
-author, try, run, read traces, and the owner's approve, accept, activate, grant,
-resolve and resume. A new function or flow never changes the surface. The
-`http_api` channel for schema clients such as the mobile chat is not part of this
-kernel; it is not stubbed.
+author, try, run, resume, read traces, and the owner's approve, accept, activate,
+grant, revoke, resolve and cancel. A new function or flow never changes the surface. The
+kernel offers no HTTP surface of its own for schema clients such as the mobile
+chat; it is not stubbed. Invoking a microservice over that service's own HTTP API
+(K-03) is a different thing and is how operation nodes work.
 
 ### K-12 — The agent sees one slot (keeps D0-044)
 
@@ -206,8 +232,10 @@ ceiling and not a redaction inside each operation.
 
 The kernel has exactly one human principal. Agents act for the owner with tokens
 configured in the installation, each marked may-author or not; revoking an agent
-is removing its token. Tokens are compared in constant time. The owner's actions
-and each agent's are distinguishable in every record.
+is removing its token, and it takes effect at the agent's next request: the kernel
+reads the token list again whenever it has changed. Tokens are compared in
+constant time. The owner's actions,
+each agent's and the kernel's own are distinguishable in every record.
 
 ### K-16 — One installation drives one set of instances (keeps D0-048)
 
@@ -233,8 +261,9 @@ caller acts on the difference; otherwise one refusal with a reason for the trace
 - No business data store, reporting database or search index.
 - No management of microservice deployment, scaling or configuration.
 - No agent-to-agent trust.
-- No `http_api` channel, no automatic outcome reconciliation, no semantic
-  vocabulary, no store-continuity mechanism in this kernel.
+- No HTTP surface of the kernel's own, no automatic outcome reconciliation, no
+  semantic vocabulary, no store-continuity mechanism and no value expiry in this
+  kernel.
 
 ## Acceptance
 
@@ -267,6 +296,34 @@ against the obligations of its notes, not only against gates of form.
    digest and class (K-14). The owner accepted the recommendation.
 4. **Sandbox language.** Functions are written in Python only. The owner's
    answer.
+
+5. **Value retention.** Kept as long as traces; nothing expires in this kernel
+   (K-10). The owner accepted the recommendation.
+6. **Missing actions.** Cancel a run and revoke a standing approval are owner
+   actions; a binding proposal that is not accepted simply stays proposed. The
+   owner accepted the recommendation.
+7. **A refused effect** ends the run `refused` (K-08). The owner accepted the
+   recommendation.
+8. **Resend after an unknown outcome** needs a fresh approval even under a
+   standing approval (K-08). The owner accepted the recommendation.
+9. **File fixtures of trial cases** are the only files the kernel keeps beyond a
+   run (K-10). The owner accepted the recommendation.
+
+10. **Actor of automatic steps.** Records name the kernel as the actor of what
+    it does on its own (K-15). The owner accepted the recommendation.
+11. **Rollback of a slot** is an action of the owner or an agent with the author
+    right: activate an earlier implementation admitted over the current corpus
+    (K-04). The owner accepted the recommendation.
+12. **Revoking an agent token** takes effect at the agent's next request (K-15).
+    The owner accepted the recommendation.
+13. **Provenance of outside material** stays in the receiving service's intake
+    record; the kernel records only who submitted it to a flow. The owner accepted
+    the recommendation.
+14. **An approval whose effect was never sent** (the service was unreachable)
+    stays valid on resume for the same input; it is used only when the effect is
+    sent. The owner accepted the recommendation.
+15. **Spool of a failed run** stays until the owner or an agent releases the run,
+    so failures with file inputs can be captured (K-10). The owner's choice.
 
 ## Open questions
 
