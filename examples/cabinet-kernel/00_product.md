@@ -2,7 +2,7 @@
 
 ## Status
 
-Draft of 2026-09-29 for the owner's acceptance. It restarts Cabinet Flow as a
+Accepted by the owner on 2026-09-29. It restarts Cabinet Flow as a
 smaller kernel. The design of `examples/cabinet-flow` (State 0 of 2026-09-19 and
 States 1–7 grown from it) is frozen as reference: its generated code passed every
 gate and linker check while no end-to-end path worked, and three quarters of the
@@ -257,20 +257,16 @@ at the text that answers it, by data, or by the owner's decision, and closed
 means the question no longer comes back. After generation the code is checked
 against the obligations of its notes, not only against gates of form.
 
-## Questions of 2026-09-29
-
-4. **Sandbox language.** Functions are written in Python only. Confirmed by the
-   owner, 2026-09-29.
-
-Recommended by the designing agent after the owner asked for them, and written
-into K-06 and K-14; awaiting the owner's confirmation:
+## Questions settled on 2026-09-29
 
 1. **Meaning labels (terms).** None in this kernel; edges are proven by schema
-   (K-06).
+   (K-06). The owner accepted the recommendation.
 2. **Media type of a function's file output.** A file port has exactly one media
-   type (K-06).
+   type (K-06). The owner accepted the recommendation.
 3. **Agents and personal data.** An agent receives personal-data values only as
-   digest and class (K-14).
+   digest and class (K-14). The owner accepted the recommendation.
+4. **Sandbox language.** Functions are written in Python only. The owner's
+   answer.
 
 ## Open questions
 
