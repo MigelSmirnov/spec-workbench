@@ -68,21 +68,21 @@ Each action names its observable output and its failure.
 
 | action | who | output | failure |
 |---|---|---|---|
-| inspect functions, flows, runs, bindings | owner, agent | typed description; to an agent, personal-data values only as digest and class | unknown reference |
+| inspect functions, flows, runs, bindings, approvals, standing grants and effect attempts | owner, agent | typed description; to an agent, personal-data values only as digest and class | unknown reference |
 | author a function contract or implementation | agent with author right | the version with its identity — an existing one when the content is equal; the first contract of a new slot name creates the slot | invalid contract or code refused with the reason |
 | add a trial case | agent with author right | the case — an existing one when the content is equal | a case whose values do not fit the contract's ports is refused |
 | try an implementation | agent | trial evidence per case | sandbox violation, timeout, contract violation are failures, never success |
 | admit and activate | kernel, when an implementation is submitted | admission over the whole corpus and, when admitted, activation at once | empty corpus or any failing case refuses |
-| capture a failed execution into the trial corpus | owner, agent with author right | the trial case every later implementation must pass — an existing one when equal | an execution that succeeded, was skipped, or belongs to another contract version is refused |
+| capture a failed execution into the trial corpus | owner, agent with author right | the trial case every later implementation must pass — an existing one when equal | an execution that succeeded, was skipped, belongs to another contract version, or whose run was already released (its files are gone) is refused |
 | release a failed run | owner, agent | the run's spooled files are removed | a run that is not `failed`, or already released, is refused |
-| roll a slot back | owner, agent with author right | an earlier implementation of the slot's current contract version, admitted over its current corpus, is activated again | an implementation not admitted over the current corpus is refused |
+| roll a slot back | owner, agent with author right | an earlier implementation of the slot's current contract version is activated again; it must already hold an `admitted` verdict over the current corpus — rollback runs no admission | an implementation not admitted over the current corpus is refused |
 | propose an operation binding | agent | proposed binding | manifest mismatch refused |
 | accept a binding | owner | accepted binding; accepting an accepted binding returns it | — |
 | compose and prove a flow | agent | the flow version and its proof result — proven, or the first failing edge; the version is kept either way, and the first version of a new flow name creates the flow | an unproven version cannot be activated or run |
-| activate a flow | agent asks; the kernel activates a proven read-only version at once, the owner activates any other | active flow version | an unproven version is refused |
-| run a flow | owner, agent | run with outputs, or resting `awaiting_approval` / `pending` | failed node stops its dependants; a function node whose contract version has no current activation refuses the start |
-| approve or refuse an effect | owner | the effect runs on the exact input shown; a refusal ends the run `refused` | — |
-| grant or revoke a standing approval for a node of a flow's active version | owner | the node of that flow version stops asking, or asks again; granting an already granted node returns the active grant | a `destructive` node cannot be granted |
+| activate a flow | agent or owner asks; the kernel activates a proven read-only version at once; any other version only when the owner asks | active flow version | an unproven version is refused; an agent asking to activate a version with effects is refused and nothing is kept for the owner — the owner activates it by the same action |
+| run a flow | owner, agent | a run of the flow's active version, with outputs, or resting `awaiting_approval` / `pending` | a flow with no active version, or a function node whose contract version has no current activation, refuses the start and creates no run; a failed node stops its dependants |
+| approve or refuse an effect | owner | the effect runs on the exact input shown; a refusal ends the run `refused` | an approval of a run that has ended can no longer be decided |
+| grant a standing approval for a node of a flow's active version, or revoke any active grant | owner | the node of that flow version stops asking, or asks again; granting an already granted node returns the active grant | a `destructive` node or a version that is not active cannot be granted; revoking where no grant is active is refused |
 | cancel a run | owner | the run ends `cancelled`; nothing further is sent | a finished run cannot be cancelled |
 | resolve an unknown outcome | owner | the effect is recorded applied, or not applied; the run continues, and a resend needs a fresh approval | — |
 | resume a run | owner, agent | the nodes waiting on an unreachable service are tried again, whatever else the run waits for | a run with no node waiting on an unreachable service is refused; nodes waiting on an unknown outcome or on approval are not touched |

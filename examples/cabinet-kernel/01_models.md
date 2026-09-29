@@ -95,7 +95,8 @@ Candidate fields:
 
 - `slot_id`: a stable name the creating agent chooses; unique in the kernel, and a
   name already taken is refused;
-- `purpose`: plain words for the owner and the agent;
+- `purpose`: plain words for the owner and the agent, fixed when the slot is
+  created;
 - `created_by`, `created_at`.
 
 ### Identity
@@ -258,12 +259,13 @@ Candidate fields:
 - `contract_version_id`;
 - `inputs`: StoredValues (M21) by input port;
 - `expected_outputs`: StoredValues by output port, absent when only the absence
-  of failure is required;
+  of failure is required — always absent for a captured case;
 - `origin`: `authored` or `captured`;
 - `captured_from`: the NodeExecution (M23) it was captured from, present exactly
   when `origin` is `captured` — only an execution of a function node pinned to the
   same contract version that was executed and did not succeed can be captured
-  (K-05) — not a `skipped_by_guard` or `upstream_failed` record; its inputs,
+  (K-05) — not a `skipped_by_guard` or `upstream_failed` record, and not one
+  whose run was already released, since its spooled files are gone; its inputs,
   including files, become the case's inputs;
 - `added_by`, `added_at`.
 
@@ -532,6 +534,7 @@ active version when a run starts.
 
 Candidate fields:
 
+- `purpose` of a flow is fixed when the flow is created;
 - `flow_id`: a stable name the creating agent chooses; the first flow version
   composed under a new name creates the flow — there is no separate create
   action;
@@ -587,8 +590,9 @@ value
 
 ### Identity evidence
 
-Substitution: equal content is the same version. Continuity: none; a change is
-another version.
+Substitution: equal content is the same version — composing it again returns the
+existing version and its first author. Continuity: none; a change is another
+version.
 
 ### Source of truth
 
@@ -702,8 +706,8 @@ other value (K-04: a function has no configuration). Read by the run.
 Candidate fields:
 
 - `to_node`, `to_port`;
-- `value`: a StoredValue (M21), whose class the composing agent declares with the
-  constant.
+- `value`: a StoredValue (M21) of `value` carriage — a constant is never a file —
+  whose class the composing agent declares with the constant.
 
 ### Identity
 
@@ -975,7 +979,9 @@ Candidate fields:
   the attempt that produced it, so files of two attempts are two SpooledFiles;
 - `content_digest`, `size_bytes`;
 - `media_type`: its port's (K-06);
-- `disclosure_class`.
+- `disclosure_class`: by the rule of StoredValue (M21) — a function's output the
+  highest class its execution received, a binding's output the class the binding
+  declares.
 
 ### Identity
 
@@ -1090,7 +1096,8 @@ The owner's decision, recorded by the kernel.
 `requested` → `approved` | `refused`; `approved` → `used` when the effect is sent.
 An approval is used at most once. An approved effect that was never sent, because
 the service was unreachable, keeps its approval for the same input when the run is
-resumed.
+resumed. When its run ends, an approval that is still `requested` or unused can no
+longer be decided or used.
 
 ### Persistence candidate
 
@@ -1130,8 +1137,13 @@ The owner's decision.
 
 ### Lifecycle candidate
 
-`active` → `revoked`. A grant never covers a `destructive` node and never moves to
-another flow version.
+`active` → `revoked`. A grant is given only for a node of the flow's active version
+and belongs to that exact version: when another version becomes active, the grant
+keeps covering the runs pinned to its version and covers no run of another
+version. A grant never covers a `destructive` node. A grant stays active when its
+version becomes active again. The owner may revoke any active grant, whether or not
+its version is still the active one; runs of that version then ask again. Revoking
+where no grant is active is refused.
 
 ### Persistence candidate
 
@@ -1152,8 +1164,8 @@ after restart and by the owner resolving an unknown outcome.
 Candidate fields:
 
 - `run_id`, `node_id`, `map_index`, `attempt_number`: the attempt number counts
-  sends at that node and element, so a resend after `not_applied` is a new
-  attempt;
+  every attempt at that node and element, `not_sent` ones included, so a resend is
+  always a new attempt;
 - `binding_id`;
 - `idempotency_key`: built from the fields the manifest names;
 - `authority`: the approval or the grant it used;
