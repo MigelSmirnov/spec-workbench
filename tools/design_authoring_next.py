@@ -133,11 +133,20 @@ def _result(
         "purpose": str(_phase(sequence, phase).get("purpose") or ""),
         "read": _read(sequence, phase),
         "ask": [str(item) for item in _phase(sequence, phase).get("questions") or []],
+        "question_round": _question_round(sequence, phase, project_text),
         "summary": summary or {},
         "findings": findings or [],
     }
     payload.update(extra)
     return payload
+
+
+def _question_round(sequence: dict[str, Any], phase: str, project_text: str) -> str | None:
+    """The command that asks the generator's own model what this state leaves open."""
+    entry = _phase(sequence, phase)
+    if not entry.get("question_scope"):
+        return None
+    return f"python tools/design_questions.py ask {project_text} --state {entry['semantic_state']}"
 
 
 def _lint_findings(report: object) -> list[dict[str, Any]]:
@@ -555,6 +564,8 @@ def main(argv: list[str] | None = None) -> int:
             print(f"read: {where}")
         for question in payload.get("ask", []):
             print(f"ask: {question}")
+        if payload.get("question_round"):
+            print(f"questions: {payload['question_round']}")
     return 1 if payload["blocked"] else 0
 
 
