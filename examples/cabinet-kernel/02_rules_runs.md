@@ -1,0 +1,307 @@
+# State 2 — Cabinet Kernel run, trace and spool rules
+
+Draft of 2026-09-30. Rules for starting, advancing, waiting, resuming, cancelling
+and releasing runs, and for the trace and the spool (K-07, K-09, K-10, K-17).
+Reuses cabinet-flow decisions 16–20 where they still hold; retry schedules, retention
+periods, store continuity and concurrent execution are gone (K-09, K-10, K-17).
+
+## Accepted decision A12 — a run pins what it executes when it starts, or does not start
+
+Reuses cabinet-flow decision 16, narrowed.
+
+### Normative rules
+
+1. A run starts from the flow's active version. Before any node executes, the
+   kernel checks, in this order, and refuses the start without creating a run on
+   the first that fails: the flow exists and has an active version; the request
+   supplies exactly the flow's input ports; each value, in port name order, fits
+   its port's schema and then its size bound —
+   for a `many` port, is a JSON array whose every element fits it — and
+   is within `stored_value_bytes_max`; every function node's contract version has
+   a current activation.
+2. The run pins the flow version and, for every function node, the implementation
+   of the current activation at start (M19). Nothing recorded later — a new
+   activation, a new flow activation, a new binding — changes what the run
+   executes.
+3. Each flow input value takes its port's class (A07). Two runs on equal inputs
+   are two runs; protection against a repeated effect is the owner's approval and
+   the idempotency key, never a deduplication of runs.
+4. The owner or any agent may start a run of an active version (State 0). The
+   starter is recorded and never changes.
+
+### Formal invariants
+
+```text
+run_created -> active_version AND inputs_exact_and_valid AND all_function_nodes_served
+start_check_failed -> no_run_created
+run.pins fixed_at_start
+later_record -/> alters(pins(run))
+```
+
+### Required tests
+
+1. A run whose flow has no active version, or whose input misses a port, or whose
+   function node has no current activation, is refused and no run exists.
+2. A run started before a new activation executes the earlier implementation to
+   the end, including after a long wait for approval.
+3. Two runs on equal inputs have distinct identities and traces.
+
+### Consequence
+
+A run means one thing from start to finish, so its trace always reads against
+exactly what it executed.
+
+## Accepted decision A13 — a run advances one node at a time, inside the request that moves it
+
+Reuses cabinet-flow decision 17, narrowed by K-17: no concurrent execution, no background
+worker.
+
+### Normative rules
+
+1. A run advances only inside a request: the start, an approval, a resolution or a
+   resume. The kernel executes until no node can execute any more, then returns
+   the run as it rests or ends. Nothing advances a run between requests, except
+   the start-up recovery of A14 rule 5.
+2. Nodes execute one at a time. The next node is the ready node with the smallest
+   `node_id`, by Unicode code point (A05 rule 2); a node is ready when every input
+   port holds its value — a mapped node's outputs exist only once it has
+   concluded, so its dependants never start from part of them. A mapped node,
+   once selected, takes its elements in list order, each once in the pass, and
+   runs every one that has no concluded record and does not wait — a concluded element is never executed again — before the next node is
+   selected; an element that waits or fails does not stop the elements after it.
+3. At start, each flow input's value is delivered along every edge from that
+   input, and each constant to its port (constants were validated when the
+   version was composed and proven, A05); an edge from a flow input straight to a flow output produces that
+   output at once. A flow output holds the value its edge delivered. A value on
+   a `many` port is a JSON array, each element of which must fit the
+   port's `value_schema`; anything else is a violation of that port. A value is
+   validated against the source port when it is produced and against
+   the target port before it enters a node; a violation concludes the producing
+   node, or the receiving node, `contract_violation`, and the value is not
+   delivered.
+4. A guarded edge delivers only when its guard port's value equals its guard
+   value. An input port that can no longer receive a value because every edge into
+   it is disabled, or comes from a skipped node, makes its node `skipped_by_guard`
+   without executing; this applies transitively and to flow outputs, which are
+   then reported `skipped_by_guard` (A05 rule 4).
+5. A node is failed when its record's status is `contract_violation`,
+   `sandbox_violation`, `timeout`, `resource_exhausted`, `crashed`,
+   `operation_refused` or `operation_failed`; `service_unreachable` and
+   `outcome_unknown` are waits, not failures, and their dependants wait, until
+   the owner's resolution makes the element count as succeeded or failed
+   (A11 rule 3). A node an
+   input of which comes from a failed node, or from a node itself
+   `upstream_failed`, concludes `upstream_failed` without executing; when both
+   rule 4 and this rule apply, this rule wins.
+6. A mapped node over an empty list runs nothing, asks nothing and sends
+   nothing; it writes one NodeExecution `succeeded` — its first record, so number
+   1 by A11 rule 1 — with no `map_index`, `executed` naming what it pins and every output an empty list. A
+   `many` file port carries a list of files; inside the sandbox it is a list of
+   `bytes` (A03). A mapped node concludes only when every element has concluded. It succeeded
+   when every element succeeded, and its outputs are then lists in element order,
+   each list of the highest class among its elements (A07), `open` when empty;
+   any failed element makes it failed for its dependants.
+7. An element's conclusion is its NodeExecution's status, except that an
+   `outcome_unknown` record the owner resolved concludes as A11 rule 3 says —
+   succeeded, or failed with `applied_outputs_unknown` — and one not yet resolved
+   waits. Readiness, rule 5 and this rule use that conclusion. When nothing can
+   execute and nothing waits, the run ends: `succeeded` when every node concluded
+   succeeded or `skipped_by_guard`; otherwise `failed`.
+   Run outputs (M19) hold only produced values. A run that rests returns the
+   outputs produced so far; the per-output reasons below are given only once it
+   has ended. The run's answer names every flow
+   output port with either its value or a reason computed from the trace:
+   `skipped_by_guard` when every edge into it was disabled by its guard or comes
+   from a node recorded `skipped_by_guard`, otherwise `not_produced`. `refused` and `cancelled` are set only by
+   the owner's decisions (A10, A14).
+8. While some elements wait, every other ready node keeps executing within the
+   request (K-09); the run then rests `awaiting_approval` when any element waits
+   for the owner's approval, otherwise `pending`.
+
+### Formal invariants
+
+```text
+advance(run) -> inside(start | approve | resolve | resume | startup_recovery)
+next_node = min(node_id, ready_nodes)
+executing_nodes_at_once <= 1
+
+port_unreachable_by_guard -> skipped_by_guard   (transitive)
+input_from(failed | upstream_failed) -> upstream_failed   (wins over skip)
+conclusion(element) = status(node_execution) unless resolved(outcome_unknown) -> A11
+run.succeeded <-> for_all node: conclusion IN {succeeded, skipped_by_guard}
+```
+
+### Required tests
+
+1. Two ready nodes `b` and `a` execute `a` first, every time.
+2. A duplicate-check guard that disables the save branch yields `skipped_by_guard`
+   on the save node and on the flow output behind it, and a `succeeded` run.
+3. One failing element of three fails the mapped node, keeps three records, and
+   concludes its dependants `upstream_failed`.
+4. With two independent branches, a failure in one lets the other finish; the run
+   ends `failed` with the other branch's output marked produced.
+5. Starting a run whose first operation node needs approval returns the run
+   `awaiting_approval` after executing every function it could.
+
+### Consequence
+
+The same flow on the same inputs always executes in the same order, and bad data
+never travels one step further than the node that produced it.
+
+## Accepted decision A14 — waiting is truthful, and only people end it
+
+Reuses cabinet-flow decision 18, narrowed by K-09: no timed retries, no reconciliation.
+
+### Normative rules
+
+1. A run rests with a WaitingPoint M20 for every element that waits, with reason
+   `owner_approval`, `service_unreachable` or `outcome_unknown`. No time limit
+   ends, fails, approves or retries anything. When a run ends, its waiting points
+   are removed; the trace keeps what happened.
+2. Resume, by the owner or an agent, sends again, in (`node_id`, `map_index`)
+   order — an element without `map_index` before index 0 — every element waiting
+   on `service_unreachable`. Each is reached again by the order of A11 rule 1, so
+   its authority is checked as it stands at the resume: its unused approval
+   (M24), which is used first when both exist, or a grant still active; an element whose grant was revoked meanwhile
+   waits for approval instead. All these resends come first; only then does the
+   run advance as A13 says. A run with no such element is refused;
+   elements waiting on approval or on an unknown outcome are not touched.
+3. Cancel, by the owner only, ends a run that has not ended as `cancelled`:
+   nothing further is sent, every concluded record stays, undecided approvals can
+   no longer be decided, and the spool is emptied.
+4. A run's spool is emptied when it ends `succeeded`, `refused` or `cancelled`.
+   A `failed` run keeps its spool until the owner or an agent releases it; release
+   removes the files, records who and when, and is refused for a run that is not
+   `failed` or was already released (K-10).
+5. On start, before the surface accepts a request, the kernel turns every
+   `in_flight` EffectAttempt into `unknown` (A11 rule 4) and then advances, as the
+   kernel actor, every run left `running`, oldest first in store order: a
+   function element without a
+   concluded record is executed again, which is safe because it is pure; a `read`
+   element without one is sent again; an operation element of another class with
+   neither a concluded record nor an EffectAttempt was never sent and is advanced
+   as if reached for the first time — an approved, unused approval still covers
+   it.
+6. Everything a resume or a restart needs is in the store before it is acted on:
+   records of concluded attempts, decided approvals, and in-flight attempts before
+   their request (K-17).
+
+### Formal invariants
+
+```text
+wait_elapsed -/> state_change
+resume -> resend(service_unreachable elements) ONLY
+resume AND none_waiting_unreachable -> refused
+cancel -> actor = owner AND run_not_ended
+spool_emptied <- ended(succeeded | refused | cancelled) OR released(failed)
+startup: in_flight -> unknown; running runs advanced by kernel before surface opens
+```
+
+### Required tests
+
+1. With a service down, a run rests `pending`, its independent read branch
+   finishes, and a resume after the service returns completes it without new
+   inputs.
+2. A resume of a run waiting only for approval is refused.
+3. Restarting the kernel during a function execution executes it again with the
+   same output digest; during an effect it yields `unknown` and no second request.
+4. A cancelled run executes nothing further, keeps its trace and has no spool.
+5. A `failed` run keeps its spooled files until released; releasing twice is
+   refused.
+
+### Consequence
+
+The owner can switch the machine off or take a week to answer, and every run is
+still in the state it was truly in.
+
+## Accepted decision A15 — the trace is immutable, bounded and holds no payload
+
+Reuses cabinet-flow decisions 19 and 20, narrowed by K-10: no retention periods, one
+spool, files only as fixtures beyond a run.
+
+### Normative rules
+
+1. Every concluded attempt at an element, every skipped node and every
+   `upstream_failed` node writes exactly one NodeExecution M23 — an owner's
+   resolution of an unknown outcome writes none (A11). A mapped node's trace is
+   its elements' records; it has a record of its own, without `map_index`, only
+   when it ran no element: over an empty list (A13 rule 6), or when it was
+   skipped or `upstream_failed` before any element. Records of nodes that become
+   non-executable together are written in (`node_id`, `map_index`) order. No operation edits
+   or deletes one. `succeeded` is written only after the outputs validated.
+2. A record names what executed by identity — the implementation or the binding —
+   and its inputs and outputs by `value_id` or spooled-file facts. It holds no
+   value, no file, no credential, no header value and no text beyond
+   `failure_detail_bytes_max`.
+3. A file produced during a run is written to that run's spool below the data
+   directory (A18), with its digest and size, and read from there by the next node.
+   A spooled file above `spool_file_bytes_max`, or a run whose spooled files
+   together exceed `spool_run_bytes_max`, concludes the producing element
+   `resource_exhausted` (for an operation, A09's `contract_violation`); only the
+   files of that attempt are discarded, and files spooled earlier in the run
+   stay.
+4. A value a node produces — a function output or a service output — above
+   `stored_value_bytes_max` is checked only after the execution or the response
+   has otherwise succeeded, so A03's `resource_exhausted` for `output_bytes` wins
+   when both hold; it concludes the element `contract_violation` with detail
+   `value_too_large`; a constant or a trial value above it is refused when
+   authored; a flow input above it refuses the start (A12).
+5. Capturing a failed execution into a trial corpus (M06) is allowed only while
+   its run still holds its spool — the run has not ended, or ended `failed` and
+   was not released — and is refused otherwise, since its files may be gone. It
+   copies its inputs,
+   spooled files included, into the case as values and file fixtures; a file
+   fixture above `trial_fixture_bytes_max` refuses the capture. This is the only
+   way a run's file outlives its run (K-10).
+6. For repair an agent receives one slot's contract, its current implementation,
+   its trial cases and executions, and the latest NodeExecutions, in reverse store
+   order, of function nodes pinned to any contract version of that slot, at most
+   `page_size_max` of them (K-12), under A07.
+7. The trace is the only source the kernel uses to explain or continue a run;
+   process logs are never an input to a kernel decision.
+
+### Formal invariants
+
+```text
+concluded_attempt | skip | upstream_failed -> exactly_one_node_execution
+node_execution immutable
+payload IN node_execution -> never
+spooled_file -> belongs_to(one run) AND size <= spool_file_bytes_max
+sum(spool(run)) <= spool_run_bytes_max
+file_outlives_run -> captured_as_fixture
+```
+
+### Required tests
+
+1. No operation alters a written NodeExecution.
+2. A function that raises after printing a secret-shaped string leaves a bounded
+   `failure_detail` without it.
+3. A function writing a file one byte over `spool_file_bytes_max` concludes
+   `resource_exhausted` and leaves nothing in the spool.
+5. Capturing a failed execution whose input was a spooled photo creates a case
+   whose fixture has the photo's digest; after release the run's spool is empty
+   and the fixture remains.
+
+### Consequence
+
+The trace is the kernel's memory of what it did, and it can be trusted because
+nobody, the kernel included, can rewrite it.
+
+## Carried to later states
+
+Questions the State 2 rounds raised that change no rule here; they belong to the
+state named and must be closed there:
+
+- State 5: the inspection operation through which the owner reads a spooled
+  file's bytes (A10 rule 2) — its request, its size and paging limits; once the
+  run's spool is emptied or released the bytes are gone and the request is
+  refused.
+- State 6: the supported JSON Schema subset and the syntax of idempotency-key
+  fields, as State 1 carries; canonical bytes are RFC 8785 (A01).
+- Release build: the frozen list of trapped standard-library entry points (A03
+  rule 4), shipped with the runtime.
+- State 5: the closed set of reason codes a refusal or an `operation_failed`
+  detail names — only where a caller acts on the difference (K-17); State 2 fixes
+  which check is named first.
+- State 6: the encoding of a list continuation token (A16 rule 6 fixes its
+  meaning: a store position).

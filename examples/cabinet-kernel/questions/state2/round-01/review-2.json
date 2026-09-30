@@ -1,0 +1,142 @@
+{
+ "open_points": [
+  {
+   "subject": "A08 vs K-03/M10/M11 binding digest scope",
+   "kind": "contradiction",
+   "text": "K-03: \"A binding pins the manifest record's digest.\" / M10: \"record_digest: the digest of the manifest record read\" / A08 rule 2: \"Its `record_digest` is the SHA-256 ... of that one capability entry\"",
+   "question": "Is a binding pin computed from the whole service record or only from the selected capability entry?",
+   "options": [
+    "Pin whole `<service_id>.json` record digest",
+    "Pin only the selected capability entry digest"
+   ],
+   "default_guess": "Pin only the selected capability entry digest (A08 is the latest explicit algorithm)."
+  },
+  {
+   "subject": "A06 activation request when effectful version is already active",
+   "kind": "rule conflict",
+   "text": "A06 rule 3: \"An agent asking to activate it is refused\" (effectful) vs A06 rule 4: \"Activating the version that is already active returns the active activation and records nothing.\"",
+   "question": "If an agent asks to activate an effectful version that is already active, is the request refused or does it return the active activation?",
+   "options": [
+    "Always refuse agent for effectful versions, even if already active",
+    "Return active activation for idempotency when already active"
+   ],
+   "default_guess": "Refuse (preserve owner-only authority for effectful activation)."
+  },
+  {
+   "subject": "Standing grant on inactive version when already active grant exists",
+   "kind": "rule conflict",
+   "text": "State 0 action failure: \"a ... version that is not active cannot be granted\" and output: \"granting an already granted node returns the active grant\"; M25 says grants stay active even when version becomes inactive.",
+   "question": "When a version is inactive but still has an active grant, what should `grant` do if called again for that node/version?",
+   "options": [
+    "Refuse because version is not active",
+    "Return existing active grant (idempotent regardless of active version)"
+   ],
+   "default_guess": "Refuse when version is not currently active."
+  },
+  {
+   "subject": "A05 disclosure phase target definition",
+   "kind": "underspecified check domain",
+   "text": "A05 phase 8: \"disclosure, by the edge order: the class that can reach the source (A07) does not exceed the class the target input accepts\" while edges may target flow outputs.",
+   "question": "Does phase-8 disclosure checking apply to edges ending at flow outputs, and if so what 'accepted class' is used there?",
+   "options": [
+    "Apply only to node-input targets",
+    "Also apply to flow outputs using an explicit flow-output class rule"
+   ],
+   "default_guess": "Apply only to node inputs (wording says \"target input\")."
+  },
+  {
+   "subject": "Run output shape for skipped/not-produced outputs",
+   "kind": "model-rule mismatch",
+   "text": "M19: \"outputs: StoredValues by flow output port, as produced\" vs A13 rule 7: \"A `failed` run still reports every flow output ... marked as produced, skipped or not produced\" and A05 rule 4 skipped flow outputs are \"reported ... as `skipped_by_guard`.\"",
+   "question": "What exact run-output data structure is returned/stored when an output is skipped or not produced?",
+   "options": [
+    "Extend run outputs with per-port status union (produced/skipped/not_produced)",
+    "Keep only produced values in M19 and expose skipped/not-produced only via trace"
+   ],
+   "default_guess": "Expose per-output status in run response; keep StoredValues only for produced ports."
+  },
+  {
+   "subject": "Agent redaction payload for personal_data",
+   "kind": "contradiction",
+   "text": "K-14: \"returns the value's digest and class instead\" vs A07 rule 4/invariant: \"returns the value's `value_id`, digest and class instead.\"",
+   "question": "For `personal_data` returned to agents, is `value_id` included or only digest+class?",
+   "options": [
+    "Only digest and class",
+    "value_id + digest + class"
+   ],
+   "default_guess": "Include value_id + digest + class (A07 explicitly broadens response form)."
+  },
+  {
+   "subject": "A07 rule 5 'execution class'",
+   "kind": "undefined term",
+   "text": "A07 rule 5: \"returned to an agent only as its length and the execution's class.\"",
+   "question": "How is \"the execution's class\" computed and where is it recorded, since M23 has no such field?",
+   "options": [
+    "Define execution class as max class of all inputs received by that NodeExecution",
+    "Define it as max of inputs and outputs",
+    "Add explicit class field to NodeExecution"
+   ],
+   "default_guess": "Use max class of inputs received by that execution."
+  },
+  {
+   "subject": "A09 pre-send refusal outcome mapping",
+   "kind": "missing outcome mapping",
+   "text": "A09 rule 1: \"An absolute path, a change of host, userinfo or a fragment is refused before anything is sent.\" and rule 4: plain `http` target may be \"refused before sending\"; table in rule 5 does not map these refusals.",
+   "question": "Which NodeExecution status (and EffectAttempt status for non-read) must be recorded for these pre-send refusals?",
+   "options": [
+    "Map to `operation_failed` + EffectAttempt `not_sent` for non-read",
+    "Map to `service_unreachable` + EffectAttempt `not_sent` for non-read",
+    "Introduce a dedicated refusal status"
+   ],
+   "default_guess": "`operation_failed` with `not_sent` for non-read attempts."
+  },
+  {
+   "subject": "A11 attempt_number scope",
+   "kind": "underspecified counter scope",
+   "text": "A11 rule 1: \"`attempt_number` counts from 1 every record the kernel writes about that element\" and A11 rule 3 has a branch \"`not_applied`: no further NodeExecution\".",
+   "question": "Exactly which record kinds advance `attempt_number` (NodeExecution only, EffectAttempt+NodeExecution, skipped/upstream records, approval records), and what number is assigned to skipped/upstream conclusions?",
+   "options": [
+    "Count only NodeExecution records",
+    "Count NodeExecution and EffectAttempt records for send attempts, with shared number per send",
+    "Count all per-element records including approvals/waits"
+   ],
+   "default_guess": "Count send-attempt pair (EffectAttempt+NodeExecution share one number) plus standalone NodeExecutions (skip/upstream/resolution-applied) each take the next number."
+  },
+  {
+   "subject": "A20 'never truncation' vs failure_detail handling",
+   "kind": "contradiction",
+   "text": "A20 rule 2: \"Over a ceiling is always a refusal or a failure, never a truncation.\" vs A03 rule 6 and A09 rule 6: kernel keeps \"at most `failure_detail_bytes_max`\" of exception/error text.",
+   "question": "Should overlong failure detail be truncated to the ceiling or treated as refusal/failure without truncation?",
+   "options": [
+    "Truncate failure detail to max bytes",
+    "Do not truncate; if exceeds max, replace with fixed marker and no payload"
+   ],
+   "default_guess": "Replace with bounded marker/summary (no raw truncation) to preserve A20 principle."
+  },
+  {
+   "subject": "A16 list ordering for 'newest first'",
+   "kind": "underspecified ordering key",
+   "text": "A16 rule 6: \"Every list operation returns ... newest first, with a continuation token\" while K-17 emphasizes store order for record order.",
+   "question": "Is \"newest\" defined by store insertion order, timestamp, or per-model lifecycle time field when these differ?",
+   "options": [
+    "Store order only",
+    "Timestamp field per model",
+    "Store order primary, timestamp only display"
+   ],
+   "default_guess": "Store order only, with continuation token based on that order."
+  }
+ ],
+ "usage": {
+  "input_tokens": 28041,
+  "input_tokens_details": {
+   "cached_tokens": 27392,
+   "cache_write_tokens": 0
+  },
+  "output_tokens": 7566,
+  "output_tokens_details": {
+   "reasoning_tokens": 6006
+  },
+  "total_tokens": 35607
+ },
+ "raw": "{\"open_points\":[{\"subject\":\"A08 vs K-03/M10/M11 binding digest scope\",\"kind\":\"contradiction\",\"text\":\"K-03: \\\"A binding pins the manifest record's digest.\\\" / M10: \\\"record_digest: the digest of the manifest record read\\\" / A08 rule 2: \\\"Its `record_digest` is the SHA-256 ... of that one capability entry\\\"\",\"question\":\"Is a binding pin computed from the whole service record or only from the selected capability entry?\",\"options\":[\"Pin whole `<service_id>.json` record digest\",\"Pin only the selected capability entry digest\"],\"default_guess\":\"Pin only the selected capability entry digest (A08 is the latest explicit algorithm).\"},{\"subject\":\"A06 activation request when effectful version is already active\",\"kind\":\"rule conflict\",\"text\":\"A06 rule 3: \\\"An agent asking to activate it is refused\\\" (effectful) vs A06 rule 4: \\\"Activating the version that is already active returns the active activation and records nothing.\\\"\",\"question\":\"If an agent asks to activate an effectful version that is already active, is the request refused or does it return the active activation?\",\"options\":[\"Always refuse agent for effectful versions, even if already active\",\"Return active activation for idempotency when already active\"],\"default_guess\":\"Refuse (preserve owner-only authority for effectful activation).\"},{\"subject\":\"Standing grant on inactive version when already active grant exists\",\"kind\":\"rule conflict\",\"text\":\"State 0 action failure: \\\"a ... version that is not active cannot be granted\\\" and output: \\\"granting an already granted node returns the active grant\\\"; M25 says grants stay active even when version becomes inactive.\",\"question\":\"When a version is inactive but still has an active grant, what should `grant` do if called again for that node/version?\",\"options\":[\"Refuse because version is not active\",\"Return existing active grant (idempotent regardless of active version)\"],\"default_guess\":\"Refuse when version is not currently active.\"},{\"subject\":\"A05 disclosure phase target definition\",\"kind\":\"underspecified check domain\",\"text\":\"A05 phase 8: \\\"disclosure, by the edge order: the class that can reach the source (A07) does not exceed the class the target input accepts\\\" while edges may target flow outputs.\",\"question\":\"Does phase-8 disclosure checking apply to edges ending at flow outputs, and if so what 'accepted class' is used there?\",\"options\":[\"Apply only to node-input targets\",\"Also apply to flow outputs using an explicit flow-output class rule\"],\"default_guess\":\"Apply only to node inputs (wording says \\\"target input\\\").\"},{\"subject\":\"Run output shape for skipped/not-produced outputs\",\"kind\":\"model-rule mismatch\",\"text\":\"M19: \\\"outputs: StoredValues by flow output port, as produced\\\" vs A13 rule 7: \\\"A `failed` run still reports every flow output ... marked as produced, skipped or not produced\\\" and A05 rule 4 skipped flow outputs are \\\"reported ... as `skipped_by_guard`.\\\"\",\"question\":\"What exact run-output data structure is returned/stored when an output is skipped or not produced?\",\"options\":[\"Extend run outputs with per-port status union (produced/skipped/not_produced)\",\"Keep only produced values in M19 and expose skipped/not-produced only via trace\"],\"default_guess\":\"Expose per-output status in run response; keep StoredValues only for produced ports.\"},{\"subject\":\"Agent redaction payload for personal_data\",\"kind\":\"contradiction\",\"text\":\"K-14: \\\"returns the value's digest and class instead\\\" vs A07 rule 4/invariant: \\\"returns the value's `value_id`, digest and class instead.\\\"\",\"question\":\"For `personal_data` returned to agents, is `value_id` included or only digest+class?\",\"options\":[\"Only digest and class\",\"value_id + digest + class\"],\"default_guess\":\"Include value_id + digest + class (A07 explicitly broadens response form).\"},{\"subject\":\"A07 rule 5 'execution class'\",\"kind\":\"undefined term\",\"text\":\"A07 rule 5: \\\"returned to an agent only as its length and the execution's class.\\\"\",\"question\":\"How is \\\"the execution's class\\\" computed and where is it recorded, since M23 has no such field?\",\"options\":[\"Define execution class as max class of all inputs received by that NodeExecution\",\"Define it as max of inputs and outputs\",\"Add explicit class field to NodeExecution\"],\"default_guess\":\"Use max class of inputs received by that execution.\"},{\"subject\":\"A09 pre-send refusal outcome mapping\",\"kind\":\"missing outcome mapping\",\"text\":\"A09 rule 1: \\\"An absolute path, a change of host, userinfo or a fragment is refused before anything is sent.\\\" and rule 4: plain `http` target may be \\\"refused before sending\\\"; table in rule 5 does not map these refusals.\",\"question\":\"Which NodeExecution status (and EffectAttempt status for non-read) must be recorded for these pre-send refusals?\",\"options\":[\"Map to `operation_failed` + EffectAttempt `not_sent` for non-read\",\"Map to `service_unreachable` + EffectAttempt `not_sent` for non-read\",\"Introduce a dedicated refusal status\"],\"default_guess\":\"`operation_failed` with `not_sent` for non-read attempts.\"},{\"subject\":\"A11 attempt_number scope\",\"kind\":\"underspecified counter scope\",\"text\":\"A11 rule 1: \\\"`attempt_number` counts from 1 every record the kernel writes about that element\\\" and A11 rule 3 has a branch \\\"`not_applied`: no further NodeExecution\\\".\",\"question\":\"Exactly which record kinds advance `attempt_number` (NodeExecution only, EffectAttempt+NodeExecution, skipped/upstream records, approval records), and what number is assigned to skipped/upstream conclusions?\",\"options\":[\"Count only NodeExecution records\",\"Count NodeExecution and EffectAttempt records for send attempts, with shared number per send\",\"Count all per-element records including approvals/waits\"],\"default_guess\":\"Count send-attempt pair (EffectAttempt+NodeExecution share one number) plus standalone NodeExecutions (skip/upstream/resolution-applied) each take the next number.\"},{\"subject\":\"A20 'never truncation' vs failure_detail handling\",\"kind\":\"contradiction\",\"text\":\"A20 rule 2: \\\"Over a ceiling is always a refusal or a failure, never a truncation.\\\" vs A03 rule 6 and A09 rule 6: kernel keeps \\\"at most `failure_detail_bytes_max`\\\" of exception/error text.\",\"question\":\"Should overlong failure detail be truncated to the ceiling or treated as refusal/failure without truncation?\",\"options\":[\"Truncate failure detail to max bytes\",\"Do not truncate; if exceeds max, replace with fixed marker and no payload\"],\"default_guess\":\"Replace with bounded marker/summary (no raw truncation) to preserve A20 principle.\"},{\"subject\":\"A16 list ordering for 'newest first'\",\"kind\":\"underspecified ordering key\",\"text\":\"A16 rule 6: \\\"Every list operation returns ... newest first, with a continuation token\\\" while K-17 emphasizes store order for record order.\",\"question\":\"Is \\\"newest\\\" defined by store insertion order, timestamp, or per-model lifecycle time field when these differ?\",\"options\":[\"Store order only\",\"Timestamp field per model\",\"Store order primary, timestamp only display\"],\"default_guess\":\"Store order only, with continuation token based on that order.\"}]}"
+}

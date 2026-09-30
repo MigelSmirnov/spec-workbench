@@ -22,7 +22,9 @@ facts; each becomes one release constant when a later state first reads it.
 
 Every content-derived identity and digest in this kernel is the lowercase hex
 SHA-256 of the canonical JSON of the model's meaning facts — never of who created
-it or when. Canonical JSON: keys sorted, no insignificant whitespace, UTF-8. The
+it or when. Canonical JSON is the JSON Canonicalization Scheme of RFC 8785 (JCS):
+keys sorted, no insignificant whitespace, UTF-8, its number and string forms, no
+non-finite numbers (State 2, A01). The
 idempotency key of an effect (M26) uses the same rule.
 
 ## Model M01 — Port
@@ -189,7 +191,8 @@ Substitution: equal limits are interchangeable. Continuity: none.
 
 ### Source of truth
 
-The contract version, clamped by the kernel release's ceilings.
+The contract version; a bound above the release ceiling is refused, never
+clamped (State 2, A02).
 
 ### Lifecycle candidate
 
@@ -439,7 +442,8 @@ invoked, to check that the manifest record still has the pinned digest.
 Candidate fields:
 
 - `service_id`, `operation_name`;
-- `record_digest`: the digest of the manifest record read;
+- `record_digest`: the digest of the operation's own capability entry in the
+  service's manifest record, not of the whole record (State 2, A08);
 - `channel`: the manifest's channel of the operation; this kernel invokes only
   operations the service exposes over its own HTTP API (`http_api` in the
   manifest's words — not an HTTP surface of the kernel, K-11);
@@ -489,7 +493,7 @@ Candidate fields:
 
 - `binding_id`: minted at random by the kernel when proposed; two proposals with
   equal content are two bindings;
-- `service_id`, `operation_name`, `record_digest`: the pinned manifest record —
+- `service_id`, `operation_name`, `record_digest`: the pinned capability entry —
   the kernel reads the digest from the manifest when the binding is proposed; the
   proposer names only the service and operation;
 - `effect_class`, `idempotency_key_fields`: copied from the manifest record, never
@@ -670,7 +674,7 @@ Candidate fields:
   guard on a port without a closed set or with a value outside it. A node whose every incoming edge is disabled by its guard is not
   executed and is recorded `skipped_by_guard`; several enabled guarded edges each
   deliver independently, and the proof refuses two edges that can both deliver to
-  one input port of cardinality `one`.
+  one input port, whatever its cardinality (State 2, A05).
 
 ### Identity
 
@@ -1168,7 +1172,8 @@ Candidate fields:
   always a new attempt;
 - `binding_id`;
 - `idempotency_key`: built from the fields the manifest names;
-- `authority`: the approval or the grant it used;
+- `authority`: the approval or the grant it used, or for a `draft-write` send
+  the flow activation of the run's version (State 2, A10);
 - `status`: `in_flight`, `applied`, `not_applied`, `not_sent` or `unknown` —
   `not_sent` when the service could not be reached before anything was sent;
 - `recorded_at`, `concluded_at`;
@@ -1302,21 +1307,25 @@ Questions the reviews of State 1 raised that change no model fact, identity or
 lifecycle; they belong to the state named and must be closed there:
 
 - State 2: the order that makes "the first failing case" of an admission and "the
-  first failure" of a proof deterministic.
-- State 2: how several enabled edges delivering to one `many` input combine.
-- State 2: what "manifest mismatch" is when a binding is proposed and invoked.
+  first failure" of a proof deterministic — closed by A04 and A05.
+- State 2: how several enabled edges delivering to one `many` input combine —
+  closed by A05 (they are refused).
+- State 2: what "manifest mismatch" is when a binding is proposed and invoked —
+  closed by A08.
 - State 2: what the trace records for a node whose unknown outcome the owner
-  resolved, and how the run continues from it.
+  resolved, and how the run continues from it — closed by A11.
 - State 2: whether bounds above the release ceilings are clamped or refused
-  when a contract is authored.
+  when a contract is authored — closed by A02 (refused).
 - State 2: whether a flow version whose proof failed because a binding was not
-  yet accepted can be proven again later.
+  yet accepted can be proven again later — closed by A05 (yes).
 - State 2: how NodeExecution and EffectAttempt attempt numbers relate for one
-  operation node.
+  operation node — closed by A11.
 - State 2: the identity of an Activation record activated again; whether
-  resubmitting an equal contract or implementation changes the current one.
-- State 2: whether every flow output must be produced under every guard outcome.
+  resubmitting an equal contract or implementation changes the current one —
+  closed by A01 and A04.
+- State 2: whether every flow output must be produced under every guard outcome
+  — closed by A05 and A13 (no; it is reported `skipped_by_guard`).
 - State 2: how transport outcomes (HTTP status, timeout, malformed response,
-  validation failure) map to NodeExecution statuses.
+  validation failure) map to NodeExecution statuses — closed by A09.
 - State 6: canonical bytes of a value for its digest; the supported JSON Schema
   subset; the path syntax, order and null handling of idempotency-key fields.

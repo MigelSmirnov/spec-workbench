@@ -77,14 +77,14 @@ Each action names its observable output and its failure.
 | release a failed run | owner, agent | the run's spooled files are removed | a run that is not `failed`, or already released, is refused |
 | roll a slot back | owner, agent with author right | an earlier implementation of the slot's current contract version is activated again; it must already hold an `admitted` verdict over the current corpus — rollback runs no admission | an implementation not admitted over the current corpus is refused |
 | propose an operation binding | agent | proposed binding | manifest mismatch refused |
-| accept a binding | owner | accepted binding; accepting an accepted binding returns it | — |
-| compose and prove a flow | agent | the flow version and its proof result — proven, or the first failing edge; the version is kept either way, and the first version of a new flow name creates the flow | an unproven version cannot be activated or run |
+| accept a binding | owner | accepted binding; accepting an accepted binding returns it | an unknown binding, or one whose manifest entry no longer matches its pin, is refused (State 2, A08) |
+| compose and prove a flow | agent | the flow version and its proof result — proven, or the first failing edge or node (State 2, A05); the version is kept either way, and the first version of a new flow name creates the flow | an unproven version cannot be activated or run |
 | activate a flow | agent or owner asks; the kernel activates a proven read-only version at once; any other version only when the owner asks | active flow version | an unproven version is refused; an agent asking to activate a version with effects is refused and nothing is kept for the owner — the owner activates it by the same action |
 | run a flow | owner, agent | a run of the flow's active version, with outputs, or resting `awaiting_approval` / `pending` | a flow with no active version, or a function node whose contract version has no current activation, refuses the start and creates no run; a failed node stops its dependants |
 | approve or refuse an effect | owner | the effect runs on the exact input shown; a refusal ends the run `refused` | an approval of a run that has ended can no longer be decided |
 | grant a standing approval for a node of a flow's active version, or revoke any active grant | owner | the node of that flow version stops asking, or asks again; granting an already granted node returns the active grant | a `destructive` node or a version that is not active cannot be granted; revoking where no grant is active is refused |
 | cancel a run | owner | the run ends `cancelled`; nothing further is sent | a finished run cannot be cancelled |
-| resolve an unknown outcome | owner | the effect is recorded applied, or not applied; the run continues, and a resend needs a fresh approval | — |
+| resolve an unknown outcome | owner | the effect is recorded applied, or not applied; the run continues, and a resend needs a fresh approval | an attempt that is not `unknown`, or whose run has ended, is refused (State 2, A11) |
 | resume a run | owner, agent | the nodes waiting on an unreachable service are tried again, whatever else the run waits for | a run with no node waiting on an unreachable service is refused; nodes waiting on an unknown outcome or on approval are not touched |
 | read a trace | owner, agent | trace records | — |
 
@@ -107,9 +107,11 @@ hidden in code.
 
 A microservice exists for the kernel only as a platform-manifest record. An
 operation binding gives one manifest operation typed input and output ports; an
-agent may propose it, only the owner accepts it. A binding pins the manifest
-record's digest. When the record's digest no longer matches, invocation is
-refused until a new binding is accepted; nothing is reissued automatically.
+agent may propose it, only the owner accepts it. A binding pins the digest of
+its operation's own record in the service's manifest — the operation's entry, not
+the whole service file (owner, 2026-09-30). When that digest no longer matches,
+invocation is refused until a new binding is accepted; nothing is reissued
+automatically.
 
 ### K-04 — Contract, implementation, activation (keeps D0-036)
 
@@ -324,6 +326,14 @@ against the obligations of its notes, not only against gates of form.
     sent. The owner accepted the recommendation.
 15. **Spool of a failed run** stays until the owner or an agent releases the run,
     so failures with file inputs can be captured (K-10). The owner's choice.
+16. **What a binding pins** (2026-09-30, raised by the State 2 question rounds):
+    the digest of its operation's own record in the manifest, so an edit to
+    another operation of the same service stops nothing (K-03). The owner accepted
+    the recommendation.
+17. **Libraries in the sandbox** (2026-09-30): the Python standard library only.
+    Photo processing is not a kernel function: the agent processes a photo itself,
+    outside the kernel, and the kernel moves the file between services. The
+    owner's answer.
 
 ## Open questions
 
