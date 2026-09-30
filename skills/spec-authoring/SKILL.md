@@ -18,7 +18,11 @@ normative. The method reaches you one phase at a time, from the pipeline — do 
 4. Answer every `Ask:` question in the state document. They are the judgement no gate can make.
 5. Run the gate. A finding names the rule it enforces and the fix. There are no warnings and no waivers
    (`tools/fence.py`): a finding that is not an error is an undecided fact.
-6. Before export, `python tools/design_factory_slices.py examples/<case> --factory-root <factory> --project <name>`
+6. Ask the generator's own model what the state still leaves open: the `questions:` command of the phase
+   (`python tools/design_questions.py ask examples/<case> --state <N>`). A state is closed when a round
+   raises no topic twice and the texts have not changed since — [QUESTIONS.md](QUESTIONS.md). Gates see
+   form; only this sees a decision nobody made.
+7. Before export, `python tools/design_factory_slices.py examples/<case> --factory-root <factory> --project <name>`
    asks the Factory what it will cut, refuse and resolve — every stop at once, without a run.
 
 ## What holds in every phase
