@@ -249,7 +249,9 @@ admission order and of resubmitting an equal implementation.
 3. A case passes when the execution succeeded and, if the case states expected
    outputs, every output's digest equals the expected one — a file output is
    recorded in the TrialExecution by digest, size and media type, keeps no bytes,
-   and is compared with the expected file fixture by digest; outputs that
+   and is compared with the expected file fixture by digest; a `many` file output
+   equals its expected list when both have the same length and the digests are
+   equal position by position, so order and repetitions count; outputs that
    validate but differ are `output_mismatch`. The verdict is `admitted` exactly
    when the corpus is non-empty and every case passed; otherwise `refused` with
    reason `empty_corpus`, or with the first case in corpus order that did not

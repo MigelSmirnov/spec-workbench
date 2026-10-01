@@ -234,12 +234,13 @@ generated statements, no suspension.
    class, `draft-write` included (K-08, A11): the element then waits with reason
    `owner_approval` like any other. Before sending a `state-transition`,
    `external-effect` or `destructive` node, the kernel needs one of: an approved,
-   unused EffectApproval M24 of that run, node and element whose input digests
-   equal the inputs about to be sent — the request, its method, path and query
-   are derived from the binding, the instance and those inputs alone, so equal
-   digests mean the same request, provided the instance's `api_base_url` is
-   still the one the preview showed; after a restart that changed it, the
-   approval no longer covers the send and a new one is asked; or an active StandingGrant M25 for that
+   unused EffectApproval M24 of that run, node and element whose
+   `request_digest` equals the digest of the request about to be sent (rule 7) —
+   any difference, in an input, the instance's `api_base_url`, a required
+   header's name or value or the credential header's name, means the approval
+   is no authority for this send: it stays `approved` and unused, void when the
+   run ends, and the kernel proceeds as if it did not exist — under a grant
+   when one applies, otherwise by asking anew as rule 2 says; or an active StandingGrant M25 for that
    node of the run's pinned flow version, when the node is not `destructive` and
    the send is not a resend after `not_applied` (A11). When both exist, the
    approval is used and recorded as the authority. A fresh approval after
@@ -247,9 +248,9 @@ generated statements, no suspension.
    before it never count.
 2. Without either, the kernel records one approval request for the element —
    none when a `requested` one for it already exists — with the exact inputs
-   and a preview — service, operation, effect class, the instance's
-   `api_base_url`, the input values and, for each file input, its digest, size
-   and media type; an agent reading it gets a `personal_data` value or file only
+   and a preview — service, operation, effect class, the request as rule 7
+   describes it with its `request_digest`, the input values and, for each file
+   input, its digest, size and media type; an agent reading it gets a `personal_data` value or file only
    as digest and class (A07) — and the element waits with reason `owner_approval`. The owner
    may read the spooled file's bytes through inspection while the run holds them;
    an agent may not.
@@ -279,12 +280,22 @@ generated statements, no suspension.
    authority the FlowActivation M18 of the run's version, except a resend after
    `not_applied`, which records its fresh approval; a `read` send has no
    EffectAttempt.
+7. The request an approval covers is described, before sending, by: the method;
+   the full URL with its query (A09 rules 1 and 2); every header the kernel
+   sends, names lower-cased and in code-point order, each with its value, except
+   that the credential header appears by name only; and the body — the JSON
+   body's bytes, or for `multipart/form-data` the parts in order, each as its
+   name, media type and the SHA-256 of its content, so the boundary is not part
+   of it. The `request_digest` is the SHA-256 of the canonical JSON of that
+   description. The credential's value is never shown, so rotating it voids no
+   approval; any other difference, whatever caused it, is a different request
+   (owner decision 18).
 
 ### Formal invariants
 
 ```text
 send(node) AND class IN {state-transition, external-effect, destructive}
--> (approval.status = approved AND approval.unused AND digests(inputs) = approval.input_digests)
+-> (approval.status = approved AND approval.unused AND request_digest(send) = approval.request_digest)
    OR (grant.active AND grant.flow_version = run.flow_version AND class != destructive
        AND NOT resend_after_not_applied)
 approval_used_at_most_once
@@ -302,6 +313,10 @@ decider(approval | grant | revoke) = owner
    a `destructive` node cannot be granted.
 5. After revocation, the next run of that version asks again.
 6. An agent's approval, grant or revocation is refused.
+7. After a restart that changed a required header's value of the instance, an
+   approval given before it on the same inputs does not cover the send: nothing
+   is sent and the element asks again. A restart that only rotated the
+   credential's value sends under the approval.
 
 ### Consequence
 

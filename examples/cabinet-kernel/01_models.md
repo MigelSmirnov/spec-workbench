@@ -260,9 +260,11 @@ Candidate fields:
   `expected_outputs` — not from its origin or who added it; a case equal in those
   facts to an existing one is that case, and the existing origin stays;
 - `contract_version_id`;
-- `inputs`: StoredValues (M21) by input port;
-- `expected_outputs`: StoredValues by output port, absent when only the absence
-  of failure is required — always absent for a captured case;
+- `inputs`: StoredValues (M21) by input port; a `many` file port holds a list of
+  file fixtures in its order, a repeated file kept as often as it occurs;
+- `expected_outputs`: StoredValues by output port, a `many` file port as a list
+  like `inputs`, absent when only the absence of failure is required — always
+  absent for a captured case;
 - `origin`: `authored` or `captured`;
 - `captured_from`: the NodeExecution (M23) it was captured from, present exactly
   when `origin` is `captured` — only an execution of a function node pinned to the
@@ -311,7 +313,10 @@ Candidate fields:
 - `outcome`: `passed`, `output_mismatch` (outputs valid but not equal to the
   case's expected outputs), `contract_violation`, `sandbox_violation`, `timeout`,
   `resource_exhausted` or `crashed`;
-- `outputs`: StoredValues by output port, when produced;
+- `outputs`: when produced, by output port: a StoredValue for a `value` port; for
+  a `file` port only its facts — digest, size and media type, no bytes and never a
+  StoredValue — and for a `many` file port a list of such facts in output order,
+  a repeated file kept as often as it occurs;
 - `resources_used`;
 - `executed_at`.
 
@@ -1075,7 +1080,10 @@ Candidate fields:
 - `approval_id`: minted at random by the kernel when the approval is requested;
 - `run_id`, `node_id`, `map_index`, `binding_id`;
 - `input_digests`: the exact inputs shown;
-- `preview`: what the owner saw — operation, target service and the input values;
+- `request_digest`: the digest of the fully built request shown; the approval
+  covers that request only (owner decision 18);
+- `preview`: what the owner saw — operation, target service, the built request
+  and the input values;
   agents may read approvals, and an agent receives personal-data values only as
   digest and class (K-14);
 - `status`: `requested`, `approved`, `refused` or `used`;

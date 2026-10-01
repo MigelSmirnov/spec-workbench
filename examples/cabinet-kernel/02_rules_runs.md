@@ -180,8 +180,8 @@ Reuses cabinet-flow decision 18, narrowed by K-09: no timed retries, no reconcil
    concluded record is executed again, which is safe because it is pure; a `read`
    element without one is sent again; an operation element of another class with
    neither a concluded record nor an EffectAttempt was never sent and is advanced
-   as if reached for the first time — an approved, unused approval still covers
-   it.
+   as if reached for the first time — an approved, unused approval covers it
+   only while the rebuilt request has its `request_digest` (A10 rules 1 and 7).
 6. Everything a resume or a restart needs is in the store before it is acted on:
    records of concluded attempts, decided approvals, and in-flight attempts before
    their request (K-17).
@@ -227,7 +227,8 @@ spool, files only as fixtures beyond a run.
    its elements' records; it has a record of its own, without `map_index`, only
    when it ran no element: over an empty list (A13 rule 6), or when it was
    skipped or `upstream_failed` before any element. Records of nodes that become
-   non-executable together are written in (`node_id`, `map_index`) order. No operation edits
+   non-executable together are written in (`node_id`, `map_index`) order, a
+   record without `map_index` before index 0, as in A14 rule 2. No operation edits
    or deletes one. `succeeded` is written only after the outputs validated.
 2. A record names what executed by identity — the implementation or the binding —
    and its inputs and outputs by `value_id` or spooled-file facts. It holds no

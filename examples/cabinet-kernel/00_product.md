@@ -334,6 +334,12 @@ against the obligations of its notes, not only against gates of form.
     Photo processing is not a kernel function: the agent processes a photo itself,
     outside the kernel, and the kernel moves the file between services. The
     owner's answer.
+18. **What an approval covers** (2026-10-01, raised by State 2 round 17): the
+    fully built request as the owner was shown it — method, URL, headers and
+    body. Any difference at send, whatever caused it (the inputs, or an
+    instance's address or headers changed by a restart), asks again. The
+    credential's value is never shown, so rotating it voids nothing. The owner
+    accepted the recommendation.
 
 ## Open questions
 
