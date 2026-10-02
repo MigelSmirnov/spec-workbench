@@ -1,0 +1,101 @@
+{
+ "open_points": [
+  {
+   "subject": "Request serialization across the whole operation lifecycle",
+   "kind": "owner-unclear",
+   "text": "A18 rule 3: \"Surface requests are handled one at a time in the order they arrive: one request, including the run advancement it causes (A13), ends before the next begins\"; State 3 assigns A18 mainly to `store` (\"### `store` ### Owns A18\") while `surface` owns the entrance (\"### `surface` ### Owns A16: the one MCP entrance\").",
+   "question": "Which module is responsible for enforcing \"one request at a time\" for the full request (not just individual store transactions)?",
+   "options": [
+    "`surface` runs a single-threaded request loop and is the sole serializer",
+    "`store` exposes a global request mutex and callers rely on it",
+    "Both enforce it redundantly"
+   ],
+   "default_guess": "`surface` serializes requests end-to-end; `store` only serializes each store call/transaction."
+  },
+  {
+   "subject": "Cross-layer record reading by `functions`",
+   "kind": "dependency-exception-unclear",
+   "text": "\"A module reads the records of a module above it, which it may not call, only as data through `store.read_records`: that is how `functions` checks the run, record and spool conditions of a capture (A15 rule 5)...\"",
+   "question": "Is reading higher-layer records through `store` a general allowed pattern, or a narrow one-off exception with fixed record sets?",
+   "options": [
+    "General rule: any module may read any model via `store` if it does not call the owning module",
+    "Narrow exception: only the two cited `functions` reads are allowed",
+    "Forbidden in code: add lower-layer capability instead"
+   ],
+   "default_guess": "Treat it as a narrow, explicit exception only for the cited `functions` use-cases."
+  },
+  {
+   "subject": "Ordering guarantee for NodeExecutions when operation outcomes trigger derived skips/upstream failures",
+   "kind": "ordering-split-across-owners",
+   "text": "\"When a step concludes an operation element, `effects` writes that conclusion in its own store call first; `runs` then writes, in its next call, the skips and upstream failures it causes — in the order of A15 rule 1\".",
+   "question": "Does A15 ordering apply across both calls as one combined sequence, or only within each module's own batch write?",
+   "options": [
+    "Combined sequence requirement across both calls",
+    "Per-call ordering only; cross-call order is just store order",
+    "`effects` must also write immediately-derived skips/upstream failures"
+   ],
+   "default_guess": "Per-call ordering only, with cross-call order taken from store order."
+  },
+  {
+   "subject": "Approval digest mismatch behavior vs owner decision text",
+   "kind": "contradiction",
+   "text": "State 0 decision 18: \"Any difference at send, whatever caused it ... asks again.\" A10 rule 1: on mismatch the approval \"stays `approved` and unused ... and the kernel proceeds as if it did not exist — under a grant when one applies, otherwise by asking anew\".",
+   "question": "When request details differ from a prior approval, must the kernel always ask again, or may it proceed under an active standing grant?",
+   "options": [
+    "Always ask again (no grant fallback)",
+    "Grant fallback is allowed as A10 states",
+    "Ask again only for certain effect classes"
+   ],
+   "default_guess": "Allow grant fallback as specified in A10 rule 1."
+  },
+  {
+   "subject": "`idempotency_key: null` semantics",
+   "kind": "contradiction",
+   "text": "A08 rule 4: \"`idempotency_key`: `null` means none\" and \"EffectAttempt's `idempotency_key` ... absent when the manifest declares none.\" But State 3 carried item says: \"State 6 ... whether a send whose declared idempotency-key field is `null` is refused.\"",
+   "question": "Is `null` already accepted as \"no key\", or still undecided and potentially refused?",
+   "options": [
+    "Accepted now: `null` means no key",
+    "Undecided until State 6",
+    "Refused unless field list is non-empty"
+   ],
+   "default_guess": "Accepted now: `null` means no idempotency key."
+  },
+  {
+   "subject": "Who computes classification for masking `failure_detail` on operation executions",
+   "kind": "owner-unclear",
+   "text": "State 3: \"The class of an execution for masking (A07 rule 5) is computed by `surface` from the records it returns.\" A09 rule 7: \"`failure_detail` ... class is the highest of the execution's class and the classes the binding declares for its outputs.\"",
+   "question": "Should `surface` fetch binding output classes during masking, or should `effects` persist the already-classified `failure_detail` class?",
+   "options": [
+    "`surface` computes dynamically and must read binding classes",
+    "`effects` computes at write time and stores classification metadata",
+    "Either is acceptable"
+   ],
+   "default_guess": "`effects` computes/stores classification metadata so masking does not require extra binding lookups."
+  },
+  {
+   "subject": "Grant checks tied to active vs pinned flow version",
+   "kind": "scope-of-knowledge-unclear",
+   "text": "`effects` \"Knows ... `flows` (the active version and its nodes, for a grant).\" But M25/A10 say a grant \"belongs to that exact version\" and can keep covering runs pinned to that version even when another version is active.",
+   "question": "For send authority, does `effects` validate grant applicability against the run's pinned flow version, the currently active version, or both?",
+   "options": [
+    "Run-pinned version only",
+    "Currently active version only",
+    "Both, with different checks"
+   ],
+   "default_guess": "Validate against the run-pinned flow version; active-version checks apply only when granting/regranting."
+  }
+ ],
+ "usage": {
+  "input_tokens": 40057,
+  "input_tokens_details": {
+   "cached_tokens": 0,
+   "cache_write_tokens": 0
+  },
+  "output_tokens": 7102,
+  "output_tokens_details": {
+   "reasoning_tokens": 5916
+  },
+  "total_tokens": 47159
+ },
+ "raw": "{\"open_points\":[{\"subject\":\"Request serialization across the whole operation lifecycle\",\"kind\":\"owner-unclear\",\"text\":\"A18 rule 3: \\\"Surface requests are handled one at a time in the order they arrive: one request, including the run advancement it causes (A13), ends before the next begins\\\"; State 3 assigns A18 mainly to `store` (\\\"### `store` ### Owns A18\\\") while `surface` owns the entrance (\\\"### `surface` ### Owns A16: the one MCP entrance\\\").\",\"question\":\"Which module is responsible for enforcing \\\"one request at a time\\\" for the full request (not just individual store transactions)?\",\"options\":[\"`surface` runs a single-threaded request loop and is the sole serializer\",\"`store` exposes a global request mutex and callers rely on it\",\"Both enforce it redundantly\"],\"default_guess\":\"`surface` serializes requests end-to-end; `store` only serializes each store call/transaction.\"},{\"subject\":\"Cross-layer record reading by `functions`\",\"kind\":\"dependency-exception-unclear\",\"text\":\"\\\"A module reads the records of a module above it, which it may not call, only as data through `store.read_records`: that is how `functions` checks the run, record and spool conditions of a capture (A15 rule 5)...\\\"\",\"question\":\"Is reading higher-layer records through `store` a general allowed pattern, or a narrow one-off exception with fixed record sets?\",\"options\":[\"General rule: any module may read any model via `store` if it does not call the owning module\",\"Narrow exception: only the two cited `functions` reads are allowed\",\"Forbidden in code: add lower-layer capability instead\"],\"default_guess\":\"Treat it as a narrow, explicit exception only for the cited `functions` use-cases.\"},{\"subject\":\"Ordering guarantee for NodeExecutions when operation outcomes trigger derived skips/upstream failures\",\"kind\":\"ordering-split-across-owners\",\"text\":\"\\\"When a step concludes an operation element, `effects` writes that conclusion in its own store call first; `runs` then writes, in its next call, the skips and upstream failures it causes — in the order of A15 rule 1\\\".\",\"question\":\"Does A15 ordering apply across both calls as one combined sequence, or only within each module's own batch write?\",\"options\":[\"Combined sequence requirement across both calls\",\"Per-call ordering only; cross-call order is just store order\",\"`effects` must also write immediately-derived skips/upstream failures\"],\"default_guess\":\"Per-call ordering only, with cross-call order taken from store order.\"},{\"subject\":\"Approval digest mismatch behavior vs owner decision text\",\"kind\":\"contradiction\",\"text\":\"State 0 decision 18: \\\"Any difference at send, whatever caused it ... asks again.\\\" A10 rule 1: on mismatch the approval \\\"stays `approved` and unused ... and the kernel proceeds as if it did not exist — under a grant when one applies, otherwise by asking anew\\\".\",\"question\":\"When request details differ from a prior approval, must the kernel always ask again, or may it proceed under an active standing grant?\",\"options\":[\"Always ask again (no grant fallback)\",\"Grant fallback is allowed as A10 states\",\"Ask again only for certain effect classes\"],\"default_guess\":\"Allow grant fallback as specified in A10 rule 1.\"},{\"subject\":\"`idempotency_key: null` semantics\",\"kind\":\"contradiction\",\"text\":\"A08 rule 4: \\\"`idempotency_key`: `null` means none\\\" and \\\"EffectAttempt's `idempotency_key` ... absent when the manifest declares none.\\\" But State 3 carried item says: \\\"State 6 ... whether a send whose declared idempotency-key field is `null` is refused.\\\"\",\"question\":\"Is `null` already accepted as \\\"no key\\\", or still undecided and potentially refused?\",\"options\":[\"Accepted now: `null` means no key\",\"Undecided until State 6\",\"Refused unless field list is non-empty\"],\"default_guess\":\"Accepted now: `null` means no idempotency key.\"},{\"subject\":\"Who computes classification for masking `failure_detail` on operation executions\",\"kind\":\"owner-unclear\",\"text\":\"State 3: \\\"The class of an execution for masking (A07 rule 5) is computed by `surface` from the records it returns.\\\" A09 rule 7: \\\"`failure_detail` ... class is the highest of the execution's class and the classes the binding declares for its outputs.\\\"\",\"question\":\"Should `surface` fetch binding output classes during masking, or should `effects` persist the already-classified `failure_detail` class?\",\"options\":[\"`surface` computes dynamically and must read binding classes\",\"`effects` computes at write time and stores classification metadata\",\"Either is acceptable\"],\"default_guess\":\"`effects` computes/stores classification metadata so masking does not require extra binding lookups.\"},{\"subject\":\"Grant checks tied to active vs pinned flow version\",\"kind\":\"scope-of-knowledge-unclear\",\"text\":\"`effects` \\\"Knows ... `flows` (the active version and its nodes, for a grant).\\\" But M25/A10 say a grant \\\"belongs to that exact version\\\" and can keep covering runs pinned to that version even when another version is active.\",\"question\":\"For send authority, does `effects` validate grant applicability against the run's pinned flow version, the currently active version, or both?\",\"options\":[\"Run-pinned version only\",\"Currently active version only\",\"Both, with different checks\"],\"default_guess\":\"Validate against the run-pinned flow version; active-version checks apply only when granting/regranting.\"}]}"
+}

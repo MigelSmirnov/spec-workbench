@@ -459,6 +459,11 @@ Candidate fields:
 - `base_url`: the manifest's base URL of the one instance the installation
   selects for the service (K-16); the installation chooses the instance, the
   manifest gives its address.
+- `required_headers`, `instance_class`: that instance's required headers and
+  class as the manifest states them (State 2, A08 rule 2, A09 rules 1 and 4);
+  `base_url`, `required_headers` and `instance_class` are absent when the
+  installation selects no instance, and judging them is the invoker's (A09
+  rule 6), not the manifest reading's.
 
 ### Identity
 
