@@ -1216,7 +1216,8 @@ target not allowed, then the credential, then input placement, input ports in
 name order and a list's elements in list order, the first that cannot be placed
 named (A09 rules 1, 2, 4, 6); credential by name only in the description (A10
 rule 7); the description covers every header sent on the wire, and no header is
-sent that it does not describe; a `GET` or `DELETE` list input that is empty
+sent that it does not describe; one `host` header, the instance's required
+`host` when it names one, else the authority of `api_base_url` (A10 rule 7); a `GET` or `DELETE` list input that is empty
 adds no query parameter (A09 rule 2).
 
 ### Errors

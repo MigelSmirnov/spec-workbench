@@ -51,8 +51,9 @@ is.
    instance has no `api_base_url` — one that is not an absolute `http` or
    `https` URL with a host counts as none — or names one required header
    twice, or names one the kernel sets itself (`host`, `accept-encoding`,
-   `content-type`, `content-length`, A10 rule 7), names compared without regard
-   to case — at send time both are A09 rule 6's `required_header_repeated`;
+   `content-type`, `content-length`, A10 rule 7) other than `host`, which an
+   instance may set instead of the kernel (A10 rule 7), names compared without
+   regard to case — at send time both are A09 rule 6's `required_header_repeated`;
    rule 4
    does not hold; or the ports do not fit
    the request shape of A09 rules 2 and 3, in that order, ports taken in name
@@ -122,7 +123,8 @@ outcomes map to NodeExecution statuses.
    mismatch — and the credential
    header the installation holds for that service (A17); an installation whose
    credential header has, compared without regard to case, the name of a required
-   header, or of a header the kernel sets itself (A08 rule 5), refuses to start. The
+   header, or of a header the kernel sets itself (A08 rule 5), `host` included,
+   refuses to start. The
    URL is the `api_base_url` without a trailing `/` followed by the declared
    path, which must start with one `/` and contain no `//`, no `.` or `..`
    segment, no `?` or `#`, and no scheme or host; a path that does not is not
@@ -174,6 +176,9 @@ outcomes map to NodeExecution statuses.
    class `local_dev` or `disposable_rig`, as the manifest instance's `class`
    states — an absent or unknown class counts as `production` — or one whose
    `api_base_url` host is a loopback address; any other plain `http` target is refused before sending.
+   The host judged here, the one connected to, and for `https` the server name
+   sent and verified, are always those of `api_base_url`; a required `Host`
+   header (A10 rule 7) changes only the header sent.
 5. The outcome of one attempt is decided in this order:
 
    | what happened | `read` operation | any other operation (EffectAttempt M26) |
@@ -307,8 +312,10 @@ generated statements, no suspension.
    length follows from the body described — and the `multipart/form-data`
    content type without its `boundary` parameter. The headers sent are exactly:
    `host` — the authority of `api_base_url` exactly as the manifest writes it,
-   not normalized (A09 rule 1) —, `accept-encoding: identity` (A09 rule 3), the instance's required
-   headers, the credential header, and, with a body, `content-type` and
+   not normalized (A09 rule 1), unless the instance's required headers name
+   `host`, in which case that required header is sent instead, its value
+   verbatim, and is the only `host` —, `accept-encoding: identity` (A09 rule 3),
+   the instance's other required headers, the credential header, and, with a body, `content-type` and
    `content-length`; the HTTP client adds no other header (no user agent, no
    connection header). The body is described as the JSON body's bytes, or for
    `multipart/form-data` as the parts in order, each as its name, filename when
@@ -344,6 +351,10 @@ decider(approval | grant | revoke) = owner
    approval given before it on the same inputs does not cover the send: nothing
    is sent and the element asks again. A restart that only rotated the
    credential's value sends under the approval.
+8. An instance at `http://127.0.0.1:8000` whose required headers name
+   `Host: portal.example` sends one request to `127.0.0.1:8000` with that one
+   `host` header, and the request description shows it; a binding to an
+   instance whose required headers name `Accept-Encoding` is refused.
 
 ### Consequence
 

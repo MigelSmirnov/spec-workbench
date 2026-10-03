@@ -255,7 +255,8 @@ per ceiling with the values of release v1; the closed lists of trapped
 standard-library entry points of A03 rule 4 and the sandbox environment of A03
 rule 1; the minimum token length of A16 rule 1; the instance classes that allow
 plain `http` and the class an absent or unknown one counts as (A09 rule 4); the
-headers the kernel sets itself (A08 rule 5); the form of a `service_id` and the
+headers the kernel sets itself and the one of them an instance may set instead
+(A08 rule 5); the form of a `service_id` and the
 file name suffix of a service record (A08 rule 1). Emitted as module constants
 (SPEC_STANDARD 15.3.1); nothing overrides them. Closed sets that are a
 model's — classes, statuses, HTTP methods — are `models` enumerations, and the
@@ -289,6 +290,7 @@ ACCESS_TOKEN_LENGTH_MIN
 PLAIN_HTTP_INSTANCE_CLASSES
 DEFAULT_INSTANCE_CLASS
 KERNEL_SET_HEADER_NAMES
+INSTANCE_SETTABLE_HEADER_NAMES
 SERVICE_ID_PATTERN
 MANIFEST_RECORD_FILE_SUFFIX
 ```
