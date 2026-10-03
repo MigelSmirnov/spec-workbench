@@ -5,6 +5,7 @@
     python tools/design_questions.py status examples/<case> --state 1
 
     python tools/design_questions.py ask examples/<case> --state 1 --since <git-ref>
+    python tools/design_questions.py ask examples/<case> --state 1 --provider codex
 
 `ask` runs one round (several independent reviews, grouped into topics; topics
 raised by two reviews are judged) and keeps it under
@@ -22,7 +23,7 @@ import sys
 from pathlib import Path
 
 from questions_workbench import service
-from questions_workbench.provider import OpenAIProvider
+from questions_workbench.provider import CodexCliProvider, OpenAIProvider
 
 
 def _human_round(summary: dict) -> str:
@@ -42,6 +43,11 @@ def _human_round(summary: dict) -> str:
     return "\n".join(lines)
 
 
+def _provider(args: argparse.Namespace):
+    factory = CodexCliProvider if args.provider == "codex" else OpenAIProvider
+    return factory(args.model, args.reasoning)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -49,6 +55,8 @@ def main(argv: list[str] | None = None) -> int:
     ask.add_argument("case", type=Path)
     ask.add_argument("--state", type=int, required=True)
     ask.add_argument("--runs", type=int, default=service.DEFAULT_RUNS)
+    ask.add_argument("--provider", choices=("openai", "codex"), default="openai",
+                     help="codex asks through the Codex CLI login; its rounds are recorded under that provider")
     ask.add_argument("--model")
     ask.add_argument("--reasoning")
     ask.add_argument("--since", help="git ref at which a reopened state was closed")
@@ -60,7 +68,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         if args.command == "ask":
-            summary = service.ask_round(args.case, args.state, OpenAIProvider(args.model, args.reasoning), args.runs, args.since)
+            summary = service.ask_round(args.case, args.state, _provider(args), args.runs, args.since)
             print(json.dumps(summary, ensure_ascii=False, indent=2) if args.json else _human_round(summary))
             return 0 if summary["closed"] else 1
         result = service.status(args.case, args.state)
@@ -68,7 +76,7 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps(result, ensure_ascii=False, indent=2))
         else:
             print(f"State {result['state']} questions: closed={str(result['closed']).lower()} "
-                  f"round={result['round']} — {result['reason']}")
+                  f"round={result['round']} provider={result.get('provider')} — {result['reason']}")
             for topic in result.get("repeated", []):
                 print(f"  [{len(topic['runs'])}] {topic['topic']}")
         return 0 if result["closed"] else 1

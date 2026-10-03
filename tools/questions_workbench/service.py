@@ -201,6 +201,7 @@ def status(case: Path, state: int) -> dict[str, Any]:
         "round": summary["round"],
         "closed": summary["closed"] and not stale,
         "stale": stale,
+        "provider": summary.get("provider"),
         "reason": ("the design texts changed after the latest round" if stale
                    else ("two clear rounds on these texts" if "judge" in summary else "no topic raised by two reviews")
                    if summary["closed"]

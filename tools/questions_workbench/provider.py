@@ -2,12 +2,16 @@
 from __future__ import annotations
 
 import os
+import subprocess
+import tempfile
 from pathlib import Path
 from typing import Any, Protocol
 
 DEFAULT_MODEL = "gpt-5.3-codex"
 DEFAULT_REASONING = "medium"
 MAX_OUTPUT_TOKENS = 24000
+DEFAULT_CODEX_MODEL = "gpt-5.6-sol"
+CODEX_TIMEOUT_SECONDS = 1800
 
 
 class Provider(Protocol):
@@ -78,3 +82,47 @@ class OpenAIProvider:
         )
         usage = response.usage.model_dump() if getattr(response, "usage", None) else {}
         return response.output_text, usage
+
+
+class CodexCliProvider:
+    """A model asked through the Codex CLI under the operator's ChatGPT login.
+
+    A stand-in when the Responses API cannot be used: a ChatGPT login does not
+    serve the Factory's generator model, so the round is recorded under this
+    provider's own name and is not the generator's own answer. Each call runs
+    `codex exec` once, ephemeral and read-only, in an empty temporary directory
+    and without the user's Codex configuration, so no project file, rule or MCP
+    server reaches the model.
+    """
+
+    def __init__(self, model: str | None = None, reasoning: str | None = None):
+        self.model = model or os.environ.get("DESIGN_QUESTIONS_CODEX_MODEL", DEFAULT_CODEX_MODEL)
+        self.reasoning = reasoning or os.environ.get("DESIGN_QUESTIONS_REASONING", DEFAULT_REASONING)
+        self.name = f"codex-cli:{self.model}:{self.reasoning}"
+
+    def complete(self, instruction: str, text: str) -> tuple[str, dict[str, Any]]:
+        prompt = (
+            f"{instruction}\n\n"
+            "Answer from the text below alone. Do not run commands or read files; "
+            "reply with the requested output and nothing else.\n\n"
+            f"=== TEXT ===\n{text}"
+        )
+        with tempfile.TemporaryDirectory(prefix="design-questions-codex-") as work:
+            answer_file = Path(work) / "answer.txt"
+            command = [
+                os.environ.get("DESIGN_QUESTIONS_CODEX_BIN", "codex"), "exec",
+                "-m", self.model,
+                "-c", f"model_reasoning_effort={self.reasoning}",
+                "--ephemeral", "--skip-git-repo-check", "--ignore-user-config",
+                "--sandbox", "read-only",
+                "-o", str(answer_file),
+                "-",
+            ]
+            completed = subprocess.run(
+                command, input=prompt, cwd=work, capture_output=True, text=True,
+                timeout=CODEX_TIMEOUT_SECONDS,
+            )
+            if completed.returncode != 0 or not answer_file.is_file():
+                tail = (completed.stderr or completed.stdout or "").strip().splitlines()[-3:]
+                raise RuntimeError(f"codex exec failed ({completed.returncode}): {' | '.join(tail)}")
+            return answer_file.read_text(encoding="utf-8"), {}

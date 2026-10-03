@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pytest
 
@@ -246,3 +247,42 @@ def test_rounds_kept_before_the_judge_keep_their_rule(tmp_path):
     assert service.status(case, 1)["closed"] is True
     # and a v1 round with no repeated topic counts as the first clear round
     assert _repeated(case, {"kind": "later_state", "later_state": 6})[0]["closed"] is True
+
+
+def test_codex_provider_asks_once_in_an_empty_directory_and_names_itself(monkeypatch):
+    calls = []
+
+    def fake_run(command, input, cwd, capture_output, text, timeout):
+        calls.append((command, input, cwd))
+        assert list(Path(cwd).iterdir()) == []
+        Path(command[command.index("-o") + 1]).write_text('{"open_points": []}', encoding="utf-8")
+        return provider.subprocess.CompletedProcess(command, 0, "", "")
+
+    monkeypatch.setattr(provider.subprocess, "run", fake_run)
+    asked = provider.CodexCliProvider("some-model", "high")
+    answer, usage = asked.complete("INSTRUCTION", "DESIGN TEXT")
+
+    assert answer == '{"open_points": []}' and usage == {}
+    assert asked.name == "codex-cli:some-model:high"
+    command, prompt, _ = calls[0]
+    for flag in ("--ephemeral", "--ignore-user-config", "--skip-git-repo-check"):
+        assert flag in command
+    assert command[command.index("--sandbox") + 1] == "read-only"
+    assert command[command.index("-m") + 1] == "some-model"
+    assert "INSTRUCTION" in prompt and "DESIGN TEXT" in prompt
+
+
+def test_codex_provider_failure_is_a_runtime_error(monkeypatch):
+    monkeypatch.setattr(
+        provider.subprocess, "run",
+        lambda command, **kwargs: provider.subprocess.CompletedProcess(command, 1, "", "model not supported"),
+    )
+    with pytest.raises(RuntimeError, match="model not supported"):
+        provider.CodexCliProvider("m", "low").complete("I", "T")
+
+
+def test_the_cli_chooses_the_codex_provider():
+    args = design_questions.argparse.Namespace(provider="codex", model="m", reasoning="low")
+    assert isinstance(design_questions._provider(args), provider.CodexCliProvider)
+    args.provider = "openai"
+    assert isinstance(design_questions._provider(args), provider.OpenAIProvider)
