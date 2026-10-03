@@ -33,3 +33,52 @@ def ask_instruction(state: int, scope: str) -> str:
 
 def ask_input(documents: list[tuple[int, str, str]]) -> str:
     return "\n\n".join(f"=== {name} (State {state}) ===\n\n{text}" for state, name, text in documents)
+
+JUDGE = """You judge the topics that several independent reviews of the same design
+texts raised about State {state}. A review always finds one more question; your
+task is to tell the questions that must change the texts before the next state
+from those that need not. Judge each topic by exactly one kind:
+
+- "contradiction": two passages of the texts say different things. Quote both,
+  verbatim.
+- "consequential_gap": the texts leave a choice open, and two careful
+  implementers would build different behaviour that the owner, an agent, a
+  caller or an external service would notice. Name the two behaviours and who
+  notices in "divergence".
+- "answered": the texts already answer the question. Quote the passage that
+  answers it, verbatim.
+- "later_state": the question belongs to a later state (orders of checks,
+  encodings, formats, schemas, signatures, field types and notes belong to
+  State 6 or later). Name that state's number in "later_state".
+- "indifferent": any answer is acceptable, because no caller, owner or service
+  acts differently on the difference. Say why in "why".{preexisting}
+
+Quotes are checked mechanically against the texts: copy them character for
+character, without ellipsis, at least a full clause. A quote not found in the
+texts counts against your judgement, so never paraphrase. When unsure between a
+blocking kind (contradiction, consequential_gap) and another, choose the
+blocking one.
+
+Output strict JSON, nothing else:
+{{"judgements":[{{"id":"<topic id>","kind":"<kind>","quotes":["<verbatim passage>"],"later_state":<number or null>,"divergence":"<two behaviours and who notices, or empty>","why":"<one sentence>"}}]}}"""
+
+PREEXISTING = """
+- "preexisting": only for a state reopened after it was closed. The texts it was
+  closed with, and the change since, are given below. The topic concerns a
+  passage the change did not touch and the change did not make it matter. Quote
+  that passage verbatim; it must appear unchanged in both versions."""
+
+
+def judge_instruction(state: int, reopened: bool) -> str:
+    return JUDGE.format(state=state, preexisting=PREEXISTING if reopened else "")
+
+
+def judge_input(texts: str, topics: list[dict], change: str | None) -> str:
+    listing = "\n\n".join(
+        f"{t['id']}: {t['topic']}\n" + "\n".join(f"  - {p}" for p in t["points"]) for t in topics
+    )
+    parts = [texts]
+    if change is not None:
+        parts.append(f"=== CHANGE SINCE THE STATE WAS CLOSED (unified diff) ===\n\n{change or '(no change)'}")
+    parts.append(f"=== TOPICS TO JUDGE ===\n\n{listing}")
+    return "\n\n".join(parts)
