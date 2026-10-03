@@ -20,18 +20,25 @@ Python signatures are State 6's.
   (State 3): what a call needs about a run, a flow version or an actor arrives
   as an argument.
 - **Time.** Every timestamp an operation records comes from
-  `clock.kernel_now`, taken once per store change.
+  `clock.kernel_now`, taken at the moment the field names: a `started_at` when
+  the execution or send begins — for an operation's NodeExecution, the
+  `recorded_at` of its EffectAttempt when it has one (A11 rule 4) — every other
+  time when its store change is made.
 - **Refusal.** An operation either returns its output or refuses with one code
   of the closed set below and a bounded reason naming the first failing check
-  in its rule's order. A refusal writes nothing — the one exception is bytes
+  in its rule's order. A refusal is decided before the operation's first store
+  change, so it writes nothing — the one exception is bytes
   a capture copied before `functions` refused the case (State 3, "Bytes left
   by a refused capture"). Codes are distinct only where
   some caller acts on the difference (K-17).
 - **Checks answer, they do not refuse.** An operation that answers a question —
   `fit_port_value`, `check_request_shape`, `prepare_request`'s pre-send
   checks, `check_binding_current`, `send_prepared_request` — returns a
-  failure as its result, which the caller concludes; only operations that
+  failure as its result, which the caller concludes — a reference to no
+  record is still `unknown_reference`; only operations that
   would change or return something refuse.
+- **Several refusals.** When an operation's Errors list several refusals, they
+  are checked in the order listed, and the first that holds is returned.
 - **Reason.** A refusal's reason is at most `bounded_text_bytes_max`, cut at a
   UTF-8 character boundary.
 - **Order.** Every collection in an output is in store order unless the
@@ -40,6 +47,10 @@ Python signatures are State 6's.
   is not mapped — in a NodeExecution, a WaitingPoint, a SpooledFile identity
   and every input naming one; in (`node_id`, `map_index`) order an absent
   index comes before index 0 (A14 rule 2).
+- **Naming an element.** A run or a node of its pinned version that does not
+  exist is `unknown_reference`; a `map_index` given for a node that is not
+  mapped, or absent for one that is, is `refused`; a well-formed element with no
+  record yet is a result — not reached, or empty — never a refusal.
 - **Naming records.** A record with a minted or computed identity is named by
   it. A start-up operation passes the kernel as the Actor of the store changes
   it makes. A NodeExecution and an EffectAttempt are named by (`run_id`,
@@ -48,12 +59,25 @@ Python signatures are State 6's.
   position.
 - **Files in checks.** A check is given a file as facts — digest, size, media
   type — never bytes; a caller holding bytes computes the facts first.
-- **Spool removal** never fails a request: a run's records are written first,
+  Building a request is not a check: `service_invoker.prepare_request` takes
+  the bytes it must send.
+- **A run holds its spool** while it has not ended, and after it ended
+  `failed` until it is released (A15 rule 5). That is `runs`' rule: `runs`
+  checks it before it spools or reads a run's file, `effects` acts only on
+  facts `runs` passed down, and `surface` checks it from `runs.read_run`
+  before `read_spooled_file`, refusing it with `refused`; `store` trusts them. It is decided from the run's
+  record, never from whether bytes are still on disk: a spooled file of a run
+  that no longer holds its spool is refused even while its bytes await removal.
+- **Spool removal** follows every store change in which `runs` ends a run
+  `succeeded`, `refused` or `cancelled`, in whichever operation that happens,
+  and every release (A14 rule 4). It never fails a request: a run's records are written first,
   and a spool that cannot be removed then is removed at the next start, which
   removes the spool of every ended run that keeps none (A18 rule 4).
 - **Internal error.** A failed store call changes nothing (A18 rule 3); the
   module returns it as `internal_error` and `module:surface` answers without
-  detail (A16 rule 7).
+  detail (A16 rule 7). When a request makes several store changes, those made
+  before the failed one stay: each is whole, and a run is derived from its
+  records (A14 rule 6; State 3, "Run state after an element").
 - **Stop required.** An unconfirmed sandbox cleanup is not a refusal: it is
   the separate internal result `stop_required`, returned up the call chain
   after the caller wrote its record; `module:surface` answers
@@ -71,7 +95,7 @@ Returned to a caller of the MCP surface:
 | `not_permitted` | the actor may not call this operation (A16 rule 3) | the caller asks the owner |
 | `unknown_reference` | a named record does not exist (State 0) | the caller re-reads |
 | `refused` | an operation's own check failed; the reason names the check | the caller reads the reason |
-| `internal_error` | nothing was changed; no detail (A16 rule 7) | the owner reads the host log |
+| `internal_error` | the failing store change wrote nothing; changes the request made before it stay (Conventions); no detail (A16 rule 7) | the caller re-reads before repeating; the owner reads the host log |
 
 Between modules, a refusal is the same pair (code, reason); `module:surface`
 returns it unchanged except `internal_error` and `stop_required`, which it
@@ -100,7 +124,7 @@ not listed are never written.
 | `record_implementation` | `functions` | Implementation M05 |
 | `record_trial_execution` | `functions` | one TrialExecution M07 and its output StoredValues |
 | `record_admission_verdict` | `functions` | AdmissionVerdict M08, and Activation M09 when admitted and not current |
-| `record_activation` | `functions` | Activation M09 of a rollback |
+| `record_activation` | `functions` | Activation M09 of a rollback, or of a reused `admitted` verdict whose implementation is not current |
 | `propose_binding` | `bindings` | OperationBinding M11 `proposed` |
 | `accept_binding` | `bindings` | the binding `accepted` |
 | `compose_flow_version` | `flows` | FlowVersion M13 with nodes, edges, constants and their StoredValues; Flow M12 when new |
@@ -117,9 +141,10 @@ not listed are never written.
 | `record_operation_failure` | `effects` | the concluding NodeExecution `operation_failed` of a pre-send failure, no attempt |
 | `resolve_attempt` | `effects` | the attempt `applied` or `not_applied` with `resolved_by` |
 | `grant` / `revoke` | `effects` | StandingGrant M25 `active`, or `revoked` |
-| `recover_in_flight` | `effects` | every `in_flight` attempt `unknown`, its missing NodeExecution `outcome_unknown`, its approval `used` |
+| `recover_in_flight` | `effects` | one `in_flight` attempt `unknown`, its missing NodeExecution `outcome_unknown`, its approval `used` — one change per attempt |
 
-A change is named, and its payload is the records that change lists. `store`
+A change is named, and its payload is the records that change lists; State 5
+fixes which records each change writes, State 6 the typed payload of each. `store`
 checks only its own invariants — attempt numbers, unique and existing
 identities, links, no record edited — and trusts its caller for every rule of
 the caller's decision. The caller supplies each record's facts, its content identities computed with
@@ -139,19 +164,23 @@ minting again on a collision.
 2. **Which of several approvals with the same `request_digest`** (State 3,
    carried from round 19): among the element's `approved` unused approvals
    that count — after a `not_applied` resolution only those requested after
-   it (A10 rule 1) — the oldest in store order.
+   the element's latest such resolution (A10 rule 1) — the oldest in store
+   order.
 3. **Which FlowActivation a `draft-write` send names** (A10 rule 6): the latest
    FlowActivation of the run's pinned version before the Run record in store
    order — the one under which it started. `runs` finds it and passes it to
    `effects` with every call about one of the run's elements (State 3, "Facts
-   passed down"); store order, not time, so two records never tie.
+   passed down"); store order, not time, so two records never tie. A run's
+   version was active when it started (A12 rule 1), so "none" cannot occur;
+   if it does, the store is inconsistent and the call is `internal_error`.
 4. **Who mints random identities** and retries a collision: `store`, inside
    the change that creates the record (above).
 5. **Filter forms of `store.page_records`**: no condition, or one — a field
    equal to a value, or a field in a non-empty set of values — at most
    `page_size_max` when a caller of the MCP surface gives it — taken without
    duplicates and in code-point order so that equal sets
-   page alike — on one record type, the
+   page alike, `surface` passing that canonical form and `store` binding the
+   token to it — on one record type, the
    field one of those the MCP catalogue below allows for that type; any other
    field, or a second condition, is `invalid_request` from `module:surface`,
    which owns the catalogue; `store` checks only the continuation token, bound
@@ -168,17 +197,28 @@ minting again on a collision.
 ## Relations of `store.read_records`
 
 Besides reading records by identity, `store.read_records` answers exactly these
-relations, each in store order unless named otherwise. The record a relation
-starts from must exist, or the call is `unknown_reference`; from an existing
-record, an empty answer is a result, not a refusal. "Runs by status" and
-"attempts by status" start from no record and are never `unknown_reference`. The module named is the only one that asks.
+relations, each in store order unless named otherwise. A read by identity takes one or more identities and answers in the order
+given, a repeated identity once. A call names the
+relation and passes the records its name mentions — a slot, a contract
+version, an implementation and a corpus digest, a flow, a flow version and a
+run, a run, an element, a flow version's node — or, for "by status", the
+status. An element is passed as (`run_id`, `node_id`, `map_index`). A call
+that passes other arguments is a defect of its caller and
+answers `internal_error`. The record a relation
+names — every one of them — must exist, or the call is
+`unknown_reference`; from an existing
+record, an empty answer is a result, not a refusal. A corpus digest is a value,
+not a record: a digest no verdict covers answers none. "Runs by status" and
+"attempts by status" start from no record and are never `unknown_reference`. Only the modules named ask.
 
 | relation | asked by | answers |
 |---|---|---|
 | contract versions of a slot | `functions` | ContractVersions M03 |
 | implementations of a contract version | `functions` | Implementations M05 |
-| corpus of a contract version | `functions` | TrialCases M06 in corpus order |
+| corpus of a contract version | `functions`, `surface` (repair view) | TrialCases M06 in corpus order |
+| trial executions of an implementation on its contract version's corpus | `surface` (repair view) | per case of the current corpus, in corpus order, the implementation's latest TrialExecution M07 in store order — from admission or a try alike, since an outcome depends only on implementation and case; a case never executed is omitted |
 | verdict of an implementation over a corpus digest | `functions` | the AdmissionVerdict M08, or none |
+| verdicts of an implementation | `functions` | AdmissionVerdicts M08 |
 | latest activation of a contract version | `functions` | the Activation M09, or none |
 | versions of a flow | `flows` | FlowVersions M13 |
 | latest activation of a flow | `flows` | the FlowActivation M18, or none |
@@ -199,10 +239,15 @@ only through `read_spooled_file`. For an agent, every `personal_data` value
 or file is its digest and class only, with no `value_id` (A07 rule 4), and a
 classified `failure_detail` its length and class (A07 rule 5). A
 `map_index` is absent for an element of a node that is not mapped.
+Wherever an answer shows a spooled file — a trace record, an approval
+preview's file input — it carries the SpooledFile's full identity, so that the owner can pass it to `read_spooled_file` — except a
+`personal_data` file shown to an agent, which is its digest and class only
+(A07 rule 4).
 
 A run's answer, wherever an operation returns one, holds: `run_id`, the flow
 version, status, starter and times, outputs produced, waiting points with
-their reasons and `approval_id` where one is awaited, and once ended the
+their reasons and, for `owner_approval`, the `approval_id` of the element's
+`requested` approval — one always exists while it waits (A10 rule 2), and once ended the
 reason per missing output (A13 rule 7). An implementation's code reaches an
 agent only in `get_repair_view`, for the slot's current implementation; every
 other answer to an agent names an implementation without its code (K-12).
@@ -239,21 +284,25 @@ rules 4–5. Field schemas and bounds are State 6's. "Agent" means any agent,
 | `grant_standing_approval` | owner | `effects.grant_standing_approval` |
 | `revoke_standing_approval` | owner | `effects.revoke_standing_approval` |
 | `get_slot` | owner, agent | `functions.read_slot` |
-| `get_repair_view` | owner, agent | no continuation; A15 rule 6: `functions.read_slot`; `functions.read_contract_version` and `functions.read_implementation` of the current ones; one page each, at most `page_size_max`, through `store.page_records` of the current contract version's trial cases, the current implementation's trial executions, and the latest NodeExecutions of the slot's implementations; older ones through `list_records` |
+| `get_repair_view` | owner, agent | one slot's repair read (A15 rule 6, K-12), not a list operation of A16 rule 6: `functions.read_slot`; the current contract version through `functions.read_contract_version` and its whole corpus; the current implementation through `functions.read_implementation`, with code, and its trial executions on the corpus; and through `store.page_records` the latest NodeExecutions of the slot's implementations — `page_size_default` unless the caller asks another size, at most `page_size_max` (A16 rule 6) — with a continuation token that also carries the implementation set of its first page; passed back, it pages only the NodeExecutions below that position for that set — an implementation added since has only newer executions, so nothing below is missed — and every other part is read again as of that request |
 | `get_contract_version` | owner, agent | `functions.read_contract_version` |
-| `get_implementation` | owner, agent (without code, K-12) | `functions.read_implementation` |
+| `get_implementation` | owner with code; agent without code (K-12) | `functions.read_implementation` |
 | `get_binding` | owner, agent | `bindings.read_binding` |
 | `get_flow` | owner, agent | `flows.active_flow_version`, `flows.read_flow_version`: the flow's purpose, its active version and FlowActivation, or that none is active |
 | `get_flow_version` | owner, agent | `flows.read_flow_version` |
 | `get_run` | owner, agent | `runs.read_run` |
-| `list_records` | owner, agent | `store.page_records` |
+| `list_records` | owner, agent | `store.page_records`; for runs, each run's answer from `runs.read_run` (State 3, "Runs are listed from their records") |
 | `read_spooled_file` | owner | `store.read_value_bytes` |
 
 `list_records` is the inspect and read-a-trace action over one record type,
 with no filter or one condition — equal to a value, or in a set of values —
 on one of the fields allowed for it; any other field is
 `invalid_request`. A filter value naming no record is not a refusal: the page
-is empty.
+is empty, and a set filter matches the records its existing members name. A
+`status` value outside its model's closed set is `invalid_request`. A
+continuation token used with another slot, record type or filter than it was
+issued for is `invalid_request`; the page size may change between pages. When resolving a value for an answer fails,
+the whole answer is `internal_error`; no partial answer is returned.
 
 | record type | filter fields |
 |---|---|
@@ -265,19 +314,24 @@ is empty.
 | bindings | `status`, `service_id` |
 | flow versions | `flow_id` |
 | runs | `flow_version_id`, `status` |
-| node executions (the trace) | `run_id`, `executed_implementation`, `executed_binding` — a record without `executed` matches neither |
+| node executions (the trace) | `run_id`, `executed_implementation`, `executed_binding` — two names for M23's one `executed` field, by the kind of record it names; a record without `executed` matches neither |
 | approvals | `run_id`, `status` |
 | standing grants | `flow_version_id`, `status` |
 | effect attempts | `run_id`, `status` |
 
-`read_spooled_file` names a SpooledFile M22 by its identity — `run_id`,
+`read_spooled_file` takes only a SpooledFile — never a StoredValue — and names
+it by its identity — `run_id`,
 `producer_node_id`, `map_index` (omitted for a node that is not mapped),
 `attempt_number`, `producer_port`, `list_index` (omitted for a `one`
-port) — an
+port) — the lookup identity; its digest, size and media type only describe it
+— an
 identity naming no SpooledFile is `unknown_reference`; the record outlives its
 bytes — and returns its bytes whole, at most `spool_file_bytes_max` (A15 rule 3); it is
 refused once the run's spool is gone, and an agent gets `not_permitted` (A10
-rule 2).
+rule 2). Checks run in that order of A16 rule 1: the actor; then the record's
+existence, through `store.read_records`; then whether its run holds its
+spool, from `runs.read_run`; only then are the bytes read through
+`store.read_value_bytes`.
 
 ## `public_op:canonical_values.canonical_bytes`
 
@@ -367,11 +421,15 @@ name the first failure.
 
 ### Inputs
 
-One Port M01 and one candidate: a JSON value, checked against the port's
-schema; or for a file its digest, size and media type; or for a `many` file
-port an ordered list of those, each checked in list order. A file's content is
-not inspected (K-10): for a file, the schema check is its media type against
-the port's.
+One Port M01, the size bound that applies where the caller stands
+(`stored_value_bytes_max`, `trial_fixture_bytes_max` or
+`spool_file_bytes_max`), and one candidate, which may be absent — presence is
+the first check: a JSON value, checked against the port's schema, its size
+bound applying to the whole value, a `many` value included; or for a file its
+digest, size and media type; or for a `many` file port an ordered list of
+those, each checked in list order against the per-file size bound. A file's
+content is not inspected (K-10): for a file, the schema check is its media type
+against the port's.
 
 ### Outputs
 
@@ -520,7 +578,8 @@ An open store holding the exclusive lock.
 
 ### Observable effect
 
-Temporary files under the data directory are removed.
+The store's own temporary files — those it writes before a rename (A18 rule 4)
+— are removed; nothing else is.
 
 ### Enforces
 
@@ -630,7 +689,9 @@ of store.read_records".
 
 ### Outputs
 
-The records as stored, in store order.
+The records as stored: for identities, in the order given, a repeated identity
+once at its first occurrence; for a relation, in its order. Existing records
+with nothing related answer empty.
 
 ### Observable effect
 
@@ -642,8 +703,8 @@ Only `store` opens the database; records are never edited (A01 rule 6).
 
 ### Errors
 
-`unknown_reference` for the whole call when any named identity does not exist;
-nothing is returned.
+`unknown_reference` for the whole call when any named identity does not exist,
+naming the first missing one in the order given; nothing is returned.
 
 ### State impact
 
@@ -653,7 +714,8 @@ Read-only.
 
 ### Owner
 
-`module:store`. Return the bytes a StoredValue or SpooledFile names, refusing a released spool.
+`module:store`. Return the bytes a StoredValue or SpooledFile names; whether a run still holds
+its spool is checked by its caller.
 
 ### Callers
 
@@ -681,9 +743,9 @@ spool is `store`'s choice (owner, 2026-10-03).
 
 ### Errors
 
-`unknown_reference` for an identity naming no record; `refused` for a spooled
-file whose run no longer holds its spool; `internal_error` when bytes fail
-their digest.
+`unknown_reference` for an identity naming no record; `internal_error` when the
+bytes of a record that should hold them are missing, unreadable or fail their
+digest.
 
 ### State impact
 
@@ -702,8 +764,8 @@ all.
 
 ### Inputs
 
-One named change of the closed set in "Named store changes" with its records,
-the acting Actor and the time.
+One named change of the closed set in "Named store changes" with its records —
+each with the times its fields name — and the acting Actor.
 
 ### Outputs
 
@@ -724,7 +786,8 @@ rule 2).
 ### Errors
 
 `refused` when an outcome's attempt is no longer the element's next ordinal;
-`internal_error` on a failed transaction, nothing written.
+`internal_error` for any other broken invariant of its own, or a failed
+transaction — nothing written either way.
 
 ### State impact
 
@@ -746,7 +809,9 @@ A run identity.
 
 ### Outputs
 
-Done — also when the spool is already gone.
+Done — also when the spool is already gone or the run is unknown: removal is
+idempotent by intent, the one operation that does not refuse an unknown
+reference.
 
 ### Observable effect
 
@@ -759,7 +824,8 @@ The run's spool directory is gone.
 
 ### Errors
 
-`internal_error` on an I/O failure.
+`internal_error` on an I/O failure; its caller does not fail the request on it
+(Conventions, spool removal).
 
 ### State impact
 
@@ -778,7 +844,8 @@ ceilings.
 
 ### Inputs
 
-A run identity, the file's bytes and its port's media type.
+The producing attempt — `run_id`, node, `map_index`, `attempt_number` — the
+port and `list_index`, the file's bytes and its port's media type.
 
 ### Outputs
 
@@ -795,8 +862,9 @@ file and `spool_run_bytes_max` per run (A15 rule 3).
 
 ### Errors
 
-`refused` over a spool ceiling, nothing kept of that file; the caller concludes
-the element (`resource_exhausted`, or `contract_violation` for an operation).
+`refused` over a spool ceiling, nothing kept of that file or of any file that
+attempt spooled before (A15 rule 3); the caller concludes the element
+(`resource_exhausted`, or `contract_violation` for an operation).
 
 ### State impact
 
@@ -1102,12 +1170,14 @@ request_digest, or name the first pre-send failure.
 ### Inputs
 
 A ManifestOperation M10 with instance facts — its `service_id` names the
-service — and the element's input values and file bytes by port.
+service — the binding's input and output Ports, and the element's input values
+and file bytes by port.
 
 ### Outputs
 
-A prepared request, its description of A10 rule 7 and its `request_digest`; or
-the first pre-send failure — a credential `installation` cannot resolve becomes
+A prepared request — carrying the binding's output Ports for A09 rule 3 — its
+description of A10 rule 7 and its `request_digest`; or the first pre-send
+failure — a credential `installation` cannot resolve becomes
 `credential_unresolved` here.
 
 ### Observable effect
@@ -1116,10 +1186,14 @@ None.
 
 ### Enforces
 
-State 3 order after the binding: no selected instance, no `api_base_url`, a
-repeated required header, a plain `http` target not allowed, then the
-credential, then input placement (A09 rules 1, 4, 6); credential by name only
-in the description (A10 rule 7).
+State 3 order after the binding: no selected instance (no name), no
+`api_base_url` (a name without one), a repeated required header, a plain `http`
+target not allowed, then the credential, then input placement, input ports in
+name order and a list's elements in list order, the first that cannot be placed
+named (A09 rules 1, 2, 4, 6); credential by name only in the description (A10
+rule 7); the description covers every header sent on the wire, and no header is
+sent that it does not describe; a `GET` or `DELETE` list input that is empty
+adds no query parameter (A09 rule 2).
 
 ### Errors
 
@@ -1145,8 +1219,12 @@ One prepared request and the operation's effect class.
 
 ### Outputs
 
-One outcome name of the A09 rule 5 table for that class, the output values or
-the file when used, and a bounded `failure_detail`.
+One outcome name of the A09 rule 5 table for that class, and for
+`operation_failed` its detail code from the closed set (`redirect_not_followed`
+for a `read` answered 3xx); when the response is used, the output values by
+port — none for a binding without output ports, whose body is ignored — or for
+a file output its bytes with the port's media type, which `effects` spools; and
+a bounded `failure_detail`.
 
 ### Observable effect
 
@@ -1399,10 +1477,14 @@ A slot name.
 
 ### Outputs
 
-Its purpose and its current contract version; the whole history, unpaged; per
-contract version in store order, its current corpus digest, its implementations
-in store order each with its verdicts grouped by corpus digest — groups in the
-store order of their first verdict — and its current activation.
+Its purpose and its current contract version; the whole history, unpaged — it
+is a read of one slot, not a list operation of A16 rule 6 — and never
+implementation code; per contract version in store order, its current corpus
+digest, its implementations in store order each with its verdicts by corpus
+digest — at most one per digest, since an existing verdict is reused (A04 rule
+2), in store order — and its current activation; each implementation carries a
+flag saying whether it holds an `admitted` verdict over its contract version's
+current corpus.
 
 ### Observable effect
 
@@ -1410,8 +1492,8 @@ None.
 
 ### Enforces
 
-A serving implementation without a verdict over the current corpus is shown so
-(A04 rule 7).
+A serving implementation without a verdict over its contract version's current
+corpus is marked so explicitly, not left to be inferred (A04 rule 7).
 
 ### Errors
 
@@ -1474,7 +1556,8 @@ A contract version, Python code, the actor.
 
 ### Outputs
 
-The Implementation, its AdmissionVerdict, and when admitted the current
+Not a refusal when admission fails: the Implementation, its AdmissionVerdict —
+`admitted`, or `refused` with its reason — and when admitted the current
 Activation — the new one, or the existing one when the implementation already
 was current (A04 rule 4).
 
@@ -1484,9 +1567,10 @@ When admitted and not current, the implementation serves its slot at once.
 
 ### Enforces
 
-Identity from code and contract version; verdict reuse for an unchanged corpus;
-whole corpus in corpus order, never stopping early; activation by the kernel
-(A04 rules 2–4, K-15).
+Identity from code and contract version; verdict reuse for an unchanged corpus
+— a reused `admitted` verdict activates like a new one when the implementation
+is not current; whole corpus in corpus order, never stopping early; activation
+by the kernel (A04 rules 2–4, K-15).
 
 ### Errors
 
@@ -1496,8 +1580,10 @@ the sandbox.
 
 ### State impact
 
-`record_implementation`, one `record_trial_execution` per case,
-`record_admission_verdict`.
+`record_implementation` for new code only — an equal implementation records
+nothing (A01 rule 4) — then, unless a verdict is reused, one
+`record_trial_execution` per case and `record_admission_verdict`; for a reused
+`admitted` verdict whose implementation is not current, `record_activation`.
 
 ## `public_op:functions.try_implementation`
 
@@ -1591,9 +1677,11 @@ A binding identity.
 
 ### Outputs
 
-The current ManifestOperation M10 with the selected instance's `base_url`,
-`required_headers` and `instance_class` as read — absent when none — or
-`binding_stale` for any failure of the record itself (A08 rule 6).
+The current ManifestOperation M10 — and beside it, not in it, the selected
+instance's name — with that instance's `base_url`, `required_headers` and
+`instance_class` as read — the name absent when none is selected, the others
+absent when missing — or `binding_stale` for any failure of the record itself
+(A08 rule 6).
 
 ### Observable effect
 
@@ -1642,8 +1730,9 @@ its instance; reads installation and manifest only (A09 rule 1).
 
 ### Errors
 
-`refused` naming the service, or a manifest record that cannot be read; the
-start stops.
+`refused` naming the first failing service, services taken in `service_id`
+code-point order and each one's manifest record read in its turn — an
+unreadable record fails at its service; the start stops.
 
 ### State impact
 
@@ -1995,8 +2084,10 @@ A run, node and element.
 
 ### Outputs
 
-Its conclusion: succeeded with outputs, failed with its status, or waiting with
-its reason (A11 rule 3).
+Its conclusion: succeeded with outputs; failed with its status, or with
+`applied_outputs_unknown` for an attempt resolved applied whose binding has
+outputs; waiting with its reason; or not reached when the element has no
+NodeExecution yet (A11 rule 3).
 
 ### Observable effect
 
@@ -2009,7 +2100,8 @@ source (A15 rule 7).
 
 ### Errors
 
-None.
+`unknown_reference` for a run, or a node of its pinned version, that does not
+exist.
 
 ### State impact
 
@@ -2043,14 +2135,16 @@ At most one request leaves the kernel, under covered authority.
 
 ### Enforces
 
+Trusts the facts `runs` passes down (State 3) and checks none of them again.
 A11 rule 1 order: pre-send checks, authority of A10 rule 1, `in_flight` before
 the send, outcome after; idempotency key from key fields (A08 rule 4); approval
 choice and `draft-write` authority as closed above.
 
 ### Errors
 
-None of its own: pre-send failures and send outcomes are conclusions;
-`internal_error` from `store`.
+None of its own: pre-send failures and send outcomes are conclusions; any
+refusal or error of a module it calls that is not one of those is
+`internal_error`.
 
 ### State impact
 
@@ -2082,8 +2176,10 @@ None.
 
 ### Enforces
 
-Every `in_flight` attempt becomes `unknown`, its missing NodeExecution
-`outcome_unknown`, its approval `used`; the service is not asked (A11 rule 4).
+Attempts oldest first in store order. Every `in_flight` attempt becomes
+`unknown`, its missing NodeExecution `outcome_unknown`, and its approval `used`
+when its authority is an approval — a grant or a FlowActivation changes
+nothing; the service is not asked (A11 rule 4).
 
 ### Errors
 
@@ -2261,8 +2357,9 @@ An approved effect is sent in this request (A10 rule 3).
 
 An unknown approval is `unknown_reference` first, the approval read through
 `store.read_records` to find its run; then run not ended; then
-`effects.decide_effect_approval`; then the element again and the run advanced
-(A13 rule 1).
+`effects.decide_effect_approval`; after an approval the element is reached
+again and the run advanced (A13 rule 1); after a refusal nothing is reached —
+the run is derived `refused` (A10 rule 3).
 
 ### Errors
 
@@ -2324,7 +2421,8 @@ A run.
 
 ### Outputs
 
-Its answer, outputs in flow output port name order and waiting points in
+Its answer as Conventions define a run's answer — `approval_id` included for
+`owner_approval` — outputs in flow output port name order and waiting points in
 (`node_id`, `map_index`) order: status, outputs produced as StoredValue
 references — `surface` resolves them for the reader — waiting points, and once
 ended the reason per missing output, `skipped_by_guard` or `not_produced` (A13
@@ -2453,7 +2551,8 @@ outcome waits untouched (A14 rule 2).
 
 ### State impact
 
-`record_resumption`; through `effects`; `record_run_progress`.
+`record_resumption` first, then the resends through `effects`, then
+`record_run_progress`.
 
 ## `public_op:runs.start_run`
 

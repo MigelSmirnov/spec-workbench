@@ -1023,7 +1023,9 @@ None; removed when its run ends, or, for a `failed` run, when the run is release
 
 ### Persistence candidate
 
-Temporary, for the life of its run; for a `failed` run, until it is released.
+The record is kept with the run's trace, like every record (A01 rule 6); its
+bytes are temporary — for the life of its run, and for a `failed` run until it
+is released (raised by State 5 round 11).
 
 ### Open questions
 
