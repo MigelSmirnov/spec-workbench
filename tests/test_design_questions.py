@@ -5,7 +5,7 @@ import json
 import pytest
 
 import design_questions
-from questions_workbench import documents, service
+from questions_workbench import documents, provider, service
 
 
 class FakeProvider:
@@ -91,3 +91,42 @@ def test_status_without_a_round_is_open(tmp_path, capsys):
     case = _case(tmp_path)
     assert design_questions.main(["status", str(case), "--state", "1"]) == 1
     assert "no question round yet" in capsys.readouterr().out
+
+
+def _clear_provider_env(monkeypatch):
+    # setenv first so monkeypatch restores even what the loader sets afterwards
+    for name in ("OPENAI_API_KEY", "DESIGN_QUESTIONS_ENV_FILE", "CODE_FACTORY_ENV_FILE", "DESIGN_QUESTIONS_MODEL"):
+        monkeypatch.setenv(name, "")
+        monkeypatch.delenv(name)
+
+
+def test_env_is_taken_from_the_nearest_dotenv_above_the_working_directory(tmp_path, monkeypatch):
+    _clear_provider_env(monkeypatch)
+    (tmp_path / ".env").write_text("OPENAI_API_KEY=outer\n", encoding="utf-8")
+    inner = tmp_path / "repo" / "case"
+    inner.mkdir(parents=True)
+    (tmp_path / "repo" / ".env").write_text("# provider\nOPENAI_API_KEY='inner'\n", encoding="utf-8")
+    monkeypatch.chdir(inner)
+    provider.load_env_file()
+    assert provider.os.environ["OPENAI_API_KEY"] == "inner"
+
+
+def test_named_env_file_is_the_only_one_read(tmp_path, monkeypatch):
+    _clear_provider_env(monkeypatch)
+    (tmp_path / ".env").write_text("OPENAI_API_KEY=nearest\n", encoding="utf-8")
+    named = tmp_path / "named.env"
+    named.write_text("DESIGN_QUESTIONS_MODEL=m\n", encoding="utf-8")
+    monkeypatch.setenv("DESIGN_QUESTIONS_ENV_FILE", str(named))
+    monkeypatch.chdir(tmp_path)
+    provider.load_env_file()
+    assert provider.os.environ["DESIGN_QUESTIONS_MODEL"] == "m"
+    assert "OPENAI_API_KEY" not in provider.os.environ
+
+
+def test_environment_wins_over_dotenv(tmp_path, monkeypatch):
+    _clear_provider_env(monkeypatch)
+    monkeypatch.setenv("OPENAI_API_KEY", "from-env")
+    (tmp_path / ".env").write_text("OPENAI_API_KEY=from-file\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    provider.load_env_file()
+    assert provider.os.environ["OPENAI_API_KEY"] == "from-env"
