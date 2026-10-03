@@ -71,10 +71,9 @@ record checked by `design_lint --state 2`, recorded as such in `30_trace.json`.
   not ended, with every call about one of its elements — which is how a grant
   is checked against the pinned version (A10 rule 1) — and passes to
   `functions.add_captured_trial_case` the pinned contract version and the
-  inputs of the record it captures. For a capture `runs` copies the spooled
-  input files into the content-addressed area through `store` and passes their
-  digests; `functions` writes the file-carriage StoredValues for those digests
-  (M21) and the TrialCase that names them.
+  inputs of the record it captures, spooled files as their SpooledFiles;
+  `functions` copies those files' bytes after its checks and writes the
+  file-carriage StoredValues for them (M21) and the TrialCase that names them.
 - **Inspection, traces and the repair view.** `surface`, which may know every
   module, assembles every read the State 0 inspect and read-a-trace actions
   list, and the repair view of one slot (A15 rule 6, K-12), from the owning
@@ -105,11 +104,14 @@ record checked by `design_lint --state 2`, recorded as such in `30_trace.json`.
   ended (A13 rule 7).
 - **Capture.** Capturing a failed execution enters through
   `runs.capture_failed_execution`, which checks first, in this order, the
-  record — an executed function element that did not succeed (M06) — and then
-  the run and its spool (A15 rule 5), and copies the spooled inputs; it then
-  calls `functions.add_captured_trial_case`, which checks that the record's
-  pinned contract version is the one named, the case's fit to it and adds it to
-  the corpus (A04 rule 1, M06).
+  record — a function element that ran in the sandbox and did not succeed
+  (M06) — and then the run and its spool (A15 rule 5); it then calls
+  `functions.add_captured_trial_case` with the record's inputs as references,
+  spooled files as their SpooledFiles. `functions` checks that the record's
+  pinned contract version is the one named and the case's fit and sizes to it
+  on the values and the files' facts, and only then copies each spooled file's
+  bytes into the content-addressed area through `store` and adds the case to
+  the corpus (A04 rule 1, M06). A refused capture copies nothing.
 - **NodeExecution records.** The record's shape is M23 in `models`. The record
   that concludes an operation element — a send, a pre-send failure, a refusal by
   the owner — is built and written by `effects` inside its outcome call (A11
@@ -233,12 +235,11 @@ record checked by `design_lint --state 2`, recorded as such in `30_trace.json`.
   that element concluded failed, so its dependants conclude `upstream_failed`
   and independent branches go on (A13 rule 5, A14 rule 5); an interrupted admission has no verdict, so the next
   submission of that implementation runs it again (A04 rule 2).
-- **Nothing copied for a refused capture.** `runs` copies a spooled file into
-  the content-addressed area only after every check of the capture has passed
-  on the records and the files' facts — eligibility, run and spool, then the
-  input fits and sizes `functions.add_captured_trial_case` would make —, so a
-  refused capture copies nothing and owner decision 9 holds: the only files
-  kept beyond a run are trial-case fixtures. Only a store failure between the
+- **Nothing copied for a refused capture.** Only `functions`, after every
+  check of the capture has passed (above, "Capture"), copies a spooled file
+  into the content-addressed area, so a refused capture copies nothing and
+  owner decision 9 holds: the only files kept beyond a run are trial-case
+  fixtures. Only a store failure between the
   copy and the case's write can leave bytes no record names; they are never
   served and enter no case (A18 rule 4).
 - **Continuation tokens.** `surface` checks the token's form; whether it names

@@ -199,10 +199,10 @@ outcomes map to NodeExecution statuses.
    status line arrived, is "may have been sent".
 6. A check of the kernel's own that fails before anything is sent is done before
    any EffectAttempt is written. The checks run in this order and the first that
-   fails is named: the binding is stale or no longer invocable (A08 rule 6); the
-   instance or its address is missing or not allowed, or a required header is
-   repeated or invalid (rules 1 and 4, A08 rule 5), or its
-   credential cannot be resolved (A17); an input
+      fails is named: the binding is stale or no longer invocable (A08 rule 6);
+   then, in this order, no instance selected, its address missing, plain
+   `http` not allowed (rule 4), a required header repeated, a required header
+   invalid (A08 rule 5), its credential not resolved (A17); an input
    value cannot be placed in the request (rule 2). The element
    concludes `operation_failed` with a detail naming the check, no EffectAttempt
    exists for it, and its approval stays unused.

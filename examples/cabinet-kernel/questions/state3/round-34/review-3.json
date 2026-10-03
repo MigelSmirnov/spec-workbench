@@ -1,0 +1,101 @@
+{
+ "open_points": [
+  {
+   "subject": "missing references inside a composed flow",
+   "kind": "contradictory ownership",
+   "text": "A05 rule 1 makes a function node naming no existing contract version a proof failure and A05 rule 7 keeps every otherwise well-formed version whether or not it is proven; A16 rule 1 says, “A request naming a record that does not exist — a flow, a flow version, a run, a binding, any other — is refused as State 0's unknown reference before that record's own checks, never as a proof failure.” State 3 says both that `flows` owns the proof and that `surface` gives the unknown-reference refusal.",
+   "question": "Does a missing contract version or binding named by a node make composition fail before keeping the version, or is the version kept with an A05 phase-1 proof failure?",
+   "options": [
+    "Treat A16 unknown-reference handling as applying only to the action's top-level target, leaving node references to the flow proof",
+    "Treat every nested record reference as an A16 unknown reference and refuse composition before keeping a version"
+   ],
+   "default_guess": "Apply A16 only to the action's top-level target and let `flows` report missing node references as proof failures."
+  },
+  {
+   "subject": "randomly minted entity identifiers",
+   "kind": "no owner",
+   "text": "A01 rule 2 says `trial_execution_id`, `binding_id`, `run_id`, `approval_id` and `grant_id` “are minted at random by the kernel; one that already exists is minted again.” State 3 assigns content identities to `canonical_values` and activation positions and attempt numbers to `store`, but assigns no module the random source, collision check or retry.",
+   "question": "Which module owns random identifier generation and collision retry for records written by `functions`, `bindings`, `runs` and `effects`?",
+   "options": [
+    "`store` owns minting and collision retry atomically with insertion",
+    "Each record-owning module mints its own identifiers and retries store conflicts",
+    "A new lower-level identifier provider owns random minting"
+   ],
+   "default_guess": "Have `store` mint and collision-check the identifier in the insertion transaction."
+  },
+  {
+   "subject": "shared Port declaration validation",
+   "kind": "double ownership",
+   "text": "`functions` “Owns A02,” including contract-port validation, while `bindings` owns A08 proposal checks, including the rule that binding ports must not “break a rule A02 sets for contract ports.” The modules are on the same dependency line and “modules on one line do not know each other”; `canonical_values` owns value fitting but does not say it owns declaration validation such as unique names or media-type placement.",
+   "question": "Which lower module owns the common Port-declaration checks used by both contract issuance and binding proposal, and which contextual checks remain with `functions` and `bindings`?",
+   "options": [
+    "Put the common declaration validator in `canonical_values` and let each caller add its contextual class/output rules",
+    "Duplicate the common checks in `functions` and `bindings`",
+    "Allow `bindings` to depend on `functions` for those checks"
+   ],
+   "default_guess": "Put common Port-declaration validation in `canonical_values`, with contextual checks retained by the calling module."
+  },
+  {
+   "subject": "runtime port facts for operation nodes",
+   "kind": "missing dependency",
+   "text": "State 3 says `runs` owns A12–A15, including readiness and validation entering the next node, and that “`runs` reads the pinned graph through `flows.read_flow_version`.” M13/M14 store only a node's `binding_id`, not the binding's ports. The `runs` Knows list omits `bindings`, and no capability it may call is said to provide an operation node's input schemas, cardinalities and carriage.",
+   "question": "How does `runs` obtain the accepted binding's port declarations needed for runtime delivery and target-port validation?",
+   "options": [
+    "Add `bindings.read_binding` to the dependencies used by `runs`",
+    "Have `flows` return a resolved executable graph containing node port declarations",
+    "Make `effects` own validation of delivery into operation nodes and expose its result to `runs`"
+   ],
+   "default_guess": "Allow `runs` to read the pinned operation binding through `bindings.read_binding`."
+  },
+  {
+   "subject": "TrialExecution failure detail",
+   "kind": "record gap",
+   "text": "A03 rule 6 says, “The kernel keeps at most `failure_detail_bytes_max` of it as `failure_detail`,” and A07 rule 5 defines disclosure of “a `failure_detail` of an execution.” M07's `TrialExecution` candidate fields contain no `failure_detail`, while State 3 says `sandbox` reports it and `functions` writes the TrialExecution.",
+   "question": "Where is the bounded failure detail of a failed trial execution recorded?",
+   "options": [
+    "Add an optional `failure_detail` field to M07 TrialExecution",
+    "Return the detail only from the immediate try or submission response without persisting it",
+    "Discard trial failure detail and keep it only for NodeExecution"
+   ],
+   "default_guess": "Add an optional bounded `failure_detail` to TrialExecution."
+  },
+  {
+   "subject": "capture preflight before copying file fixtures",
+   "kind": "unclear responsibility",
+   "text": "State 3 says `functions` hides and owns “Case validation,” but also says `runs` copies a spooled file only after “every check ... the input fits and sizes `functions.add_captured_trial_case` would make” has passed. No non-mutating validation capability is listed, and copying must occur before `functions.add_captured_trial_case` can receive the fixture digests.",
+   "question": "Which module performs the authoritative captured-case fit and size preflight before `runs` copies fixture bytes, without duplicating `functions`' case-validation rules?",
+   "options": [
+    "Expose a non-mutating preflight capability from `functions`, then let `runs` copy and commit",
+    "Let `runs` duplicate the relevant case checks using `canonical_values`",
+    "Copy first, call `functions.add_captured_trial_case`, and tolerate unreferenced bytes on every ordinary refusal"
+   ],
+   "default_guess": "Expose a non-mutating captured-case preflight from `functions` for `runs` to call before copying."
+  },
+  {
+   "subject": "fatal store failure during run movement",
+   "kind": "no action owner",
+   "text": "A14 rule 7 says that after a store failure following an already-written run change, “the kernel then answers `internal_error` and stops.” State 3 explicitly assigns `surface` process termination only for the stop returned after unconfirmed sandbox cleanup; it does not assign who classifies this store failure as fatal, propagates the stop, or terminates the process.",
+   "question": "Which module owns the fatal-stop decision and propagation when a run-moving request has committed an earlier change and a later store call fails?",
+   "options": [
+    "`runs` classifies the condition and returns a fatal-stop result that `surface` executes",
+    "`store` marks the error fatal and `surface` stops on that error type",
+    "`surface` treats every internal store error as fatal"
+   ],
+   "default_guess": "Have `runs` return a fatal-stop result for the A14 rule-7 condition and have `surface` send the sanitized error and terminate."
+  },
+  {
+   "subject": "instance URL and required-header validation",
+   "kind": "shared mechanism unclear",
+   "text": "`bindings` owns A08 proposal and acceptance checks for missing or invalid `api_base_url`, repeated or invalid required headers and forbidden header names. `service_invoker` owns the corresponding A09 pre-send instance checks. State 3 exposes `check_request_shape` for shared request-shape validation but names no shared capability for these instance predicates.",
+   "question": "Which module owns the common definition of valid instance addresses and required headers so proposal-time and send-time checks cannot diverge?",
+   "options": [
+    "`service_invoker` exposes a pure instance-validation capability used by `bindings` and by request preparation",
+    "`bindings` exposes validated instance facts and `service_invoker` trusts them",
+    "Both modules independently implement the same predicates"
+   ],
+   "default_guess": "Make `service_invoker` own a pure reusable instance validator that `bindings` calls while retaining its own proposal-check ordering."
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"missing references inside a composed flow\",\"kind\":\"contradictory ownership\",\"text\":\"A05 rule 1 makes a function node naming no existing contract version a proof failure and A05 rule 7 keeps every otherwise well-formed version whether or not it is proven; A16 rule 1 says, “A request naming a record that does not exist — a flow, a flow version, a run, a binding, any other — is refused as State 0's unknown reference before that record's own checks, never as a proof failure.” State 3 says both that `flows` owns the proof and that `surface` gives the unknown-reference refusal.\",\"question\":\"Does a missing contract version or binding named by a node make composition fail before keeping the version, or is the version kept with an A05 phase-1 proof failure?\",\"options\":[\"Treat A16 unknown-reference handling as applying only to the action's top-level target, leaving node references to the flow proof\",\"Treat every nested record reference as an A16 unknown reference and refuse composition before keeping a version\"],\"default_guess\":\"Apply A16 only to the action's top-level target and let `flows` report missing node references as proof failures.\"},{\"subject\":\"randomly minted entity identifiers\",\"kind\":\"no owner\",\"text\":\"A01 rule 2 says `trial_execution_id`, `binding_id`, `run_id`, `approval_id` and `grant_id` “are minted at random by the kernel; one that already exists is minted again.” State 3 assigns content identities to `canonical_values` and activation positions and attempt numbers to `store`, but assigns no module the random source, collision check or retry.\",\"question\":\"Which module owns random identifier generation and collision retry for records written by `functions`, `bindings`, `runs` and `effects`?\",\"options\":[\"`store` owns minting and collision retry atomically with insertion\",\"Each record-owning module mints its own identifiers and retries store conflicts\",\"A new lower-level identifier provider owns random minting\"],\"default_guess\":\"Have `store` mint and collision-check the identifier in the insertion transaction.\"},{\"subject\":\"shared Port declaration validation\",\"kind\":\"double ownership\",\"text\":\"`functions` “Owns A02,” including contract-port validation, while `bindings` owns A08 proposal checks, including the rule that binding ports must not “break a rule A02 sets for contract ports.” The modules are on the same dependency line and “modules on one line do not know each other”; `canonical_values` owns value fitting but does not say it owns declaration validation such as unique names or media-type placement.\",\"question\":\"Which lower module owns the common Port-declaration checks used by both contract issuance and binding proposal, and which contextual checks remain with `functions` and `bindings`?\",\"options\":[\"Put the common declaration validator in `canonical_values` and let each caller add its contextual class/output rules\",\"Duplicate the common checks in `functions` and `bindings`\",\"Allow `bindings` to depend on `functions` for those checks\"],\"default_guess\":\"Put common Port-declaration validation in `canonical_values`, with contextual checks retained by the calling module.\"},{\"subject\":\"runtime port facts for operation nodes\",\"kind\":\"missing dependency\",\"text\":\"State 3 says `runs` owns A12–A15, including readiness and validation entering the next node, and that “`runs` reads the pinned graph through `flows.read_flow_version`.” M13/M14 store only a node's `binding_id`, not the binding's ports. The `runs` Knows list omits `bindings`, and no capability it may call is said to provide an operation node's input schemas, cardinalities and carriage.\",\"question\":\"How does `runs` obtain the accepted binding's port declarations needed for runtime delivery and target-port validation?\",\"options\":[\"Add `bindings.read_binding` to the dependencies used by `runs`\",\"Have `flows` return a resolved executable graph containing node port declarations\",\"Make `effects` own validation of delivery into operation nodes and expose its result to `runs`\"],\"default_guess\":\"Allow `runs` to read the pinned operation binding through `bindings.read_binding`.\"},{\"subject\":\"TrialExecution failure detail\",\"kind\":\"record gap\",\"text\":\"A03 rule 6 says, “The kernel keeps at most `failure_detail_bytes_max` of it as `failure_detail`,” and A07 rule 5 defines disclosure of “a `failure_detail` of an execution.” M07's `TrialExecution` candidate fields contain no `failure_detail`, while State 3 says `sandbox` reports it and `functions` writes the TrialExecution.\",\"question\":\"Where is the bounded failure detail of a failed trial execution recorded?\",\"options\":[\"Add an optional `failure_detail` field to M07 TrialExecution\",\"Return the detail only from the immediate try or submission response without persisting it\",\"Discard trial failure detail and keep it only for NodeExecution\"],\"default_guess\":\"Add an optional bounded `failure_detail` to TrialExecution.\"},{\"subject\":\"capture preflight before copying file fixtures\",\"kind\":\"unclear responsibility\",\"text\":\"State 3 says `functions` hides and owns “Case validation,” but also says `runs` copies a spooled file only after “every check ... the input fits and sizes `functions.add_captured_trial_case` would make” has passed. No non-mutating validation capability is listed, and copying must occur before `functions.add_captured_trial_case` can receive the fixture digests.\",\"question\":\"Which module performs the authoritative captured-case fit and size preflight before `runs` copies fixture bytes, without duplicating `functions`' case-validation rules?\",\"options\":[\"Expose a non-mutating preflight capability from `functions`, then let `runs` copy and commit\",\"Let `runs` duplicate the relevant case checks using `canonical_values`\",\"Copy first, call `functions.add_captured_trial_case`, and tolerate unreferenced bytes on every ordinary refusal\"],\"default_guess\":\"Expose a non-mutating captured-case preflight from `functions` for `runs` to call before copying.\"},{\"subject\":\"fatal store failure during run movement\",\"kind\":\"no action owner\",\"text\":\"A14 rule 7 says that after a store failure following an already-written run change, “the kernel then answers `internal_error` and stops.” State 3 explicitly assigns `surface` process termination only for the stop returned after unconfirmed sandbox cleanup; it does not assign who classifies this store failure as fatal, propagates the stop, or terminates the process.\",\"question\":\"Which module owns the fatal-stop decision and propagation when a run-moving request has committed an earlier change and a later store call fails?\",\"options\":[\"`runs` classifies the condition and returns a fatal-stop result that `surface` executes\",\"`store` marks the error fatal and `surface` stops on that error type\",\"`surface` treats every internal store error as fatal\"],\"default_guess\":\"Have `runs` return a fatal-stop result for the A14 rule-7 condition and have `surface` send the sanitized error and terminate.\"},{\"subject\":\"instance URL and required-header validation\",\"kind\":\"shared mechanism unclear\",\"text\":\"`bindings` owns A08 proposal and acceptance checks for missing or invalid `api_base_url`, repeated or invalid required headers and forbidden header names. `service_invoker` owns the corresponding A09 pre-send instance checks. State 3 exposes `check_request_shape` for shared request-shape validation but names no shared capability for these instance predicates.\",\"question\":\"Which module owns the common definition of valid instance addresses and required headers so proposal-time and send-time checks cannot diverge?\",\"options\":[\"`service_invoker` exposes a pure instance-validation capability used by `bindings` and by request preparation\",\"`bindings` exposes validated instance facts and `service_invoker` trusts them\",\"Both modules independently implement the same predicates\"],\"default_guess\":\"Make `service_invoker` own a pure reusable instance validator that `bindings` calls while retaining its own proposal-check ordering.\"}]}"
+}

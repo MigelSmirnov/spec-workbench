@@ -320,7 +320,8 @@ Candidate fields:
 - `outcome`: `passed`, `output_mismatch` (outputs valid but not equal to the
   case's expected outputs), `contract_violation`, `sandbox_violation`, `timeout`,
   `resource_exhausted` or `crashed`;
-- `outputs`: when produced, by output port: a StoredValue for a `value` port; for
+- `outputs`: only when the execution succeeded — passed or output mismatch —,
+  none otherwise; by output port: a StoredValue for a `value` port; for
   a `file` port only its facts — digest, size and media type, no bytes and never a
   StoredValue — and for a `many` file port a list of such facts in output order,
   a repeated file kept as often as it occurs;

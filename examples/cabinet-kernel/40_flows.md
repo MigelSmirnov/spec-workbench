@@ -14,7 +14,9 @@ to its end (A18 rule 3) and applies A16 rule 1 in its order — size, token,
 operation schema, actor — before any operation's own check. A refusal there
 reaches no other module and records nothing. A request naming a record that
 does not exist is refused as an unknown reference by the module that owns the
-record, recording nothing (State 0) — except in the inspection, trace and
+record, recording nothing (State 0) — a contract version or binding named
+inside a composed flow version's content is not such a request: the version
+is kept and its proof fails phase 1 (A05 rule 7) — except in the inspection, trace and
 repair reads `module:surface` assembles from `store` itself, where `surface`
 gives that refusal (State 3, "Inspection, traces and the repair view"); the closed set of refusal codes is State
 5's (K-17). Every identity of a content record
@@ -107,9 +109,9 @@ AdmissionVerdict M08 and Activation M09 are written by `module:functions`.
    case's inputs and the contract's bounds; the sandbox sets its wall deadline
    with `capability:clock.monotonic_deadline` and returns one outcome of
    the closed A03 rule 5 order and, on success, outputs that fit the output
-   ports. `module:functions` stores the outputs through
-   `capability:store.put_value_bytes` with the highest class of the case's
-   inputs, computed by `capability:canonical_values.highest_disclosure_class`
+   ports. `module:functions` stores the value outputs through
+   `capability:store.put_value_bytes` and records a file output by its facts
+   only (M07), each with the highest class of the case's inputs, computed by `capability:canonical_values.highest_disclosure_class`
    (A07 rule 3), compares them with the expected outputs by digest (A04
    rule 3) and writes one TrialExecution per case. No verdict, no activation.
    The answer is the trial evidence per case.
@@ -496,7 +498,9 @@ records are the trace and the rest state.
 The owner or an agent runs a flow whose active version the owner activated and
 which holds operation nodes above `read` — acceptance case 1: an invoice photo
 taken into custody through the owning service's declared operations. The owner
-approves or refuses each effect, and may grant or revoke a standing approval
+approves or refuses each effect that needs approval — not a `draft-write`
+send, whose authority is the version's FlowActivation, except a resend after
+`not_applied` (A10 rule 1) — and may grant or revoke a standing approval
 for a node of the active version.
 
 ### Boundary
@@ -747,15 +751,17 @@ page of NodeExecutions cross into `module:surface`.
 
 1. **Capture.** `capability:runs.capture_failed_execution` reads the record
    through `capability:store.read_records` and checks, in this
-   order, the record — an executed function element that did not succeed
-   (M06) — then the run and its spool: not ended, or ended `failed` and not
-   released (A15 rule 5). It copies the spooled input files into the
-   content-addressed area — read through `capability:store.read_value_bytes`,
-   stored through `capability:store.put_value_bytes` — and calls `capability:functions.add_captured_trial_case`
-   with the pinned contract version, the inputs and the file digests.
-   `module:functions` checks that the record's contract version is the one
-   named, fits each value with `capability:canonical_values.fit_port_value`
-   and each fixture against `trial_fixture_bytes_max` (A04 rule 1), computes
+   order, the record — a function element that ran in the sandbox and did not
+   succeed (M06) — then the run and its spool: not ended, or ended `failed` and
+   not released (A15 rule 5). It calls `capability:functions.add_captured_trial_case`
+   with the pinned contract version and the record's inputs as references,
+   spooled files as their SpooledFiles. `module:functions` checks that the
+   record's contract version is the one named, fits each value with
+   `capability:canonical_values.fit_port_value` and each file by its facts
+   against `trial_fixture_bytes_max` (A04 rule 1), and only then copies each
+   spooled file into the content-addressed area — read through
+   `capability:store.read_value_bytes`, stored through
+   `capability:store.put_value_bytes` —; it computes
    `trial_case_id` with `capability:canonical_values.content_identity` and
    writes the file-carriage StoredValues, each with the class its contract
    input port declares (M21), and the TrialCase; an equal case is
@@ -802,10 +808,9 @@ page of NodeExecutions cross into `module:surface`.
 - Release of a run that is not `failed` or already released: `module:runs`.
   Rollback to an implementation without an `admitted` verdict over the current
   corpus: `module:functions`.
-- Cleanup duty: capture copies files before the run's spool can go; files
-  copied before `module:functions` refuses the case stay in the
-  content-addressed area, named by no record (State 3, "Bytes left by a
-  refused capture"); release
+- Cleanup duty: capture copies files before the run's spool can go, and only
+  once every check has passed, so a refused capture copies nothing (State 3,
+  "Nothing copied for a refused capture"); release
   is the only removal of a failed run's spool, and the content-addressed copy
   of a captured file is the only file that outlives its run (K-10).
 
@@ -845,7 +850,9 @@ EffectAttempt M26 and the concluding NodeExecution M23 written by
    distinct (A16 rule 1, A17 rule 1).
 3. `capability:bindings.check_installed_instances`: no credential header has,
    case-insensitively, the name of a required header of its instance or of a
-   header the kernel sets itself, `host` included (A09 rule 1). It reads only the installation —
+   header the kernel sets itself, `host` included (A09 rule    1). A selected service whose manifest record cannot be read stops the start
+   naming it; a selected instance the record does not list fails nothing here
+   (it is not invocable at send, A09 rule 6). It reads only the installation —
    `capability:installation.selected_instance_name` and
    `capability:installation.manifest_source` — and the manifest, never the
    store.

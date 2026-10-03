@@ -1,0 +1,258 @@
+{
+ "open_points": [
+  {
+   "subject": "Sandbox filesystem access",
+   "kind": "contradiction",
+   "text": "K-02 says a function has \"no filesystem beyond its input\", while A03 permits a writable exchange directory and reads from the read-only runtime, and its audit hook allows opening paths in both.",
+   "question": "May function code inspect and use the exchange directory and runtime filesystem, and if so which paths and contents are part of its permitted interface?",
+   "options": [
+    "Allow arbitrary reads of the runtime and reads/writes anywhere in the private exchange directory",
+    "Expose only declared inputs and outputs and refuse all other filesystem access",
+    "Allow scratch files but hide the runner protocol, source and serialized inputs"
+   ],
+   "default_guess": "Allow scratch use inside a dedicated empty subdirectory, expose declared file inputs only as bytes, and deny access to runner and protocol files."
+  },
+  {
+   "subject": "Sandbox clock and randomness prohibition",
+   "kind": "unverifiable invariant",
+   "text": "K-02 requires \"no clock, no randomness\", but A03 traps only a closed list of Python entry points and explicitly says the isolation, not the traps, is the security boundary; that isolation does not itself remove clock or entropy system calls or unlisted standard-library entry points.",
+   "question": "What mechanism makes access through unlisted APIs such as other clock functions, low-level modules, direct system calls or newly discovered aliases fail, and what outcome do those attempts produce?",
+   "options": [
+    "The listed traps are the complete product guarantee despite bypasses",
+    "Add syscall-level denial of clock and entropy sources",
+    "Weaken the rule to prohibit only the enumerated Python APIs"
+   ],
+   "default_guess": "Enforce the prohibition below Python as well as with traps, and classify every detected attempt as sandbox_violation."
+  },
+  {
+   "subject": "Deterministic function execution",
+   "kind": "unverifiable invariant",
+   "text": "A03 requires that the same implementation and input yield the same output digest, but permits explicit seeded randomness, multiple processes up to the contract bound, threads and other scheduling-dependent behavior without defining or detecting nondeterministic execution.",
+   "question": "Is deterministic output a guaranteed sandbox property, an admission assumption, or merely a required test for selected implementations?",
+   "options": [
+    "Guarantee determinism by restricting all nondeterministic facilities",
+    "Permit nondeterministic code and let trials observe only individual runs",
+    "Run repeated trials and refuse implementations whose outputs differ"
+   ],
+   "default_guess": "Treat determinism as a contract requirement and refuse facilities such as process/thread concurrency that the kernel cannot make deterministic."
+  },
+  {
+   "subject": "Sandbox cleanup failure outcome",
+   "kind": "precedence conflict",
+   "text": "A03 rule 5 says the first of timeout, resource_exhausted, sandbox_violation, crashed, contract_violation decides the outcome, while rule 7 says an unconfirmed cleanup records crashed with cleanup_failed.",
+   "question": "If cleanup cannot be confirmed after an earlier timeout, resource limit or sandbox violation, which status is recorded?",
+   "options": [
+    "cleanup_failed always overrides the earlier outcome",
+    "The earlier rule-5 outcome remains and cleanup failure is separate detail",
+    "The earlier outcome wins except when no outcome was otherwise determined"
+   ],
+   "default_guess": "Record crashed with cleanup_failed because the output is discarded and the kernel stops."
+  },
+  {
+   "subject": "Failure details and trace payload prohibition",
+   "kind": "contradiction",
+   "text": "A15 says the trace \"holds no payload\" and A17 says a credential never enters a failure detail, but A03 stores an exception type and message supplied by untrusted code and A09 stores an excerpt of an untrusted service error body.",
+   "question": "How can the kernel prevent exception messages or service error bodies from copying inputs, personal data, credentials or arbitrary payload into failure_detail?",
+   "options": [
+    "Never retain untrusted exception messages or response bodies",
+    "Retain them and treat failure_detail as bounded payload with disclosure handling",
+    "Apply a specified redaction algorithm before storage"
+   ],
+   "default_guess": "Store only kernel-generated reason identifiers and exception class names, never user-controlled messages or service bodies."
+  },
+  {
+   "subject": "Actor attribution for automatic work",
+   "kind": "model-rule mismatch",
+   "text": "State 0 says the kernel's records name it as actor and K-15 says actors are distinguishable in every record, while AdmissionVerdict, TrialExecution, NodeExecution, EffectAttempt and EffectApproval requests have no actor fact; A14 also advances recovered runs \"as the kernel actor\" without saying where that actor is recorded.",
+   "question": "Which records must store the actor that caused admission, approval creation, execution or recovery advancement, and how is request-driven kernel work distinguished from startup recovery?",
+   "options": [
+    "Add an actor or trigger actor to every such record",
+    "Infer the actor through the enclosing run or request",
+    "Record actors only on the high-level request and activation records"
+   ],
+   "default_guess": "Record both the initiating actor and the executing kernel actor on each operation-created record, with kernel as initiator for startup recovery."
+  },
+  {
+   "subject": "Run pin of its flow activation",
+   "kind": "missing invariant",
+   "text": "M19 and A12 pin only flow_version_id, but M26 and A10 require a draft-write attempt to name \"the flow activation under which the run started\" even when the same version can be activated repeatedly.",
+   "question": "How does a run identify the exact FlowActivation that authorized its draft-write sends after later activations or a restart?",
+   "options": [
+    "Store the FlowActivation position on the Run",
+    "Derive the last activation preceding the Run in store order",
+    "Use whichever activation of that version is current when the send occurs"
+   ],
+   "default_guess": "Pin and store the exact FlowActivation position when the run is created."
+  },
+  {
+   "subject": "Database and filesystem atomicity",
+   "kind": "incomplete failure semantics",
+   "text": "A18 says every failed store call changes nothing, while one call may write, flush and rename value, fixture or spool files as well as commit SQLite records; startup removes temporary files but specifies no reconciliation of published orphan files or records whose referenced file was not published.",
+   "question": "What ordering and recovery protocol makes a store call spanning SQLite and the filesystem atomic across errors and process crashes?",
+   "options": [
+    "Publish files before the database and tolerate or collect orphan files",
+    "Commit database records before files and repair missing files on recovery",
+    "Use a journal or staged protocol that reconciles both directions on startup"
+   ],
+   "default_guess": "Stage bytes, commit records that name staged content, atomically publish, and use a durable recovery journal to complete or roll back interrupted calls."
+  },
+  {
+   "subject": "Surface request serialization",
+   "kind": "undefined ordering",
+   "text": "A18 says surface requests are handled \"one at a time in the order they arrive\" but does not define arrival when multiple MCP requests are received concurrently.",
+   "question": "What observable event establishes the total request order used for store positions and conflicting actions?",
+   "options": [
+    "Order by completion of frame parsing",
+    "Order by acceptance into a single listener queue",
+    "Permit an arbitrary scheduler order while guaranteeing serial execution"
+   ],
+   "default_guess": "Assign a monotonic queue position when a complete authenticated request message is accepted, then process by that position."
+  },
+  {
+   "subject": "Reloaded agent-token identities",
+   "kind": "missing validation",
+   "text": "M27 says agent names are unique and repeated names make configuration invalid at start, but A16 rule 2 validates a changed token list only for parsing, token length and duplicate token values.",
+   "question": "What happens when a live configuration reload introduces duplicate agent names, a missing name or another invalid actor entry?",
+   "options": [
+    "Refuse all requests until the actor list is valid",
+    "Accept it because only token values are reload-validated",
+    "Keep the prior actor metadata while replacing only token values"
+   ],
+   "default_guess": "Apply all token and actor-identity invariants on reload and refuse every request until they pass."
+  },
+  {
+   "subject": "Installation startup check precedence",
+   "kind": "undefined precedence",
+   "text": "Startup refusals are spread across A03, A09, A16, A17 and A18, while no rule orders configuration parsing, token checks, credential-header checks, file permissions, data-directory checks, lock acquisition, dependency checks and the sandbox probe.",
+   "question": "When several startup conditions fail, which failure is reported first and which checks may have already changed local state?",
+   "options": [
+    "Define one global startup check sequence",
+    "Allow implementation-defined diagnostic order while requiring no durable changes",
+    "Run independent checks and return all failures"
+   ],
+   "default_guess": "Use a fixed global sequence beginning with configuration-file safety and parsing, then configuration invariants, data-directory safety and lock, store checks, dependencies and sandbox probe."
+  },
+  {
+   "subject": "Service credential source and lifecycle",
+   "kind": "underspecified mechanism",
+   "text": "A17 calls the credential value source \"the reference that resolves to its value on the host\" without defining reference kinds, resolution semantics, size or encoding rules, while A09 allows runtime credential resolution to fail and A17 also says the configuration holds one credential per service.",
+   "question": "What credential references are valid, when is a missing credential a startup refusal versus a pre-send failure, and how are its value and header encoding validated?",
+   "options": [
+    "Only a protected file path with exact validation rules",
+    "An operating-system secret-store identifier",
+    "A release-defined set of credential providers"
+   ],
+   "default_guess": "Support one protected regular-file reference, validate the header name at startup, and resolve and validate the value immediately before each request."
+  },
+  {
+   "subject": "Manifest revision access",
+   "kind": "underspecified mechanism",
+   "text": "M28 and A08 require reading `<manifest_location>/<service_id>.json` \"at the configured manifest_revision\" but do not define how a revision is resolved or read, whether the location is a repository, or what happens when the revision is absent or changes beneath the process.",
+   "question": "What storage/repository mechanism gives the kernel the exact bytes at manifest_revision?",
+   "options": [
+    "Read from a Git repository object without checking out files",
+    "Require manifest_location already to be an immutable checkout of that revision",
+    "Ignore revision during reads and trust the configured directory"
+   ],
+   "default_guess": "Require a Git repository and read the file directly from the named immutable commit object."
+  },
+  {
+   "subject": "Manifest and instance schema",
+   "kind": "incomplete refusal conditions",
+   "text": "A08 rule 5 handles an absent or invalid-JSON record and a few missing fields, but leaves the required JSON types and shapes of `service`, `capabilities`, capability entries, `exposed_as`, `idempotency_key`, instances and `required_headers` unstated.",
+   "question": "For every malformed manifest shape not explicitly listed, is it a manifest mismatch, which named check fails, and where does it fall in the rule-5 order?",
+   "options": [
+    "Define and validate one complete manifest schema before semantic checks",
+    "Treat every unlisted malformed shape as invalid JSON",
+    "Let each field-reading check reject incompatible shapes locally"
+   ],
+   "default_guess": "Validate a complete release-pinned manifest schema first, with deterministic field and item ordering for the first failure."
+  },
+  {
+   "subject": "Read-operation idempotency metadata",
+   "kind": "contradiction",
+   "text": "M10 and M11 carry `idempotency_key_fields` copied from the manifest, while A08 rule 4 says a read operation's key \"is not used and not checked\", including potentially malformed key text.",
+   "question": "What idempotency_key_fields does a binding store for a read operation whose manifest idempotency_key is malformed or names invalid fields?",
+   "options": [
+    "Always store no key fields for reads and ignore the manifest field",
+    "Parse and store valid read keys but reject malformed syntax",
+    "Copy the raw text instead of parsed fields"
+   ],
+   "default_guess": "Store no idempotency key for reads and ignore the field completely."
+  },
+  {
+   "subject": "Base URL validity and URL joining",
+   "kind": "incomplete refusal conditions",
+   "text": "A08 accepts any absolute HTTP or HTTPS URL with a host, and A09 constructs the target as the base URL \"without a trailing `/` followed by the declared path\" without addressing userinfo, query, fragment, percent escapes, multiple trailing slashes or an existing base path.",
+   "question": "Which exact api_base_url forms are valid, and what exact URL results for every accepted base URL and declared path?",
+   "options": [
+    "Require scheme, host and optional port only",
+    "Allow a base path but forbid userinfo, query and fragment",
+    "Allow all absolute URLs and define literal string concatenation"
+   ],
+   "default_guess": "Allow scheme, host, optional port and an optional normalized base path; forbid userinfo, query and fragment; remove all trailing slashes before appending the declared path."
+  },
+  {
+   "subject": "Multipart port names",
+   "kind": "injection gap",
+   "text": "A09 inserts an unrestricted port name verbatim into `Content-Disposition: form-data; name=\"<port>\"` and `filename=\"<port>\"`, while A02 constrains port names only for uniqueness.",
+   "question": "Which port names are legal in multipart bindings, or how are quotes, backslashes, control characters and non-ASCII characters encoded without creating extra headers or changing part names?",
+   "options": [
+    "Restrict multipart-used port names to a safe ASCII token grammar",
+    "Use a specified quoted-string escaping and filename encoding",
+    "Refuse only names containing control characters"
+   ],
+   "default_guess": "Require multipart-used port names to match a conservative ASCII identifier grammar and refuse the binding otherwise."
+  },
+  {
+   "subject": "Multipart wire encoding",
+   "kind": "underspecified request",
+   "text": "A09 fixes each multipart part and A10 omits the boundary from the approved description, but no rule fixes boundary generation, CRLF framing, quoting or the complete byte serialization sent to the service.",
+   "question": "What exact multipart serialization must every implementation produce, and may it vary between an approval preview, resume and actual send?",
+   "options": [
+    "Specify a deterministic canonical multipart encoding",
+    "Permit any RFC-conforming encoding because approval covers the logical parts",
+    "Pin the generated wire bytes per approval including the boundary"
+   ],
+   "default_guess": "Use one deterministic release-defined multipart serialization while continuing to exclude its boundary from request_digest as expressly required."
+  },
+  {
+   "subject": "Guard value equality",
+   "kind": "undefined comparison",
+   "text": "A05 relies on guard values being \"different\" for mutual exclusion and A13 enables an edge when a runtime value \"equals\" its guard value, but no JSON equality rule is defined.",
+   "question": "Are values compared by canonical JSON bytes, JSON Schema equality, host-language equality, or another rule, especially for numbers and booleans such as `1`, `1.0` and `true`?",
+   "options": [
+    "Compare canonical JSON bytes",
+    "Use JSON Schema enum equality",
+    "Use Python equality"
+   ],
+   "default_guess": "Compare canonical JSON representations, with booleans distinct from numbers."
+  },
+  {
+   "subject": "HTTP error status with incomplete or late body",
+   "kind": "outcome ambiguity",
+   "text": "A09 first classifies a timeout or EOF with no valid final response as unreachable or unknown, but later classifies 3xx, 4xx and 5xx \"whatever the body's size\" and says the response is used only when it arrived within the timeout.",
+   "question": "If a valid final status line and headers arrive but the error body times out, resets or ends malformed, does the status determine the outcome or is the effect outcome unknown?",
+   "options": [
+    "A final 3xx/4xx/5xx status determines the outcome immediately; the body is diagnostic only",
+    "Any incomplete body means no valid final response and therefore unknown for effects",
+    "Status determines 4xx only, while incomplete 3xx/5xx remains unknown"
+   ],
+   "default_guess": "Once a valid final 3xx, 4xx or 5xx status and headers arrive, classify by that status and keep only whatever bounded diagnostic body arrived."
+  },
+  {
+   "subject": "Data-directory privacy check",
+   "kind": "vague refusal condition",
+   "text": "A18 says the data directory and \"everything in it are private to the kernel's user\" and refuses startup otherwise, without defining ownership, acceptable permission bits, ACLs, hard links, parent-directory exposure or the treatment of newly created entries after startup.",
+   "question": "What exact filesystem conditions constitute private, and when are they checked?",
+   "options": [
+    "Require kernel ownership and no group/other permission on every entry",
+    "Require only the root directory to be private and create children with fixed modes",
+    "Also reject ACL grants, hard links and unsafe parent directories"
+   ],
+   "default_guess": "Require kernel ownership, no group/other permission and no symlinks on the root and every entry at startup, and enforce secure creation/open rules thereafter."
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"Sandbox filesystem access\",\"kind\":\"contradiction\",\"text\":\"K-02 says a function has \\\"no filesystem beyond its input\\\", while A03 permits a writable exchange directory and reads from the read-only runtime, and its audit hook allows opening paths in both.\",\"question\":\"May function code inspect and use the exchange directory and runtime filesystem, and if so which paths and contents are part of its permitted interface?\",\"options\":[\"Allow arbitrary reads of the runtime and reads/writes anywhere in the private exchange directory\",\"Expose only declared inputs and outputs and refuse all other filesystem access\",\"Allow scratch files but hide the runner protocol, source and serialized inputs\"],\"default_guess\":\"Allow scratch use inside a dedicated empty subdirectory, expose declared file inputs only as bytes, and deny access to runner and protocol files.\"},{\"subject\":\"Sandbox clock and randomness prohibition\",\"kind\":\"unverifiable invariant\",\"text\":\"K-02 requires \\\"no clock, no randomness\\\", but A03 traps only a closed list of Python entry points and explicitly says the isolation, not the traps, is the security boundary; that isolation does not itself remove clock or entropy system calls or unlisted standard-library entry points.\",\"question\":\"What mechanism makes access through unlisted APIs such as other clock functions, low-level modules, direct system calls or newly discovered aliases fail, and what outcome do those attempts produce?\",\"options\":[\"The listed traps are the complete product guarantee despite bypasses\",\"Add syscall-level denial of clock and entropy sources\",\"Weaken the rule to prohibit only the enumerated Python APIs\"],\"default_guess\":\"Enforce the prohibition below Python as well as with traps, and classify every detected attempt as sandbox_violation.\"},{\"subject\":\"Deterministic function execution\",\"kind\":\"unverifiable invariant\",\"text\":\"A03 requires that the same implementation and input yield the same output digest, but permits explicit seeded randomness, multiple processes up to the contract bound, threads and other scheduling-dependent behavior without defining or detecting nondeterministic execution.\",\"question\":\"Is deterministic output a guaranteed sandbox property, an admission assumption, or merely a required test for selected implementations?\",\"options\":[\"Guarantee determinism by restricting all nondeterministic facilities\",\"Permit nondeterministic code and let trials observe only individual runs\",\"Run repeated trials and refuse implementations whose outputs differ\"],\"default_guess\":\"Treat determinism as a contract requirement and refuse facilities such as process/thread concurrency that the kernel cannot make deterministic.\"},{\"subject\":\"Sandbox cleanup failure outcome\",\"kind\":\"precedence conflict\",\"text\":\"A03 rule 5 says the first of timeout, resource_exhausted, sandbox_violation, crashed, contract_violation decides the outcome, while rule 7 says an unconfirmed cleanup records crashed with cleanup_failed.\",\"question\":\"If cleanup cannot be confirmed after an earlier timeout, resource limit or sandbox violation, which status is recorded?\",\"options\":[\"cleanup_failed always overrides the earlier outcome\",\"The earlier rule-5 outcome remains and cleanup failure is separate detail\",\"The earlier outcome wins except when no outcome was otherwise determined\"],\"default_guess\":\"Record crashed with cleanup_failed because the output is discarded and the kernel stops.\"},{\"subject\":\"Failure details and trace payload prohibition\",\"kind\":\"contradiction\",\"text\":\"A15 says the trace \\\"holds no payload\\\" and A17 says a credential never enters a failure detail, but A03 stores an exception type and message supplied by untrusted code and A09 stores an excerpt of an untrusted service error body.\",\"question\":\"How can the kernel prevent exception messages or service error bodies from copying inputs, personal data, credentials or arbitrary payload into failure_detail?\",\"options\":[\"Never retain untrusted exception messages or response bodies\",\"Retain them and treat failure_detail as bounded payload with disclosure handling\",\"Apply a specified redaction algorithm before storage\"],\"default_guess\":\"Store only kernel-generated reason identifiers and exception class names, never user-controlled messages or service bodies.\"},{\"subject\":\"Actor attribution for automatic work\",\"kind\":\"model-rule mismatch\",\"text\":\"State 0 says the kernel's records name it as actor and K-15 says actors are distinguishable in every record, while AdmissionVerdict, TrialExecution, NodeExecution, EffectAttempt and EffectApproval requests have no actor fact; A14 also advances recovered runs \\\"as the kernel actor\\\" without saying where that actor is recorded.\",\"question\":\"Which records must store the actor that caused admission, approval creation, execution or recovery advancement, and how is request-driven kernel work distinguished from startup recovery?\",\"options\":[\"Add an actor or trigger actor to every such record\",\"Infer the actor through the enclosing run or request\",\"Record actors only on the high-level request and activation records\"],\"default_guess\":\"Record both the initiating actor and the executing kernel actor on each operation-created record, with kernel as initiator for startup recovery.\"},{\"subject\":\"Run pin of its flow activation\",\"kind\":\"missing invariant\",\"text\":\"M19 and A12 pin only flow_version_id, but M26 and A10 require a draft-write attempt to name \\\"the flow activation under which the run started\\\" even when the same version can be activated repeatedly.\",\"question\":\"How does a run identify the exact FlowActivation that authorized its draft-write sends after later activations or a restart?\",\"options\":[\"Store the FlowActivation position on the Run\",\"Derive the last activation preceding the Run in store order\",\"Use whichever activation of that version is current when the send occurs\"],\"default_guess\":\"Pin and store the exact FlowActivation position when the run is created.\"},{\"subject\":\"Database and filesystem atomicity\",\"kind\":\"incomplete failure semantics\",\"text\":\"A18 says every failed store call changes nothing, while one call may write, flush and rename value, fixture or spool files as well as commit SQLite records; startup removes temporary files but specifies no reconciliation of published orphan files or records whose referenced file was not published.\",\"question\":\"What ordering and recovery protocol makes a store call spanning SQLite and the filesystem atomic across errors and process crashes?\",\"options\":[\"Publish files before the database and tolerate or collect orphan files\",\"Commit database records before files and repair missing files on recovery\",\"Use a journal or staged protocol that reconciles both directions on startup\"],\"default_guess\":\"Stage bytes, commit records that name staged content, atomically publish, and use a durable recovery journal to complete or roll back interrupted calls.\"},{\"subject\":\"Surface request serialization\",\"kind\":\"undefined ordering\",\"text\":\"A18 says surface requests are handled \\\"one at a time in the order they arrive\\\" but does not define arrival when multiple MCP requests are received concurrently.\",\"question\":\"What observable event establishes the total request order used for store positions and conflicting actions?\",\"options\":[\"Order by completion of frame parsing\",\"Order by acceptance into a single listener queue\",\"Permit an arbitrary scheduler order while guaranteeing serial execution\"],\"default_guess\":\"Assign a monotonic queue position when a complete authenticated request message is accepted, then process by that position.\"},{\"subject\":\"Reloaded agent-token identities\",\"kind\":\"missing validation\",\"text\":\"M27 says agent names are unique and repeated names make configuration invalid at start, but A16 rule 2 validates a changed token list only for parsing, token length and duplicate token values.\",\"question\":\"What happens when a live configuration reload introduces duplicate agent names, a missing name or another invalid actor entry?\",\"options\":[\"Refuse all requests until the actor list is valid\",\"Accept it because only token values are reload-validated\",\"Keep the prior actor metadata while replacing only token values\"],\"default_guess\":\"Apply all token and actor-identity invariants on reload and refuse every request until they pass.\"},{\"subject\":\"Installation startup check precedence\",\"kind\":\"undefined precedence\",\"text\":\"Startup refusals are spread across A03, A09, A16, A17 and A18, while no rule orders configuration parsing, token checks, credential-header checks, file permissions, data-directory checks, lock acquisition, dependency checks and the sandbox probe.\",\"question\":\"When several startup conditions fail, which failure is reported first and which checks may have already changed local state?\",\"options\":[\"Define one global startup check sequence\",\"Allow implementation-defined diagnostic order while requiring no durable changes\",\"Run independent checks and return all failures\"],\"default_guess\":\"Use a fixed global sequence beginning with configuration-file safety and parsing, then configuration invariants, data-directory safety and lock, store checks, dependencies and sandbox probe.\"},{\"subject\":\"Service credential source and lifecycle\",\"kind\":\"underspecified mechanism\",\"text\":\"A17 calls the credential value source \\\"the reference that resolves to its value on the host\\\" without defining reference kinds, resolution semantics, size or encoding rules, while A09 allows runtime credential resolution to fail and A17 also says the configuration holds one credential per service.\",\"question\":\"What credential references are valid, when is a missing credential a startup refusal versus a pre-send failure, and how are its value and header encoding validated?\",\"options\":[\"Only a protected file path with exact validation rules\",\"An operating-system secret-store identifier\",\"A release-defined set of credential providers\"],\"default_guess\":\"Support one protected regular-file reference, validate the header name at startup, and resolve and validate the value immediately before each request.\"},{\"subject\":\"Manifest revision access\",\"kind\":\"underspecified mechanism\",\"text\":\"M28 and A08 require reading `<manifest_location>/<service_id>.json` \\\"at the configured manifest_revision\\\" but do not define how a revision is resolved or read, whether the location is a repository, or what happens when the revision is absent or changes beneath the process.\",\"question\":\"What storage/repository mechanism gives the kernel the exact bytes at manifest_revision?\",\"options\":[\"Read from a Git repository object without checking out files\",\"Require manifest_location already to be an immutable checkout of that revision\",\"Ignore revision during reads and trust the configured directory\"],\"default_guess\":\"Require a Git repository and read the file directly from the named immutable commit object.\"},{\"subject\":\"Manifest and instance schema\",\"kind\":\"incomplete refusal conditions\",\"text\":\"A08 rule 5 handles an absent or invalid-JSON record and a few missing fields, but leaves the required JSON types and shapes of `service`, `capabilities`, capability entries, `exposed_as`, `idempotency_key`, instances and `required_headers` unstated.\",\"question\":\"For every malformed manifest shape not explicitly listed, is it a manifest mismatch, which named check fails, and where does it fall in the rule-5 order?\",\"options\":[\"Define and validate one complete manifest schema before semantic checks\",\"Treat every unlisted malformed shape as invalid JSON\",\"Let each field-reading check reject incompatible shapes locally\"],\"default_guess\":\"Validate a complete release-pinned manifest schema first, with deterministic field and item ordering for the first failure.\"},{\"subject\":\"Read-operation idempotency metadata\",\"kind\":\"contradiction\",\"text\":\"M10 and M11 carry `idempotency_key_fields` copied from the manifest, while A08 rule 4 says a read operation's key \\\"is not used and not checked\\\", including potentially malformed key text.\",\"question\":\"What idempotency_key_fields does a binding store for a read operation whose manifest idempotency_key is malformed or names invalid fields?\",\"options\":[\"Always store no key fields for reads and ignore the manifest field\",\"Parse and store valid read keys but reject malformed syntax\",\"Copy the raw text instead of parsed fields\"],\"default_guess\":\"Store no idempotency key for reads and ignore the field completely.\"},{\"subject\":\"Base URL validity and URL joining\",\"kind\":\"incomplete refusal conditions\",\"text\":\"A08 accepts any absolute HTTP or HTTPS URL with a host, and A09 constructs the target as the base URL \\\"without a trailing `/` followed by the declared path\\\" without addressing userinfo, query, fragment, percent escapes, multiple trailing slashes or an existing base path.\",\"question\":\"Which exact api_base_url forms are valid, and what exact URL results for every accepted base URL and declared path?\",\"options\":[\"Require scheme, host and optional port only\",\"Allow a base path but forbid userinfo, query and fragment\",\"Allow all absolute URLs and define literal string concatenation\"],\"default_guess\":\"Allow scheme, host, optional port and an optional normalized base path; forbid userinfo, query and fragment; remove all trailing slashes before appending the declared path.\"},{\"subject\":\"Multipart port names\",\"kind\":\"injection gap\",\"text\":\"A09 inserts an unrestricted port name verbatim into `Content-Disposition: form-data; name=\\\"<port>\\\"` and `filename=\\\"<port>\\\"`, while A02 constrains port names only for uniqueness.\",\"question\":\"Which port names are legal in multipart bindings, or how are quotes, backslashes, control characters and non-ASCII characters encoded without creating extra headers or changing part names?\",\"options\":[\"Restrict multipart-used port names to a safe ASCII token grammar\",\"Use a specified quoted-string escaping and filename encoding\",\"Refuse only names containing control characters\"],\"default_guess\":\"Require multipart-used port names to match a conservative ASCII identifier grammar and refuse the binding otherwise.\"},{\"subject\":\"Multipart wire encoding\",\"kind\":\"underspecified request\",\"text\":\"A09 fixes each multipart part and A10 omits the boundary from the approved description, but no rule fixes boundary generation, CRLF framing, quoting or the complete byte serialization sent to the service.\",\"question\":\"What exact multipart serialization must every implementation produce, and may it vary between an approval preview, resume and actual send?\",\"options\":[\"Specify a deterministic canonical multipart encoding\",\"Permit any RFC-conforming encoding because approval covers the logical parts\",\"Pin the generated wire bytes per approval including the boundary\"],\"default_guess\":\"Use one deterministic release-defined multipart serialization while continuing to exclude its boundary from request_digest as expressly required.\"},{\"subject\":\"Guard value equality\",\"kind\":\"undefined comparison\",\"text\":\"A05 relies on guard values being \\\"different\\\" for mutual exclusion and A13 enables an edge when a runtime value \\\"equals\\\" its guard value, but no JSON equality rule is defined.\",\"question\":\"Are values compared by canonical JSON bytes, JSON Schema equality, host-language equality, or another rule, especially for numbers and booleans such as `1`, `1.0` and `true`?\",\"options\":[\"Compare canonical JSON bytes\",\"Use JSON Schema enum equality\",\"Use Python equality\"],\"default_guess\":\"Compare canonical JSON representations, with booleans distinct from numbers.\"},{\"subject\":\"HTTP error status with incomplete or late body\",\"kind\":\"outcome ambiguity\",\"text\":\"A09 first classifies a timeout or EOF with no valid final response as unreachable or unknown, but later classifies 3xx, 4xx and 5xx \\\"whatever the body's size\\\" and says the response is used only when it arrived within the timeout.\",\"question\":\"If a valid final status line and headers arrive but the error body times out, resets or ends malformed, does the status determine the outcome or is the effect outcome unknown?\",\"options\":[\"A final 3xx/4xx/5xx status determines the outcome immediately; the body is diagnostic only\",\"Any incomplete body means no valid final response and therefore unknown for effects\",\"Status determines 4xx only, while incomplete 3xx/5xx remains unknown\"],\"default_guess\":\"Once a valid final 3xx, 4xx or 5xx status and headers arrive, classify by that status and keep only whatever bounded diagnostic body arrived.\"},{\"subject\":\"Data-directory privacy check\",\"kind\":\"vague refusal condition\",\"text\":\"A18 says the data directory and \\\"everything in it are private to the kernel's user\\\" and refuses startup otherwise, without defining ownership, acceptable permission bits, ACLs, hard links, parent-directory exposure or the treatment of newly created entries after startup.\",\"question\":\"What exact filesystem conditions constitute private, and when are they checked?\",\"options\":[\"Require kernel ownership and no group/other permission on every entry\",\"Require only the root directory to be private and create children with fixed modes\",\"Also reject ACL grants, hard links and unsafe parent directories\"],\"default_guess\":\"Require kernel ownership, no group/other permission and no symlinks on the root and every entry at startup, and enforce secure creation/open rules thereafter.\"}]}"
+}

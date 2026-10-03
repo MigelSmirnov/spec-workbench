@@ -81,8 +81,9 @@ worker.
    delivered. A receiving node concluded so did not run: its NodeExecution names
    what it pinned as `executed`, the inputs it had, no outputs and no resources
    used, and starts and ends at the time of the check. An element that does not
-   succeed keeps no output: its NodeExecution names none, a value it produced
-   is not stored, and the files its attempt spooled are discarded.
+      succeed keeps no output: its NodeExecution names none, a value it produced
+   is not stored, and the files its attempt spooled are discarded with no
+   SpooledFile record naming them.
 4. A guarded edge delivers only when its guard port's value equals its guard
    value. An input port that can no longer receive a value because every edge into
    it is disabled, or comes from a skipped node, makes its node `skipped_by_guard`
@@ -103,10 +104,14 @@ worker.
    `many` file port carries a list of files; inside the sandbox it is a list of
    `bytes` (A03). A mapped node concludes only when every element has concluded. It succeeded
    when every element succeeded, and its outputs are then lists in element order,
-   each list of the highest class among its elements (A07), `open` when empty;
+      each list of the highest class among its elements (A07); an empty list
+   takes the class of the list the node mapped over, so no class is lowered;
    any failed element makes it failed for its dependants. A value list is one
-   StoredValue, the JSON array of the elements' values in element order, written
-   in the store change that records the node's conclusion; a file list is the
+   StoredValue, the JSON array of the elements' values in element order, whose
+   `value_schema` is the array schema with the port's schema as `items`,
+   written in the store change that writes the node's last element record and
+   named, like any value, by the records that receive it; mapping over such a
+   list gives each element the list's class; a file list is the
    elements' SpooledFiles in element order, each keeping its own record. A port's
    reference to values names exactly one StoredValue, a `many` value being one
    JSON array.
@@ -200,10 +205,10 @@ Reuses cabinet-flow decision 18, narrowed by K-09: no timed retries, no reconcil
 6. Everything a resume or a restart needs is in the store before it is acted on:
    records of concluded attempts, decided approvals, and in-flight attempts before
    their request (K-17).
-7. A store failure in a request after a change of a run was already written
-   leaves that run's stored status behind its records; the kernel then answers
-   `internal_error` and stops, so the next start derives the run (rule 5)
-   before any request touches it.
+7. A store failure can leave a run's stored status behind its records. Any
+   request answered `internal_error` therefore stops the kernel once the
+   answer is sent, so the next start derives every run (rule 5) before any
+   request touches one.
 
 ### Formal invariants
 

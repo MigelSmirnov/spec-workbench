@@ -27,9 +27,8 @@ Python signatures are State 6's.
 - **Refusal.** An operation either returns its output or refuses with one code
   of the closed set below and a bounded reason naming the first failing check
   in its rule's order. A refusal is decided before the operation's first store
-  change, so it writes nothing — the one exception is bytes
-  a capture copied before `functions` refused the case (State 3, "Bytes left
-  by a refused capture"). Codes are distinct only where
+  change, so it writes nothing; a refused capture copies nothing either (State
+  3, "Nothing copied for a refused capture"). Codes are distinct only where
   some caller acts on the difference (K-17).
 - **Values enter canonical.** `module:surface` turns every JSON text a
   request carries — a value, a port's `value_schema`, a guard value — into its
@@ -161,7 +160,7 @@ not listed are never written.
 A change is named, and its payload is the records that change lists; State 5
 fixes which records each change writes, State 6 the typed payload of each. `store`
 checks only its own invariants — attempt numbers, unique and existing
-identities, links, no record edited — a lifecycle change (a status, who
+identities, links, no record of a kind A01 rule 6 lists edited — a lifecycle change of another entity (a status, who
 decided or resolved or released and when, `concluded_at`) updates those fields
 of the entity's one record in place, which keeps its store position, the
 position of its creation; every other field is never changed — and trusts its caller for every rule of
@@ -733,7 +732,8 @@ None.
 
 ### Enforces
 
-Only `store` opens the database; records are never edited (A01 rule 6).
+Only `store` opens the database; the records A01 rule 6 lists are never
+edited, and an entity's lifecycle fields change in place (Conventions).
 
 ### Errors
 
@@ -894,7 +894,11 @@ The file exists in that run's spool.
 ### Enforces
 
 Complete and digest-checked before it is visible; `spool_file_bytes_max` per
-file and `spool_run_bytes_max` per run (A15 rule 3).
+file and `spool_run_bytes_max` per run (A15 rule 3). A SpooledFile is named by
+its producing position alone (SpooledFileKey); a file already at that position
+that no SpooledFile record names — left by a change that failed — is replaced,
+and one a record names is never overwritten: that call is `internal_error`. A
+link or an I/O failure is `internal_error` with nothing kept of that file.
 
 ### Errors
 
@@ -1231,8 +1235,9 @@ State 3 order after the binding: no selected instance (no name) is
 `instance_not_selected`; no `api_base_url` (a name without one — whether the
 record lists no instance of that name, the instance has no `api_base_url`, or
 it is not an absolute `http` or `https` URL with a host, A08 rule 5) is
-`instance_address_missing`; a repeated required header, a plain `http`
-target not allowed, then the credential, then input placement, input ports in
+`instance_address_missing`; then a plain `http` target not allowed, a
+repeated required header, an invalid required header
+(`required_header_invalid`, A08 rule 5), then the credential, then input placement, input ports in
 name order and a list's elements in list order, the first that cannot be placed
 named (A09 rules 1, 2, 4, 6); credential by name only in the description (A10
 rule 7); the description covers every header sent on the wire, and no header is
@@ -1302,8 +1307,8 @@ corpus.
 ### Inputs
 
 The contract version the record pinned, the contract version named, the
-record's input StoredValues, the digests of the copied files, the source
-NodeExecution, the actor.
+record's inputs as references — StoredValues, and spooled files as their
+SpooledFiles —, the source NodeExecution, the actor.
 
 ### Outputs
 
@@ -1315,9 +1320,10 @@ The case is in the corpus; the corpus digest changed when new.
 
 ### Enforces
 
-Pinned version equals the one named; fit of every value; fixtures within
-`trial_fixture_bytes_max`; inputs take the port's class (A04 rule 1, A15 rule
-5, M21).
+Pinned version equals the one named; fit of every value; every file within
+`trial_fixture_bytes_max` by its facts; all before any byte is copied — only
+then each spooled file is copied into the content-addressed area, so a refusal
+copies nothing; inputs take the port's class (A04 rule 1, A15 rule 5, M21).
 
 ### Errors
 
@@ -2382,7 +2388,9 @@ The case is in its corpus.
 
 Record first — a function element that ran in the sandbox (its record names
 resources used) and did not succeed — then run and spool, all before an equal
-existing case is returned (A15 rule 5, M06); copies spooled inputs; passes facts down (State 3).
+existing case is returned (A15 rule 5, M06); copies nothing itself: passes
+the record's inputs down as references, spooled files as their SpooledFiles
+(State 3, "Capture").
 
 ### Errors
 
@@ -2535,8 +2543,12 @@ Spools of ended runs that keep none are gone; runs left `running` rest or end.
 
 ### Enforces
 
-First names spools to remove (A14 rule 4); then advances runs oldest first as
-the kernel (A14 rule 5).
+First names spools to remove (A14 rule 4); then derives every run not ended —
+`running`, `awaiting_approval`, `pending` — from its records, oldest first,
+rewriting a lagging status or waiting point; an operation element whose wait
+no longer holds (its approval decided, its attempt resolved) is reached again
+through `effects.reach_operation_element`; then advances, as the kernel, every
+run left `running` (A14 rule 5).
 
 ### Errors
 

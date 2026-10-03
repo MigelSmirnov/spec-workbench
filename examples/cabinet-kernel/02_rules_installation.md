@@ -125,7 +125,11 @@ Reuses cabinet-flow decision 23, narrowed by K-16.
    no environment variable. The file
    must be a regular file, not a symbolic link, owned by the kernel's user, with
    no permission for group or others; the kernel refuses to start otherwise.
-2. A credential is resolved only when a request to its service is built and is
+2. A credential is resolved only when a request to its service is built — a
+   service the installation gives no credential, or whose secret file is
+   missing, unreadable or holds an empty value or a control character, fails
+   that request's pre-send check `credential_unresolved` and stops nothing
+   else — and is
    added as that header. It never enters the store, a record, a trace, a preview, a
    failure detail, a log line, a process argument or a response.
 3. A function never receives a credential: its environment holds only the hash
@@ -179,8 +183,9 @@ concurrent connections.
    advancement it causes (A13), ends before the next begins, so an approval, a
    cancellation and a resume of one run never race.
 4. Value bytes and spooled files are written to a temporary file, flushed, checked
-   against their digest and size, and then renamed into place; a completed file is
-   never overwritten. Equal bytes are stored once. On start, temporary files and
+   against their digest and size, and then renamed into place; a completed file a record names is
+   never overwritten — a spooled file no record names, left by a change that
+   failed, is replaced at its position. Equal bytes are stored once. On start, temporary files and
    the spool directories of runs that ended and do not keep their spool (A14) are
    removed; nothing else is.
 5. Backup and restore are an operational procedure outside the kernel (K-10); the
