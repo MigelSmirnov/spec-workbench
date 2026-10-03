@@ -198,6 +198,20 @@ record checked by `design_lint --state 2`, recorded as such in `30_trace.json`.
   names to `store.remove_run_spool` every ended run that no longer keeps its
   spool (A14 rule 4) and then advances the runs left `running`; and only then
   the first request (A03 rule 8, A14 rule 5, A18 rule 4).
+- **Unconfirmed cleanup.** A03 rule 7 records the execution `crashed` with
+  `cleanup_failed` and then stops the kernel; the record comes first, so that
+  start-up recovery finds the element concluded and never executes it again.
+  `sandbox` only reports that outcome; it stops nothing. The module that called
+  `sandbox.execute_function` writes the execution's record in its usual store
+  call — `runs` the NodeExecution, `functions` the TrialExecution — then does
+  nothing more in that request: no further element, no further case, no
+  verdict, no activation, no run status. It returns the stop to its caller, and
+  `surface` ends the process: during a request after answering it as an
+  internal error (A16 rule 7), during the start by stopping the start. The
+  run is left `running`; the next start's recovery advances it from there with
+  that element concluded failed, so its dependants conclude `upstream_failed`
+  and independent branches go on (A13 rule 5, A14 rule 5); an interrupted admission has no verdict, so the next
+  submission of that implementation runs it again (A04 rule 2).
 - **Continuation tokens.** `surface` checks the token's form; whether it names
   a position of that list is answered by `store.page_records`, which refuses
   one that does not (A16 rule 6).
@@ -440,8 +454,8 @@ manifest_source
 A03: every execution of agent code, trial and real alike — the fresh
 `bubblewrap` environment, the in-sandbox runner and its traps, limits enforced
 from outside, the closed outcome order, the bounded `failure_detail`, confirmed
-cleanup and stopping the kernel when cleanup cannot be confirmed, and the start
-probe.
+cleanup, reporting an execution whose cleanup cannot be confirmed as `crashed`
+with `cleanup_failed` (above, "Unconfirmed cleanup"), and the start probe.
 
 ### Knows
 
@@ -451,7 +465,8 @@ deadline).
 ### Must not own
 
 Which implementation runs, what its outputs mean for a run or a verdict, where
-files go next, or any retry.
+files go next, any retry, or stopping the process — it reports, and its caller
+records before `surface` stops.
 
 ### Hides
 
@@ -737,7 +752,9 @@ against the installation's current list, the operation schemas and their
 bounds, the actor table of A16 rule 3, handling one request at a time to its
 end, run advancement included (A18 rule 3), paging parameters, the reads of
 inspection, traces and the repair view of a slot (A15 rule 6), and responses that
-carry no secret, path or stack trace. The single rule that an agent receives a
+carry no secret, path or stack trace; ending the process when a module returns
+the stop of an unconfirmed cleanup, after that module has written its record
+(above, "Unconfirmed cleanup"). The single rule that an agent receives a
 `personal_data` value or file only as digest and class, and a classified
 `failure_detail` only as length and class (A07 rules 4 and 5). The order of
 process start, every step required, as "Start" above lists it: installation,
