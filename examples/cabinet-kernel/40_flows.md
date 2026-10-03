@@ -585,7 +585,10 @@ call; the run's status and WaitingPoints M20 written by `module:runs`.
    (`capability:flows.active_flow_version`, the node read through
    `capability:flows.read_flow_version`) whose class is not `destructive`; a
    node already granted returns the active grant. A later send of that node in a
-   run pinned to that version uses the grant as its authority (step 2).
+   run pinned to that version uses the grant as its authority only where step 2
+   lets it: a `state-transition` or `external-effect` send with no matching
+   unused approval, not a resend after `not_applied`; a grant for a `read` or
+   `draft-write` node is never used (M25, A10 rule 6).
    `capability:effects.revoke_standing_approval` ends an active grant for every
    later send; an element already waiting keeps waiting for an approval. Grants
    move no run.
@@ -836,8 +839,8 @@ EffectAttempt M26 and the concluding NodeExecution M23 written by
    file of the kernel's user; tokens at least 43 characters and pairwise
    distinct (A16 rule 1, A17 rule 1).
 3. `capability:bindings.check_installed_instances`: no credential header has,
-   case-insensitively, the name of a required header of its instance (A09 rule
-   1). It reads only the installation —
+   case-insensitively, the name of a required header of its instance or of a
+   header the kernel sets itself, `host` included (A09 rule 1). It reads only the installation —
    `capability:installation.selected_instance_name` and
    `capability:installation.manifest_source` — and the manifest, never the
    store.
@@ -874,7 +877,7 @@ EffectAttempt M26 and the concluding NodeExecution M23 written by
 
 - Each start check failing stops the start and names why: configuration file
   mode, owner or token rules (`module:installation`); a credential header
-  colliding with a required header (`module:bindings`); lock held, directory
+  colliding with a required header or a kernel-set header (`module:bindings`); lock held, directory
   not private, a symbolic link (`module:store`); sandbox missing or probe
   failing (`module:sandbox`). The surface never opens; there is no partial
   start.

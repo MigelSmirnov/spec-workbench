@@ -94,8 +94,9 @@ record checked by `design_lint --state 2`, recorded as such in `30_trace.json`.
   conclusion, a slot's current activation — comes from the owning module's
   capability, never from `surface` re-deriving it. It gives the "unknown
   reference" refusal and masks under A07, computing an execution's class from
-  the records it returns and the classes `bindings.read_binding` declares
-  (A07 rule 5). A run is read through `runs.read_run` (below).
+  the records it returns only (A07 rule 5), and the class of an operation
+  execution's `failure_detail` from that class and the output classes
+  `bindings.read_binding` declares (A09 rule 7). A run is read through `runs.read_run` (below).
 - **Run answers.** The run's answer — status, outputs, and per flow output its
   value or the reason `skipped_by_guard` or `not_produced` (A13 rule 7) — is
   computed by `runs` from the trace when asked and is not stored; `runs.read_run`
@@ -169,7 +170,8 @@ record checked by `design_lint --state 2`, recorded as such in `30_trace.json`.
 - **Instance facts.** The instance's `api_base_url`, `required_headers` and
   class come from the manifest, read by `bindings`; the instance name and the
   credential header come from `installation`. The start check that no
-  credential header has the name of a required header (A09 rule 1) is
+  credential header has the name of a required header or of a header the
+  kernel sets itself, `host` included (A09 rule 1), is
   `bindings.check_installed_instances`, a required start step that `surface`
   calls right after `installation.load_installation` and before the store is
   opened; it reads only the installation and the manifest, never the store. At send `service_invoker` judges only the
@@ -822,8 +824,9 @@ the state named, by the module named:
 
 - State 5, `effects`: which of several approved, unused approvals with the same
   `request_digest` is used — possible after owner decision 18 when a restart
-  changes a header and changes it back.
+  changes a header and changes it back. Closed: State 5, closed question 2.
 - State 6, `bindings` and `effects`: whether a send whose declared
   idempotency-key field is `null` is refused.
 - State 5, `effects`: which FlowActivation M18 a `draft-write` send names as its
   authority (A10 rule 6) when the run's version was activated more than once.
+  Closed: State 5, closed question 3.

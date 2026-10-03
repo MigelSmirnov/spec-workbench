@@ -729,6 +729,8 @@ Only `store` opens the database; records are never edited (A01 rule 6).
 
 `unknown_reference` for the whole call when any named identity does not exist,
 naming the first missing one in the order given; nothing is returned.
+`internal_error` for a call whose relation arguments are a defect of its caller
+("Relations of `store.read_records`"), decided before any record is looked up.
 
 ### State impact
 
@@ -1194,8 +1196,10 @@ request_digest, or name the first pre-send failure.
 ### Inputs
 
 A ManifestOperation M10 with instance facts — its `service_id` names the
-service — the binding's input and output Ports, and the element's input values
-and file bytes by port.
+service —, beside it the selected instance's name exactly as
+`bindings.check_binding_current` returned it, absent when none is selected,
+the binding's input and output Ports, and the element's input values and file
+bytes by port.
 
 ### Outputs
 
@@ -1210,8 +1214,11 @@ None.
 
 ### Enforces
 
-State 3 order after the binding: no selected instance (no name), no
-`api_base_url` (a name without one), a repeated required header, a plain `http`
+State 3 order after the binding: no selected instance (no name) is
+`instance_not_selected`; no `api_base_url` (a name without one — whether the
+record lists no instance of that name, the instance has no `api_base_url`, or
+it is not an absolute `http` or `https` URL with a host, A08 rule 5) is
+`instance_address_missing`; a repeated required header, a plain `http`
 target not allowed, then the credential, then input placement, input ports in
 name order and a list's elements in list order, the first that cannot be placed
 named (A09 rules 1, 2, 4, 6); credential by name only in the description (A10
@@ -1730,7 +1737,7 @@ Reads the manifest.
 
 ### Owner
 
-`module:bindings`. At start, refuse a credential header that names a required header.
+`module:bindings`. At start, refuse a credential header that names a required header or a kernel-set header.
 
 ### Callers
 
@@ -1751,7 +1758,14 @@ None.
 ### Enforces
 
 No credential header has, case-insensitively, the name of a required header of
-its instance; reads installation and manifest only (A09 rule 1).
+its instance or one of `KERNEL_SET_HEADER_NAMES`, `host` included; reads
+installation and manifest only (A09 rule 1). The services checked are those the
+installation holds a credential for, in `service_id` code-point order; for
+each, the kernel-set names are compared first, without reading the manifest;
+then, only when the installation selects an instance for it, its manifest
+record is read and that instance's required headers compared. A service with
+no selected instance, or whose record lists no instance of the selected name,
+fails nothing here: it is not invocable at send (A09 rule 6).
 
 ### Errors
 
