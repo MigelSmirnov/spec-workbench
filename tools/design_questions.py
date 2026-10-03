@@ -4,9 +4,14 @@
     python tools/design_questions.py ask examples/<case> --state 1
     python tools/design_questions.py status examples/<case> --state 1
 
-`ask` runs one round (several independent reviews, grouped into topics) and
-keeps it under examples/<case>/questions/state<N>/. `status` exits 0 when the
-latest round closed the state and the texts have not changed since, 1 otherwise.
+    python tools/design_questions.py ask examples/<case> --state 1 --since <git-ref>
+
+`ask` runs one round (several independent reviews, grouped into topics; topics
+raised by two reviews are judged) and keeps it under
+examples/<case>/questions/state<N>/. `--since` reopens a state closed at that
+git ref: the judge sees the change and may set aside topics about passages the
+change did not touch. `status` exits 0 when the state is closed — two latest
+rounds clear on the same texts, unchanged since — and 1 otherwise.
 The method is skills/spec-authoring/QUESTIONS.md.
 """
 from __future__ import annotations
@@ -24,10 +29,16 @@ def _human_round(summary: dict) -> str:
     lines = [
         f"State {summary['state']} {summary['round']}: reviews={summary['reviews']} "
         f"points={summary['points']} topics={len(summary['topics'])} "
-        f"repeated={summary['repeated_topics']} closed={str(summary['closed']).lower()}"
+        f"repeated={summary['repeated_topics']} blocking={summary.get('blocking_topics', '-')} "
+        f"clear={str(summary.get('clear', not summary['repeated_topics'])).lower()} "
+        f"closed={str(summary['closed']).lower()}"
     ]
     for topic in summary["topics"]:
-        lines.append(f"  [{len(topic['runs'])}/{summary['reviews']}] {topic['topic']}")
+        verdict = ""
+        if "judgement" in topic:
+            j = topic["judgement"]
+            verdict = f" <{j['kind']}{'' if j['verified'] else ', UNVERIFIED: ' + j.get('failure', '')}{', BLOCKING' if j['blocking'] else ''}>"
+        lines.append(f"  [{len(topic['runs'])}/{summary['reviews']}] {topic['topic']}{verdict}")
     return "\n".join(lines)
 
 
@@ -40,6 +51,7 @@ def main(argv: list[str] | None = None) -> int:
     ask.add_argument("--runs", type=int, default=service.DEFAULT_RUNS)
     ask.add_argument("--model")
     ask.add_argument("--reasoning")
+    ask.add_argument("--since", help="git ref at which a reopened state was closed")
     ask.add_argument("--json", action="store_true")
     stat = sub.add_parser("status")
     stat.add_argument("case", type=Path)
@@ -48,7 +60,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         if args.command == "ask":
-            summary = service.ask_round(args.case, args.state, OpenAIProvider(args.model, args.reasoning), args.runs)
+            summary = service.ask_round(args.case, args.state, OpenAIProvider(args.model, args.reasoning), args.runs, args.since)
             print(json.dumps(summary, ensure_ascii=False, indent=2) if args.json else _human_round(summary))
             return 0 if summary["closed"] else 1
         result = service.status(args.case, args.state)
