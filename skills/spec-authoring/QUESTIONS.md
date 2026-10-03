@@ -29,6 +29,17 @@ reviews judged (below). The round is kept under
 with the texts' digests, every topic, how many reviews raised it and, for a
 repeated topic, its judgement.
 
+### Another model through the Codex CLI
+
+`--provider codex` asks through `codex exec` under the operator's ChatGPT login
+instead of the Responses API, for when the API cannot be used. That login does
+not serve the generator's model (`gpt-5.3-codex`), so the round asks another one
+(`gpt-5.6-sol` by default, `--model` to choose) and records it as
+`codex-cli:<model>:<reasoning>`; `status` names the provider of the latest round.
+Such a round finds real gaps, but not necessarily the ones the generator would
+guess at: before a state is handed to the Factory, close it again with the
+generator's own model.
+
 ## Judging a repeated topic
 
 Repetition says that reviews agree a question exists, not that it matters: a
