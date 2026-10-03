@@ -50,7 +50,10 @@ is.
    refuses; the installation selects no instance for the service or that
    instance has no `api_base_url` — one that is not an absolute `http` or
    `https` URL with a host counts as none — or names one required header
-   twice, names compared without regard to case; rule 4
+   twice, or names one the kernel sets itself (`host`, `accept-encoding`,
+   `content-type`, `content-length`, A10 rule 7), names compared without regard
+   to case — at send time both are A09 rule 6's `required_header_repeated`;
+   rule 4
    does not hold; or the ports do not fit
    the request shape of A09 rules 2 and 3, in that order, ports taken in name
    order; or its ports break a rule A02 sets for contract ports — unique names
@@ -119,7 +122,7 @@ outcomes map to NodeExecution statuses.
    mismatch — and the credential
    header the installation holds for that service (A17); an installation whose
    credential header has, compared without regard to case, the name of a required
-   header refuses to start. The
+   header, or of a header the kernel sets itself (A08 rule 5), refuses to start. The
    URL is the `api_base_url` without a trailing `/` followed by the declared
    path, which must start with one `/` and contain no `//`, no `.` or `..`
    segment, no `?` or `#`, and no scheme or host; a path that does not is not
@@ -142,7 +145,11 @@ outcomes map to NodeExecution statuses.
    `POST`, `PUT` and `PATCH`, a `multipart/form-data` body with one part per other
    input port, in port name order, named by the port — one part per file, in list order, for a `many`
    file port — a file part carrying its port's media type, a value
-   part carrying its canonical JSON (State 1). When proposed, a binding is refused unless, by its
+   part carrying its canonical JSON (State 1). Each part has exactly two
+   headers: `Content-Disposition: form-data; name="<port>"`, with
+   `filename="<port>"` added for a file part, and `Content-Type`, the port's
+   media type for a file part and `application/json` for a value part, without
+   parameters; nothing else. When proposed, a binding is refused unless, by its
    port declarations alone: every `{name}` of the path is an input port whose
    schema's `type` is `string` or `integer`; for `GET` and `DELETE`, no input is a
    `file` and every other input's schema `type` is `string`, `integer`, `number`,
@@ -160,7 +167,9 @@ outcomes map to NodeExecution statuses.
    parses as one JSON object without duplicate member names — its
    `Content-Type` is not checked — and each output port takes the member of the same name, which
    must validate against the port. Members no port names are ignored, and a
-   binding without output ports ignores the body.
+   binding without output ports reads the body only up to
+   `service_response_bytes_max` — a longer one is `contract_violation` by the
+   table of rule 5 — and does not parse or validate it.
 4. TLS is verified for `https`. Plain `http` is allowed only for an instance of
    class `local_dev` or `disposable_rig`, as the manifest instance's `class`
    states — an absent or unknown class counts as `production` — or one whose
@@ -257,7 +266,8 @@ generated statements, no suspension.
 2. Without either, the kernel records one approval request for the element —
    none when a `requested` one for it already exists, even if the request has
    changed since: when that one is approved and the send's digest differs, rule 1
-   applies and a new approval is requested — with the exact inputs
+   applies — the send goes under a grant when one covers it, otherwise a new
+   approval is requested — with the exact inputs
    and a preview — service, operation, effect class, the request as rule 7
    describes it with its `request_digest`, the input values and, for each file
    input, its digest, size and media type; an agent reading it gets a `personal_data` value or file only
@@ -291,12 +301,19 @@ generated statements, no suspension.
    `not_applied`, which records its fresh approval; a `read` send has no
    EffectAttempt.
 7. The request an approval covers is described, before sending, by: the method;
-   the full URL with its query (A09 rules 1 and 2); every header the kernel
-   sends, names lower-cased and in code-point order, each with its value, except
-   that the credential header appears by name only; and the body — the JSON
-   body's bytes, or for `multipart/form-data` the parts in order, each as its
-   name, media type and the SHA-256 of its content, so the boundary is not part
-   of it. The `request_digest` is the SHA-256 of the canonical JSON of that
+   the full URL with its query (A09 rules 1 and 2); every header sent on the
+   wire, names lower-cased and in code-point order, each with its value, except
+   that the credential header and `content-length` appear by name only — the
+   length follows from the body described — and the `multipart/form-data`
+   content type without its `boundary` parameter. The headers sent are exactly:
+   `host` — the authority of `api_base_url` exactly as the manifest writes it,
+   not normalized (A09 rule 1) —, `accept-encoding: identity` (A09 rule 3), the instance's required
+   headers, the credential header, and, with a body, `content-type` and
+   `content-length`; the HTTP client adds no other header (no user agent, no
+   connection header). The body is described as the JSON body's bytes, or for
+   `multipart/form-data` as the parts in order, each as its name, filename when
+   present, media type and the SHA-256 of its content, so the boundary is not
+   part of it: equal parts give equal descriptions. The `request_digest` is the SHA-256 of the canonical JSON of that
    description. The credential's value is never shown, so rotating it voids no
    approval; any other difference, whatever caused it, is a different request
    (owner decision 18).
@@ -354,9 +371,13 @@ trace records after the owner resolves an unknown outcome.
    Reaching an operation element runs in this order: the pre-send checks of
    A09 rule 6 — a failure writes the element's next NodeExecution,
    `operation_failed`; then the authority of A10 rule 1, checked as it stands
-   now — without it the element waits for approval, and after the approval this
+   now — none for a `read`, the flow activation for a `draft-write` that is not
+   a resend after `not_applied`, otherwise an approval or a grant; without it
+   the element waits for approval, and after the approval this
    order starts again; then, for an operation other than `read`, one store call
-   writes the EffectAttempt `in_flight`, naming the approval or grant it uses;
+   writes the EffectAttempt `in_flight`, naming the authority it uses — the
+   approval, the grant, or for a `draft-write` send the flow activation
+   (A10 rule 6);
    then the request is made; then one store call writes the outcome: the
    EffectAttempt's conclusion, the next NodeExecution, the values it produced,
    and the approval it used marked `used` — unless the attempt ended `not_sent`,

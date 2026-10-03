@@ -161,7 +161,9 @@ Reuses cabinet-flow decision 18, narrowed by K-09: no timed retries, no reconcil
 2. Resume, by the owner or an agent, sends again, in (`node_id`, `map_index`)
    order — an element without `map_index` before index 0 — every element waiting
    on `service_unreachable`. Each is reached again by the order of A11 rule 1, so
-   its authority is checked as it stands at the resume: its unused approval
+   its authority is checked as it stands at the resume (A10 rule 1): for a
+   `draft-write` element, the flow activation under which the run started,
+   unless it is a resend after `not_applied`; otherwise its unused approval
    (M24), which is used first when both exist, or a grant still active; an element whose grant was revoked meanwhile
    waits for approval instead. All these resends come first; only then does the
    run advance as A13 says. A run with no such element is refused;
