@@ -140,8 +140,10 @@ record checked by `design_lint --state 2`, recorded as such in `30_trace.json`.
   constants (the class the composing agent declared, A07 rule 2), `runs` for
   flow inputs (the port's class) and for function outputs, values and files
   alike (the highest class received), `effects` for service outputs, values and
-  files alike (the binding's declared class), `functions` for trial outputs
-  (the highest class of the case's inputs).
+  files alike (the binding's declared class), `functions` for trial cases and
+  trial outputs (a case input, authored or captured, the class its contract
+  input port declares; an expected output and a trial output, the highest class
+  of the case's inputs; M21).
 - **Owner decisions on effects.** Whether the run has ended is checked first
   by `runs`, which owns the run's status; whether the approval is `requested` or
   the attempt `unknown` is then checked by `effects`, which owns those records

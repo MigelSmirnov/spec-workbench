@@ -170,7 +170,8 @@ per-agent ceilings.
 3. At run time a value's class is set by the one rule of M21: a flow input takes
    its port's class, a constant its declared class, a function output the highest
    class its execution actually received, a binding output the class the binding
-   declares. No function, edge or flow construct lowers a class.
+   declares, a trial case's input its contract input port's class and its
+   expected output the highest class of the case's inputs. No function, edge or flow construct lowers a class.
 4. An agent never receives a `personal_data` value: wherever the surface would
    return one to an agent — run inputs and outputs, trial cases and executions,
    approval previews, trace records — it returns only the value's digest and class

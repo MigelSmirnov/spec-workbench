@@ -966,7 +966,10 @@ The kernel's store. The class of a value is set by exactly one rule: a flow
 input's value takes its flow input port's class (the kernel assigns it); a flow
 constant's value takes the class the composing agent declares with it; a
 function's output takes the highest class its execution received; a binding's
-output takes the class the binding declares (K-14).
+output takes the class the binding declares (K-14); a trial case's input value,
+authored or captured, takes the class its contract input port declares, and a
+trial case's expected output the highest class among that case's inputs, as a
+trial execution's output does (owner, 2026-10-03, raised by State 4 round 1).
 
 ### Lifecycle candidate
 

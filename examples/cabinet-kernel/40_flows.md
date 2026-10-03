@@ -71,11 +71,16 @@ AdmissionVerdict M08 and Activation M09 are written by `module:functions`.
    each value against its port with `capability:canonical_values.fit_port_value`,
    ports in name order — presence, carriage, schema,
    size — and the size ceilings `stored_value_bytes_max` and
-   `trial_fixture_bytes_max`, naming the first failure (A04 rule 1). Value
+   `trial_fixture_bytes_max`, naming the first failure (A04 rule 1). A
+   request field over those bounds never gets here: `module:surface` refuses
+   it at schema validation (A16 rule 4); the check of `module:functions`
+   decides for the canonical value and for captured cases, which do not
+   arrive as a request field. Value
    bytes and file fixtures go to the content-addressed area through
    `capability:store.put_value_bytes`, which stores equal bytes once (A18 rule
-   4); `module:functions` writes their StoredValues, each with the class the
-   input port declares (A07 rule 3), and the TrialCase in one
+   4); `module:functions` writes their StoredValues — an input with the class its
+   contract input port declares, an expected output with the highest class of
+   the case's inputs (M21, A07 rule 3) — and the TrialCase in one
    `capability:store.record_change`. The case's place in the corpus is the
    store's order of first addition; an equal case is that case and keeps its
    place. Next decision: the agent's.
@@ -136,6 +141,9 @@ AdmissionVerdict M08 and Activation M09 are written by `module:functions`.
   any operation (A16 rules 1, 3, 4); an agent without the author right asking
   to issue, add or submit is refused there. A caller-supplied content identity
   is refused by the operation (A01 rule 1).
+- A trial value or fixture over its bound as a request field: refused by
+  `module:surface` at schema validation, before `module:functions` (A16
+  rule 4).
 - Purpose, ceiling, port and case-fit refusals, unknown or foreign cases,
   `empty_corpus`: produced by `module:functions`, which names the first failing
   condition of the rule's order. Each refusal records nothing.
@@ -310,8 +318,11 @@ the answer and is not stored; FlowActivation M18 is written by `module:flows`.
 - Actor and schema refusals: `module:surface` (A16 rules 1, 3, 4). An agent's
   activation of an effectful version is not an actor refusal: it depends on the
   record named and is refused by `module:flows` (A16 rule 1, A06 rule 3).
-- Purpose and pre-proof refusals, and a constant above
-  `stored_value_bytes_max`: `module:flows`, recording nothing.
+- A constant over `stored_value_bytes_max` as a request field: refused by
+  `module:surface` at schema validation (A16 rule 4), before composition.
+- Purpose and pre-proof refusals: `module:flows`, recording nothing. A
+  constant whose value does not fit its port is a proof failure of phase 2,
+  not a composition refusal (A05 rules 1 and 7).
 - A proof failure is a result, not an error; activation turns it into a
   refusal with the same failure. `module:functions` and `module:bindings`
   only answer reads; they decide nothing for the proof.
@@ -673,7 +684,8 @@ page of NodeExecutions cross into `module:surface`.
    named, fits each value with `capability:canonical_values.fit_port_value`
    and each fixture against `trial_fixture_bytes_max` (A04 rule 1), computes
    `trial_case_id` with `capability:canonical_values.content_identity` and
-   writes the file-carriage StoredValues and the TrialCase; an equal case is
+   writes the file-carriage StoredValues, each with the class its contract
+   input port declares (M21), and the TrialCase; an equal case is
    that case. The corpus digest changes; the serving implementation keeps
    serving and visibly lacks a verdict over the current corpus (A04 rule 7).
 2. **Repair view.** `module:surface` takes the slot's contract versions and
@@ -763,7 +775,8 @@ EffectAttempt M26 and the concluding NodeExecution M23 written by
 6. `capability:effects.recover_in_flight_attempts`: every `in_flight` attempt
    becomes `unknown`, and when its attempt has no NodeExecution yet the
    `outcome_unknown` record is written with the attempt's number, its start
-   time and the recovery time as end (A11 rule 4). The service is not asked.
+   time and the recovery time as end (A11 rule 4), and the approval the attempt
+   named, if any, is marked `used` (A11 rule 1). The service is not asked.
 7. `capability:runs.recover_running_runs`: first names to
    `capability:store.remove_run_spool` every ended run that does not keep its
    spool (A14 rule 4, A18 rule 4); then, as the kernel actor, advances every
