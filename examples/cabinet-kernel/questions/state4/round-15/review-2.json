@@ -1,0 +1,161 @@
+{
+ "open_points": [
+  {
+   "subject": "flow proof references to missing contracts or bindings",
+   "kind": "contradictory failure",
+   "text": "State 4 says “A request naming a record that does not exist … is refused as State 0's unknown reference … never as a proof failure,” while A05 phase 1 and `flow:compose_prove_activate_flow` require the proof to check that “a function node names an existing contract version” and that an operation node names an accepted binding.",
+   "question": "When a stored flow version contains a reference to a nonexistent contract version or binding, is proving it refused as an unknown reference, or does it return a phase-1 proof failure?",
+   "options": [
+    "Refuse the proof request as an unknown reference",
+    "Return a phase-1 proof failure",
+    "Reject such references during composition"
+   ],
+   "default_guess": "Return a phase-1 proof failure because existence is explicitly part of the proof."
+  },
+  {
+   "subject": "binding proposal check order",
+   "kind": "contradictory order",
+   "text": "A08 rule 5 places invalid non-read idempotency-key syntax before instance checks, but `flow:propose_and_accept_binding` says the order is “invocable … the instance … with an `api_base_url` and no repeated required header, key fields …”.",
+   "question": "Which check wins when both the idempotency-key syntax and the selected instance are invalid?",
+   "options": [
+    "Use the complete A08 rule 5 order",
+    "Use the order written in the State 4 proposal flow"
+   ],
+   "default_guess": "Use the complete A08 rule 5 order."
+  },
+  {
+   "subject": "trial execution file outputs",
+   "kind": "contradictory persistence",
+   "text": "M07 says a trial file output records “only its facts — digest, size and media type, no bytes and never a StoredValue,” but `flow:author_and_admit_function` step 3 says `module:functions` “stores the outputs through capability:store.put_value_bytes”.",
+   "question": "Are bytes from trial file outputs discarded after their digest and size are computed, or stored in the content-addressed value area?",
+   "options": [
+    "Discard trial file-output bytes and retain only their facts",
+    "Store them as content-addressed bytes without a StoredValue",
+    "Store them as StoredValues"
+   ],
+   "default_guess": "Discard the bytes and retain only the M07 facts."
+  },
+  {
+   "subject": "StoredValue byte persistence in composition and runs",
+   "kind": "missing operation",
+   "text": "Composition says a new version “is written with its constants”; run start says it “writes the Run … and the input values”; function execution says `module:runs` “writes the element's NodeExecution and the outputs”; service execution says `module:effects` “writes … the output values”. None of these steps calls `capability:store.put_value_bytes`, although M21 stores value bytes and later execution reads them through `capability:store.read_value_bytes`.",
+   "question": "At what exact step and under whose call are the bytes for constants, run inputs, function value outputs and service value outputs published before their StoredValues become usable?",
+   "options": [
+    "Each producing module calls `store.put_value_bytes` before its record change",
+    "Their record-change capability atomically publishes the bytes as well",
+    "A separate orchestration step publishes all pending value bytes"
+   ],
+   "default_guess": "Each producing module calls `store.put_value_bytes` before writing the StoredValue and owning record."
+  },
+  {
+   "subject": "resume of an unreachable read operation",
+   "kind": "missing authority branch",
+   "text": "`flow:wait_resume_resolve_cancel` says resumed authority is checked as follows: “for a `draft-write` element … the flow activation …; otherwise the unused approval first, then a grant still active”. It gives no branch for a `read` element, although read operations can wait on `service_unreachable` and A11 says they require no authority.",
+   "question": "How does `effects.reach_operation_element` authorize the resumed send of a `read` operation?",
+   "options": [
+    "Send it without authority",
+    "Require an unused approval",
+    "Require a standing grant"
+   ],
+   "default_guess": "Send it without authority, as on its first attempt."
+  },
+  {
+   "subject": "draft-write approval behavior in the effect flow",
+   "kind": "contradictory trigger",
+   "text": "The trigger for `flow:run_effect_with_approval` says the active version has “operation nodes above `read`” and “The owner approves or refuses each effect,” while step 2 says “a `draft-write` node needs nothing at run time”.",
+   "question": "Does “each effect” in this flow include ordinary `draft-write` sends, or only the classes that K-08 stops for plus resends after `not_applied`?",
+   "options": [
+    "Ordinary draft writes send under flow activation without approval",
+    "Every non-read send requires approval",
+    "Split draft-write execution into a separate reviewed flow"
+   ],
+   "default_guess": "Ordinary draft writes send under flow activation; only their resend after `not_applied` requires approval."
+  },
+  {
+   "subject": "capture provenance and contract-version validation",
+   "kind": "missing capability input",
+   "text": "State 4 says `runs` calls `functions.add_captured_trial_case` with “the pinned contract version, the inputs and the file digests,” after which `module:functions` “checks that the record's contract version is the one named”. M23 does not contain a contract-version field, and the stated call does not pass the NodeExecution or executed implementation identity.",
+   "question": "What evidence lets `module:functions` verify that the captured execution belongs to the named contract version?",
+   "options": [
+    "`runs` resolves the executed implementation and performs this check before calling `functions`",
+    "Pass the executed implementation identity to `functions`",
+    "Pass the complete NodeExecution to `functions`"
+   ],
+   "default_guess": "Have `runs` resolve the NodeExecution's implementation through `functions.read_implementation` and validate the contract version before the add call."
+  },
+  {
+   "subject": "files copied during a refused capture",
+   "kind": "contradictory retention",
+   "text": "State 4 says files copied before `functions.add_captured_trial_case` refuses “stay in the content-addressed area, named by no record,” but K-10 says “The only files the kernel keeps beyond a run are the file fixtures of trial cases,” and the same State 4 paragraph says a captured file is “the only file that outlives its run”.",
+   "question": "Are unreferenced files from a refused capture retained permanently, removed, or staged so they are published only when the TrialCase is written?",
+   "options": [
+    "Remove unreferenced copied files after refusal",
+    "Stage and publish them atomically with the TrialCase",
+    "Retain them as an explicit exception to K-10"
+   ],
+   "default_guess": "Stage them and publish only when the TrialCase is successfully written."
+  },
+  {
+   "subject": "spool-ceiling failures for function outputs",
+   "kind": "missing outcome owner",
+   "text": "State 3 says `store.spool_file` checks the run spool ceilings and “`runs` for a function output” concludes `resource_exhausted`; State 4 only says function files “go to the run's spool” and attributes function `resource_exhausted` outcomes to `module:sandbox`.",
+   "question": "When a valid function file output exceeds the remaining run-spool allowance, which module converts the `store.spool_file` refusal into the NodeExecution outcome, and what cleanup occurs for files already spooled by that attempt?",
+   "options": [
+    "`runs` records `resource_exhausted` and `store` discards every file from that attempt",
+    "Treat it as an internal store error",
+    "Have `sandbox` enforce the run-wide spool limit"
+   ],
+   "default_guess": "`runs` records `resource_exhausted`, with `store` discarding files already spooled by that attempt."
+  },
+  {
+   "subject": "spool-ceiling failures for service outputs",
+   "kind": "contradictory outcome owner",
+   "text": "State 3 says `service_invoker` “never sees the run's spool” and `effects` concludes a service spool refusal `contract_violation`; State 4 says the invoker names the send outcome, then a returned file goes through `store.spool_file`, while its Errors section attributes `contract_violation` send outcomes to `module:service_invoker`.",
+   "question": "How is a successful 2xx file response changed into `contract_violation` when `store.spool_file` refuses it because of a file or run spool ceiling?",
+   "options": [
+    "`effects` overrides the invoker's successful result and records `contract_violation` with the EffectAttempt `applied`",
+    "`service_invoker` receives spool state and decides it",
+    "Treat spool refusal as an internal error"
+   ],
+   "default_guess": "`effects` records `contract_violation` and marks the already-sent EffectAttempt `applied`."
+  },
+  {
+   "subject": "release and terminal spool removal",
+   "kind": "unstated partial-failure outcome",
+   "text": "Release says it “records who and when, and `capability:store.remove_run_spool` removes the run's files”; cancellation, refusal and successful completion likewise combine a durable terminal state with spool removal, but no text says what remains authoritative if one change succeeds and the other fails.",
+   "question": "What observable run state and response result apply if recording the terminal or released state succeeds but spool removal fails, or spool removal succeeds but recording fails?",
+   "options": [
+    "Record state first, return an internal error on removal failure, and let startup cleanup retry",
+    "Remove files first and record afterward",
+    "Provide one recoverable store operation that coordinates the record and filesystem transition"
+   ],
+   "default_guess": "Record the state first, return an internal error if removal fails, and retry removal during startup cleanup."
+  },
+  {
+   "subject": "installed-instance start check",
+   "kind": "unstated failure outcome",
+   "text": "`bindings.check_installed_instances` must read selected instances and manifest records before the store opens, but the start flow names only credential-header collisions as its failure; it does not state the outcome when a selected service's manifest file is absent, malformed, unreadable, or lacks the selected instance.",
+   "question": "Does inability to read or interpret a selected instance stop kernel startup, or is that service deferred to binding proposal and pre-send failure?",
+   "options": [
+    "Stop startup with a named installation or manifest failure",
+    "Skip that service and defer failure until proposal or send",
+    "Check only records that are readable and ignore the rest"
+   ],
+   "default_guess": "Stop startup because the mandatory installed-instance check cannot be completed."
+  },
+  {
+   "subject": "store failures during startup recovery",
+   "kind": "missing failure outcome",
+   "text": "The State 4 preamble gives an internal-error response when a store call fails during a request, but `recover_in_flight_attempts` and `recover_running_runs` execute before the surface opens. Their steps perform reads, record changes and spool removals without stating what startup does if one of those store calls fails after earlier recovery changes committed.",
+   "question": "What does startup do on a store failure during effect or run recovery, and are already committed recovery changes retained?",
+   "options": [
+    "Stop startup immediately, retain committed changes, and retry remaining recovery on the next start",
+    "Roll back the entire recovery phase",
+    "Continue recovering other attempts and runs"
+   ],
+   "default_guess": "Stop startup immediately, retain completed atomic changes, and resume idempotent recovery on the next start."
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"flow proof references to missing contracts or bindings\",\"kind\":\"contradictory failure\",\"text\":\"State 4 says “A request naming a record that does not exist … is refused as State 0's unknown reference … never as a proof failure,” while A05 phase 1 and `flow:compose_prove_activate_flow` require the proof to check that “a function node names an existing contract version” and that an operation node names an accepted binding.\",\"question\":\"When a stored flow version contains a reference to a nonexistent contract version or binding, is proving it refused as an unknown reference, or does it return a phase-1 proof failure?\",\"options\":[\"Refuse the proof request as an unknown reference\",\"Return a phase-1 proof failure\",\"Reject such references during composition\"],\"default_guess\":\"Return a phase-1 proof failure because existence is explicitly part of the proof.\"},{\"subject\":\"binding proposal check order\",\"kind\":\"contradictory order\",\"text\":\"A08 rule 5 places invalid non-read idempotency-key syntax before instance checks, but `flow:propose_and_accept_binding` says the order is “invocable … the instance … with an `api_base_url` and no repeated required header, key fields …”.\",\"question\":\"Which check wins when both the idempotency-key syntax and the selected instance are invalid?\",\"options\":[\"Use the complete A08 rule 5 order\",\"Use the order written in the State 4 proposal flow\"],\"default_guess\":\"Use the complete A08 rule 5 order.\"},{\"subject\":\"trial execution file outputs\",\"kind\":\"contradictory persistence\",\"text\":\"M07 says a trial file output records “only its facts — digest, size and media type, no bytes and never a StoredValue,” but `flow:author_and_admit_function` step 3 says `module:functions` “stores the outputs through capability:store.put_value_bytes”.\",\"question\":\"Are bytes from trial file outputs discarded after their digest and size are computed, or stored in the content-addressed value area?\",\"options\":[\"Discard trial file-output bytes and retain only their facts\",\"Store them as content-addressed bytes without a StoredValue\",\"Store them as StoredValues\"],\"default_guess\":\"Discard the bytes and retain only the M07 facts.\"},{\"subject\":\"StoredValue byte persistence in composition and runs\",\"kind\":\"missing operation\",\"text\":\"Composition says a new version “is written with its constants”; run start says it “writes the Run … and the input values”; function execution says `module:runs` “writes the element's NodeExecution and the outputs”; service execution says `module:effects` “writes … the output values”. None of these steps calls `capability:store.put_value_bytes`, although M21 stores value bytes and later execution reads them through `capability:store.read_value_bytes`.\",\"question\":\"At what exact step and under whose call are the bytes for constants, run inputs, function value outputs and service value outputs published before their StoredValues become usable?\",\"options\":[\"Each producing module calls `store.put_value_bytes` before its record change\",\"Their record-change capability atomically publishes the bytes as well\",\"A separate orchestration step publishes all pending value bytes\"],\"default_guess\":\"Each producing module calls `store.put_value_bytes` before writing the StoredValue and owning record.\"},{\"subject\":\"resume of an unreachable read operation\",\"kind\":\"missing authority branch\",\"text\":\"`flow:wait_resume_resolve_cancel` says resumed authority is checked as follows: “for a `draft-write` element … the flow activation …; otherwise the unused approval first, then a grant still active”. It gives no branch for a `read` element, although read operations can wait on `service_unreachable` and A11 says they require no authority.\",\"question\":\"How does `effects.reach_operation_element` authorize the resumed send of a `read` operation?\",\"options\":[\"Send it without authority\",\"Require an unused approval\",\"Require a standing grant\"],\"default_guess\":\"Send it without authority, as on its first attempt.\"},{\"subject\":\"draft-write approval behavior in the effect flow\",\"kind\":\"contradictory trigger\",\"text\":\"The trigger for `flow:run_effect_with_approval` says the active version has “operation nodes above `read`” and “The owner approves or refuses each effect,” while step 2 says “a `draft-write` node needs nothing at run time”.\",\"question\":\"Does “each effect” in this flow include ordinary `draft-write` sends, or only the classes that K-08 stops for plus resends after `not_applied`?\",\"options\":[\"Ordinary draft writes send under flow activation without approval\",\"Every non-read send requires approval\",\"Split draft-write execution into a separate reviewed flow\"],\"default_guess\":\"Ordinary draft writes send under flow activation; only their resend after `not_applied` requires approval.\"},{\"subject\":\"capture provenance and contract-version validation\",\"kind\":\"missing capability input\",\"text\":\"State 4 says `runs` calls `functions.add_captured_trial_case` with “the pinned contract version, the inputs and the file digests,” after which `module:functions` “checks that the record's contract version is the one named”. M23 does not contain a contract-version field, and the stated call does not pass the NodeExecution or executed implementation identity.\",\"question\":\"What evidence lets `module:functions` verify that the captured execution belongs to the named contract version?\",\"options\":[\"`runs` resolves the executed implementation and performs this check before calling `functions`\",\"Pass the executed implementation identity to `functions`\",\"Pass the complete NodeExecution to `functions`\"],\"default_guess\":\"Have `runs` resolve the NodeExecution's implementation through `functions.read_implementation` and validate the contract version before the add call.\"},{\"subject\":\"files copied during a refused capture\",\"kind\":\"contradictory retention\",\"text\":\"State 4 says files copied before `functions.add_captured_trial_case` refuses “stay in the content-addressed area, named by no record,” but K-10 says “The only files the kernel keeps beyond a run are the file fixtures of trial cases,” and the same State 4 paragraph says a captured file is “the only file that outlives its run”.\",\"question\":\"Are unreferenced files from a refused capture retained permanently, removed, or staged so they are published only when the TrialCase is written?\",\"options\":[\"Remove unreferenced copied files after refusal\",\"Stage and publish them atomically with the TrialCase\",\"Retain them as an explicit exception to K-10\"],\"default_guess\":\"Stage them and publish only when the TrialCase is successfully written.\"},{\"subject\":\"spool-ceiling failures for function outputs\",\"kind\":\"missing outcome owner\",\"text\":\"State 3 says `store.spool_file` checks the run spool ceilings and “`runs` for a function output” concludes `resource_exhausted`; State 4 only says function files “go to the run's spool” and attributes function `resource_exhausted` outcomes to `module:sandbox`.\",\"question\":\"When a valid function file output exceeds the remaining run-spool allowance, which module converts the `store.spool_file` refusal into the NodeExecution outcome, and what cleanup occurs for files already spooled by that attempt?\",\"options\":[\"`runs` records `resource_exhausted` and `store` discards every file from that attempt\",\"Treat it as an internal store error\",\"Have `sandbox` enforce the run-wide spool limit\"],\"default_guess\":\"`runs` records `resource_exhausted`, with `store` discarding files already spooled by that attempt.\"},{\"subject\":\"spool-ceiling failures for service outputs\",\"kind\":\"contradictory outcome owner\",\"text\":\"State 3 says `service_invoker` “never sees the run's spool” and `effects` concludes a service spool refusal `contract_violation`; State 4 says the invoker names the send outcome, then a returned file goes through `store.spool_file`, while its Errors section attributes `contract_violation` send outcomes to `module:service_invoker`.\",\"question\":\"How is a successful 2xx file response changed into `contract_violation` when `store.spool_file` refuses it because of a file or run spool ceiling?\",\"options\":[\"`effects` overrides the invoker's successful result and records `contract_violation` with the EffectAttempt `applied`\",\"`service_invoker` receives spool state and decides it\",\"Treat spool refusal as an internal error\"],\"default_guess\":\"`effects` records `contract_violation` and marks the already-sent EffectAttempt `applied`.\"},{\"subject\":\"release and terminal spool removal\",\"kind\":\"unstated partial-failure outcome\",\"text\":\"Release says it “records who and when, and `capability:store.remove_run_spool` removes the run's files”; cancellation, refusal and successful completion likewise combine a durable terminal state with spool removal, but no text says what remains authoritative if one change succeeds and the other fails.\",\"question\":\"What observable run state and response result apply if recording the terminal or released state succeeds but spool removal fails, or spool removal succeeds but recording fails?\",\"options\":[\"Record state first, return an internal error on removal failure, and let startup cleanup retry\",\"Remove files first and record afterward\",\"Provide one recoverable store operation that coordinates the record and filesystem transition\"],\"default_guess\":\"Record the state first, return an internal error if removal fails, and retry removal during startup cleanup.\"},{\"subject\":\"installed-instance start check\",\"kind\":\"unstated failure outcome\",\"text\":\"`bindings.check_installed_instances` must read selected instances and manifest records before the store opens, but the start flow names only credential-header collisions as its failure; it does not state the outcome when a selected service's manifest file is absent, malformed, unreadable, or lacks the selected instance.\",\"question\":\"Does inability to read or interpret a selected instance stop kernel startup, or is that service deferred to binding proposal and pre-send failure?\",\"options\":[\"Stop startup with a named installation or manifest failure\",\"Skip that service and defer failure until proposal or send\",\"Check only records that are readable and ignore the rest\"],\"default_guess\":\"Stop startup because the mandatory installed-instance check cannot be completed.\"},{\"subject\":\"store failures during startup recovery\",\"kind\":\"missing failure outcome\",\"text\":\"The State 4 preamble gives an internal-error response when a store call fails during a request, but `recover_in_flight_attempts` and `recover_running_runs` execute before the surface opens. Their steps perform reads, record changes and spool removals without stating what startup does if one of those store calls fails after earlier recovery changes committed.\",\"question\":\"What does startup do on a store failure during effect or run recovery, and are already committed recovery changes retained?\",\"options\":[\"Stop startup immediately, retain committed changes, and retry remaining recovery on the next start\",\"Roll back the entire recovery phase\",\"Continue recovering other attempts and runs\"],\"default_guess\":\"Stop startup immediately, retain completed atomic changes, and resume idempotent recovery on the next start.\"}]}"
+}

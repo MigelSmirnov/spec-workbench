@@ -1,0 +1,354 @@
+{
+ "open_points": [
+  {
+   "subject": "Function sandbox filesystem access",
+   "kind": "contradiction",
+   "text": "K-02 says a function has \"no filesystem beyond its input\"; A03 rule 1 gives it \"one private exchange directory\" and rule 4 permits opening paths inside that directory.",
+   "question": "May agent-written code read and write arbitrary scratch files inside the exchange directory, or is filesystem access limited to kernel-created input/output files?",
+   "options": [
+    "Permit arbitrary access inside the private exchange directory",
+    "Permit only designated input and output paths",
+    "Expose file inputs and outputs without any user-visible filesystem API"
+   ],
+   "default_guess": "Permit arbitrary access inside the bounded private exchange directory."
+  },
+  {
+   "subject": "Deterministic pseudorandomness",
+   "kind": "contradiction",
+   "text": "K-02 says a function has \"no randomness\"; A03 rule 4 says \"random.Random(seed) with an explicit seed stays usable.\"",
+   "question": "Does the prohibition cover deterministic seeded pseudorandom generation, or only entropy and implicit seeding?",
+   "options": [
+    "Allow explicitly seeded pseudorandom generation",
+    "Prohibit every random-module generator",
+    "Allow it only with a fixed kernel-supplied seed"
+   ],
+   "default_guess": "Allow explicitly seeded pseudorandom generation."
+  },
+  {
+   "subject": "Deterministic admission",
+   "kind": "unverifiable invariant",
+   "text": "K-05 calls admission \"a deterministic verdict\" and A03 requires that the same implementation on the same input yield the same output digest, but the sandbox rules do not prohibit other process-dependent observations such as object addresses, scheduling, runtime metadata or all standard-library sources of nondeterminism.",
+   "question": "What enforceable condition makes executions deterministic, and what happens when identical executions produce different outputs?",
+   "options": [
+    "Define determinism only as deterministic evaluation of the observations from one admission",
+    "Run cases repeatedly and refuse inconsistent implementations",
+    "Expand the sandbox restrictions to exclude every supported nondeterministic observation"
+   ],
+   "default_guess": "Treat the verdict calculation as deterministic over the single recorded execution set, without claiming arbitrary Python code is reproducible."
+  },
+  {
+   "subject": "Resource-limit outcome detection",
+   "kind": "unverifiable invariant",
+   "text": "A03 rule 5 says \"a limit hit (memory, process count, scratch, output_bytes)\" decides `resource_exhausted`, including when this precedes `crashed`, but it does not define observable evidence of a memory, process or scratch limit hit when Python catches the resulting exception and returns normally.",
+   "question": "What exact observable events count as a resource limit hit, especially when the program catches `MemoryError`, `OSError` or an allocation/write/fork failure?",
+   "options": [
+    "Any kernel-level denial is instrumented and reported to the parent",
+    "Only process termination or externally measurable excess counts",
+    "A caught denial does not count if the function later returns successfully"
+   ],
+   "default_guess": "Instrument denials and record them out of band so any actual limit denial yields `resource_exhausted`."
+  },
+  {
+   "subject": "Sandbox outcome precedence",
+   "kind": "contradiction",
+   "text": "A03 rule 5 says the first outcome is `timeout`, then `resource_exhausted`, then `sandbox_violation`; its formal invariant says `trap_raised -> outcome = sandbox_violation`; rule 7 says unconfirmed cleanup is recorded `crashed` with `cleanup_failed`.",
+   "question": "Which outcome is recorded when a trap and a timeout or resource exhaustion both occur, or when cleanup fails after one of those outcomes?",
+   "options": [
+    "Always use rule 5's precedence",
+    "Let `cleanup_failed` override every earlier outcome",
+    "Use rule 5 for execution and record cleanup failure separately"
+   ],
+   "default_guess": "Use rule 5's precedence, except make cleanup failure a separate fatal kernel condition rather than replacing the execution outcome."
+  },
+  {
+   "subject": "Sandbox stdout and stderr",
+   "kind": "missing bound",
+   "text": "A03 rule 6 says \"Nothing the code prints or raises is interpreted\" and stdout is never kept, but no rule says whether stdout or stderr is drained, capped, discarded, or whether excessive writes cause a failure.",
+   "question": "How are stdout and stderr handled, and what outcome results if code emits unbounded output?",
+   "options": [
+    "Redirect both to a bounded sink and classify overflow `resource_exhausted`",
+    "Discard both directly without counting them",
+    "Capture bounded stderr only for exception diagnostics"
+   ],
+   "default_guess": "Discard stdout and bound diagnostic stderr, classifying an exceeded bound as `resource_exhausted`."
+  },
+  {
+   "subject": "Authored trial-case port coverage",
+   "kind": "vague validation",
+   "text": "A04 rule 1 requires that trial-case inputs and expected outputs \"fit\" the contract ports and mentions checking \"presence, carriage, schema, then size\", but it does not say whether inputs must contain exactly every input port or whether expected outputs may be partial.",
+   "question": "Must authored inputs and present expected outputs name exactly all corresponding contract ports, with no missing or extra names?",
+   "options": [
+    "Inputs and expected outputs are both exact port maps",
+    "Inputs are exact but expected outputs may be a subset",
+    "Both maps may be partial"
+   ],
+   "default_guess": "Require exact inputs and, when expected outputs are present, exact outputs."
+  },
+  {
+   "subject": "Many-valued flow constants",
+   "kind": "missing rule",
+   "text": "A05 phase 2 says a constant's value must fit the target port's schema, while A13 says a value on a `many` port is a JSON array whose elements fit the port schema; no constant rule states the required representation or element validation for a `many` target.",
+   "question": "How is a constant targeting a `many` input validated, and may such a constant supply a node's `map_over` port?",
+   "options": [
+    "Require an array, validate each element, and allow it to drive `map_over`",
+    "Require an array but prohibit constants on `map_over`",
+    "Prohibit constants on all `many` ports"
+   ],
+   "default_guess": "Require an array whose elements fit the schema and allow it to drive `map_over`."
+  },
+  {
+   "subject": "Guards on many or mapped outputs",
+   "kind": "undefined comparison",
+   "text": "M15 permits a guard on an output whose schema is a closed set; A05 says every output of a mapped node is `many`; A13 says a guarded edge compares the guard port's value with one member of the closed set. It does not say how a list is compared with a scalar guard member.",
+   "question": "Are guard ports required to have effective cardinality `one`, or do guards on `many` outputs have element-wise or whole-list semantics?",
+   "options": [
+    "Require guard ports to be effective cardinality `one`",
+    "Compare the complete list to the guard literal",
+    "Evaluate the guard independently for each mapped element"
+   ],
+   "default_guess": "Require guard ports to have effective cardinality `one`."
+  },
+  {
+   "subject": "Mapped-node aggregate outputs and trace",
+   "kind": "model conflict",
+   "text": "A13 rule 6 says a mapped node's collected value list is written \"in the store change that records the node's conclusion\"; A15 rule 1 says \"A mapped node's trace is its elements' records\" and gives it no aggregate NodeExecution except when it ran no element, was skipped or was upstream-failed.",
+   "question": "Which record names the aggregate output lists and the mapped node's aggregate conclusion after one or more elements run?",
+   "options": [
+    "Create a separate aggregate NodeExecution without `map_index`",
+    "Derive the aggregate entirely from element NodeExecutions and do not record a separate conclusion",
+    "Add a distinct mapped-node conclusion model"
+   ],
+   "default_guess": "Derive the conclusion and collected outputs from element records, while explicitly storing references to the derived collections in the run."
+  },
+  {
+   "subject": "Disclosure class of mapped elements",
+   "kind": "ambiguous propagation",
+   "text": "A13 rule 6 says a mapped output list has the highest class among its elements; value lists become one StoredValue, while file lists remain separate SpooledFiles with their own classes. It does not say what class a later mapped consumer receives for one extracted element.",
+   "question": "When a downstream mapped node consumes an element of a classified list, does it receive the aggregate list class or that element's original class?",
+   "options": [
+    "Every extracted element inherits the aggregate list class",
+    "Each element retains its own class",
+    "Value lists use aggregate class while file lists use per-file class"
+   ],
+   "default_guess": "Every extracted element inherits the aggregate list class so a map cannot lower disclosure."
+  },
+  {
+   "subject": "Receiving-node contract violations",
+   "kind": "model contradiction",
+   "text": "A13 rule 3 allows a receiving node to conclude `contract_violation` before the value enters it, and A15 rule 5 explicitly calls this a node that \"concluded without running\". M23 says `executed` is absent only for `skipped_by_guard` and `upstream_failed`, and says `resources_used` is present for a function node.",
+   "question": "What do `executed`, `resources_used`, timestamps and attempt identity contain for a receiving node that concludes `contract_violation` without executing?",
+   "options": [
+    "Allow `executed` and `resources_used` to be absent for this status",
+    "Attribute the violation to the producer so the receiver has no record",
+    "Record the pinned implementation or binding as `executed` despite not invoking it"
+   ],
+   "default_guess": "Allow `executed` and `resources_used` to be absent and explicitly mark the attempt as pre-execution."
+  },
+  {
+   "subject": "Outputs of failed executions",
+   "kind": "missing persistence rule",
+   "text": "M07 and M23 allow `outputs` \"when produced\", while A03 and A09 define failures that may occur after some outputs or bytes exist; no rule says whether validated partial outputs are stored, traced or discarded when the overall attempt fails.",
+   "question": "Which outputs, if any, are retained for `contract_violation`, `resource_exhausted`, `crashed`, `operation_failed` and other failed outcomes?",
+   "options": [
+    "Discard all outputs unless the attempt succeeds",
+    "Keep each independently validated output",
+    "Keep output facts for diagnostics but never deliver them"
+   ],
+   "default_guess": "Discard attempt outputs unless the attempt succeeds, except for explicitly retained bounded failure diagnostics."
+  },
+  {
+   "subject": "Agent view of approval previews",
+   "kind": "undefined redaction",
+   "text": "A10 rule 2 includes the built request, full URL, input values and file metadata in the preview; A07 rule 4 says an agent receives a personal-data value or file only as digest and class, with no size, media type or spool facts.",
+   "question": "How is a built URL, query, JSON body, multipart description or header containing personal data represented to an agent without revealing that data?",
+   "options": [
+    "Return a structurally redacted request with each personal field replaced by digest and class",
+    "Omit the built request entirely when any part is personal",
+    "Return only `request_digest` plus non-personal request components"
+   ],
+   "default_guess": "Return a structurally redacted request plus its unchanged `request_digest`, replacing every personal-derived component with digest and class."
+  },
+  {
+   "subject": "Multipart boundary in effect approval",
+   "kind": "contradiction",
+   "text": "State 0 decision 18 says an approval covers the fully built request and \"Any difference at send ... asks again\"; A10 rule 7 excludes the multipart boundary from the request description and says equal parts give equal descriptions.",
+   "question": "Does changing the multipart boundary between approval and send invalidate the approval?",
+   "options": [
+    "Boundary changes invalidate approval like every other wire difference",
+    "The boundary is explicitly outside approval identity",
+    "The boundary must be fixed before approval and reused at send"
+   ],
+   "default_guess": "Treat the boundary as outside approval identity, following A10's detailed rule."
+  },
+  {
+   "subject": "Grant eligibility and refusal order",
+   "kind": "missing conditions",
+   "text": "A10 rule 5 says a grant is for \"a node of the flow's active version whose effect class is not `destructive`\" but does not explicitly refuse function nodes, missing nodes or nodes without an accepted operation binding, nor give the check order among version activity, node kind, effect class and an existing grant.",
+   "question": "What exact nodes are grantable, and in what order are invalid-version, missing-node, wrong-kind, destructive and already-granted conditions checked?",
+   "options": [
+    "Only accepted operation nodes are grantable, with existence and active-version checks before effect class",
+    "Any node identifier is grantable unless destructive",
+    "Only the three approval-stopping effect classes are grantable"
+   ],
+   "default_guess": "Allow only operation nodes of the currently active version; check version and node existence, then node kind, then effect class, then existing grant."
+  },
+  {
+   "subject": "Agent-name uniqueness after configuration reload",
+   "kind": "contradiction",
+   "text": "M27 says agent names are unique and \"a configuration repeating one is refused at start\"; A16 rule 2 says exactly three checks apply to a token-list re-read, and duplicate agent names are not one of them.",
+   "question": "What happens when a live token-list reload introduces two agents with the same name?",
+   "options": [
+    "Refuse the reload as at startup",
+    "Accept duplicate names because only tokens identify actors",
+    "Keep the old list"
+   ],
+   "default_guess": "Refuse the reload and all requests until agent names are unique."
+  },
+  {
+   "subject": "Atomic configuration reload",
+   "kind": "race ambiguity",
+   "text": "A16 rule 2 says the kernel reads the file to compare its byte digest and, when changed, \"re-reads it\" to obtain the token list; it does not say which snapshot wins if the file changes between those reads.",
+   "question": "Must digest comparison and parsing use the same captured byte sequence, and how is a concurrent replacement handled?",
+   "options": [
+    "Read one immutable byte snapshot and both hash and parse it",
+    "Read twice and retry until both reads match",
+    "Accept the second read and store its digest"
+   ],
+   "default_guess": "Read one safely opened byte snapshot, then hash and parse exactly those bytes."
+  },
+  {
+   "subject": "Global startup-check order",
+   "kind": "missing precedence",
+   "text": "A03, A09, A16, A17, A18, M27 and A20 each define startup refusals, while A03 says its sandbox check occurs before recovery and the surface, but no text orders all startup checks against one another.",
+   "question": "Which failure is reported first when configuration, token, credential-header, data-directory, dependency and sandbox checks fail together, and when may recovery begin?",
+   "options": [
+    "Define one global ordered startup checklist",
+    "Report all startup failures together",
+    "Allow module initialization order to decide"
+   ],
+   "default_guess": "Use one explicit checklist: configuration and filesystem security, release dependencies and sandbox, store opening, then recovery, then surface opening."
+  },
+  {
+   "subject": "Store record position",
+   "kind": "undefined identity",
+   "text": "A01 says activation records are identified by \"their position in the store's one order of records\" and A16 uses store positions for paging, but no rule defines the position type or the ordering of several records created in one transaction.",
+   "question": "What is a store position, and how are positions assigned deterministically to multiple new records in one store call?",
+   "options": [
+    "A single monotonically increasing sequence assigned in a specified record order",
+    "SQLite row identifiers independently per table",
+    "Transaction position plus a deterministic sub-index"
+   ],
+   "default_guess": "Use one durable monotonically increasing sequence with a specified sub-order for every record created by a call."
+  },
+  {
+   "subject": "Durability before external effects",
+   "kind": "unverifiable invariant",
+   "text": "A11 requires `in_flight_recorded_before_send`; A18 requires only a SQLite transaction and does not state that a successful commit is durably flushed before the first request byte is written.",
+   "question": "What durability guarantee must the store call satisfy before an external effect may be sent?",
+   "options": [
+    "The commit and required filesystem metadata must be durably synced before sending",
+    "A successful database commit without forced sync is sufficient",
+    "Durability is delegated to SQLite defaults"
+   ],
+   "default_guess": "Require durable commit and sync before sending the first request byte."
+  },
+  {
+   "subject": "Database and content-file atomicity",
+   "kind": "atomicity gap",
+   "text": "A18 rule 3 says \"A call that fails changes nothing\"; rule 4 publishes value and fixture files by rename, while SQLite records are committed separately, and startup removes temporary files but \"nothing else\".",
+   "question": "How does one store call avoid an orphan published file or a database record naming a missing file when it crashes or fails between file publication and database commit?",
+   "options": [
+    "Use a defined write-ahead publication protocol with startup reconciliation",
+    "Allow unreferenced complete files and garbage-collect them",
+    "Store all durable bytes inside SQLite"
+   ],
+   "default_guess": "Use a write-ahead publication protocol and reconcile incomplete or unreferenced publications at startup."
+  },
+  {
+   "subject": "Store-call failure handling",
+   "kind": "missing failure behavior",
+   "text": "A18 says a failed store call changes nothing, but no rule says whether the kernel stops, returns an internal refusal, or continues when persistence fails before or after an HTTP effect.",
+   "question": "What must the caller do after each class of store failure, especially failure to record an effect outcome after the request may have been sent?",
+   "options": [
+    "Stop the kernel and recover any durable `in_flight` attempt as unknown",
+    "Return an internal error but keep serving",
+    "Retry the store call in place"
+   ],
+   "default_guess": "Do not send if the pre-send write fails; after a post-send persistence failure, stop the kernel so recovery converts the durable in-flight attempt to unknown."
+  },
+  {
+   "subject": "Data-directory privacy check",
+   "kind": "vague refusal condition",
+   "text": "A18 rule 2 says the data directory and everything in it are \"private to the kernel's user\" and the kernel refuses to start otherwise, but unlike A17 it does not define ownership, required file type or permitted mode bits.",
+   "question": "What exact ownership, file-type and permission checks define a private data directory, database, value area, fixtures and spool?",
+   "options": [
+    "Require ownership by the kernel user and no group/other permission on every entry",
+    "Require only that group/other cannot write",
+    "Rely on accessibility checks rather than mode bits"
+   ],
+   "default_guess": "Require all entries to be owned by the kernel user, be of the expected regular-file or directory type, and have no group or other permissions."
+  },
+  {
+   "subject": "Manifest revision resolution",
+   "kind": "missing mechanism",
+   "text": "M28 and A08 say records are read from `manifest_location` \"at the configured `manifest_revision`\", but do not define how a revision is resolved, pinned or read without changing the working tree.",
+   "question": "What storage format and operation resolve `manifest_revision` to immutable manifest bytes, and what failures count as an absent or unreadable record?",
+   "options": [
+    "Read Git objects directly at the named commit",
+    "Require `manifest_location` to be an already materialized immutable revision",
+    "Use a versioned manifest API"
+   ],
+   "default_guess": "Read the manifest file directly from a validated Git commit object without changing a working tree."
+  },
+  {
+   "subject": "Service base URL",
+   "kind": "underspecified URL rules",
+   "text": "A08 accepts any absolute `http` or `https` URL with a host; A09 forms the target by removing a trailing slash and appending the operation path, but does not address user information, query, fragment, base paths, percent escapes, IPv6 authority formatting or multiple trailing slashes.",
+   "question": "Which exact base-URL forms are valid, and what byte-level URL results from joining them to an operation path?",
+   "options": [
+    "Allow only scheme plus authority with no userinfo, path, query or fragment",
+    "Allow a normalized base path but prohibit query, fragment and userinfo",
+    "Apply a specified standard URL-resolution algorithm"
+   ],
+   "default_guess": "Allow only `http` or `https` scheme plus authority, with no userinfo, query or fragment, and at most an empty base path."
+  },
+  {
+   "subject": "HTTP header names and values",
+   "kind": "missing validation",
+   "text": "A09 sends required headers and the credential header, and A10 places required values \"verbatim\" on the wire; the texts check duplicate and reserved names but give no grammar for header names or values and no handling of control characters.",
+   "question": "What syntax is accepted for manifest and credential header names and for required-header values, and how are CR, LF, NUL and other invalid bytes handled?",
+   "options": [
+    "Validate names as HTTP field names and values as field values, rejecting controls",
+    "Delegate validation to the HTTP library",
+    "Escape invalid characters before sending"
+   ],
+   "default_guess": "Strictly validate HTTP field-name and field-value syntax and refuse invalid manifest or configuration data before sending."
+  },
+  {
+   "subject": "Multipart request encoding",
+   "kind": "underspecified wire format",
+   "text": "A09 specifies multipart parts and headers, and A10 excludes the boundary from approval identity, but neither specifies boundary generation, CRLF framing, quoting or escaping of port names and filenames, or collision handling when a boundary occurs in content.",
+   "question": "What exact multipart encoder is required, including safe disposition quoting and boundary collision rules?",
+   "options": [
+    "Define a deterministic canonical multipart encoding",
+    "Use a random boundary with mandatory collision checking and fixed framing",
+    "Delegate encoding to the pinned HTTP library"
+   ],
+   "default_guess": "Use fixed RFC-compliant framing, strict escaping, and a generated boundary checked not to occur in any part."
+  },
+  {
+   "subject": "Failure-detail encoding and secret removal",
+   "kind": "contradiction",
+   "text": "A09 permits a bounded excerpt of an arbitrary HTTP error body as `failure_detail`; A20 truncates it at a UTF-8 boundary; A17 says a credential never enters a failure detail. An error body may be non-UTF-8 or may echo the credential.",
+   "question": "How are arbitrary response bytes converted to failure detail, and how is an echoed credential guaranteed not to appear?",
+   "options": [
+    "Decode with a specified replacement policy and redact exact credential byte sequences before truncation",
+    "Keep only a status-derived fixed message and no response-body excerpt",
+    "Base64-encode bytes after credential redaction"
+   ],
+   "default_guess": "Decode with UTF-8 replacement, redact credential values before storage, then truncate at a UTF-8 boundary."
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"Function sandbox filesystem access\",\"kind\":\"contradiction\",\"text\":\"K-02 says a function has \\\"no filesystem beyond its input\\\"; A03 rule 1 gives it \\\"one private exchange directory\\\" and rule 4 permits opening paths inside that directory.\",\"question\":\"May agent-written code read and write arbitrary scratch files inside the exchange directory, or is filesystem access limited to kernel-created input/output files?\",\"options\":[\"Permit arbitrary access inside the private exchange directory\",\"Permit only designated input and output paths\",\"Expose file inputs and outputs without any user-visible filesystem API\"],\"default_guess\":\"Permit arbitrary access inside the bounded private exchange directory.\"},{\"subject\":\"Deterministic pseudorandomness\",\"kind\":\"contradiction\",\"text\":\"K-02 says a function has \\\"no randomness\\\"; A03 rule 4 says \\\"random.Random(seed) with an explicit seed stays usable.\\\"\",\"question\":\"Does the prohibition cover deterministic seeded pseudorandom generation, or only entropy and implicit seeding?\",\"options\":[\"Allow explicitly seeded pseudorandom generation\",\"Prohibit every random-module generator\",\"Allow it only with a fixed kernel-supplied seed\"],\"default_guess\":\"Allow explicitly seeded pseudorandom generation.\"},{\"subject\":\"Deterministic admission\",\"kind\":\"unverifiable invariant\",\"text\":\"K-05 calls admission \\\"a deterministic verdict\\\" and A03 requires that the same implementation on the same input yield the same output digest, but the sandbox rules do not prohibit other process-dependent observations such as object addresses, scheduling, runtime metadata or all standard-library sources of nondeterminism.\",\"question\":\"What enforceable condition makes executions deterministic, and what happens when identical executions produce different outputs?\",\"options\":[\"Define determinism only as deterministic evaluation of the observations from one admission\",\"Run cases repeatedly and refuse inconsistent implementations\",\"Expand the sandbox restrictions to exclude every supported nondeterministic observation\"],\"default_guess\":\"Treat the verdict calculation as deterministic over the single recorded execution set, without claiming arbitrary Python code is reproducible.\"},{\"subject\":\"Resource-limit outcome detection\",\"kind\":\"unverifiable invariant\",\"text\":\"A03 rule 5 says \\\"a limit hit (memory, process count, scratch, output_bytes)\\\" decides `resource_exhausted`, including when this precedes `crashed`, but it does not define observable evidence of a memory, process or scratch limit hit when Python catches the resulting exception and returns normally.\",\"question\":\"What exact observable events count as a resource limit hit, especially when the program catches `MemoryError`, `OSError` or an allocation/write/fork failure?\",\"options\":[\"Any kernel-level denial is instrumented and reported to the parent\",\"Only process termination or externally measurable excess counts\",\"A caught denial does not count if the function later returns successfully\"],\"default_guess\":\"Instrument denials and record them out of band so any actual limit denial yields `resource_exhausted`.\"},{\"subject\":\"Sandbox outcome precedence\",\"kind\":\"contradiction\",\"text\":\"A03 rule 5 says the first outcome is `timeout`, then `resource_exhausted`, then `sandbox_violation`; its formal invariant says `trap_raised -> outcome = sandbox_violation`; rule 7 says unconfirmed cleanup is recorded `crashed` with `cleanup_failed`.\",\"question\":\"Which outcome is recorded when a trap and a timeout or resource exhaustion both occur, or when cleanup fails after one of those outcomes?\",\"options\":[\"Always use rule 5's precedence\",\"Let `cleanup_failed` override every earlier outcome\",\"Use rule 5 for execution and record cleanup failure separately\"],\"default_guess\":\"Use rule 5's precedence, except make cleanup failure a separate fatal kernel condition rather than replacing the execution outcome.\"},{\"subject\":\"Sandbox stdout and stderr\",\"kind\":\"missing bound\",\"text\":\"A03 rule 6 says \\\"Nothing the code prints or raises is interpreted\\\" and stdout is never kept, but no rule says whether stdout or stderr is drained, capped, discarded, or whether excessive writes cause a failure.\",\"question\":\"How are stdout and stderr handled, and what outcome results if code emits unbounded output?\",\"options\":[\"Redirect both to a bounded sink and classify overflow `resource_exhausted`\",\"Discard both directly without counting them\",\"Capture bounded stderr only for exception diagnostics\"],\"default_guess\":\"Discard stdout and bound diagnostic stderr, classifying an exceeded bound as `resource_exhausted`.\"},{\"subject\":\"Authored trial-case port coverage\",\"kind\":\"vague validation\",\"text\":\"A04 rule 1 requires that trial-case inputs and expected outputs \\\"fit\\\" the contract ports and mentions checking \\\"presence, carriage, schema, then size\\\", but it does not say whether inputs must contain exactly every input port or whether expected outputs may be partial.\",\"question\":\"Must authored inputs and present expected outputs name exactly all corresponding contract ports, with no missing or extra names?\",\"options\":[\"Inputs and expected outputs are both exact port maps\",\"Inputs are exact but expected outputs may be a subset\",\"Both maps may be partial\"],\"default_guess\":\"Require exact inputs and, when expected outputs are present, exact outputs.\"},{\"subject\":\"Many-valued flow constants\",\"kind\":\"missing rule\",\"text\":\"A05 phase 2 says a constant's value must fit the target port's schema, while A13 says a value on a `many` port is a JSON array whose elements fit the port schema; no constant rule states the required representation or element validation for a `many` target.\",\"question\":\"How is a constant targeting a `many` input validated, and may such a constant supply a node's `map_over` port?\",\"options\":[\"Require an array, validate each element, and allow it to drive `map_over`\",\"Require an array but prohibit constants on `map_over`\",\"Prohibit constants on all `many` ports\"],\"default_guess\":\"Require an array whose elements fit the schema and allow it to drive `map_over`.\"},{\"subject\":\"Guards on many or mapped outputs\",\"kind\":\"undefined comparison\",\"text\":\"M15 permits a guard on an output whose schema is a closed set; A05 says every output of a mapped node is `many`; A13 says a guarded edge compares the guard port's value with one member of the closed set. It does not say how a list is compared with a scalar guard member.\",\"question\":\"Are guard ports required to have effective cardinality `one`, or do guards on `many` outputs have element-wise or whole-list semantics?\",\"options\":[\"Require guard ports to be effective cardinality `one`\",\"Compare the complete list to the guard literal\",\"Evaluate the guard independently for each mapped element\"],\"default_guess\":\"Require guard ports to have effective cardinality `one`.\"},{\"subject\":\"Mapped-node aggregate outputs and trace\",\"kind\":\"model conflict\",\"text\":\"A13 rule 6 says a mapped node's collected value list is written \\\"in the store change that records the node's conclusion\\\"; A15 rule 1 says \\\"A mapped node's trace is its elements' records\\\" and gives it no aggregate NodeExecution except when it ran no element, was skipped or was upstream-failed.\",\"question\":\"Which record names the aggregate output lists and the mapped node's aggregate conclusion after one or more elements run?\",\"options\":[\"Create a separate aggregate NodeExecution without `map_index`\",\"Derive the aggregate entirely from element NodeExecutions and do not record a separate conclusion\",\"Add a distinct mapped-node conclusion model\"],\"default_guess\":\"Derive the conclusion and collected outputs from element records, while explicitly storing references to the derived collections in the run.\"},{\"subject\":\"Disclosure class of mapped elements\",\"kind\":\"ambiguous propagation\",\"text\":\"A13 rule 6 says a mapped output list has the highest class among its elements; value lists become one StoredValue, while file lists remain separate SpooledFiles with their own classes. It does not say what class a later mapped consumer receives for one extracted element.\",\"question\":\"When a downstream mapped node consumes an element of a classified list, does it receive the aggregate list class or that element's original class?\",\"options\":[\"Every extracted element inherits the aggregate list class\",\"Each element retains its own class\",\"Value lists use aggregate class while file lists use per-file class\"],\"default_guess\":\"Every extracted element inherits the aggregate list class so a map cannot lower disclosure.\"},{\"subject\":\"Receiving-node contract violations\",\"kind\":\"model contradiction\",\"text\":\"A13 rule 3 allows a receiving node to conclude `contract_violation` before the value enters it, and A15 rule 5 explicitly calls this a node that \\\"concluded without running\\\". M23 says `executed` is absent only for `skipped_by_guard` and `upstream_failed`, and says `resources_used` is present for a function node.\",\"question\":\"What do `executed`, `resources_used`, timestamps and attempt identity contain for a receiving node that concludes `contract_violation` without executing?\",\"options\":[\"Allow `executed` and `resources_used` to be absent for this status\",\"Attribute the violation to the producer so the receiver has no record\",\"Record the pinned implementation or binding as `executed` despite not invoking it\"],\"default_guess\":\"Allow `executed` and `resources_used` to be absent and explicitly mark the attempt as pre-execution.\"},{\"subject\":\"Outputs of failed executions\",\"kind\":\"missing persistence rule\",\"text\":\"M07 and M23 allow `outputs` \\\"when produced\\\", while A03 and A09 define failures that may occur after some outputs or bytes exist; no rule says whether validated partial outputs are stored, traced or discarded when the overall attempt fails.\",\"question\":\"Which outputs, if any, are retained for `contract_violation`, `resource_exhausted`, `crashed`, `operation_failed` and other failed outcomes?\",\"options\":[\"Discard all outputs unless the attempt succeeds\",\"Keep each independently validated output\",\"Keep output facts for diagnostics but never deliver them\"],\"default_guess\":\"Discard attempt outputs unless the attempt succeeds, except for explicitly retained bounded failure diagnostics.\"},{\"subject\":\"Agent view of approval previews\",\"kind\":\"undefined redaction\",\"text\":\"A10 rule 2 includes the built request, full URL, input values and file metadata in the preview; A07 rule 4 says an agent receives a personal-data value or file only as digest and class, with no size, media type or spool facts.\",\"question\":\"How is a built URL, query, JSON body, multipart description or header containing personal data represented to an agent without revealing that data?\",\"options\":[\"Return a structurally redacted request with each personal field replaced by digest and class\",\"Omit the built request entirely when any part is personal\",\"Return only `request_digest` plus non-personal request components\"],\"default_guess\":\"Return a structurally redacted request plus its unchanged `request_digest`, replacing every personal-derived component with digest and class.\"},{\"subject\":\"Multipart boundary in effect approval\",\"kind\":\"contradiction\",\"text\":\"State 0 decision 18 says an approval covers the fully built request and \\\"Any difference at send ... asks again\\\"; A10 rule 7 excludes the multipart boundary from the request description and says equal parts give equal descriptions.\",\"question\":\"Does changing the multipart boundary between approval and send invalidate the approval?\",\"options\":[\"Boundary changes invalidate approval like every other wire difference\",\"The boundary is explicitly outside approval identity\",\"The boundary must be fixed before approval and reused at send\"],\"default_guess\":\"Treat the boundary as outside approval identity, following A10's detailed rule.\"},{\"subject\":\"Grant eligibility and refusal order\",\"kind\":\"missing conditions\",\"text\":\"A10 rule 5 says a grant is for \\\"a node of the flow's active version whose effect class is not `destructive`\\\" but does not explicitly refuse function nodes, missing nodes or nodes without an accepted operation binding, nor give the check order among version activity, node kind, effect class and an existing grant.\",\"question\":\"What exact nodes are grantable, and in what order are invalid-version, missing-node, wrong-kind, destructive and already-granted conditions checked?\",\"options\":[\"Only accepted operation nodes are grantable, with existence and active-version checks before effect class\",\"Any node identifier is grantable unless destructive\",\"Only the three approval-stopping effect classes are grantable\"],\"default_guess\":\"Allow only operation nodes of the currently active version; check version and node existence, then node kind, then effect class, then existing grant.\"},{\"subject\":\"Agent-name uniqueness after configuration reload\",\"kind\":\"contradiction\",\"text\":\"M27 says agent names are unique and \\\"a configuration repeating one is refused at start\\\"; A16 rule 2 says exactly three checks apply to a token-list re-read, and duplicate agent names are not one of them.\",\"question\":\"What happens when a live token-list reload introduces two agents with the same name?\",\"options\":[\"Refuse the reload as at startup\",\"Accept duplicate names because only tokens identify actors\",\"Keep the old list\"],\"default_guess\":\"Refuse the reload and all requests until agent names are unique.\"},{\"subject\":\"Atomic configuration reload\",\"kind\":\"race ambiguity\",\"text\":\"A16 rule 2 says the kernel reads the file to compare its byte digest and, when changed, \\\"re-reads it\\\" to obtain the token list; it does not say which snapshot wins if the file changes between those reads.\",\"question\":\"Must digest comparison and parsing use the same captured byte sequence, and how is a concurrent replacement handled?\",\"options\":[\"Read one immutable byte snapshot and both hash and parse it\",\"Read twice and retry until both reads match\",\"Accept the second read and store its digest\"],\"default_guess\":\"Read one safely opened byte snapshot, then hash and parse exactly those bytes.\"},{\"subject\":\"Global startup-check order\",\"kind\":\"missing precedence\",\"text\":\"A03, A09, A16, A17, A18, M27 and A20 each define startup refusals, while A03 says its sandbox check occurs before recovery and the surface, but no text orders all startup checks against one another.\",\"question\":\"Which failure is reported first when configuration, token, credential-header, data-directory, dependency and sandbox checks fail together, and when may recovery begin?\",\"options\":[\"Define one global ordered startup checklist\",\"Report all startup failures together\",\"Allow module initialization order to decide\"],\"default_guess\":\"Use one explicit checklist: configuration and filesystem security, release dependencies and sandbox, store opening, then recovery, then surface opening.\"},{\"subject\":\"Store record position\",\"kind\":\"undefined identity\",\"text\":\"A01 says activation records are identified by \\\"their position in the store's one order of records\\\" and A16 uses store positions for paging, but no rule defines the position type or the ordering of several records created in one transaction.\",\"question\":\"What is a store position, and how are positions assigned deterministically to multiple new records in one store call?\",\"options\":[\"A single monotonically increasing sequence assigned in a specified record order\",\"SQLite row identifiers independently per table\",\"Transaction position plus a deterministic sub-index\"],\"default_guess\":\"Use one durable monotonically increasing sequence with a specified sub-order for every record created by a call.\"},{\"subject\":\"Durability before external effects\",\"kind\":\"unverifiable invariant\",\"text\":\"A11 requires `in_flight_recorded_before_send`; A18 requires only a SQLite transaction and does not state that a successful commit is durably flushed before the first request byte is written.\",\"question\":\"What durability guarantee must the store call satisfy before an external effect may be sent?\",\"options\":[\"The commit and required filesystem metadata must be durably synced before sending\",\"A successful database commit without forced sync is sufficient\",\"Durability is delegated to SQLite defaults\"],\"default_guess\":\"Require durable commit and sync before sending the first request byte.\"},{\"subject\":\"Database and content-file atomicity\",\"kind\":\"atomicity gap\",\"text\":\"A18 rule 3 says \\\"A call that fails changes nothing\\\"; rule 4 publishes value and fixture files by rename, while SQLite records are committed separately, and startup removes temporary files but \\\"nothing else\\\".\",\"question\":\"How does one store call avoid an orphan published file or a database record naming a missing file when it crashes or fails between file publication and database commit?\",\"options\":[\"Use a defined write-ahead publication protocol with startup reconciliation\",\"Allow unreferenced complete files and garbage-collect them\",\"Store all durable bytes inside SQLite\"],\"default_guess\":\"Use a write-ahead publication protocol and reconcile incomplete or unreferenced publications at startup.\"},{\"subject\":\"Store-call failure handling\",\"kind\":\"missing failure behavior\",\"text\":\"A18 says a failed store call changes nothing, but no rule says whether the kernel stops, returns an internal refusal, or continues when persistence fails before or after an HTTP effect.\",\"question\":\"What must the caller do after each class of store failure, especially failure to record an effect outcome after the request may have been sent?\",\"options\":[\"Stop the kernel and recover any durable `in_flight` attempt as unknown\",\"Return an internal error but keep serving\",\"Retry the store call in place\"],\"default_guess\":\"Do not send if the pre-send write fails; after a post-send persistence failure, stop the kernel so recovery converts the durable in-flight attempt to unknown.\"},{\"subject\":\"Data-directory privacy check\",\"kind\":\"vague refusal condition\",\"text\":\"A18 rule 2 says the data directory and everything in it are \\\"private to the kernel's user\\\" and the kernel refuses to start otherwise, but unlike A17 it does not define ownership, required file type or permitted mode bits.\",\"question\":\"What exact ownership, file-type and permission checks define a private data directory, database, value area, fixtures and spool?\",\"options\":[\"Require ownership by the kernel user and no group/other permission on every entry\",\"Require only that group/other cannot write\",\"Rely on accessibility checks rather than mode bits\"],\"default_guess\":\"Require all entries to be owned by the kernel user, be of the expected regular-file or directory type, and have no group or other permissions.\"},{\"subject\":\"Manifest revision resolution\",\"kind\":\"missing mechanism\",\"text\":\"M28 and A08 say records are read from `manifest_location` \\\"at the configured `manifest_revision`\\\", but do not define how a revision is resolved, pinned or read without changing the working tree.\",\"question\":\"What storage format and operation resolve `manifest_revision` to immutable manifest bytes, and what failures count as an absent or unreadable record?\",\"options\":[\"Read Git objects directly at the named commit\",\"Require `manifest_location` to be an already materialized immutable revision\",\"Use a versioned manifest API\"],\"default_guess\":\"Read the manifest file directly from a validated Git commit object without changing a working tree.\"},{\"subject\":\"Service base URL\",\"kind\":\"underspecified URL rules\",\"text\":\"A08 accepts any absolute `http` or `https` URL with a host; A09 forms the target by removing a trailing slash and appending the operation path, but does not address user information, query, fragment, base paths, percent escapes, IPv6 authority formatting or multiple trailing slashes.\",\"question\":\"Which exact base-URL forms are valid, and what byte-level URL results from joining them to an operation path?\",\"options\":[\"Allow only scheme plus authority with no userinfo, path, query or fragment\",\"Allow a normalized base path but prohibit query, fragment and userinfo\",\"Apply a specified standard URL-resolution algorithm\"],\"default_guess\":\"Allow only `http` or `https` scheme plus authority, with no userinfo, query or fragment, and at most an empty base path.\"},{\"subject\":\"HTTP header names and values\",\"kind\":\"missing validation\",\"text\":\"A09 sends required headers and the credential header, and A10 places required values \\\"verbatim\\\" on the wire; the texts check duplicate and reserved names but give no grammar for header names or values and no handling of control characters.\",\"question\":\"What syntax is accepted for manifest and credential header names and for required-header values, and how are CR, LF, NUL and other invalid bytes handled?\",\"options\":[\"Validate names as HTTP field names and values as field values, rejecting controls\",\"Delegate validation to the HTTP library\",\"Escape invalid characters before sending\"],\"default_guess\":\"Strictly validate HTTP field-name and field-value syntax and refuse invalid manifest or configuration data before sending.\"},{\"subject\":\"Multipart request encoding\",\"kind\":\"underspecified wire format\",\"text\":\"A09 specifies multipart parts and headers, and A10 excludes the boundary from approval identity, but neither specifies boundary generation, CRLF framing, quoting or escaping of port names and filenames, or collision handling when a boundary occurs in content.\",\"question\":\"What exact multipart encoder is required, including safe disposition quoting and boundary collision rules?\",\"options\":[\"Define a deterministic canonical multipart encoding\",\"Use a random boundary with mandatory collision checking and fixed framing\",\"Delegate encoding to the pinned HTTP library\"],\"default_guess\":\"Use fixed RFC-compliant framing, strict escaping, and a generated boundary checked not to occur in any part.\"},{\"subject\":\"Failure-detail encoding and secret removal\",\"kind\":\"contradiction\",\"text\":\"A09 permits a bounded excerpt of an arbitrary HTTP error body as `failure_detail`; A20 truncates it at a UTF-8 boundary; A17 says a credential never enters a failure detail. An error body may be non-UTF-8 or may echo the credential.\",\"question\":\"How are arbitrary response bytes converted to failure detail, and how is an echoed credential guaranteed not to appear?\",\"options\":[\"Decode with a specified replacement policy and redact exact credential byte sequences before truncation\",\"Keep only a status-derived fixed message and no response-body excerpt\",\"Base64-encode bytes after credential redaction\"],\"default_guess\":\"Decode with UTF-8 replacement, redact credential values before storage, then truncate at a UTF-8 boundary.\"}]}"
+}

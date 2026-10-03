@@ -78,7 +78,11 @@ worker.
    validated against the source port when it is produced and against
    the target port before it enters a node; a violation concludes the producing
    node, or the receiving node, `contract_violation`, and the value is not
-   delivered.
+   delivered. A receiving node concluded so did not run: its NodeExecution names
+   what it pinned as `executed`, the inputs it had, no outputs and no resources
+   used, and starts and ends at the time of the check. An element that does not
+   succeed keeps no output: its NodeExecution names none, a value it produced
+   is not stored, and the files its attempt spooled are discarded.
 4. A guarded edge delivers only when its guard port's value equals its guard
    value. An input port that can no longer receive a value because every edge into
    it is disabled, or comes from a skipped node, makes its node `skipped_by_guard`
@@ -181,8 +185,12 @@ Reuses cabinet-flow decision 18, narrowed by K-09: no timed retries, no reconcil
    removes the files, records who and when, and is refused for a run that is not
    `failed` or was already released (K-10).
 5. On start, before the surface accepts a request, the kernel turns every
-   `in_flight` EffectAttempt into `unknown` (A11 rule 4) and then advances, as the
-   kernel actor, every run left `running`, oldest first in store order: a
+   `in_flight` EffectAttempt into `unknown` (A11 rule 4) and then derives every
+   run that has not ended — `running`, `awaiting_approval` or `pending` — again
+   from its records, oldest first in store order, rewriting a stored status or
+   waiting point that lags them (a decided approval, a resolved attempt, an
+   outcome whose run change was lost), and advances, as the
+   kernel actor, every run that derivation leaves `running`: a
    function element without a
    concluded record is executed again, which is safe because it is pure; a `read`
    element without one is sent again; an operation element of another class with
@@ -192,6 +200,10 @@ Reuses cabinet-flow decision 18, narrowed by K-09: no timed retries, no reconcil
 6. Everything a resume or a restart needs is in the store before it is acted on:
    records of concluded attempts, decided approvals, and in-flight attempts before
    their request (K-17).
+7. A store failure in a request after a change of a run was already written
+   leaves that run's stored status behind its records; the kernel then answers
+   `internal_error` and stops, so the next start derives the run (rule 5)
+   before any request touches it.
 
 ### Formal invariants
 

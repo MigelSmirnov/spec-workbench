@@ -1,0 +1,90 @@
+{
+ "open_points": [
+  {
+   "subject": "minted record identifiers",
+   "kind": "missing owner",
+   "text": "“`trial_execution_id` M07, `binding_id` M11, `run_id` M19, `approval_id` M24 and `grant_id` M25 are minted at random by the kernel; one that already exists is minted again.” State 3 assigns no module ownership of random identifier generation or collision retry.",
+   "question": "Which module owns generating random identifiers, checking collisions and minting again, and which modules call it?",
+   "options": [
+    "`store` mints identifiers atomically while creating records",
+    "Each record-owning module mints its own identifiers and asks `store` to reject collisions",
+    "A separate lower-level identity capability owns random identifier generation"
+   ],
+   "default_guess": "Have `store` mint and collision-check the identifier in the record-creation transaction."
+  },
+  {
+   "subject": "captured trial-case handoff",
+   "kind": "dependency contradiction",
+   "text": "“`runs` ... passes to `functions.add_captured_trial_case` the pinned contract version and the inputs of the record it captures.” Later, “`functions.add_captured_trial_case` ... checks that the record's pinned contract version is the one named.” A NodeExecution does not contain a pinned contract version, and `functions` may not know `runs` or read its records directly.",
+   "question": "Which module verifies that the captured NodeExecution belongs to the named contract version, and what trusted facts or record reference cross from `runs` to `functions`?",
+   "options": [
+    "`runs` performs the execution-to-contract check and `functions` only validates and adds the constructed case",
+    "`runs` passes the full NodeExecution identity and executed implementation, allowing `functions` to derive the contract from its own implementation record",
+    "`functions` is allowed a new capability for reading run trace records"
+   ],
+   "default_guess": "Let `runs` verify the execution and contract association, then pass the captured-from identity, validated inputs and contract version to `functions`."
+  },
+  {
+   "subject": "function-output spooling and attempt numbers",
+   "kind": "transaction gap",
+   "text": "“`store` alone assigns `attempt_number`, inside the transaction that writes the record ... no caller passes a number.” But “`store.spool_file` alone checks both ceilings” and must discard “any file the same attempt spooled before it”; SpooledFile identity itself includes `attempt_number`. A function has no EffectAttempt that assigns the number before its output files are spooled.",
+   "question": "How are files from one function attempt grouped, named and rolled back before the concluding NodeExecution transaction assigns that attempt's number?",
+   "options": [
+    "One store call assigns the attempt number, publishes all files and writes the NodeExecution atomically",
+    "The store reserves an attempt number before function execution or spooling",
+    "Files are staged under a private token and bound to the assigned attempt number when the NodeExecution is committed"
+   ],
+   "default_guess": "Stage all files under a store-owned private token, then atomically assign the attempt number, publish the files and write the NodeExecution."
+  },
+  {
+   "subject": "sandbox probe cleanup failure",
+   "kind": "unowned exception",
+   "text": "A03 says, “If [cleanup] cannot be confirmed ... the execution is recorded `crashed` with detail `cleanup_failed`, and the kernel process stops.” State 3 says the caller recording this is “`runs` [for] the NodeExecution, `functions` [for] the TrialExecution,” but startup calls `sandbox.probe_sandbox` from `surface`, where there is no run or trial execution to record.",
+   "question": "Does the cleanup-failure recording rule apply to the startup probe, and if so, what record is written and which module owns it?",
+   "options": [
+    "The probe is excluded from execution records and startup simply fails",
+    "A durable probe-execution record is added with an owning module",
+    "`surface` writes an existing execution record despite there being no run or trial case"
+   ],
+   "default_guess": "Treat the probe as non-recorded startup evidence: cleanup failure stops startup but creates no NodeExecution or TrialExecution."
+  },
+  {
+   "subject": "file-content digests",
+   "kind": "missing owner",
+   "text": "State 3 gives `canonical_values` ownership of SHA-256 identities derived from canonical JSON, while files require `content_digest` in SpooledFile, file digests in TrialExecution, content-addressed fixture names, and SHA-256 of multipart file content. No module is named as the single owner of computing the digest of raw file bytes.",
+   "question": "Which module owns the raw-file digest algorithm and capability used by `functions`, `runs`, `effects`, `service_invoker` and `store`?",
+   "options": [
+    "`canonical_values` exposes a raw-bytes SHA-256 capability",
+    "`store` computes every persistent file digest and another owner handles transient trial and request files",
+    "Each producing module computes raw-file SHA-256 independently"
+   ],
+   "default_guess": "Put the raw-bytes SHA-256 capability in `canonical_values` and have all producers and `store` use it."
+  },
+  {
+   "subject": "NodeExecution.executed for nodes that did not execute",
+   "kind": "model contradiction",
+   "text": "M23 says “`executed`: the implementation or the binding, absent for `skipped_by_guard` and `upstream_failed`,” while A15 describes “a receiving node refusing a misfit input” as a node that “concluded without running.” State 3 nevertheless assigns every non-skip, non-upstream NodeExecution an implementation or binding as what “executed.”",
+   "question": "What must `executed` contain for a receiving-node contract violation, pre-send failure, owner refusal or empty mapped node where the implementation or service operation did not actually run?",
+   "options": [
+    "It names the selected implementation or binding even when no sandbox or HTTP execution occurred",
+    "It is absent whenever the implementation or service operation did not run",
+    "The model separates the selected target from the implementation or binding actually executed"
+   ],
+   "default_guess": "Interpret the existing field as the selected implementation or binding and populate it for every status except `skipped_by_guard` and `upstream_failed`."
+  },
+  {
+   "subject": "duplicate agent names at startup",
+   "kind": "missing owner",
+   "text": "M27 requires that agent names “are unique in an installation, and a configuration repeating one is refused at start.” State 3 gives `installation` several configuration start checks but names only file properties, token length and token equality; `models` must not own validation, and no other module is assigned the duplicate-name check.",
+   "question": "Which module owns and performs the unique-agent-name startup validation?",
+   "options": [
+    "`installation.load_installation` validates agent-name uniqueness",
+    "`surface` validates names after loading the installation",
+    "The configuration parser enforces uniqueness as part of constructing M28"
+   ],
+   "default_guess": "Make agent-name uniqueness a check owned by `installation.load_installation`."
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"minted record identifiers\",\"kind\":\"missing owner\",\"text\":\"“`trial_execution_id` M07, `binding_id` M11, `run_id` M19, `approval_id` M24 and `grant_id` M25 are minted at random by the kernel; one that already exists is minted again.” State 3 assigns no module ownership of random identifier generation or collision retry.\",\"question\":\"Which module owns generating random identifiers, checking collisions and minting again, and which modules call it?\",\"options\":[\"`store` mints identifiers atomically while creating records\",\"Each record-owning module mints its own identifiers and asks `store` to reject collisions\",\"A separate lower-level identity capability owns random identifier generation\"],\"default_guess\":\"Have `store` mint and collision-check the identifier in the record-creation transaction.\"},{\"subject\":\"captured trial-case handoff\",\"kind\":\"dependency contradiction\",\"text\":\"“`runs` ... passes to `functions.add_captured_trial_case` the pinned contract version and the inputs of the record it captures.” Later, “`functions.add_captured_trial_case` ... checks that the record's pinned contract version is the one named.” A NodeExecution does not contain a pinned contract version, and `functions` may not know `runs` or read its records directly.\",\"question\":\"Which module verifies that the captured NodeExecution belongs to the named contract version, and what trusted facts or record reference cross from `runs` to `functions`?\",\"options\":[\"`runs` performs the execution-to-contract check and `functions` only validates and adds the constructed case\",\"`runs` passes the full NodeExecution identity and executed implementation, allowing `functions` to derive the contract from its own implementation record\",\"`functions` is allowed a new capability for reading run trace records\"],\"default_guess\":\"Let `runs` verify the execution and contract association, then pass the captured-from identity, validated inputs and contract version to `functions`.\"},{\"subject\":\"function-output spooling and attempt numbers\",\"kind\":\"transaction gap\",\"text\":\"“`store` alone assigns `attempt_number`, inside the transaction that writes the record ... no caller passes a number.” But “`store.spool_file` alone checks both ceilings” and must discard “any file the same attempt spooled before it”; SpooledFile identity itself includes `attempt_number`. A function has no EffectAttempt that assigns the number before its output files are spooled.\",\"question\":\"How are files from one function attempt grouped, named and rolled back before the concluding NodeExecution transaction assigns that attempt's number?\",\"options\":[\"One store call assigns the attempt number, publishes all files and writes the NodeExecution atomically\",\"The store reserves an attempt number before function execution or spooling\",\"Files are staged under a private token and bound to the assigned attempt number when the NodeExecution is committed\"],\"default_guess\":\"Stage all files under a store-owned private token, then atomically assign the attempt number, publish the files and write the NodeExecution.\"},{\"subject\":\"sandbox probe cleanup failure\",\"kind\":\"unowned exception\",\"text\":\"A03 says, “If [cleanup] cannot be confirmed ... the execution is recorded `crashed` with detail `cleanup_failed`, and the kernel process stops.” State 3 says the caller recording this is “`runs` [for] the NodeExecution, `functions` [for] the TrialExecution,” but startup calls `sandbox.probe_sandbox` from `surface`, where there is no run or trial execution to record.\",\"question\":\"Does the cleanup-failure recording rule apply to the startup probe, and if so, what record is written and which module owns it?\",\"options\":[\"The probe is excluded from execution records and startup simply fails\",\"A durable probe-execution record is added with an owning module\",\"`surface` writes an existing execution record despite there being no run or trial case\"],\"default_guess\":\"Treat the probe as non-recorded startup evidence: cleanup failure stops startup but creates no NodeExecution or TrialExecution.\"},{\"subject\":\"file-content digests\",\"kind\":\"missing owner\",\"text\":\"State 3 gives `canonical_values` ownership of SHA-256 identities derived from canonical JSON, while files require `content_digest` in SpooledFile, file digests in TrialExecution, content-addressed fixture names, and SHA-256 of multipart file content. No module is named as the single owner of computing the digest of raw file bytes.\",\"question\":\"Which module owns the raw-file digest algorithm and capability used by `functions`, `runs`, `effects`, `service_invoker` and `store`?\",\"options\":[\"`canonical_values` exposes a raw-bytes SHA-256 capability\",\"`store` computes every persistent file digest and another owner handles transient trial and request files\",\"Each producing module computes raw-file SHA-256 independently\"],\"default_guess\":\"Put the raw-bytes SHA-256 capability in `canonical_values` and have all producers and `store` use it.\"},{\"subject\":\"NodeExecution.executed for nodes that did not execute\",\"kind\":\"model contradiction\",\"text\":\"M23 says “`executed`: the implementation or the binding, absent for `skipped_by_guard` and `upstream_failed`,” while A15 describes “a receiving node refusing a misfit input” as a node that “concluded without running.” State 3 nevertheless assigns every non-skip, non-upstream NodeExecution an implementation or binding as what “executed.”\",\"question\":\"What must `executed` contain for a receiving-node contract violation, pre-send failure, owner refusal or empty mapped node where the implementation or service operation did not actually run?\",\"options\":[\"It names the selected implementation or binding even when no sandbox or HTTP execution occurred\",\"It is absent whenever the implementation or service operation did not run\",\"The model separates the selected target from the implementation or binding actually executed\"],\"default_guess\":\"Interpret the existing field as the selected implementation or binding and populate it for every status except `skipped_by_guard` and `upstream_failed`.\"},{\"subject\":\"duplicate agent names at startup\",\"kind\":\"missing owner\",\"text\":\"M27 requires that agent names “are unique in an installation, and a configuration repeating one is refused at start.” State 3 gives `installation` several configuration start checks but names only file properties, token length and token equality; `models` must not own validation, and no other module is assigned the duplicate-name check.\",\"question\":\"Which module owns and performs the unique-agent-name startup validation?\",\"options\":[\"`installation.load_installation` validates agent-name uniqueness\",\"`surface` validates names after loading the installation\",\"The configuration parser enforces uniqueness as part of constructing M28\"],\"default_guess\":\"Make agent-name uniqueness a check owned by `installation.load_installation`.\"}]}"
+}

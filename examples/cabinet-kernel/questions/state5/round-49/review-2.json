@@ -1,0 +1,226 @@
+{
+ "open_points": [
+  {
+   "subject": "store.spool_file attempt identity",
+   "kind": "contradiction",
+   "text": "State 3 says “store alone assigns attempt_number” and “no caller passes a number”; public_op:store.spool_file instead takes “The producing attempt — run_id, node, map_index, attempt_number”.",
+   "question": "How does runs obtain the attempt_number needed to spool a function or read-operation output before the NodeExecution transaction assigns that number?",
+   "options": [
+    "Reserve or query the next attempt number before spooling",
+    "Let the caller predict and pass the next ordinal",
+    "Move spooling into the record change that assigns the attempt number",
+    "Give temporary spool files an identity that does not contain attempt_number"
+   ],
+   "default_guess": "Move spooling into the same store operation that assigns the NodeExecution attempt number."
+  },
+  {
+   "subject": "trial file outputs",
+   "kind": "contradiction",
+   "text": "M07 says a file output has “only its facts — digest, size and media type, no bytes and never a StoredValue”; the named change record_trial_execution writes “one TrialExecution M07 and its output StoredValues”, and State 4 says functions “stores the outputs through capability:store.put_value_bytes”.",
+   "question": "Are successful trial file-output bytes discarded after their facts are recorded, or published as StoredValues in the content-addressed area?",
+   "options": [
+    "Discard file bytes and record only digest, size and media type",
+    "Persist file outputs as StoredValues",
+    "Persist them temporarily until the TrialExecution transaction completes"
+   ],
+   "default_guess": "Discard trial file-output bytes after recording their digest, size and media type."
+  },
+  {
+   "subject": "flow constants before proof",
+   "kind": "missing operation contract",
+   "text": "compose_flow_version writes “constants and their StoredValues” before prove_flow_version performs phase 2, where “the port exists” and “the value fits its schema” are checked.",
+   "question": "How is a FlowConstant's StoredValue.value_schema constructed when its target port is missing, is a file port, or the constant does not fit it, given that the malformed version must still be kept?",
+   "options": [
+    "Store the constant as raw canonical bytes until proof succeeds",
+    "Require enough schema information in the constant itself to construct a StoredValue",
+    "Make these constant faults composition refusals instead of proof failures",
+    "Permit StoredValues whose bytes have not validated against their recorded schema"
+   ],
+   "default_guess": "Store canonical constant data inside the FlowVersion without creating a StoredValue until a valid target schema is known."
+  },
+  {
+   "subject": "flow-port schema validation",
+   "kind": "missing check",
+   "text": "M01 requires value_schema to be “written in the subset of JSON Schema the kernel supports”, but A05 rule 7's composition checks omit this condition and the nine proof phases contain no supported-subset check.",
+   "question": "Which operation rejects a flow input or output whose value_schema is outside the supported subset, in what order, and is the outcome a composition refusal or a proof failure?",
+   "options": [
+    "compose_flow_version refuses it",
+    "prove_flow_version reports it in a specified phase",
+    "Flow ports may use schemas outside the function-port subset"
+   ],
+   "default_guess": "compose_flow_version refuses it before computing or storing the version."
+  },
+  {
+   "subject": "guards on mapped-node outputs",
+   "kind": "ambiguous runtime semantics",
+   "text": "A05 says “Every output of a mapped node is many for its consumers”, while A13 says “A guarded edge delivers only when its guard port's value equals its guard value.”",
+   "question": "When the guard port belongs to a mapped node, is the guard tested once against the collected list, separately for each mapped element, or are such guards refused by proof?",
+   "options": [
+    "Refuse guards whose source is a mapped node",
+    "Compare the collected list with the scalar guard value",
+    "Apply the guard independently to each mapped element"
+   ],
+   "default_guess": "Refuse guards whose guard source is a mapped node."
+  },
+  {
+   "subject": "mutable entity records and store order",
+   "kind": "contradiction",
+   "text": "Models say bindings, runs, approvals, grants and attempts move between statuses, and named store changes write those transitions; store.read_records instead enforces that “records are never edited”, while paging and approval selection depend on record store order.",
+   "question": "Does a lifecycle transition update one entity in place, append a replacement snapshot, or append a separate event, and which position orders and pages the resulting entity?",
+   "options": [
+    "Update the entity while preserving its creation position",
+    "Append a new snapshot and use its latest position",
+    "Keep an immutable entity plus separate transition events"
+   ],
+   "default_guess": "Keep an immutable creation record plus transition events, while listing the entity by its creation position."
+  },
+  {
+   "subject": "paging mutable filtered records",
+   "kind": "missing pagination semantics",
+   "text": "page_records promises that “a record added meanwhile never shifts, repeats or hides an item”, but filters include mutable fields such as status and the text says only that the token is bound to the record type and filter.",
+   "question": "What happens between pages when an existing record enters or leaves the selected status filter?",
+   "options": [
+    "Each token preserves a snapshot of filter membership",
+    "Each page evaluates current status, allowing items to appear or disappear",
+    "Tokens preserve only the position boundary and exclude records changed after the first page"
+   ],
+   "default_guess": "Bind the continuation token to a snapshot boundary and membership as of the first page."
+  },
+  {
+   "subject": "store positions within one transaction",
+   "kind": "missing ordering rule",
+   "text": "The store has “one store order of records”, and record_change may write several records, but State 5 fixes no position-allocation order for most multi-record changes.",
+   "question": "What total order and positions are assigned to records written by one record_change, especially when an Activation or FlowActivation is identified by its position?",
+   "options": [
+    "Use the order in the named change's writes list",
+    "Give the transaction one position shared by its records with a secondary fixed order",
+    "Define a record-type-specific order for every named change"
+   ],
+   "default_guess": "Assign consecutive positions in the exact order records appear in the named change's writes list."
+  },
+  {
+   "subject": "bytes copied by a refused capture",
+   "kind": "contradiction",
+   "text": "K-10 says “The only files the kernel keeps beyond a run are the file fixtures of trial cases”; State 3 and State 4 say files copied before a refused capture “stay in the content-addressed area, named by no record”.",
+   "question": "Are unreferenced copied file bytes retained indefinitely after the capture is refused, or must they be removed because they are not trial fixtures?",
+   "options": [
+    "Retain the unreferenced bytes indefinitely",
+    "Remove bytes that remain unreferenced when capture is refused",
+    "Retain them temporarily and garbage-collect them later"
+   ],
+   "default_guess": "Remove newly copied bytes when the capture is refused and no existing record references them."
+  },
+  {
+   "subject": "unreferenced published value bytes",
+   "kind": "missing cleanup effect",
+   "text": "put_value_bytes publishes bytes before later record changes, while the Internal error convention says “changes the request made before it stay”; only refused capture explicitly states what happens to unreferenced published bytes.",
+   "question": "What happens to content-addressed bytes published by trial, flow, run or effect operations when the later record transaction fails and no StoredValue references them?",
+   "options": [
+    "They remain indefinitely",
+    "The caller removes bytes newly published by the failed operation",
+    "The store garbage-collects all unreferenced content-addressed bytes at startup"
+   ],
+   "default_guess": "Garbage-collect unreferenced content-addressed bytes at startup."
+  },
+  {
+   "subject": "spool files published before their trace record",
+   "kind": "missing crash/retry semantics",
+   "text": "spool_file makes a completed file visible before record_run_progress, record_read_outcome or record_attempt_outcome writes its SpooledFile and NodeExecution, and prior effects remain after a later internal error.",
+   "question": "On recovery, how is an unrecorded spool file from an interrupted attempt handled before that element is retried, particularly if the retry produces different bytes for the same spool identity?",
+   "options": [
+    "Delete every unrecorded file of the incomplete attempt before retry",
+    "Reuse it only if the retry digest matches and otherwise fail",
+    "Allocate a new spool identity for the retry",
+    "Make spool publication and the trace record one atomic store change"
+   ],
+   "default_guess": "Delete unrecorded attempt files before retrying the element."
+  },
+  {
+   "subject": "release, cancellation and spool deletion",
+   "kind": "contradictory effect guarantee",
+   "text": "cancel_run says “the spool is gone” and release_run says “The run's spooled files are gone”; the Spool removal convention says removal failure “does not fail the request” and deletion is deferred to a later start.",
+   "question": "Does a successful cancel or release guarantee physical deletion before returning, or only logical inaccessibility with best-effort deferred deletion?",
+   "options": [
+    "Guarantee physical deletion or return internal_error",
+    "Return success after logical removal and retry physical deletion later",
+    "Record a distinct pending-cleanup state"
+   ],
+   "default_guess": "Return success after logical inaccessibility and retry physical deletion at every start."
+  },
+  {
+   "subject": "get_repair_view without a current implementation",
+   "kind": "missing output case",
+   "text": "get_repair_view requires “the current implementation through functions.read_implementation, with code”, but a slot's current contract version can have no activation after an empty corpus or refused admission.",
+   "question": "What does get_repair_view return when the current contract version has no current implementation?",
+   "options": [
+    "Return current_implementation as absent and omit its trial executions",
+    "Refuse the repair view",
+    "Fall back to the activation of an older contract version"
+   ],
+   "default_guess": "Return an absent current implementation and no current-implementation trial executions."
+  },
+  {
+   "subject": "store.open_store permission checks",
+   "kind": "contradiction",
+   "text": "A18 requires “The directory and everything in it are private to the kernel's user”; public_op:store.open_store says it enforces only “private directory” plus symbolic-link checks.",
+   "question": "Must open_store validate owner and permission bits of every existing database, content-area, fixture and spool entry, or only the data directory itself?",
+   "options": [
+    "Validate the directory and every descendant",
+    "Validate only the top-level directory",
+    "Validate the directory plus files when each is opened"
+   ],
+   "default_guess": "Validate the directory at start and every descendant before opening or using it."
+  },
+  {
+   "subject": "HTTP header validity",
+   "kind": "missing pre-send rule",
+   "text": "Required headers are sent with “their manifest values verbatim”, and the credential header is added, but no rule defines valid header-name or header-value bytes or the outcome for control characters and other values the HTTP client cannot place.",
+   "question": "Which operation validates required and credential header names and values, and which closed failure detail represents an invalid one?",
+   "options": [
+    "Reject invalid manifest headers as binding_stale",
+    "Return required_header_repeated or credential_unresolved",
+    "Return input_not_placeable",
+    "Add distinct invalid_required_header and invalid_credential_header details"
+   ],
+   "default_guess": "Reject invalid required headers as binding_stale and invalid credential headers as credential_unresolved before sending."
+  },
+  {
+   "subject": "multipart port-name encoding",
+   "kind": "missing request construction rule",
+   "text": "A multipart part uses Content-Disposition with `name=\"<port>\"` and optionally `filename=\"<port>\"`, while port names have no stated escaping or restricted syntax.",
+   "question": "How are quotes, backslashes, control characters, non-ASCII text and line breaks in a port name encoded in multipart Content-Disposition?",
+   "options": [
+    "Restrict port names so no escaping is needed",
+    "Use quoted-string escaping with a specified character encoding",
+    "Use RFC 5987 extended parameters",
+    "Refuse only bindings that contain unencodable multipart names"
+   ],
+   "default_guess": "Restrict multipart-used port names to a conservative ASCII token syntax during binding proposal."
+  },
+  {
+   "subject": "start-up atomicity",
+   "kind": "contradiction",
+   "text": "State 4 says that on a start failure “there is no partial start”; State 5 says recover_in_flight performs “one change per attempt” and the Internal error convention says earlier successful changes remain when a later change fails.",
+   "question": "When a later recovery or probe step stops startup, are durable changes made by earlier startup steps retained or rolled back?",
+   "options": [
+    "Retain completed recovery changes; only opening the surface is atomic",
+    "Roll back all startup recovery changes",
+    "Resume from a durable startup transaction on the next start"
+   ],
+   "default_guess": "Retain completed recovery changes and interpret “no partial start” as meaning only that the MCP surface never opens."
+  },
+  {
+   "subject": "canonical_values.highest_disclosure_class callers",
+   "kind": "caller contradiction",
+   "text": "State 3 says effects computes service-output classes with `canonical_values.highest_disclosure_class`; State 5 lists its callers as only “module:functions, module:flows, module:runs, module:surface”.",
+   "question": "May effects call highest_disclosure_class, or must it assign each service output's binding-declared class without that capability?",
+   "options": [
+    "Add effects to the callers",
+    "Remove the State 3 call and assign the binding's declared class directly"
+   ],
+   "default_guess": "Remove the effects call and assign each binding output's declared class directly."
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"store.spool_file attempt identity\",\"kind\":\"contradiction\",\"text\":\"State 3 says “store alone assigns attempt_number” and “no caller passes a number”; public_op:store.spool_file instead takes “The producing attempt — run_id, node, map_index, attempt_number”.\",\"question\":\"How does runs obtain the attempt_number needed to spool a function or read-operation output before the NodeExecution transaction assigns that number?\",\"options\":[\"Reserve or query the next attempt number before spooling\",\"Let the caller predict and pass the next ordinal\",\"Move spooling into the record change that assigns the attempt number\",\"Give temporary spool files an identity that does not contain attempt_number\"],\"default_guess\":\"Move spooling into the same store operation that assigns the NodeExecution attempt number.\"},{\"subject\":\"trial file outputs\",\"kind\":\"contradiction\",\"text\":\"M07 says a file output has “only its facts — digest, size and media type, no bytes and never a StoredValue”; the named change record_trial_execution writes “one TrialExecution M07 and its output StoredValues”, and State 4 says functions “stores the outputs through capability:store.put_value_bytes”.\",\"question\":\"Are successful trial file-output bytes discarded after their facts are recorded, or published as StoredValues in the content-addressed area?\",\"options\":[\"Discard file bytes and record only digest, size and media type\",\"Persist file outputs as StoredValues\",\"Persist them temporarily until the TrialExecution transaction completes\"],\"default_guess\":\"Discard trial file-output bytes after recording their digest, size and media type.\"},{\"subject\":\"flow constants before proof\",\"kind\":\"missing operation contract\",\"text\":\"compose_flow_version writes “constants and their StoredValues” before prove_flow_version performs phase 2, where “the port exists” and “the value fits its schema” are checked.\",\"question\":\"How is a FlowConstant's StoredValue.value_schema constructed when its target port is missing, is a file port, or the constant does not fit it, given that the malformed version must still be kept?\",\"options\":[\"Store the constant as raw canonical bytes until proof succeeds\",\"Require enough schema information in the constant itself to construct a StoredValue\",\"Make these constant faults composition refusals instead of proof failures\",\"Permit StoredValues whose bytes have not validated against their recorded schema\"],\"default_guess\":\"Store canonical constant data inside the FlowVersion without creating a StoredValue until a valid target schema is known.\"},{\"subject\":\"flow-port schema validation\",\"kind\":\"missing check\",\"text\":\"M01 requires value_schema to be “written in the subset of JSON Schema the kernel supports”, but A05 rule 7's composition checks omit this condition and the nine proof phases contain no supported-subset check.\",\"question\":\"Which operation rejects a flow input or output whose value_schema is outside the supported subset, in what order, and is the outcome a composition refusal or a proof failure?\",\"options\":[\"compose_flow_version refuses it\",\"prove_flow_version reports it in a specified phase\",\"Flow ports may use schemas outside the function-port subset\"],\"default_guess\":\"compose_flow_version refuses it before computing or storing the version.\"},{\"subject\":\"guards on mapped-node outputs\",\"kind\":\"ambiguous runtime semantics\",\"text\":\"A05 says “Every output of a mapped node is many for its consumers”, while A13 says “A guarded edge delivers only when its guard port's value equals its guard value.”\",\"question\":\"When the guard port belongs to a mapped node, is the guard tested once against the collected list, separately for each mapped element, or are such guards refused by proof?\",\"options\":[\"Refuse guards whose source is a mapped node\",\"Compare the collected list with the scalar guard value\",\"Apply the guard independently to each mapped element\"],\"default_guess\":\"Refuse guards whose guard source is a mapped node.\"},{\"subject\":\"mutable entity records and store order\",\"kind\":\"contradiction\",\"text\":\"Models say bindings, runs, approvals, grants and attempts move between statuses, and named store changes write those transitions; store.read_records instead enforces that “records are never edited”, while paging and approval selection depend on record store order.\",\"question\":\"Does a lifecycle transition update one entity in place, append a replacement snapshot, or append a separate event, and which position orders and pages the resulting entity?\",\"options\":[\"Update the entity while preserving its creation position\",\"Append a new snapshot and use its latest position\",\"Keep an immutable entity plus separate transition events\"],\"default_guess\":\"Keep an immutable creation record plus transition events, while listing the entity by its creation position.\"},{\"subject\":\"paging mutable filtered records\",\"kind\":\"missing pagination semantics\",\"text\":\"page_records promises that “a record added meanwhile never shifts, repeats or hides an item”, but filters include mutable fields such as status and the text says only that the token is bound to the record type and filter.\",\"question\":\"What happens between pages when an existing record enters or leaves the selected status filter?\",\"options\":[\"Each token preserves a snapshot of filter membership\",\"Each page evaluates current status, allowing items to appear or disappear\",\"Tokens preserve only the position boundary and exclude records changed after the first page\"],\"default_guess\":\"Bind the continuation token to a snapshot boundary and membership as of the first page.\"},{\"subject\":\"store positions within one transaction\",\"kind\":\"missing ordering rule\",\"text\":\"The store has “one store order of records”, and record_change may write several records, but State 5 fixes no position-allocation order for most multi-record changes.\",\"question\":\"What total order and positions are assigned to records written by one record_change, especially when an Activation or FlowActivation is identified by its position?\",\"options\":[\"Use the order in the named change's writes list\",\"Give the transaction one position shared by its records with a secondary fixed order\",\"Define a record-type-specific order for every named change\"],\"default_guess\":\"Assign consecutive positions in the exact order records appear in the named change's writes list.\"},{\"subject\":\"bytes copied by a refused capture\",\"kind\":\"contradiction\",\"text\":\"K-10 says “The only files the kernel keeps beyond a run are the file fixtures of trial cases”; State 3 and State 4 say files copied before a refused capture “stay in the content-addressed area, named by no record”.\",\"question\":\"Are unreferenced copied file bytes retained indefinitely after the capture is refused, or must they be removed because they are not trial fixtures?\",\"options\":[\"Retain the unreferenced bytes indefinitely\",\"Remove bytes that remain unreferenced when capture is refused\",\"Retain them temporarily and garbage-collect them later\"],\"default_guess\":\"Remove newly copied bytes when the capture is refused and no existing record references them.\"},{\"subject\":\"unreferenced published value bytes\",\"kind\":\"missing cleanup effect\",\"text\":\"put_value_bytes publishes bytes before later record changes, while the Internal error convention says “changes the request made before it stay”; only refused capture explicitly states what happens to unreferenced published bytes.\",\"question\":\"What happens to content-addressed bytes published by trial, flow, run or effect operations when the later record transaction fails and no StoredValue references them?\",\"options\":[\"They remain indefinitely\",\"The caller removes bytes newly published by the failed operation\",\"The store garbage-collects all unreferenced content-addressed bytes at startup\"],\"default_guess\":\"Garbage-collect unreferenced content-addressed bytes at startup.\"},{\"subject\":\"spool files published before their trace record\",\"kind\":\"missing crash/retry semantics\",\"text\":\"spool_file makes a completed file visible before record_run_progress, record_read_outcome or record_attempt_outcome writes its SpooledFile and NodeExecution, and prior effects remain after a later internal error.\",\"question\":\"On recovery, how is an unrecorded spool file from an interrupted attempt handled before that element is retried, particularly if the retry produces different bytes for the same spool identity?\",\"options\":[\"Delete every unrecorded file of the incomplete attempt before retry\",\"Reuse it only if the retry digest matches and otherwise fail\",\"Allocate a new spool identity for the retry\",\"Make spool publication and the trace record one atomic store change\"],\"default_guess\":\"Delete unrecorded attempt files before retrying the element.\"},{\"subject\":\"release, cancellation and spool deletion\",\"kind\":\"contradictory effect guarantee\",\"text\":\"cancel_run says “the spool is gone” and release_run says “The run's spooled files are gone”; the Spool removal convention says removal failure “does not fail the request” and deletion is deferred to a later start.\",\"question\":\"Does a successful cancel or release guarantee physical deletion before returning, or only logical inaccessibility with best-effort deferred deletion?\",\"options\":[\"Guarantee physical deletion or return internal_error\",\"Return success after logical removal and retry physical deletion later\",\"Record a distinct pending-cleanup state\"],\"default_guess\":\"Return success after logical inaccessibility and retry physical deletion at every start.\"},{\"subject\":\"get_repair_view without a current implementation\",\"kind\":\"missing output case\",\"text\":\"get_repair_view requires “the current implementation through functions.read_implementation, with code”, but a slot's current contract version can have no activation after an empty corpus or refused admission.\",\"question\":\"What does get_repair_view return when the current contract version has no current implementation?\",\"options\":[\"Return current_implementation as absent and omit its trial executions\",\"Refuse the repair view\",\"Fall back to the activation of an older contract version\"],\"default_guess\":\"Return an absent current implementation and no current-implementation trial executions.\"},{\"subject\":\"store.open_store permission checks\",\"kind\":\"contradiction\",\"text\":\"A18 requires “The directory and everything in it are private to the kernel's user”; public_op:store.open_store says it enforces only “private directory” plus symbolic-link checks.\",\"question\":\"Must open_store validate owner and permission bits of every existing database, content-area, fixture and spool entry, or only the data directory itself?\",\"options\":[\"Validate the directory and every descendant\",\"Validate only the top-level directory\",\"Validate the directory plus files when each is opened\"],\"default_guess\":\"Validate the directory at start and every descendant before opening or using it.\"},{\"subject\":\"HTTP header validity\",\"kind\":\"missing pre-send rule\",\"text\":\"Required headers are sent with “their manifest values verbatim”, and the credential header is added, but no rule defines valid header-name or header-value bytes or the outcome for control characters and other values the HTTP client cannot place.\",\"question\":\"Which operation validates required and credential header names and values, and which closed failure detail represents an invalid one?\",\"options\":[\"Reject invalid manifest headers as binding_stale\",\"Return required_header_repeated or credential_unresolved\",\"Return input_not_placeable\",\"Add distinct invalid_required_header and invalid_credential_header details\"],\"default_guess\":\"Reject invalid required headers as binding_stale and invalid credential headers as credential_unresolved before sending.\"},{\"subject\":\"multipart port-name encoding\",\"kind\":\"missing request construction rule\",\"text\":\"A multipart part uses Content-Disposition with `name=\\\"<port>\\\"` and optionally `filename=\\\"<port>\\\"`, while port names have no stated escaping or restricted syntax.\",\"question\":\"How are quotes, backslashes, control characters, non-ASCII text and line breaks in a port name encoded in multipart Content-Disposition?\",\"options\":[\"Restrict port names so no escaping is needed\",\"Use quoted-string escaping with a specified character encoding\",\"Use RFC 5987 extended parameters\",\"Refuse only bindings that contain unencodable multipart names\"],\"default_guess\":\"Restrict multipart-used port names to a conservative ASCII token syntax during binding proposal.\"},{\"subject\":\"start-up atomicity\",\"kind\":\"contradiction\",\"text\":\"State 4 says that on a start failure “there is no partial start”; State 5 says recover_in_flight performs “one change per attempt” and the Internal error convention says earlier successful changes remain when a later change fails.\",\"question\":\"When a later recovery or probe step stops startup, are durable changes made by earlier startup steps retained or rolled back?\",\"options\":[\"Retain completed recovery changes; only opening the surface is atomic\",\"Roll back all startup recovery changes\",\"Resume from a durable startup transaction on the next start\"],\"default_guess\":\"Retain completed recovery changes and interpret “no partial start” as meaning only that the MCP surface never opens.\"},{\"subject\":\"canonical_values.highest_disclosure_class callers\",\"kind\":\"caller contradiction\",\"text\":\"State 3 says effects computes service-output classes with `canonical_values.highest_disclosure_class`; State 5 lists its callers as only “module:functions, module:flows, module:runs, module:surface”.\",\"question\":\"May effects call highest_disclosure_class, or must it assign each service output's binding-declared class without that capability?\",\"options\":[\"Add effects to the callers\",\"Remove the State 3 call and assign the binding's declared class directly\"],\"default_guess\":\"Remove the effects call and assign each binding output's declared class directly.\"}]}"
+}

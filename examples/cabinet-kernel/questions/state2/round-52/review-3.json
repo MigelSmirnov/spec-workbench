@@ -1,0 +1,378 @@
+{
+ "open_points": [
+  {
+   "subject": "Capture a failed execution",
+   "kind": "contradiction",
+   "text": "State 0 refuses capture when the execution's run \"was already released\"; A15 rule 5 allows capture only while \"the run has not ended, or ended `failed` and was not released\".",
+   "question": "May a failed function execution from a run that later ended `refused`, `cancelled` or `succeeded` be captured when all required inputs are still durable values and no file bytes are missing?",
+   "options": [
+    "Allow it unless a required file is gone or the failed run was released",
+    "Refuse it whenever the run ended other than `failed`",
+    "Refuse capture after every ended run"
+   ],
+   "default_guess": "Follow the more specific A15 rule and refuse it unless the run is unfinished or is failed and unreleased."
+  },
+  {
+   "subject": "Function filesystem access",
+   "kind": "contradiction",
+   "text": "K-02 says a function has \"no filesystem beyond its input\"; A03 permits opening paths in \"the exchange directory and the read-only runtime\".",
+   "question": "What filesystem operations may implementation code itself perform inside the exchange directory and read-only runtime?",
+   "options": [
+    "No implementation-initiated filesystem access; only the runner uses those paths",
+    "Allow reads and writes in the exchange directory and reads in the runtime",
+    "Allow reads only, including runtime and input files"
+   ],
+   "default_guess": "Apply A03 as the more specific rule: allow exchange-directory access and read-only runtime access."
+  },
+  {
+   "subject": "Clock and randomness isolation",
+   "kind": "contradiction",
+   "text": "K-02 requires \"no clock, no randomness\" and A03 says \"every clock and randomness entry point\" is replaced, but A03 then declares an exact closed list that omits standard-library sources such as `time.clock_gettime`, `time.clock_gettime_ns`, `os.times`, process identifiers and runtime metadata.",
+   "question": "Are unlisted clock-, entropy- or execution-identity-dependent APIs permitted in release v1, or must the no-clock/no-randomness rule prohibit them too?",
+   "options": [
+    "The exact list is exhaustive and unlisted APIs remain usable",
+    "The semantic prohibition controls and every equivalent source must be blocked",
+    "Only returned dependence on such sources is prohibited"
+   ],
+   "default_guess": "Treat the exact release-v1 list as authoritative, although that weakens the stated no-clock/no-randomness invariant."
+  },
+  {
+   "subject": "Deterministic function execution and admission",
+   "kind": "unverifiable invariant",
+   "text": "K-05 calls admission \"a deterministic verdict\" and A03 requires the same implementation and input to yield the same digest, while the sandbox rules do not prohibit observable nondeterminism such as `id()`, PIDs, thread scheduling, runtime-file metadata or other untrapped APIs.",
+   "question": "What mechanism makes function outputs deterministic for every admitted implementation, and what happens when repeated executions differ?",
+   "options": [
+    "Determinism is guaranteed only by the listed traps and fixed release environment",
+    "The sandbox must block every remaining nondeterministic observation",
+    "The kernel must run cases repeatedly and refuse inconsistent implementations"
+   ],
+   "default_guess": "Use the specified traps and fixed environment only, cache the first verdict, and accept that the stronger determinism claim is not enforceable."
+  },
+  {
+   "subject": "Sandbox audit reporting channel",
+   "kind": "unverifiable invariant",
+   "text": "A03 says each trap writes to \"the runner's channel to the parent, which user code cannot unsend\", but the untrusted module is loaded by the in-sandbox runner and no protection of that channel from closing, replacing or forging is defined.",
+   "question": "How is the trap channel isolated from implementation code so caught violations cannot be hidden or corrupt the runner protocol?",
+   "options": [
+    "Run implementation code in a separate child with no access to the channel",
+    "Keep one process but reserve and protect a file descriptor by an enforcement mechanism",
+    "Trust the Python runner and audit hooks despite shared-process access"
+   ],
+   "default_guess": "Use a separate sandbox child for implementation code and keep the parent channel inaccessible to it."
+  },
+  {
+   "subject": "Sandbox resource outcome classification",
+   "kind": "vague refusal condition",
+   "text": "A03 says \"a limit hit (memory, process count, scratch, `output_bytes`)\" is `resource_exhausted`, but does not define how OS exceptions, signals, failed allocations, failed forks, filesystem errors or abnormal exits prove which limit was hit.",
+   "question": "Exactly which observable conditions count as each resource limit being hit rather than `crashed` or `sandbox_violation`, especially when several conditions coincide?",
+   "options": [
+    "Classify only independently measured limit events as `resource_exhausted`",
+    "Map designated signals and OS errors to their corresponding limits",
+    "Treat ambiguous termination as `crashed`"
+   ],
+   "default_guess": "Classify as `resource_exhausted` only when the parent can attribute the event to a measured limit; otherwise use `crashed`."
+  },
+  {
+   "subject": "Sandbox scratch bound",
+   "kind": "missing mechanism",
+   "text": "A03 requires \"one private exchange directory bounded by `sandbox_scratch_bytes_max`\" but specifies no quota mechanism, accounting rule or result for a write that crosses the bound.",
+   "question": "How is scratch usage measured and enforced, including sparse files, replacements, metadata and concurrent child processes?",
+   "options": [
+    "Use a size-limited filesystem and classify exhaustion as `resource_exhausted`",
+    "Measure allocated bytes in the directory from the parent",
+    "Count logical file lengths maintained by the runner"
+   ],
+   "default_guess": "Use a size-limited filesystem and report an attempted overrun as `resource_exhausted`."
+  },
+  {
+   "subject": "Sandbox stdout and stderr",
+   "kind": "missing behavior",
+   "text": "A03 says stdout is never kept and \"Nothing the code prints\" is interpreted, but gives no destination, byte bound or outcome for unlimited stdout or stderr.",
+   "question": "Where do stdout and stderr go, and can filling or writing them cause `resource_exhausted`, `crashed` or `timeout`?",
+   "options": [
+    "Redirect both to a bounded discard sink and report overrun as `resource_exhausted`",
+    "Redirect both to `/dev/null` without counting",
+    "Capture a bounded diagnostic stream"
+   ],
+   "default_guess": "Redirect both to `/dev/null` and never include them in execution output or failure detail."
+  },
+  {
+   "subject": "Failed function outputs and spool",
+   "kind": "missing behavior",
+   "text": "A03 validates returned outputs after execution, while A15 only explicitly discards attempt files when spool ceilings are exceeded; neither says what happens to otherwise valid sibling outputs or staged files when another output makes the attempt fail.",
+   "question": "Are all outputs of a failed function attempt discarded atomically, or are valid values and files retained and named in its NodeExecution?",
+   "options": [
+    "Discard every output of a failed attempt",
+    "Keep and trace every independently valid output but deliver none",
+    "Keep valid outputs and allow unaffected downstream delivery"
+   ],
+   "default_guess": "Discard all produced outputs from a failed attempt and deliver none."
+  },
+  {
+   "subject": "Multi-output node validation",
+   "kind": "missing behavior",
+   "text": "A13 says a validation failure concludes \"the producing node, or the receiving node, `contract_violation`, and the value is not delivered\" but does not say whether other outputs of that same node may already have been delivered.",
+   "question": "Is production and delivery atomic across all output ports of one node attempt?",
+   "options": [
+    "Validate every output first and deliver all or none",
+    "Deliver valid outputs independently while failing dependants of invalid outputs",
+    "Retain valid outputs only for trace inspection"
+   ],
+   "default_guess": "Validate all outputs first and deliver none if any output is invalid."
+  },
+  {
+   "subject": "Rollback eligibility",
+   "kind": "vague condition",
+   "text": "K-04 and A04 permit rollback to \"an earlier implementation\" of the current contract version without defining earlier relative to submission order, activation order or the current implementation.",
+   "question": "Which admitted implementations are eligible for rollback, particularly an implementation submitted later than the currently active one or reactivating a newer implementation after a prior rollback?",
+   "options": [
+    "Any non-current implementation admitted over the current corpus",
+    "Only implementations submitted before the current implementation",
+    "Only implementations that were activated before the current activation"
+   ],
+   "default_guess": "Allow any non-current implementation with an admitted verdict over the current corpus."
+  },
+  {
+   "subject": "FlowVersion content identity",
+   "kind": "underdetermined ordering",
+   "text": "A01 sorts edges \"in the edge order of A05\" and constants by (`to_node`, `to_port`), but those keys can tie for two guarded edges or for multiple constants that are retained as an unproven version.",
+   "question": "What tie-breaker canonicalizes edges or constants with equal stated sort keys so reordering equal content cannot change `flow_version_id`?",
+   "options": [
+    "Sort by the canonical JSON of the complete edge or constant after the stated keys",
+    "Preserve submission order for tied items",
+    "Refuse all duplicate destination keys before identity is computed"
+   ],
+   "default_guess": "Use canonical JSON of the complete item as the final tie-breaker."
+  },
+  {
+   "subject": "Port validation outside contracts",
+   "kind": "missing refusal conditions",
+   "text": "A02 fully validates contract ports, but A08 names only selected A02 port rules for bindings, and A05's malformed-composition checks do not cover all M01 invariants such as supported schemas or forbidden `media_type` on a `value` port.",
+   "question": "Which M01 and A02 port invariants are checked when proposing bindings and composing flow ports, and at what stage is each invalid declaration refused?",
+   "options": [
+    "Apply every applicable M01 invariant and supported-schema check before keeping the record",
+    "Apply only the checks explicitly repeated in A05 and A08",
+    "Keep malformed declarations and let proof or invocation fail later"
+   ],
+   "default_guess": "Refuse before keeping the record whenever any applicable M01 invariant or supported-schema requirement fails."
+  },
+  {
+   "subject": "Guard value comparison",
+   "kind": "undefined equality",
+   "text": "A05 requires a guard value to be a member of a closed set and A13 delivers when a runtime value \"equals its guard value\", but JSON equality is not defined.",
+   "question": "What equality rule is used for guard membership and runtime matching, including `1` versus `1.0`, `true` versus `1`, object key order and nested values?",
+   "options": [
+    "Equality of canonical JSON bytes",
+    "JSON structural equality with numeric mathematical equality",
+    "Host-language equality"
+   ],
+   "default_guess": "Compare canonical JSON bytes."
+  },
+  {
+   "subject": "Disclosure through guards",
+   "kind": "rule conflict",
+   "text": "A07 says personal data cannot leave through a chain, but A05 checks disclosure only for the edge's delivered source value; a guard may use another, more sensitive output of the same operation, and `skipped_by_guard` remains visible to an agent.",
+   "question": "Does the disclosure class of a guard influence the guarded edge, target or observable skipped status?",
+   "options": [
+    "Raise the guarded delivery/control result to the guard port's class",
+    "Refuse a guard whose class exceeds the target's accepted class",
+    "Treat control-flow outcomes as unclassified metadata and permit the leak"
+   ],
+   "default_guess": "Follow the literal proof rules and treat the skipped/delivered status as unclassified metadata."
+  },
+  {
+   "subject": "Mapped-element retries",
+   "kind": "contradiction",
+   "text": "A13 says a mapped pass runs elements with \"no concluded record\" and that \"a concluded element is never executed again\"; A09 writes a NodeExecution for `service_unreachable`, while A14 requires that waiting element to be sent again on resume.",
+   "question": "Does a waiting attempt's `service_unreachable` NodeExecution count as a concluded record for mapped scheduling?",
+   "options": [
+    "No; only an element conclusion, not a concluded attempt record, prevents execution",
+    "Yes; resume must use a separate retry path that bypasses A13's condition",
+    "Do not write a NodeExecution until the wait is resolved"
+   ],
+   "default_guess": "Treat `service_unreachable` as a concluded attempt but not a concluded element, and allow A14's retry path to bypass that condition."
+  },
+  {
+   "subject": "StandingGrant target",
+   "kind": "missing refusal condition",
+   "text": "A10 says a grant is for \"a node of the flow's active version whose effect class is not `destructive`\", but function nodes have no effect class and are not explicitly refused.",
+   "question": "Can a StandingGrant be created for a function node, or only for operation nodes?",
+   "options": [
+    "Only operation nodes may be granted",
+    "Any node except a destructive operation may be granted",
+    "Function-node grants are accepted but never used"
+   ],
+   "default_guess": "Refuse grants for function nodes."
+  },
+  {
+   "subject": "Manifest record schema",
+   "kind": "missing refusal conditions",
+   "text": "A08 handles absent fields, invalid JSON and selected values, but does not define required types and shapes for `capabilities`, capability entries, `exposed_as`, `idempotency_key`, instances or `required_headers`, nor whether a missing `idempotency_key` means `null`.",
+   "question": "What complete manifest shape is accepted, and in what order are malformed field types, missing nested fields and unexpected shapes reported?",
+   "options": [
+    "Validate against a closed manifest schema before A08's semantic checks",
+    "Treat each malformed shape as the corresponding listed check failing",
+    "Let the manifest reader or HTTP library reject malformed shapes"
+   ],
+   "default_guess": "Use a closed manifest schema first and report malformed data as manifest mismatch before semantic checks."
+  },
+  {
+   "subject": "Manifest revision immutability",
+   "kind": "contradiction",
+   "text": "A08 says the operation file is read before every send, but also says it \"changes for a running kernel only after a restart with a new configured revision\" without defining how `manifest_revision` makes files immutable.",
+   "question": "How is a record read at a configured revision, and what happens if files at the same location or revision change while the kernel is running?",
+   "options": [
+    "Read immutable repository objects addressed by the revision",
+    "Load and cache the entire configured revision at start",
+    "Read the live path every time and treat same-revision edits as changes"
+   ],
+   "default_guess": "Resolve and read immutable repository objects at the configured revision."
+  },
+  {
+   "subject": "HTTP header validity",
+   "kind": "missing refusal conditions",
+   "text": "A08 and A09 check duplicate and reserved header names but do not define valid header-name characters, valid values, control-character handling, or validation of the credential header name.",
+   "question": "Which required and credential header names and values are refused before request construction, and under which check?",
+   "options": [
+    "Apply RFC HTTP field-name and field-value validation when configuration or manifest data is read",
+    "Defer validation to send-time pre-send checks",
+    "Pass values verbatim and let the HTTP client decide"
+   ],
+   "default_guess": "Validate credential headers at start and manifest headers during manifest checks, rejecting control characters and invalid field names."
+  },
+  {
+   "subject": "HTTP timeout outcome",
+   "kind": "contradiction",
+   "text": "A09 classifies failures before the first request byte as \"nothing could be sent\", but its next row lists an undifferentiated \"timeout\" under \"request may have been sent\".",
+   "question": "How is a timeout that occurs during DNS, connection or TLS setup before the first request byte classified?",
+   "options": [
+    "`service_unreachable` and `not_sent` for non-read operations",
+    "`outcome_unknown` for every timeout",
+    "Use `not_sent` only when the transport positively proves no byte was written"
+   ],
+   "default_guess": "Use `service_unreachable` and `not_sent` whenever the kernel proves no request byte was written."
+  },
+  {
+   "subject": "HTTP content encoding",
+   "kind": "missing behavior",
+   "text": "A09 sends `Accept-Encoding: identity` and counts bytes \"after transfer decoding\", but does not say what happens if a service nevertheless returns `Content-Encoding`, or whether a client library may decode it automatically.",
+   "question": "Are non-identity content codings refused, decoded, or treated as literal response-body bytes, and which bytes count toward limits and digests?",
+   "options": [
+    "Refuse any non-identity content encoding as `contract_violation`",
+    "Decode supported content codings and count decoded bytes",
+    "Disable automatic decoding and treat encoded bytes literally"
+   ],
+   "default_guess": "Refuse a response carrying a non-identity content encoding as `contract_violation`."
+  },
+  {
+   "subject": "TLS verification",
+   "kind": "vague security rule",
+   "text": "A09 states only that \"TLS is verified for `https`\".",
+   "question": "Which trust store, hostname rules, protocol versions, certificate policies and client configuration define successful TLS verification?",
+   "options": [
+    "Use a release-pinned TLS configuration and CA bundle",
+    "Use the host system trust store with hostname verification",
+    "Make the trust source part of protected installation configuration"
+   ],
+   "default_guess": "Use the host system trust store with standard hostname verification and release-pinned minimum TLS settings."
+  },
+  {
+   "subject": "Multipart approval digest",
+   "kind": "contradiction",
+   "text": "State 0 says approval covers the \"fully built request\" and \"Any difference at send\" asks again; A10 excludes the multipart boundary from both the content-type description and body description, so wire requests with different boundaries have the same `request_digest`.",
+   "question": "Must a changed multipart boundary void an approval as a changed header/body, or is the boundary intentionally outside approval identity?",
+   "options": [
+    "Include the actual boundary and exact multipart bytes in the digest",
+    "Keep the semantic part description and declare boundary differences irrelevant",
+    "Use a deterministic boundary derived from the parts"
+   ],
+   "default_guess": "Use a deterministic boundary derived from the parts so the semantic digest and actual wire request remain stable."
+  },
+  {
+   "subject": "Failure-detail bytes",
+   "kind": "missing behavior",
+   "text": "A09 may retain bytes from an arbitrary error response, while M23 models `failure_detail` as text and A20 truncates it \"at a UTF-8 character boundary\".",
+   "question": "How are non-UTF-8 or binary error bodies converted into bounded failure detail?",
+   "options": [
+    "Decode UTF-8 strictly and omit invalid bodies",
+    "Decode with replacement before truncation",
+    "Store a bounded encoded representation such as hexadecimal or base64"
+   ],
+   "default_guess": "Decode as UTF-8 with replacement and then truncate at a character boundary."
+  },
+  {
+   "subject": "Secret exclusion from diagnostics",
+   "kind": "unverifiable invariant",
+   "text": "A17 says a credential \"never enters ... a failure detail, a log line ... or a response\", while A09 retains untrusted service error bodies and transport diagnostics that may echo credentials; no detection or redaction rule is given.",
+   "question": "How does the kernel enforce credential non-disclosure when a service or library includes the secret in error text, and what happens when it detects one?",
+   "options": [
+    "Redact exact resolved credential values from all diagnostics before storage or logging",
+    "Discard all service error bodies and transport-library messages",
+    "Rely on services and libraries never to echo credentials"
+   ],
+   "default_guess": "Redact exact resolved credential values and discard a diagnostic entirely if safe redaction cannot be assured."
+  },
+  {
+   "subject": "List ordering for mutable entities",
+   "kind": "undefined order",
+   "text": "A16 says list items are \"newest first, in reverse store order\" and continuation tokens name a store position, but bindings, runs, approvals, grants and attempts are updated after creation.",
+   "question": "Does a mutable entity's list position remain its creation position, move to its latest update position, or produce multiple list entries?",
+   "options": [
+    "Order each entity by immutable creation position",
+    "Order by the store position of its latest mutation",
+    "List immutable event records rather than current entities"
+   ],
+   "default_guess": "Keep one item per entity ordered by its creation position."
+  },
+  {
+   "subject": "Data-directory privacy check",
+   "kind": "vague refusal condition",
+   "text": "A18 says the data directory \"and everything in it are private to the kernel's user\" but gives no exact ownership, file-mode, ACL or recursive-check rule.",
+   "question": "Which ownership and permission conditions must hold at start and for newly created entries, and do ACLs or platform-specific permissions count?",
+   "options": [
+    "Require kernel-user ownership and no group/other permissions recursively",
+    "Require only that directories and sensitive files are inaccessible to other users",
+    "Use platform ACL checks with an equivalent privacy policy"
+   ],
+   "default_guess": "Require kernel-user ownership and zero group/other permission bits for the directory and every entry."
+  },
+  {
+   "subject": "Service credential references",
+   "kind": "missing model",
+   "text": "M28 carries \"references to secrets\" and A17 says a reference \"resolves to its value on the host\", but no reference syntax, resolver, ownership checks, size bound or failure behavior is defined.",
+   "question": "What kinds of credential references exist and how are they securely resolved and validated?",
+   "options": [
+    "References are paths to protected regular files",
+    "References name entries in a single supported host secret store",
+    "The resolver is a release-pinned installation adapter with a closed reference schema"
+   ],
+   "default_guess": "Use protected regular files with the same ownership and no-symlink requirements as the installation configuration."
+  },
+  {
+   "subject": "MCP transport and token carriage",
+   "kind": "missing interface behavior",
+   "text": "K-11 names `mcp`, M28 gives an `mcp_listen_address`, and A16 says every MCP request carries one token, but no MCP transport, token location, framing boundary or byte-counted request envelope is defined.",
+   "question": "Which MCP transport is exposed, where is the token carried, and exactly which received bytes count toward `surface_request_bytes_max`?",
+   "options": [
+    "Streamable HTTP MCP with a fixed authorization header and the complete request body counted",
+    "Another network MCP transport with authentication in its framing",
+    "A token field inside every typed operation request"
+   ],
+   "default_guess": "Use streamable HTTP MCP behind the reverse proxy, carry the token in a fixed authorization header, and count the received MCP message body."
+  },
+  {
+   "subject": "Release dependency pinning",
+   "kind": "missing required data",
+   "text": "A20 says a release pins \"the exact versions\" of dependencies and the sandbox runtime, but release v1 specifies only `CPython 3.12` and gives no exact patch/build or dependency versions.",
+   "question": "What exact runtime build, kernel dependencies and host sandbox-tool versions constitute release v1?",
+   "options": [
+    "Provide an exact lock and runtime artifact digest",
+    "Treat any CPython 3.12 patch and compatible dependencies as the same release",
+    "Pin Python packages but accept the host's bubblewrap version"
+   ],
+   "default_guess": "Require an exact dependency lock and immutable runtime artifact digest; treat bubblewrap as a separately checked host prerequisite."
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"Capture a failed execution\",\"kind\":\"contradiction\",\"text\":\"State 0 refuses capture when the execution's run \\\"was already released\\\"; A15 rule 5 allows capture only while \\\"the run has not ended, or ended `failed` and was not released\\\".\",\"question\":\"May a failed function execution from a run that later ended `refused`, `cancelled` or `succeeded` be captured when all required inputs are still durable values and no file bytes are missing?\",\"options\":[\"Allow it unless a required file is gone or the failed run was released\",\"Refuse it whenever the run ended other than `failed`\",\"Refuse capture after every ended run\"],\"default_guess\":\"Follow the more specific A15 rule and refuse it unless the run is unfinished or is failed and unreleased.\"},{\"subject\":\"Function filesystem access\",\"kind\":\"contradiction\",\"text\":\"K-02 says a function has \\\"no filesystem beyond its input\\\"; A03 permits opening paths in \\\"the exchange directory and the read-only runtime\\\".\",\"question\":\"What filesystem operations may implementation code itself perform inside the exchange directory and read-only runtime?\",\"options\":[\"No implementation-initiated filesystem access; only the runner uses those paths\",\"Allow reads and writes in the exchange directory and reads in the runtime\",\"Allow reads only, including runtime and input files\"],\"default_guess\":\"Apply A03 as the more specific rule: allow exchange-directory access and read-only runtime access.\"},{\"subject\":\"Clock and randomness isolation\",\"kind\":\"contradiction\",\"text\":\"K-02 requires \\\"no clock, no randomness\\\" and A03 says \\\"every clock and randomness entry point\\\" is replaced, but A03 then declares an exact closed list that omits standard-library sources such as `time.clock_gettime`, `time.clock_gettime_ns`, `os.times`, process identifiers and runtime metadata.\",\"question\":\"Are unlisted clock-, entropy- or execution-identity-dependent APIs permitted in release v1, or must the no-clock/no-randomness rule prohibit them too?\",\"options\":[\"The exact list is exhaustive and unlisted APIs remain usable\",\"The semantic prohibition controls and every equivalent source must be blocked\",\"Only returned dependence on such sources is prohibited\"],\"default_guess\":\"Treat the exact release-v1 list as authoritative, although that weakens the stated no-clock/no-randomness invariant.\"},{\"subject\":\"Deterministic function execution and admission\",\"kind\":\"unverifiable invariant\",\"text\":\"K-05 calls admission \\\"a deterministic verdict\\\" and A03 requires the same implementation and input to yield the same digest, while the sandbox rules do not prohibit observable nondeterminism such as `id()`, PIDs, thread scheduling, runtime-file metadata or other untrapped APIs.\",\"question\":\"What mechanism makes function outputs deterministic for every admitted implementation, and what happens when repeated executions differ?\",\"options\":[\"Determinism is guaranteed only by the listed traps and fixed release environment\",\"The sandbox must block every remaining nondeterministic observation\",\"The kernel must run cases repeatedly and refuse inconsistent implementations\"],\"default_guess\":\"Use the specified traps and fixed environment only, cache the first verdict, and accept that the stronger determinism claim is not enforceable.\"},{\"subject\":\"Sandbox audit reporting channel\",\"kind\":\"unverifiable invariant\",\"text\":\"A03 says each trap writes to \\\"the runner's channel to the parent, which user code cannot unsend\\\", but the untrusted module is loaded by the in-sandbox runner and no protection of that channel from closing, replacing or forging is defined.\",\"question\":\"How is the trap channel isolated from implementation code so caught violations cannot be hidden or corrupt the runner protocol?\",\"options\":[\"Run implementation code in a separate child with no access to the channel\",\"Keep one process but reserve and protect a file descriptor by an enforcement mechanism\",\"Trust the Python runner and audit hooks despite shared-process access\"],\"default_guess\":\"Use a separate sandbox child for implementation code and keep the parent channel inaccessible to it.\"},{\"subject\":\"Sandbox resource outcome classification\",\"kind\":\"vague refusal condition\",\"text\":\"A03 says \\\"a limit hit (memory, process count, scratch, `output_bytes`)\\\" is `resource_exhausted`, but does not define how OS exceptions, signals, failed allocations, failed forks, filesystem errors or abnormal exits prove which limit was hit.\",\"question\":\"Exactly which observable conditions count as each resource limit being hit rather than `crashed` or `sandbox_violation`, especially when several conditions coincide?\",\"options\":[\"Classify only independently measured limit events as `resource_exhausted`\",\"Map designated signals and OS errors to their corresponding limits\",\"Treat ambiguous termination as `crashed`\"],\"default_guess\":\"Classify as `resource_exhausted` only when the parent can attribute the event to a measured limit; otherwise use `crashed`.\"},{\"subject\":\"Sandbox scratch bound\",\"kind\":\"missing mechanism\",\"text\":\"A03 requires \\\"one private exchange directory bounded by `sandbox_scratch_bytes_max`\\\" but specifies no quota mechanism, accounting rule or result for a write that crosses the bound.\",\"question\":\"How is scratch usage measured and enforced, including sparse files, replacements, metadata and concurrent child processes?\",\"options\":[\"Use a size-limited filesystem and classify exhaustion as `resource_exhausted`\",\"Measure allocated bytes in the directory from the parent\",\"Count logical file lengths maintained by the runner\"],\"default_guess\":\"Use a size-limited filesystem and report an attempted overrun as `resource_exhausted`.\"},{\"subject\":\"Sandbox stdout and stderr\",\"kind\":\"missing behavior\",\"text\":\"A03 says stdout is never kept and \\\"Nothing the code prints\\\" is interpreted, but gives no destination, byte bound or outcome for unlimited stdout or stderr.\",\"question\":\"Where do stdout and stderr go, and can filling or writing them cause `resource_exhausted`, `crashed` or `timeout`?\",\"options\":[\"Redirect both to a bounded discard sink and report overrun as `resource_exhausted`\",\"Redirect both to `/dev/null` without counting\",\"Capture a bounded diagnostic stream\"],\"default_guess\":\"Redirect both to `/dev/null` and never include them in execution output or failure detail.\"},{\"subject\":\"Failed function outputs and spool\",\"kind\":\"missing behavior\",\"text\":\"A03 validates returned outputs after execution, while A15 only explicitly discards attempt files when spool ceilings are exceeded; neither says what happens to otherwise valid sibling outputs or staged files when another output makes the attempt fail.\",\"question\":\"Are all outputs of a failed function attempt discarded atomically, or are valid values and files retained and named in its NodeExecution?\",\"options\":[\"Discard every output of a failed attempt\",\"Keep and trace every independently valid output but deliver none\",\"Keep valid outputs and allow unaffected downstream delivery\"],\"default_guess\":\"Discard all produced outputs from a failed attempt and deliver none.\"},{\"subject\":\"Multi-output node validation\",\"kind\":\"missing behavior\",\"text\":\"A13 says a validation failure concludes \\\"the producing node, or the receiving node, `contract_violation`, and the value is not delivered\\\" but does not say whether other outputs of that same node may already have been delivered.\",\"question\":\"Is production and delivery atomic across all output ports of one node attempt?\",\"options\":[\"Validate every output first and deliver all or none\",\"Deliver valid outputs independently while failing dependants of invalid outputs\",\"Retain valid outputs only for trace inspection\"],\"default_guess\":\"Validate all outputs first and deliver none if any output is invalid.\"},{\"subject\":\"Rollback eligibility\",\"kind\":\"vague condition\",\"text\":\"K-04 and A04 permit rollback to \\\"an earlier implementation\\\" of the current contract version without defining earlier relative to submission order, activation order or the current implementation.\",\"question\":\"Which admitted implementations are eligible for rollback, particularly an implementation submitted later than the currently active one or reactivating a newer implementation after a prior rollback?\",\"options\":[\"Any non-current implementation admitted over the current corpus\",\"Only implementations submitted before the current implementation\",\"Only implementations that were activated before the current activation\"],\"default_guess\":\"Allow any non-current implementation with an admitted verdict over the current corpus.\"},{\"subject\":\"FlowVersion content identity\",\"kind\":\"underdetermined ordering\",\"text\":\"A01 sorts edges \\\"in the edge order of A05\\\" and constants by (`to_node`, `to_port`), but those keys can tie for two guarded edges or for multiple constants that are retained as an unproven version.\",\"question\":\"What tie-breaker canonicalizes edges or constants with equal stated sort keys so reordering equal content cannot change `flow_version_id`?\",\"options\":[\"Sort by the canonical JSON of the complete edge or constant after the stated keys\",\"Preserve submission order for tied items\",\"Refuse all duplicate destination keys before identity is computed\"],\"default_guess\":\"Use canonical JSON of the complete item as the final tie-breaker.\"},{\"subject\":\"Port validation outside contracts\",\"kind\":\"missing refusal conditions\",\"text\":\"A02 fully validates contract ports, but A08 names only selected A02 port rules for bindings, and A05's malformed-composition checks do not cover all M01 invariants such as supported schemas or forbidden `media_type` on a `value` port.\",\"question\":\"Which M01 and A02 port invariants are checked when proposing bindings and composing flow ports, and at what stage is each invalid declaration refused?\",\"options\":[\"Apply every applicable M01 invariant and supported-schema check before keeping the record\",\"Apply only the checks explicitly repeated in A05 and A08\",\"Keep malformed declarations and let proof or invocation fail later\"],\"default_guess\":\"Refuse before keeping the record whenever any applicable M01 invariant or supported-schema requirement fails.\"},{\"subject\":\"Guard value comparison\",\"kind\":\"undefined equality\",\"text\":\"A05 requires a guard value to be a member of a closed set and A13 delivers when a runtime value \\\"equals its guard value\\\", but JSON equality is not defined.\",\"question\":\"What equality rule is used for guard membership and runtime matching, including `1` versus `1.0`, `true` versus `1`, object key order and nested values?\",\"options\":[\"Equality of canonical JSON bytes\",\"JSON structural equality with numeric mathematical equality\",\"Host-language equality\"],\"default_guess\":\"Compare canonical JSON bytes.\"},{\"subject\":\"Disclosure through guards\",\"kind\":\"rule conflict\",\"text\":\"A07 says personal data cannot leave through a chain, but A05 checks disclosure only for the edge's delivered source value; a guard may use another, more sensitive output of the same operation, and `skipped_by_guard` remains visible to an agent.\",\"question\":\"Does the disclosure class of a guard influence the guarded edge, target or observable skipped status?\",\"options\":[\"Raise the guarded delivery/control result to the guard port's class\",\"Refuse a guard whose class exceeds the target's accepted class\",\"Treat control-flow outcomes as unclassified metadata and permit the leak\"],\"default_guess\":\"Follow the literal proof rules and treat the skipped/delivered status as unclassified metadata.\"},{\"subject\":\"Mapped-element retries\",\"kind\":\"contradiction\",\"text\":\"A13 says a mapped pass runs elements with \\\"no concluded record\\\" and that \\\"a concluded element is never executed again\\\"; A09 writes a NodeExecution for `service_unreachable`, while A14 requires that waiting element to be sent again on resume.\",\"question\":\"Does a waiting attempt's `service_unreachable` NodeExecution count as a concluded record for mapped scheduling?\",\"options\":[\"No; only an element conclusion, not a concluded attempt record, prevents execution\",\"Yes; resume must use a separate retry path that bypasses A13's condition\",\"Do not write a NodeExecution until the wait is resolved\"],\"default_guess\":\"Treat `service_unreachable` as a concluded attempt but not a concluded element, and allow A14's retry path to bypass that condition.\"},{\"subject\":\"StandingGrant target\",\"kind\":\"missing refusal condition\",\"text\":\"A10 says a grant is for \\\"a node of the flow's active version whose effect class is not `destructive`\\\", but function nodes have no effect class and are not explicitly refused.\",\"question\":\"Can a StandingGrant be created for a function node, or only for operation nodes?\",\"options\":[\"Only operation nodes may be granted\",\"Any node except a destructive operation may be granted\",\"Function-node grants are accepted but never used\"],\"default_guess\":\"Refuse grants for function nodes.\"},{\"subject\":\"Manifest record schema\",\"kind\":\"missing refusal conditions\",\"text\":\"A08 handles absent fields, invalid JSON and selected values, but does not define required types and shapes for `capabilities`, capability entries, `exposed_as`, `idempotency_key`, instances or `required_headers`, nor whether a missing `idempotency_key` means `null`.\",\"question\":\"What complete manifest shape is accepted, and in what order are malformed field types, missing nested fields and unexpected shapes reported?\",\"options\":[\"Validate against a closed manifest schema before A08's semantic checks\",\"Treat each malformed shape as the corresponding listed check failing\",\"Let the manifest reader or HTTP library reject malformed shapes\"],\"default_guess\":\"Use a closed manifest schema first and report malformed data as manifest mismatch before semantic checks.\"},{\"subject\":\"Manifest revision immutability\",\"kind\":\"contradiction\",\"text\":\"A08 says the operation file is read before every send, but also says it \\\"changes for a running kernel only after a restart with a new configured revision\\\" without defining how `manifest_revision` makes files immutable.\",\"question\":\"How is a record read at a configured revision, and what happens if files at the same location or revision change while the kernel is running?\",\"options\":[\"Read immutable repository objects addressed by the revision\",\"Load and cache the entire configured revision at start\",\"Read the live path every time and treat same-revision edits as changes\"],\"default_guess\":\"Resolve and read immutable repository objects at the configured revision.\"},{\"subject\":\"HTTP header validity\",\"kind\":\"missing refusal conditions\",\"text\":\"A08 and A09 check duplicate and reserved header names but do not define valid header-name characters, valid values, control-character handling, or validation of the credential header name.\",\"question\":\"Which required and credential header names and values are refused before request construction, and under which check?\",\"options\":[\"Apply RFC HTTP field-name and field-value validation when configuration or manifest data is read\",\"Defer validation to send-time pre-send checks\",\"Pass values verbatim and let the HTTP client decide\"],\"default_guess\":\"Validate credential headers at start and manifest headers during manifest checks, rejecting control characters and invalid field names.\"},{\"subject\":\"HTTP timeout outcome\",\"kind\":\"contradiction\",\"text\":\"A09 classifies failures before the first request byte as \\\"nothing could be sent\\\", but its next row lists an undifferentiated \\\"timeout\\\" under \\\"request may have been sent\\\".\",\"question\":\"How is a timeout that occurs during DNS, connection or TLS setup before the first request byte classified?\",\"options\":[\"`service_unreachable` and `not_sent` for non-read operations\",\"`outcome_unknown` for every timeout\",\"Use `not_sent` only when the transport positively proves no byte was written\"],\"default_guess\":\"Use `service_unreachable` and `not_sent` whenever the kernel proves no request byte was written.\"},{\"subject\":\"HTTP content encoding\",\"kind\":\"missing behavior\",\"text\":\"A09 sends `Accept-Encoding: identity` and counts bytes \\\"after transfer decoding\\\", but does not say what happens if a service nevertheless returns `Content-Encoding`, or whether a client library may decode it automatically.\",\"question\":\"Are non-identity content codings refused, decoded, or treated as literal response-body bytes, and which bytes count toward limits and digests?\",\"options\":[\"Refuse any non-identity content encoding as `contract_violation`\",\"Decode supported content codings and count decoded bytes\",\"Disable automatic decoding and treat encoded bytes literally\"],\"default_guess\":\"Refuse a response carrying a non-identity content encoding as `contract_violation`.\"},{\"subject\":\"TLS verification\",\"kind\":\"vague security rule\",\"text\":\"A09 states only that \\\"TLS is verified for `https`\\\".\",\"question\":\"Which trust store, hostname rules, protocol versions, certificate policies and client configuration define successful TLS verification?\",\"options\":[\"Use a release-pinned TLS configuration and CA bundle\",\"Use the host system trust store with hostname verification\",\"Make the trust source part of protected installation configuration\"],\"default_guess\":\"Use the host system trust store with standard hostname verification and release-pinned minimum TLS settings.\"},{\"subject\":\"Multipart approval digest\",\"kind\":\"contradiction\",\"text\":\"State 0 says approval covers the \\\"fully built request\\\" and \\\"Any difference at send\\\" asks again; A10 excludes the multipart boundary from both the content-type description and body description, so wire requests with different boundaries have the same `request_digest`.\",\"question\":\"Must a changed multipart boundary void an approval as a changed header/body, or is the boundary intentionally outside approval identity?\",\"options\":[\"Include the actual boundary and exact multipart bytes in the digest\",\"Keep the semantic part description and declare boundary differences irrelevant\",\"Use a deterministic boundary derived from the parts\"],\"default_guess\":\"Use a deterministic boundary derived from the parts so the semantic digest and actual wire request remain stable.\"},{\"subject\":\"Failure-detail bytes\",\"kind\":\"missing behavior\",\"text\":\"A09 may retain bytes from an arbitrary error response, while M23 models `failure_detail` as text and A20 truncates it \\\"at a UTF-8 character boundary\\\".\",\"question\":\"How are non-UTF-8 or binary error bodies converted into bounded failure detail?\",\"options\":[\"Decode UTF-8 strictly and omit invalid bodies\",\"Decode with replacement before truncation\",\"Store a bounded encoded representation such as hexadecimal or base64\"],\"default_guess\":\"Decode as UTF-8 with replacement and then truncate at a character boundary.\"},{\"subject\":\"Secret exclusion from diagnostics\",\"kind\":\"unverifiable invariant\",\"text\":\"A17 says a credential \\\"never enters ... a failure detail, a log line ... or a response\\\", while A09 retains untrusted service error bodies and transport diagnostics that may echo credentials; no detection or redaction rule is given.\",\"question\":\"How does the kernel enforce credential non-disclosure when a service or library includes the secret in error text, and what happens when it detects one?\",\"options\":[\"Redact exact resolved credential values from all diagnostics before storage or logging\",\"Discard all service error bodies and transport-library messages\",\"Rely on services and libraries never to echo credentials\"],\"default_guess\":\"Redact exact resolved credential values and discard a diagnostic entirely if safe redaction cannot be assured.\"},{\"subject\":\"List ordering for mutable entities\",\"kind\":\"undefined order\",\"text\":\"A16 says list items are \\\"newest first, in reverse store order\\\" and continuation tokens name a store position, but bindings, runs, approvals, grants and attempts are updated after creation.\",\"question\":\"Does a mutable entity's list position remain its creation position, move to its latest update position, or produce multiple list entries?\",\"options\":[\"Order each entity by immutable creation position\",\"Order by the store position of its latest mutation\",\"List immutable event records rather than current entities\"],\"default_guess\":\"Keep one item per entity ordered by its creation position.\"},{\"subject\":\"Data-directory privacy check\",\"kind\":\"vague refusal condition\",\"text\":\"A18 says the data directory \\\"and everything in it are private to the kernel's user\\\" but gives no exact ownership, file-mode, ACL or recursive-check rule.\",\"question\":\"Which ownership and permission conditions must hold at start and for newly created entries, and do ACLs or platform-specific permissions count?\",\"options\":[\"Require kernel-user ownership and no group/other permissions recursively\",\"Require only that directories and sensitive files are inaccessible to other users\",\"Use platform ACL checks with an equivalent privacy policy\"],\"default_guess\":\"Require kernel-user ownership and zero group/other permission bits for the directory and every entry.\"},{\"subject\":\"Service credential references\",\"kind\":\"missing model\",\"text\":\"M28 carries \\\"references to secrets\\\" and A17 says a reference \\\"resolves to its value on the host\\\", but no reference syntax, resolver, ownership checks, size bound or failure behavior is defined.\",\"question\":\"What kinds of credential references exist and how are they securely resolved and validated?\",\"options\":[\"References are paths to protected regular files\",\"References name entries in a single supported host secret store\",\"The resolver is a release-pinned installation adapter with a closed reference schema\"],\"default_guess\":\"Use protected regular files with the same ownership and no-symlink requirements as the installation configuration.\"},{\"subject\":\"MCP transport and token carriage\",\"kind\":\"missing interface behavior\",\"text\":\"K-11 names `mcp`, M28 gives an `mcp_listen_address`, and A16 says every MCP request carries one token, but no MCP transport, token location, framing boundary or byte-counted request envelope is defined.\",\"question\":\"Which MCP transport is exposed, where is the token carried, and exactly which received bytes count toward `surface_request_bytes_max`?\",\"options\":[\"Streamable HTTP MCP with a fixed authorization header and the complete request body counted\",\"Another network MCP transport with authentication in its framing\",\"A token field inside every typed operation request\"],\"default_guess\":\"Use streamable HTTP MCP behind the reverse proxy, carry the token in a fixed authorization header, and count the received MCP message body.\"},{\"subject\":\"Release dependency pinning\",\"kind\":\"missing required data\",\"text\":\"A20 says a release pins \\\"the exact versions\\\" of dependencies and the sandbox runtime, but release v1 specifies only `CPython 3.12` and gives no exact patch/build or dependency versions.\",\"question\":\"What exact runtime build, kernel dependencies and host sandbox-tool versions constitute release v1?\",\"options\":[\"Provide an exact lock and runtime artifact digest\",\"Treat any CPython 3.12 patch and compatible dependencies as the same release\",\"Pin Python packages but accept the host's bubblewrap version\"],\"default_guess\":\"Require an exact dependency lock and immutable runtime artifact digest; treat bubblewrap as a separately checked host prerequisite.\"}]}"
+}

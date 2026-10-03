@@ -221,9 +221,11 @@ come from the installation.
    `<manifest_location>/<service_id>.json` at the configured revision, both
    from `capability:installation.manifest_source` (A08 rule 1), and runs the A08 rule 5 checks in their order, naming the first
    failing one: record, duplicate entry names, operation present, effect class
-   one of the five, invocable (A08 rule 3, A09 rule 1), the instance
+   one of the five, invocable (A08 rule 3, A09 rule 1), the key syntax for an
+   operation other than `read`, the instance
    `capability:installation.selected_instance_name` selects, with an
-   `api_base_url` and no repeated required header, key fields (A08 rule 4),
+   `api_base_url` and no repeated or invalid required header, key fields as
+   `value` input ports (A08 rule 4),
    request shape through `capability:service_invoker.check_request_shape`, then
    the contract-port rules and classes of M01.
 2. **Pin.** `module:bindings` computes `record_digest` of the one capability

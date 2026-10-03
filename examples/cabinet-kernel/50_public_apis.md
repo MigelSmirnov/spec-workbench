@@ -121,7 +121,7 @@ Details of an element that concluded `operation_failed` (A09 rule 6, A08 rule
 `binding_stale` — for every failure of the record itself, a changed digest
 or an operation no longer invocable alike (A08 rule 6; accept a new binding),
 `instance_not_selected`, `instance_address_missing`,
-`required_header_repeated`, `plain_http_not_allowed` and
+`required_header_repeated`, `required_header_invalid`, `plain_http_not_allowed` and
 `credential_unresolved` (fix the installation), `input_not_placeable` (fix
 the flow's data), `redirect_not_followed` (a `read` answered 3xx, A09 rule
 5). Other details: `value_too_large` (A15 rule 4),
@@ -137,7 +137,7 @@ not listed are never written.
 | `issue_contract_version` | `functions` | ContractVersion M03, and Slot M02 when new |
 | `add_trial_case` | `functions` | StoredValues M21 of the case, TrialCase M06 |
 | `record_implementation` | `functions` | Implementation M05 |
-| `record_trial_execution` | `functions` | one TrialExecution M07 and its output StoredValues |
+| `record_trial_execution` | `functions` | one TrialExecution M07 and the StoredValues of its `value` outputs; a file output is held by its facts only, never as a StoredValue |
 | `record_admission_verdict` | `functions` | AdmissionVerdict M08, and Activation M09 when admitted and not current |
 | `record_activation` | `functions` | Activation M09 of a rollback, or of a reused `admitted` verdict whose implementation is not current |
 | `propose_binding` | `bindings` | OperationBinding M11 `proposed` |
@@ -161,7 +161,10 @@ not listed are never written.
 A change is named, and its payload is the records that change lists; State 5
 fixes which records each change writes, State 6 the typed payload of each. `store`
 checks only its own invariants — attempt numbers, unique and existing
-identities, links, no record edited — and trusts its caller for every rule of
+identities, links, no record edited — a lifecycle change (a status, who
+decided or resolved or released and when, `concluded_at`) updates those fields
+of the entity's one record in place, which keeps its store position, the
+position of its creation; every other field is never changed — and trusts its caller for every rule of
 the caller's decision. The caller supplies each record's facts, its content identities computed with
 `canonical_values`, and the time from `clock.kernel_now`; `store` adds what
 only it can: store positions, `attempt_number` and minted identities.
@@ -307,7 +310,7 @@ rules 4–5. Field schemas and bounds are State 6's. "Agent" means any agent,
 | `grant_standing_approval` | owner | `effects.grant_standing_approval` |
 | `revoke_standing_approval` | owner | `effects.revoke_standing_approval` |
 | `get_slot` | owner, agent | `functions.read_slot` |
-| `get_repair_view` | owner, agent | one slot's repair read (A15 rule 6, K-12), not a list operation of A16 rule 6: `functions.read_slot`; the current contract version through `functions.read_contract_version` and its whole corpus; the current implementation through `functions.read_implementation`, with code, and its trial executions on the corpus; and through `store.page_records` the latest NodeExecutions of the slot's implementations — `page_size_default` unless the caller asks another size, at most `page_size_max` (A16 rule 6) — with a continuation token that also carries the implementation set of its first page; passed back, it pages only the NodeExecutions below that position for that set — an implementation added since has only newer executions, so nothing below is missed — and every other part is read again as of that request; the token is bound to its slot, so passed with another slot it is `invalid_request`, as the rule below the table says for every continuation token, and only the page size may change |
+| `get_repair_view` | owner, agent | one slot's repair read (A15 rule 6, K-12), not a list operation of A16 rule 6: `functions.read_slot`; the current contract version through `functions.read_contract_version` and its whole corpus; the current implementation through `functions.read_implementation`, with code, and its trial executions on the corpus — none, without an error, when the current contract version has no current activation; and through `store.page_records` the latest NodeExecutions of the slot's implementations — `page_size_default` unless the caller asks another size, at most `page_size_max` (A16 rule 6) — with a continuation token that also carries the implementation set of its first page; passed back, it pages only the NodeExecutions below that position for that set — an implementation added since has only newer executions, so nothing below is missed — and every other part is read again as of that request; the token is bound to its slot, so passed with another slot it is `invalid_request`, as the rule below the table says for every continuation token, and only the page size may change |
 | `get_contract_version` | owner, agent | `functions.read_contract_version` |
 | `get_implementation` | owner with code; agent without code (K-12) | `functions.read_implementation` |
 | `get_binding` | owner, agent | `bindings.read_binding` |
@@ -1108,8 +1111,11 @@ A fresh environment was created and, on return, confirmed removed.
 
 ### Enforces
 
-Isolation, traps, limits from outside and the outcome order of A03; outputs
-validated against the output ports with `canonical_values.fit_port_value`.
+Isolation, traps, limits from outside and the outcome order of A03; outputs validated against the output ports with
+`canonical_values.fit_port_value`, the bound passed being the execution's
+`output_bytes`; `stored_value_bytes_max` and the spool ceilings are not the
+sandbox's — `runs` and `store` apply them after the execution has otherwise
+succeeded (A15 rules 3 and 4).
 
 ### Errors
 
@@ -1957,7 +1963,10 @@ The version is kept, proven or not.
 ### Enforces
 
 Purpose rule first; A05 rule 7 pre-proof refusals in order; identity per A01
-rule 1.
+rule 1. A constant's StoredValue takes the `value_schema` and class the
+composing agent declared with it (State 6, decision 5), never its target's, so
+a version whose constant targets a missing or unfitting port is still kept
+and fails its proof (A05 phases 2 and 3).
 
 ### Errors
 
@@ -2328,7 +2337,9 @@ The run's answer, ended `cancelled`.
 
 ### Observable effect
 
-Nothing further is sent; the spool is gone.
+Nothing further is sent; the run's spool can no longer be read, and its files
+are removed in this request or, when removal fails, at the next start (A18
+rule 4).
 
 ### Enforces
 
@@ -2440,7 +2451,8 @@ The run's answer as it rests or ended.
 
 ### Observable effect
 
-None.
+The run advances as far as it can: elements that become ready run, and their
+requests are sent under the authority each has (A13).
 
 ### Enforces
 

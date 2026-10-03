@@ -128,6 +128,11 @@ record checked by `design_lint --state 2`, recorded as such in `30_trace.json`.
   transaction that writes the record, as the ordinal of the element's
   NodeExecutions (A11 rule 1); no caller passes a number, `effects` included.
   The in-flight EffectAttempt is given the next ordinal when `store` writes it.
+  A file spooled before its record is written — a function output, a `read`
+  send's file — is named by the element's next ordinal, which the spooling
+  module reads as the count of the element's NodeExecutions plus one; `store`
+  writes the record under that ordinal only while it is still the next one,
+  refusing the change otherwise, and passes no number of its own choosing.
   A requested EffectApproval is given the next ordinal too, without taking
   it: it names the attempt it was requested for (A11 rule 1).
   The outcome call names the EffectAttempt, and `store` gives the concluding
@@ -228,10 +233,14 @@ record checked by `design_lint --state 2`, recorded as such in `30_trace.json`.
   that element concluded failed, so its dependants conclude `upstream_failed`
   and independent branches go on (A13 rule 5, A14 rule 5); an interrupted admission has no verdict, so the next
   submission of that implementation runs it again (A04 rule 2).
-- **Bytes left by a refused capture.** Files `runs` copied into the
-  content-addressed area before `functions.add_captured_trial_case` refused
-  stay there: the area is immutable and stores equal bytes once, and no record
-  names them, so they enter no case (A18 rule 4).
+- **Nothing copied for a refused capture.** `runs` copies a spooled file into
+  the content-addressed area only after every check of the capture has passed
+  on the records and the files' facts — eligibility, run and spool, then the
+  input fits and sizes `functions.add_captured_trial_case` would make —, so a
+  refused capture copies nothing and owner decision 9 holds: the only files
+  kept beyond a run are trial-case fixtures. Only a store failure between the
+  copy and the case's write can leave bytes no record names; they are never
+  served and enter no case (A18 rule 4).
 - **Continuation tokens.** `surface` checks the token's form; whether it names
   a position of that list is answered by `store.page_records`, which refuses
   one that does not (A16 rule 6).

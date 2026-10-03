@@ -117,7 +117,8 @@ Reuses cabinet-flow decision 23, narrowed by K-16.
 
 1. The installation's configuration file holds the owner token, the agent tokens
    and, per service, the selected manifest instance name and one credential: a
-   header name and the reference that resolves to its value on the host; and the
+   header name — an HTTP field-name token, or the kernel refuses to start —
+   and the reference that resolves to its value on the host; and the
    address the kernel's one `mcp` entrance listens on, which the host's reverse
    proxy reaches (owner, 2026-10-03, raised by the pre-contract data closure).
    The kernel reads the file's path from its one command-line argument and reads

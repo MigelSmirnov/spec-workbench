@@ -1,0 +1,192 @@
+{
+ "open_points": [
+  {
+   "subject": "SpooledFile attempt identity",
+   "kind": "contradictory input ownership",
+   "text": "“store alone assigns attempt_number, inside the transaction that writes the record” and “store.spool_file” takes “attempt_number” before the SpooledFile record is written",
+   "question": "How does runs or effects obtain the attempt_number required to spool a function or read-operation file when no EffectAttempt exists and the later record_change is supposed to assign that number?",
+   "options": [
+    "Add a store operation that reserves and returns the next attempt number",
+    "Let spool_file assign and return the attempt number",
+    "Let callers calculate and pass the next number, contrary to store-alone ownership",
+    "Write the NodeExecution and SpooledFile atomically with the bytes"
+   ],
+   "default_guess": "Let spool_file reserve and return the next attempt number, then require the concluding record_change to consume that reservation."
+  },
+  {
+   "subject": "TrialExecution file outputs",
+   "kind": "contradictory persistence",
+   "text": "M07 says a file output has “only its facts — digest, size and media type, no bytes and never a StoredValue”, while State 4 says functions “stores the outputs through capability:store.put_value_bytes” and record_trial_execution writes “its output StoredValues”",
+   "question": "Are file outputs of a trial execution discarded after recording their facts, or persisted in the content-addressed area as StoredValues?",
+   "options": [
+    "Discard file bytes and record only digest, size and media type",
+    "Persist file bytes without a StoredValue",
+    "Persist them as StoredValues"
+   ],
+   "default_guess": "Discard the file bytes and record only their facts, following M07 and K-10."
+  },
+  {
+   "subject": "Internal error after an effect was sent",
+   "kind": "missing recovery behavior",
+   "text": "“When a request makes several store changes, those made before the failed one stay” but record_attempt_outcome may fail after record_attempt_in_flight and the HTTP send have succeeded",
+   "question": "What must happen when the request may have produced an effect but the outcome transaction returns internal_error: does the process stop, does the attempt immediately become unknown, or may the kernel continue serving with an in_flight attempt?",
+   "options": [
+    "Stop the process so startup recovery converts in_flight to unknown",
+    "Convert the attempt to unknown immediately in another store call",
+    "Continue serving and require an explicit restart",
+    "Return a pending run despite the failed outcome transaction"
+   ],
+   "default_guess": "Stop the process and rely on startup recovery to mark the attempt unknown before serving again."
+  },
+  {
+   "subject": "Partially committed approval and resolution continuations",
+   "kind": "missing continuation semantics",
+   "text": "“the caller re-reads before repeating” after internal_error, while continue_after_approval and continue_after_resolution commit the decision before later calls that may fail",
+   "question": "How can a run continue if an approval has become approved or an attempt has become not_applied, but the later send, approval request, or record_run_progress fails, leaving the stored run waiting on a decision that can no longer be repeated?",
+   "options": [
+    "Stop and recover every non-final run from its records at startup",
+    "Make each whole continuation one transaction, excluding the HTTP send",
+    "Add an explicit advance operation for such runs",
+    "Allow the caller to repeat an already committed decision idempotently"
+   ],
+   "default_guess": "Make repeated decisions idempotently resume advancement, and have startup recovery re-derive every non-final run rather than only runs stored as running."
+  },
+  {
+   "subject": "stop_required from continuation operations",
+   "kind": "incomplete error contract",
+   "text": "The global convention says stop_required is “returned up the call chain”, but runs.resume_run, runs.continue_after_approval and runs.continue_after_resolution do not list stop_required although each advances the run and can execute a function",
+   "question": "Must these three operations return stop_required and terminate the process when a subsequently executed function has unconfirmed cleanup?",
+   "options": [
+    "Yes, propagate stop_required from every advancement path",
+    "Convert it to internal_error without stopping",
+    "Prevent these operations from executing function nodes"
+   ],
+   "default_guess": "Propagate stop_required through every operation that advances a run and stop the process after recording the failed execution."
+  },
+  {
+   "subject": "Spool removal success guarantees",
+   "kind": "contradictory effect",
+   "text": "cancel_run says “the spool is gone” and release_run says “The run's spooled files are gone”, while the conventions say removal failure “does not fail the request” and cleanup may wait until the next start",
+   "question": "Does a successful cancel or release guarantee physical deletion before returning, or only logical inaccessibility with best-effort deferred deletion?",
+   "options": [
+    "Guarantee physical deletion and fail if it cannot be completed",
+    "Return success after logical removal and retry physical deletion at startup",
+    "Return success with an explicit cleanup-pending result"
+   ],
+   "default_guess": "Guarantee only logical inaccessibility and treat physical deletion as deferred cleanup, changing the stated outputs accordingly."
+  },
+  {
+   "subject": "Unreferenced files from refused capture",
+   "kind": "direct contradiction",
+   "text": "K-10 says “The only files the kernel keeps beyond a run are the file fixtures of trial cases”, but State 3 says files copied before a refused captured case “stay there” and “no record names them”",
+   "question": "Must unreferenced content-addressed files created by a refused capture be removed, or are they a permanent exception to K-10?",
+   "options": [
+    "Remove or transactionally stage them when the case is refused",
+    "Keep them permanently as an explicit exception",
+    "Garbage-collect all unreferenced content-addressed bytes at startup"
+   ],
+   "default_guess": "Stage or remove them so only accepted trial fixtures outlive a run."
+  },
+  {
+   "subject": "canonical_values.canonical_bytes duplicate-key handling",
+   "kind": "input representation gap",
+   "text": "The operation takes “One JSON value” but must refuse “a duplicate key”",
+   "question": "What representation reaches canonical_bytes that still preserves duplicate object members long enough to detect them?",
+   "options": [
+    "Raw UTF-8 JSON text or bytes",
+    "A duplicate-preserving parsed JSON representation",
+    "A normal parsed JSON value, making duplicate-key detection the surface parser's responsibility"
+   ],
+   "default_guess": "Have the surface parse raw JSON with duplicate detection, and let canonical_bytes accept already validated parsed values."
+  },
+  {
+   "subject": "sandbox output validation size bound",
+   "kind": "unspecified input",
+   "text": "sandbox.execute_function “validates against the output ports with canonical_values.fit_port_value”, but fit_port_value requires “the size bound that applies where the caller stands” and sandbox.execute_function does not identify that bound",
+   "question": "Which size bound must sandbox use for per-port fit, and which later module owns stored_value_bytes_max and spool limits without changing the A03 outcome order?",
+   "options": [
+    "Use ResourceBounds.output_bytes for sandbox fit and apply storage ceilings later",
+    "Use stored_value_bytes_max or spool_file_bytes_max inside the sandbox",
+    "Add a schema-only fit mode with no storage-size check"
+   ],
+   "default_guess": "Add a schema-only fit mode; enforce total output_bytes in sandbox and storage/spool ceilings afterward in functions, runs or effects."
+  },
+  {
+   "subject": "Point-read response projections",
+   "kind": "contradictory outputs",
+   "text": "“Records reach a caller as they are”, but read_contract_version returns only “ports and bounds”, read_implementation only code, contract and bounds, read_binding omits proposal and acceptance actors and times, and read_flow_version lists only graph content",
+   "question": "Do the corresponding MCP get operations return the complete State 1 records, including identities, provenance and timestamps, or only the projections listed by each module operation?",
+   "options": [
+    "Return complete records at the MCP surface while module capabilities return projections",
+    "Return only the listed projections",
+    "Expand every read capability to return the complete record"
+   ],
+   "default_guess": "Return complete records to inspection callers, using separate minimal internal projections if needed."
+  },
+  {
+   "subject": "Pagination with mutable filtered records",
+   "kind": "undefined paging semantics",
+   "text": "A continuation token is “the store position of the last item returned” and must name a position “of that list”, while list filters include mutable fields such as run, approval, grant, binding and attempt status",
+   "question": "What happens when records enter or leave the selected status filter between pages, especially when the cursor record itself no longer matches the filter?",
+   "options": [
+    "Use a live view and continue below the immutable cursor position even if it no longer matches",
+    "Invalidate the token when membership changed",
+    "Bind the token to a snapshot of list membership",
+    "Disallow filters on mutable fields"
+   ],
+   "default_guess": "Use the immutable store position as a live cursor and scan current matching records below it, without requiring the cursor record still to match."
+  },
+  {
+   "subject": "continue_after_approval observable effect",
+   "kind": "direct contradiction",
+   "text": "The operation says “An approved effect is sent in this request”, but A10 says a repeated pre-send check may fail or a changed request_digest may cause another approval request instead",
+   "question": "What does continue_after_approval promise when the approved request is no longer sendable or no longer matches: successful decision recording only, or an actual send?",
+   "options": [
+    "Promise only that the decision is recorded and the run is advanced",
+    "Refuse the decision unless the request can still be sent unchanged",
+    "Roll back the approval if no send occurs"
+   ],
+   "default_guess": "Promise decision recording and advancement only; the returned run states whether a send occurred, failed pre-send, or awaits a new approval."
+  },
+  {
+   "subject": "continue_after_resolution external effects",
+   "kind": "contradictory effect",
+   "text": "runs.continue_after_resolution says “Observable effect None” but also says it advances the run; that advancement can reach later draft-write, granted or approved operation nodes and send HTTP requests",
+   "question": "May the same resolution request execute and send downstream effects, or must it stop after recording and deriving the resolved element?",
+   "options": [
+    "Advance fully and permit downstream sends",
+    "Advance only pure and read nodes",
+    "Stop immediately after resolution and require another request"
+   ],
+   "default_guess": "Advance fully as A13 requires, and declare that downstream HTTP sends are possible observable effects."
+  },
+  {
+   "subject": "Credentials echoed by service error responses",
+   "kind": "security contradiction",
+   "text": "A17 says a credential “never enters ... a failure detail”, while A09 and send_prepared_request retain a bounded excerpt of an untrusted error response body",
+   "question": "How must the invoker prevent a service that echoes the credential from placing it in failure_detail?",
+   "options": [
+    "Store no service error-body excerpts when credentials are used",
+    "Redact exact credential byte sequences before storing",
+    "Store the excerpt encrypted or only as a digest",
+    "Treat the no-credential-in-detail rule as covering only kernel-generated text"
+   ],
+   "default_guess": "Do not persist service error-body text; retain only status and bounded non-payload diagnostics."
+  },
+  {
+   "subject": "HTTP header validity",
+   "kind": "missing validation and error mapping",
+   "text": "Required headers are sent with manifest values “verbatim”, but the accepted checks cover duplicates and reserved names only, and the closed pre-send detail set has no invalid-header result",
+   "question": "Where and how are invalid HTTP header names or values, including control characters, rejected, and which existing refusal or operation_failed detail represents that failure?",
+   "options": [
+    "Reject them as manifest mismatch during proposal, acceptance and current-binding checks",
+    "Reject them at startup or prepare_request as instance_address_missing",
+    "Map them to input_not_placeable",
+    "Leave validation to the HTTP client and add a new transport outcome"
+   ],
+   "default_guess": "Reject invalid required-header syntax as binding_stale or manifest mismatch, and invalid configured credential-header syntax as a startup configuration refusal."
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"SpooledFile attempt identity\",\"kind\":\"contradictory input ownership\",\"text\":\"“store alone assigns attempt_number, inside the transaction that writes the record” and “store.spool_file” takes “attempt_number” before the SpooledFile record is written\",\"question\":\"How does runs or effects obtain the attempt_number required to spool a function or read-operation file when no EffectAttempt exists and the later record_change is supposed to assign that number?\",\"options\":[\"Add a store operation that reserves and returns the next attempt number\",\"Let spool_file assign and return the attempt number\",\"Let callers calculate and pass the next number, contrary to store-alone ownership\",\"Write the NodeExecution and SpooledFile atomically with the bytes\"],\"default_guess\":\"Let spool_file reserve and return the next attempt number, then require the concluding record_change to consume that reservation.\"},{\"subject\":\"TrialExecution file outputs\",\"kind\":\"contradictory persistence\",\"text\":\"M07 says a file output has “only its facts — digest, size and media type, no bytes and never a StoredValue”, while State 4 says functions “stores the outputs through capability:store.put_value_bytes” and record_trial_execution writes “its output StoredValues”\",\"question\":\"Are file outputs of a trial execution discarded after recording their facts, or persisted in the content-addressed area as StoredValues?\",\"options\":[\"Discard file bytes and record only digest, size and media type\",\"Persist file bytes without a StoredValue\",\"Persist them as StoredValues\"],\"default_guess\":\"Discard the file bytes and record only their facts, following M07 and K-10.\"},{\"subject\":\"Internal error after an effect was sent\",\"kind\":\"missing recovery behavior\",\"text\":\"“When a request makes several store changes, those made before the failed one stay” but record_attempt_outcome may fail after record_attempt_in_flight and the HTTP send have succeeded\",\"question\":\"What must happen when the request may have produced an effect but the outcome transaction returns internal_error: does the process stop, does the attempt immediately become unknown, or may the kernel continue serving with an in_flight attempt?\",\"options\":[\"Stop the process so startup recovery converts in_flight to unknown\",\"Convert the attempt to unknown immediately in another store call\",\"Continue serving and require an explicit restart\",\"Return a pending run despite the failed outcome transaction\"],\"default_guess\":\"Stop the process and rely on startup recovery to mark the attempt unknown before serving again.\"},{\"subject\":\"Partially committed approval and resolution continuations\",\"kind\":\"missing continuation semantics\",\"text\":\"“the caller re-reads before repeating” after internal_error, while continue_after_approval and continue_after_resolution commit the decision before later calls that may fail\",\"question\":\"How can a run continue if an approval has become approved or an attempt has become not_applied, but the later send, approval request, or record_run_progress fails, leaving the stored run waiting on a decision that can no longer be repeated?\",\"options\":[\"Stop and recover every non-final run from its records at startup\",\"Make each whole continuation one transaction, excluding the HTTP send\",\"Add an explicit advance operation for such runs\",\"Allow the caller to repeat an already committed decision idempotently\"],\"default_guess\":\"Make repeated decisions idempotently resume advancement, and have startup recovery re-derive every non-final run rather than only runs stored as running.\"},{\"subject\":\"stop_required from continuation operations\",\"kind\":\"incomplete error contract\",\"text\":\"The global convention says stop_required is “returned up the call chain”, but runs.resume_run, runs.continue_after_approval and runs.continue_after_resolution do not list stop_required although each advances the run and can execute a function\",\"question\":\"Must these three operations return stop_required and terminate the process when a subsequently executed function has unconfirmed cleanup?\",\"options\":[\"Yes, propagate stop_required from every advancement path\",\"Convert it to internal_error without stopping\",\"Prevent these operations from executing function nodes\"],\"default_guess\":\"Propagate stop_required through every operation that advances a run and stop the process after recording the failed execution.\"},{\"subject\":\"Spool removal success guarantees\",\"kind\":\"contradictory effect\",\"text\":\"cancel_run says “the spool is gone” and release_run says “The run's spooled files are gone”, while the conventions say removal failure “does not fail the request” and cleanup may wait until the next start\",\"question\":\"Does a successful cancel or release guarantee physical deletion before returning, or only logical inaccessibility with best-effort deferred deletion?\",\"options\":[\"Guarantee physical deletion and fail if it cannot be completed\",\"Return success after logical removal and retry physical deletion at startup\",\"Return success with an explicit cleanup-pending result\"],\"default_guess\":\"Guarantee only logical inaccessibility and treat physical deletion as deferred cleanup, changing the stated outputs accordingly.\"},{\"subject\":\"Unreferenced files from refused capture\",\"kind\":\"direct contradiction\",\"text\":\"K-10 says “The only files the kernel keeps beyond a run are the file fixtures of trial cases”, but State 3 says files copied before a refused captured case “stay there” and “no record names them”\",\"question\":\"Must unreferenced content-addressed files created by a refused capture be removed, or are they a permanent exception to K-10?\",\"options\":[\"Remove or transactionally stage them when the case is refused\",\"Keep them permanently as an explicit exception\",\"Garbage-collect all unreferenced content-addressed bytes at startup\"],\"default_guess\":\"Stage or remove them so only accepted trial fixtures outlive a run.\"},{\"subject\":\"canonical_values.canonical_bytes duplicate-key handling\",\"kind\":\"input representation gap\",\"text\":\"The operation takes “One JSON value” but must refuse “a duplicate key”\",\"question\":\"What representation reaches canonical_bytes that still preserves duplicate object members long enough to detect them?\",\"options\":[\"Raw UTF-8 JSON text or bytes\",\"A duplicate-preserving parsed JSON representation\",\"A normal parsed JSON value, making duplicate-key detection the surface parser's responsibility\"],\"default_guess\":\"Have the surface parse raw JSON with duplicate detection, and let canonical_bytes accept already validated parsed values.\"},{\"subject\":\"sandbox output validation size bound\",\"kind\":\"unspecified input\",\"text\":\"sandbox.execute_function “validates against the output ports with canonical_values.fit_port_value”, but fit_port_value requires “the size bound that applies where the caller stands” and sandbox.execute_function does not identify that bound\",\"question\":\"Which size bound must sandbox use for per-port fit, and which later module owns stored_value_bytes_max and spool limits without changing the A03 outcome order?\",\"options\":[\"Use ResourceBounds.output_bytes for sandbox fit and apply storage ceilings later\",\"Use stored_value_bytes_max or spool_file_bytes_max inside the sandbox\",\"Add a schema-only fit mode with no storage-size check\"],\"default_guess\":\"Add a schema-only fit mode; enforce total output_bytes in sandbox and storage/spool ceilings afterward in functions, runs or effects.\"},{\"subject\":\"Point-read response projections\",\"kind\":\"contradictory outputs\",\"text\":\"“Records reach a caller as they are”, but read_contract_version returns only “ports and bounds”, read_implementation only code, contract and bounds, read_binding omits proposal and acceptance actors and times, and read_flow_version lists only graph content\",\"question\":\"Do the corresponding MCP get operations return the complete State 1 records, including identities, provenance and timestamps, or only the projections listed by each module operation?\",\"options\":[\"Return complete records at the MCP surface while module capabilities return projections\",\"Return only the listed projections\",\"Expand every read capability to return the complete record\"],\"default_guess\":\"Return complete records to inspection callers, using separate minimal internal projections if needed.\"},{\"subject\":\"Pagination with mutable filtered records\",\"kind\":\"undefined paging semantics\",\"text\":\"A continuation token is “the store position of the last item returned” and must name a position “of that list”, while list filters include mutable fields such as run, approval, grant, binding and attempt status\",\"question\":\"What happens when records enter or leave the selected status filter between pages, especially when the cursor record itself no longer matches the filter?\",\"options\":[\"Use a live view and continue below the immutable cursor position even if it no longer matches\",\"Invalidate the token when membership changed\",\"Bind the token to a snapshot of list membership\",\"Disallow filters on mutable fields\"],\"default_guess\":\"Use the immutable store position as a live cursor and scan current matching records below it, without requiring the cursor record still to match.\"},{\"subject\":\"continue_after_approval observable effect\",\"kind\":\"direct contradiction\",\"text\":\"The operation says “An approved effect is sent in this request”, but A10 says a repeated pre-send check may fail or a changed request_digest may cause another approval request instead\",\"question\":\"What does continue_after_approval promise when the approved request is no longer sendable or no longer matches: successful decision recording only, or an actual send?\",\"options\":[\"Promise only that the decision is recorded and the run is advanced\",\"Refuse the decision unless the request can still be sent unchanged\",\"Roll back the approval if no send occurs\"],\"default_guess\":\"Promise decision recording and advancement only; the returned run states whether a send occurred, failed pre-send, or awaits a new approval.\"},{\"subject\":\"continue_after_resolution external effects\",\"kind\":\"contradictory effect\",\"text\":\"runs.continue_after_resolution says “Observable effect None” but also says it advances the run; that advancement can reach later draft-write, granted or approved operation nodes and send HTTP requests\",\"question\":\"May the same resolution request execute and send downstream effects, or must it stop after recording and deriving the resolved element?\",\"options\":[\"Advance fully and permit downstream sends\",\"Advance only pure and read nodes\",\"Stop immediately after resolution and require another request\"],\"default_guess\":\"Advance fully as A13 requires, and declare that downstream HTTP sends are possible observable effects.\"},{\"subject\":\"Credentials echoed by service error responses\",\"kind\":\"security contradiction\",\"text\":\"A17 says a credential “never enters ... a failure detail”, while A09 and send_prepared_request retain a bounded excerpt of an untrusted error response body\",\"question\":\"How must the invoker prevent a service that echoes the credential from placing it in failure_detail?\",\"options\":[\"Store no service error-body excerpts when credentials are used\",\"Redact exact credential byte sequences before storing\",\"Store the excerpt encrypted or only as a digest\",\"Treat the no-credential-in-detail rule as covering only kernel-generated text\"],\"default_guess\":\"Do not persist service error-body text; retain only status and bounded non-payload diagnostics.\"},{\"subject\":\"HTTP header validity\",\"kind\":\"missing validation and error mapping\",\"text\":\"Required headers are sent with manifest values “verbatim”, but the accepted checks cover duplicates and reserved names only, and the closed pre-send detail set has no invalid-header result\",\"question\":\"Where and how are invalid HTTP header names or values, including control characters, rejected, and which existing refusal or operation_failed detail represents that failure?\",\"options\":[\"Reject them as manifest mismatch during proposal, acceptance and current-binding checks\",\"Reject them at startup or prepare_request as instance_address_missing\",\"Map them to input_not_placeable\",\"Leave validation to the HTTP client and add a new transport outcome\"],\"default_guess\":\"Reject invalid required-header syntax as binding_stale or manifest mismatch, and invalid configured credential-header syntax as a startup configuration refusal.\"}]}"
+}

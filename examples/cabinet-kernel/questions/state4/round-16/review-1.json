@@ -1,0 +1,131 @@
+{
+ "open_points": [
+  {
+   "subject": "Trial file outputs",
+   "kind": "contradiction",
+   "text": "State 4 says `module:functions` \"stores the outputs through `capability:store.put_value_bytes`\", while M07 says a trial file output records \"only its facts — digest, size and media type, no bytes and never a StoredValue\".",
+   "question": "When a trial produces a file output, are its bytes discarded after digesting, or stored in the content-addressed area?",
+   "options": [
+    "Discard the bytes and record only digest, size and media type as M07 requires",
+    "Store the bytes through `put_value_bytes` and define their retention and record"
+   ],
+   "default_guess": "Discard trial file-output bytes after computing their facts."
+  },
+  {
+   "subject": "Binding proposal check order",
+   "kind": "contradiction",
+   "text": "`flow:propose_and_accept_binding` says it runs A08 rule 5 checks in order but lists \"the instance ... with an `api_base_url` and no repeated required header, key fields\", whereas A08 rule 5 checks non-read idempotency-key syntax before the instance checks.",
+   "question": "Does key syntax fail before instance validation, as A08 requires, or after it, as the State 4 flow orders it?",
+   "options": [
+    "Check key syntax before instance facts",
+    "Check instance facts before key syntax"
+   ],
+   "default_guess": "Use the normative A08 rule 5 order and check key syntax first."
+  },
+  {
+   "subject": "Installed-instance startup check",
+   "kind": "unstated failure",
+   "text": "`capability:bindings.check_installed_instances` \"reads only the installation ... and the manifest\" and checks header collisions, but no outcome is stated when a selected service's manifest record or instance cannot be read, parsed or found.",
+   "question": "What does startup do when the manifest data needed by `check_installed_instances` is absent, malformed or does not contain the selected instance?",
+   "options": [
+    "Stop startup with a named failure",
+    "Skip that service and defer the fault to binding proposal or invocation"
+   ],
+   "default_guess": "Stop startup because the required-header collision check could not be completed."
+  },
+  {
+   "subject": "Trial input materialization",
+   "kind": "missing capability use",
+   "text": "The author/admit flow says `sandbox.execute_function` receives \"the case's inputs\", but TrialCase inputs are StoredValue references and the flow never names a capability that reads their value or fixture bytes before sandbox execution.",
+   "question": "Which module materializes trial value and file-fixture bytes, through which capability, before calling the sandbox?",
+   "options": [
+    "`functions` reads them through `store.read_value_bytes`",
+    "`sandbox` receives StoredValue records and reads storage itself"
+   ],
+   "default_guess": "Have `functions` read the bytes through `store.read_value_bytes` and pass materialized inputs to `sandbox`."
+  },
+  {
+   "subject": "Flow constants persistence",
+   "kind": "missing operation",
+   "text": "Composition says \"A new version is written with its constants\" but does not name `store.put_value_bytes` or another operation that persists each constant's bytes and creates its StoredValue M21.",
+   "question": "How are constant bytes persisted before the FlowVersion and its StoredValue references are recorded, and what remains if a later write fails?",
+   "options": [
+    "Write bytes through `store.put_value_bytes`, then atomically record StoredValues and the FlowVersion",
+    "Extend the flow-version record call to persist bytes as part of that call"
+   ],
+   "default_guess": "Use `store.put_value_bytes` first and then one record transaction, allowing unreferenced content-addressed bytes after failure."
+  },
+  {
+   "subject": "Run value persistence",
+   "kind": "missing capability use",
+   "text": "Run start \"writes the Run ... and the input values with their identities\", and function/service steps \"write\" output values, but these flows do not name the `store.put_value_bytes` calls that State 3 requires for StoredValue bytes.",
+   "question": "For flow inputs and function or service value outputs, which step writes the canonical bytes, and is that write completed before the transaction recording the StoredValue and NodeExecution?",
+   "options": [
+    "The producing module calls `store.put_value_bytes` before its record transaction",
+    "The relevant `store.record_change` call also accepts and persists value bytes"
+   ],
+   "default_guess": "Call `store.put_value_bytes` before atomically recording the StoredValue and related run records."
+  },
+  {
+   "subject": "Operation input materialization",
+   "kind": "vague boundary",
+   "text": "The run flows pass \"the element's inputs\" to `module:effects`; the effectful flow names `store.read_value_bytes` only for file inputs, while `service_invoker.prepare_request` also needs the actual JSON values of StoredValue inputs.",
+   "question": "Which module reads and decodes StoredValue bytes for operation inputs, and exactly what payload crosses from `runs` to `effects` and then to `service_invoker`?",
+   "options": [
+    "`runs` materializes all inputs and passes values/files to `effects`",
+    "`effects` receives references and materializes all inputs through `store.read_value_bytes`",
+    "`service_invoker` receives records and reads their bytes"
+   ],
+   "default_guess": "Let `effects` receive references, read all required bytes through `store.read_value_bytes`, and pass materialized inputs to `service_invoker`."
+  },
+  {
+   "subject": "Captured trial-case provenance",
+   "kind": "missing boundary data",
+   "text": "`runs` calls `functions.add_captured_trial_case` \"with the pinned contract version, the inputs and the file digests\", but M06 requires `captured_from` to contain the source NodeExecution's `run_id`, `node_id`, `map_index` and `attempt_number`, and State 3 says `functions` checks the record's pinned contract version.",
+   "question": "What source-execution identity or record must cross into `functions` so it can write `captured_from` and perform the required contract-version check?",
+   "options": [
+    "Pass the complete NodeExecution",
+    "Pass its four-part identity plus the implementation or verified contract-version evidence"
+   ],
+   "default_guess": "Pass the complete immutable NodeExecution together with the verified pinned contract version."
+  },
+  {
+   "subject": "Continuation after approval or resolution",
+   "kind": "stranded state",
+   "text": "State 4 records an approval or resolution in `effects` and only afterward has `runs` reach the element and derive the run; State 3 claims \"A crash between the two leaves a run `running`\", although the persisted run was previously `awaiting_approval` or `pending` and no step says it is changed to `running` first.",
+   "question": "What persisted transition or recovery rule guarantees that a crash or store failure after the decision record cannot leave an `awaiting_approval` or `pending` run whose approval is already decided or whose attempt is no longer unknown, with no operation able to advance it?",
+   "options": [
+    "Persistently mark the run `running` before recording the decision, then let startup recovery advance it",
+    "Atomically record the decision and the run transition in one store call",
+    "Teach startup recovery or a public continuation operation to detect and advance these inconsistent waiting states"
+   ],
+   "default_guess": "Atomically record the owner decision and transition the run to `running`, so existing startup recovery can finish it."
+  },
+  {
+   "subject": "Continuation after resume outcomes",
+   "kind": "duplicate-send risk",
+   "text": "`resume_run` resends elements through `effects` and only afterward has `runs` update waiting points and status; the texts state only that a failed store call changes that call's writes and returns an internal error.",
+   "question": "If an effect outcome is recorded but the following run-state update fails, how is the stale `service_unreachable` waiting point removed before another resume can resend the same element?",
+   "options": [
+    "Record removal of the waiting point or a `running` transition before the send",
+    "Make resume derive eligibility from effect records rather than the stored waiting point alone",
+    "Recover stale waiting points before accepting another request"
+   ],
+   "default_guess": "Make resend eligibility depend on current element records as well as the waiting point, preventing a second send once an outcome exists."
+  },
+  {
+   "subject": "Spool removal after run completion or release",
+   "kind": "unstated partial failure",
+   "text": "Release \"records who and when, and `store.remove_run_spool` removes the run's files\"; cancellation, refusal and successful completion likewise record the final state separately from deleting the spool, with no stated outcome if deletion fails after the record commits.",
+   "question": "If the run is already recorded ended or released but `remove_run_spool` fails, is the action considered complete, retriable, fatal, or deferred to startup cleanup, and how is the promised absence of the spool made observable?",
+   "options": [
+    "Fail the request but retain a cleanup-pending state that can be retried",
+    "Treat the logical action as complete and guarantee deferred cleanup before further service",
+    "Stop the process so startup cleanup must finish before the surface reopens"
+   ],
+   "default_guess": "Stop serving after the internal error and require startup cleanup to remove the spool before reopening."
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"Trial file outputs\",\"kind\":\"contradiction\",\"text\":\"State 4 says `module:functions` \\\"stores the outputs through `capability:store.put_value_bytes`\\\", while M07 says a trial file output records \\\"only its facts — digest, size and media type, no bytes and never a StoredValue\\\".\",\"question\":\"When a trial produces a file output, are its bytes discarded after digesting, or stored in the content-addressed area?\",\"options\":[\"Discard the bytes and record only digest, size and media type as M07 requires\",\"Store the bytes through `put_value_bytes` and define their retention and record\"],\"default_guess\":\"Discard trial file-output bytes after computing their facts.\"},{\"subject\":\"Binding proposal check order\",\"kind\":\"contradiction\",\"text\":\"`flow:propose_and_accept_binding` says it runs A08 rule 5 checks in order but lists \\\"the instance ... with an `api_base_url` and no repeated required header, key fields\\\", whereas A08 rule 5 checks non-read idempotency-key syntax before the instance checks.\",\"question\":\"Does key syntax fail before instance validation, as A08 requires, or after it, as the State 4 flow orders it?\",\"options\":[\"Check key syntax before instance facts\",\"Check instance facts before key syntax\"],\"default_guess\":\"Use the normative A08 rule 5 order and check key syntax first.\"},{\"subject\":\"Installed-instance startup check\",\"kind\":\"unstated failure\",\"text\":\"`capability:bindings.check_installed_instances` \\\"reads only the installation ... and the manifest\\\" and checks header collisions, but no outcome is stated when a selected service's manifest record or instance cannot be read, parsed or found.\",\"question\":\"What does startup do when the manifest data needed by `check_installed_instances` is absent, malformed or does not contain the selected instance?\",\"options\":[\"Stop startup with a named failure\",\"Skip that service and defer the fault to binding proposal or invocation\"],\"default_guess\":\"Stop startup because the required-header collision check could not be completed.\"},{\"subject\":\"Trial input materialization\",\"kind\":\"missing capability use\",\"text\":\"The author/admit flow says `sandbox.execute_function` receives \\\"the case's inputs\\\", but TrialCase inputs are StoredValue references and the flow never names a capability that reads their value or fixture bytes before sandbox execution.\",\"question\":\"Which module materializes trial value and file-fixture bytes, through which capability, before calling the sandbox?\",\"options\":[\"`functions` reads them through `store.read_value_bytes`\",\"`sandbox` receives StoredValue records and reads storage itself\"],\"default_guess\":\"Have `functions` read the bytes through `store.read_value_bytes` and pass materialized inputs to `sandbox`.\"},{\"subject\":\"Flow constants persistence\",\"kind\":\"missing operation\",\"text\":\"Composition says \\\"A new version is written with its constants\\\" but does not name `store.put_value_bytes` or another operation that persists each constant's bytes and creates its StoredValue M21.\",\"question\":\"How are constant bytes persisted before the FlowVersion and its StoredValue references are recorded, and what remains if a later write fails?\",\"options\":[\"Write bytes through `store.put_value_bytes`, then atomically record StoredValues and the FlowVersion\",\"Extend the flow-version record call to persist bytes as part of that call\"],\"default_guess\":\"Use `store.put_value_bytes` first and then one record transaction, allowing unreferenced content-addressed bytes after failure.\"},{\"subject\":\"Run value persistence\",\"kind\":\"missing capability use\",\"text\":\"Run start \\\"writes the Run ... and the input values with their identities\\\", and function/service steps \\\"write\\\" output values, but these flows do not name the `store.put_value_bytes` calls that State 3 requires for StoredValue bytes.\",\"question\":\"For flow inputs and function or service value outputs, which step writes the canonical bytes, and is that write completed before the transaction recording the StoredValue and NodeExecution?\",\"options\":[\"The producing module calls `store.put_value_bytes` before its record transaction\",\"The relevant `store.record_change` call also accepts and persists value bytes\"],\"default_guess\":\"Call `store.put_value_bytes` before atomically recording the StoredValue and related run records.\"},{\"subject\":\"Operation input materialization\",\"kind\":\"vague boundary\",\"text\":\"The run flows pass \\\"the element's inputs\\\" to `module:effects`; the effectful flow names `store.read_value_bytes` only for file inputs, while `service_invoker.prepare_request` also needs the actual JSON values of StoredValue inputs.\",\"question\":\"Which module reads and decodes StoredValue bytes for operation inputs, and exactly what payload crosses from `runs` to `effects` and then to `service_invoker`?\",\"options\":[\"`runs` materializes all inputs and passes values/files to `effects`\",\"`effects` receives references and materializes all inputs through `store.read_value_bytes`\",\"`service_invoker` receives records and reads their bytes\"],\"default_guess\":\"Let `effects` receive references, read all required bytes through `store.read_value_bytes`, and pass materialized inputs to `service_invoker`.\"},{\"subject\":\"Captured trial-case provenance\",\"kind\":\"missing boundary data\",\"text\":\"`runs` calls `functions.add_captured_trial_case` \\\"with the pinned contract version, the inputs and the file digests\\\", but M06 requires `captured_from` to contain the source NodeExecution's `run_id`, `node_id`, `map_index` and `attempt_number`, and State 3 says `functions` checks the record's pinned contract version.\",\"question\":\"What source-execution identity or record must cross into `functions` so it can write `captured_from` and perform the required contract-version check?\",\"options\":[\"Pass the complete NodeExecution\",\"Pass its four-part identity plus the implementation or verified contract-version evidence\"],\"default_guess\":\"Pass the complete immutable NodeExecution together with the verified pinned contract version.\"},{\"subject\":\"Continuation after approval or resolution\",\"kind\":\"stranded state\",\"text\":\"State 4 records an approval or resolution in `effects` and only afterward has `runs` reach the element and derive the run; State 3 claims \\\"A crash between the two leaves a run `running`\\\", although the persisted run was previously `awaiting_approval` or `pending` and no step says it is changed to `running` first.\",\"question\":\"What persisted transition or recovery rule guarantees that a crash or store failure after the decision record cannot leave an `awaiting_approval` or `pending` run whose approval is already decided or whose attempt is no longer unknown, with no operation able to advance it?\",\"options\":[\"Persistently mark the run `running` before recording the decision, then let startup recovery advance it\",\"Atomically record the decision and the run transition in one store call\",\"Teach startup recovery or a public continuation operation to detect and advance these inconsistent waiting states\"],\"default_guess\":\"Atomically record the owner decision and transition the run to `running`, so existing startup recovery can finish it.\"},{\"subject\":\"Continuation after resume outcomes\",\"kind\":\"duplicate-send risk\",\"text\":\"`resume_run` resends elements through `effects` and only afterward has `runs` update waiting points and status; the texts state only that a failed store call changes that call's writes and returns an internal error.\",\"question\":\"If an effect outcome is recorded but the following run-state update fails, how is the stale `service_unreachable` waiting point removed before another resume can resend the same element?\",\"options\":[\"Record removal of the waiting point or a `running` transition before the send\",\"Make resume derive eligibility from effect records rather than the stored waiting point alone\",\"Recover stale waiting points before accepting another request\"],\"default_guess\":\"Make resend eligibility depend on current element records as well as the waiting point, preventing a second send once an outcome exists.\"},{\"subject\":\"Spool removal after run completion or release\",\"kind\":\"unstated partial failure\",\"text\":\"Release \\\"records who and when, and `store.remove_run_spool` removes the run's files\\\"; cancellation, refusal and successful completion likewise record the final state separately from deleting the spool, with no stated outcome if deletion fails after the record commits.\",\"question\":\"If the run is already recorded ended or released but `remove_run_spool` fails, is the action considered complete, retriable, fatal, or deferred to startup cleanup, and how is the promised absence of the spool made observable?\",\"options\":[\"Fail the request but retain a cleanup-pending state that can be retried\",\"Treat the logical action as complete and guarantee deferred cleanup before further service\",\"Stop the process so startup cleanup must finish before the surface reopens\"],\"default_guess\":\"Stop serving after the internal error and require startup cleanup to remove the spool before reopening.\"}]}"
+}

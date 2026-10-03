@@ -24,8 +24,9 @@ edges into one input, of flow outputs under guards, and of proving again later.
       with the right direction; both carry the same schema, the same carriage and,
       for files, the same media type (K-06) — cardinality is phase 5's; a flow
       input or output is `value` carriage;
-   4. guards, by the same edge order: the guard port is an output of the edge's
-      source node, its schema is a closed set, the guard value is a member;
+   4. guards, by the same edge order: the guard port is a `one` output of the
+      edge's source node, which is not mapped, its schema is a closed set, the
+      guard value is a member;
    5. cardinality and maps, by the edge order: a `one` output feeds a `one`
       input; a `many` output feeds a `many` input, or a `one` input that is its
       node's `map_over` port; a `one` output never feeds a `many` input. Every

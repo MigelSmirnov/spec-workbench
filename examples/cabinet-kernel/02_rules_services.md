@@ -55,7 +55,8 @@ is.
    twice, or names one the kernel sets itself (`host`, `accept-encoding`,
    `content-type`, `content-length`, A10 rule 7) other than `host`, which an
    instance may set instead of the kernel (A10 rule 7), names compared without
-   regard to case — at send time both are A09 rule 6's `required_header_repeated`;
+   regard to case — at send time both are A09 rule 6's `required_header_repeated`
+   —, or has a required header whose name is not an HTTP field-name token, or whose value is empty, has leading or trailing whitespace, or holds a control character — at send time `required_header_invalid`;
    a key field of rule 4 is not a `value` input port of the proposal; or the ports do not fit
    the request shape of A09 rules 2 and 3, in that order, ports taken in name
    order; or its ports break a rule A02 sets for contract ports — unique names
@@ -199,7 +200,8 @@ outcomes map to NodeExecution statuses.
 6. A check of the kernel's own that fails before anything is sent is done before
    any EffectAttempt is written. The checks run in this order and the first that
    fails is named: the binding is stale or no longer invocable (A08 rule 6); the
-   instance or its address is missing or not allowed (rules 1 and 4), or its
+   instance or its address is missing or not allowed, or a required header is
+   repeated or invalid (rules 1 and 4, A08 rule 5), or its
    credential cannot be resolved (A17); an input
    value cannot be placed in the request (rule 2). The element
    concludes `operation_failed` with a detail naming the check, no EffectAttempt
@@ -270,7 +272,8 @@ generated statements, no suspension.
    match, the oldest in store order is used (State 5, closed question 2).
    At send time the instance checks are A09 rule 6's, with their own details
    (`instance_not_selected`, `instance_address_missing` — the same "counts as
-   none" as A08 rule 5 —, `required_header_repeated`, `plain_http_not_allowed`);
+   none" as A08 rule 5 —, `required_header_repeated`, `required_header_invalid`,
+   `plain_http_not_allowed`);
    only the checks of the record itself give `binding_stale` (A08 rule 6).
 2. Without either, the kernel records one approval request for the element —
    none when a `requested` one for it already exists, even if the request has
