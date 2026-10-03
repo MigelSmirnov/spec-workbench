@@ -20,7 +20,16 @@ Reuses cabinet-flow decisions 21 and 22, narrowed by K-11 and K-15.
    operation at all (rule 3);
    then the operation's own checks, in the order its decision gives — a restriction
    that depends on the record named, such as A06's refusal of an agent asking for
-   a version above `read`, is one of those. Every request over `mcp` carries one token. The kernel compares it in constant
+   a version above `read`, is one of those. One convention covers every
+   "first failing" of every decision: checks in the order the decision lists
+   them; a check naming several conditions in one sentence takes them in the
+   order written; a check that fails at several items names the first in its own
+   order, or, when the items have none, the smallest identifier by code point
+   (A05 rule 2); a list's elements in list order. A request naming a record
+   that does not exist — a flow, a flow version, a run, a binding, any other —
+   is refused as State 0's unknown reference before that record's own checks,
+   never as a proof failure or a missing activation; refusal codes are State
+   5's. Every request over `mcp` carries one token. The kernel compares it in constant
    time with the owner token and with each agent token of the installation (M28).
    A missing, unknown or revoked token gets one refusal that reveals nothing about
    any record. Abuse control against guessing is the reverse proxy's (State 0);

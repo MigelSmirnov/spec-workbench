@@ -48,7 +48,13 @@ edges into one input, of flow outputs under guards, and of proving again later.
 2. All orders compare identifiers as strings by Unicode code point. A flow input
    or flow output endpoint has the empty string as its node, so it orders before
    every node. Within one item, the conditions are checked in the order the phase
-   lists them, and the first that fails is the reason. "The same schema" means
+   lists them, and the first that fails is the reason. A check that fails at
+   several items names the first of them in that check's own order; a check
+   whose items have no order of their own names the smallest identifier by
+   code point — for cycles (phase 7) the smallest `node_id` on any cycle, for
+   reach (phase 9) the smallest `node_id` of a function node none of whose
+   outputs reaches, for repeated names at composition (rule 7) the smallest
+   repeated name. "The same schema" means
    equal canonical JSON (State 1); two schemas that accept the same values but
    are written differently are different.
 3. Two edges into one port can both deliver unless both are guarded on the same

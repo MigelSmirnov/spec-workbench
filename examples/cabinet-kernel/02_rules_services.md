@@ -48,8 +48,9 @@ is.
    `effect_class` is not one of the five of M10; it is
    not invocable by rule 3, including a declared path of a shape A09 rule 1
    refuses; the installation selects no instance for the service or that
-   instance has no `api_base_url` or names one required header twice, names
-   compared without regard to case; rule 4
+   instance has no `api_base_url` — one that is not an absolute `http` or
+   `https` URL with a host counts as none — or names one required header
+   twice, names compared without regard to case; rule 4
    does not hold; or the ports do not fit
    the request shape of A09 rules 2 and 3, in that order, ports taken in name
    order; or its ports break a rule A02 sets for contract ports — unique names
@@ -69,9 +70,9 @@ is.
 7. Accepting a binding, by the owner only: an unknown `binding_id` is refused; an
    `accepted` binding is returned unchanged, without reading the manifest, even
    when its digest has changed meanwhile — a change stops its sends (rule 6),
-   not its acceptance; a `proposed` one is read against the
-   manifest as rule 6 does and, when a check fails — in the order rule 5 lists
-   them, the first failing one named — refused naming that check as
+   not its acceptance; a `proposed` one is checked again by every check of
+   rule 5, those of the instance included, and, when a check fails — in the
+   order rule 5 lists them, the first failing one named — refused naming that check as
    a proposal is (rule 5), with `binding_stale` when only the digest differs;
    otherwise it becomes `accepted`.
 8. The kernel never writes the manifest.
@@ -246,8 +247,13 @@ generated statements, no suspension.
    node of the run's pinned flow version, when the node is not `destructive` and
    the send is not a resend after `not_applied` (A11). When both exist, the
    approval is used and recorded as the authority. A fresh approval after
-   `not_applied` is one requested after that resolution; approvals recorded
-   before it never count.
+   `not_applied` is one requested after the element's latest such resolution;
+   approvals recorded before it never count. When several approvals count and
+   match, the oldest in store order is used (State 5, closed question 2).
+   At send time the instance checks are A09 rule 6's, with their own details
+   (`instance_not_selected`, `instance_address_missing` — the same "counts as
+   none" as A08 rule 5 —, `required_header_repeated`, `plain_http_not_allowed`);
+   only the checks of the record itself give `binding_stale` (A08 rule 6).
 2. Without either, the kernel records one approval request for the element —
    none when a `requested` one for it already exists, even if the request has
    changed since: when that one is approved and the send's digest differs, rule 1
@@ -378,8 +384,9 @@ trace records after the owner resolves an unknown outcome.
 4. On start, every EffectAttempt still `in_flight` becomes `unknown`; when its
    attempt has no NodeExecution yet, the kernel writes it with status
    `outcome_unknown`, its start time taken from the EffectAttempt and its end
-   time the time of recovery. The element waits as in rule 2; the kernel does not
-   ask the service.
+   time the time of recovery, and, when the attempt's authority is an approval,
+   marks that approval `used`, in the same store call, one call per attempt. The element
+   waits as in rule 2; the kernel does not ask the service.
 5. Cancelling a run whose element waits on an unknown outcome leaves that
    EffectAttempt `unknown`; the kernel claims neither outcome.
 

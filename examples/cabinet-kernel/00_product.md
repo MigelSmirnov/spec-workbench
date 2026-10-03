@@ -27,8 +27,9 @@ Cabinet Kernel runs flows over the platform's microservices. A flow is a small
 proven graph of two kinds of node: a pure function an agent wrote, and a declared
 operation of a microservice. The agent writes a function, the kernel tries it in
 a sandbox and admits it; the agent composes a flow; the kernel proves the flow,
-runs it, asks the owner before any effect that changes a service's state (K-08),
-and records what happened.
+runs it, asks the owner before each effect of the classes K-08 stops for — a
+`draft-write` runs under the owner's activation of the flow instead — and records
+what happened.
 
 The stable part of the platform lives in the microservices. The changing part
 lives in functions and flows, and changing it needs no new application, module
@@ -245,6 +246,10 @@ An installation selects one manifest instance per service; no flow, run or agent
 chooses another. Effectful flows are rehearsed on an installation of disposable
 rigs.
 
+State 2 reads "one" as "at most one": an installation may leave a service
+without an instance; that service is not invocable, and no binding for it can be
+proposed or accepted (A17 rule 4, A08 rules 5 and 7).
+
 ### K-17 — One process, one writer, guarantees only where effects leave (new)
 
 The kernel is one process with one store and one writer. A change is one call in
@@ -339,7 +344,10 @@ against the obligations of its notes, not only against gates of form.
     body. Any difference at send, whatever caused it (the inputs, or an
     instance's address or headers changed by a restart), asks again. The
     credential's value is never shown, so rotating it voids nothing. The owner
-    accepted the recommendation.
+    accepted the recommendation. A difference voids the approval, not a
+    standing grant: where the owner's active grant covers the node, the send
+    goes under the grant without asking (A10 rule 1; owner, 2026-10-03, raised
+    by State 2 round 30).
 
 ## Open questions
 

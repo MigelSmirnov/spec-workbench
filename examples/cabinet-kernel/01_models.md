@@ -99,7 +99,9 @@ Candidate fields:
   name already taken is refused;
 - `purpose`: plain words for the owner and the agent, fixed when the slot is
   created — taken from the request that issues its first contract version,
-  which is refused without one (State 2, A01 rule 5);
+  which is refused without one; a later contract version naming the slot with
+  the same purpose, or with none, is accepted, and with a different one is
+  refused (State 2, A01 rule 5);
 - `created_by`, `created_at`.
 
 ### Identity
@@ -550,8 +552,9 @@ active version when a run starts.
 Candidate fields:
 
 - `purpose` of a flow is fixed when the flow is created — taken from the
-  request that composes its first version, which is refused without one
-  (State 2, A01 rule 5);
+  request that composes its first version, which is refused without one; a
+  later version naming the flow with the same purpose, or with none, is
+  accepted, and with a different one is refused (State 2, A01 rule 5);
 - `flow_id`: a stable name the creating agent chooses; the first flow version
   composed under a new name creates the flow — there is no separate create
   action;
@@ -992,8 +995,9 @@ None. Values are kept as long as traces; nothing expires (K-10).
 
 One file a node produced during one run; its bytes are held until the run ends
 (K-10), its record is kept with the trace. Read by the next node that receives
-it, by the owner's approval preview and the owner's inspection read of its bytes
-(A10 rule 2; the State 5 operation `read_spooled_file`), and by capture into
+it, by the owner's approval preview, by the owner inspecting its bytes — part of
+the State 0 inspect action, owner only whatever the class, while its run holds
+its spool (A10 rule 2) — and by capture into
 a trial corpus while its run holds its spool (A15 rule 5).
 
 Candidate fields:
@@ -1195,7 +1199,10 @@ None.
 
 The record written before an effect is sent, so that a crash or an unclear answer
 leaves a known unknown instead of a silent one (K-08). Read by the run's recovery
-after restart and by the owner resolving an unknown outcome.
+after restart and by the owner resolving an unknown outcome. Written for every send of
+an operation whose effect class is not `read`, `draft-write` included; a `read`
+send writes none, since nothing leaves the service changed (State 2, A08 rule 4,
+A10 rule 6).
 
 Candidate fields:
 
@@ -1205,7 +1212,9 @@ Candidate fields:
 - `binding_id`;
 - `idempotency_key`: built from the fields the manifest names;
 - `authority`: the approval or the grant it used, or for a `draft-write` send
-  the flow activation of the run's version (State 2, A10);
+  the flow activation under which the run started (State 2, A10 rule 6; State
+  5) — except a resend after `not_applied`, which, whatever its class, records
+  the fresh approval it needed;
 - `status`: `in_flight`, `applied`, `not_applied`, `not_sent` or `unknown` —
   `not_sent` when the service could not be reached before anything was sent;
 - `recorded_at`, `concluded_at`;
@@ -1298,8 +1307,9 @@ Candidate fields:
   (M10), so a record changes for the kernel only when the owner changes the
   configured revision;
 - `service_instances`: at most one selected instance per service, by its
-  manifest instance name; a service with none selected is not invocable
-  (A17 rule 4, A08 rule 5);
+  manifest instance name; a service with none selected is not invocable, and
+  a binding for it is refused when proposed or accepted, its ManifestOperation
+  then read without instance facts (A17 rule 4, A08 rules 5 and 7);
 - `service_credentials`: references to secrets, never the secrets;
 - `owner_token`, `agent_tokens`: each agent token with its name and whether it
   may author;
