@@ -679,7 +679,10 @@ has not ended, and the element; EffectAttempt M26 is changed by
    without output ports — succeeded; applied with output ports — failed,
    `applied_outputs_unknown`; not applied — waits `owner_approval` for a fresh
    approval, even under a grant, and the resend is the next attempt
-   (`flow:run_effect_with_approval` step 4). The run advances.
+   (`flow:run_effect_with_approval` step 4): `module:runs` reaches that element
+   again through `capability:effects.reach_operation_element`, which runs the
+   pre-send checks and, finding no authority, requests the fresh approval for
+   the request as built now (A11 rule 3). The run advances.
 4. **Cancel.** `capability:runs.cancel_run` refuses an ended run; otherwise it
    ends the run `cancelled`: nothing further is sent, concluded records stay,
    waiting points are removed, undecided approvals can no longer be decided,

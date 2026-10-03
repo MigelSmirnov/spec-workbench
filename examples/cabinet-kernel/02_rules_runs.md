@@ -100,7 +100,12 @@ worker.
    `bytes` (A03). A mapped node concludes only when every element has concluded. It succeeded
    when every element succeeded, and its outputs are then lists in element order,
    each list of the highest class among its elements (A07), `open` when empty;
-   any failed element makes it failed for its dependants.
+   any failed element makes it failed for its dependants. A value list is one
+   StoredValue, the JSON array of the elements' values in element order, written
+   in the store change that records the node's conclusion; a file list is the
+   elements' SpooledFiles in element order, each keeping its own record. A port's
+   reference to values names exactly one StoredValue, a `many` value being one
+   JSON array.
 7. An element's conclusion is its NodeExecution's status, except that an
    `outcome_unknown` record the owner resolved concludes as A11 rule 3 says —
    succeeded, or failed with `applied_outputs_unknown` — and one not yet resolved
@@ -248,7 +253,8 @@ spool, files only as fixtures beyond a run.
    has otherwise succeeded, so A03's `resource_exhausted` for `output_bytes` wins
    when both hold; it concludes the element `contract_violation` with detail
    `value_too_large`; a constant or a trial value above it is refused when
-   authored; a flow input above it refuses the start (A12).
+   authored, by the surface's request bound (A16 rule 4) before any check of
+   composition or of the trial case; a flow input above it refuses the start (A12).
 5. Capturing a failed execution into a trial corpus (M06) is allowed only while
    its run still holds its spool — the run has not ended, or ended `failed` and
    was not released — and is refused otherwise, since its files may be gone. It

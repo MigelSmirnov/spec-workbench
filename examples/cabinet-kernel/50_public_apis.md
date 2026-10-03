@@ -166,7 +166,9 @@ the caller's decision. The caller supplies each record's facts, its content iden
 `canonical_values`, and the time from `clock.kernel_now`; `store` adds what
 only it can: store positions, `attempt_number` and minted identities.
 `store` assigns `attempt_number` inside each change that writes a
-NodeExecution or an EffectAttempt (State 3, "Attempt numbers"), and mints the
+NodeExecution or an EffectAttempt (State 3, "Attempt numbers") — and, inside
+`request_approval`, the EffectApproval's `attempt_number`, the element's next
+number, without taking it (A11 rule 1) — and mints the
 random identities of A01 rule 2 inside the change that creates the record,
 minting again on a collision.
 
@@ -178,9 +180,9 @@ minting again on a collision.
    it produced and has no verdict (A04 rule 2).
 2. **Which of several approvals with the same `request_digest`** (State 3,
    carried from round 19): among the element's `approved` unused approvals
-   that count — after a `not_applied` resolution only those requested after
-   the element's latest such resolution (A10 rule 1) — the oldest in store
-   order.
+   that count — after a `not_applied` resolution only those whose
+   `attempt_number` is greater than that of the element's latest attempt
+   resolved `not_applied` (A10 rule 1) — the oldest in store order.
 3. **Which FlowActivation a `draft-write` send names** (A10 rule 6): the latest
    FlowActivation of the run's pinned version before the Run record in store
    order — the one under which it started. `runs` finds it and passes it to
@@ -339,6 +341,11 @@ the whole answer is `internal_error`; no partial answer is returned.
 | approvals | `run_id`, `status` |
 | standing grants | `flow_version_id`, `status` |
 | effect attempts | `run_id`, `status` |
+
+No other record type is listed: activations are read through `get_slot`, flow
+activations through `get_flow`, stored values within the records that name
+them, spooled files through `read_spooled_file`; asking `list_records` for one
+of them is `invalid_request`.
 
 `read_spooled_file` takes only a SpooledFile — never a StoredValue — and names
 it by its identity — `run_id`,
@@ -1330,8 +1337,8 @@ A contract version, input values by port, optional expected outputs, the actor.
 
 ### Outputs
 
-The TrialCase with its identity and corpus place — new, or the equal existing
-one.
+The TrialCase with its identity and corpus place, counted from 0 in corpus
+order — new, or the equal existing one.
 
 ### Observable effect
 
@@ -2219,9 +2226,10 @@ None.
 ### Enforces
 
 Attempts oldest first in store order. Every `in_flight` attempt becomes
-`unknown`, its missing NodeExecution `outcome_unknown`, and its approval `used`
-when its authority is an approval — a grant or a FlowActivation changes
-nothing; the service is not asked (A11 rule 4).
+`unknown`, its missing NodeExecution `outcome_unknown` — executed the
+attempt's binding, inputs the ones the EffectAttempt names, no outputs — and
+its approval `used` when its authority is an approval — a grant or a
+FlowActivation changes nothing; the service is not asked (A11 rule 4).
 
 ### Errors
 
@@ -2437,7 +2445,10 @@ None.
 
 An unknown attempt is `unknown_reference` first, the attempt read through
 `store.read_records` to find its run; then run not ended; conclusion per A11
-rule 3; `not_applied` waits for a fresh approval even under a grant (K-08).
+rule 3; `not_applied` waits for a fresh approval even under a grant (K-08):
+the element is reached again through `effects.reach_operation_element`, which
+runs the pre-send checks and, finding no authority, requests that approval for
+the request as built now (A11 rule 3).
 
 ### Errors
 
@@ -2445,7 +2456,7 @@ rule 3; `not_applied` waits for a fresh approval even under a grant (K-08).
 
 ### State impact
 
-Through `effects`, then `record_run_progress`.
+Through `effects` — the resolution, and after `not_applied` a pre-send failure or `request_approval` — then `record_run_progress`.
 
 ## `public_op:runs.read_run`
 

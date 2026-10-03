@@ -47,15 +47,16 @@ is.
    `service` field differs; two entries of `capabilities` share the name; the operation is absent; its
    `effect_class` is not one of the five of M10; it is
    not invocable by rule 3, including a declared path of a shape A09 rule 1
-   refuses; the installation selects no instance for the service or that
+   refuses; for an operation other than `read`, its `idempotency_key` text breaks rule 4's syntax — an empty part,
+   a repeated name, or a name that is not a plain field name — which is a fault
+   of the record itself, as the checks before it are; the installation selects no instance for the service or that
    instance has no `api_base_url` — one that is not an absolute `http` or
    `https` URL with a host counts as none — or names one required header
    twice, or names one the kernel sets itself (`host`, `accept-encoding`,
    `content-type`, `content-length`, A10 rule 7) other than `host`, which an
    instance may set instead of the kernel (A10 rule 7), names compared without
    regard to case — at send time both are A09 rule 6's `required_header_repeated`;
-   rule 4
-   does not hold; or the ports do not fit
+   a key field of rule 4 is not a `value` input port of the proposal; or the ports do not fit
    the request shape of A09 rules 2 and 3, in that order, ports taken in name
    order; or its ports break a rule A02 sets for contract ports — unique names
    per direction, a media type exactly on `file` ports — or leave out the class
@@ -263,8 +264,9 @@ generated statements, no suspension.
    node of the run's pinned flow version, when the node is not `destructive` and
    the send is not a resend after `not_applied` (A11). When both exist, the
    approval is used and recorded as the authority. A fresh approval after
-   `not_applied` is one requested after the element's latest such resolution;
-   approvals recorded before it never count. When several approvals count and
+   `not_applied` is one whose `attempt_number` is greater than that of the
+   element's latest attempt resolved `not_applied`; approvals requested before
+   it never count. When several approvals count and
    match, the oldest in store order is used (State 5, closed question 2).
    At send time the instance checks are A09 rule 6's, with their own details
    (`instance_not_selected`, `instance_address_missing` — the same "counts as
@@ -378,9 +380,11 @@ trace records after the owner resolves an unknown outcome.
    send, a pre-send failure, an owner's refusal, a skip, an upstream failure, the
    record of a mapped node over an empty list. An EffectAttempt M26 carries the
    number of the NodeExecution that will conclude its send, which is the next
-   number when it is written. Nothing else takes or holds a number: waiting for
-   approval writes no record, and the owner's resolution of an unknown outcome
-   writes no NodeExecution (rule 3).
+   number when it is written, and an EffectApproval M24 the next number when it
+   is requested — the attempt it was requested for — without taking it. Nothing
+   else takes or holds a number: waiting for approval writes no NodeExecution,
+   and the owner's resolution of an unknown outcome writes no NodeExecution
+   (rule 3).
    Reaching an operation element runs in this order: the pre-send checks of
    A09 rule 6 — a failure writes the element's next NodeExecution,
    `operation_failed`; then the authority of A10 rule 1, checked as it stands
@@ -412,12 +416,15 @@ trace records after the owner resolves an unknown outcome.
      received for what depends on it;
    - `not_applied`: the element waits again with reason `owner_approval`, and the
      next send, under a fresh approval even where a grant exists (K-08), is the
-     next attempt.
+     next attempt. In the owner's same request the kernel reaches the element
+     again: the pre-send checks of A09 rule 6, then, finding no authority, it
+     requests the fresh approval for the request as built now (A10 rule 2).
    Resolving is refused unless the named attempt's EffectAttempt is `unknown`
    and its run has not ended.
 4. On start, every EffectAttempt still `in_flight` becomes `unknown`; when its
    attempt has no NodeExecution yet, the kernel writes it with status
-   `outcome_unknown`, its start time taken from the EffectAttempt and its end
+   `outcome_unknown`, the binding as what it executed, the inputs the
+   EffectAttempt names, no outputs, its start time taken from the EffectAttempt and its end
    time the time of recovery, and, when the attempt's authority is an approval,
    marks that approval `used`, in the same store call, one call per attempt. The element
    waits as in rule 2; the kernel does not ask the service.

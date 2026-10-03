@@ -128,6 +128,8 @@ record checked by `design_lint --state 2`, recorded as such in `30_trace.json`.
   transaction that writes the record, as the ordinal of the element's
   NodeExecutions (A11 rule 1); no caller passes a number, `effects` included.
   The in-flight EffectAttempt is given the next ordinal when `store` writes it.
+  A requested EffectApproval is given the next ordinal too, without taking
+  it: it names the attempt it was requested for (A11 rule 1).
   The outcome call names the EffectAttempt, and `store` gives the concluding
   NodeExecution that attempt's number after checking that it is still the
   element's next ordinal, refusing the call otherwise. Requests are handled one at a time (A18 rule 3), so nothing writes

@@ -64,7 +64,8 @@ Reuses cabinet-flow decisions 21 and 22, narrowed by K-11 and K-15.
    its token, before anything else; an unknown operation, an unknown field, or a
    field over its bound is refused. The bounds are: implementation code, at most
    `implementation_code_bytes_max`; a value of a trial case or constant, at most
-   `stored_value_bytes_max` (a file fixture `trial_fixture_bytes_max`); every
+   `stored_value_bytes_max`, and so is a run's input value (A12 rule 1) (a file
+   fixture `trial_fixture_bytes_max`); every
    other string anywhere in the request, at most `bounded_text_bytes_max`, each
    counted as its UTF-8 bytes.
 5. Text an agent supplies — purposes, code, names — is data. The kernel never

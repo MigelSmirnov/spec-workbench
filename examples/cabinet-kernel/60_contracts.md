@@ -142,6 +142,52 @@ not review fields, classes or formats, so each is the agent's and says why.
     detail of State 5 is a code, the excerpt is text, and the owner acts on the
     code.
 
+## Decisions closed while writing State 7 (2026-10-03)
+
+Authoring the notes asked for facts the texts did not fix. Each is the
+agent's and says why; the owner-facing rules they rest on are in State 2.
+
+12. **Model changes.** `StoredValuesRef` names one `value_id`: a value port,
+    `one` or `many`, refers to one StoredValue, a `many` value being one JSON
+    array (A13 rule 6). `EffectApproval` gains `attempt_number`, the attempt it
+    was requested for, so "requested after a `not_applied` resolution" is
+    decided from the records (A10 rule 1, A11 rule 1). `EffectAttempt` and
+    `RecordAttemptInFlightChange` gain `inputs`, the element's PortRefs, so a
+    recovered attempt's NodeExecution names its inputs (A11 rule 4).
+    `FileFactsRef` gains `disclosure_class`: a trial execution's file output is
+    recorded by facts only, and its class — the highest class of the case's
+    inputs (A07 rule 3) — must travel with it to be masked.
+13. **Continuation token**: base64url without padding of the canonical JSON
+    object of `record_type`, `filter_digest` and `store_position`; with no
+    filter the digest is that of canonical `null`.
+14. **Content identities** are computed over the canonical JSON object of all
+    fields of the variant, `subject_kind` included; a JSON schema is held as
+    its canonical text; only unordered lists are sorted, so a corpus keeps its
+    order. An idempotency key is the object of port name to JSON value, `null`
+    kept (decision 3). `request_digest` is the content identity of the request
+    description's canonical JSON (A10 rule 7).
+15. **`MonotonicDeadline.remaining_ms`** rounds up, so zero remaining means
+    `has_passed`.
+16. **Store writes.** Writing a StoredValue whose `value_id` exists returns the
+    existing record; repeating any other immutable record is
+    `StoreInternalError`, since its caller checks existence first.
+17. **Request body and addresses.** A JSON request body is sent as its RFC 8785
+    canonical bytes. "Loopback" (A09 rule 4) is an IP literal in
+    `127.0.0.0/8` or `::1`; no name is resolved to decide it.
+18. **Media types.** Within the kernel — ports, fixtures, proof (K-06) — media
+    types are equal only as equal text; only an HTTP response's
+    `Content-Type` is compared on type and subtype without regard to case,
+    parameters ignored (A09 rule 3). An authored file fixture takes its port's
+    media type.
+19. **Corpus place** (`corpus_position`) counts from 0 in corpus order.
+20. **Listing.** `list_records` lists the fourteen record types of
+    `ShownRecords`; the other members of `RecordType` are read through the
+    operations State 5 names for them and are `invalid_request` there.
+21. **A stop during a request.** `surface` lets `StopRequiredError` pass out of
+    `answer_request`; `serve_kernel` sends that request the `internal_error`
+    answer and then ends the process with a non-zero status (State 3,
+    "Unconfirmed cleanup").
+
 ## Texts of earlier states changed by State 6
 
 - State 5: the relation "executions of an element", asked by `effects`, which

@@ -1115,6 +1115,10 @@ Candidate fields:
 
 - `approval_id`: minted at random by the kernel when the approval is requested;
 - `run_id`, `node_id`, `map_index`, `binding_id`;
+- `attempt_number`: the number of the attempt it was requested for — the
+  element's next NodeExecution number when it was requested — so an approval
+  requested after an attempt resolved `not_applied` is told apart from one
+  requested before it (State 2, A10 rule 1, A11 rule 1);
 - `input_digests`: the exact inputs shown;
 - `request_digest`: the digest of the fully built request shown; the approval
   covers that request only (owner decision 18);
@@ -1232,6 +1236,9 @@ Candidate fields:
   every attempt at that node and element, `not_sent` ones included, so a resend is
   always a new attempt;
 - `binding_id`;
+- `inputs`: the element's inputs the request was built from, by reference
+  as a NodeExecution names them (M23), never their payload, so a recovered
+  attempt's NodeExecution names them too (State 2, A11 rule 4);
 - `idempotency_key`: built from the fields the manifest names;
 - `authority`: the approval or the grant it used, or for a `draft-write` send
   the flow activation under which the run started (State 2, A10 rule 6; State
