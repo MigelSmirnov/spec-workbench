@@ -12,30 +12,39 @@ State 3.
 Every flow enters through `module:surface`, which handles one request at a time
 to its end (A18 rule 3) and applies A16 rule 1 in its order — size, token,
 operation schema, actor — before any operation's own check. A refusal there
-reaches no other module and records nothing. Every identity of a content record
+reaches no other module and records nothing. A request naming a record that
+does not exist is refused as an unknown reference by the module that owns the
+record, recording nothing (State 0); the closed set of refusal codes is State
+5's (K-17). Every identity of a content record
 is computed by the module that writes it through `module:canonical_values` (A01
 rule 1); an equal submission returns the existing record and records nothing for
 it (A01 rule 4). A flow references `module:canonical_values` only where its own
 steps compute an identity, fit a value to a port or compare disclosure classes.
 
 Every record is written through `module:store`, one call and one transaction
-(K-17), and a module reaches the installation's facts only through
-`module:installation`. A flow references either module only where its own steps
-use a capability of it beyond that: content-addressed bytes, the spool, paging,
+(K-17). A flow references `module:store` only where its own steps use a
+capability of it beyond that: reading records, value bytes, the spool, paging,
 the start. A step that says "writes" means one such store call by the module
-named.
+named; a store call that fails changes nothing (A18 rule 3) and the request
+is answered as an internal error by `module:surface` (A16 rule 7). Every
+timestamp a step records comes from `module:clock`; a flow
+references the clock where a step stamps a time it names or sets a deadline.
+`module:installation` is referenced wherever its facts are read: the token list
+for every request, the manifest source and selected instances, credentials.
 
 ## `flow:author_and_admit_function`
 
 ### Trigger
 
 An agent with the author right issues a contract version, adds trial cases to
-it and submits an implementation; any agent may try an implementation on the
-corpus before or after submitting it (State 0, A16 rule 3).
+it and submits an implementation; any agent may then try a submitted
+implementation on the corpus — trying names an existing implementation and
+never runs code that was not submitted (A04 rule 6; State 0, A16 rule 3).
 
 ### Boundary
 
-`module:surface` admits the request and decides only whether the caller may make
+`module:surface` checks the request's token against
+`capability:installation.current_token_list` (A16 rules 1–2) and admits the request and decides only whether the caller may make
 it. `module:functions` owns every rule of the flow: the contract version and its
 ceilings (A02), the slot and its purpose (A01 rule 5), the trial cases and the
 corpus (A04 rule 1), trying, admission and the kernel's activation (A04 rules
@@ -44,6 +53,9 @@ ends (A03). `module:canonical_values` computes identities, fits values to
 ports and orders disclosure classes; it decides nothing about what a failed fit
 means. `module:store` holds every record and every byte; it decides
 nothing.
+
+`module:installation` gives the current token list; `module:clock` the
+sandbox's deadline and the records' times.
 
 Crossing models: the request's contract content enters `module:functions` and
 leaves as ContractVersion M03 (and Slot M02 when new); trial values enter as
@@ -90,7 +102,8 @@ AdmissionVerdict M08 and Activation M09 are written by `module:functions`.
    case named twice and an empty corpus (`empty_corpus`) are refused before
    anything executes (A04 rule 6). Each case, in corpus order, is one call of
    `capability:sandbox.execute_function` with the implementation's code, the
-   case's inputs and the contract's bounds; the sandbox returns one outcome of
+   case's inputs and the contract's bounds; the sandbox sets its wall deadline
+   with `capability:clock.monotonic_deadline` and returns one outcome of
    the closed A03 rule 5 order and, on success, outputs that fit the output
    ports. `module:functions` stores the outputs through
    `capability:store.put_value_bytes` with the highest class of the case's
@@ -102,7 +115,9 @@ AdmissionVerdict M08 and Activation M09 are written by `module:functions`.
    takes code for one contract version and computes `implementation_id` from
    the code with the contract version (K-04). A new implementation is written;
    an equal one is that implementation, first submitter kept (A01 rule 4). It
-   then computes the current corpus digest (A04 rule 2):
+   then reads the corpus in store order through
+   `capability:store.read_records` and computes the current corpus digest
+   (A04 rule 2):
    - when an AdmissionVerdict for this implementation and this digest exists,
      that verdict is used and nothing executes;
    - otherwise admission runs every case of the corpus in corpus order, each
@@ -114,7 +129,7 @@ AdmissionVerdict M08 and Activation M09 are written by `module:functions`.
 5. **Activate what is admitted.** On `admitted`, `module:functions` asks
    `capability:functions.current_activation` for the slot's contract version;
    when the implementation is not already current, it writes an Activation by
-   the kernel in the same request (A04 rule 4, K-15: the kernel is the actor).
+   the kernel, stamped with `capability:clock.kernel_now`, in the same request (A04 rule 4, K-15: the kernel is the actor).
    When it is already current, nothing is recorded. On `refused`, nothing is
    activated and the current activation keeps serving.
 6. `module:surface` returns the implementation with its verdict and, when one
@@ -175,13 +190,17 @@ owner accepts it, or leaves it proposed (State 0 question 6).
 
 ### Boundary
 
-`module:surface` admits the request: any agent may propose, only the owner
+`module:surface` checks the request's token against
+`capability:installation.current_token_list` (A16 rules 1–2) and admits the request: any agent may propose, only the owner
 accepts (A16 rule 3). `module:bindings` owns reading the manifest record, the
 proposal checks in their order, the digest pin and acceptance (A08).
 `module:service_invoker` owns the request-shape rules a binding's ports must
 satisfy (A09 rules 2 and 3) and offers them to `module:bindings`; it sends
 nothing in this flow. `module:canonical_values` computes the digest of the
 operation's capability entry.
+
+`module:installation` gives the token list, the manifest source and the
+selected instance.
 
 Crossing models: the proposal — `service_id`, operation name and ports with
 their schemas and classes — enters `module:bindings`; the ports cross into
@@ -197,11 +216,12 @@ come from the installation.
    and ports. The proposer states no effect class and no key fields; a request
    that does is refused, because both are copied from the manifest (M11, A08
    rule 5). It refuses a malformed `service_id` before a path is built, reads
-   `<manifest_location>/<service_id>.json` at the configured revision (A08
-   rule 1) and runs the A08 rule 5 checks in their order, naming the first
+   `<manifest_location>/<service_id>.json` at the configured revision, both
+   from `capability:installation.manifest_source` (A08 rule 1), and runs the A08 rule 5 checks in their order, naming the first
    failing one: record, duplicate entry names, operation present, effect class
-   one of the five, invocable (A08 rule 3, A09 rule 1), selected instance with
-   an `api_base_url` and no repeated required header, key fields (A08 rule 4),
+   one of the five, invocable (A08 rule 3, A09 rule 1), the instance
+   `capability:installation.selected_instance_name` selects, with an
+   `api_base_url` and no repeated required header, key fields (A08 rule 4),
    request shape through `capability:service_invoker.check_request_shape`, then
    the contract-port rules and classes of M01.
 2. **Pin.** `module:bindings` computes `record_digest` of the one capability
@@ -250,7 +270,8 @@ asks to activate a proven version.
 
 ### Boundary
 
-`module:surface` admits the request: any agent composes and proves; the owner
+`module:surface` checks the request's token against
+`capability:installation.current_token_list` (A16 rules 1–2) and admits the request: any agent composes and proves; the owner
 or any agent asks to activate, an agent only a `read` version (A16 rule 3,
 A06). `module:flows` owns composition with its pre-proof refusals, the purpose
 rule for flows, the nine-phase proof, the highest effect class and activation
@@ -259,6 +280,8 @@ rule for flows, the nine-phase proof, the highest effect class and activation
 `module:bindings` answers a binding's status and declared classes.
 `module:canonical_values` computes the version's identity, compares schemas by
 canonical form and orders classes.
+
+`module:installation` gives the token list.
 
 Crossing models: the version content — nodes, edges, guards, constants, flow
 ports, purpose — enters `module:flows` and is written as FlowVersion M13 with
@@ -339,7 +362,8 @@ declared read operations, returning an analysis.
 
 ### Boundary
 
-`module:surface` admits the request; the owner or any agent may run (A16 rule
+`module:surface` checks the request's token against
+`capability:installation.current_token_list` (A16 rules 1–2) and admits the request; the owner or any agent may run (A16 rule
 3), and it answers only once the run rests or ends (A18 rule 3).
 `module:runs` owns the start checks and pins, the order of execution, guards,
 maps, failures, the trace other than an operation's concluding record, and the
@@ -351,6 +375,10 @@ concluding record, even for `read`; for `read` it writes no EffectAttempt and
 asks no authority (A10 rule 6). `module:bindings` checks the binding is current
 before the send. `module:service_invoker` builds and sends the one request.
 `module:canonical_values` fits values and computes identities and classes.
+
+`module:installation` gives the token list, the manifest source, the selected
+instance and the credential; `module:clock` the deadlines and the records'
+times; `module:store` the run's records, value bytes and spool.
 
 Crossing models: the run's input values enter `module:runs` and become
 StoredValues M21 of their port's class; Run M19 pins FlowVersion M13 and one
@@ -373,31 +401,41 @@ records are the trace and the rest state.
    `stored_value_bytes_max`; every function node's contract version has a
    current activation (`capability:functions.current_activation`). It reads
    the pinned graph through `capability:flows.read_flow_version`, writes the
-   Run `running` with its pins and starter, and the input values with their
+   Run `running` with its pins, starter and start time
+   (`capability:clock.kernel_now`), and the input values with their
    identities (`capability:canonical_values.content_identity`) and their port's
    class. It delivers inputs and constants along their edges (A13 rule 3).
 2. **Function element.** The next node is the ready node with the smallest
-   `node_id` (A13 rule 2). `module:runs` reads the pinned implementation's code
-   and bounds through `capability:functions.read_implementation` and calls
-   `capability:sandbox.execute_function`. On success it validates each output
-   against the source port, then against each target port before delivery
-   (A13 rule 3); a value above `stored_value_bytes_max` concludes
+   `node_id` (A13 rule 2), readiness derived from the run's records read
+   through `capability:store.read_records`. `module:runs` reads the pinned implementation's code
+   and bounds through `capability:functions.read_implementation`, the inputs'
+   bytes through `capability:store.read_value_bytes`, and calls
+   `capability:sandbox.execute_function`, which sets its wall deadline with
+   `capability:clock.monotonic_deadline`. On success it validates each output
+   against the source port, then against each target port before delivery;
+   a failure against the source port concludes this node, a failure against a
+   target port the receiving node, `contract_violation` (A13 rule 3); a value above `stored_value_bytes_max` concludes
    `contract_violation` with `value_too_large` (A15 rule 4). Output classes are
    the highest class received
    (`capability:canonical_values.highest_disclosure_class`, A07 rule 3); files
-   go to the run's spool. `module:runs` writes the element's NodeExecution and
+   go to the run's spool through `capability:store.spool_file`. `module:runs` writes the element's NodeExecution and
    the outputs. A mapped node runs its elements in list order (A13 rule 2, 6).
 3. **Read operation element.** `capability:effects.reach_operation_element`
    runs the A09 rule 6 pre-send checks in their order:
    `capability:bindings.check_binding_current` returns the current
-   ManifestOperation or `binding_stale`;
-   `capability:service_invoker.prepare_request` judges the instance, resolves
-   the credential through the installation and places the inputs, naming the
+   ManifestOperation — read at `capability:installation.manifest_source`,
+   with the instance `capability:installation.selected_instance_name` names —
+   or `binding_stale`; `capability:service_invoker.prepare_request` judges the
+   instance, resolves the credential through
+   `capability:installation.resolve_service_credential` and places the inputs,
+   JSON values as `capability:canonical_values.canonical_bytes`, naming the
    first failure. A failure concludes `operation_failed` with nothing sent.
-   Otherwise `capability:service_invoker.send_prepared_request` sends once — no
-   redirect, proxy or retry — and names the outcome from the `read` column of
+   Otherwise `capability:service_invoker.send_prepared_request` sends once,
+   within the transport deadline set with
+   `capability:clock.monotonic_deadline` — no redirect, proxy or retry — and names the outcome from the `read` column of
    the A09 rule 5 table. `module:effects` writes the concluding NodeExecution
-   and the output values, class from the binding. `module:runs` reads the
+   and the output values, class from the binding, a returned file going to the
+   run's spool. `module:runs` reads the
    element's conclusion through
    `capability:effects.operation_element_conclusion`.
 4. **Propagate.** In its next store call `module:runs` writes the skips and
@@ -459,7 +497,8 @@ for a node of the active version.
 
 ### Boundary
 
-`module:surface` admits the request: anyone who may run starts it; only the
+`module:surface` checks the request's token against
+`capability:installation.current_token_list` (A16 rules 1–2) and admits the request: anyone who may run starts it; only the
 owner approves, refuses, grants and revokes (A16 rule 3). `module:runs` owns
 the run, as in `flow:run_read_only_flow`, and checks first whether the run has
 ended. `module:effects` owns the element's reach in A11 rule 1 order:
@@ -469,6 +508,10 @@ record; approvals, grants and their coverage by `request_digest` (A10, A11).
 builds the request, its description and `request_digest`, and sends it once.
 `module:flows` answers the active version and its nodes for a grant.
 `module:canonical_values` computes the request digest and the idempotency key.
+
+`module:installation` gives the token list, the manifest source, the selected
+instance and the credential; `module:clock` the transport deadline;
+`module:store` value bytes and the spool.
 
 Crossing models: from `module:runs` to `module:effects` the run id, pinned
 version, that the run has not ended, and the element's inputs; ManifestOperation
@@ -488,8 +531,13 @@ call; the run's status and WaitingPoints M20 written by `module:runs`.
    `capability:service_invoker.prepare_request`, which also returns the
    request's description and its `request_digest`
    (`capability:canonical_values.content_identity` of A10 rule 7's
-   description). A failure concludes `operation_failed`; no EffectAttempt is
-   written (A09 rule 6).
+   description). As in `flow:run_read_only_flow` step 3, the operation is read
+   at `capability:installation.manifest_source` for the instance
+   `capability:installation.selected_instance_name` names, the credential
+   comes from `capability:installation.resolve_service_credential`, JSON values
+   are placed as `capability:canonical_values.canonical_bytes`, and file inputs
+   are read through `capability:store.read_value_bytes`. A failure concludes
+   `operation_failed`; no EffectAttempt is written (A09 rule 6).
 2. **Authority.** `module:effects` checks A10 rule 1 as it stands now: a
    `draft-write` node needs nothing at run time — its authority is the version's
    FlowActivation — except a resend after `not_applied`; any other class needs
@@ -508,7 +556,10 @@ call; the run's status and WaitingPoints M20 written by `module:runs`.
    `capability:canonical_values.content_identity` (A08 rule 4) and the attempt
    number the store assigns inside that call
    (State 3, "Attempt numbers"). `capability:service_invoker.send_prepared_request`
-   sends once, the key fields travelling as the inputs themselves. A second
+   sends once, within the transport deadline set with
+   `capability:clock.monotonic_deadline`, the key fields travelling as the
+   inputs themselves; a file the service returns goes to the run's spool
+   through `capability:store.spool_file`. A second
    store call writes the outcome: the attempt's conclusion from the non-`read`
    column of A09 rule 5, the next NodeExecution, the output values, and the
    approval `used` — unless the attempt ended `not_sent`.
@@ -581,11 +632,15 @@ outcome; the owner cancels a run that has not ended.
 
 ### Boundary
 
-`module:surface` admits the request: resume by the owner or any agent;
+`module:surface` checks the request's token against
+`capability:installation.current_token_list` (A16 rules 1–2) and admits the request: resume by the owner or any agent;
 resolve and cancel by the owner only (A16 rule 3). `module:runs` owns the run's
 status, its waiting points, resume and cancel, and checks first that the run
 has not ended (A13 rule 1, A14). `module:effects` owns the EffectAttempt and
 its resolution, and reaches each resumed element in A11 rule 1 order.
+
+`module:installation` gives the token list; `module:store` the run's waiting
+points and records.
 
 Crossing models: WaitingPoint M20 records name the elements and reasons;
 from `module:runs` to `module:effects` the run id, pinned version, that the run
@@ -597,7 +652,8 @@ has not ended, and the element; EffectAttempt M26 is changed by
 
 1. **Rest.** A run rests with one waiting point per waiting element, reason
    `owner_approval`, `service_unreachable` or `outcome_unknown`; no time limit
-   moves it (A14 rule 1). `capability:runs.read_run` gives the answer with the
+   moves it (A14 rule 1). Waiting points and records are read through
+   `capability:store.read_records`. `capability:runs.read_run` gives the answer with the
    outputs produced so far.
 2. **Resume.** `capability:runs.resume_run` refuses a run with no element
    waiting on `service_unreachable`. Otherwise it reaches every such element
@@ -655,7 +711,8 @@ owner or an agent with the author right may roll the slot back.
 
 ### Boundary
 
-`module:surface` admits the request — capture and rollback by the owner or an
+`module:surface` checks the request's token against
+`capability:installation.current_token_list` (A16 rules 1–2) and admits the request — capture and rollback by the owner or an
 agent with the author right; release by the owner or any agent (A16 rule 3) —
 and assembles the repair view (A15 rule 6, K-12). `module:runs` owns the
 conditions of capture, copying the spooled inputs, and the release (A14 rule
@@ -663,6 +720,8 @@ conditions of capture, copying the spooled inputs, and the release (A14 rule
 rollback (A04). `module:store` holds the content-addressed area, the spool and
 paging. `module:canonical_values` fits the captured values and computes the
 case's identity.
+
+`module:installation` gives the token list.
 
 Crossing models: NodeExecution M23 of the failed element and Run M19 are read
 by `module:runs`; the spooled input files cross into the content-addressed
@@ -674,11 +733,13 @@ page of NodeExecutions cross into `module:surface`.
 
 ### Steps
 
-1. **Capture.** `capability:runs.capture_failed_execution` checks, in this
+1. **Capture.** `capability:runs.capture_failed_execution` reads the record
+   through `capability:store.read_records` and checks, in this
    order, the record — an executed function element that did not succeed
    (M06) — then the run and its spool: not ended, or ended `failed` and not
    released (A15 rule 5). It copies the spooled input files into the
-   content-addressed area and calls `capability:functions.add_captured_trial_case`
+   content-addressed area — read through `capability:store.read_value_bytes`,
+   stored through `capability:store.put_value_bytes` — and calls `capability:functions.add_captured_trial_case`
    with the pinned contract version, the inputs and the file digests.
    `module:functions` checks that the record's contract version is the one
    named, fits each value with `capability:canonical_values.fit_port_value`
@@ -729,7 +790,10 @@ page of NodeExecutions cross into `module:surface`.
 - Release of a run that is not `failed` or already released: `module:runs`.
   Rollback to an implementation without an `admitted` verdict over the current
   corpus: `module:functions`.
-- Cleanup duty: capture copies files before the run's spool can go; release
+- Cleanup duty: capture copies files before the run's spool can go; files
+  copied before `module:functions` refuses the case stay in the
+  content-addressed area, named by no record (State 3, "Bytes left by a
+  refused capture"); release
   is the only removal of a failed run's spool, and the content-addressed copy
   of a captured file is the only file that outlives its run (K-10).
 
@@ -751,6 +815,8 @@ the sandbox (A03 rule 8). `module:effects` turns `in_flight` attempts into
 `unknown` (A11 rule 4). `module:runs` decides which ended runs' spools go and
 advances the runs left `running` (A14 rules 4, 5).
 
+`module:clock` gives the recovery time.
+
 Crossing models: the configuration file into `module:installation`, which
 yields tokens, selected instances, credential headers and the manifest source
 (M28); those instances and the manifest records into `module:bindings`; the
@@ -767,7 +833,10 @@ EffectAttempt M26 and the concluding NodeExecution M23 written by
    distinct (A16 rule 1, A17 rule 1).
 3. `capability:bindings.check_installed_instances`: no credential header has,
    case-insensitively, the name of a required header of its instance (A09 rule
-   1). It reads only the installation and the manifest, never the store.
+   1). It reads only the installation —
+   `capability:installation.selected_instance_name` and
+   `capability:installation.manifest_source` — and the manifest, never the
+   store.
 4. `capability:store.open_store`: the exclusive lock, private directory, no
    symbolic link, removal of temporary files (A18 rules 1, 2, 4).
 5. `capability:sandbox.probe_sandbox`: `bubblewrap` is present and one probe
@@ -775,7 +844,7 @@ EffectAttempt M26 and the concluding NodeExecution M23 written by
 6. `capability:effects.recover_in_flight_attempts`: every `in_flight` attempt
    becomes `unknown`, and when its attempt has no NodeExecution yet the
    `outcome_unknown` record is written with the attempt's number, its start
-   time and the recovery time as end (A11 rule 4), and the approval the attempt
+   time and the recovery time from `capability:clock.kernel_now` as end (A11 rule 4), and the approval the attempt
    named, if any, is marked `used` (A11 rule 1). The service is not asked.
 7. `capability:runs.recover_running_runs`: first names to
    `capability:store.remove_run_spool` every ended run that does not keep its

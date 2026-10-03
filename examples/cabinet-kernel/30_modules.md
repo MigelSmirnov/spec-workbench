@@ -214,6 +214,10 @@ record checked by `design_lint --state 2`, recorded as such in `30_trace.json`.
   that element concluded failed, so its dependants conclude `upstream_failed`
   and independent branches go on (A13 rule 5, A14 rule 5); an interrupted admission has no verdict, so the next
   submission of that implementation runs it again (A04 rule 2).
+- **Bytes left by a refused capture.** Files `runs` copied into the
+  content-addressed area before `functions.add_captured_trial_case` refused
+  stay there: the area is immutable and stores equal bytes once, and no record
+  names them, so they enter no case (A18 rule 4).
 - **Continuation tokens.** `surface` checks the token's form; whether it names
   a position of that list is answered by `store.page_records`, which refuses
   one that does not (A16 rule 6).
@@ -397,7 +401,11 @@ page_records
 ```
 
 `record_change` stands for the closed set of one-transaction calls the other
-modules make; State 5 names each one.
+modules make; State 5 names each one. `read_value_bytes` returns the bytes a
+StoredValue M21 or a SpooledFile M22 names, from the content-addressed area or
+the run's spool; the caller names the record, never a place (owner,
+2026-10-03, raised by State 4 round 3). A spooled file whose run no longer
+holds its spool is refused.
 
 ### Depth assessment
 
