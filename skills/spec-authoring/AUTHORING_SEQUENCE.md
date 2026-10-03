@@ -197,6 +197,11 @@ reviewed State 4 flow
    silently fall back to an LLM path.
 10. Artifact filename prefixes are storage conventions, not semantic state
     authority. When a filename conflicts with this sequence, this sequence wins.
+11. A case whose State 5 exposure names no external operation and that has no
+    router artifact does not use `rules.http_router_backend`: the sequencer
+    skips per-route Router Closure and router context. Do not add an empty
+    `70_router_closure.json` to close them; once either router artifact exists,
+    both phases apply as usual.
 
 ## Deterministic authoring entrypoint
 
