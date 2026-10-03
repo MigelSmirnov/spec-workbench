@@ -150,15 +150,24 @@ and no detection promises the runtime cannot keep.
    `time.localtime`, `time.gmtime`, `time.ctime` and `time.asctime` when called
    without an argument, `datetime.datetime.now`, `datetime.datetime.utcnow`,
    `datetime.datetime.today`, `datetime.date.today`, `os.urandom`,
-   `os.getrandom`, `uuid.uuid1`, `uuid.uuid4`, every function of `secrets`, and
+   `os.getrandom`, `uuid.uuid1`, `uuid.uuid4`, every function of `secrets` (its
+   `__all__` without the class `SystemRandom`, which is trapped as
+   `random.SystemRandom`; for release v1: `choice`, `compare_digest`,
+   `randbelow`, `randbits`, `token_bytes`, `token_hex`, `token_urlsafe`), and
    the module-level functions of `random` (`random.random`, `randint`, `choice`
    and every other function the module exports), any method of
    `random.SystemRandom`, and `random.Random` constructed without a seed or with
    `None`; `random.Random(seed)`
    with an explicit seed stays usable. The list is closed for the release; an
    entry point found missing is added by a new release. "Every function the
-   module exports" is resolved once, when the release's runtime is built, into a
-   fixed list shipped with it. Each trap, before raising, writes its hit to the
+   module exports" is the release interpreter's `random.__all__` without the
+   classes `Random` and `SystemRandom`; for release v1 (CPython 3.12, A20 rule 3)
+   it is, written out: `betavariate`, `binomialvariate`, `choice`, `choices`,
+   `expovariate`, `gammavariate`, `gauss`, `getrandbits`, `getstate`,
+   `lognormvariate`, `normalvariate`, `paretovariate`, `randbytes`, `randint`,
+   `random`, `randrange`, `sample`, `seed`, `setstate`, `shuffle`, `triangular`,
+   `uniform`, `vonmisesvariate`, `weibullvariate` (pre-contract data closure,
+   2026-10-03). Each trap, before raising, writes its hit to the
    runner's channel to the parent, which user code cannot unsend; any recorded hit makes the
    execution `sandbox_violation` under the order of rule 5, even when the code
    catches it and returns a conforming output: `timeout` and `resource_exhausted`

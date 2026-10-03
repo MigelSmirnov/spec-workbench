@@ -478,7 +478,7 @@ None.
 
 ### Enforces
 
-The one order of DISCLOSURE_CLASSES (A07 rule 1); no construct lowers a class.
+The one order of the disclosure classes, the declared order of their `models` enumeration (A07 rule 1); no construct lowers a class.
 
 ### Errors
 

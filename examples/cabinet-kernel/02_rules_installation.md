@@ -282,7 +282,8 @@ reads.
    `failure_detail`, a diagnostic excerpt, not a value: it is cut to
    `failure_detail_bytes_max` at a UTF-8 character boundary.
 3. A release pins the exact versions of the kernel's Python dependencies and of
-   the sandbox runtime (A03). A vulnerable dependency is answered by a new
+   the sandbox runtime (A03); the sandbox interpreter of release v1 is CPython
+   3.12, whose `random` module gives A03 rule 4 its list. A vulnerable dependency is answered by a new
    release; a running kernel never updates one.
 4. A new release may change ceilings. They bind contract versions issued after
    it; a contract version issued earlier keeps its bounds and executes under them

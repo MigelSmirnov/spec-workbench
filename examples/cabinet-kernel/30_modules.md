@@ -30,15 +30,17 @@ record checked by `design_lint --state 2`, recorded as such in `30_trace.json`.
 
 ## Facts several modules touch, and their one owner
 
-- **Class orders.** The order of disclosure classes and of effect classes is
-  data of `data_provider` (`DISCLOSURE_CLASSES`, `EFFECT_CLASSES`); every
-  comparison of disclosure classes goes through
-  `canonical_values.highest_disclosure_class`. `EFFECT_CLASSES` is read by
-  `flows` for the highest effect class (A05 rule 5) and by `effects` for which
-  classes stop for approval, take a grant or are `draft-write` (A10);
+- **Class orders.** The disclosure classes (A07 rule 1) and the effect
+  classes (M10) are enumerations of `models`, each ordered by its declared order
+  (State 1); the members and the order have that one home, and no constant
+  repeats them (SPEC_STANDARD 15.4). A member is compared only by its position
+  in that order, never as text. Every comparison of disclosure classes goes
+  through `canonical_values.highest_disclosure_class`; the highest effect class
+  is computed only by `flows` (A05 rule 5). `effects` asks which classes stop
+  for approval, take a grant or are `draft-write` (A10), by member;
   `service_invoker` asks only whether a class is `read`, to choose the column of
   the A09 rule 5 table; `bindings` checks that a manifest's `effect_class` is
-  one of `EFFECT_CLASSES` (A08 rule 5). No other module looks at effect
+  a member of the enumeration (A08 rule 5). No other module looks at effect
   classes. The class of an execution for masking (A07
   rule 5) is computed by `surface` from the records it returns.
 - **Writing records.** Every record is written through `store`, which owns
@@ -249,10 +251,15 @@ may change.
 ### Owns
 
 A20: the release constants generated code reads — one `RELEASE_CEILING_<NAME>`
-per ceiling with the values of release v1, the ordered disclosure classes of A07 rule 1, the ordered
-effect classes of M10, and the closed list of trapped standard-library entry
-points of A03 rule 4 shipped with the runtime. Emitted as module constants
-(SPEC_STANDARD 15.3.1); nothing overrides them.
+per ceiling with the values of release v1; the closed lists of trapped
+standard-library entry points of A03 rule 4 and the sandbox environment of A03
+rule 1; the minimum token length of A16 rule 1; the instance classes that allow
+plain `http` and the class an absent or unknown one counts as (A09 rule 4); the
+headers the kernel sets itself (A08 rule 5); the form of a `service_id` and the
+file name suffix of a service record (A08 rule 1). Emitted as module constants
+(SPEC_STANDARD 15.3.1); nothing overrides them. Closed sets that are a
+model's — classes, statuses, HTTP methods — are `models` enumerations, and the
+field names of a manifest record are the fields of its model, not constants.
 
 ### Knows
 
@@ -273,9 +280,17 @@ generator's prompt (SPEC_STANDARD 15.9).
 
 ```text
 RELEASE_CEILING_<NAME> (one per A20 ceiling)
-DISCLOSURE_CLASSES
-EFFECT_CLASSES
-TRAPPED_ENTRY_POINTS
+SANDBOX_TRAPPED_FUNCTIONS
+SANDBOX_TRAPPED_WITHOUT_ARGUMENT
+SANDBOX_TRAPPED_CLASS
+SANDBOX_UNSEEDED_CONSTRUCTOR
+SANDBOX_ENVIRONMENT
+ACCESS_TOKEN_LENGTH_MIN
+PLAIN_HTTP_INSTANCE_CLASSES
+DEFAULT_INSTANCE_CLASS
+KERNEL_SET_HEADER_NAMES
+SERVICE_ID_PATTERN
+MANIFEST_RECORD_FILE_SUFFIX
 ```
 
 ### Depth assessment
@@ -591,7 +606,7 @@ and the stale check before every send.
 
 ### Knows
 
-`models`, `data_provider` (`EFFECT_CLASSES`), `canonical_values`, `clock`,
+`models` (effect classes), `data_provider`, `canonical_values`, `clock`,
 `store`, `installation`, `service_invoker` (request shape).
 
 ### Must not own
@@ -630,7 +645,7 @@ The proof-time reach of disclosure classes (A07 rule 2).
 
 ### Knows
 
-`models`, `data_provider` (`EFFECT_CLASSES`), `canonical_values`, `clock`,
+`models` (effect classes), `data_provider`, `canonical_values`, `clock`,
 `store`, `functions` (contract versions), `bindings` (binding status and
 declared classes).
 

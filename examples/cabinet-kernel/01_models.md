@@ -18,7 +18,10 @@ outcome reconciliation, binding drift history, copying and withdrawing trial
 cases, disclosure ceilings and per-reader redaction.
 
 Closed value sets named here (statuses, kinds, classes, reasons) are product
-facts; each becomes one release constant when a later state first reads it.
+facts; each becomes one enumeration of `models` (SPEC_STANDARD 15.3.1). A set
+named here as ordered — disclosure classes (M01), effect classes (M10) — is
+ordered by the declared order of its enumeration, and its members are compared
+only by that position, never as text (pre-contract data closure, 2026-10-03).
 
 Every content-derived identity and digest in this kernel is the lowercase hex
 SHA-256 of the canonical JSON of the model's meaning facts — never of who created
@@ -325,13 +328,16 @@ Candidate fields:
 
 ### Identity
 
-value
+entity
 
 ### Identity evidence
 
-Substitution: an execution is an observation; two runs of the same pair are two
-observations, and both are kept. The record is still a value: it is issued once
-and never changed.
+Substitution: fails — an execution is an observation; two runs of the same pair
+are two observations with equal facts possible, and both are kept, so the
+record is told apart by its minted `trial_execution_id` (A01 rule 2), not by its
+values. Continuity: trivial; it is issued once and never changed. Entity issued
+once, not a value (SPEC_STANDARD 15.1.1: a value has no identifier of its own;
+pre-contract data closure, 2026-10-03).
 
 ### Source of truth
 
@@ -415,12 +421,15 @@ Candidate fields:
 
 ### Identity
 
-value
+entity
 
 ### Identity evidence
 
-Substitution: each activation is one issued selection. Continuity: none; rollback
-is another activation.
+Substitution: fails — each activation is one issued selection; activating the
+same implementation again is a new record with its own position in the store's
+order (A01 rule 3), not the earlier one. Continuity: trivial; it is issued once
+and never changed. Rollback is another activation. Entity issued once, not a
+value (SPEC_STANDARD 15.1.1; pre-contract data closure, 2026-10-03).
 
 ### Source of truth
 
@@ -811,12 +820,15 @@ Candidate fields:
 
 ### Identity
 
-value
+entity
 
 ### Identity evidence
 
-Substitution: each activation is one issued selection. Continuity: none;
-switching back is another activation.
+Substitution: fails — each activation is one issued selection; activating the
+same flow version again is a new record with its own position in the store's
+order (A01 rule 3), not the earlier one. Continuity: trivial; it is issued once
+and never changed. Switching back is another activation. Entity issued once, not
+a value (SPEC_STANDARD 15.1.1; pre-contract data closure, 2026-10-03).
 
 ### Source of truth
 
