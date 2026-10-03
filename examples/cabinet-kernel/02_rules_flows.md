@@ -35,7 +35,7 @@ edges into one input, of flow outputs under guards, and of proving again later.
       flow output, has at least one source; a port with a constant has no other
       constant and no edge; and no two edges that can both deliver (rule 3) end at
       the same port, whatever its cardinality;
-   7. cycles: the graph of nodes and edges is acyclic;
+   7. cycles: the graph of nodes and every edge, guarded or not, is acyclic;
    8. disclosure, by the edge order, for every edge or constant ending at a node's
       input port: the class that can reach the source (A07) does not exceed the
       class that input accepts. An edge ending at a flow output is not checked: a

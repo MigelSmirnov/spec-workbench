@@ -127,8 +127,10 @@ outcomes map to NodeExecution statuses.
    refuses to start. The
    URL is the `api_base_url` without a trailing `/` followed by the declared
    path, which must start with one `/` and contain no `//`, no `.` or `..`
-   segment, no `?` or `#`, and no scheme or host; a path that does not is not
-   invocable (A08 rule 3). Placeholder values are percent-encoded so that they
+   segment, no `?` or `#`, and no scheme or host; a `{` or `}` appears only in a
+   placeholder, which is one whole segment `{name}` whose name is not empty and
+   contains no `{`, `}` or `/`, and no name is a placeholder twice; a path that
+   does not is not invocable (A08 rule 3). Placeholder values are percent-encoded so that they
    stay one segment. Nothing else is normalized. Redirects are not followed; proxy environment
    variables are ignored; nothing is retried inside one attempt.
 2. The request is built from the node's inputs: every `{name}` in the path takes
