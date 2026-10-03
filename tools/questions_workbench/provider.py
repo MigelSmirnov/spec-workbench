@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 from typing import Any, Protocol
 
 DEFAULT_MODEL = "gpt-5.3-codex"
@@ -16,15 +17,8 @@ class Provider(Protocol):
         """Return the model's text and its usage."""
 
 
-def load_env_file() -> None:
-    """Load provider settings from the file an operator names explicitly.
-
-    `DESIGN_QUESTIONS_ENV_FILE`, or the Factory's `CODE_FACTORY_ENV_FILE`, so a
-    workbench round can use the Factory's provider settings without copying them.
-    Values already in the environment win; nothing is searched for.
-    """
-    path = os.environ.get("DESIGN_QUESTIONS_ENV_FILE") or os.environ.get("CODE_FACTORY_ENV_FILE")
-    if not path or not os.path.isfile(path):
+def _load_env(path: Path) -> None:
+    if not path.is_file():
         return
     with open(path, encoding="utf-8") as handle:
         for raw in handle:
@@ -35,6 +29,23 @@ def load_env_file() -> None:
             key = key.strip()
             if key and key not in os.environ:
                 os.environ[key] = value.strip().strip('"').strip("'")
+
+
+def load_env_file() -> None:
+    """Load provider settings the way the Factory's `llm_config` does.
+
+    An env file named in `DESIGN_QUESTIONS_ENV_FILE`, or the Factory's
+    `CODE_FACTORY_ENV_FILE`, is the only one read. Without either, the nearest
+    `.env` from the working directory upwards is read, so a round run from a
+    case checkout uses the same provider settings as the Factory without the
+    operator naming them. Values already in the environment win.
+    """
+    explicit = os.environ.get("DESIGN_QUESTIONS_ENV_FILE") or os.environ.get("CODE_FACTORY_ENV_FILE")
+    if explicit:
+        _load_env(Path(explicit))
+        return
+    for directory in [Path.cwd(), *Path.cwd().parents]:
+        _load_env(directory / ".env")
 
 
 class OpenAIProvider:
@@ -52,7 +63,10 @@ class OpenAIProvider:
     def complete(self, instruction: str, text: str) -> tuple[str, dict[str, Any]]:
         load_env_file()
         if not os.environ.get("OPENAI_API_KEY"):
-            raise RuntimeError("OPENAI_API_KEY is not set; set it or name an env file in DESIGN_QUESTIONS_ENV_FILE")
+            raise RuntimeError(
+                "OPENAI_API_KEY is not set: not in the environment, in DESIGN_QUESTIONS_ENV_FILE "
+                "or CODE_FACTORY_ENV_FILE, nor in a .env above the working directory"
+            )
         from openai import OpenAI
 
         response = OpenAI().responses.create(
