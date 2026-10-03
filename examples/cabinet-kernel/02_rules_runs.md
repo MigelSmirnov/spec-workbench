@@ -255,9 +255,15 @@ spool, files only as fixtures beyond a run.
    `value_too_large`; a constant or a trial value above it is refused when
    authored, by the surface's request bound (A16 rule 4) before any check of
    composition or of the trial case; a flow input above it refuses the start (A12).
-5. Capturing a failed execution into a trial corpus (M06) is allowed only while
+5. Capturing a failed execution into a trial corpus (M06) is allowed only for
+   a function node's execution that ran in the sandbox — its record names the
+   resources it used — and did not succeed; a node that concluded without
+   running, a receiving node refusing a misfit input among them, is not
+   captured. It is allowed only while
    its run still holds its spool — the run has not ended, or ended `failed` and
-   was not released — and is refused otherwise, since its files may be gone. It
+   was not released — and is refused otherwise, since its files may be gone.
+   These checks, in this order, come before the case is built, and so before an
+   equal existing case is returned (A04 rule 1). It
    copies its inputs,
    spooled files included, into the case as values and file fixtures; a file
    fixture above `trial_fixture_bytes_max` refuses the capture. This is the only

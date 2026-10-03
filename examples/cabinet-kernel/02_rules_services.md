@@ -421,7 +421,8 @@ trace records after the owner resolves an unknown outcome.
      requests the fresh approval for the request as built now (A10 rule 2).
    Resolving is refused unless the named attempt's EffectAttempt is `unknown`
    and its run has not ended.
-4. On start, every EffectAttempt still `in_flight` becomes `unknown`; when its
+4. On start, every EffectAttempt still `in_flight`, oldest first in store
+   order and one store call per attempt, becomes `unknown`; when its
    attempt has no NodeExecution yet, the kernel writes it with status
    `outcome_unknown`, the binding as what it executed, the inputs the
    EffectAttempt names, no outputs, its start time taken from the EffectAttempt and its end

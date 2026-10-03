@@ -30,7 +30,8 @@ edges into one input, of flow outputs under guards, and of proving again later.
       input; a `many` output feeds a `many` input, or a `one` input that is its
       node's `map_over` port; a `one` output never feeds a `many` input. Every
       output of a mapped node is `many` for its consumers. A node with
-      `map_over` has exactly one input fed that way;
+      `map_over` has exactly one input fed that way and no `many` output: a
+      mapped list is never a list of lists;
    6. fan-in, by (`to_node`, `to_port`): every input port of every node, and every
       flow output, has at least one source; a port with a constant has no other
       constant and no edge; and no two edges that can both deliver (rule 3) end at

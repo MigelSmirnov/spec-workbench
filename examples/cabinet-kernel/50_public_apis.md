@@ -2369,8 +2369,9 @@ The case is in its corpus.
 
 ### Enforces
 
-Record first — an executed function element that did not succeed — then run and
-spool (A15 rule 5, M06); copies spooled inputs; passes facts down (State 3).
+Record first — a function element that ran in the sandbox (its record names
+resources used) and did not succeed — then run and spool, all before an equal
+existing case is returned (A15 rule 5, M06); copies spooled inputs; passes facts down (State 3).
 
 ### Errors
 

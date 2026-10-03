@@ -135,6 +135,14 @@ record checked by `design_lint --state 2`, recorded as such in `30_trace.json`.
   element's next ordinal, refusing the call otherwise. Requests are handled one at a time (A18 rule 3), so nothing writes
   a record for that element in between; start-up recovery uses the
   EffectAttempt's number too (A11 rule 4).
+- **Spool ceilings.** `store.spool_file` alone checks both ceilings of A15
+  rule 3 — the file against `spool_file_bytes_max`, the run's spooled files
+  plus this one against `spool_run_bytes_max` — and on a refusal keeps nothing
+  of that file or of any file the same attempt spooled before it; files of
+  earlier attempts stay. The module that spooled concludes the element:
+  `runs` for a function output (`resource_exhausted`), `effects` for a service
+  output (`contract_violation`, the attempt `applied`). `service_invoker`
+  judges only the response ceiling and never sees the run's spool.
 - **Idempotency key.** `effects` computes the EffectAttempt's
   `idempotency_key` from the key fields of the ManifestOperation that
   `bindings.check_binding_current` returns and the element's inputs, with
@@ -686,7 +694,8 @@ active_flow_version
 A10 and A11: reaching an operation element in the order of A11 rule 1 —
 pre-send checks, authority, the in-flight record, the send, the outcome record
 — approvals and their coverage by `request_digest`, standing grants and their
-revocation, EffectAttempts and attempt numbers, the owner's resolution of an
+revocation, EffectAttempts — whose numbers `store` assigns ("Attempt numbers")
+—, the owner's resolution of an
 unknown outcome, and turning `in_flight` into `unknown` at start.
 
 ### Knows

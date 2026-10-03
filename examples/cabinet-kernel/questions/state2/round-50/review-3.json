@@ -1,0 +1,277 @@
+{
+ "open_points": [
+  {
+   "subject": "K-02 and A03 sandbox filesystem access",
+   "kind": "contradiction",
+   "text": "K-02 says a function has \"no filesystem beyond its input\", while A03 rule 1 gives it \"one private exchange directory\" and rule 4 permits opening paths inside that directory and the read-only runtime.",
+   "question": "May agent code itself read or write the exchange directory or runtime files, or are those accesses reserved for the runner and imports?",
+   "options": [
+    "Agent code may use the bounded exchange directory and read runtime files",
+    "Agent code may access only its supplied values and file bytes; runner/import access is mediated separately",
+    "Any filesystem access by agent code is a sandbox violation"
+   ],
+   "default_guess": "Allow only accesses required to load the module and standard library; treat other agent-initiated filesystem access as a sandbox violation."
+  },
+  {
+   "subject": "A03 deterministic function execution",
+   "kind": "unverifiable invariant",
+   "text": "A03 fixes selected clock and randomness entry points and requires that \"The same implementation on the same input yields the same output digest twice\", but Python still exposes nondeterministic observations such as process identity, object identity, directory ordering, thread scheduling and other unlisted operating-system state.",
+   "question": "Is repeatable output a guaranteed sandbox property, and if so, what closes every remaining nondeterministic source?",
+   "options": [
+    "Guarantee determinism and prohibit or virtualize every observable nondeterministic source",
+    "Guarantee only isolation and fixed known sources; implementations may still behave nondeterministically",
+    "Treat differing repeated outputs as a sandbox violation detected by rerunning executions"
+   ],
+   "default_guess": "Interpret the rules as fixing known sources and execution order, not as a complete guarantee that arbitrary Python code is deterministic."
+  },
+  {
+   "subject": "A03 stdout and stderr handling",
+   "kind": "missing resource rule",
+   "text": "Rule 6 says stdout is never kept, but no rule says where stdout or stderr go, how they are drained, or which ceiling applies while untrusted code writes an unbounded amount.",
+   "question": "What happens when a function writes indefinitely or writes more than a bounded amount to stdout or stderr?",
+   "options": [
+    "Redirect both streams to a bounded sink and classify overflow as resource_exhausted",
+    "Discard both streams continuously without counting them",
+    "Count them against output_bytes",
+    "Let the operating-system pipe behavior determine the result"
+   ],
+   "default_guess": "Drain and discard both streams through a bounded mechanism, classifying inability to drain within the wall deadline as timeout."
+  },
+  {
+   "subject": "A03 cleanup failure during A04 admission or try",
+   "kind": "contradictory lifecycle",
+   "text": "A03 rule 7 says cleanup failure records the execution as crashed and stops the kernel, while A04 rule 2 says admission executes every case and \"never stops early\"; recovery rules cover runs but not an interrupted admission or try.",
+   "question": "What records and verdict remain after cleanup failure or process death partway through admission or try, and is that operation resumed after restart?",
+   "options": [
+    "Commit no executions or verdict and rerun the whole operation on a new request",
+    "Keep completed TrialExecutions and the cleanup_failed execution but no verdict; a later submission starts a new admission",
+    "Recover and continue the interrupted admission or try after restart"
+   ],
+   "default_guess": "Keep any individually committed evidence, issue no verdict or activation, and require a later request to rerun the whole admission."
+  },
+  {
+   "subject": "Mapped nodes with declared many outputs",
+   "kind": "undefined mapping semantics",
+   "text": "M14 says each output of a mapped node \"collects one result per element\", A05 says every mapped output is `many` for consumers, and A03 still lets each invocation return a declared `many` output; M22 has only one `list_index`, not nested indices.",
+   "question": "What is the result when a mapped node's contract or binding already declares an output as `many`?",
+   "options": [
+    "Refuse mapping a node that has any declared many output",
+    "Collect lists as a nested list without flattening",
+    "Flatten all per-element lists into one list",
+    "Preserve an additional nested index for many file outputs"
+   ],
+   "default_guess": "Refuse a mapped node with a declared `many` output."
+  },
+  {
+   "subject": "Guards sourced from mapped nodes",
+   "kind": "undefined guard semantics",
+   "text": "A05 makes every output of a mapped node `many` for consumers, while M15 and A13 enable a guarded edge when its guard port's value equals one closed scalar member; no rule says whether a mapped guard is compared per element or as the collected list.",
+   "question": "Can an edge be guarded by an output of a mapped node, and if so, how is the guard evaluated?",
+   "options": [
+    "Refuse guards whose guard source is a mapped node",
+    "Evaluate the guard independently for each mapped element",
+    "Compare the complete collected list with the guard value"
+   ],
+   "default_guess": "Refuse such a guard because the collected output cannot equal a scalar member of the declared closed set."
+  },
+  {
+   "subject": "Flow constants delivered to many ports",
+   "kind": "missing cardinality rule",
+   "text": "A05 phase 2 says a constant's \"value fits its schema\", while A13 says a value on a `many` port must be a JSON array whose every element fits the port schema; A05 phase 5 applies cardinality checks only to edges.",
+   "question": "May a constant feed a `many` input, and is its literal validated as one schema value or as an array of element values?",
+   "options": [
+    "Allow it only when the literal is an array and every element fits the port schema",
+    "Refuse constants on many ports",
+    "Treat the entire array as the single value checked against value_schema"
+   ],
+   "default_guess": "Allow an array constant and validate each element against the port's value schema."
+  },
+  {
+   "subject": "File-port media type comparison",
+   "kind": "undefined equality",
+   "text": "K-06 and A05 require file ports to have \"the same media type\", while A09 separately defines response comparison as case-insensitive on type and subtype with parameters ignored; no equality or valid syntax is defined for proof and identity.",
+   "question": "How are declared media types validated and compared between ports?",
+   "options": [
+    "Require bare type/subtype and compare a normalized lowercase form",
+    "Compare declared strings exactly",
+    "Use full RFC media-type equivalence including parameters"
+   ],
+   "default_guess": "Require a bare valid type/subtype, normalize it to lowercase, and compare that normalized value."
+  },
+  {
+   "subject": "A08 binding port validation",
+   "kind": "ambiguous rule scope",
+   "text": "A08 rule 5 refuses ports that \"break a rule A02 sets for contract ports — unique names per direction, a media type exactly on file ports\", but A02 also requires supported schemas and at least one output, while A09 explicitly handles bindings without output ports.",
+   "question": "Exactly which A02 port rules apply to bindings, especially supported-schema validation and the at-least-one-output rule?",
+   "options": [
+    "Apply every applicable A02 rule except resource bounds and the output requirement",
+    "Apply only the two examples named in A08 plus disclosure classes",
+    "Apply all A02 rules, thereby refusing bindings without outputs"
+   ],
+   "default_guess": "Require supported schemas, unique names, valid carriage/media declarations and required classes, but allow zero outputs and omit resource bounds."
+  },
+  {
+   "subject": "Accepting a proposed binding after manifest change",
+   "kind": "missing check order",
+   "text": "A08 rule 7 says to repeat rule 5's checks and return `binding_stale` \"when only the digest differs\", but digest comparison has no position in rule 5's ordered checks.",
+   "question": "When the current capability both differs in digest and fails another manifest or port check, which failure is reported first?",
+   "options": [
+    "Run every rule 5 check first and compare the digest last",
+    "Compare the digest immediately after locating the operation",
+    "Any digest difference always reports binding_stale before further validation"
+   ],
+   "default_guess": "Validate in rule 5 order, then compare the valid current entry's digest with the pin."
+  },
+  {
+   "subject": "Manifest api_base_url and declared path",
+   "kind": "incomplete URL rules",
+   "text": "A08 accepts any absolute `http` or `https` URL with a host, and A09 forms a URL by removing a trailing slash and appending the declared path while saying \"Nothing else is normalized\"; query, fragment, user information, base paths, invalid static path characters and existing percent escapes are not covered.",
+   "question": "Which exact base URLs and static path characters are valid, and how are base paths, trailing slashes and percent escapes joined?",
+   "options": [
+    "Restrict base_url to scheme, authority and an optional normalized path, with no userinfo, query or fragment, and require a valid ASCII URI path",
+    "Allow all absolute URLs and define a complete URL-resolution algorithm",
+    "Require base_url to contain only scheme and authority"
+   ],
+   "default_guess": "Reject userinfo, query and fragment, allow a valid base path, strip trailing slashes, and require the declared path to be valid without further normalization."
+  },
+  {
+   "subject": "HTTP header and multipart field serialization",
+   "kind": "injection gap",
+   "text": "A09 sends required-header values \"verbatim\" and inserts unrestricted port names into `Content-Disposition: form-data; name=\"<port>\"`; no rule validates header-name tokens, control characters, quoted-string escaping, credential-header names or file media types used as headers.",
+   "question": "What syntax is accepted for every generated or manifest/configured header name and value, and how are multipart names escaped or refused?",
+   "options": [
+    "Validate all header names and values and restrict multipart port names to a safe identifier syntax",
+    "Define escaping for arbitrary port names and header values",
+    "Pass strings to the HTTP library and accept or refuse according to that library"
+   ],
+   "default_guess": "Require RFC-valid header names and control-character-free values, and refuse operation-binding port names that cannot be serialized safely in multipart headers."
+  },
+  {
+   "subject": "EffectAttempt not_applied from a direct 4xx",
+   "kind": "contradictory retry lifecycle",
+   "text": "A09 maps a non-read 4xx to `operation_refused` with the attempt `not_applied`; A13 makes `operation_refused` a terminal node failure, while K-08 and M26 say sending again after `not_applied` requires a fresh approval. Resume touches only `service_unreachable`, and A11 creates the resend path only for an unknown outcome resolved `not_applied`.",
+   "question": "Can an effect that directly received a 4xx be sent again, and through which action does it enter `owner_approval` for the fresh approval?",
+   "options": [
+    "A direct 4xx is terminal and cannot be resent within that run",
+    "Treat every not_applied attempt like an unknown resolved not_applied and request fresh approval",
+    "Extend resume to retry direct not_applied attempts with fresh approval"
+   ],
+   "default_guess": "Treat the direct 4xx as terminal because no accepted action currently reopens that element."
+  },
+  {
+   "subject": "Selecting among several matching approvals",
+   "kind": "missing referenced rule",
+   "text": "A10 rule 1 says \"When several approvals count and match, the oldest in store order is used (State 5, closed question 2)\", but no supplied text defines that State 5 decision.",
+   "question": "Is oldest matching approval definitively the State 2 authority-selection rule, or may later surface rules choose differently?",
+   "options": [
+    "Use the oldest matching approved and unused approval",
+    "Use the newest matching approval",
+    "Refuse the send when more than one matches"
+   ],
+   "default_guess": "Use the oldest matching approval, as the sentence states, despite the missing referenced decision."
+  },
+  {
+   "subject": "Service failure_detail bytes",
+   "kind": "undefined encoding",
+   "text": "A09 permits keeping an excerpt of an arbitrary error-response body as `failure_detail`, while A20 requires truncation at a UTF-8 character boundary; an HTTP error body need not be UTF-8.",
+   "question": "How is a non-UTF-8 error body converted into bounded failure_detail text, and what length does A07 disclose?",
+   "options": [
+    "Decode as UTF-8 with replacement and then truncate",
+    "Store a bounded hexadecimal or base64 representation",
+    "Keep failure_detail empty unless the body is valid UTF-8",
+    "Treat invalid UTF-8 as a transport failure"
+   ],
+   "default_guess": "Decode with replacement, truncate the resulting UTF-8 text at the ceiling, and report that stored text's byte length."
+  },
+  {
+   "subject": "Outputs of unsuccessful node attempts",
+   "kind": "missing persistence rule",
+   "text": "A13 forbids delivery of invalid values and A15 expressly discards files for ceiling failures, but no general rule says which otherwise produced values or files are persisted and named in NodeExecution when an attempt ends `contract_violation`, `resource_exhausted`, `crashed` or another non-success status.",
+   "question": "Which partial or individually valid outputs of a failed attempt are recorded, stored in the value area, or retained in the run spool?",
+   "options": [
+    "Discard all outputs of every unsuccessful attempt",
+    "Record validated outputs and retain their bytes even though they are not delivered",
+    "Record only digests and metadata while discarding bytes",
+    "Define status-specific handling"
+   ],
+   "default_guess": "Do not deliver or publish any output unless the complete output set succeeds; retain only bounded diagnostic facts needed by the trace."
+  },
+  {
+   "subject": "Startup conversion of multiple in_flight attempts",
+   "kind": "missing deterministic order",
+   "text": "A14 says every `in_flight` EffectAttempt is turned into `unknown`, and A11 says this is one store call per attempt, but neither gives the order when several attempts exist; those writes acquire store positions and timestamps.",
+   "question": "In what order are multiple in-flight attempts recovered before runs are advanced?",
+   "options": [
+    "Oldest EffectAttempt first in store order",
+    "Order by run store order, then node_id and map_index",
+    "Order by run_id, node_id, map_index and attempt number",
+    "Convert all in one transaction with one logical position"
+   ],
+   "default_guess": "Recover EffectAttempts in their original store order, oldest first."
+  },
+  {
+   "subject": "Configured manifest_revision stability",
+   "kind": "contradictory invariant",
+   "text": "M28 stores a configured `manifest_revision`, and A08 says a record changes for a running kernel only after restart with a new configured revision; no rule requires that revision to be an immutable commit rather than a moving branch or tag.",
+   "question": "Must manifest_revision be an immutable commit identifier, or when and how is a symbolic revision resolved and pinned?",
+   "options": [
+    "Require an immutable full commit identifier",
+    "Resolve any revision once at startup and pin the resulting commit for that process",
+    "Resolve the configured revision on every manifest read"
+   ],
+   "default_guess": "Resolve once at startup to an immutable commit and use that resolved commit for every read until restart."
+  },
+  {
+   "subject": "Agent-name uniqueness during token-list reload",
+   "kind": "contradiction",
+   "text": "M27 says agent names are unique and a configuration repeating one is refused at start, while A16 rule 2 says exactly three checks apply to a token-list re-read and agent-name uniqueness is not one of them.",
+   "question": "What happens if a hot-reloaded token list contains distinct tokens with the same agent name or conflicting may-author flags?",
+   "options": [
+    "Reject the re-read and refuse every request until names are unique",
+    "Accept it and treat both tokens as the same Actor",
+    "Accept it but derive separate actor identities from tokens"
+   ],
+   "default_guess": "Reject the re-read under the same opaque token refusal until agent names are unique."
+  },
+  {
+   "subject": "Kernel startup validation and precedence",
+   "kind": "missing global order",
+   "text": "A03, A17, A18 and A09 each add startup refusals for the sandbox, configuration file, data directory, locks, symlinks and credential-header collisions, but no single rule orders these checks or says how manifest-dependent header checks behave when a selected manifest instance is absent or malformed.",
+   "question": "What is the complete startup check order, and does an unreadable or malformed selected service record stop startup or merely make later binding operations fail?",
+   "options": [
+    "Define a total startup order and require all selected service records needed for header checks to be valid",
+    "Validate only local configuration/store/sandbox facts at startup and defer every manifest fault to binding use",
+    "Collect and return all startup failures without first-failure precedence"
+   ],
+   "default_guess": "Check configuration and data-directory security, acquire the lock, validate release and sandbox, validate locally knowable credential-header rules, then recover; defer ordinary manifest faults to binding operations unless a startup-only collision check requires that record."
+  },
+  {
+   "subject": "SQLite records and filesystem artifacts",
+   "kind": "atomicity gap",
+   "text": "A18 says a failed store call changes nothing and every change is one SQLite transaction, while value bytes, fixtures and spool files are separately flushed and renamed; it gives no crash protocol for the interval between filesystem publication and database commit, and startup removes only temporary files and selected spool directories.",
+   "question": "How are database records and their content files made crash-consistent, and what happens to complete but unreferenced files or records whose referenced rename did not finish?",
+   "options": [
+    "Publish files first, commit references second, and tolerate complete unreferenced files",
+    "Publish first and remove unreferenced files during startup reconciliation",
+    "Use a durable journal that makes database and filesystem publication recoverable as one logical transaction",
+    "Store all bytes inside SQLite"
+   ],
+   "default_guess": "Publish and verify files before committing references, never commit a reference to missing bytes, and tolerate harmless complete unreferenced content files."
+  },
+  {
+   "subject": "A18 private data-directory condition",
+   "kind": "vague refusal condition",
+   "text": "A18 says the data directory \"and everything in it are private to the kernel's user\" and refuses startup otherwise, but unlike A17 it does not define ownership, allowed file types or permission bits.",
+   "question": "What exact ownership, mode and file-type checks define a private data directory and its database, value area, fixtures, lock and spool contents?",
+   "options": [
+    "Require kernel-user ownership and no group or other permission bits on every entry",
+    "Require only that group and others cannot write",
+    "Use fixed modes per kind, such as owner-only directories and owner-read/write regular files",
+    "Rely on effective access checks rather than mode bits"
+   ],
+   "default_guess": "Require kernel-user ownership, regular files or directories of the expected kind, owner-only directories, and no group or other permission bits on any entry."
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"K-02 and A03 sandbox filesystem access\",\"kind\":\"contradiction\",\"text\":\"K-02 says a function has \\\"no filesystem beyond its input\\\", while A03 rule 1 gives it \\\"one private exchange directory\\\" and rule 4 permits opening paths inside that directory and the read-only runtime.\",\"question\":\"May agent code itself read or write the exchange directory or runtime files, or are those accesses reserved for the runner and imports?\",\"options\":[\"Agent code may use the bounded exchange directory and read runtime files\",\"Agent code may access only its supplied values and file bytes; runner/import access is mediated separately\",\"Any filesystem access by agent code is a sandbox violation\"],\"default_guess\":\"Allow only accesses required to load the module and standard library; treat other agent-initiated filesystem access as a sandbox violation.\"},{\"subject\":\"A03 deterministic function execution\",\"kind\":\"unverifiable invariant\",\"text\":\"A03 fixes selected clock and randomness entry points and requires that \\\"The same implementation on the same input yields the same output digest twice\\\", but Python still exposes nondeterministic observations such as process identity, object identity, directory ordering, thread scheduling and other unlisted operating-system state.\",\"question\":\"Is repeatable output a guaranteed sandbox property, and if so, what closes every remaining nondeterministic source?\",\"options\":[\"Guarantee determinism and prohibit or virtualize every observable nondeterministic source\",\"Guarantee only isolation and fixed known sources; implementations may still behave nondeterministically\",\"Treat differing repeated outputs as a sandbox violation detected by rerunning executions\"],\"default_guess\":\"Interpret the rules as fixing known sources and execution order, not as a complete guarantee that arbitrary Python code is deterministic.\"},{\"subject\":\"A03 stdout and stderr handling\",\"kind\":\"missing resource rule\",\"text\":\"Rule 6 says stdout is never kept, but no rule says where stdout or stderr go, how they are drained, or which ceiling applies while untrusted code writes an unbounded amount.\",\"question\":\"What happens when a function writes indefinitely or writes more than a bounded amount to stdout or stderr?\",\"options\":[\"Redirect both streams to a bounded sink and classify overflow as resource_exhausted\",\"Discard both streams continuously without counting them\",\"Count them against output_bytes\",\"Let the operating-system pipe behavior determine the result\"],\"default_guess\":\"Drain and discard both streams through a bounded mechanism, classifying inability to drain within the wall deadline as timeout.\"},{\"subject\":\"A03 cleanup failure during A04 admission or try\",\"kind\":\"contradictory lifecycle\",\"text\":\"A03 rule 7 says cleanup failure records the execution as crashed and stops the kernel, while A04 rule 2 says admission executes every case and \\\"never stops early\\\"; recovery rules cover runs but not an interrupted admission or try.\",\"question\":\"What records and verdict remain after cleanup failure or process death partway through admission or try, and is that operation resumed after restart?\",\"options\":[\"Commit no executions or verdict and rerun the whole operation on a new request\",\"Keep completed TrialExecutions and the cleanup_failed execution but no verdict; a later submission starts a new admission\",\"Recover and continue the interrupted admission or try after restart\"],\"default_guess\":\"Keep any individually committed evidence, issue no verdict or activation, and require a later request to rerun the whole admission.\"},{\"subject\":\"Mapped nodes with declared many outputs\",\"kind\":\"undefined mapping semantics\",\"text\":\"M14 says each output of a mapped node \\\"collects one result per element\\\", A05 says every mapped output is `many` for consumers, and A03 still lets each invocation return a declared `many` output; M22 has only one `list_index`, not nested indices.\",\"question\":\"What is the result when a mapped node's contract or binding already declares an output as `many`?\",\"options\":[\"Refuse mapping a node that has any declared many output\",\"Collect lists as a nested list without flattening\",\"Flatten all per-element lists into one list\",\"Preserve an additional nested index for many file outputs\"],\"default_guess\":\"Refuse a mapped node with a declared `many` output.\"},{\"subject\":\"Guards sourced from mapped nodes\",\"kind\":\"undefined guard semantics\",\"text\":\"A05 makes every output of a mapped node `many` for consumers, while M15 and A13 enable a guarded edge when its guard port's value equals one closed scalar member; no rule says whether a mapped guard is compared per element or as the collected list.\",\"question\":\"Can an edge be guarded by an output of a mapped node, and if so, how is the guard evaluated?\",\"options\":[\"Refuse guards whose guard source is a mapped node\",\"Evaluate the guard independently for each mapped element\",\"Compare the complete collected list with the guard value\"],\"default_guess\":\"Refuse such a guard because the collected output cannot equal a scalar member of the declared closed set.\"},{\"subject\":\"Flow constants delivered to many ports\",\"kind\":\"missing cardinality rule\",\"text\":\"A05 phase 2 says a constant's \\\"value fits its schema\\\", while A13 says a value on a `many` port must be a JSON array whose every element fits the port schema; A05 phase 5 applies cardinality checks only to edges.\",\"question\":\"May a constant feed a `many` input, and is its literal validated as one schema value or as an array of element values?\",\"options\":[\"Allow it only when the literal is an array and every element fits the port schema\",\"Refuse constants on many ports\",\"Treat the entire array as the single value checked against value_schema\"],\"default_guess\":\"Allow an array constant and validate each element against the port's value schema.\"},{\"subject\":\"File-port media type comparison\",\"kind\":\"undefined equality\",\"text\":\"K-06 and A05 require file ports to have \\\"the same media type\\\", while A09 separately defines response comparison as case-insensitive on type and subtype with parameters ignored; no equality or valid syntax is defined for proof and identity.\",\"question\":\"How are declared media types validated and compared between ports?\",\"options\":[\"Require bare type/subtype and compare a normalized lowercase form\",\"Compare declared strings exactly\",\"Use full RFC media-type equivalence including parameters\"],\"default_guess\":\"Require a bare valid type/subtype, normalize it to lowercase, and compare that normalized value.\"},{\"subject\":\"A08 binding port validation\",\"kind\":\"ambiguous rule scope\",\"text\":\"A08 rule 5 refuses ports that \\\"break a rule A02 sets for contract ports — unique names per direction, a media type exactly on file ports\\\", but A02 also requires supported schemas and at least one output, while A09 explicitly handles bindings without output ports.\",\"question\":\"Exactly which A02 port rules apply to bindings, especially supported-schema validation and the at-least-one-output rule?\",\"options\":[\"Apply every applicable A02 rule except resource bounds and the output requirement\",\"Apply only the two examples named in A08 plus disclosure classes\",\"Apply all A02 rules, thereby refusing bindings without outputs\"],\"default_guess\":\"Require supported schemas, unique names, valid carriage/media declarations and required classes, but allow zero outputs and omit resource bounds.\"},{\"subject\":\"Accepting a proposed binding after manifest change\",\"kind\":\"missing check order\",\"text\":\"A08 rule 7 says to repeat rule 5's checks and return `binding_stale` \\\"when only the digest differs\\\", but digest comparison has no position in rule 5's ordered checks.\",\"question\":\"When the current capability both differs in digest and fails another manifest or port check, which failure is reported first?\",\"options\":[\"Run every rule 5 check first and compare the digest last\",\"Compare the digest immediately after locating the operation\",\"Any digest difference always reports binding_stale before further validation\"],\"default_guess\":\"Validate in rule 5 order, then compare the valid current entry's digest with the pin.\"},{\"subject\":\"Manifest api_base_url and declared path\",\"kind\":\"incomplete URL rules\",\"text\":\"A08 accepts any absolute `http` or `https` URL with a host, and A09 forms a URL by removing a trailing slash and appending the declared path while saying \\\"Nothing else is normalized\\\"; query, fragment, user information, base paths, invalid static path characters and existing percent escapes are not covered.\",\"question\":\"Which exact base URLs and static path characters are valid, and how are base paths, trailing slashes and percent escapes joined?\",\"options\":[\"Restrict base_url to scheme, authority and an optional normalized path, with no userinfo, query or fragment, and require a valid ASCII URI path\",\"Allow all absolute URLs and define a complete URL-resolution algorithm\",\"Require base_url to contain only scheme and authority\"],\"default_guess\":\"Reject userinfo, query and fragment, allow a valid base path, strip trailing slashes, and require the declared path to be valid without further normalization.\"},{\"subject\":\"HTTP header and multipart field serialization\",\"kind\":\"injection gap\",\"text\":\"A09 sends required-header values \\\"verbatim\\\" and inserts unrestricted port names into `Content-Disposition: form-data; name=\\\"<port>\\\"`; no rule validates header-name tokens, control characters, quoted-string escaping, credential-header names or file media types used as headers.\",\"question\":\"What syntax is accepted for every generated or manifest/configured header name and value, and how are multipart names escaped or refused?\",\"options\":[\"Validate all header names and values and restrict multipart port names to a safe identifier syntax\",\"Define escaping for arbitrary port names and header values\",\"Pass strings to the HTTP library and accept or refuse according to that library\"],\"default_guess\":\"Require RFC-valid header names and control-character-free values, and refuse operation-binding port names that cannot be serialized safely in multipart headers.\"},{\"subject\":\"EffectAttempt not_applied from a direct 4xx\",\"kind\":\"contradictory retry lifecycle\",\"text\":\"A09 maps a non-read 4xx to `operation_refused` with the attempt `not_applied`; A13 makes `operation_refused` a terminal node failure, while K-08 and M26 say sending again after `not_applied` requires a fresh approval. Resume touches only `service_unreachable`, and A11 creates the resend path only for an unknown outcome resolved `not_applied`.\",\"question\":\"Can an effect that directly received a 4xx be sent again, and through which action does it enter `owner_approval` for the fresh approval?\",\"options\":[\"A direct 4xx is terminal and cannot be resent within that run\",\"Treat every not_applied attempt like an unknown resolved not_applied and request fresh approval\",\"Extend resume to retry direct not_applied attempts with fresh approval\"],\"default_guess\":\"Treat the direct 4xx as terminal because no accepted action currently reopens that element.\"},{\"subject\":\"Selecting among several matching approvals\",\"kind\":\"missing referenced rule\",\"text\":\"A10 rule 1 says \\\"When several approvals count and match, the oldest in store order is used (State 5, closed question 2)\\\", but no supplied text defines that State 5 decision.\",\"question\":\"Is oldest matching approval definitively the State 2 authority-selection rule, or may later surface rules choose differently?\",\"options\":[\"Use the oldest matching approved and unused approval\",\"Use the newest matching approval\",\"Refuse the send when more than one matches\"],\"default_guess\":\"Use the oldest matching approval, as the sentence states, despite the missing referenced decision.\"},{\"subject\":\"Service failure_detail bytes\",\"kind\":\"undefined encoding\",\"text\":\"A09 permits keeping an excerpt of an arbitrary error-response body as `failure_detail`, while A20 requires truncation at a UTF-8 character boundary; an HTTP error body need not be UTF-8.\",\"question\":\"How is a non-UTF-8 error body converted into bounded failure_detail text, and what length does A07 disclose?\",\"options\":[\"Decode as UTF-8 with replacement and then truncate\",\"Store a bounded hexadecimal or base64 representation\",\"Keep failure_detail empty unless the body is valid UTF-8\",\"Treat invalid UTF-8 as a transport failure\"],\"default_guess\":\"Decode with replacement, truncate the resulting UTF-8 text at the ceiling, and report that stored text's byte length.\"},{\"subject\":\"Outputs of unsuccessful node attempts\",\"kind\":\"missing persistence rule\",\"text\":\"A13 forbids delivery of invalid values and A15 expressly discards files for ceiling failures, but no general rule says which otherwise produced values or files are persisted and named in NodeExecution when an attempt ends `contract_violation`, `resource_exhausted`, `crashed` or another non-success status.\",\"question\":\"Which partial or individually valid outputs of a failed attempt are recorded, stored in the value area, or retained in the run spool?\",\"options\":[\"Discard all outputs of every unsuccessful attempt\",\"Record validated outputs and retain their bytes even though they are not delivered\",\"Record only digests and metadata while discarding bytes\",\"Define status-specific handling\"],\"default_guess\":\"Do not deliver or publish any output unless the complete output set succeeds; retain only bounded diagnostic facts needed by the trace.\"},{\"subject\":\"Startup conversion of multiple in_flight attempts\",\"kind\":\"missing deterministic order\",\"text\":\"A14 says every `in_flight` EffectAttempt is turned into `unknown`, and A11 says this is one store call per attempt, but neither gives the order when several attempts exist; those writes acquire store positions and timestamps.\",\"question\":\"In what order are multiple in-flight attempts recovered before runs are advanced?\",\"options\":[\"Oldest EffectAttempt first in store order\",\"Order by run store order, then node_id and map_index\",\"Order by run_id, node_id, map_index and attempt number\",\"Convert all in one transaction with one logical position\"],\"default_guess\":\"Recover EffectAttempts in their original store order, oldest first.\"},{\"subject\":\"Configured manifest_revision stability\",\"kind\":\"contradictory invariant\",\"text\":\"M28 stores a configured `manifest_revision`, and A08 says a record changes for a running kernel only after restart with a new configured revision; no rule requires that revision to be an immutable commit rather than a moving branch or tag.\",\"question\":\"Must manifest_revision be an immutable commit identifier, or when and how is a symbolic revision resolved and pinned?\",\"options\":[\"Require an immutable full commit identifier\",\"Resolve any revision once at startup and pin the resulting commit for that process\",\"Resolve the configured revision on every manifest read\"],\"default_guess\":\"Resolve once at startup to an immutable commit and use that resolved commit for every read until restart.\"},{\"subject\":\"Agent-name uniqueness during token-list reload\",\"kind\":\"contradiction\",\"text\":\"M27 says agent names are unique and a configuration repeating one is refused at start, while A16 rule 2 says exactly three checks apply to a token-list re-read and agent-name uniqueness is not one of them.\",\"question\":\"What happens if a hot-reloaded token list contains distinct tokens with the same agent name or conflicting may-author flags?\",\"options\":[\"Reject the re-read and refuse every request until names are unique\",\"Accept it and treat both tokens as the same Actor\",\"Accept it but derive separate actor identities from tokens\"],\"default_guess\":\"Reject the re-read under the same opaque token refusal until agent names are unique.\"},{\"subject\":\"Kernel startup validation and precedence\",\"kind\":\"missing global order\",\"text\":\"A03, A17, A18 and A09 each add startup refusals for the sandbox, configuration file, data directory, locks, symlinks and credential-header collisions, but no single rule orders these checks or says how manifest-dependent header checks behave when a selected manifest instance is absent or malformed.\",\"question\":\"What is the complete startup check order, and does an unreadable or malformed selected service record stop startup or merely make later binding operations fail?\",\"options\":[\"Define a total startup order and require all selected service records needed for header checks to be valid\",\"Validate only local configuration/store/sandbox facts at startup and defer every manifest fault to binding use\",\"Collect and return all startup failures without first-failure precedence\"],\"default_guess\":\"Check configuration and data-directory security, acquire the lock, validate release and sandbox, validate locally knowable credential-header rules, then recover; defer ordinary manifest faults to binding operations unless a startup-only collision check requires that record.\"},{\"subject\":\"SQLite records and filesystem artifacts\",\"kind\":\"atomicity gap\",\"text\":\"A18 says a failed store call changes nothing and every change is one SQLite transaction, while value bytes, fixtures and spool files are separately flushed and renamed; it gives no crash protocol for the interval between filesystem publication and database commit, and startup removes only temporary files and selected spool directories.\",\"question\":\"How are database records and their content files made crash-consistent, and what happens to complete but unreferenced files or records whose referenced rename did not finish?\",\"options\":[\"Publish files first, commit references second, and tolerate complete unreferenced files\",\"Publish first and remove unreferenced files during startup reconciliation\",\"Use a durable journal that makes database and filesystem publication recoverable as one logical transaction\",\"Store all bytes inside SQLite\"],\"default_guess\":\"Publish and verify files before committing references, never commit a reference to missing bytes, and tolerate harmless complete unreferenced content files.\"},{\"subject\":\"A18 private data-directory condition\",\"kind\":\"vague refusal condition\",\"text\":\"A18 says the data directory \\\"and everything in it are private to the kernel's user\\\" and refuses startup otherwise, but unlike A17 it does not define ownership, allowed file types or permission bits.\",\"question\":\"What exact ownership, mode and file-type checks define a private data directory and its database, value area, fixtures, lock and spool contents?\",\"options\":[\"Require kernel-user ownership and no group or other permission bits on every entry\",\"Require only that group and others cannot write\",\"Use fixed modes per kind, such as owner-only directories and owner-read/write regular files\",\"Rely on effective access checks rather than mode bits\"],\"default_guess\":\"Require kernel-user ownership, regular files or directories of the expected kind, owner-only directories, and no group or other permission bits on any entry.\"}]}"
+}

@@ -1,0 +1,341 @@
+{
+ "open_points": [
+  {
+   "subject": "Flow node identifiers and endpoint ordering",
+   "kind": "missing refusal condition",
+   "text": "“A flow input or flow output endpoint has the empty string as its node, so it orders before every node.”",
+   "question": "Must composition refuse an empty `node_id`, or may a real node use the same identifier used for flow endpoints?",
+   "options": [
+    "Refuse an empty `node_id` during composition",
+    "Allow it and define a separate endpoint discriminator and tie-break order"
+   ],
+   "default_guess": "Refuse an empty `node_id`."
+  },
+  {
+   "subject": "Flow constants and cardinality",
+   "kind": "missing rule",
+   "text": "“constants ... the port exists and is an input port ... of `value` carriage, and the value fits its schema” and “cardinality and maps, by the edge order”",
+   "question": "How is a constant checked against a target port's `one` or `many` cardinality, and may a constant supply a mapped node's `map_over` port?",
+   "options": [
+    "Apply the same cardinality rules as edges and allow mapping over a list-valued constant",
+    "Forbid constants on `many` and `map_over` ports",
+    "Treat cardinality as part of the constant's schema validation"
+   ],
+   "default_guess": "Apply the same cardinality rules as edges and allow a list-valued constant to feed `map_over`."
+  },
+  {
+   "subject": "Guards on mapped-node outputs",
+   "kind": "undefined execution semantics",
+   "text": "“Every output of a mapped node is `many` for its consumers” and “A guarded edge delivers only when its guard port's value equals its guard value.”",
+   "question": "When the source is a mapped node, is a guard tested once against the collected list or separately for each element, and what data is delivered when only some elements match?",
+   "options": [
+    "Evaluate per element and deliver the matching elements",
+    "Evaluate once against the collected list",
+    "Refuse guards whose guard port is a mapped output"
+   ],
+   "default_guess": "Refuse guards on mapped outputs until per-element routing is explicitly modeled."
+  },
+  {
+   "subject": "Guard port cardinality",
+   "kind": "missing proof check",
+   "text": "“the guard port is an output of the edge's source node, its schema is a closed set, the guard value is a member”",
+   "question": "Must a guard port have cardinality `one`, or can a `many` port be compared with a guard value?",
+   "options": [
+    "Require cardinality `one`",
+    "Allow `many` and compare the entire list",
+    "Allow `many` with an any-element rule"
+   ],
+   "default_guess": "Require cardinality `one`."
+  },
+  {
+   "subject": "Mapped aggregate value exceeding storage limit",
+   "kind": "missing failure record",
+   "text": "“A mapped node's trace is its elements' records; it has a record of its own ... only when it ran no element” and “A value list is one StoredValue ... written in the store change that records the node's conclusion” and “A value a node produces ... above `stored_value_bytes_max` ... concludes the element `contract_violation`”",
+   "question": "If all mapped elements succeed individually but their collected JSON array exceeds `stored_value_bytes_max`, which element or record receives `contract_violation`, and how is the mapped node's failed conclusion represented?",
+   "options": [
+    "Fail the last element and replace its successful record",
+    "Write an aggregate NodeExecution without `map_index`",
+    "Keep all element records successful and derive an aggregate failure from a separate fact"
+   ],
+   "default_guess": "Write a separate aggregate NodeExecution without `map_index` for the collection failure."
+  },
+  {
+   "subject": "Sandbox filesystem access",
+   "kind": "contradiction",
+   "text": "“no filesystem beyond its input” versus “an audit hook that raises ... on opening any path outside the exchange directory and the read-only runtime”",
+   "question": "May agent code directly read the runtime or read and write arbitrary paths in the exchange directory, or must all filesystem access by agent code be denied?",
+   "options": [
+    "Deny agent-initiated filesystem access entirely",
+    "Permit the runtime and exchange directory exactly as A03 states",
+    "Permit only runner-controlled paths representing declared file ports"
+   ],
+   "default_guess": "Permit only runner-controlled declared file-port paths, with other agent-initiated opens denied."
+  },
+  {
+   "subject": "Clock and randomness prohibition",
+   "kind": "contradiction",
+   "text": "“no clock, no randomness” versus “The replaced entry points are exactly” and “an entry point found missing is added by a new release.”",
+   "question": "Are unlisted standard-library or runtime sources of time, randomness, process identity, filesystem metadata or other nondeterminism allowed in the current release?",
+   "options": [
+    "All such sources are forbidden and startup must verify comprehensive blocking",
+    "Only the enumerated entry points are forbidden",
+    "Unlisted sources may run but their use is a sandbox violation when detected"
+   ],
+   "default_guess": "Treat all time and randomness sources as forbidden and fail startup if the release cannot enforce that."
+  },
+  {
+   "subject": "Deterministic function execution",
+   "kind": "unverifiable invariant",
+   "text": "“The same implementation on the same input yields the same output digest twice.”",
+   "question": "What prevents permitted observations such as process/runtime metadata or readable runtime-file metadata from changing an output between executions?",
+   "options": [
+    "Expand isolation and traps until no varying observation is available",
+    "Define determinism as an author obligation checked only by trials",
+    "Remove the universal determinism guarantee"
+   ],
+   "default_guess": "Expand isolation and traps so the guarantee is enforceable."
+  },
+  {
+   "subject": "Function stdout and stderr",
+   "kind": "unbounded behavior",
+   "text": "“Every function execution ... [has] bounded ... output” and “The output count is the sum of ... every `value` output and ... every `file` output” and “The kernel keeps ... never stdout.”",
+   "question": "How are stdout and stderr drained and bounded, and what outcome results when code emits more than the permitted amount?",
+   "options": [
+    "Count stdout and stderr toward `output_bytes` and return `resource_exhausted`",
+    "Discard them through bounded sinks with a separate fixed limit",
+    "Allow unlimited discarded output until another resource limit stops it"
+   ],
+   "default_guess": "Drain them through bounded sinks and classify overflow as `resource_exhausted`."
+  },
+  {
+   "subject": "Sandbox cleanup failure precedence",
+   "kind": "contradictory outcome",
+   "text": "“Outcomes are closed and checked in this order ... `timeout`; ... `crashed`” versus “If [cleanup] cannot be confirmed ... the execution is recorded `crashed` with detail `cleanup_failed`.”",
+   "question": "If an execution times out or exhausts a resource and cleanup then cannot be confirmed, is its recorded outcome the earlier timeout/resource failure or `crashed/cleanup_failed`?",
+   "options": [
+    "Cleanup failure overrides every earlier outcome",
+    "The normal outcome precedence remains and cleanup failure is separate fatal metadata",
+    "Record both outcomes"
+   ],
+   "default_guess": "Record `crashed` with `cleanup_failed`, because rule 7 explicitly requires it, while separately preserving the triggering condition if the model permits."
+  },
+  {
+   "subject": "`process_count` resource bound",
+   "kind": "undefined measurement",
+   "text": "“`process_count`” and “enforced ... with `setrlimit` (address space, processes)”",
+   "question": "Which processes count against a contract's `process_count`: the interpreter itself, its descendants, all processes mapped to the sandbox user, or only child processes created by the implementation?",
+   "options": [
+    "Count the interpreter and every descendant",
+    "Count only descendants created by the implementation",
+    "Use the raw host `RLIMIT_NPROC` count"
+   ],
+   "default_guess": "Count the sandbox interpreter and all of its descendants."
+  },
+  {
+   "subject": "Operation path placeholders and cardinality",
+   "kind": "missing proposal check",
+   "text": "“every `{name}` of the path is an input port whose schema's `type` is `string` or `integer`” and “a `many` port [is] a Python `list`”",
+   "question": "May a path placeholder name a `many` input port whose element schema is string or integer, even though its runtime value is a list that cannot occupy one path segment?",
+   "options": [
+    "Refuse any placeholder port whose cardinality is `many` at proposal time",
+    "Accept it and fail pre-send",
+    "Define list-to-segment serialization"
+   ],
+   "default_guess": "Refuse it at proposal time."
+  },
+  {
+   "subject": "Names used in multipart headers",
+   "kind": "missing validation",
+   "text": "“`Content-Disposition: form-data; name=\"<port>\"`, with `filename=\"<port>\"` added”",
+   "question": "What characters are allowed in port names used verbatim inside quoted multipart header parameters, and how are quotes, backslashes, CR, LF and non-ASCII characters handled?",
+   "options": [
+    "Restrict port names to a safe ASCII field-name grammar",
+    "Define escaping and encoding for quoted parameters",
+    "Refuse multipart bindings when any involved port name needs escaping"
+   ],
+   "default_guess": "Restrict port names used by multipart bindings to a safe ASCII grammar."
+  },
+  {
+   "subject": "Required and credential HTTP headers",
+   "kind": "missing validation",
+   "text": "“required_headers with their manifest values verbatim” and “one credential: a header name and the reference that resolves to its value”",
+   "question": "What syntax and value checks apply to required-header names and values and to credential-header names and resolved values, and how is a failure classified?",
+   "options": [
+    "Validate RFC-compatible field names and reject CR/LF or invalid values before sending",
+    "Pass all strings verbatim to the HTTP library",
+    "Let the HTTP library reject them and map that rejection to a specified pre-send failure"
+   ],
+   "default_guess": "Validate them before sending and classify invalid manifest headers as a manifest/instance failure and invalid credential material as credential resolution failure."
+  },
+  {
+   "subject": "Service base URL shape and joining",
+   "kind": "ambiguous request construction",
+   "text": "“an absolute `http` or `https` URL with a host” and “the `api_base_url` without a trailing `/` followed by the declared path”",
+   "question": "May `api_base_url` contain user information, a non-root path, query, fragment, percent escapes, or multiple trailing slashes, and exactly how are those forms joined to the operation path?",
+   "options": [
+    "Restrict it to scheme, authority and an optional normalized path with no query or fragment",
+    "Allow all absolute URLs and define exact string concatenation",
+    "Allow only scheme and authority"
+   ],
+   "default_guess": "Allow scheme and authority plus an optional base path, but refuse user information, query and fragment and remove all trailing slashes before joining."
+  },
+  {
+   "subject": "Content-encoded service responses",
+   "kind": "missing transport rule",
+   "text": "“`Accept-Encoding: identity`; the size counted is the response body's bytes after transfer decoding.”",
+   "question": "If a service nevertheless returns `Content-Encoding`, does the kernel decode it, reject it, or treat the encoded bytes as the body, and which bytes count toward limits and digests?",
+   "options": [
+    "Reject every non-identity content encoding",
+    "Decode supported encodings and count decoded bytes",
+    "Do not decode and count the encoded bytes"
+   ],
+   "default_guess": "Reject every non-identity content encoding."
+  },
+  {
+   "subject": "Multipart approval identity",
+   "kind": "contradiction",
+   "text": "“the fully built request as the owner was shown it — method, URL, headers and body. Any difference at send ... asks again” versus “the `multipart/form-data` content type without its `boundary` parameter” and “the boundary is not part of it.”",
+   "question": "Does an approval cover the exact multipart wire request including its boundary, or is boundary variation an explicit exception to the exact-request rule?",
+   "options": [
+    "Include a deterministic boundary in the preview and digest",
+    "Treat the boundary as an explicit non-semantic exception",
+    "Generate a fresh boundary but compare only the logical parts"
+   ],
+   "default_guess": "Follow the specific State 2 rule and treat the boundary as a non-semantic exception, while using deterministic serialization."
+  },
+  {
+   "subject": "Flow activation authority pinned by a run",
+   "kind": "missing persisted fact",
+   "text": "“a `draft-write` send records as its authority the FlowActivation M18 of the run's version” while Run M19 pins only “`flow_version_id`” and function implementations",
+   "question": "How does a run durably identify the exact FlowActivation under which it started, especially when the same version can be activated repeatedly?",
+   "options": [
+    "Store the FlowActivation's store-order identity on the Run",
+    "Derive the latest preceding activation from store order whenever needed",
+    "Use only the flow version and discard activation-event identity"
+   ],
+   "default_guess": "Store the exact FlowActivation identity on the Run at start."
+  },
+  {
+   "subject": "Hot-reloaded agent configuration",
+   "kind": "contradictory validation",
+   "text": "“names are unique in an installation, and a configuration repeating one is refused at start” versus “Exactly three checks apply to a re-read: the file can be read and parsed; every token is at least 43 characters; no two tokens are equal.”",
+   "question": "When the token list is reloaded, must duplicate agent names, missing names, invalid `may_author` values and other token-entry shape errors also be refused?",
+   "options": [
+    "Apply the complete token-list schema and unique-name invariant on every re-read",
+    "Apply only the three enumerated checks",
+    "Keep structurally valid old entries while rejecting only changed invalid entries"
+   ],
+   "default_guess": "Apply the complete token-list schema and unique-name invariant on every re-read."
+  },
+  {
+   "subject": "Configuration security on token-list re-read",
+   "kind": "missing security check",
+   "text": "“The file must be a regular file, not a symbolic link, owned by the kernel's user, with no permission for group or others; the kernel refuses to start otherwise” and “Exactly three checks apply to a re-read.”",
+   "question": "Are file type, symlink, ownership and permission checks repeated before accepting a hot-reloaded token list?",
+   "options": [
+    "Repeat all security checks on every re-read",
+    "Check them only at process start",
+    "Refuse runtime replacement of the configuration inode"
+   ],
+   "default_guess": "Repeat all security checks on every re-read."
+  },
+  {
+   "subject": "Credential reference resolution",
+   "kind": "unspecified mechanism",
+   "text": "“the reference that resolves to its value on the host” and “A credential is resolved only when a request to its service is built”",
+   "question": "What kinds of credential references exist, how are they resolved without environment variables, and what exact conditions constitute `credential cannot be resolved`?",
+   "options": [
+    "Define one file-based reference format with ownership and permission checks",
+    "Define a fixed host-secret-provider interface",
+    "Leave resolution to an installation adapter with a normative error contract"
+   ],
+   "default_guess": "Use a fixed host-secret-provider interface with a closed reference type and error contract."
+  },
+  {
+   "subject": "Atomicity of database records and content files",
+   "kind": "missing crash semantics",
+   "text": "“Every change is ... one transaction” and “Value bytes and spooled files are written to a temporary file ... and then renamed into place”",
+   "question": "What commit order and recovery rule prevent either a committed database record with missing bytes or a published orphan file after a crash between file publication and SQLite commit?",
+   "options": [
+    "Publish files first and garbage-collect unreferenced files on startup",
+    "Commit records first and complete file publication from a durable journal",
+    "Use a store-level journal covering both database and filesystem steps"
+   ],
+   "default_guess": "Use a store-level durable journal and reconcile it before recovery."
+  },
+  {
+   "subject": "Deduplication and ownership of spooled files",
+   "kind": "contradiction",
+   "text": "“the run spool, one subdirectory per run” and “Equal bytes are stored once” and “A spool ... belongs to its run and is emptied when the run ends.”",
+   "question": "Are equal spooled bytes deduplicated across attempts or runs, and if so how can one run's spool be removed without affecting another run or trial fixture?",
+   "options": [
+    "Do not deduplicate run-spool bytes; deduplicate only durable values and fixtures",
+    "Deduplicate globally with reference counting",
+    "Deduplicate only within one run"
+   ],
+   "default_guess": "Do not deduplicate run-spool bytes; deduplicate only durable values and fixtures."
+  },
+  {
+   "subject": "Data-directory permission refusal",
+   "kind": "vague refusal condition",
+   "text": "“The directory and everything in it are private to the kernel's user; the kernel refuses to start otherwise.”",
+   "question": "What exact ownership, file-type and permission modes satisfy “private,” including parent directories, SQLite side files, lock files and spool subdirectories?",
+   "options": [
+    "Require kernel-user ownership and no group/other permission on every managed entry",
+    "Require only that the top-level directory be mode 0700",
+    "Accept ACL-based equivalent privacy under a specified check"
+   ],
+   "default_guess": "Require kernel-user ownership and no group/other permissions on the data directory and every managed entry."
+  },
+  {
+   "subject": "Startup cleanup failure",
+   "kind": "missing failure behavior",
+   "text": "“On start, temporary files and the spool directories of runs that ended and do not keep their spool ... are removed; nothing else is.”",
+   "question": "If required cleanup cannot be completed, does startup stop, continue with inaccessible leftovers, or mark affected runs/store entries failed?",
+   "options": [
+    "Refuse to start until cleanup succeeds",
+    "Continue and report a bounded warning",
+    "Continue only if leftovers cannot be mistaken for live data"
+   ],
+   "default_guess": "Refuse to start until cleanup succeeds."
+  },
+  {
+   "subject": "Recovery order for in-flight attempts",
+   "kind": "missing deterministic order",
+   "text": "“On start ... the kernel turns every `in_flight` EffectAttempt into `unknown` ... one call per attempt”",
+   "question": "In what order are multiple in-flight attempts converted and their NodeExecutions written before running-run recovery begins?",
+   "options": [
+    "EffectAttempt store order, oldest first",
+    "Run order then node and map-index order",
+    "Any order because all are converted before advancement"
+   ],
+   "default_guess": "Use EffectAttempt store order, oldest first."
+  },
+  {
+   "subject": "Release-ceiling changes and existing artifacts",
+   "kind": "incomplete grandfathering rule",
+   "text": "“A new release may change ceilings. They bind contract versions issued after it; a contract version issued earlier keeps its bounds”",
+   "question": "Which release's non-contract ceilings apply after an upgrade to existing implementations, stored values, trial fixtures, active runs, spooled files and service responses?",
+   "options": [
+    "All non-contract operations use the currently running release's ceilings",
+    "Every artifact and run retains the ceilings of the release that created it",
+    "Only contract bounds are grandfathered; existing stored artifacts remain readable but new writes use current ceilings"
+   ],
+   "default_guess": "Grandfather only contract bounds; keep existing artifacts readable and apply current ceilings to new requests, responses and writes."
+  },
+  {
+   "subject": "Pinned dependency versions",
+   "kind": "unclosed release fact",
+   "text": "“A release pins the exact versions of the kernel's Python dependencies and of the sandbox runtime” and “the sandbox interpreter of release v1 is CPython 3.12”",
+   "question": "What exact patch version and dependency versions define release v1, and is the host `bubblewrap` version also pinned or merely required to be present?",
+   "options": [
+    "Specify exact CPython, package and bubblewrap versions",
+    "Pin Python packages and CPython but accept any compatible bubblewrap",
+    "Leave exact versions to the build lock files created later"
+   ],
+   "default_guess": "Specify exact CPython, package and bubblewrap versions in the release build."
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"Flow node identifiers and endpoint ordering\",\"kind\":\"missing refusal condition\",\"text\":\"“A flow input or flow output endpoint has the empty string as its node, so it orders before every node.”\",\"question\":\"Must composition refuse an empty `node_id`, or may a real node use the same identifier used for flow endpoints?\",\"options\":[\"Refuse an empty `node_id` during composition\",\"Allow it and define a separate endpoint discriminator and tie-break order\"],\"default_guess\":\"Refuse an empty `node_id`.\"},{\"subject\":\"Flow constants and cardinality\",\"kind\":\"missing rule\",\"text\":\"“constants ... the port exists and is an input port ... of `value` carriage, and the value fits its schema” and “cardinality and maps, by the edge order”\",\"question\":\"How is a constant checked against a target port's `one` or `many` cardinality, and may a constant supply a mapped node's `map_over` port?\",\"options\":[\"Apply the same cardinality rules as edges and allow mapping over a list-valued constant\",\"Forbid constants on `many` and `map_over` ports\",\"Treat cardinality as part of the constant's schema validation\"],\"default_guess\":\"Apply the same cardinality rules as edges and allow a list-valued constant to feed `map_over`.\"},{\"subject\":\"Guards on mapped-node outputs\",\"kind\":\"undefined execution semantics\",\"text\":\"“Every output of a mapped node is `many` for its consumers” and “A guarded edge delivers only when its guard port's value equals its guard value.”\",\"question\":\"When the source is a mapped node, is a guard tested once against the collected list or separately for each element, and what data is delivered when only some elements match?\",\"options\":[\"Evaluate per element and deliver the matching elements\",\"Evaluate once against the collected list\",\"Refuse guards whose guard port is a mapped output\"],\"default_guess\":\"Refuse guards on mapped outputs until per-element routing is explicitly modeled.\"},{\"subject\":\"Guard port cardinality\",\"kind\":\"missing proof check\",\"text\":\"“the guard port is an output of the edge's source node, its schema is a closed set, the guard value is a member”\",\"question\":\"Must a guard port have cardinality `one`, or can a `many` port be compared with a guard value?\",\"options\":[\"Require cardinality `one`\",\"Allow `many` and compare the entire list\",\"Allow `many` with an any-element rule\"],\"default_guess\":\"Require cardinality `one`.\"},{\"subject\":\"Mapped aggregate value exceeding storage limit\",\"kind\":\"missing failure record\",\"text\":\"“A mapped node's trace is its elements' records; it has a record of its own ... only when it ran no element” and “A value list is one StoredValue ... written in the store change that records the node's conclusion” and “A value a node produces ... above `stored_value_bytes_max` ... concludes the element `contract_violation`”\",\"question\":\"If all mapped elements succeed individually but their collected JSON array exceeds `stored_value_bytes_max`, which element or record receives `contract_violation`, and how is the mapped node's failed conclusion represented?\",\"options\":[\"Fail the last element and replace its successful record\",\"Write an aggregate NodeExecution without `map_index`\",\"Keep all element records successful and derive an aggregate failure from a separate fact\"],\"default_guess\":\"Write a separate aggregate NodeExecution without `map_index` for the collection failure.\"},{\"subject\":\"Sandbox filesystem access\",\"kind\":\"contradiction\",\"text\":\"“no filesystem beyond its input” versus “an audit hook that raises ... on opening any path outside the exchange directory and the read-only runtime”\",\"question\":\"May agent code directly read the runtime or read and write arbitrary paths in the exchange directory, or must all filesystem access by agent code be denied?\",\"options\":[\"Deny agent-initiated filesystem access entirely\",\"Permit the runtime and exchange directory exactly as A03 states\",\"Permit only runner-controlled paths representing declared file ports\"],\"default_guess\":\"Permit only runner-controlled declared file-port paths, with other agent-initiated opens denied.\"},{\"subject\":\"Clock and randomness prohibition\",\"kind\":\"contradiction\",\"text\":\"“no clock, no randomness” versus “The replaced entry points are exactly” and “an entry point found missing is added by a new release.”\",\"question\":\"Are unlisted standard-library or runtime sources of time, randomness, process identity, filesystem metadata or other nondeterminism allowed in the current release?\",\"options\":[\"All such sources are forbidden and startup must verify comprehensive blocking\",\"Only the enumerated entry points are forbidden\",\"Unlisted sources may run but their use is a sandbox violation when detected\"],\"default_guess\":\"Treat all time and randomness sources as forbidden and fail startup if the release cannot enforce that.\"},{\"subject\":\"Deterministic function execution\",\"kind\":\"unverifiable invariant\",\"text\":\"“The same implementation on the same input yields the same output digest twice.”\",\"question\":\"What prevents permitted observations such as process/runtime metadata or readable runtime-file metadata from changing an output between executions?\",\"options\":[\"Expand isolation and traps until no varying observation is available\",\"Define determinism as an author obligation checked only by trials\",\"Remove the universal determinism guarantee\"],\"default_guess\":\"Expand isolation and traps so the guarantee is enforceable.\"},{\"subject\":\"Function stdout and stderr\",\"kind\":\"unbounded behavior\",\"text\":\"“Every function execution ... [has] bounded ... output” and “The output count is the sum of ... every `value` output and ... every `file` output” and “The kernel keeps ... never stdout.”\",\"question\":\"How are stdout and stderr drained and bounded, and what outcome results when code emits more than the permitted amount?\",\"options\":[\"Count stdout and stderr toward `output_bytes` and return `resource_exhausted`\",\"Discard them through bounded sinks with a separate fixed limit\",\"Allow unlimited discarded output until another resource limit stops it\"],\"default_guess\":\"Drain them through bounded sinks and classify overflow as `resource_exhausted`.\"},{\"subject\":\"Sandbox cleanup failure precedence\",\"kind\":\"contradictory outcome\",\"text\":\"“Outcomes are closed and checked in this order ... `timeout`; ... `crashed`” versus “If [cleanup] cannot be confirmed ... the execution is recorded `crashed` with detail `cleanup_failed`.”\",\"question\":\"If an execution times out or exhausts a resource and cleanup then cannot be confirmed, is its recorded outcome the earlier timeout/resource failure or `crashed/cleanup_failed`?\",\"options\":[\"Cleanup failure overrides every earlier outcome\",\"The normal outcome precedence remains and cleanup failure is separate fatal metadata\",\"Record both outcomes\"],\"default_guess\":\"Record `crashed` with `cleanup_failed`, because rule 7 explicitly requires it, while separately preserving the triggering condition if the model permits.\"},{\"subject\":\"`process_count` resource bound\",\"kind\":\"undefined measurement\",\"text\":\"“`process_count`” and “enforced ... with `setrlimit` (address space, processes)”\",\"question\":\"Which processes count against a contract's `process_count`: the interpreter itself, its descendants, all processes mapped to the sandbox user, or only child processes created by the implementation?\",\"options\":[\"Count the interpreter and every descendant\",\"Count only descendants created by the implementation\",\"Use the raw host `RLIMIT_NPROC` count\"],\"default_guess\":\"Count the sandbox interpreter and all of its descendants.\"},{\"subject\":\"Operation path placeholders and cardinality\",\"kind\":\"missing proposal check\",\"text\":\"“every `{name}` of the path is an input port whose schema's `type` is `string` or `integer`” and “a `many` port [is] a Python `list`”\",\"question\":\"May a path placeholder name a `many` input port whose element schema is string or integer, even though its runtime value is a list that cannot occupy one path segment?\",\"options\":[\"Refuse any placeholder port whose cardinality is `many` at proposal time\",\"Accept it and fail pre-send\",\"Define list-to-segment serialization\"],\"default_guess\":\"Refuse it at proposal time.\"},{\"subject\":\"Names used in multipart headers\",\"kind\":\"missing validation\",\"text\":\"“`Content-Disposition: form-data; name=\\\"<port>\\\"`, with `filename=\\\"<port>\\\"` added”\",\"question\":\"What characters are allowed in port names used verbatim inside quoted multipart header parameters, and how are quotes, backslashes, CR, LF and non-ASCII characters handled?\",\"options\":[\"Restrict port names to a safe ASCII field-name grammar\",\"Define escaping and encoding for quoted parameters\",\"Refuse multipart bindings when any involved port name needs escaping\"],\"default_guess\":\"Restrict port names used by multipart bindings to a safe ASCII grammar.\"},{\"subject\":\"Required and credential HTTP headers\",\"kind\":\"missing validation\",\"text\":\"“required_headers with their manifest values verbatim” and “one credential: a header name and the reference that resolves to its value”\",\"question\":\"What syntax and value checks apply to required-header names and values and to credential-header names and resolved values, and how is a failure classified?\",\"options\":[\"Validate RFC-compatible field names and reject CR/LF or invalid values before sending\",\"Pass all strings verbatim to the HTTP library\",\"Let the HTTP library reject them and map that rejection to a specified pre-send failure\"],\"default_guess\":\"Validate them before sending and classify invalid manifest headers as a manifest/instance failure and invalid credential material as credential resolution failure.\"},{\"subject\":\"Service base URL shape and joining\",\"kind\":\"ambiguous request construction\",\"text\":\"“an absolute `http` or `https` URL with a host” and “the `api_base_url` without a trailing `/` followed by the declared path”\",\"question\":\"May `api_base_url` contain user information, a non-root path, query, fragment, percent escapes, or multiple trailing slashes, and exactly how are those forms joined to the operation path?\",\"options\":[\"Restrict it to scheme, authority and an optional normalized path with no query or fragment\",\"Allow all absolute URLs and define exact string concatenation\",\"Allow only scheme and authority\"],\"default_guess\":\"Allow scheme and authority plus an optional base path, but refuse user information, query and fragment and remove all trailing slashes before joining.\"},{\"subject\":\"Content-encoded service responses\",\"kind\":\"missing transport rule\",\"text\":\"“`Accept-Encoding: identity`; the size counted is the response body's bytes after transfer decoding.”\",\"question\":\"If a service nevertheless returns `Content-Encoding`, does the kernel decode it, reject it, or treat the encoded bytes as the body, and which bytes count toward limits and digests?\",\"options\":[\"Reject every non-identity content encoding\",\"Decode supported encodings and count decoded bytes\",\"Do not decode and count the encoded bytes\"],\"default_guess\":\"Reject every non-identity content encoding.\"},{\"subject\":\"Multipart approval identity\",\"kind\":\"contradiction\",\"text\":\"“the fully built request as the owner was shown it — method, URL, headers and body. Any difference at send ... asks again” versus “the `multipart/form-data` content type without its `boundary` parameter” and “the boundary is not part of it.”\",\"question\":\"Does an approval cover the exact multipart wire request including its boundary, or is boundary variation an explicit exception to the exact-request rule?\",\"options\":[\"Include a deterministic boundary in the preview and digest\",\"Treat the boundary as an explicit non-semantic exception\",\"Generate a fresh boundary but compare only the logical parts\"],\"default_guess\":\"Follow the specific State 2 rule and treat the boundary as a non-semantic exception, while using deterministic serialization.\"},{\"subject\":\"Flow activation authority pinned by a run\",\"kind\":\"missing persisted fact\",\"text\":\"“a `draft-write` send records as its authority the FlowActivation M18 of the run's version” while Run M19 pins only “`flow_version_id`” and function implementations\",\"question\":\"How does a run durably identify the exact FlowActivation under which it started, especially when the same version can be activated repeatedly?\",\"options\":[\"Store the FlowActivation's store-order identity on the Run\",\"Derive the latest preceding activation from store order whenever needed\",\"Use only the flow version and discard activation-event identity\"],\"default_guess\":\"Store the exact FlowActivation identity on the Run at start.\"},{\"subject\":\"Hot-reloaded agent configuration\",\"kind\":\"contradictory validation\",\"text\":\"“names are unique in an installation, and a configuration repeating one is refused at start” versus “Exactly three checks apply to a re-read: the file can be read and parsed; every token is at least 43 characters; no two tokens are equal.”\",\"question\":\"When the token list is reloaded, must duplicate agent names, missing names, invalid `may_author` values and other token-entry shape errors also be refused?\",\"options\":[\"Apply the complete token-list schema and unique-name invariant on every re-read\",\"Apply only the three enumerated checks\",\"Keep structurally valid old entries while rejecting only changed invalid entries\"],\"default_guess\":\"Apply the complete token-list schema and unique-name invariant on every re-read.\"},{\"subject\":\"Configuration security on token-list re-read\",\"kind\":\"missing security check\",\"text\":\"“The file must be a regular file, not a symbolic link, owned by the kernel's user, with no permission for group or others; the kernel refuses to start otherwise” and “Exactly three checks apply to a re-read.”\",\"question\":\"Are file type, symlink, ownership and permission checks repeated before accepting a hot-reloaded token list?\",\"options\":[\"Repeat all security checks on every re-read\",\"Check them only at process start\",\"Refuse runtime replacement of the configuration inode\"],\"default_guess\":\"Repeat all security checks on every re-read.\"},{\"subject\":\"Credential reference resolution\",\"kind\":\"unspecified mechanism\",\"text\":\"“the reference that resolves to its value on the host” and “A credential is resolved only when a request to its service is built”\",\"question\":\"What kinds of credential references exist, how are they resolved without environment variables, and what exact conditions constitute `credential cannot be resolved`?\",\"options\":[\"Define one file-based reference format with ownership and permission checks\",\"Define a fixed host-secret-provider interface\",\"Leave resolution to an installation adapter with a normative error contract\"],\"default_guess\":\"Use a fixed host-secret-provider interface with a closed reference type and error contract.\"},{\"subject\":\"Atomicity of database records and content files\",\"kind\":\"missing crash semantics\",\"text\":\"“Every change is ... one transaction” and “Value bytes and spooled files are written to a temporary file ... and then renamed into place”\",\"question\":\"What commit order and recovery rule prevent either a committed database record with missing bytes or a published orphan file after a crash between file publication and SQLite commit?\",\"options\":[\"Publish files first and garbage-collect unreferenced files on startup\",\"Commit records first and complete file publication from a durable journal\",\"Use a store-level journal covering both database and filesystem steps\"],\"default_guess\":\"Use a store-level durable journal and reconcile it before recovery.\"},{\"subject\":\"Deduplication and ownership of spooled files\",\"kind\":\"contradiction\",\"text\":\"“the run spool, one subdirectory per run” and “Equal bytes are stored once” and “A spool ... belongs to its run and is emptied when the run ends.”\",\"question\":\"Are equal spooled bytes deduplicated across attempts or runs, and if so how can one run's spool be removed without affecting another run or trial fixture?\",\"options\":[\"Do not deduplicate run-spool bytes; deduplicate only durable values and fixtures\",\"Deduplicate globally with reference counting\",\"Deduplicate only within one run\"],\"default_guess\":\"Do not deduplicate run-spool bytes; deduplicate only durable values and fixtures.\"},{\"subject\":\"Data-directory permission refusal\",\"kind\":\"vague refusal condition\",\"text\":\"“The directory and everything in it are private to the kernel's user; the kernel refuses to start otherwise.”\",\"question\":\"What exact ownership, file-type and permission modes satisfy “private,” including parent directories, SQLite side files, lock files and spool subdirectories?\",\"options\":[\"Require kernel-user ownership and no group/other permission on every managed entry\",\"Require only that the top-level directory be mode 0700\",\"Accept ACL-based equivalent privacy under a specified check\"],\"default_guess\":\"Require kernel-user ownership and no group/other permissions on the data directory and every managed entry.\"},{\"subject\":\"Startup cleanup failure\",\"kind\":\"missing failure behavior\",\"text\":\"“On start, temporary files and the spool directories of runs that ended and do not keep their spool ... are removed; nothing else is.”\",\"question\":\"If required cleanup cannot be completed, does startup stop, continue with inaccessible leftovers, or mark affected runs/store entries failed?\",\"options\":[\"Refuse to start until cleanup succeeds\",\"Continue and report a bounded warning\",\"Continue only if leftovers cannot be mistaken for live data\"],\"default_guess\":\"Refuse to start until cleanup succeeds.\"},{\"subject\":\"Recovery order for in-flight attempts\",\"kind\":\"missing deterministic order\",\"text\":\"“On start ... the kernel turns every `in_flight` EffectAttempt into `unknown` ... one call per attempt”\",\"question\":\"In what order are multiple in-flight attempts converted and their NodeExecutions written before running-run recovery begins?\",\"options\":[\"EffectAttempt store order, oldest first\",\"Run order then node and map-index order\",\"Any order because all are converted before advancement\"],\"default_guess\":\"Use EffectAttempt store order, oldest first.\"},{\"subject\":\"Release-ceiling changes and existing artifacts\",\"kind\":\"incomplete grandfathering rule\",\"text\":\"“A new release may change ceilings. They bind contract versions issued after it; a contract version issued earlier keeps its bounds”\",\"question\":\"Which release's non-contract ceilings apply after an upgrade to existing implementations, stored values, trial fixtures, active runs, spooled files and service responses?\",\"options\":[\"All non-contract operations use the currently running release's ceilings\",\"Every artifact and run retains the ceilings of the release that created it\",\"Only contract bounds are grandfathered; existing stored artifacts remain readable but new writes use current ceilings\"],\"default_guess\":\"Grandfather only contract bounds; keep existing artifacts readable and apply current ceilings to new requests, responses and writes.\"},{\"subject\":\"Pinned dependency versions\",\"kind\":\"unclosed release fact\",\"text\":\"“A release pins the exact versions of the kernel's Python dependencies and of the sandbox runtime” and “the sandbox interpreter of release v1 is CPython 3.12”\",\"question\":\"What exact patch version and dependency versions define release v1, and is the host `bubblewrap` version also pinned or merely required to be present?\",\"options\":[\"Specify exact CPython, package and bubblewrap versions\",\"Pin Python packages and CPython but accept any compatible bubblewrap\",\"Leave exact versions to the build lock files created later\"],\"default_guess\":\"Specify exact CPython, package and bubblewrap versions in the release build.\"}]}"
+}
