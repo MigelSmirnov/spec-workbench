@@ -155,8 +155,9 @@ only over edges and is validated leaving one node and entering the next.
 ### K-08 — Authority lives on operation nodes (narrows D0-040)
 
 Effect classes are `read`, `draft-write`, `state-transition`, `external-effect`,
-`destructive`. A read-only flow is activated by the kernel once proven; any other
-flow only by the owner. At run time each `state-transition`, `external-effect` and
+`destructive`. A proven read-only flow is activated by the kernel as soon as the
+owner or an agent asks for it (the action "activate a flow"); any other flow only
+by the owner. At run time each `state-transition`, `external-effect` and
 `destructive` node stops for the owner's approval of the exact operation, target
 and input, unless the owner granted that exact flow version a standing approval
 for that node; `destructive` never takes a grant. The kernel supplies the declared

@@ -272,7 +272,8 @@ Candidate fields:
   like `inputs`, absent when only the absence of failure is required — always
   absent for a captured case;
 - `origin`: `authored` or `captured`;
-- `captured_from`: the NodeExecution (M23) it was captured from, present exactly
+- `captured_from`: the NodeExecution (M23) it was captured from, named by that
+  record's `run_id`, `node_id`, `map_index` and `attempt_number`, present exactly
   when `origin` is `captured` — only an execution of a function node pinned to the
   same contract version that was executed and did not succeed can be captured
   (K-05) — not a `skipped_by_guard` or `upstream_failed` record, and not one
@@ -775,8 +776,8 @@ Candidate fields:
 - `flow_version_id`;
 - `proven`: yes or no;
 - `failure`: the first failing edge or node and why, when not proven;
-- `highest_effect_class`: of the version's operation nodes, when proven; `read`
-  for a version without operation nodes.
+- `highest_effect_class`: of the version's operation nodes, when proven, and
+  `read` for a version without operation nodes.
 
 ### Identity
 
@@ -1141,7 +1142,10 @@ The owner's decision, recorded by the kernel.
 ### Lifecycle candidate
 
 `requested` → `approved` | `refused`; `approved` → `used` when the effect is sent.
-An approval is used at most once. An approved effect that was never sent, because
+An approval is used at most once. It is requested when a send of its element has
+no authority, and only when no approval of that element is `requested` already,
+so an element has at most one `requested` approval at a time (State 2, A10 rule
+2). An approved effect that was never sent, because
 the service was unreachable, keeps its approval for the same input when the run is
 resumed. When its run ends, an approval that is still `requested` or unused can no
 longer be decided or used. No other transition exists: neither the end of a run
@@ -1192,8 +1196,14 @@ The owner's decision.
 `active` → `revoked`. A grant is given only for a node of the flow's active version
 and belongs to that exact version: when another version becomes active, the grant
 keeps covering the runs pinned to its version and covers no run of another
-version. A grant never covers a `destructive` node. A grant stays active when its
-version becomes active again. The owner may revoke any active grant, whether or not
+version. A grant never covers a `destructive` node. A grant for a `read` or
+`draft-write` node is given like any other and is never used: those classes ask
+no approval (K-08), and a resend after `not_applied` needs a fresh approval
+whatever grant exists. A grant stays active when its
+version becomes active again. A grant moves no run: an element already waiting for
+approval keeps waiting for the owner's decision on its requested approval, and the
+grant covers the sends after it (State 2, A10 rule 5, A13 rule 1). The owner may
+revoke any active grant, whether or not
 its version is still the active one; runs of that version then ask again. Revoking
 where no grant is active is refused.
 
@@ -1226,7 +1236,10 @@ Candidate fields:
 - `authority`: the approval or the grant it used, or for a `draft-write` send
   the flow activation under which the run started (State 2, A10 rule 6; State
   5) — except a resend after `not_applied`, which, whatever its class, records
-  the fresh approval it needed;
+  the fresh approval it needed. The authority is named by its identity: an
+  approval or a grant by its minted id, a flow activation by its position in
+  the store's order (M18), so a version activated again never makes the
+  reference ambiguous;
 - `status`: `in_flight`, `applied`, `not_applied`, `not_sent` or `unknown` —
   `not_sent` when the service could not be reached before anything was sent;
 - `recorded_at`, `concluded_at`;

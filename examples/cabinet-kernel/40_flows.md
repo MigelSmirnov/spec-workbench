@@ -14,7 +14,9 @@ to its end (A18 rule 3) and applies A16 rule 1 in its order — size, token,
 operation schema, actor — before any operation's own check. A refusal there
 reaches no other module and records nothing. A request naming a record that
 does not exist is refused as an unknown reference by the module that owns the
-record, recording nothing (State 0); the closed set of refusal codes is State
+record, recording nothing (State 0) — except in the inspection, trace and
+repair reads `module:surface` assembles from `store` itself, where `surface`
+gives that refusal (State 3, "Inspection, traces and the repair view"); the closed set of refusal codes is State
 5's (K-17). Every identity of a content record
 is computed by the module that writes it through `module:canonical_values` (A01
 rule 1); an equal submission returns the existing record and records nothing for
@@ -659,8 +661,10 @@ has not ended, and the element; EffectAttempt M26 is changed by
    waiting on `service_unreachable`. Otherwise it reaches every such element
    again in (`node_id`, `map_index`) order through
    `capability:effects.reach_operation_element`, authority checked as it
-   stands at the resume: the unused approval first, then a grant still active;
-   an element whose grant was revoked waits for approval instead (A14 rule 2).
+   stands at the resume (A14 rule 2): for a `draft-write` element that is not
+   a resend after `not_applied`, the flow activation under which the run
+   started; otherwise the unused approval first, then a grant still active;
+   an element whose grant was revoked waits for approval instead.
    Only after all resends does the run advance (A13). Elements waiting on
    approval or an unknown outcome are not touched.
 3. **Resolve.** The owner's resolution enters through

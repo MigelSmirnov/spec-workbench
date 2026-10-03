@@ -31,6 +31,12 @@ Python signatures are State 6's.
   a capture copied before `functions` refused the case (State 3, "Bytes left
   by a refused capture"). Codes are distinct only where
   some caller acts on the difference (K-17).
+- **Values enter canonical.** `module:surface` turns every JSON text a
+  request carries — a value, a port's `value_schema`, a guard value — into its
+  canonical form with `canonical_values.canonical_bytes` before any module
+  sees it; a text JCS cannot represent is `invalid_request` (A01 rule 1:
+  refused where it enters). Modules below receive canonical bytes and compare
+  schemas as equal text.
 - **Checks answer, they do not refuse.** An operation that answers a question —
   `fit_port_value`, `check_request_shape`, `prepare_request`'s pre-send
   checks, `check_binding_current`, `send_prepared_request` — returns a
@@ -56,8 +62,9 @@ Python signatures are State 6's.
   record yet is a result — not reached, or empty — never a refusal. Every
   operation that takes an element makes these checks, except one whose Enforces
   says it trusts the facts its caller passes down (State 3) —
-  `effects.reach_operation_element` — which makes none of them and has no such
-  refusal.
+  `effects.reach_operation_element` and `effects.operation_element_conclusion`,
+  both called only by `runs` for an element of a run it has read — which make
+  none of them and have no such refusal.
 - **Naming records.** A record with a minted or computed identity is named by
   it. A start-up operation passes the kernel as the Actor of the store changes
   it makes. A NodeExecution and an EffectAttempt are named by (`run_id`,
@@ -99,7 +106,7 @@ Returned to a caller of the MCP surface:
 | code | meaning | who acts on it |
 |---|---|---|
 | `unauthorized` | the one token refusal: missing, unknown or revoked token, or no valid token list (A16 rules 1–2) | the caller fixes its token |
-| `invalid_request` | size, unknown operation, unknown field, a field over its bound, a malformed continuation token (A16 rules 1, 4, 6) | the caller fixes the request |
+| `invalid_request` | size, unknown operation, unknown field, a field over its bound, a JSON text JCS cannot represent, a malformed continuation token (A01 rule 1, A16 rules 1, 4, 6) | the caller fixes the request |
 | `not_permitted` | the actor may not call this operation (A16 rule 3) | the caller asks the owner |
 | `unknown_reference` | a named record does not exist (State 0) | the caller re-reads |
 | `refused` | an operation's own check failed; the reason names the check | the caller reads the reason |
@@ -235,6 +242,7 @@ not a record: a digest no verdict covers answers none. "Runs by status" and
 | latest activation of a flow | `flows` | the FlowActivation M18, or none |
 | latest activation of a flow version before a run's record in store order | `runs` | the FlowActivation; none cannot occur, and finding none is `internal_error` (closed question 3) |
 | executions of a run | `runs` | NodeExecutions M23 with their SpooledFiles M22 |
+| executions of an element | `effects` | the element's NodeExecutions M23 with their SpooledFiles M22, from which it reads an operation element's conclusion (A11 rule 3) and the attempt number a read send's file is spooled under |
 | runs by status | `runs` | Runs M19 with that status, oldest first (A14 rule 5) |
 | approvals of an element | `effects` | EffectApprovals M24 |
 | attempts of an element | `effects` | EffectAttempts M26 |
@@ -336,8 +344,11 @@ the whole answer is `internal_error`; no partial answer is returned.
 it by its identity — `run_id`,
 `producer_node_id`, `map_index` (omitted for a node that is not mapped),
 `attempt_number`, `producer_port`, `list_index` (omitted for a `one`
-port) — the lookup identity; its digest, size and media type only describe it
-— an
+port) — the lookup identity and the request's only fields; its digest, size
+and media type are not asked, they come back in the answer. The identity is
+looked up whole, not checked as an element: one whose `map_index` or
+`list_index` is given where the record has none, or absent where it has one,
+names no SpooledFile, and an
 identity naming no SpooledFile is `unknown_reference`; the record outlives its
 bytes — and returns its bytes whole, at most `spool_file_bytes_max` (A15 rule 3); it is
 refused once the run's spool is gone, and an agent gets `not_permitted` (A10
@@ -355,7 +366,7 @@ represent.
 
 ### Callers
 
-`module:sandbox`, `module:service_invoker`.
+`module:sandbox`, `module:service_invoker`, `module:surface`.
 
 ### Inputs
 
@@ -2111,12 +2122,13 @@ None.
 ### Enforces
 
 Read from the NodeExecution and EffectAttempt together; the trace is the only
-source (A15 rule 7).
+source (A15 rule 7). Trusts the run, its pinned version and the element that
+`runs` passes down (State 3) and checks none of them again.
 
 ### Errors
 
-`unknown_reference` for a run, or a node of its pinned version, that does not
-exist.
+None of its own: a run, node or element `runs` names exists; a failed read is
+`internal_error`.
 
 ### State impact
 
