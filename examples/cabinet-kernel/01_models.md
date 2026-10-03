@@ -994,6 +994,9 @@ Candidate fields:
 
 - `run_id`, `producer_node_id`, `map_index`, `attempt_number`, `producer_port`:
   the attempt that produced it, so files of two attempts are two SpooledFiles;
+- `list_index`: its position in the list a `many` file port produced, from 0;
+  absent for a `one` port — so two files of one `many` output are two
+  SpooledFiles (A03 rule 3; raised by State 5 round 9);
 - `content_digest`, `size_bytes`;
 - `media_type`: its port's (K-06);
 - `disclosure_class`: by the rule of StoredValue (M21) — a function's output the
