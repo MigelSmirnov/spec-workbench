@@ -23,9 +23,34 @@ python tools/design_questions.py status examples/<case> --state <N>
 
 `ask` gives the texts of States 0..N to several independent reviews (three by
 default) with the state's `question_scope` from `authoring_sequence.json`, then
-groups their open points into topics. The round is kept under
+groups their open points into topics, and has every topic raised by two or more
+reviews judged (below). The round is kept under
 `examples/<case>/questions/state<N>/round-<k>/`: each review, and `summary.json`
-with the texts' digests, every topic and how many reviews raised it.
+with the texts' digests, every topic, how many reviews raised it and, for a
+repeated topic, its judgement.
+
+## Judging a repeated topic
+
+Repetition says that reviews agree a question exists, not that it matters: a
+review always finds one more question, one level deeper (Cabinet Kernel, States
+1 and 2 reopened on 2026-10-03: three rounds each, 2–4 new repeated topics every
+time, about texts nobody had changed). So a separate judge call sorts each
+repeated topic into one kind, and only two kinds keep a state open:
+
+| kind | means | evidence the tool checks | blocks |
+|---|---|---|---|
+| `contradiction` | two passages say different things | two quotes, verbatim in the texts | yes |
+| `consequential_gap` | two careful implementers build different behaviour that the owner, an agent, a caller or a service notices | the two behaviours and who notices | yes |
+| `answered` | the texts already answer it | the answering quote, verbatim in the texts | no |
+| `later_state` | it belongs to a later state | a state number after this one | no |
+| `indifferent` | no one acts differently on any answer | the reason | no |
+| `preexisting` | only with `--since`: about a passage the change did not touch | the quote, verbatim in both versions | no |
+
+The judge is not trusted: a judgement whose evidence fails its check — a quote
+not found character for character, a "later" state that is not later — blocks
+like a gap. Closing what blocks is the work below; a non-blocking topic is
+recorded in the round and, for `later_state`, must reach that state's texts as
+a carried question.
 
 ## Closing a question
 
@@ -46,10 +71,22 @@ Ask first who uses what the question is about.
   says. A question of a later state is recorded in the texts as carried to that
   state and is closed there; without this rule reviews descend forever into
   orders, encodings and formats.
-- **Closure.** The latest round raises no topic in two or more reviews, and the
-  texts have not changed since that round (`status` compares digests). A topic
-  raised by one review is closed or carried when cheap, but does not hold the
-  state open.
+- **Clear round.** No judged topic blocks.
+- **Closure.** The two latest rounds are clear on the same texts, and the texts
+  have not changed since (`status` compares digests). One clear round can be
+  luck; two on the same texts show the questions have stopped mattering, not
+  merely changed. A topic raised by one review is closed or carried when cheap,
+  but does not hold the state open. Rounds kept before the judge existed keep
+  their rule: closed when no topic was raised by two reviews.
+- **Reopened state.** When a closed state is edited, re-close it with
+  `ask --since <git-ref where it was closed>`: the judge sees the change and
+  sets aside, as `preexisting`, topics about passages the change did not touch.
+  A reopened state is checked for what the change did, not audited again from
+  scratch.
+- **A recurring kind of question asks for a convention.** When topics of one
+  kind keep coming (which failure is named first, which bytes are counted),
+  write one convention that answers the whole kind, not one fix per place;
+  Cabinet Kernel States 3 and 5 converged only after that.
 - **Recurrence is the test of a closure.** A question closed by the owner must
   not come back in the next round; when it does, the closure did not reach the
   text.
