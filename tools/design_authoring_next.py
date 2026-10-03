@@ -328,6 +328,99 @@ def _promoted_states_step(sequence: dict[str, Any], project: Path, project_text:
     return None
 
 
+def _router_step(sequence: dict[str, Any], project: Path, project_text: str) -> dict[str, Any] | None:
+    """Router Closure and router context, or None when the case needs no router.
+
+    Both router phases are conditional on rules.http_router_backend being used
+    (authoring_sequence.json). A case with no router artifact whose State 5
+    exposure names no external operation has no HTTP route to close, so both
+    phases are skipped rather than closed by an empty artifact.
+    """
+    has_router_artifact = (project / ROUTER_CLOSURE_FILE).is_file() or (
+        project / design_router_context.FILE
+    ).is_file()
+    if not (project / ROUTER_CLOSURE_FILE).is_file():
+        try:
+            external = list(exposure_boundary(project).external)
+        except RouterClosureError as exc:
+            return _result(
+                sequence=sequence, project=project, project_text=project_text,
+                phase="deterministic_http_router_closure", blocked=True,
+                reason=f"Router Closure cannot start: {exc}",
+                summary={"closure_exists": False, "errors": 1},
+                unresolved_operations=[],
+                router_allowed=True, persistence_allowed=True,
+            )
+        if not external and not has_router_artifact:
+            return None
+        return _result(
+            sequence=sequence, project=project, project_text=project_text,
+            phase="deterministic_http_router_closure", blocked=False,
+            reason=(
+                "Canonical contracts are ready. Author the per-route Router Closure "
+                f"{ROUTER_CLOSURE_FILE} for the externally exposed operations: start it as "
+                f'{{"schema_version": "{ROUTER_CLOSURE_SCHEMA}", "items": []}} and close one operation at a time.'
+            ),
+            summary={"closure_exists": False, "external_operations": len(external)},
+            unresolved_operations=external,
+            router_allowed=True, persistence_allowed=True,
+        )
+    try:
+        router = router_authoring.coverage(project)
+    except RouterClosureError as exc:
+        return _result(
+            sequence=sequence, project=project, project_text=project_text,
+            phase="deterministic_http_router_closure", blocked=True,
+            reason=f"Router Closure could not be inspected deterministically: {exc}",
+            summary={"closure_exists": True, "errors": 1},
+            unresolved_operations=[],
+            router_allowed=True, persistence_allowed=True,
+        )
+    if not router["summary"]["handoff_ready"]:
+        return _result(
+            sequence=sequence, project=project, project_text=project_text,
+            phase="deterministic_http_router_closure", blocked=bool(router["summary"]["errors"]),
+            reason="Canonical contracts are ready; per-route Router Closure may now bind transport semantics and must validate them against State 6.",
+            summary=router["summary"],
+            unresolved_operations=router["unresolved_operations"],
+            router_allowed=True, persistence_allowed=True,
+        )
+
+    if not (project / design_router_context.FILE).is_file():
+        return _result(
+            sequence=sequence, project=project, project_text=project_text,
+            phase="deterministic_http_router_context_closure", blocked=False,
+            reason=(
+                "Per-route closure is ready. Author the global deterministic HTTP "
+                f"wiring/auth/error policy {design_router_context.FILE}."
+            ),
+            summary={"context_exists": False},
+            unresolved_topics=[],
+            router_allowed=True, persistence_allowed=True,
+        )
+    try:
+        context = design_router_context.coverage(project)
+    except design_router_context.RouterContextError as exc:
+        return _result(
+            sequence=sequence, project=project, project_text=project_text,
+            phase="deterministic_http_router_context_closure", blocked=True,
+            reason=f"Router context could not be inspected deterministically: {exc}",
+            summary={"context_exists": True, "errors": 1},
+            unresolved_topics=[],
+            router_allowed=True, persistence_allowed=True,
+        )
+    if not context["summary"]["handoff_ready"]:
+        return _result(
+            sequence=sequence, project=project, project_text=project_text,
+            phase="deterministic_http_router_context_closure", blocked=bool(context["summary"]["errors"]),
+            reason="Per-route closure is ready, but global deterministic HTTP wiring/auth/error policy is not yet closed.",
+            summary=context["summary"],
+            unresolved_topics=context["unresolved_topics"],
+            router_allowed=True, persistence_allowed=True,
+        )
+    return None
+
+
 def _post_state5_step(sequence: dict[str, Any], project: Path, project_text: str) -> dict[str, Any]:
     """Post-State-5 chain: data closure -> contracts -> backend closures -> notes -> assembly."""
     data_path = project / design_stage6_data.DEFAULT_FILE
@@ -410,83 +503,9 @@ def _post_state5_step(sequence: dict[str, Any], project: Path, project_text: str
             router_allowed=True, persistence_allowed=True,
         )
 
-    if not (project / ROUTER_CLOSURE_FILE).is_file():
-        try:
-            external = list(exposure_boundary(project).external)
-        except RouterClosureError as exc:
-            return _result(
-                sequence=sequence, project=project, project_text=project_text,
-                phase="deterministic_http_router_closure", blocked=True,
-                reason=f"Router Closure cannot start: {exc}",
-                summary={"closure_exists": False, "errors": 1},
-                unresolved_operations=[],
-                router_allowed=True, persistence_allowed=True,
-            )
-        return _result(
-            sequence=sequence, project=project, project_text=project_text,
-            phase="deterministic_http_router_closure", blocked=False,
-            reason=(
-                "Canonical contracts are ready. Author the per-route Router Closure "
-                f"{ROUTER_CLOSURE_FILE} for the externally exposed operations: start it as "
-                f'{{"schema_version": "{ROUTER_CLOSURE_SCHEMA}", "items": []}} and close one operation at a time.'
-            ),
-            summary={"closure_exists": False, "external_operations": len(external)},
-            unresolved_operations=external,
-            router_allowed=True, persistence_allowed=True,
-        )
-    try:
-        router = router_authoring.coverage(project)
-    except RouterClosureError as exc:
-        return _result(
-            sequence=sequence, project=project, project_text=project_text,
-            phase="deterministic_http_router_closure", blocked=True,
-            reason=f"Router Closure could not be inspected deterministically: {exc}",
-            summary={"closure_exists": True, "errors": 1},
-            unresolved_operations=[],
-            router_allowed=True, persistence_allowed=True,
-        )
-    if not router["summary"]["handoff_ready"]:
-        return _result(
-            sequence=sequence, project=project, project_text=project_text,
-            phase="deterministic_http_router_closure", blocked=bool(router["summary"]["errors"]),
-            reason="Canonical contracts are ready; per-route Router Closure may now bind transport semantics and must validate them against State 6.",
-            summary=router["summary"],
-            unresolved_operations=router["unresolved_operations"],
-            router_allowed=True, persistence_allowed=True,
-        )
-
-    if not (project / design_router_context.FILE).is_file():
-        return _result(
-            sequence=sequence, project=project, project_text=project_text,
-            phase="deterministic_http_router_context_closure", blocked=False,
-            reason=(
-                "Per-route closure is ready. Author the global deterministic HTTP "
-                f"wiring/auth/error policy {design_router_context.FILE}."
-            ),
-            summary={"context_exists": False},
-            unresolved_topics=[],
-            router_allowed=True, persistence_allowed=True,
-        )
-    try:
-        context = design_router_context.coverage(project)
-    except design_router_context.RouterContextError as exc:
-        return _result(
-            sequence=sequence, project=project, project_text=project_text,
-            phase="deterministic_http_router_context_closure", blocked=True,
-            reason=f"Router context could not be inspected deterministically: {exc}",
-            summary={"context_exists": True, "errors": 1},
-            unresolved_topics=[],
-            router_allowed=True, persistence_allowed=True,
-        )
-    if not context["summary"]["handoff_ready"]:
-        return _result(
-            sequence=sequence, project=project, project_text=project_text,
-            phase="deterministic_http_router_context_closure", blocked=bool(context["summary"]["errors"]),
-            reason="Per-route closure is ready, but global deterministic HTTP wiring/auth/error policy is not yet closed.",
-            summary=context["summary"],
-            unresolved_topics=context["unresolved_topics"],
-            router_allowed=True, persistence_allowed=True,
-        )
+    router_step = _router_step(sequence, project, project_text)
+    if router_step is not None:
+        return router_step
 
     binding = design_emitter_binding.coverage(project)
     if not binding["summary"]["handoff_ready"]:

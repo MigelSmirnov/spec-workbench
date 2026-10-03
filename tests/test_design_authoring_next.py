@@ -134,6 +134,34 @@ def test_missing_router_closure_routes_to_router_phase_with_the_external_operati
     assert report["unresolved_operations"] == ["public_op:surface.run", "public_op:surface.inspect"]
 
 
+def test_a_case_without_external_operations_skips_both_router_phases(tmp_path, monkeypatch) -> None:
+    _ready_through_persistence(tmp_path, monkeypatch)
+    boundary = type("Boundary", (), {"external": ()})()
+    monkeypatch.setattr(design_authoring_next, "exposure_boundary", lambda project: boundary)
+    monkeypatch.setattr(
+        design_authoring_next.design_emitter_binding,
+        "coverage",
+        lambda project: {"summary": {"handoff_ready": False}, "findings": []},
+    )
+
+    report = design_authoring_next.next_step(tmp_path)
+
+    assert report["phase"] == "deterministic_backend_binding"
+    assert not (tmp_path / design_authoring_next.ROUTER_CLOSURE_FILE).exists()
+
+
+def test_a_router_artifact_keeps_the_router_phase_without_external_operations(tmp_path, monkeypatch) -> None:
+    _ready_through_persistence(tmp_path, monkeypatch)
+    boundary = type("Boundary", (), {"external": ()})()
+    monkeypatch.setattr(design_authoring_next, "exposure_boundary", lambda project: boundary)
+    (tmp_path / design_authoring_next.design_router_context.FILE).write_text("{}\n", encoding="utf-8")
+
+    report = design_authoring_next.next_step(tmp_path)
+
+    assert report["phase"] == "deterministic_http_router_closure"
+    assert report["summary"] == {"closure_exists": False, "external_operations": 0}
+
+
 def test_invalid_router_closure_blocks_without_crash(tmp_path, monkeypatch) -> None:
     _ready_through_persistence(tmp_path, monkeypatch)
     (tmp_path / design_authoring_next.ROUTER_CLOSURE_FILE).write_text("{}\n", encoding="utf-8")
