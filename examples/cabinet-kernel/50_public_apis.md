@@ -38,7 +38,10 @@ Python signatures are State 6's.
   record is still `unknown_reference`; only operations that
   would change or return something refuse.
 - **Several refusals.** When an operation's Errors list several refusals, they
-  are checked in the order listed, and the first that holds is returned.
+  are checked in the order listed, and the first that holds is returned. When
+  several records a request names do not exist, the `unknown_reference` names
+  the first of them in the order the operation's Inputs list them (A16 rule 1:
+  checks in the order listed).
 - **Reason.** A refusal's reason is at most `bounded_text_bytes_max`, cut at a
   UTF-8 character boundary.
 - **Order.** Every collection in an output is in store order unless the
@@ -50,7 +53,11 @@ Python signatures are State 6's.
 - **Naming an element.** A run or a node of its pinned version that does not
   exist is `unknown_reference`; a `map_index` given for a node that is not
   mapped, or absent for one that is, is `refused`; a well-formed element with no
-  record yet is a result — not reached, or empty — never a refusal.
+  record yet is a result — not reached, or empty — never a refusal. Every
+  operation that takes an element makes these checks, except one whose Enforces
+  says it trusts the facts its caller passes down (State 3) —
+  `effects.reach_operation_element` — which makes none of them and has no such
+  refusal.
 - **Naming records.** A record with a minted or computed identity is named by
   it. A start-up operation passes the kernel as the Actor of the store changes
   it makes. A NodeExecution and an EffectAttempt are named by (`run_id`,
@@ -73,7 +80,8 @@ Python signatures are State 6's.
   and every release (A14 rule 4). It never fails a request: a run's records are written first,
   and a spool that cannot be removed then is removed at the next start, which
   removes the spool of every ended run that keeps none (A18 rule 4).
-- **Internal error.** A failed store call changes nothing (A18 rule 3); the
+- **Internal error.** `internal_error` is not a refusal, so "a refusal writes
+  nothing" does not hold for it. A failed store call changes nothing (A18 rule 3); the
   module returns it as `internal_error` and `module:surface` answers without
   detail (A16 rule 7). When a request makes several store changes, those made
   before the failed one stay: each is whole, and a run is derived from its
@@ -204,9 +212,12 @@ version, an implementation and a corpus digest, a flow, a flow version and a
 run, a run, an element, a flow version's node — or, for "by status", the
 status. An element is passed as (`run_id`, `node_id`, `map_index`). A call
 that passes other arguments is a defect of its caller and
-answers `internal_error`. The record a relation
+answers `internal_error` — so does one that omits an argument its relation
+names or passes one of another kind; that defect is decided before any record
+is looked up. The record a relation
 names — every one of them — must exist, or the call is
-`unknown_reference`; from an existing
+`unknown_reference`, naming the first missing record in the order the
+relation's name mentions them (A16 rule 1: checks in the order listed); from an existing
 record, an empty answer is a result, not a refusal. A corpus digest is a value,
 not a record: a digest no verdict covers answers none. "Runs by status" and
 "attempts by status" start from no record and are never `unknown_reference`. Only the modules named ask.
@@ -222,7 +233,7 @@ not a record: a digest no verdict covers answers none. "Runs by status" and
 | latest activation of a contract version | `functions` | the Activation M09, or none |
 | versions of a flow | `flows` | FlowVersions M13 |
 | latest activation of a flow | `flows` | the FlowActivation M18, or none |
-| latest activation of a flow version before a run's record in store order | `runs` | the FlowActivation, or none (closed question 3) |
+| latest activation of a flow version before a run's record in store order | `runs` | the FlowActivation; none cannot occur, and finding none is `internal_error` (closed question 3) |
 | executions of a run | `runs` | NodeExecutions M23 with their SpooledFiles M22 |
 | runs by status | `runs` | Runs M19 with that status, oldest first (A14 rule 5) |
 | approvals of an element | `effects` | EffectApprovals M24 |
@@ -247,8 +258,10 @@ preview's file input — it carries the SpooledFile's full identity, so that the
 A run's answer, wherever an operation returns one, holds: `run_id`, the flow
 version, status, starter and times, outputs produced, waiting points with
 their reasons and, for `owner_approval`, the `approval_id` of the element's
-`requested` approval — one always exists while it waits (A10 rule 2), and once ended the
-reason per missing output (A13 rule 7). An implementation's code reaches an
+`requested` approval — one always exists while it waits (A10 rule 2), once ended the
+reason per missing output (A13 rule 7), and, once a `failed` run's spool is
+released, `released_by` and `released_at` (M19) — every operation returning a
+run, `release_run` among them, returns this one answer. An implementation's code reaches an
 agent only in `get_repair_view`, for the slot's current implementation; every
 other answer to an agent names an implementation without its code (K-12).
 Answers have no size ceiling of their own: every field they carry is bounded
@@ -284,7 +297,7 @@ rules 4–5. Field schemas and bounds are State 6's. "Agent" means any agent,
 | `grant_standing_approval` | owner | `effects.grant_standing_approval` |
 | `revoke_standing_approval` | owner | `effects.revoke_standing_approval` |
 | `get_slot` | owner, agent | `functions.read_slot` |
-| `get_repair_view` | owner, agent | one slot's repair read (A15 rule 6, K-12), not a list operation of A16 rule 6: `functions.read_slot`; the current contract version through `functions.read_contract_version` and its whole corpus; the current implementation through `functions.read_implementation`, with code, and its trial executions on the corpus; and through `store.page_records` the latest NodeExecutions of the slot's implementations — `page_size_default` unless the caller asks another size, at most `page_size_max` (A16 rule 6) — with a continuation token that also carries the implementation set of its first page; passed back, it pages only the NodeExecutions below that position for that set — an implementation added since has only newer executions, so nothing below is missed — and every other part is read again as of that request |
+| `get_repair_view` | owner, agent | one slot's repair read (A15 rule 6, K-12), not a list operation of A16 rule 6: `functions.read_slot`; the current contract version through `functions.read_contract_version` and its whole corpus; the current implementation through `functions.read_implementation`, with code, and its trial executions on the corpus; and through `store.page_records` the latest NodeExecutions of the slot's implementations — `page_size_default` unless the caller asks another size, at most `page_size_max` (A16 rule 6) — with a continuation token that also carries the implementation set of its first page; passed back, it pages only the NodeExecutions below that position for that set — an implementation added since has only newer executions, so nothing below is missed — and every other part is read again as of that request; the token is bound to its slot, so passed with another slot it is `invalid_request`, as the rule below the table says for every continuation token, and only the page size may change |
 | `get_contract_version` | owner, agent | `functions.read_contract_version` |
 | `get_implementation` | owner with code; agent without code (K-12) | `functions.read_implementation` |
 | `get_binding` | owner, agent | `bindings.read_binding` |
@@ -2086,8 +2099,10 @@ A run, node and element.
 
 Its conclusion: succeeded with outputs; failed with its status, or with
 `applied_outputs_unknown` for an attempt resolved applied whose binding has
-outputs; waiting with its reason; or not reached when the element has no
-NodeExecution yet (A11 rule 3).
+outputs; waiting with its reason and, for `owner_approval`, the `approval_id`
+of the element's `requested` approval, so `runs` builds the run's answer
+(Conventions) without reading approval records itself; or not reached when the
+element has no NodeExecution yet (A11 rule 3).
 
 ### Observable effect
 

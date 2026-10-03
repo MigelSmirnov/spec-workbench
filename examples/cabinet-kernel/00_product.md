@@ -28,8 +28,9 @@ proven graph of two kinds of node: a pure function an agent wrote, and a declare
 operation of a microservice. The agent writes a function, the kernel tries it in
 a sandbox and admits it; the agent composes a flow; the kernel proves the flow,
 runs it, asks the owner before each effect of the classes K-08 stops for — a
-`draft-write` runs under the owner's activation of the flow instead — and records
-what happened.
+`draft-write` runs under the owner's activation of the flow instead, except that
+sending one again after `not_applied` needs a fresh approval, as for every class
+(K-08) — and records what happened.
 
 The stable part of the platform lives in the microservices. The changing part
 lives in functions and flows, and changing it needs no new application, module
