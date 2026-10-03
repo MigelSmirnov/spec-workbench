@@ -248,8 +248,8 @@ may change.
 
 ### Owns
 
-A20: the release constants generated code reads — `RELEASE_CEILINGS` with the
-values of release v1, the ordered disclosure classes of A07 rule 1, the ordered
+A20: the release constants generated code reads — one `RELEASE_CEILING_<NAME>`
+per ceiling with the values of release v1, the ordered disclosure classes of A07 rule 1, the ordered
 effect classes of M10, and the closed list of trapped standard-library entry
 points of A03 rule 4 shipped with the runtime. Emitted as module constants
 (SPEC_STANDARD 15.3.1); nothing overrides them.
@@ -272,7 +272,7 @@ generator's prompt (SPEC_STANDARD 15.9).
 ### Candidate public capabilities
 
 ```text
-RELEASE_CEILINGS
+RELEASE_CEILING_<NAME> (one per A20 ceiling)
 DISCLOSURE_CLASSES
 EFFECT_CLASSES
 TRAPPED_ENTRY_POINTS

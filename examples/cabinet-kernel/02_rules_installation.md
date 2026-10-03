@@ -107,7 +107,11 @@ Reuses cabinet-flow decision 23, narrowed by K-16.
 
 1. The installation's configuration file holds the owner token, the agent tokens
    and, per service, the selected manifest instance name and one credential: a
-   header name and the reference that resolves to its value on the host. The file
+   header name and the reference that resolves to its value on the host; and the
+   address the kernel's one `mcp` entrance listens on, which the host's reverse
+   proxy reaches (owner, 2026-10-03, raised by the pre-contract data closure).
+   The kernel reads the file's path from its one command-line argument and reads
+   no environment variable. The file
    must be a regular file, not a symbolic link, owned by the kernel's user, with
    no permission for group or others; the kernel refuses to start otherwise.
 2. A credential is resolved only when a request to its service is built and is
@@ -235,8 +239,10 @@ reads.
 
 ### Normative rules
 
-1. Every global ceiling is one entry of the release constant `RELEASE_CEILINGS`,
-   delivered to code as a data-provider constant (SPEC_STANDARD 15.3.1). No
+1. Every global ceiling is one release constant `RELEASE_CEILING_<NAME>`, the
+   name below in upper case, delivered to code as a data-provider constant
+   (SPEC_STANDARD 15.3.1, 6.10: one exact entry is one scalar constant; owner,
+   2026-10-03, raised by the pre-contract data closure). No
    request, flow, contract, manifest, configuration or environment variable raises
    one, and no module defines a second default. Release v1:
 
@@ -277,7 +283,7 @@ reads.
 ### Formal invariants
 
 ```text
-ceiling(name) = RELEASE_CEILINGS[name]
+ceiling(name) = RELEASE_CEILING_<NAME>
 override(ceiling) -> never
 over_ceiling -> refusal_or_failure (never truncation)
 dependencies pinned_by_release

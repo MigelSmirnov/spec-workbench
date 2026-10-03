@@ -98,7 +98,8 @@ Candidate fields:
 - `slot_id`: a stable name the creating agent chooses; unique in the kernel, and a
   name already taken is refused;
 - `purpose`: plain words for the owner and the agent, fixed when the slot is
-  created;
+  created — taken from the request that issues its first contract version,
+  which is refused without one (State 2, A01 rule 5);
 - `created_by`, `created_at`.
 
 ### Identity
@@ -441,17 +442,15 @@ None.
 ### Meaning
 
 The kernel's reading of one operation of one microservice in the platform
-manifest (K-03). Read when a binding is proposed and every time the operation is
-invoked, to check that the manifest record still has the pinned digest.
+manifest (K-03). Read when a binding is proposed or accepted and every time the
+operation is invoked, to check that the manifest record still has the pinned
+digest (A08 rules 5–7).
 
 Candidate fields:
 
 - `service_id`, `operation_name`;
 - `record_digest`: the digest of the operation's own capability entry in the
   service's manifest record, not of the whole record (State 2, A08);
-- `channel`: the manifest's channel of the operation; this kernel invokes only
-  operations the service exposes over its own HTTP API (`http_api` in the
-  manifest's words — not an HTTP surface of the kernel, K-11);
 - `effect_class`: `read`, `draft-write`, `state-transition`, `external-effect`
   or `destructive`, ordered in that sequence from lowest to highest (K-08);
 - `idempotency_key_fields`: the request fields the manifest names as the key;
@@ -461,9 +460,11 @@ Candidate fields:
   manifest gives its address.
 - `required_headers`, `instance_class`: that instance's required headers and
   class as the manifest states them (State 2, A08 rule 2, A09 rules 1 and 4);
-  `base_url`, `required_headers` and `instance_class` are absent when the
-  installation selects no instance, and judging them is the invoker's (A09
-  rule 6), not the manifest reading's.
+  each is absent when the installation selects no instance or that instance
+  does not state it, and judging them is the invoker's (A09 rule 6), not the
+  manifest reading's. Only an operation the service exposes over its own HTTP
+  API is read into a ManifestOperation (A08 rule 3), so no channel is carried:
+  every reading has the same one (checked State 1, 2026-10-03).
 
 ### Identity
 
@@ -548,7 +549,9 @@ active version when a run starts.
 
 Candidate fields:
 
-- `purpose` of a flow is fixed when the flow is created;
+- `purpose` of a flow is fixed when the flow is created — taken from the
+  request that composes its first version, which is refused without one
+  (State 2, A01 rule 5);
 - `flow_id`: a stable name the creating agent chooses; the first flow version
   composed under a new name creates the flow — there is no separate create
   action;
@@ -987,8 +990,11 @@ None. Values are kept as long as traces; nothing expires (K-10).
 
 ### Meaning
 
-One file a node produced during one run, held until the run ends (K-10). Read by
-the next node that receives it and by the owner's approval preview.
+One file a node produced during one run; its bytes are held until the run ends
+(K-10), its record is kept with the trace. Read by the next node that receives
+it, by the owner's approval preview and the owner's inspection read of its bytes
+(A10 rule 2; the State 5 operation `read_spooled_file`), and by capture into
+a trial corpus while its run holds its spool (A15 rule 5).
 
 Candidate fields:
 
@@ -1009,8 +1015,8 @@ value
 
 ### Identity evidence
 
-Substitution: equal facts are the same spooled file. Continuity: none; it is
-released when its run's spool is emptied.
+Substitution: equal facts are the same spooled file. Continuity: none; its
+bytes are removed when its run's spool is emptied, the record stays.
 
 ### Source of truth
 
@@ -1018,8 +1024,8 @@ The kernel's observation while receiving the bytes.
 
 ### Lifecycle candidate
 
-None; removed when its run ends, or, for a `failed` run, when the run is released
-(K-10).
+None for the record. Its bytes are removed when its run ends, or, for a
+`failed` run, when the run is released (K-10).
 
 ### Persistence candidate
 
@@ -1122,7 +1128,12 @@ The owner's decision, recorded by the kernel.
 An approval is used at most once. An approved effect that was never sent, because
 the service was unreachable, keeps its approval for the same input when the run is
 resumed. When its run ends, an approval that is still `requested` or unused can no
-longer be decided or used.
+longer be decided or used. No other transition exists: neither the end of a run
+nor a changed request changes a status. An approved, unused approval whose
+`request_digest` no longer matches the request about to be sent stays `approved`
+and unused and is simply no authority for that send; the kernel then sends
+under an active grant when one applies, otherwise requests a new approval
+(State 2, A10 rules 1, 2 and 4).
 
 ### Persistence candidate
 
@@ -1286,10 +1297,14 @@ Candidate fields:
   and the repository revision it is read at — read by every manifest reading
   (M10), so a record changes for the kernel only when the owner changes the
   configured revision;
-- `service_instances`: one selected instance per service;
+- `service_instances`: at most one selected instance per service, by its
+  manifest instance name; a service with none selected is not invocable
+  (A17 rule 4, A08 rule 5);
 - `service_credentials`: references to secrets, never the secrets;
 - `owner_token`, `agent_tokens`: each agent token with its name and whether it
-  may author.
+  may author;
+- `mcp_listen_address`: where the one `mcp` entrance listens for the host's
+  reverse proxy, read at start by the surface (A17 rule 1; owner, 2026-10-03).
 
 ### Identity
 

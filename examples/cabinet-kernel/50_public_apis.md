@@ -918,12 +918,12 @@ Reads the configuration file.
 
 ### Inputs
 
-The configuration file path given to the process.
+The configuration file path, the process's one command-line argument (A17 rule 1).
 
 ### Outputs
 
 The loaded installation M28: data directory, manifest source, selected
-instances, credential references, tokens.
+instances, credential references, tokens, the `mcp` listen address.
 
 ### Observable effect
 
@@ -2603,7 +2603,7 @@ from the sandbox.
 
 ### Inputs
 
-The configuration file path, from the host.
+The configuration file path, the process's one command-line argument (A17 rule 1).
 
 ### Outputs
 

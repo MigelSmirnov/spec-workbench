@@ -67,7 +67,9 @@ is.
    (M28), so a record changes for a running kernel only after a restart with a
    new configured revision.
 7. Accepting a binding, by the owner only: an unknown `binding_id` is refused; an
-   `accepted` binding is returned unchanged; a `proposed` one is read against the
+   `accepted` binding is returned unchanged, without reading the manifest, even
+   when its digest has changed meanwhile — a change stops its sends (rule 6),
+   not its acceptance; a `proposed` one is read against the
    manifest as rule 6 does and, when a check fails — in the order rule 5 lists
    them, the first failing one named — refused naming that check as
    a proposal is (rule 5), with `binding_stale` when only the digest differs;
@@ -247,7 +249,9 @@ generated statements, no suspension.
    `not_applied` is one requested after that resolution; approvals recorded
    before it never count.
 2. Without either, the kernel records one approval request for the element —
-   none when a `requested` one for it already exists — with the exact inputs
+   none when a `requested` one for it already exists, even if the request has
+   changed since: when that one is approved and the send's digest differs, rule 1
+   applies and a new approval is requested — with the exact inputs
    and a preview — service, operation, effect class, the request as rule 7
    describes it with its `request_digest`, the input values and, for each file
    input, its digest, size and media type; an agent reading it gets a `personal_data` value or file only
