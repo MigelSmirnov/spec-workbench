@@ -105,7 +105,9 @@ worker.
    `bytes` (A03). A mapped node concludes only when every element has concluded. It succeeded
    when every element succeeded, and its outputs are then lists in element order,
       each list of the highest class among its elements (A07); an empty list
-   takes the class of the list the node mapped over, so no class is lowered;
+   takes the highest class among the node's inputs — the list it mapped over
+   and every other input — as an execution of the node would have received
+   them (M21), so no class is lowered;
    any failed element makes it failed for its dependants. A value list is one
    StoredValue, the JSON array of the elements' values in element order, whose
    `value_schema` is the array schema with the port's schema as `items`, as
@@ -114,8 +116,9 @@ worker.
    named, like any value, by the records that receive it; mapping over such a
    list gives each element the list's class; a file list is the
    elements' SpooledFiles in element order, each keeping its own record, and
-   the reference naming the list carries the list's class, so an empty one
-   keeps it. A port's
+   the reference naming the list — stored in the node's NodeExecution outputs
+   and in every record that receives the list — carries the list's class, so
+   an empty one keeps it across restarts. A port's
    reference to values names exactly one StoredValue, a `many` value being one
    JSON array.
 7. An element's conclusion is its NodeExecution's status, except that an

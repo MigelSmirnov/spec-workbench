@@ -1,0 +1,102 @@
+{
+ "open_points": [
+  {
+   "subject": "canonical_values.canonical_bytes input representation",
+   "kind": "contradictory input",
+   "text": "Inputs: \"One JSON value.\" Errors: \"refused for a value JCS cannot represent: a non-finite number, a duplicate key.\"",
+   "question": "How can canonical_bytes detect duplicate object keys after its input has already become a JSON value, and which component must reject them?",
+   "options": [
+    "canonical_bytes receives raw JSON text or a duplicate-preserving parse tree",
+    "surface rejects duplicate keys while parsing and canonical_bytes receives an already validated value",
+    "duplicate keys are resolved by the JSON parser before canonicalization"
+   ],
+   "default_guess": "Have surface parse with duplicate-key rejection, then pass the validated value to canonical_bytes."
+  },
+  {
+   "subject": "file content digests",
+   "kind": "missing operation rule",
+   "text": "\"A caller holding bytes computes the facts first\" and store.put_value_bytes takes \"Bytes and their expected digest and size,\" but no operation fixes how a file's content_digest or value_digest is computed.",
+   "question": "What exact digest algorithm and byte representation must callers use for file fixtures and spooled files, and which module owns that computation?",
+   "options": [
+    "SHA-256 of the raw file bytes, lowercase hexadecimal",
+    "SHA-256 of a canonical JSON wrapper or encoded representation",
+    "A digest supplied by the caller and only compared by store"
+   ],
+   "default_guess": "Use lowercase hexadecimal SHA-256 of the raw file bytes, computed by canonical_values or store."
+  },
+  {
+   "subject": "sandbox and service value-output handoff",
+   "kind": "underspecified output",
+   "text": "sandbox.execute_function returns \"the outputs by port\" and service_invoker.send_prepared_request returns \"the output values by port,\" while store.put_value_bytes requires bytes, digest and size and canonical_values.canonical_bytes lists only sandbox, service_invoker and surface as callers.",
+   "question": "What exact artifacts must sandbox and service_invoker return so functions, runs and effects can persist value outputs without independently implementing canonical JSON encoding or hashing?",
+   "options": [
+    "Return the decoded value together with canonical bytes, digest and size",
+    "Return canonical bytes only and let the caller decode when needed",
+    "Allow functions, runs and effects to call canonical_bytes and compute the digest"
+   ],
+   "default_guess": "Return each decoded value together with its canonical bytes, SHA-256 digest and byte size."
+  },
+  {
+   "subject": "service_invoker.send_prepared_request outcome",
+   "kind": "contradictory responsibility",
+   "text": "The operation says it will \"name its outcome by the A09 table\" and enforces \"response limits,\" but State 3 says \"service_invoker judges only the response ceiling and never sees the run's spool\" while a spool-ceiling refusal must change a non-read 2xx result to contract_violation with the attempt applied.",
+   "question": "Does send_prepared_request return a final A09 outcome, or a transport/response result that effects finalizes after StoredValue and spool ceiling checks?",
+   "options": [
+    "Return a provisional response result; effects determines the final outcome after persistence checks",
+    "Pass run spool state into service_invoker so it returns the final outcome",
+    "Return succeeded and let effects overwrite that outcome when storage fails"
+   ],
+   "default_guess": "Return a provisional response result and have effects determine and record the final A09 outcome after all value and spool checks."
+  },
+  {
+   "subject": "store.spool_file refusal effects",
+   "kind": "contradiction",
+   "text": "The convention says \"A refusal is decided before the operation's first store change, so it writes nothing,\" but store.spool_file says a ceiling refusal keeps \"nothing ... of any file that attempt spooled before.\"",
+   "question": "May a refused spool_file call delete files published by earlier spool_file calls for the same attempt, or must attempt-level cleanup be a separate non-refusal operation?",
+   "options": [
+    "The refusal atomically removes every unrecorded file of that attempt",
+    "The refusal removes only the current file and the caller explicitly cleans earlier files",
+    "All files of an attempt must be supplied to one atomic spool operation"
+   ],
+   "default_guess": "Treat attempt spooling as provisional and remove every unrecorded file of that attempt on a ceiling refusal."
+  },
+  {
+   "subject": "store.open_store initialization",
+   "kind": "missing behavior",
+   "text": "The operation says \"Take the exclusive lock, check the data directory and remove temporary files\" and returns \"An open store,\" but it does not say what happens when the data directory, SQLite database, content area, spool area or database schema does not yet exist.",
+   "question": "What does open_store create on a first installation, and which missing or incompatible store structures are refusals versus internal errors?",
+   "options": [
+    "Require a pre-existing private data directory but create an empty database and managed subdirectories",
+    "Create the data directory and the entire store when absent",
+    "Require every directory, database and schema to be provisioned before start"
+   ],
+   "default_guess": "Require the configured data directory to exist with private permissions, then atomically create the database schema and managed subdirectories when absent."
+  },
+  {
+   "subject": "runs.continue_after_approval send guarantee",
+   "kind": "contradictory effect",
+   "text": "Observable effect: \"An approved effect is sent in this request.\" The same operation says the element is reached again, while A10 says a pre-send check may fail, or a changed request_digest may leave the approval unused and request another approval without sending.",
+   "question": "Does approving guarantee that an HTTP request leaves the kernel, or only that the run immediately re-evaluates the element and sends if all current checks and authority coverage still pass?",
+   "options": [
+    "Approval triggers immediate re-evaluation and may result in no send",
+    "Approval is refused unless the request can still be sent exactly as approved",
+    "Approval always sends the previously previewed request without rebuilding it"
+   ],
+   "default_guess": "Approval triggers immediate re-evaluation; it does not guarantee a send."
+  },
+  {
+   "subject": "runs.resume_run send guarantee",
+   "kind": "contradictory effect",
+   "text": "Observable effect: \"Elements waiting on an unreachable service are sent again.\" Its enforcing rules say authority is checked again and an element whose grant was revoked may instead wait for approval; pre-send checks may also conclude operation_failed without a send.",
+   "question": "Does resume guarantee a network resend for every service_unreachable element, or merely reach each element again through current pre-send and authority checks?",
+   "options": [
+    "Reach every eligible element again; some may fail before sending or move to owner_approval",
+    "Refuse the whole resume unless every eligible element can be sent",
+    "Send using the authority that existed when the element first became unreachable"
+   ],
+   "default_guess": "Reach each eligible element again under current checks and authority; do not guarantee that a request is sent."
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"canonical_values.canonical_bytes input representation\",\"kind\":\"contradictory input\",\"text\":\"Inputs: \\\"One JSON value.\\\" Errors: \\\"refused for a value JCS cannot represent: a non-finite number, a duplicate key.\\\"\",\"question\":\"How can canonical_bytes detect duplicate object keys after its input has already become a JSON value, and which component must reject them?\",\"options\":[\"canonical_bytes receives raw JSON text or a duplicate-preserving parse tree\",\"surface rejects duplicate keys while parsing and canonical_bytes receives an already validated value\",\"duplicate keys are resolved by the JSON parser before canonicalization\"],\"default_guess\":\"Have surface parse with duplicate-key rejection, then pass the validated value to canonical_bytes.\"},{\"subject\":\"file content digests\",\"kind\":\"missing operation rule\",\"text\":\"\\\"A caller holding bytes computes the facts first\\\" and store.put_value_bytes takes \\\"Bytes and their expected digest and size,\\\" but no operation fixes how a file's content_digest or value_digest is computed.\",\"question\":\"What exact digest algorithm and byte representation must callers use for file fixtures and spooled files, and which module owns that computation?\",\"options\":[\"SHA-256 of the raw file bytes, lowercase hexadecimal\",\"SHA-256 of a canonical JSON wrapper or encoded representation\",\"A digest supplied by the caller and only compared by store\"],\"default_guess\":\"Use lowercase hexadecimal SHA-256 of the raw file bytes, computed by canonical_values or store.\"},{\"subject\":\"sandbox and service value-output handoff\",\"kind\":\"underspecified output\",\"text\":\"sandbox.execute_function returns \\\"the outputs by port\\\" and service_invoker.send_prepared_request returns \\\"the output values by port,\\\" while store.put_value_bytes requires bytes, digest and size and canonical_values.canonical_bytes lists only sandbox, service_invoker and surface as callers.\",\"question\":\"What exact artifacts must sandbox and service_invoker return so functions, runs and effects can persist value outputs without independently implementing canonical JSON encoding or hashing?\",\"options\":[\"Return the decoded value together with canonical bytes, digest and size\",\"Return canonical bytes only and let the caller decode when needed\",\"Allow functions, runs and effects to call canonical_bytes and compute the digest\"],\"default_guess\":\"Return each decoded value together with its canonical bytes, SHA-256 digest and byte size.\"},{\"subject\":\"service_invoker.send_prepared_request outcome\",\"kind\":\"contradictory responsibility\",\"text\":\"The operation says it will \\\"name its outcome by the A09 table\\\" and enforces \\\"response limits,\\\" but State 3 says \\\"service_invoker judges only the response ceiling and never sees the run's spool\\\" while a spool-ceiling refusal must change a non-read 2xx result to contract_violation with the attempt applied.\",\"question\":\"Does send_prepared_request return a final A09 outcome, or a transport/response result that effects finalizes after StoredValue and spool ceiling checks?\",\"options\":[\"Return a provisional response result; effects determines the final outcome after persistence checks\",\"Pass run spool state into service_invoker so it returns the final outcome\",\"Return succeeded and let effects overwrite that outcome when storage fails\"],\"default_guess\":\"Return a provisional response result and have effects determine and record the final A09 outcome after all value and spool checks.\"},{\"subject\":\"store.spool_file refusal effects\",\"kind\":\"contradiction\",\"text\":\"The convention says \\\"A refusal is decided before the operation's first store change, so it writes nothing,\\\" but store.spool_file says a ceiling refusal keeps \\\"nothing ... of any file that attempt spooled before.\\\"\",\"question\":\"May a refused spool_file call delete files published by earlier spool_file calls for the same attempt, or must attempt-level cleanup be a separate non-refusal operation?\",\"options\":[\"The refusal atomically removes every unrecorded file of that attempt\",\"The refusal removes only the current file and the caller explicitly cleans earlier files\",\"All files of an attempt must be supplied to one atomic spool operation\"],\"default_guess\":\"Treat attempt spooling as provisional and remove every unrecorded file of that attempt on a ceiling refusal.\"},{\"subject\":\"store.open_store initialization\",\"kind\":\"missing behavior\",\"text\":\"The operation says \\\"Take the exclusive lock, check the data directory and remove temporary files\\\" and returns \\\"An open store,\\\" but it does not say what happens when the data directory, SQLite database, content area, spool area or database schema does not yet exist.\",\"question\":\"What does open_store create on a first installation, and which missing or incompatible store structures are refusals versus internal errors?\",\"options\":[\"Require a pre-existing private data directory but create an empty database and managed subdirectories\",\"Create the data directory and the entire store when absent\",\"Require every directory, database and schema to be provisioned before start\"],\"default_guess\":\"Require the configured data directory to exist with private permissions, then atomically create the database schema and managed subdirectories when absent.\"},{\"subject\":\"runs.continue_after_approval send guarantee\",\"kind\":\"contradictory effect\",\"text\":\"Observable effect: \\\"An approved effect is sent in this request.\\\" The same operation says the element is reached again, while A10 says a pre-send check may fail, or a changed request_digest may leave the approval unused and request another approval without sending.\",\"question\":\"Does approving guarantee that an HTTP request leaves the kernel, or only that the run immediately re-evaluates the element and sends if all current checks and authority coverage still pass?\",\"options\":[\"Approval triggers immediate re-evaluation and may result in no send\",\"Approval is refused unless the request can still be sent exactly as approved\",\"Approval always sends the previously previewed request without rebuilding it\"],\"default_guess\":\"Approval triggers immediate re-evaluation; it does not guarantee a send.\"},{\"subject\":\"runs.resume_run send guarantee\",\"kind\":\"contradictory effect\",\"text\":\"Observable effect: \\\"Elements waiting on an unreachable service are sent again.\\\" Its enforcing rules say authority is checked again and an element whose grant was revoked may instead wait for approval; pre-send checks may also conclude operation_failed without a send.\",\"question\":\"Does resume guarantee a network resend for every service_unreachable element, or merely reach each element again through current pre-send and authority checks?\",\"options\":[\"Reach every eligible element again; some may fail before sending or move to owner_approval\",\"Refuse the whole resume unless every eligible element can be sent\",\"Send using the authority that existed when the element first became unreachable\"],\"default_guess\":\"Reach each eligible element again under current checks and authority; do not guarantee that a request is sent.\"}]}"
+}

@@ -1,0 +1,258 @@
+{
+ "open_points": [
+  {
+   "subject": "Implementation submission and syntax-invalid code",
+   "kind": "contradiction",
+   "text": "State 0 says “invalid contract or code refused with the reason”, while A03 says “one with a syntax error” is `crashed`, and A04 says submitting an implementation runs admission and records its executions and verdict.",
+   "question": "Is syntactically invalid Python refused before an Implementation exists, or is it stored as an Implementation and admitted with `crashed` trial executions?",
+   "options": [
+    "Refuse it before storing an Implementation",
+    "Store it and let admission produce `crashed` evidence",
+    "Store it but refuse the authoring request without admission"
+   ],
+   "default_guess": "Store it and let admission produce `crashed` evidence, following A03 and A04."
+  },
+  {
+   "subject": "Sandbox filesystem access",
+   "kind": "contradiction",
+   "text": "K-02 permits “no filesystem beyond its input”, but A03 gives code “one private exchange directory” and allows opening paths inside that directory and the read-only runtime.",
+   "question": "What filesystem reads and writes may user code perform inside the exchange directory and runtime, and do arbitrary scratch files violate K-02?",
+   "options": [
+    "Only runner-created input files may be read and no files may be created",
+    "Arbitrary reads and writes inside the exchange directory are allowed",
+    "The exchange directory is runner-only and user code receives inputs solely as Python values"
+   ],
+   "default_guess": "Allow arbitrary temporary reads and writes only inside the fresh exchange directory, while treating the runtime as readable."
+  },
+  {
+   "subject": "Sandbox stdout and stderr",
+   "kind": "unbounded behavior",
+   "text": "A03 says “Nothing the code prints or raises is interpreted by the kernel” and “never stdout”, but does not say where stdout and stderr go or what happens when code emits them without bound.",
+   "question": "Are stdout and stderr discarded, bounded, redirected, or counted toward a resource limit, and what outcome results when their limit is reached?",
+   "options": [
+    "Redirect both to a bounded discard sink and classify overflow as `resource_exhausted`",
+    "Redirect both directly to `/dev/null` with no byte accounting",
+    "Capture a bounded amount but never expose it"
+   ],
+   "default_guess": "Redirect stdout and stderr to `/dev/null` so they cannot block or consume unbounded parent memory."
+  },
+  {
+   "subject": "Sandbox resource-limit accounting",
+   "kind": "vague condition",
+   "text": "A03 says “a limit hit (memory, process count, scratch, `output_bytes`)” yields `resource_exhausted`, but does not define what counts toward each limit or whether a denied allocation, fork or write that user code catches counts as a hit.",
+   "question": "Does the Python runner count toward `process_count` and `memory_bytes`, and is a caught resource-denial still `resource_exhausted` or may the function return successfully?",
+   "options": [
+    "Count the runner and classify every attempted limit breach even if caught",
+    "Count only child processes and classify only externally observable termination or overflow",
+    "Count the runner but allow caught allocation, fork or scratch failures to return normally"
+   ],
+   "default_guess": "Count the runner in the limits and classify a breach as `resource_exhausted` even if user code catches the resulting exception."
+  },
+  {
+   "subject": "Trial-case input and expected-output sets",
+   "kind": "missing refusal conditions",
+   "text": "A04 requires that “input values fit the contract version's input ports” and expected outputs “fit the output ports”, but it does not say whether the supplied maps must contain exactly all ports or whether expected outputs may be partial when present.",
+   "question": "Must trial inputs contain every input and no extra names, and must present `expected_outputs` contain every output and no extra names?",
+   "options": [
+    "Both maps must exactly match their respective port sets",
+    "Inputs must be exact but expected outputs may name a subset",
+    "Missing entries are allowed and only supplied entries are checked"
+   ],
+   "default_guess": "Require exact input and output port sets whenever the corresponding map is present."
+  },
+  {
+   "subject": "Mapped node over an empty list",
+   "kind": "contradiction",
+   "text": "A07 says a function output has the highest class that can reach or was received by any input and “No function, edge or flow construct lowers a class”, while A13 says an empty mapped output “takes the class of the list the node mapped over”.",
+   "question": "If an empty mapped list is `open` but another broadcast input is `personal_data`, what class do the mapped node's empty outputs receive?",
+   "options": [
+    "The highest class among all node inputs",
+    "Only the mapped list's class",
+    "The proof-time highest reachable class"
+   ],
+   "default_guess": "Use the highest class among all inputs supplied to the mapped node."
+  },
+  {
+   "subject": "Oversized aggregate output of a mapped node",
+   "kind": "missing outcome",
+   "text": "A13 writes a mapped value output as one aggregate StoredValue when the last element record is written, while A15 says an oversized produced value concludes “the producing element” `contract_violation`; no rule identifies an element when only the aggregate list exceeds `stored_value_bytes_max`.",
+   "question": "What trace record and status represent a mapped node whose individual elements succeed but whose collected JSON array exceeds `stored_value_bytes_max`?",
+   "options": [
+    "Change the last element's conclusion to `contract_violation`",
+    "Write a separate node-level aggregate failure record",
+    "Let every element remain succeeded but treat the mapped node as failed without another NodeExecution"
+   ],
+   "default_guess": "Make the last element's NodeExecution `contract_violation` and produce no aggregate output."
+  },
+  {
+   "subject": "Class of an empty `many` file reference",
+   "kind": "unverifiable invariant",
+   "text": "A13 says “the reference naming the list carries the list's class, so an empty one keeps it”, but M23 only names files by SpooledFile facts and an empty list contains no SpooledFile from which to obtain a class.",
+   "question": "Where is the disclosure class of an empty `many` file list represented durably for tracing, recovery and downstream execution?",
+   "options": [
+    "Store a class on every file-list reference",
+    "Derive it from the producing execution and graph whenever needed",
+    "Represent every file list with a separate durable value record"
+   ],
+   "default_guess": "Store the list's disclosure class explicitly on the port reference in NodeExecution."
+  },
+  {
+   "subject": "Token configuration re-read recovery",
+   "kind": "state ambiguity",
+   "text": "A16 says the kernel compares the file hash with “that of the last read”, discards the old token list when a re-read fails, and refuses requests “until a re-read passes”. It does not say which hash or retry state is retained after a failed read or parse.",
+   "question": "After a failed re-read, when and how is another re-read forced, especially if the restored file has the same bytes as the last valid file?",
+   "options": [
+    "Retry reading on every request until one succeeds",
+    "Retain the failed file's hash and retry only when its bytes change",
+    "Retain the last valid hash but also retain an explicit invalid state that forces a retry"
+   ],
+   "default_guess": "Keep an invalid-reload flag and retry on every request until a valid token list is loaded."
+  },
+  {
+   "subject": "Release changes to non-contract ceilings",
+   "kind": "lifecycle gap",
+   "text": "A20 says “A new release may change ceilings. They bind contract versions issued after it”, but only the first four ceilings are stored in contract versions; limits such as stored values, spool size, transport response size and request size have no pinned release value.",
+   "question": "After an upgrade changes a non-contract ceiling, which ceiling applies to existing flows, trial cases, runs and stored artifacts?",
+   "options": [
+    "The currently running release's ceiling applies immediately",
+    "The release under which each owning record was created remains pinned",
+    "Existing records are grandfathered but every new operation uses the current ceiling"
+   ],
+   "default_guess": "Use the current release for new operations while leaving already stored artifacts valid."
+  },
+  {
+   "subject": "Service base URL validation and joining",
+   "kind": "missing refusal conditions",
+   "text": "A08 accepts an “absolute `http` or `https` URL with a host”, and A09 constructs the target by removing a trailing slash and appending the declared path. It does not address user information, an existing query or fragment, multiple trailing slashes, or URL parser normalization.",
+   "question": "Which components are permitted in `api_base_url`, and exactly which malformed or ambiguous base URLs are refused?",
+   "options": [
+    "Allow only scheme, host and optional port with an optional path prefix, but no userinfo, query or fragment",
+    "Allow every absolute URL with a host and use literal string concatenation",
+    "Allow a path prefix and query but refuse userinfo and fragments"
+   ],
+   "default_guess": "Allow scheme, host, optional port and path prefix only; refuse userinfo, query and fragment."
+  },
+  {
+   "subject": "JSON request body bytes",
+   "kind": "serialization gap",
+   "text": "A09 says POST, PUT and PATCH inputs “form one JSON object body keyed by port name”, while A10 hashes “the JSON body's bytes”; no rule states how that object is serialized.",
+   "question": "Are JSON request bodies encoded using JCS, ordinary compact JSON, or another fixed serialization?",
+   "options": [
+    "RFC 8785 canonical JSON",
+    "Compact UTF-8 JSON with ports in code-point order",
+    "An HTTP-library serializer whose output is included in the approval digest"
+   ],
+   "default_guess": "Use RFC 8785 canonical JSON bytes."
+  },
+  {
+   "subject": "Multipart request serialization",
+   "kind": "serialization gap",
+   "text": "A09 specifies multipart parts and their two headers, but not boundary selection, CRLF placement, header quoting or escaping, final-boundary form, or the exact bytes of the multipart body.",
+   "question": "What exact multipart wire encoding must every implementation produce?",
+   "options": [
+    "Define a deterministic boundary and complete byte grammar",
+    "Permit an HTTP library to choose the boundary and serialization",
+    "Use a random boundary but prescribe every other byte"
+   ],
+   "default_guess": "Define a deterministic multipart encoder and boundary format as part of the release."
+  },
+  {
+   "subject": "Approval coverage of multipart transport details",
+   "kind": "contradiction",
+   "text": "State 0 says approval covers “the fully built request” and “Any difference at send ... asks again”, but A10 excludes the multipart boundary and the `content-length` value from the request description even though both can differ on the wire.",
+   "question": "Do differences in multipart boundary or `Content-Length` void an approval, or are they explicitly outside the owner's approved request?",
+   "options": [
+    "They void approval like every other wire difference",
+    "They are transport-only details deliberately excluded from approval",
+    "They are excluded only when deterministically derived from an otherwise identical multipart body"
+   ],
+   "default_guess": "Treat boundary and derived `Content-Length` as transport-only details that do not void approval."
+  },
+  {
+   "subject": "Port names and media types used in multipart headers",
+   "kind": "missing validation",
+   "text": "A02 requires unique port names and a media type on file ports, while A09 inserts the port name into quoted `Content-Disposition` parameters and the media type into `Content-Type`; no allowed syntax or escaping rule is given.",
+   "question": "Which port names and media types are safe to place in multipart headers, and are invalid values refused when the contract or binding is authored or escaped at send time?",
+   "options": [
+    "Restrict port names and media types to closed HTTP-safe grammars",
+    "Allow arbitrary bounded text and define escaping",
+    "Accept them at authoring but fail the operation before send if they cannot be encoded"
+   ],
+   "default_guess": "Validate port names and media types against strict HTTP-safe grammars when authored or proposed."
+  },
+  {
+   "subject": "Non-ASCII HTTP header values",
+   "kind": "wire encoding gap",
+   "text": "A08 and A17 reject empty, whitespace-padded and control-containing header values but otherwise require required headers and credentials to be sent “verbatim” after decoding credentials as UTF-8.",
+   "question": "How are non-ASCII Unicode header values encoded on the HTTP wire, and what outcome occurs if the HTTP client cannot represent one?",
+   "options": [
+    "Require visible ASCII and refuse all other values",
+    "Encode UTF-8 bytes in field values",
+    "Permit the HTTP library's header encoding and classify rejection as a pre-send failure"
+   ],
+   "default_guess": "Require visible ASCII header values and classify violations as `required_header_invalid` or `credential_unresolved`."
+  },
+  {
+   "subject": "HTTP final status outside the outcome table",
+   "kind": "unclassified outcome",
+   "text": "A09's outcome table classifies only 2xx, 3xx, 4xx, 5xx and the case where only 1xx is received.",
+   "question": "How is a syntactically received final status outside those classes, or an unrecognized status class, classified for read and non-read operations?",
+   "options": [
+    "Treat it as a malformed final response",
+    "Treat it like 5xx",
+    "Treat it as `operation_failed` for reads and `outcome_unknown` for effects"
+   ],
+   "default_guess": "Treat it as a malformed final response: `service_unreachable` for reads and `outcome_unknown` for non-read operations."
+  },
+  {
+   "subject": "Binary error bodies and `failure_detail`",
+   "kind": "encoding gap",
+   "text": "A09 permits keeping bytes from an error response as `failure_detail`, while A20 says `failure_detail` is cut “at a UTF-8 character boundary”; an HTTP error body need not be UTF-8.",
+   "question": "How is a non-UTF-8 error body converted into bounded `failure_detail`?",
+   "options": [
+    "Decode as UTF-8 with replacement",
+    "Keep a bounded base64 representation",
+    "Omit detail unless the body is valid UTF-8"
+   ],
+   "default_guess": "Decode as UTF-8 with replacement and then truncate at a character boundary."
+  },
+  {
+   "subject": "EffectAttempt resolution timestamp",
+   "kind": "lifecycle ambiguity",
+   "text": "M26 has `recorded_at` and `concluded_at`, and A11 changes an attempt from `unknown` to `applied` or `not_applied` but says only that `resolved_by` is added; it does not say whether `concluded_at` changes or whether resolution time is recorded.",
+   "question": "What time does `concluded_at` mean after owner resolution, and is the resolution time retained separately?",
+   "options": [
+    "Keep the original unknown-outcome conclusion time and add `resolved_at`",
+    "Replace `concluded_at` with the resolution time",
+    "Keep the original time and record no resolution timestamp"
+   ],
+   "default_guess": "Keep the original conclusion time and add a separate `resolved_at` timestamp."
+  },
+  {
+   "subject": "Function outputs not representable as canonical JSON",
+   "kind": "missing outcome",
+   "text": "A01 says a value JCS cannot represent “is refused where it enters”, while A03 allows Python floats and integers and classifies returned values by schema and port conformance without naming the outcome for values such as NaN, infinity or otherwise unencodable numbers.",
+   "question": "What execution outcome results when `run` returns a schema-accepted Python value that cannot be represented as the kernel's canonical JSON value?",
+   "options": [
+    "`contract_violation`",
+    "`crashed`",
+    "`resource_exhausted` if serialization fails while counting output"
+   ],
+   "default_guess": "Classify it as `contract_violation`."
+  },
+  {
+   "subject": "Canonicalization failure in a manifest capability entry",
+   "kind": "missing manifest outcome",
+   "text": "A08 requires `record_digest` to be the JCS digest of the capability entry and calls valid JSON sufficient at its first record check, but does not state what happens when valid JSON contains a value the JCS implementation cannot canonicalize.",
+   "question": "Is an uncanonicalizable capability entry a manifest mismatch at proposal and `binding_stale` at send, and which check has precedence?",
+   "options": [
+    "Treat it as invalid manifest JSON",
+    "Add a distinct canonicalization check after JSON parsing",
+    "Treat the operation as absent"
+   ],
+   "default_guess": "Treat canonicalization failure as a manifest-record fault: manifest mismatch on proposal and `binding_stale` before send."
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"Implementation submission and syntax-invalid code\",\"kind\":\"contradiction\",\"text\":\"State 0 says “invalid contract or code refused with the reason”, while A03 says “one with a syntax error” is `crashed`, and A04 says submitting an implementation runs admission and records its executions and verdict.\",\"question\":\"Is syntactically invalid Python refused before an Implementation exists, or is it stored as an Implementation and admitted with `crashed` trial executions?\",\"options\":[\"Refuse it before storing an Implementation\",\"Store it and let admission produce `crashed` evidence\",\"Store it but refuse the authoring request without admission\"],\"default_guess\":\"Store it and let admission produce `crashed` evidence, following A03 and A04.\"},{\"subject\":\"Sandbox filesystem access\",\"kind\":\"contradiction\",\"text\":\"K-02 permits “no filesystem beyond its input”, but A03 gives code “one private exchange directory” and allows opening paths inside that directory and the read-only runtime.\",\"question\":\"What filesystem reads and writes may user code perform inside the exchange directory and runtime, and do arbitrary scratch files violate K-02?\",\"options\":[\"Only runner-created input files may be read and no files may be created\",\"Arbitrary reads and writes inside the exchange directory are allowed\",\"The exchange directory is runner-only and user code receives inputs solely as Python values\"],\"default_guess\":\"Allow arbitrary temporary reads and writes only inside the fresh exchange directory, while treating the runtime as readable.\"},{\"subject\":\"Sandbox stdout and stderr\",\"kind\":\"unbounded behavior\",\"text\":\"A03 says “Nothing the code prints or raises is interpreted by the kernel” and “never stdout”, but does not say where stdout and stderr go or what happens when code emits them without bound.\",\"question\":\"Are stdout and stderr discarded, bounded, redirected, or counted toward a resource limit, and what outcome results when their limit is reached?\",\"options\":[\"Redirect both to a bounded discard sink and classify overflow as `resource_exhausted`\",\"Redirect both directly to `/dev/null` with no byte accounting\",\"Capture a bounded amount but never expose it\"],\"default_guess\":\"Redirect stdout and stderr to `/dev/null` so they cannot block or consume unbounded parent memory.\"},{\"subject\":\"Sandbox resource-limit accounting\",\"kind\":\"vague condition\",\"text\":\"A03 says “a limit hit (memory, process count, scratch, `output_bytes`)” yields `resource_exhausted`, but does not define what counts toward each limit or whether a denied allocation, fork or write that user code catches counts as a hit.\",\"question\":\"Does the Python runner count toward `process_count` and `memory_bytes`, and is a caught resource-denial still `resource_exhausted` or may the function return successfully?\",\"options\":[\"Count the runner and classify every attempted limit breach even if caught\",\"Count only child processes and classify only externally observable termination or overflow\",\"Count the runner but allow caught allocation, fork or scratch failures to return normally\"],\"default_guess\":\"Count the runner in the limits and classify a breach as `resource_exhausted` even if user code catches the resulting exception.\"},{\"subject\":\"Trial-case input and expected-output sets\",\"kind\":\"missing refusal conditions\",\"text\":\"A04 requires that “input values fit the contract version's input ports” and expected outputs “fit the output ports”, but it does not say whether the supplied maps must contain exactly all ports or whether expected outputs may be partial when present.\",\"question\":\"Must trial inputs contain every input and no extra names, and must present `expected_outputs` contain every output and no extra names?\",\"options\":[\"Both maps must exactly match their respective port sets\",\"Inputs must be exact but expected outputs may name a subset\",\"Missing entries are allowed and only supplied entries are checked\"],\"default_guess\":\"Require exact input and output port sets whenever the corresponding map is present.\"},{\"subject\":\"Mapped node over an empty list\",\"kind\":\"contradiction\",\"text\":\"A07 says a function output has the highest class that can reach or was received by any input and “No function, edge or flow construct lowers a class”, while A13 says an empty mapped output “takes the class of the list the node mapped over”.\",\"question\":\"If an empty mapped list is `open` but another broadcast input is `personal_data`, what class do the mapped node's empty outputs receive?\",\"options\":[\"The highest class among all node inputs\",\"Only the mapped list's class\",\"The proof-time highest reachable class\"],\"default_guess\":\"Use the highest class among all inputs supplied to the mapped node.\"},{\"subject\":\"Oversized aggregate output of a mapped node\",\"kind\":\"missing outcome\",\"text\":\"A13 writes a mapped value output as one aggregate StoredValue when the last element record is written, while A15 says an oversized produced value concludes “the producing element” `contract_violation`; no rule identifies an element when only the aggregate list exceeds `stored_value_bytes_max`.\",\"question\":\"What trace record and status represent a mapped node whose individual elements succeed but whose collected JSON array exceeds `stored_value_bytes_max`?\",\"options\":[\"Change the last element's conclusion to `contract_violation`\",\"Write a separate node-level aggregate failure record\",\"Let every element remain succeeded but treat the mapped node as failed without another NodeExecution\"],\"default_guess\":\"Make the last element's NodeExecution `contract_violation` and produce no aggregate output.\"},{\"subject\":\"Class of an empty `many` file reference\",\"kind\":\"unverifiable invariant\",\"text\":\"A13 says “the reference naming the list carries the list's class, so an empty one keeps it”, but M23 only names files by SpooledFile facts and an empty list contains no SpooledFile from which to obtain a class.\",\"question\":\"Where is the disclosure class of an empty `many` file list represented durably for tracing, recovery and downstream execution?\",\"options\":[\"Store a class on every file-list reference\",\"Derive it from the producing execution and graph whenever needed\",\"Represent every file list with a separate durable value record\"],\"default_guess\":\"Store the list's disclosure class explicitly on the port reference in NodeExecution.\"},{\"subject\":\"Token configuration re-read recovery\",\"kind\":\"state ambiguity\",\"text\":\"A16 says the kernel compares the file hash with “that of the last read”, discards the old token list when a re-read fails, and refuses requests “until a re-read passes”. It does not say which hash or retry state is retained after a failed read or parse.\",\"question\":\"After a failed re-read, when and how is another re-read forced, especially if the restored file has the same bytes as the last valid file?\",\"options\":[\"Retry reading on every request until one succeeds\",\"Retain the failed file's hash and retry only when its bytes change\",\"Retain the last valid hash but also retain an explicit invalid state that forces a retry\"],\"default_guess\":\"Keep an invalid-reload flag and retry on every request until a valid token list is loaded.\"},{\"subject\":\"Release changes to non-contract ceilings\",\"kind\":\"lifecycle gap\",\"text\":\"A20 says “A new release may change ceilings. They bind contract versions issued after it”, but only the first four ceilings are stored in contract versions; limits such as stored values, spool size, transport response size and request size have no pinned release value.\",\"question\":\"After an upgrade changes a non-contract ceiling, which ceiling applies to existing flows, trial cases, runs and stored artifacts?\",\"options\":[\"The currently running release's ceiling applies immediately\",\"The release under which each owning record was created remains pinned\",\"Existing records are grandfathered but every new operation uses the current ceiling\"],\"default_guess\":\"Use the current release for new operations while leaving already stored artifacts valid.\"},{\"subject\":\"Service base URL validation and joining\",\"kind\":\"missing refusal conditions\",\"text\":\"A08 accepts an “absolute `http` or `https` URL with a host”, and A09 constructs the target by removing a trailing slash and appending the declared path. It does not address user information, an existing query or fragment, multiple trailing slashes, or URL parser normalization.\",\"question\":\"Which components are permitted in `api_base_url`, and exactly which malformed or ambiguous base URLs are refused?\",\"options\":[\"Allow only scheme, host and optional port with an optional path prefix, but no userinfo, query or fragment\",\"Allow every absolute URL with a host and use literal string concatenation\",\"Allow a path prefix and query but refuse userinfo and fragments\"],\"default_guess\":\"Allow scheme, host, optional port and path prefix only; refuse userinfo, query and fragment.\"},{\"subject\":\"JSON request body bytes\",\"kind\":\"serialization gap\",\"text\":\"A09 says POST, PUT and PATCH inputs “form one JSON object body keyed by port name”, while A10 hashes “the JSON body's bytes”; no rule states how that object is serialized.\",\"question\":\"Are JSON request bodies encoded using JCS, ordinary compact JSON, or another fixed serialization?\",\"options\":[\"RFC 8785 canonical JSON\",\"Compact UTF-8 JSON with ports in code-point order\",\"An HTTP-library serializer whose output is included in the approval digest\"],\"default_guess\":\"Use RFC 8785 canonical JSON bytes.\"},{\"subject\":\"Multipart request serialization\",\"kind\":\"serialization gap\",\"text\":\"A09 specifies multipart parts and their two headers, but not boundary selection, CRLF placement, header quoting or escaping, final-boundary form, or the exact bytes of the multipart body.\",\"question\":\"What exact multipart wire encoding must every implementation produce?\",\"options\":[\"Define a deterministic boundary and complete byte grammar\",\"Permit an HTTP library to choose the boundary and serialization\",\"Use a random boundary but prescribe every other byte\"],\"default_guess\":\"Define a deterministic multipart encoder and boundary format as part of the release.\"},{\"subject\":\"Approval coverage of multipart transport details\",\"kind\":\"contradiction\",\"text\":\"State 0 says approval covers “the fully built request” and “Any difference at send ... asks again”, but A10 excludes the multipart boundary and the `content-length` value from the request description even though both can differ on the wire.\",\"question\":\"Do differences in multipart boundary or `Content-Length` void an approval, or are they explicitly outside the owner's approved request?\",\"options\":[\"They void approval like every other wire difference\",\"They are transport-only details deliberately excluded from approval\",\"They are excluded only when deterministically derived from an otherwise identical multipart body\"],\"default_guess\":\"Treat boundary and derived `Content-Length` as transport-only details that do not void approval.\"},{\"subject\":\"Port names and media types used in multipart headers\",\"kind\":\"missing validation\",\"text\":\"A02 requires unique port names and a media type on file ports, while A09 inserts the port name into quoted `Content-Disposition` parameters and the media type into `Content-Type`; no allowed syntax or escaping rule is given.\",\"question\":\"Which port names and media types are safe to place in multipart headers, and are invalid values refused when the contract or binding is authored or escaped at send time?\",\"options\":[\"Restrict port names and media types to closed HTTP-safe grammars\",\"Allow arbitrary bounded text and define escaping\",\"Accept them at authoring but fail the operation before send if they cannot be encoded\"],\"default_guess\":\"Validate port names and media types against strict HTTP-safe grammars when authored or proposed.\"},{\"subject\":\"Non-ASCII HTTP header values\",\"kind\":\"wire encoding gap\",\"text\":\"A08 and A17 reject empty, whitespace-padded and control-containing header values but otherwise require required headers and credentials to be sent “verbatim” after decoding credentials as UTF-8.\",\"question\":\"How are non-ASCII Unicode header values encoded on the HTTP wire, and what outcome occurs if the HTTP client cannot represent one?\",\"options\":[\"Require visible ASCII and refuse all other values\",\"Encode UTF-8 bytes in field values\",\"Permit the HTTP library's header encoding and classify rejection as a pre-send failure\"],\"default_guess\":\"Require visible ASCII header values and classify violations as `required_header_invalid` or `credential_unresolved`.\"},{\"subject\":\"HTTP final status outside the outcome table\",\"kind\":\"unclassified outcome\",\"text\":\"A09's outcome table classifies only 2xx, 3xx, 4xx, 5xx and the case where only 1xx is received.\",\"question\":\"How is a syntactically received final status outside those classes, or an unrecognized status class, classified for read and non-read operations?\",\"options\":[\"Treat it as a malformed final response\",\"Treat it like 5xx\",\"Treat it as `operation_failed` for reads and `outcome_unknown` for effects\"],\"default_guess\":\"Treat it as a malformed final response: `service_unreachable` for reads and `outcome_unknown` for non-read operations.\"},{\"subject\":\"Binary error bodies and `failure_detail`\",\"kind\":\"encoding gap\",\"text\":\"A09 permits keeping bytes from an error response as `failure_detail`, while A20 says `failure_detail` is cut “at a UTF-8 character boundary”; an HTTP error body need not be UTF-8.\",\"question\":\"How is a non-UTF-8 error body converted into bounded `failure_detail`?\",\"options\":[\"Decode as UTF-8 with replacement\",\"Keep a bounded base64 representation\",\"Omit detail unless the body is valid UTF-8\"],\"default_guess\":\"Decode as UTF-8 with replacement and then truncate at a character boundary.\"},{\"subject\":\"EffectAttempt resolution timestamp\",\"kind\":\"lifecycle ambiguity\",\"text\":\"M26 has `recorded_at` and `concluded_at`, and A11 changes an attempt from `unknown` to `applied` or `not_applied` but says only that `resolved_by` is added; it does not say whether `concluded_at` changes or whether resolution time is recorded.\",\"question\":\"What time does `concluded_at` mean after owner resolution, and is the resolution time retained separately?\",\"options\":[\"Keep the original unknown-outcome conclusion time and add `resolved_at`\",\"Replace `concluded_at` with the resolution time\",\"Keep the original time and record no resolution timestamp\"],\"default_guess\":\"Keep the original conclusion time and add a separate `resolved_at` timestamp.\"},{\"subject\":\"Function outputs not representable as canonical JSON\",\"kind\":\"missing outcome\",\"text\":\"A01 says a value JCS cannot represent “is refused where it enters”, while A03 allows Python floats and integers and classifies returned values by schema and port conformance without naming the outcome for values such as NaN, infinity or otherwise unencodable numbers.\",\"question\":\"What execution outcome results when `run` returns a schema-accepted Python value that cannot be represented as the kernel's canonical JSON value?\",\"options\":[\"`contract_violation`\",\"`crashed`\",\"`resource_exhausted` if serialization fails while counting output\"],\"default_guess\":\"Classify it as `contract_violation`.\"},{\"subject\":\"Canonicalization failure in a manifest capability entry\",\"kind\":\"missing manifest outcome\",\"text\":\"A08 requires `record_digest` to be the JCS digest of the capability entry and calls valid JSON sufficient at its first record check, but does not state what happens when valid JSON contains a value the JCS implementation cannot canonicalize.\",\"question\":\"Is an uncanonicalizable capability entry a manifest mismatch at proposal and `binding_stale` at send, and which check has precedence?\",\"options\":[\"Treat it as invalid manifest JSON\",\"Add a distinct canonicalization check after JSON parsing\",\"Treat the operation as absent\"],\"default_guess\":\"Treat canonicalization failure as a manifest-record fault: manifest mismatch on proposal and `binding_stale` before send.\"}]}"
+}

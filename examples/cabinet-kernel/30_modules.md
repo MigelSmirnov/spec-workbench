@@ -231,7 +231,9 @@ record checked by `design_lint --state 2`, recorded as such in `30_trace.json`.
   checks links and removes temporary files; `sandbox.probe_sandbox`;
   `effects.recover_in_flight_attempts`; `runs.recover_running_runs`, which first
   names to `store.remove_run_spool` every ended run that no longer keeps its
-  spool (A14 rule 4) and then advances the runs left `running`; and only then
+  spool (A14 rule 4), then derives again every run not ended — `running`,
+  `awaiting_approval` or `pending` — from its records, and then advances the
+  runs left `running`; and only then
   the first request (A03 rule 8, A14 rule 5, A18 rule 4).
 - **Unconfirmed cleanup.** A03 rule 7 records the execution `crashed` with
   `cleanup_failed` and then stops the kernel; the record comes first, so that
@@ -764,7 +766,8 @@ recover_in_flight_attempts
 A12–A15: starting a run and pinning, advancing one node at a time inside the
 request that moves it, guards, maps and failures, waiting points, resume,
 cancel, the run's spool and its release, which ended runs no longer keep a
-spool at start, start-up recovery of runs left `running`, the conditions of
+spool at start, start-up recovery of every run not ended (derived again from
+its records, then advanced when left `running`), the conditions of
 capturing a failed execution (A15 rule 5), and the trace: every
 NodeExecution other than the one `effects` writes to conclude an operation
 element by a send, a pre-send failure or the owner's refusal, the

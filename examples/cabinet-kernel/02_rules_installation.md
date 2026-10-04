@@ -200,7 +200,8 @@ concurrent connections.
    never overwritten — a spooled file no record names, left by a change that
    failed, is replaced at its position. Equal bytes are stored once. On start, temporary files and
    the spool directories of runs that ended and do not keep their spool (A14) are
-   removed; nothing else is.
+   removed; nothing else is. A spool directory that cannot be removed does not
+   stop the start: it stays, never served, until a later start removes it.
 5. Backup and restore are an operational procedure outside the kernel (K-10); the
    kernel detects no restore and keeps no continuity counter.
 

@@ -1,0 +1,282 @@
+{
+ "open_points": [
+  {
+   "subject": "flow composition and proof",
+   "kind": "contradiction",
+   "text": "A05 says a function node that does not name an existing contract version or an operation node that does not name an accepted binding is retained as a flow version and fails proof phase 1; A16 says any request naming a nonexistent record is refused before operation checks, never as a proof failure.",
+   "question": "When composition names a missing contract version or binding, is no flow version kept, or is the version kept with a failed proof?",
+   "options": [
+    "Refuse composition and keep nothing",
+    "Keep the version and return a phase-1 proof failure",
+    "Treat missing records differently from existing-but-unaccepted bindings"
+   ],
+   "default_guess": "Keep a version only for existing references; refuse a missing reference before composition, but keep a version that names an existing proposed binding and fail its proof."
+  },
+  {
+   "subject": "flow-version identity and proof order",
+   "kind": "non-total order",
+   "text": "A01 sorts edges only by (`to_node`, `to_port`, `from_node`, `from_port`) and constants only by (`to_node`, `to_port`), although distinct guarded edges or distinct duplicate constants can have the same listed key; A05 uses those same orders to choose the first failure.",
+   "question": "What deterministic tie-breaker orders distinct edges or constants whose listed ordering keys are equal?",
+   "options": [
+    "Compare their complete canonical JSON after the listed key",
+    "Include guard facts or constant value facts in the ordering key",
+    "Refuse all equal-key edges and constants before identity or proof is computed"
+   ],
+   "default_guess": "Use complete canonical JSON as the final tie-breaker, while exact duplicate objects remain indistinguishable."
+  },
+  {
+   "subject": "guard evaluation",
+   "kind": "undefined equality",
+   "text": "A13 says a guarded edge delivers when its guard port's value \"equals\" its guard value, but no equality rule is given for JSON numbers, arrays or objects.",
+   "question": "What definition of equality is used for a guard value?",
+   "options": [
+    "Equality of canonical JSON bytes",
+    "Structural JSON equality with numeric-type rules",
+    "Host-language equality"
+   ],
+   "default_guess": "Compare canonical JSON bytes."
+  },
+  {
+   "subject": "operation-output disclosure",
+   "kind": "contradiction",
+   "text": "A07 says \"a disclosure class only rises\" and `lowers_class(any construct) -> never`, but it also assigns every operation output the class declared by its binding without requiring that class to be at least the classes of the operation's inputs.",
+   "question": "May a service operation declassify personal or confidential input by declaring a lower-class output?",
+   "options": [
+    "Yes, a binding's output declaration is an explicit service-boundary declassification",
+    "No, each operation output must be at least the highest input class",
+    "Only a separately authorized declassification operation may do so"
+   ],
+   "default_guess": "Allow the binding's declared output class, following the specific operation-output rule."
+  },
+  {
+   "subject": "sandbox filesystem boundary",
+   "kind": "contradiction",
+   "text": "K-02 says a function has \"no filesystem beyond its input\", while A03 gives it a writable private exchange directory and permits opening paths inside that directory and the read-only runtime.",
+   "question": "What filesystem access may agent code actually perform?",
+   "options": [
+    "Only read its supplied file inputs and write declared file outputs",
+    "Arbitrary reads and writes inside the exchange directory plus reads of the runtime",
+    "No direct filesystem API at all; only the `bytes` values passed to and returned from `run`"
+   ],
+   "default_guess": "Permit arbitrary temporary use of the isolated exchange directory and read-only runtime, interpreting K-02 as forbidding host filesystem access."
+  },
+  {
+   "subject": "function purity and repeatability",
+   "kind": "unverifiable invariant",
+   "text": "Functions are described as pure and a required test expects the same output digest twice, but unrestricted CPython and its standard library expose nondeterministic observations not covered by the listed traps, such as process identity, object addresses and resource or platform observations.",
+   "question": "Is repeatable output for equal input a required enforceable property, and if so, which remaining nondeterministic facilities are forbidden or normalized?",
+   "options": [
+    "Guarantee determinism by closing or virtualizing every observable source",
+    "Treat purity as effect isolation only and allow nondeterministic outputs",
+    "Run repeated trials and refuse implementations whose outputs differ"
+   ],
+   "default_guess": "Treat the sandbox rules as effect isolation and best-effort repeatability, not a complete determinism guarantee."
+  },
+  {
+   "subject": "sandbox clock traps",
+   "kind": "contradiction",
+   "text": "A03 says the runner replaces \"every clock\" entry point and that functions have no clock, but its closed release-v1 list omits clock-like APIs such as `time.thread_time`, `time.clock_gettime`, `os.times` and resource-usage timing.",
+   "question": "Does the closed written list define the allowed boundary, or must all other clock and timing APIs also be trapped?",
+   "options": [
+    "Only the written list is trapped and omitted APIs remain usable",
+    "All clock-like APIs are trapped despite not being listed",
+    "The release must add an exhaustive named list before implementation"
+   ],
+   "default_guess": "Trap all clock-like APIs and extend the release list explicitly."
+  },
+  {
+   "subject": "sandbox audit hook",
+   "kind": "vague boundary",
+   "text": "A03 requires an audit hook that raises \"on socket, subprocess, `ctypes` and on opening any path\" but does not enumerate the CPython audit event names or arguments that constitute those categories.",
+   "question": "Which exact audit events and argument conditions must produce `sandbox_violation`?",
+   "options": [
+    "A closed release-specific event list",
+    "Every event whose name has selected prefixes",
+    "A semantic wrapper around all relevant standard-library APIs"
+   ],
+   "default_guess": "Define a closed CPython-3.12 audit-event list with argument predicates."
+  },
+  {
+   "subject": "sandbox resource outcomes",
+   "kind": "unverifiable classification",
+   "text": "A03 requires a detected memory, process, scratch or output limit hit to be `resource_exhausted`, ahead of `crashed`, although `setrlimit` and ordinary Python failures can surface as an exception or abnormal exit without identifying which limit caused them.",
+   "question": "How is a limit hit distinguished reliably from an ordinary exception or crash?",
+   "options": [
+    "Only explicit supervisor or runner limit signals count; ambiguous exits are `crashed`",
+    "Any compatible exception or signal is inferred to be `resource_exhausted`",
+    "Instrument every resource so the parent receives an authoritative limit event"
+   ],
+   "default_guess": "Use authoritative supervisor or runner events; classify an ambiguous termination as `crashed`."
+  },
+  {
+   "subject": "sandbox scratch accounting",
+   "kind": "missing rule",
+   "text": "The exchange directory is bounded by `sandbox_scratch_bytes_max`, but the texts do not say whether staged code, serialized values and input files consume that bound or what happens when inputs alone exceed it before `run` starts.",
+   "question": "Which bytes count toward the scratch ceiling, and how is an over-limit input-staging failure recorded?",
+   "options": [
+    "Everything in the exchange directory counts and staging failure is `resource_exhausted`",
+    "Only files created by agent code count",
+    "Inputs are stored outside the bounded exchange area"
+   ],
+   "default_guess": "Count every byte in the exchange directory and record staging overflow as `resource_exhausted`."
+  },
+  {
+   "subject": "sandbox cleanup failure",
+   "kind": "precedence conflict",
+   "text": "A03 rule 5 says the first of timeout, resource exhaustion, sandbox violation, crash and contract violation decides the outcome, while rule 7 says any unconfirmed cleanup records `crashed` with `cleanup_failed`.",
+   "question": "Does `cleanup_failed` override an already determined timeout, resource exhaustion or sandbox violation?",
+   "options": [
+    "Cleanup failure always overrides with `crashed`",
+    "The earlier outcome remains and cleanup failure is separate diagnostic data",
+    "Cleanup failure overrides only an otherwise successful execution"
+   ],
+   "default_guess": "Cleanup failure overrides with `crashed`, following the specific rule 7."
+  },
+  {
+   "subject": "sandbox stdout and stderr",
+   "kind": "unbounded behavior",
+   "text": "A03 says printed output is not interpreted and stdout is never kept, but it does not say where stdout and stderr are directed, whether their bytes are bounded, or what outcome an unlimited writer receives.",
+   "question": "How are stdout and stderr drained or discarded without allowing unbounded host resource use?",
+   "options": [
+    "Redirect both directly to a bounded sink such as `/dev/null`",
+    "Count them against `output_bytes`",
+    "Capture each under a separate release ceiling"
+   ],
+   "default_guess": "Redirect stdout to `/dev/null` and capture only a bounded exception message through the runner's control channel."
+  },
+  {
+   "subject": "mapped-node receiving violation",
+   "kind": "contradiction",
+   "text": "A13 permits a receiving node to conclude `contract_violation` without running, but A15 says a mapped node has an unindexed record of its own only for an empty map, `skipped_by_guard`, or `upstream_failed` before any element.",
+   "question": "What NodeExecution is written when a mapped node's list input fails target-port validation before any element runs?",
+   "options": [
+    "One unindexed `contract_violation` record for the mapped node",
+    "One record for each invalid element",
+    "No NodeExecution, with the producing node taking the violation"
+   ],
+   "default_guess": "Write one unindexed `contract_violation` record before element execution."
+  },
+  {
+   "subject": "empty many-file list disclosure",
+   "kind": "missing persisted fact",
+   "text": "A13 and A07 say a file-list reference carries the list's class even when empty, but M23 represents file inputs and outputs through SpooledFile facts; an empty list has no SpooledFile from which that class can be recovered.",
+   "question": "Where is the disclosure class of an empty `many` file value persisted for tracing, recovery and later function-output classification?",
+   "options": [
+    "Store a class on every per-port file-list reference",
+    "Store a separate empty-list value record",
+    "Derive it from the source port or mapped input whenever needed"
+   ],
+   "default_guess": "Persist the class on the per-port file-list reference."
+  },
+  {
+   "subject": "multipart request approval",
+   "kind": "contradiction",
+   "text": "State 0 says approval covers the fully built request and any difference at send asks again, while A10 deliberately excludes the multipart boundary and represents the body as a canonical parts description rather than the actual wire bytes.",
+   "question": "Must the multipart boundary and encoded wire body be identical between preview and send, or is semantic equality of parts sufficient?",
+   "options": [
+    "Freeze and include the exact boundary and wire bytes",
+    "Define multipart approval as semantic equality of ordered parts, ignoring boundary differences",
+    "Use a deterministic boundary derived from the parts"
+   ],
+   "default_guess": "Use a deterministic boundary derived from the approved parts so the wire request can also remain stable."
+  },
+  {
+   "subject": "multipart field names",
+   "kind": "missing encoding rule",
+   "text": "A09 places arbitrary port names inside quoted `name` and `filename` parameters but contract and binding rules do not restrict those names or define escaping for quotes, backslashes, non-ASCII characters or line breaks.",
+   "question": "How are port names represented safely in multipart `Content-Disposition` headers?",
+   "options": [
+    "Restrict multipart port names to a safe ASCII grammar",
+    "Define exact quoted-string escaping and non-ASCII encoding",
+    "Percent-encode parameter values"
+   ],
+   "default_guess": "Refuse a binding with multipart port names outside a conservative ASCII token grammar."
+  },
+  {
+   "subject": "service base URL",
+   "kind": "incomplete validation",
+   "text": "A08 accepts any absolute `http` or `https` URL with a host, while A09 joins it by removing a trailing slash and appending the operation path and derives `Host` from the authority \"exactly as the manifest writes it\". User information, query, fragment, unusual authority syntax and base-path behavior are not decided.",
+   "question": "What exact `api_base_url` grammar is accepted, how is a base path joined, and which textual authority becomes the `Host` header and TLS server name?",
+   "options": [
+    "Allow only scheme, host, optional port and optional path; forbid userinfo, query and fragment",
+    "Allow the full absolute-URL grammar and define component-based resolution",
+    "Require an origin URL with no path beyond `/`"
+   ],
+   "default_guess": "Forbid userinfo, query and fragment; allow an optional base path and join paths component-wise while deriving a validated host-and-port authority."
+  },
+  {
+   "subject": "HTTP header serialization",
+   "kind": "missing wire rule",
+   "text": "Required-header and credential values are Unicode configuration text and are sent \"verbatim\", but the rules allow values that may not have a portable HTTP wire encoding and do not define serialization; credential values also lack the required-header rule against leading or trailing whitespace.",
+   "question": "Which characters and whitespace are valid in configured header values, and what exact byte encoding is used on the wire?",
+   "options": [
+    "Restrict all configured header values to a defined ASCII field-value subset",
+    "Permit ISO-8859-1 bytes mapped from Unicode",
+    "Use UTF-8 header bytes"
+   ],
+   "default_guess": "Restrict both required and credential header values to a defined visible-ASCII field-value grammar and reject leading or trailing whitespace."
+  },
+  {
+   "subject": "plain-HTTP loopback exception",
+   "kind": "ambiguous security check",
+   "text": "A09 permits plain HTTP when the `api_base_url` \"host is a loopback address\" but does not say whether this means a literal loopback IP, a hostname such as `localhost`, or a DNS name that currently resolves to loopback.",
+   "question": "How is the loopback exception determined, and must the connected address be rechecked after resolution?",
+   "options": [
+    "Only literal loopback IP addresses qualify",
+    "A recognized localhost name or literal address qualifies",
+    "Any hostname resolving exclusively to loopback qualifies, with the connected address verified"
+   ],
+   "default_guess": "Only a parsed literal loopback IP address qualifies."
+  },
+  {
+   "subject": "HTTP send outcome",
+   "kind": "unverifiable boundary",
+   "text": "A09 distinguishes `not_sent` from `unknown` by whether the kernel wrote the first byte of the request, but it does not require a transport interface that can report that boundary accurately.",
+   "question": "What observation is authoritative for deciding that no request byte was written?",
+   "options": [
+    "A transport callback at the first successful socket write",
+    "Connection-stage error categories supplied by the HTTP library",
+    "Conservatively treat every post-connect failure as possibly sent"
+   ],
+   "default_guess": "Use a transport layer that records the first successful request-byte write; otherwise classify the result as possibly sent."
+  },
+  {
+   "subject": "error-response failure detail",
+   "kind": "missing encoding rule",
+   "text": "A09 may keep bytes from an arbitrary error response as `failure_detail`, while A20 requires truncation at a UTF-8 character boundary and M23 models `failure_detail` as text; an error body need not be valid UTF-8.",
+   "question": "How is a non-UTF-8 error body represented as bounded failure detail?",
+   "options": [
+    "Decode with replacement and then truncate",
+    "Store a bounded hexadecimal or base64 representation",
+    "Keep detail only when the body is valid UTF-8"
+   ],
+   "default_guess": "Decode as UTF-8 with replacement and truncate the resulting text at the byte ceiling."
+  },
+  {
+   "subject": "live token configuration reload",
+   "kind": "atomicity gap",
+   "text": "A16 says the kernel reads the configuration to hash its bytes and, when changed, \"re-reads it\" and applies the new token list, but it does not say which snapshot wins if the file changes between those reads.",
+   "question": "Must hashing, parsing, validation and token replacement use one atomic byte snapshot, and what happens when the file changes during the operation?",
+   "options": [
+    "Read one byte snapshot and use it for both digest and parsing",
+    "Re-read until two consecutive snapshots match",
+    "Treat any detected concurrent change as a failed reload and refuse requests"
+   ],
+   "default_guess": "Use one opened byte snapshot for hashing, parsing and validation."
+  },
+  {
+   "subject": "repair evidence response",
+   "kind": "unspecified limit",
+   "text": "A15 says repair returns \"the latest NodeExecutions ... at most `page_size_max` of them\" but does not choose how many are returned or connect this response to A16's default and caller-selected page size.",
+   "question": "How many recent NodeExecutions does a repair request return, and can the caller page or choose the count?",
+   "options": [
+    "Use `page_size_default` with normal pagination",
+    "Always return exactly up to `page_size_max`",
+    "Let the repair request supply a bounded count without pagination"
+   ],
+   "default_guess": "Use `page_size_default` and the standard continuation-token pagination rules."
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"flow composition and proof\",\"kind\":\"contradiction\",\"text\":\"A05 says a function node that does not name an existing contract version or an operation node that does not name an accepted binding is retained as a flow version and fails proof phase 1; A16 says any request naming a nonexistent record is refused before operation checks, never as a proof failure.\",\"question\":\"When composition names a missing contract version or binding, is no flow version kept, or is the version kept with a failed proof?\",\"options\":[\"Refuse composition and keep nothing\",\"Keep the version and return a phase-1 proof failure\",\"Treat missing records differently from existing-but-unaccepted bindings\"],\"default_guess\":\"Keep a version only for existing references; refuse a missing reference before composition, but keep a version that names an existing proposed binding and fail its proof.\"},{\"subject\":\"flow-version identity and proof order\",\"kind\":\"non-total order\",\"text\":\"A01 sorts edges only by (`to_node`, `to_port`, `from_node`, `from_port`) and constants only by (`to_node`, `to_port`), although distinct guarded edges or distinct duplicate constants can have the same listed key; A05 uses those same orders to choose the first failure.\",\"question\":\"What deterministic tie-breaker orders distinct edges or constants whose listed ordering keys are equal?\",\"options\":[\"Compare their complete canonical JSON after the listed key\",\"Include guard facts or constant value facts in the ordering key\",\"Refuse all equal-key edges and constants before identity or proof is computed\"],\"default_guess\":\"Use complete canonical JSON as the final tie-breaker, while exact duplicate objects remain indistinguishable.\"},{\"subject\":\"guard evaluation\",\"kind\":\"undefined equality\",\"text\":\"A13 says a guarded edge delivers when its guard port's value \\\"equals\\\" its guard value, but no equality rule is given for JSON numbers, arrays or objects.\",\"question\":\"What definition of equality is used for a guard value?\",\"options\":[\"Equality of canonical JSON bytes\",\"Structural JSON equality with numeric-type rules\",\"Host-language equality\"],\"default_guess\":\"Compare canonical JSON bytes.\"},{\"subject\":\"operation-output disclosure\",\"kind\":\"contradiction\",\"text\":\"A07 says \\\"a disclosure class only rises\\\" and `lowers_class(any construct) -> never`, but it also assigns every operation output the class declared by its binding without requiring that class to be at least the classes of the operation's inputs.\",\"question\":\"May a service operation declassify personal or confidential input by declaring a lower-class output?\",\"options\":[\"Yes, a binding's output declaration is an explicit service-boundary declassification\",\"No, each operation output must be at least the highest input class\",\"Only a separately authorized declassification operation may do so\"],\"default_guess\":\"Allow the binding's declared output class, following the specific operation-output rule.\"},{\"subject\":\"sandbox filesystem boundary\",\"kind\":\"contradiction\",\"text\":\"K-02 says a function has \\\"no filesystem beyond its input\\\", while A03 gives it a writable private exchange directory and permits opening paths inside that directory and the read-only runtime.\",\"question\":\"What filesystem access may agent code actually perform?\",\"options\":[\"Only read its supplied file inputs and write declared file outputs\",\"Arbitrary reads and writes inside the exchange directory plus reads of the runtime\",\"No direct filesystem API at all; only the `bytes` values passed to and returned from `run`\"],\"default_guess\":\"Permit arbitrary temporary use of the isolated exchange directory and read-only runtime, interpreting K-02 as forbidding host filesystem access.\"},{\"subject\":\"function purity and repeatability\",\"kind\":\"unverifiable invariant\",\"text\":\"Functions are described as pure and a required test expects the same output digest twice, but unrestricted CPython and its standard library expose nondeterministic observations not covered by the listed traps, such as process identity, object addresses and resource or platform observations.\",\"question\":\"Is repeatable output for equal input a required enforceable property, and if so, which remaining nondeterministic facilities are forbidden or normalized?\",\"options\":[\"Guarantee determinism by closing or virtualizing every observable source\",\"Treat purity as effect isolation only and allow nondeterministic outputs\",\"Run repeated trials and refuse implementations whose outputs differ\"],\"default_guess\":\"Treat the sandbox rules as effect isolation and best-effort repeatability, not a complete determinism guarantee.\"},{\"subject\":\"sandbox clock traps\",\"kind\":\"contradiction\",\"text\":\"A03 says the runner replaces \\\"every clock\\\" entry point and that functions have no clock, but its closed release-v1 list omits clock-like APIs such as `time.thread_time`, `time.clock_gettime`, `os.times` and resource-usage timing.\",\"question\":\"Does the closed written list define the allowed boundary, or must all other clock and timing APIs also be trapped?\",\"options\":[\"Only the written list is trapped and omitted APIs remain usable\",\"All clock-like APIs are trapped despite not being listed\",\"The release must add an exhaustive named list before implementation\"],\"default_guess\":\"Trap all clock-like APIs and extend the release list explicitly.\"},{\"subject\":\"sandbox audit hook\",\"kind\":\"vague boundary\",\"text\":\"A03 requires an audit hook that raises \\\"on socket, subprocess, `ctypes` and on opening any path\\\" but does not enumerate the CPython audit event names or arguments that constitute those categories.\",\"question\":\"Which exact audit events and argument conditions must produce `sandbox_violation`?\",\"options\":[\"A closed release-specific event list\",\"Every event whose name has selected prefixes\",\"A semantic wrapper around all relevant standard-library APIs\"],\"default_guess\":\"Define a closed CPython-3.12 audit-event list with argument predicates.\"},{\"subject\":\"sandbox resource outcomes\",\"kind\":\"unverifiable classification\",\"text\":\"A03 requires a detected memory, process, scratch or output limit hit to be `resource_exhausted`, ahead of `crashed`, although `setrlimit` and ordinary Python failures can surface as an exception or abnormal exit without identifying which limit caused them.\",\"question\":\"How is a limit hit distinguished reliably from an ordinary exception or crash?\",\"options\":[\"Only explicit supervisor or runner limit signals count; ambiguous exits are `crashed`\",\"Any compatible exception or signal is inferred to be `resource_exhausted`\",\"Instrument every resource so the parent receives an authoritative limit event\"],\"default_guess\":\"Use authoritative supervisor or runner events; classify an ambiguous termination as `crashed`.\"},{\"subject\":\"sandbox scratch accounting\",\"kind\":\"missing rule\",\"text\":\"The exchange directory is bounded by `sandbox_scratch_bytes_max`, but the texts do not say whether staged code, serialized values and input files consume that bound or what happens when inputs alone exceed it before `run` starts.\",\"question\":\"Which bytes count toward the scratch ceiling, and how is an over-limit input-staging failure recorded?\",\"options\":[\"Everything in the exchange directory counts and staging failure is `resource_exhausted`\",\"Only files created by agent code count\",\"Inputs are stored outside the bounded exchange area\"],\"default_guess\":\"Count every byte in the exchange directory and record staging overflow as `resource_exhausted`.\"},{\"subject\":\"sandbox cleanup failure\",\"kind\":\"precedence conflict\",\"text\":\"A03 rule 5 says the first of timeout, resource exhaustion, sandbox violation, crash and contract violation decides the outcome, while rule 7 says any unconfirmed cleanup records `crashed` with `cleanup_failed`.\",\"question\":\"Does `cleanup_failed` override an already determined timeout, resource exhaustion or sandbox violation?\",\"options\":[\"Cleanup failure always overrides with `crashed`\",\"The earlier outcome remains and cleanup failure is separate diagnostic data\",\"Cleanup failure overrides only an otherwise successful execution\"],\"default_guess\":\"Cleanup failure overrides with `crashed`, following the specific rule 7.\"},{\"subject\":\"sandbox stdout and stderr\",\"kind\":\"unbounded behavior\",\"text\":\"A03 says printed output is not interpreted and stdout is never kept, but it does not say where stdout and stderr are directed, whether their bytes are bounded, or what outcome an unlimited writer receives.\",\"question\":\"How are stdout and stderr drained or discarded without allowing unbounded host resource use?\",\"options\":[\"Redirect both directly to a bounded sink such as `/dev/null`\",\"Count them against `output_bytes`\",\"Capture each under a separate release ceiling\"],\"default_guess\":\"Redirect stdout to `/dev/null` and capture only a bounded exception message through the runner's control channel.\"},{\"subject\":\"mapped-node receiving violation\",\"kind\":\"contradiction\",\"text\":\"A13 permits a receiving node to conclude `contract_violation` without running, but A15 says a mapped node has an unindexed record of its own only for an empty map, `skipped_by_guard`, or `upstream_failed` before any element.\",\"question\":\"What NodeExecution is written when a mapped node's list input fails target-port validation before any element runs?\",\"options\":[\"One unindexed `contract_violation` record for the mapped node\",\"One record for each invalid element\",\"No NodeExecution, with the producing node taking the violation\"],\"default_guess\":\"Write one unindexed `contract_violation` record before element execution.\"},{\"subject\":\"empty many-file list disclosure\",\"kind\":\"missing persisted fact\",\"text\":\"A13 and A07 say a file-list reference carries the list's class even when empty, but M23 represents file inputs and outputs through SpooledFile facts; an empty list has no SpooledFile from which that class can be recovered.\",\"question\":\"Where is the disclosure class of an empty `many` file value persisted for tracing, recovery and later function-output classification?\",\"options\":[\"Store a class on every per-port file-list reference\",\"Store a separate empty-list value record\",\"Derive it from the source port or mapped input whenever needed\"],\"default_guess\":\"Persist the class on the per-port file-list reference.\"},{\"subject\":\"multipart request approval\",\"kind\":\"contradiction\",\"text\":\"State 0 says approval covers the fully built request and any difference at send asks again, while A10 deliberately excludes the multipart boundary and represents the body as a canonical parts description rather than the actual wire bytes.\",\"question\":\"Must the multipart boundary and encoded wire body be identical between preview and send, or is semantic equality of parts sufficient?\",\"options\":[\"Freeze and include the exact boundary and wire bytes\",\"Define multipart approval as semantic equality of ordered parts, ignoring boundary differences\",\"Use a deterministic boundary derived from the parts\"],\"default_guess\":\"Use a deterministic boundary derived from the approved parts so the wire request can also remain stable.\"},{\"subject\":\"multipart field names\",\"kind\":\"missing encoding rule\",\"text\":\"A09 places arbitrary port names inside quoted `name` and `filename` parameters but contract and binding rules do not restrict those names or define escaping for quotes, backslashes, non-ASCII characters or line breaks.\",\"question\":\"How are port names represented safely in multipart `Content-Disposition` headers?\",\"options\":[\"Restrict multipart port names to a safe ASCII grammar\",\"Define exact quoted-string escaping and non-ASCII encoding\",\"Percent-encode parameter values\"],\"default_guess\":\"Refuse a binding with multipart port names outside a conservative ASCII token grammar.\"},{\"subject\":\"service base URL\",\"kind\":\"incomplete validation\",\"text\":\"A08 accepts any absolute `http` or `https` URL with a host, while A09 joins it by removing a trailing slash and appending the operation path and derives `Host` from the authority \\\"exactly as the manifest writes it\\\". User information, query, fragment, unusual authority syntax and base-path behavior are not decided.\",\"question\":\"What exact `api_base_url` grammar is accepted, how is a base path joined, and which textual authority becomes the `Host` header and TLS server name?\",\"options\":[\"Allow only scheme, host, optional port and optional path; forbid userinfo, query and fragment\",\"Allow the full absolute-URL grammar and define component-based resolution\",\"Require an origin URL with no path beyond `/`\"],\"default_guess\":\"Forbid userinfo, query and fragment; allow an optional base path and join paths component-wise while deriving a validated host-and-port authority.\"},{\"subject\":\"HTTP header serialization\",\"kind\":\"missing wire rule\",\"text\":\"Required-header and credential values are Unicode configuration text and are sent \\\"verbatim\\\", but the rules allow values that may not have a portable HTTP wire encoding and do not define serialization; credential values also lack the required-header rule against leading or trailing whitespace.\",\"question\":\"Which characters and whitespace are valid in configured header values, and what exact byte encoding is used on the wire?\",\"options\":[\"Restrict all configured header values to a defined ASCII field-value subset\",\"Permit ISO-8859-1 bytes mapped from Unicode\",\"Use UTF-8 header bytes\"],\"default_guess\":\"Restrict both required and credential header values to a defined visible-ASCII field-value grammar and reject leading or trailing whitespace.\"},{\"subject\":\"plain-HTTP loopback exception\",\"kind\":\"ambiguous security check\",\"text\":\"A09 permits plain HTTP when the `api_base_url` \\\"host is a loopback address\\\" but does not say whether this means a literal loopback IP, a hostname such as `localhost`, or a DNS name that currently resolves to loopback.\",\"question\":\"How is the loopback exception determined, and must the connected address be rechecked after resolution?\",\"options\":[\"Only literal loopback IP addresses qualify\",\"A recognized localhost name or literal address qualifies\",\"Any hostname resolving exclusively to loopback qualifies, with the connected address verified\"],\"default_guess\":\"Only a parsed literal loopback IP address qualifies.\"},{\"subject\":\"HTTP send outcome\",\"kind\":\"unverifiable boundary\",\"text\":\"A09 distinguishes `not_sent` from `unknown` by whether the kernel wrote the first byte of the request, but it does not require a transport interface that can report that boundary accurately.\",\"question\":\"What observation is authoritative for deciding that no request byte was written?\",\"options\":[\"A transport callback at the first successful socket write\",\"Connection-stage error categories supplied by the HTTP library\",\"Conservatively treat every post-connect failure as possibly sent\"],\"default_guess\":\"Use a transport layer that records the first successful request-byte write; otherwise classify the result as possibly sent.\"},{\"subject\":\"error-response failure detail\",\"kind\":\"missing encoding rule\",\"text\":\"A09 may keep bytes from an arbitrary error response as `failure_detail`, while A20 requires truncation at a UTF-8 character boundary and M23 models `failure_detail` as text; an error body need not be valid UTF-8.\",\"question\":\"How is a non-UTF-8 error body represented as bounded failure detail?\",\"options\":[\"Decode with replacement and then truncate\",\"Store a bounded hexadecimal or base64 representation\",\"Keep detail only when the body is valid UTF-8\"],\"default_guess\":\"Decode as UTF-8 with replacement and truncate the resulting text at the byte ceiling.\"},{\"subject\":\"live token configuration reload\",\"kind\":\"atomicity gap\",\"text\":\"A16 says the kernel reads the configuration to hash its bytes and, when changed, \\\"re-reads it\\\" and applies the new token list, but it does not say which snapshot wins if the file changes between those reads.\",\"question\":\"Must hashing, parsing, validation and token replacement use one atomic byte snapshot, and what happens when the file changes during the operation?\",\"options\":[\"Read one byte snapshot and use it for both digest and parsing\",\"Re-read until two consecutive snapshots match\",\"Treat any detected concurrent change as a failed reload and refuse requests\"],\"default_guess\":\"Use one opened byte snapshot for hashing, parsing and validation.\"},{\"subject\":\"repair evidence response\",\"kind\":\"unspecified limit\",\"text\":\"A15 says repair returns \\\"the latest NodeExecutions ... at most `page_size_max` of them\\\" but does not choose how many are returned or connect this response to A16's default and caller-selected page size.\",\"question\":\"How many recent NodeExecutions does a repair request return, and can the caller page or choose the count?\",\"options\":[\"Use `page_size_default` with normal pagination\",\"Always return exactly up to `page_size_max`\",\"Let the repair request supply a bounded count without pagination\"],\"default_guess\":\"Use `page_size_default` and the standard continuation-token pagination rules.\"}]}"
+}
