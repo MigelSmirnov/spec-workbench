@@ -55,6 +55,7 @@ repeated topic into one kind, and only two kinds keep a state open:
 | `answered` | the texts already answer it | the answering quote, verbatim in the texts | no |
 | `answered_later` | only with `--provider codex`: a later state's text already decides it | the deciding quote, verbatim in the later states' texts | no |
 | `later_state` | it belongs to a later state | a state number after this one | no |
+| `judged_before` | the same question a recent round already judged non-blocking, on passages that have not changed | the prior judgement's id; its quotes still verbatim in the texts | no |
 | `indifferent` | no one acts differently on any answer | the reason | no |
 | `preexisting` | only with `--since`: about a passage the change did not touch | the quote, verbatim in both versions | no |
 
@@ -76,6 +77,22 @@ State 2 judge grows by what it reads, not by ~40k tokens of contracts and notes;
 the reviews are unchanged. Their digests are kept in the round's `judge` as
 `later_documents`; the state's closure still compares only States 0..N. A judge
 that cannot read files (the Responses API) is not offered `answered_later`.
+
+### The same question gets the same answer
+
+A judge call is a sample: on Cabinet Kernel State 2, rounds 67 and 68 judged
+about fifteen repeated topics on old, untouched passages `preexisting`, and
+round 69, on texts that differed in three sentences, judged seven of the same
+topics contradictions or gaps. With that many topics, two clear rounds in a row
+are a matter of luck, and editing the texts does not change the odds.
+
+So the judge is shown the verified non-blocking judgements of the state's latest
+three judged rounds (newest first, one per topic) and may follow one as
+`judged_before`, naming it. The tool accepts that only when the named judgement
+was offered and every passage it quoted is still found verbatim — in the texts,
+or for `answered_later` in the later states' texts; a judgement that followed a
+precedent passes the original kind and quotes on. A topic whose passages
+changed is judged afresh, and a blocking judgement is never a precedent.
 
 The judge is not trusted: a judgement whose evidence fails its check — a quote
 not found character for character, a "later" state that is not later — blocks

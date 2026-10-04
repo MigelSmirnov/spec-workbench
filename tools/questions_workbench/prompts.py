@@ -51,7 +51,7 @@ from those that need not. Judge each topic by exactly one kind:
   encodings, formats, schemas, signatures, field types and notes belong to
   State 6 or later). Name that state's number in "later_state".
 - "indifferent": any answer is acceptable, because no caller, owner or service
-  acts differently on the difference. Say why in "why".{preexisting}{answered_later}
+  acts differently on the difference. Say why in "why".{preexisting}{answered_later}{judged_before}
 
 Quotes are checked mechanically against the texts: copy them character for
 character, without ellipsis, at least a full clause. A quote not found in the
@@ -60,7 +60,7 @@ blocking kind (contradiction, consequential_gap) and another, choose the
 blocking one.
 
 Output strict JSON, nothing else:
-{{"judgements":[{{"id":"<topic id>","kind":"<kind>","quotes":["<verbatim passage>"],"later_state":<number or null>,"divergence":"<two behaviours and who notices, or empty>","why":"<one sentence>"}}]}}"""
+{{"judgements":[{{"id":"<topic id>","kind":"<kind>","quotes":["<verbatim passage>"],"later_state":<number or null>,"precedent":"<prior judgement id or null>","divergence":"<two behaviours and who notices, or empty>","why":"<one sentence>"}}]}}"""
 
 PREEXISTING = """
 - "preexisting": only for a state reopened after it was closed. The texts it was
@@ -78,17 +78,36 @@ ANSWERED_LATER = """
   to State {state} that disagree are not reconciled by a later text."""
 
 
-def judge_instruction(state: int, reopened: bool, later_files: list[str] | None = None) -> str:
+JUDGED_BEFORE = """
+- "judged_before": the topic asks the same question as one of the PRIOR
+  JUDGEMENTS below — non-blocking judgements of this state's latest rounds —
+  and neither the change since nor the passages that judgement quotes changed
+  it. Name that judgement's id in "precedent". The same question on the same
+  texts deserves the same answer: prefer this to judging such a topic afresh,
+  and judge afresh only when the texts the topic is about have changed."""
+
+
+def judge_instruction(state: int, reopened: bool, later_files: list[str] | None = None,
+                      precedents: bool = False) -> str:
     answered_later = ANSWERED_LATER.format(files=", ".join(later_files), state=state) if later_files else ""
-    return JUDGE.format(state=state, preexisting=PREEXISTING if reopened else "", answered_later=answered_later)
+    return JUDGE.format(state=state, preexisting=PREEXISTING if reopened else "", answered_later=answered_later,
+                        judged_before=JUDGED_BEFORE if precedents else "")
 
 
-def judge_input(texts: str, topics: list[dict], change: str | None) -> str:
+def judge_input(texts: str, topics: list[dict], change: str | None, precedents: list[dict] | None = None) -> str:
     listing = "\n\n".join(
         f"{t['id']}: {t['topic']}\n" + "\n".join(f"  - {p}" for p in t["points"]) for t in topics
     )
     parts = [texts]
     if change is not None:
         parts.append(f"=== CHANGE SINCE THE STATE WAS CLOSED (unified diff) ===\n\n{change or '(no change)'}")
+    if precedents:
+        prior = "\n\n".join(
+            f"{p['id']} ({p['round']}, {p['kind']}): {p['topic']}\n"
+            + "\n".join(f"  quote: {q}" for q in p["quotes"])
+            + (f"\n  why: {p['why']}" if p.get("why") else "")
+            for p in precedents
+        )
+        parts.append(f"=== PRIOR JUDGEMENTS (non-blocking, verified) ===\n\n{prior}")
     parts.append(f"=== TOPICS TO JUDGE ===\n\n{listing}")
     return "\n\n".join(parts)
