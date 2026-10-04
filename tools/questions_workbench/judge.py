@@ -4,7 +4,8 @@ Repetition says that reviews agree a question exists, not that it matters.
 The judge sorts each repeated topic into a kind; only a contradiction or a gap
 with an observable consequence keeps a state open. Every non-blocking kind
 carries evidence the tool can check without trusting the judge: a quote must
-appear verbatim in the texts, a later state must come after this one. A
+appear verbatim in the texts (for `answered_later`, in the later states'
+texts the judge searched), a later state must come after this one. A
 judgement whose evidence fails counts as blocking.
 """
 from __future__ import annotations
@@ -12,7 +13,7 @@ from __future__ import annotations
 from typing import Any
 
 BLOCKING = {"contradiction", "consequential_gap"}
-KINDS = BLOCKING | {"answered", "later_state", "indifferent", "preexisting"}
+KINDS = BLOCKING | {"answered", "answered_later", "later_state", "indifferent", "preexisting"}
 
 
 def _norm(text: str) -> str:
@@ -24,7 +25,8 @@ def _found(quote: str, corpus: str) -> bool:
     return len(quote) >= 12 and quote in corpus
 
 
-def check(judgement: dict[str, Any] | None, state: int, texts: str, old_texts: str | None) -> dict[str, Any]:
+def check(judgement: dict[str, Any] | None, state: int, texts: str, old_texts: str | None,
+          later_texts: str | None = None) -> dict[str, Any]:
     """The judgement as kept in the round, with `verified` and `blocking`."""
     if not isinstance(judgement, dict):
         return {"kind": None, "verified": False, "blocking": True, "failure": "the judge gave no judgement"}
@@ -50,6 +52,11 @@ def check(judgement: dict[str, Any] | None, state: int, texts: str, old_texts: s
     elif kind == "answered":
         if not quotes or not all(_found(q, corpus) for q in quotes):
             failure = "the answering quote is not found verbatim in the texts"
+    elif kind == "answered_later":
+        if later_texts is None:
+            failure = "answered_later is allowed only when the judge was given the later states' texts"
+        elif not quotes or not all(_found(q, _norm(later_texts)) for q in quotes):
+            failure = "the deciding quote is not found verbatim in the later states' texts"
     elif kind == "later_state":
         later = kept["later_state"]
         if not isinstance(later, int) or isinstance(later, bool) or later <= state:
