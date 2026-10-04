@@ -29,7 +29,7 @@ Every record is written through `module:store`, one call and one transaction
 (K-17). A flow references `module:store` only where its own steps use a
 capability of it beyond that: reading records, value bytes, the spool, paging,
 the start. A step that says "writes" means one such store call by the module
-named; a store call that fails changes nothing (A18 rule 3) and the request
+named; a store call that fails changes no record (A18 rules 3-4) and the request
 is answered as an internal error by `module:surface` (A16 rule 7). Every
 timestamp a step records comes from `module:clock`; a flow
 references the clock where a step stamps a time it names or sets a deadline.

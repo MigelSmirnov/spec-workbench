@@ -178,7 +178,9 @@ concurrent connections.
    fail with nothing written.
 3. Only the store module opens the database. Every change is one call to the
    store module and one transaction inside it; callers never open, name or pass a
-   transaction (K-17). A call that fails changes nothing. Surface requests are
+   transaction (K-17). A call that fails writes and changes no record; the only
+   trace it can leave is a published file no record names, which nothing reads
+   and which is replaced at its position (rule 4). Surface requests are
    handled one at a time in the order they arrive: one request, including the run
    advancement it causes (A13), ends before the next begins, so an approval, a
    cancellation and a resume of one run never race.

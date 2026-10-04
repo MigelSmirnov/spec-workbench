@@ -87,7 +87,7 @@ Python signatures are State 6's.
   and a spool that cannot be removed then is removed at the next start, which
   removes the spool of every ended run that keeps none (A18 rule 4).
 - **Internal error.** `internal_error` is not a refusal, so "a refusal writes
-  nothing" does not hold for it. A failed store call changes nothing (A18 rule 3); the
+  nothing" does not hold for it. A failed store call changes no record (A18 rules 3-4); the
   module returns it as `internal_error` and `module:surface` answers without
   detail (A16 rule 7). When a request makes several store changes, those made
   before the failed one stay: each is whole, and a run is derived from its
