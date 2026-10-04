@@ -913,6 +913,14 @@ EffectAttempt M26 and the concluding NodeExecution M23 written by
   not private, a symbolic link (`module:store`); sandbox missing or probe
   failing (`module:sandbox`). The surface never opens; there is no partial
   start.
+- "No partial start" means only that the surface never opens: on any failing
+  step — a start check, a recovery step or a stopped start —
+  `capability:surface.serve_kernel` ends the process with a non-zero status,
+  and the lock taken in step 4 ends with the process, so a restart is never
+  blocked by it (A18 rule 1). Nothing written before the failure is undone:
+  every recovery change is its own store call and transaction (A18 rule 3), so
+  removed files and spools, attempts made `unknown` and runs advanced stay as
+  committed, and the next start runs the whole sequence again from them.
 - During run recovery, an element fails or waits exactly as in a request;
   nothing is decided by time.
 - Cleanup duty: if a re-executed function's cleanup cannot be confirmed,
