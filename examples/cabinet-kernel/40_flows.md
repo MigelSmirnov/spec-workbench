@@ -766,8 +766,10 @@ page of NodeExecutions cross into `module:surface`.
    `trial_case_id` with `capability:canonical_values.content_identity` and
    writes the file-carriage StoredValues, each with the class its contract
    input port declares (M21), and the TrialCase; an equal case is
-   that case. The corpus digest changes; the serving implementation keeps
-   serving and visibly lacks a verdict over the current corpus (A04 rule 7).
+   that case, keeps its place and writes nothing, so the corpus and its digest
+   stay as they were. A new case changes the corpus digest; the serving
+   implementation keeps serving and visibly lacks a verdict over the current
+   corpus (A04 rule 7).
 2. **Repair view.** `module:surface` takes the slot's contract versions and
    implementations from `capability:functions.read_slot` and pages, through
    `capability:store.page_records`, the NodeExecutions whose executed
