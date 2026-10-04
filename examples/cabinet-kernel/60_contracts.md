@@ -104,10 +104,11 @@ not review fields, classes or formats, so each is the agent's and says why.
    `store` token.
 5. **Constants carry a declared schema.** A flow constant is a typed literal
    (M16): the composing agent declares its `value_schema` with its class, and its
-   StoredValue takes both. Phase 2 of the proof checks that the declared schema
-   is the target port's stored schema (M21) and that the value fits the port
-   (A05 rule 1); the constant's identity does not depend on resolving another
-   record.
+   StoredValue takes both. Composition refuses a constant whose value does not
+   fit its declared schema (A05 rule 7); phase 2 of the proof checks that the
+   declared schema is the target port's stored schema (M21), so the value then
+   fits the port (A05 rule 1); the constant's identity does not depend on
+   resolving another record.
 6. **The MCP entrance.** MCP over streamable HTTP at `mcp_listen_address`, one
    tool per operation of the State 5 catalogue, its input schema the request
    model of that operation; the token is the `Authorization: Bearer` header.

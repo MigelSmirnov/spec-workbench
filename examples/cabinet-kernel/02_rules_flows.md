@@ -19,8 +19,9 @@ edges into one input, of flow outputs under guards, and of proving again later.
       operation node names a binding in status `accepted`;
    2. constants, by (`to_node`, `to_port`): the port exists and is an input port
       of a node — never a flow output — of `value` carriage, the constant's
-      declared schema is the port's stored schema (M21), and the value fits the
-      port;
+      declared schema is the port's stored schema (M21) — its value already
+      fits that declared schema, composition refused it otherwise (rule 7), so
+      it then fits the port;
    3. edges, by (`to_node`, `to_port`, `from_node`, `from_port`): both ports exist
       with the right direction; both carry the same schema, the same carriage and,
       for files, the same media type (K-06) — cardinality is phase 5's; a flow
@@ -79,8 +80,10 @@ edges into one input, of flow outputs under guards, and of proving again later.
    not it is proven. A malformed request is not a version. Composition refuses, before anything is kept, a flow version whose node ids
    repeat, whose flow input or output port names repeat within a direction, or
    which declares a flow input or output of `file` carriage (M13), a flow input
-   without a class, or a flow output with one (M01) — the first of these, in
-   this order, is named;
+   without a class, or a flow output with one (M01), or a constant whose value
+   does not fit the schema declared with it (M16) — the first of these, in
+   this order, is named; a kept constant is therefore always a validated
+   StoredValue (M21);
    the proof never sees such a version. Every other structural fault is a proof
    failure (rule 1). Composition keeps any other flow version
    whether or not it is proven. Activation
@@ -110,6 +113,9 @@ proof(version) recomputed_on_demand   (not persisted)
 5. A version refused because its binding is `proposed` is proven after the owner
    accepts the binding, with the same `flow_version_id`.
 6. A function node whose output reaches nothing is refused in phase 9.
+7. A constant whose value does not fit the schema declared with it is refused
+   at composition and records nothing; one whose declared schema differs from
+   its port's stored schema is kept and fails in phase 2.
 
 ### Consequence
 

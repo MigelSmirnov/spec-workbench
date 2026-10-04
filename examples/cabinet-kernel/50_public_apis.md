@@ -2000,8 +2000,10 @@ The version is kept, proven or not.
 Purpose rule first; A05 rule 7 pre-proof refusals in order; identity per A01
 rule 1. A constant's StoredValue takes the `value_schema` and class the
 composing agent declared with it (State 6, decision 5), never its target's, so
-a version whose constant targets a missing or unfitting port is still kept
-and fails its proof (A05 phases 2 and 3).
+a version whose constant targets a missing port, or one whose stored schema
+is not the declared one, is still kept and fails its proof (A05 phases 2 and
+3); a constant whose value does not fit its own declared schema is a pre-proof
+refusal (A05 rule 7).
 
 ### Errors
 

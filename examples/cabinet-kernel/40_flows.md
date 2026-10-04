@@ -301,7 +301,8 @@ the answer and is not stored; FlowActivation M18 is written by `module:flows`.
    rule first (A01 rule 5: a new flow name needs a purpose and creates the
    flow), then the pre-proof refusals of A05 rule 7 in their order — repeated
    node ids, repeated flow port names, a `file` flow port, a flow input without
-   a class, a flow output with one. A refused composition is not a version and
+   a class, a flow output with one, a constant whose value does not fit the
+   schema declared with it. A refused composition is not a version and
    records nothing. Otherwise it computes `flow_version_id` with
    `capability:canonical_values.content_identity`, sorting order-free lists as
    A01 rule 1 says; an equal version is returned unchanged. A new version is
@@ -350,8 +351,11 @@ the answer and is not stored; FlowActivation M18 is written by `module:flows`.
 - A constant over `stored_value_bytes_max` as a request field: refused by
   `module:surface` at schema validation (A16 rule 4), before composition.
 - Purpose and pre-proof refusals: `module:flows`, recording nothing. A
-  constant whose value does not fit its port is a proof failure of phase 2,
-  not a composition refusal (A05 rules 1 and 7).
+  constant whose value does not fit the schema declared with it is one of
+  them (A05 rule 7), so every kept constant is a validated StoredValue (M21);
+  a constant whose declared schema is not its port's stored schema, or whose
+  port is missing, is a proof failure of phase 2, not a composition refusal
+  (A05 rules 1 and 7).
 - A proof failure is a result, not an error; activation turns it into a
   refusal with the same failure. `module:functions` and `module:bindings`
   only answer reads; they decide nothing for the proof.
