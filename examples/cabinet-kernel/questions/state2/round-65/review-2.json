@@ -1,0 +1,440 @@
+{
+ "open_points": [
+  {
+   "subject": "Function filesystem isolation",
+   "kind": "contradiction",
+   "text": "K-02 says a function has “no filesystem beyond its input”, while A03 rule 1 gives it “one private exchange directory” and rule 4 permits opening paths inside that directory and the read-only runtime.",
+   "question": "May agent code read or write the exchange directory and read runtime files, or are those paths available only to the sandbox runner?",
+   "options": [
+    "Agent code may access both allowed trees",
+    "Agent code may access only input/output files selected by the runner",
+    "Agent code has no filesystem API access"
+   ],
+   "default_guess": "Expose only runner-managed input and output files, not arbitrary runtime or exchange-directory paths."
+  },
+  {
+   "subject": "Function clock prohibition",
+   "kind": "contradiction",
+   "text": "A03 says it replaces “every clock ... entry point” and then says “The replaced entry points are exactly” a list that omits CPython clock sources such as `time.clock_gettime`, `time.thread_time`, `os.times` and `resource.getrusage`.",
+   "question": "Are unlisted clock-like standard-library APIs allowed, trapped, or excluded from the runtime?",
+   "options": [
+    "Trap every clock-like API, including unlisted ones",
+    "Trap only the enumerated APIs",
+    "Remove modules exposing additional clocks"
+   ],
+   "default_guess": "Trap every API that can disclose current or elapsed host time."
+  },
+  {
+   "subject": "Deterministic function execution",
+   "kind": "unverifiable invariant",
+   "text": "K-05 calls admission “a deterministic verdict”, and A03 requires “The same implementation on the same input yields the same output digest twice”, but the sandbox permits threads and other observable runtime state not covered by its traps.",
+   "question": "What rule guarantees or checks determinism when permitted Python code can still produce different results for equal inputs?",
+   "options": [
+    "Strengthen the sandbox until all observable nondeterminism is excluded",
+    "Run cases repeatedly and refuse inconsistent results",
+    "Define determinism only as deterministic ordering of one admission run"
+   ],
+   "default_guess": "Treat differing repeated executions as a refusal and also close known nondeterministic APIs."
+  },
+  {
+   "subject": "Resource-limit outcomes",
+   "kind": "unverifiable condition",
+   "text": "A03 rule 5 says “a limit hit (memory, process count, scratch, `output_bytes`)” yields `resource_exhausted`, but only says memory and process limits are enforced with `setrlimit`.",
+   "question": "How does the kernel detect a memory or process limit that Python catches as an ordinary exception, and what exactly does `process_count` count?",
+   "options": [
+    "Instrument and report every denied resource operation",
+    "Classify only observable signals or process exits as resource exhaustion",
+    "Let caught denials remain ordinary program behavior"
+   ],
+   "default_guess": "Count the sandbox runner as the first process and instrument denied allocations or process creation so caught failures still record `resource_exhausted`."
+  },
+  {
+   "subject": "Malformed function outputs and output_bytes",
+   "kind": "precedence gap",
+   "text": "A03 counts “the canonical JSON bytes of every `value` output” before `contract_violation`, but malformed returns may contain non-JSON values, cycles, missing ports or extra ports whose canonical byte count is undefined.",
+   "question": "How are `output_bytes` and outcome precedence determined when the returned object cannot be canonically serialized or contains undeclared outputs?",
+   "options": [
+    "Validate the return shape first and report `contract_violation`",
+    "Measure a bounded transport encoding before contract validation",
+    "Count only declared serializable outputs and ignore other data for the limit"
+   ],
+   "default_guess": "Validate enough structure to make canonicalization possible; otherwise report `contract_violation`, while enforcing a separate bounded runner channel."
+  },
+  {
+   "subject": "Trial-case input set",
+   "kind": "missing refusal rule",
+   "text": "A04 requires that “its input values fit the contract version's input ports” and mentions per-port “presence”, but does not say whether extra input names are refused.",
+   "question": "Must an authored trial case contain exactly every input port and no additional names?",
+   "options": [
+    "Require the exact input-port set",
+    "Allow omitted optional-schema inputs",
+    "Ignore additional inputs"
+   ],
+   "default_guess": "Require exactly one entry for every contract input port and no extras."
+  },
+  {
+   "subject": "Trial expected outputs",
+   "kind": "ambiguous completeness",
+   "text": "M06 allows `expected_outputs` to be “absent when only the absence of failure is required”, while A04 says that, “if the case states expected outputs, every output's digest equals the expected one”.",
+   "question": "When `expected_outputs` is present, must it name every output port, or may it assert only a subset?",
+   "options": [
+    "It must name every output port exactly",
+    "It may name any nonempty subset",
+    "Missing expected outputs mean those ports are ignored"
+   ],
+   "default_guess": "Require the exact output-port set whenever `expected_outputs` is present."
+  },
+  {
+   "subject": "Interrupted admission and explicit try",
+   "kind": "crash lifecycle gap",
+   "text": "A04 says admission and try execute all named cases and “records one TrialExecution per case”, but gives no transaction boundary or restart rule for a crash after only some cases ran.",
+   "question": "After an interrupted admission or try, are partial TrialExecutions retained, discarded, resumed, or rerun as a new operation?",
+   "options": [
+    "Retain partial evidence and rerun the whole operation on retry",
+    "Commit all TrialExecutions atomically after all cases finish",
+    "Persist an admission/try operation and resume its remaining cases"
+   ],
+   "default_guess": "Retain completed observations, create no verdict, and rerun the entire requested set on retry."
+  },
+  {
+   "subject": "Flow canonical ordering",
+   "kind": "nondeterministic tie",
+   "text": "A01 sorts edges only by (`to_node`, `to_port`, `from_node`, `from_port`) and constants only by (`to_node`, `to_port`), although different guarded edges or different constants can share those keys.",
+   "question": "What breaks ties so flow identity and the first failure are independent of submission order?",
+   "options": [
+    "Extend the sort key with guard and content facts",
+    "Preserve submission order for tied items",
+    "Refuse all duplicate sort keys before identity is computed"
+   ],
+   "default_guess": "Extend canonical sort keys with every remaining meaning fact."
+  },
+  {
+   "subject": "Empty node identifier",
+   "kind": "reserved-value gap",
+   "text": "A05 rule 2 says “A flow input or flow output endpoint has the empty string as its node”, but no rule forbids a FlowNode whose `node_id` is the empty string.",
+   "question": "Is the empty string reserved and therefore refused as a node identifier?",
+   "options": [
+    "Reserve and refuse the empty node id",
+    "Allow it and distinguish endpoint kind separately",
+    "Use a non-string endpoint sentinel"
+   ],
+   "default_guess": "Refuse an empty `node_id`."
+  },
+  {
+   "subject": "Guard comparison",
+   "kind": "undefined equality",
+   "text": "A13 says a guarded edge delivers when the guard port's value “equals its guard value”, without defining JSON equality.",
+   "question": "What equality applies to objects, arrays, numbers such as `1` versus `1.0`, and booleans such as `true` versus `1`?",
+   "options": [
+    "Equality of canonical JSON bytes",
+    "JSON structural equality with numbers compared mathematically",
+    "Host-language Python equality"
+   ],
+   "default_guess": "Use equality of canonical JSON bytes."
+  },
+  {
+   "subject": "Oversized mapped value output",
+   "kind": "trace contradiction",
+   "text": "A13 says a nonempty mapped node has no aggregate NodeExecution and writes its collected list when the last element record is written, while A15 says an oversized produced value “concludes the element `contract_violation`”.",
+   "question": "Which record carries failure when individually successful mapped elements form a collected `many` value larger than `stored_value_bytes_max`?",
+   "options": [
+    "Change the last element's record to `contract_violation`",
+    "Write a separate aggregate NodeExecution",
+    "Reject mapping before execution from a provable maximum",
+    "Permit mapped aggregates above the stored-value ceiling"
+   ],
+   "default_guess": "Write an explicit aggregate failure record rather than rewriting a successful element."
+  },
+  {
+   "subject": "Draft-write activation authority",
+   "kind": "missing pin",
+   "text": "M26 records “the flow activation under which the run started”, but M19 and A12 pin only the flow version and function implementations, not the FlowActivation record.",
+   "question": "How is the exact FlowActivation identity recovered after reactivation of the same version or after restart?",
+   "options": [
+    "Store the FlowActivation identity on the Run",
+    "Derive the latest activation preceding the Run in store order",
+    "Use whichever activation of the version is current when sending"
+   ],
+   "default_guess": "Store the exact FlowActivation identity on the Run at start."
+  },
+  {
+   "subject": "Kernel release and implementation semantics",
+   "kind": "versioning gap",
+   "text": "A20 says each release pins the sandbox runtime and dependencies, but Implementation identity and Run pins contain no release or runtime identity, and cached AdmissionVerdicts are keyed only by implementation and corpus.",
+   "question": "After an upgrade changes Python, traps or dependencies, which runtime executes an old implementation, and does its old admission verdict remain valid?",
+   "options": [
+    "Implementations and verdicts pin their original runtime release",
+    "Every upgrade invalidates and reruns admission verdicts",
+    "New releases must execute old implementations with exactly the old runtime",
+    "Old verdicts remain valid under the new runtime"
+   ],
+   "default_guess": "Include a sandbox-runtime release identity in execution and admission identity, and readmit under a changed runtime."
+  },
+  {
+   "subject": "Pinned dependency versions",
+   "kind": "unspecified invariant",
+   "text": "A20 says “A release pins the exact versions of the kernel's Python dependencies and of the sandbox runtime”, but names only CPython 3.12 and gives no dependency set or exact bubblewrap version.",
+   "question": "Which exact dependency and sandbox versions constitute release v1?",
+   "options": [
+    "Specify them in the accepted release text",
+    "Treat a checked-in lockfile and build manifest as the normative release record",
+    "Allow the implementing agent to choose them"
+   ],
+   "default_guess": "Make the checked-in lockfile and build manifest normative and record the exact bubblewrap build/version."
+  },
+  {
+   "subject": "Manifest structural validation",
+   "kind": "incomplete refusal conditions",
+   "text": "A08 rule 5 covers invalid JSON, missing `service` or `capabilities`, duplicate capability names and invalid selected fields, but does not define outcomes for wrong container types, non-object capability entries, missing `name`, malformed `required_headers`, duplicate JSON members or non-JCS numbers.",
+   "question": "What complete manifest shape is accepted, and where do each of these malformed forms appear in the ordered mismatch checks?",
+   "options": [
+    "Validate against a closed manifest schema before A08's semantic checks",
+    "Map every malformed form into the nearest listed A08 check",
+    "Treat unlisted malformed forms as internal errors"
+   ],
+   "default_guess": "Apply a closed manifest schema first and classify its first failure as manifest mismatch."
+  },
+  {
+   "subject": "Service base URL",
+   "kind": "incomplete URL policy",
+   "text": "A08 accepts an “absolute `http` or `https` URL with a host”, and A09 joins it by taking the base URL “without a trailing `/`” and appending the path.",
+   "question": "Are user information, query strings, fragments, nonempty base paths, percent escapes and multiple trailing slashes allowed, and exactly how are they joined?",
+   "options": [
+    "Allow only scheme, host and optional port",
+    "Allow a base path but forbid user information, query and fragment",
+    "Permit all absolute URLs and define a standards-based resolution algorithm"
+   ],
+   "default_guess": "Allow scheme, host, optional port and an optional normalized base path; forbid user information, query and fragment."
+  },
+  {
+   "subject": "Plain HTTP loopback exception",
+   "kind": "vague target check",
+   "text": "A09 permits plain HTTP when the `api_base_url` “host is a loopback address”.",
+   "question": "Does this mean only a literal loopback IP, a hostname such as `localhost`, or any hostname whose DNS result is loopback, and must every resolved address be loopback?",
+   "options": [
+    "Literal loopback IP addresses only",
+    "`localhost` plus literal loopback addresses",
+    "DNS-resolved hosts when every result is loopback"
+   ],
+   "default_guess": "Allow only literal IPv4 or IPv6 loopback addresses."
+  },
+  {
+   "subject": "JSON request Content-Type",
+   "kind": "missing wire value",
+   "text": "A10 says a request with a body sends `content-type`, but A09 specifies a Content-Type value only for multipart parts and multipart bodies, not for an ordinary JSON body.",
+   "question": "What exact `Content-Type` header is sent for POST, PUT or PATCH with a JSON object body?",
+   "options": [
+    "`application/json`",
+    "`application/json; charset=utf-8`",
+    "A manifest-declared value"
+   ],
+   "default_guess": "Use `application/json` with no parameters."
+  },
+  {
+   "subject": "Multipart wire representation and approval",
+   "kind": "contradiction",
+   "text": "State 0 says approval covers the “fully built request” and “Any difference at send ... asks again”, while A10 excludes the multipart boundary and the `content-length` value from the request description and does not define multipart delimiters or boundary generation.",
+   "question": "Must the actual multipart bytes, boundary and Content-Length be fixed at approval time, or may they vary while the canonical parts remain equal?",
+   "options": [
+    "Fix and persist the exact wire bytes and boundary",
+    "Use a deterministic boundary derived from the canonical parts",
+    "Approve canonical multipart semantics and explicitly permit wire-boundary differences"
+   ],
+   "default_guess": "Use a deterministic boundary and include the resulting Content-Type and Content-Length values in the approved request description."
+  },
+  {
+   "subject": "Header-name changes in approval digests",
+   "kind": "internal contradiction",
+   "text": "A10 rule 1 says a difference in “a required header's name” or “the credential header's name” voids approval, but rule 7 lower-cases all header names before computing `request_digest`.",
+   "question": "Does a case-only change in a header name void approval?",
+   "options": [
+    "Yes; preserve original header-name spelling in the digest",
+    "No; header names are compared case-insensitively",
+    "Only required-header case changes matter"
+   ],
+   "default_guess": "Treat header names case-insensitively and revise the name-difference rule accordingly."
+  },
+  {
+   "subject": "Port names in multipart headers",
+   "kind": "encoding gap",
+   "text": "A09 emits `Content-Disposition: form-data; name=\"<port>\"` and `filename=\"<port>\"`, but port names have no syntax restriction or escaping rule.",
+   "question": "How are quotes, backslashes, control characters, non-ASCII text and empty port names represented or refused?",
+   "options": [
+    "Restrict port names to a safe ASCII identifier grammar",
+    "Escape them using a specified multipart parameter grammar",
+    "Use RFC 5987 extended parameters for non-ASCII names"
+   ],
+   "default_guess": "Restrict port names used by bindings to a nonempty safe ASCII identifier grammar."
+  },
+  {
+   "subject": "HTTP client failures outside the outcome table",
+   "kind": "unclassified outcome",
+   "text": "A09's “nothing could be sent” row names only name resolution, connection and TLS failures, and its pre-send list omits local encoder errors, missing spool bytes, socket setup failures and write failures before the first request byte.",
+   "question": "How are local failures not covered by the table classified, and do they create an EffectAttempt?",
+   "options": [
+    "Treat every failure before the first request byte as `service_unreachable` and `not_sent`",
+    "Treat local invariant or spool failures as `internal_error`",
+    "Treat request-construction failures as `operation_failed` before writing an EffectAttempt"
+   ],
+   "default_guess": "Use `operation_failed` for deterministic construction problems, `internal_error` for corrupted stored inputs, and `not_sent` only for transport failures."
+  },
+  {
+   "subject": "Error-response failure_detail",
+   "kind": "undefined encoding",
+   "text": "A09 permits a bounded error-response body as `failure_detail`, while A20 truncates failure detail “at a UTF-8 character boundary”; an HTTP error body need not be UTF-8.",
+   "question": "How is an arbitrary binary or invalid-UTF-8 error body converted into bounded failure-detail text?",
+   "options": [
+    "Store only valid UTF-8 and otherwise omit it",
+    "Decode with replacement characters",
+    "Store a bounded base64 or hexadecimal representation"
+   ],
+   "default_guess": "Decode strict UTF-8 and omit the body when decoding fails."
+  },
+  {
+   "subject": "Credentials and tokens echoed by untrusted data",
+   "kind": "contradictory invariant",
+   "text": "A17 says a credential “never enters the store, a record, a trace, a preview, a failure detail, a log line ... or a response”, and A16 says “No response carries a token”, while service responses are untrusted values and error bodies may be retained.",
+   "question": "What happens if a service echoes a credential or token, or a caller deliberately submits identical bytes as an ordinary value?",
+   "options": [
+    "Scan and redact exact configured secrets everywhere",
+    "Suppress all service error bodies and reject values equal to configured secrets",
+    "Interpret the prohibition as applying only to values inserted by the kernel itself"
+   ],
+   "default_guess": "Never retain service error bodies and scan outbound responses and logs for exact configured token and credential values."
+  },
+  {
+   "subject": "Hot configuration reload security",
+   "kind": "security contradiction",
+   "text": "A17 requires the configuration file to be regular, non-symlink, owner-owned and private, but A16 rule 2 says “Exactly four checks apply to a re-read” and lists only parsing and token-list checks.",
+   "question": "After startup, may a replaced symlinked, foreign-owned or group-readable configuration file supply the live token list?",
+   "options": [
+    "Reapply all A17 file-security checks on every re-read",
+    "Keep the original securely opened file descriptor and reread only it",
+    "Apply only the four listed checks"
+   ],
+   "default_guess": "Reapply every A17 ownership, type, symlink and permission check on each re-read."
+  },
+  {
+   "subject": "Data-directory privacy",
+   "kind": "vague refusal condition",
+   "text": "A18 says the data directory and everything in it are “private to the kernel's user” without defining ownership, mode bits, ACLs or required directory permissions.",
+   "question": "What exact filesystem ownership and permission checks decide whether startup is refused?",
+   "options": [
+    "Require kernel ownership and no group/other permission bits",
+    "Also reject ACL entries granting another principal access",
+    "Require a fixed mode such as 0700 for directories and 0600 for files"
+   ],
+   "default_guess": "Require kernel-user ownership, no group or other mode bits, and no ACL granting another principal access."
+  },
+  {
+   "subject": "Record order inside one transaction",
+   "kind": "ordering gap",
+   "text": "K-17 and A18 require “one order of records”, while several store calls atomically write multiple records, but no order is defined among records created by the same call.",
+   "question": "How are store positions assigned within a multi-record transaction for listing, activation identity and oldest-first processing?",
+   "options": [
+    "The store API specifies a fixed per-call record-type and item order",
+    "All records in one transaction share a position plus a deterministic subposition",
+    "Only entity records receive store positions"
+   ],
+   "default_guess": "Assign a monotonically increasing position to each record in an explicitly specified insertion order."
+  },
+  {
+   "subject": "Filtered pagination under status changes",
+   "kind": "contradiction",
+   "text": "A16 says the next page starts below the prior item's store position, but also says a record whose filtered status changes “leaves or enters the pages still to come”. A newly matching record above the continuation position cannot enter a later page.",
+   "question": "Are filtered pages a per-request live view, a snapshot, or a cursor over creation positions that may omit newly matching older-page records?",
+   "options": [
+    "Use a snapshot fixed by the first page",
+    "Keep the positional cursor and document that newly matching records above it are omitted",
+    "Use a mutable query cursor that can revisit positions"
+   ],
+   "default_guess": "Use a snapshot token that fixes the filter view at the first page."
+  },
+  {
+   "subject": "Run-input validation precedence",
+   "kind": "check-order contradiction",
+   "text": "A16 validates a run input's `stored_value_bytes_max` as a request-schema bound before operation checks, while A12 says each value is checked to fit its schema “and then its size bound”.",
+   "question": "When one run input is both schema-invalid and oversized, which failure is reported first?",
+   "options": [
+    "The surface size bound first",
+    "The port schema failure first",
+    "Remove the size bound from the surface schema and leave it to A12"
+   ],
+   "default_guess": "Remove this semantic size check from generic surface validation so A12 can apply schema then size."
+  },
+  {
+   "subject": "MCP transport and token carriage",
+   "kind": "missing protocol rule",
+   "text": "The kernel has an `mcp_listen_address`, is behind a reverse proxy, and says every MCP request “carries one token”, but no MCP transport, token location or definition of “request message as received” is given.",
+   "question": "Which MCP transport is used, where is the token carried, and which bytes count toward `surface_request_bytes_max`?",
+   "options": [
+    "Streamable HTTP with an Authorization header and the JSON-RPC body counted",
+    "Streamable HTTP with a token field inside each operation request",
+    "Another fixed framed transport with its framing bytes counted"
+   ],
+   "default_guess": "Use MCP Streamable HTTP, carry a bearer token in Authorization, and count the decoded HTTP request body bytes."
+  },
+  {
+   "subject": "Repair-context implementation disclosure",
+   "kind": "unenforceable access rule",
+   "text": "K-12 says an agent receives implementation bodies “for repair” but receives contracts and bindings “for composition”, while the kernel has no model or rule that identifies the agent's purpose for an inspection request.",
+   "question": "Which concrete request is allowed to return implementation code, and how does the kernel distinguish repair from composition?",
+   "options": [
+    "A dedicated inspect-slot-for-repair operation returns only that slot's current code",
+    "Any inspection of a specifically named slot returns its current code",
+    "Agents never receive implementation bodies through general inspection"
+   ],
+   "default_guess": "Expose code only through a dedicated inspection of one named slot."
+  },
+  {
+   "subject": "TrialExecution failure details",
+   "kind": "model contradiction",
+   "text": "A03 says the kernel keeps bounded exception detail, and A07 discusses a TrialExecution's `failure_detail`, but M07's Candidate fields contain no `failure_detail`.",
+   "question": "Does a TrialExecution persist failure detail, and if so what field, class and redaction rules apply?",
+   "options": [
+    "Add the same bounded `failure_detail` field as NodeExecution",
+    "Keep diagnostics only in the immediate try response",
+    "Store no trial failure detail"
+   ],
+   "default_guess": "Add a bounded persistent `failure_detail` governed by A07 and A20."
+  },
+  {
+   "subject": "File content digests",
+   "kind": "digest-definition contradiction",
+   "text": "State 1 says “Every content-derived identity and digest ... is the lowercase hex SHA-256 of the canonical JSON of the model's meaning facts”, while M22 names a file `content_digest` and trial file comparisons plainly require a digest of file bytes.",
+   "question": "What exact bytes are hashed for a file's content digest and a file fixture's value digest?",
+   "options": [
+    "The raw file bytes",
+    "Canonical JSON of a base64 string",
+    "Canonical JSON of file metadata plus bytes"
+   ],
+   "default_guess": "Use lowercase hexadecimal SHA-256 of the raw file bytes."
+  },
+  {
+   "subject": "Media-type equality",
+   "kind": "undefined comparison",
+   "text": "A05 requires file ports to have “the same media type”, while A09 explicitly compares response Content-Type case-insensitively on type and subtype and ignores parameters.",
+   "question": "Are port media types compared as exact strings, normalized type/subtype values, or full parsed media types including parameters?",
+   "options": [
+    "Exact string equality",
+    "Case-insensitive type/subtype equality with no parameters allowed on ports",
+    "Parsed media-type equality including normalized parameters"
+   ],
+   "default_guess": "Forbid parameters on port declarations and compare normalized type/subtype case-insensitively."
+  },
+  {
+   "subject": "Credential-file text normalization",
+   "kind": "vague input rule",
+   "text": "A17 decodes a credential file as UTF-8 “without one trailing newline” and refuses a “control character”, without defining CRLF handling, multiple final newlines or the control-character set.",
+   "question": "Exactly which trailing bytes are removed and which Unicode or ASCII characters cause `credential_unresolved`?",
+   "options": [
+    "Remove one LF and an immediately preceding CR; reject ASCII C0 controls and DEL",
+    "Remove exactly one LF only; reject Unicode category Cc",
+    "Trim all line endings and surrounding whitespace"
+   ],
+   "default_guess": "Remove one terminal LF and an immediately preceding CR, then reject ASCII C0 controls and DEL."
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"Function filesystem isolation\",\"kind\":\"contradiction\",\"text\":\"K-02 says a function has “no filesystem beyond its input”, while A03 rule 1 gives it “one private exchange directory” and rule 4 permits opening paths inside that directory and the read-only runtime.\",\"question\":\"May agent code read or write the exchange directory and read runtime files, or are those paths available only to the sandbox runner?\",\"options\":[\"Agent code may access both allowed trees\",\"Agent code may access only input/output files selected by the runner\",\"Agent code has no filesystem API access\"],\"default_guess\":\"Expose only runner-managed input and output files, not arbitrary runtime or exchange-directory paths.\"},{\"subject\":\"Function clock prohibition\",\"kind\":\"contradiction\",\"text\":\"A03 says it replaces “every clock ... entry point” and then says “The replaced entry points are exactly” a list that omits CPython clock sources such as `time.clock_gettime`, `time.thread_time`, `os.times` and `resource.getrusage`.\",\"question\":\"Are unlisted clock-like standard-library APIs allowed, trapped, or excluded from the runtime?\",\"options\":[\"Trap every clock-like API, including unlisted ones\",\"Trap only the enumerated APIs\",\"Remove modules exposing additional clocks\"],\"default_guess\":\"Trap every API that can disclose current or elapsed host time.\"},{\"subject\":\"Deterministic function execution\",\"kind\":\"unverifiable invariant\",\"text\":\"K-05 calls admission “a deterministic verdict”, and A03 requires “The same implementation on the same input yields the same output digest twice”, but the sandbox permits threads and other observable runtime state not covered by its traps.\",\"question\":\"What rule guarantees or checks determinism when permitted Python code can still produce different results for equal inputs?\",\"options\":[\"Strengthen the sandbox until all observable nondeterminism is excluded\",\"Run cases repeatedly and refuse inconsistent results\",\"Define determinism only as deterministic ordering of one admission run\"],\"default_guess\":\"Treat differing repeated executions as a refusal and also close known nondeterministic APIs.\"},{\"subject\":\"Resource-limit outcomes\",\"kind\":\"unverifiable condition\",\"text\":\"A03 rule 5 says “a limit hit (memory, process count, scratch, `output_bytes`)” yields `resource_exhausted`, but only says memory and process limits are enforced with `setrlimit`.\",\"question\":\"How does the kernel detect a memory or process limit that Python catches as an ordinary exception, and what exactly does `process_count` count?\",\"options\":[\"Instrument and report every denied resource operation\",\"Classify only observable signals or process exits as resource exhaustion\",\"Let caught denials remain ordinary program behavior\"],\"default_guess\":\"Count the sandbox runner as the first process and instrument denied allocations or process creation so caught failures still record `resource_exhausted`.\"},{\"subject\":\"Malformed function outputs and output_bytes\",\"kind\":\"precedence gap\",\"text\":\"A03 counts “the canonical JSON bytes of every `value` output” before `contract_violation`, but malformed returns may contain non-JSON values, cycles, missing ports or extra ports whose canonical byte count is undefined.\",\"question\":\"How are `output_bytes` and outcome precedence determined when the returned object cannot be canonically serialized or contains undeclared outputs?\",\"options\":[\"Validate the return shape first and report `contract_violation`\",\"Measure a bounded transport encoding before contract validation\",\"Count only declared serializable outputs and ignore other data for the limit\"],\"default_guess\":\"Validate enough structure to make canonicalization possible; otherwise report `contract_violation`, while enforcing a separate bounded runner channel.\"},{\"subject\":\"Trial-case input set\",\"kind\":\"missing refusal rule\",\"text\":\"A04 requires that “its input values fit the contract version's input ports” and mentions per-port “presence”, but does not say whether extra input names are refused.\",\"question\":\"Must an authored trial case contain exactly every input port and no additional names?\",\"options\":[\"Require the exact input-port set\",\"Allow omitted optional-schema inputs\",\"Ignore additional inputs\"],\"default_guess\":\"Require exactly one entry for every contract input port and no extras.\"},{\"subject\":\"Trial expected outputs\",\"kind\":\"ambiguous completeness\",\"text\":\"M06 allows `expected_outputs` to be “absent when only the absence of failure is required”, while A04 says that, “if the case states expected outputs, every output's digest equals the expected one”.\",\"question\":\"When `expected_outputs` is present, must it name every output port, or may it assert only a subset?\",\"options\":[\"It must name every output port exactly\",\"It may name any nonempty subset\",\"Missing expected outputs mean those ports are ignored\"],\"default_guess\":\"Require the exact output-port set whenever `expected_outputs` is present.\"},{\"subject\":\"Interrupted admission and explicit try\",\"kind\":\"crash lifecycle gap\",\"text\":\"A04 says admission and try execute all named cases and “records one TrialExecution per case”, but gives no transaction boundary or restart rule for a crash after only some cases ran.\",\"question\":\"After an interrupted admission or try, are partial TrialExecutions retained, discarded, resumed, or rerun as a new operation?\",\"options\":[\"Retain partial evidence and rerun the whole operation on retry\",\"Commit all TrialExecutions atomically after all cases finish\",\"Persist an admission/try operation and resume its remaining cases\"],\"default_guess\":\"Retain completed observations, create no verdict, and rerun the entire requested set on retry.\"},{\"subject\":\"Flow canonical ordering\",\"kind\":\"nondeterministic tie\",\"text\":\"A01 sorts edges only by (`to_node`, `to_port`, `from_node`, `from_port`) and constants only by (`to_node`, `to_port`), although different guarded edges or different constants can share those keys.\",\"question\":\"What breaks ties so flow identity and the first failure are independent of submission order?\",\"options\":[\"Extend the sort key with guard and content facts\",\"Preserve submission order for tied items\",\"Refuse all duplicate sort keys before identity is computed\"],\"default_guess\":\"Extend canonical sort keys with every remaining meaning fact.\"},{\"subject\":\"Empty node identifier\",\"kind\":\"reserved-value gap\",\"text\":\"A05 rule 2 says “A flow input or flow output endpoint has the empty string as its node”, but no rule forbids a FlowNode whose `node_id` is the empty string.\",\"question\":\"Is the empty string reserved and therefore refused as a node identifier?\",\"options\":[\"Reserve and refuse the empty node id\",\"Allow it and distinguish endpoint kind separately\",\"Use a non-string endpoint sentinel\"],\"default_guess\":\"Refuse an empty `node_id`.\"},{\"subject\":\"Guard comparison\",\"kind\":\"undefined equality\",\"text\":\"A13 says a guarded edge delivers when the guard port's value “equals its guard value”, without defining JSON equality.\",\"question\":\"What equality applies to objects, arrays, numbers such as `1` versus `1.0`, and booleans such as `true` versus `1`?\",\"options\":[\"Equality of canonical JSON bytes\",\"JSON structural equality with numbers compared mathematically\",\"Host-language Python equality\"],\"default_guess\":\"Use equality of canonical JSON bytes.\"},{\"subject\":\"Oversized mapped value output\",\"kind\":\"trace contradiction\",\"text\":\"A13 says a nonempty mapped node has no aggregate NodeExecution and writes its collected list when the last element record is written, while A15 says an oversized produced value “concludes the element `contract_violation`”.\",\"question\":\"Which record carries failure when individually successful mapped elements form a collected `many` value larger than `stored_value_bytes_max`?\",\"options\":[\"Change the last element's record to `contract_violation`\",\"Write a separate aggregate NodeExecution\",\"Reject mapping before execution from a provable maximum\",\"Permit mapped aggregates above the stored-value ceiling\"],\"default_guess\":\"Write an explicit aggregate failure record rather than rewriting a successful element.\"},{\"subject\":\"Draft-write activation authority\",\"kind\":\"missing pin\",\"text\":\"M26 records “the flow activation under which the run started”, but M19 and A12 pin only the flow version and function implementations, not the FlowActivation record.\",\"question\":\"How is the exact FlowActivation identity recovered after reactivation of the same version or after restart?\",\"options\":[\"Store the FlowActivation identity on the Run\",\"Derive the latest activation preceding the Run in store order\",\"Use whichever activation of the version is current when sending\"],\"default_guess\":\"Store the exact FlowActivation identity on the Run at start.\"},{\"subject\":\"Kernel release and implementation semantics\",\"kind\":\"versioning gap\",\"text\":\"A20 says each release pins the sandbox runtime and dependencies, but Implementation identity and Run pins contain no release or runtime identity, and cached AdmissionVerdicts are keyed only by implementation and corpus.\",\"question\":\"After an upgrade changes Python, traps or dependencies, which runtime executes an old implementation, and does its old admission verdict remain valid?\",\"options\":[\"Implementations and verdicts pin their original runtime release\",\"Every upgrade invalidates and reruns admission verdicts\",\"New releases must execute old implementations with exactly the old runtime\",\"Old verdicts remain valid under the new runtime\"],\"default_guess\":\"Include a sandbox-runtime release identity in execution and admission identity, and readmit under a changed runtime.\"},{\"subject\":\"Pinned dependency versions\",\"kind\":\"unspecified invariant\",\"text\":\"A20 says “A release pins the exact versions of the kernel's Python dependencies and of the sandbox runtime”, but names only CPython 3.12 and gives no dependency set or exact bubblewrap version.\",\"question\":\"Which exact dependency and sandbox versions constitute release v1?\",\"options\":[\"Specify them in the accepted release text\",\"Treat a checked-in lockfile and build manifest as the normative release record\",\"Allow the implementing agent to choose them\"],\"default_guess\":\"Make the checked-in lockfile and build manifest normative and record the exact bubblewrap build/version.\"},{\"subject\":\"Manifest structural validation\",\"kind\":\"incomplete refusal conditions\",\"text\":\"A08 rule 5 covers invalid JSON, missing `service` or `capabilities`, duplicate capability names and invalid selected fields, but does not define outcomes for wrong container types, non-object capability entries, missing `name`, malformed `required_headers`, duplicate JSON members or non-JCS numbers.\",\"question\":\"What complete manifest shape is accepted, and where do each of these malformed forms appear in the ordered mismatch checks?\",\"options\":[\"Validate against a closed manifest schema before A08's semantic checks\",\"Map every malformed form into the nearest listed A08 check\",\"Treat unlisted malformed forms as internal errors\"],\"default_guess\":\"Apply a closed manifest schema first and classify its first failure as manifest mismatch.\"},{\"subject\":\"Service base URL\",\"kind\":\"incomplete URL policy\",\"text\":\"A08 accepts an “absolute `http` or `https` URL with a host”, and A09 joins it by taking the base URL “without a trailing `/`” and appending the path.\",\"question\":\"Are user information, query strings, fragments, nonempty base paths, percent escapes and multiple trailing slashes allowed, and exactly how are they joined?\",\"options\":[\"Allow only scheme, host and optional port\",\"Allow a base path but forbid user information, query and fragment\",\"Permit all absolute URLs and define a standards-based resolution algorithm\"],\"default_guess\":\"Allow scheme, host, optional port and an optional normalized base path; forbid user information, query and fragment.\"},{\"subject\":\"Plain HTTP loopback exception\",\"kind\":\"vague target check\",\"text\":\"A09 permits plain HTTP when the `api_base_url` “host is a loopback address”.\",\"question\":\"Does this mean only a literal loopback IP, a hostname such as `localhost`, or any hostname whose DNS result is loopback, and must every resolved address be loopback?\",\"options\":[\"Literal loopback IP addresses only\",\"`localhost` plus literal loopback addresses\",\"DNS-resolved hosts when every result is loopback\"],\"default_guess\":\"Allow only literal IPv4 or IPv6 loopback addresses.\"},{\"subject\":\"JSON request Content-Type\",\"kind\":\"missing wire value\",\"text\":\"A10 says a request with a body sends `content-type`, but A09 specifies a Content-Type value only for multipart parts and multipart bodies, not for an ordinary JSON body.\",\"question\":\"What exact `Content-Type` header is sent for POST, PUT or PATCH with a JSON object body?\",\"options\":[\"`application/json`\",\"`application/json; charset=utf-8`\",\"A manifest-declared value\"],\"default_guess\":\"Use `application/json` with no parameters.\"},{\"subject\":\"Multipart wire representation and approval\",\"kind\":\"contradiction\",\"text\":\"State 0 says approval covers the “fully built request” and “Any difference at send ... asks again”, while A10 excludes the multipart boundary and the `content-length` value from the request description and does not define multipart delimiters or boundary generation.\",\"question\":\"Must the actual multipart bytes, boundary and Content-Length be fixed at approval time, or may they vary while the canonical parts remain equal?\",\"options\":[\"Fix and persist the exact wire bytes and boundary\",\"Use a deterministic boundary derived from the canonical parts\",\"Approve canonical multipart semantics and explicitly permit wire-boundary differences\"],\"default_guess\":\"Use a deterministic boundary and include the resulting Content-Type and Content-Length values in the approved request description.\"},{\"subject\":\"Header-name changes in approval digests\",\"kind\":\"internal contradiction\",\"text\":\"A10 rule 1 says a difference in “a required header's name” or “the credential header's name” voids approval, but rule 7 lower-cases all header names before computing `request_digest`.\",\"question\":\"Does a case-only change in a header name void approval?\",\"options\":[\"Yes; preserve original header-name spelling in the digest\",\"No; header names are compared case-insensitively\",\"Only required-header case changes matter\"],\"default_guess\":\"Treat header names case-insensitively and revise the name-difference rule accordingly.\"},{\"subject\":\"Port names in multipart headers\",\"kind\":\"encoding gap\",\"text\":\"A09 emits `Content-Disposition: form-data; name=\\\"<port>\\\"` and `filename=\\\"<port>\\\"`, but port names have no syntax restriction or escaping rule.\",\"question\":\"How are quotes, backslashes, control characters, non-ASCII text and empty port names represented or refused?\",\"options\":[\"Restrict port names to a safe ASCII identifier grammar\",\"Escape them using a specified multipart parameter grammar\",\"Use RFC 5987 extended parameters for non-ASCII names\"],\"default_guess\":\"Restrict port names used by bindings to a nonempty safe ASCII identifier grammar.\"},{\"subject\":\"HTTP client failures outside the outcome table\",\"kind\":\"unclassified outcome\",\"text\":\"A09's “nothing could be sent” row names only name resolution, connection and TLS failures, and its pre-send list omits local encoder errors, missing spool bytes, socket setup failures and write failures before the first request byte.\",\"question\":\"How are local failures not covered by the table classified, and do they create an EffectAttempt?\",\"options\":[\"Treat every failure before the first request byte as `service_unreachable` and `not_sent`\",\"Treat local invariant or spool failures as `internal_error`\",\"Treat request-construction failures as `operation_failed` before writing an EffectAttempt\"],\"default_guess\":\"Use `operation_failed` for deterministic construction problems, `internal_error` for corrupted stored inputs, and `not_sent` only for transport failures.\"},{\"subject\":\"Error-response failure_detail\",\"kind\":\"undefined encoding\",\"text\":\"A09 permits a bounded error-response body as `failure_detail`, while A20 truncates failure detail “at a UTF-8 character boundary”; an HTTP error body need not be UTF-8.\",\"question\":\"How is an arbitrary binary or invalid-UTF-8 error body converted into bounded failure-detail text?\",\"options\":[\"Store only valid UTF-8 and otherwise omit it\",\"Decode with replacement characters\",\"Store a bounded base64 or hexadecimal representation\"],\"default_guess\":\"Decode strict UTF-8 and omit the body when decoding fails.\"},{\"subject\":\"Credentials and tokens echoed by untrusted data\",\"kind\":\"contradictory invariant\",\"text\":\"A17 says a credential “never enters the store, a record, a trace, a preview, a failure detail, a log line ... or a response”, and A16 says “No response carries a token”, while service responses are untrusted values and error bodies may be retained.\",\"question\":\"What happens if a service echoes a credential or token, or a caller deliberately submits identical bytes as an ordinary value?\",\"options\":[\"Scan and redact exact configured secrets everywhere\",\"Suppress all service error bodies and reject values equal to configured secrets\",\"Interpret the prohibition as applying only to values inserted by the kernel itself\"],\"default_guess\":\"Never retain service error bodies and scan outbound responses and logs for exact configured token and credential values.\"},{\"subject\":\"Hot configuration reload security\",\"kind\":\"security contradiction\",\"text\":\"A17 requires the configuration file to be regular, non-symlink, owner-owned and private, but A16 rule 2 says “Exactly four checks apply to a re-read” and lists only parsing and token-list checks.\",\"question\":\"After startup, may a replaced symlinked, foreign-owned or group-readable configuration file supply the live token list?\",\"options\":[\"Reapply all A17 file-security checks on every re-read\",\"Keep the original securely opened file descriptor and reread only it\",\"Apply only the four listed checks\"],\"default_guess\":\"Reapply every A17 ownership, type, symlink and permission check on each re-read.\"},{\"subject\":\"Data-directory privacy\",\"kind\":\"vague refusal condition\",\"text\":\"A18 says the data directory and everything in it are “private to the kernel's user” without defining ownership, mode bits, ACLs or required directory permissions.\",\"question\":\"What exact filesystem ownership and permission checks decide whether startup is refused?\",\"options\":[\"Require kernel ownership and no group/other permission bits\",\"Also reject ACL entries granting another principal access\",\"Require a fixed mode such as 0700 for directories and 0600 for files\"],\"default_guess\":\"Require kernel-user ownership, no group or other mode bits, and no ACL granting another principal access.\"},{\"subject\":\"Record order inside one transaction\",\"kind\":\"ordering gap\",\"text\":\"K-17 and A18 require “one order of records”, while several store calls atomically write multiple records, but no order is defined among records created by the same call.\",\"question\":\"How are store positions assigned within a multi-record transaction for listing, activation identity and oldest-first processing?\",\"options\":[\"The store API specifies a fixed per-call record-type and item order\",\"All records in one transaction share a position plus a deterministic subposition\",\"Only entity records receive store positions\"],\"default_guess\":\"Assign a monotonically increasing position to each record in an explicitly specified insertion order.\"},{\"subject\":\"Filtered pagination under status changes\",\"kind\":\"contradiction\",\"text\":\"A16 says the next page starts below the prior item's store position, but also says a record whose filtered status changes “leaves or enters the pages still to come”. A newly matching record above the continuation position cannot enter a later page.\",\"question\":\"Are filtered pages a per-request live view, a snapshot, or a cursor over creation positions that may omit newly matching older-page records?\",\"options\":[\"Use a snapshot fixed by the first page\",\"Keep the positional cursor and document that newly matching records above it are omitted\",\"Use a mutable query cursor that can revisit positions\"],\"default_guess\":\"Use a snapshot token that fixes the filter view at the first page.\"},{\"subject\":\"Run-input validation precedence\",\"kind\":\"check-order contradiction\",\"text\":\"A16 validates a run input's `stored_value_bytes_max` as a request-schema bound before operation checks, while A12 says each value is checked to fit its schema “and then its size bound”.\",\"question\":\"When one run input is both schema-invalid and oversized, which failure is reported first?\",\"options\":[\"The surface size bound first\",\"The port schema failure first\",\"Remove the size bound from the surface schema and leave it to A12\"],\"default_guess\":\"Remove this semantic size check from generic surface validation so A12 can apply schema then size.\"},{\"subject\":\"MCP transport and token carriage\",\"kind\":\"missing protocol rule\",\"text\":\"The kernel has an `mcp_listen_address`, is behind a reverse proxy, and says every MCP request “carries one token”, but no MCP transport, token location or definition of “request message as received” is given.\",\"question\":\"Which MCP transport is used, where is the token carried, and which bytes count toward `surface_request_bytes_max`?\",\"options\":[\"Streamable HTTP with an Authorization header and the JSON-RPC body counted\",\"Streamable HTTP with a token field inside each operation request\",\"Another fixed framed transport with its framing bytes counted\"],\"default_guess\":\"Use MCP Streamable HTTP, carry a bearer token in Authorization, and count the decoded HTTP request body bytes.\"},{\"subject\":\"Repair-context implementation disclosure\",\"kind\":\"unenforceable access rule\",\"text\":\"K-12 says an agent receives implementation bodies “for repair” but receives contracts and bindings “for composition”, while the kernel has no model or rule that identifies the agent's purpose for an inspection request.\",\"question\":\"Which concrete request is allowed to return implementation code, and how does the kernel distinguish repair from composition?\",\"options\":[\"A dedicated inspect-slot-for-repair operation returns only that slot's current code\",\"Any inspection of a specifically named slot returns its current code\",\"Agents never receive implementation bodies through general inspection\"],\"default_guess\":\"Expose code only through a dedicated inspection of one named slot.\"},{\"subject\":\"TrialExecution failure details\",\"kind\":\"model contradiction\",\"text\":\"A03 says the kernel keeps bounded exception detail, and A07 discusses a TrialExecution's `failure_detail`, but M07's Candidate fields contain no `failure_detail`.\",\"question\":\"Does a TrialExecution persist failure detail, and if so what field, class and redaction rules apply?\",\"options\":[\"Add the same bounded `failure_detail` field as NodeExecution\",\"Keep diagnostics only in the immediate try response\",\"Store no trial failure detail\"],\"default_guess\":\"Add a bounded persistent `failure_detail` governed by A07 and A20.\"},{\"subject\":\"File content digests\",\"kind\":\"digest-definition contradiction\",\"text\":\"State 1 says “Every content-derived identity and digest ... is the lowercase hex SHA-256 of the canonical JSON of the model's meaning facts”, while M22 names a file `content_digest` and trial file comparisons plainly require a digest of file bytes.\",\"question\":\"What exact bytes are hashed for a file's content digest and a file fixture's value digest?\",\"options\":[\"The raw file bytes\",\"Canonical JSON of a base64 string\",\"Canonical JSON of file metadata plus bytes\"],\"default_guess\":\"Use lowercase hexadecimal SHA-256 of the raw file bytes.\"},{\"subject\":\"Media-type equality\",\"kind\":\"undefined comparison\",\"text\":\"A05 requires file ports to have “the same media type”, while A09 explicitly compares response Content-Type case-insensitively on type and subtype and ignores parameters.\",\"question\":\"Are port media types compared as exact strings, normalized type/subtype values, or full parsed media types including parameters?\",\"options\":[\"Exact string equality\",\"Case-insensitive type/subtype equality with no parameters allowed on ports\",\"Parsed media-type equality including normalized parameters\"],\"default_guess\":\"Forbid parameters on port declarations and compare normalized type/subtype case-insensitively.\"},{\"subject\":\"Credential-file text normalization\",\"kind\":\"vague input rule\",\"text\":\"A17 decodes a credential file as UTF-8 “without one trailing newline” and refuses a “control character”, without defining CRLF handling, multiple final newlines or the control-character set.\",\"question\":\"Exactly which trailing bytes are removed and which Unicode or ASCII characters cause `credential_unresolved`?\",\"options\":[\"Remove one LF and an immediately preceding CR; reject ASCII C0 controls and DEL\",\"Remove exactly one LF only; reject Unicode category Cc\",\"Trim all line endings and surrounding whitespace\"],\"default_guess\":\"Remove one terminal LF and an immediately preceding CR, then reject ASCII C0 controls and DEL.\"}]}"
+}

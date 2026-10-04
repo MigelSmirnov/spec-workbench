@@ -112,8 +112,12 @@ worker.
    StoredValue, the JSON array of the elements' values in element order, whose
    `value_schema` is the array schema with the port's schema as `items`, as
    for every value of a `many` port (M21),
-   written in the store change that writes the node's last element record and
-   named, like any value, by the records that receive it; mapping over such a
+   written by `runs` when the list is first delivered — never in an element's
+   own store change, which for an operation element is `effects'` — and
+   named, like any value, by the records that receive it; a list whose
+   canonical bytes exceed `stored_value_bytes_max` is not written: the node is
+   then failed for its dependants, derived like the list from the elements'
+   records, which stay as they are (A15 rule 4); mapping over such a
    list gives each element the list's class; a file list is the
    elements' SpooledFiles in element order, each keeping its own record, and
    the reference naming it carries the list's class. A non-empty list has no
@@ -197,7 +201,11 @@ Reuses cabinet-flow decision 18, narrowed by K-09: no timed retries, no reconcil
 4. A run's spool is emptied when it ends `succeeded`, `refused` or `cancelled`.
    A `failed` run keeps its spool until the owner or an agent releases it; release
    removes the files, records who and when, and is refused for a run that is not
-   `failed` or was already released (K-10).
+   `failed` or was already released (K-10). The record that ends or releases the
+   run is written first and stands; the files are removed after it, and a
+   removal that fails or is interrupted fails nothing: what is left is removed
+   at the next start (A18 rule 4), and from that record on no file of the run
+   is served.
 5. On start, before the surface accepts a request, the kernel turns every
    `in_flight` EffectAttempt into `unknown` (A11 rule 4) and then derives every
    run that has not ended — `running`, `awaiting_approval` or `pending` — again
@@ -278,7 +286,8 @@ spool, files only as fixtures beyond a run.
    `stored_value_bytes_max` is checked only after the execution or the response
    has otherwise succeeded, so A03's `resource_exhausted` for `output_bytes` wins
    when both hold; it concludes the element `contract_violation` with detail
-   `value_too_large`; a constant or a trial value above it is refused when
+   `value_too_large`; a mapped node's value list above it fails the node for
+   its dependants without changing any element's record (A13 rule 6); a constant or a trial value above it is refused when
    authored, by the surface's request bound (A16 rule 4) before any check of
    composition or of the trial case; a flow input above it refuses the start (A12).
 5. Capturing a failed execution into a trial corpus (M06) is allowed only for
