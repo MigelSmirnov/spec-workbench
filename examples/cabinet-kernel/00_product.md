@@ -29,8 +29,8 @@ operation of a microservice. The agent writes a function, the kernel tries it in
 a sandbox and admits it; the agent composes a flow; the kernel proves the flow,
 runs it, asks the owner before each effect of the classes K-08 stops for — a
 `draft-write` runs under the owner's activation of the flow instead, except that
-sending one again after `not_applied` needs a fresh approval, as for every class
-(K-08) — and records what happened.
+sending one again after the owner resolved its unknown outcome `not_applied`
+needs a fresh approval, as for every class (K-08) — and records what happened.
 
 The stable part of the platform lives in the microservices. The changing part
 lives in functions and flows, and changing it needs no new application, module

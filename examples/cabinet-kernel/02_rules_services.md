@@ -265,10 +265,14 @@ generated statements, no suspension.
    when one applies, otherwise by asking anew as rule 2 says; or an active StandingGrant M25 for that
    node of the run's pinned flow version, when the node is not `destructive` and
    the send is not a resend after `not_applied` (A11). When both exist, the
-   approval is used and recorded as the authority. A fresh approval after
-   `not_applied` is one whose `attempt_number` is greater than that of the
-   element's latest attempt resolved `not_applied`; approvals requested before
-   it never count. When several approvals count and
+   approval is used and recorded as the authority. A resend after
+   `not_applied` is a send of an element whose `unknown` attempt the owner
+   resolved `not_applied` (A11 rule 3); an attempt answered 4xx is
+   `not_applied` too, but concludes its element `operation_refused` (A09 rule
+   5) and is never sent again, and no other element or run is affected. A
+   fresh approval after `not_applied` is one whose `attempt_number` is greater
+   than that of the element's latest attempt resolved `not_applied`; approvals
+   requested before it never count. When several approvals count and
    match, the oldest in store order is used (State 5, closed question 2).
    At send time the instance checks are A09 rule 6's, with their own details
    (`instance_not_selected`, `instance_address_missing` — the same "counts as
