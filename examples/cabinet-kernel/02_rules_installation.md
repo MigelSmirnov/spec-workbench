@@ -40,9 +40,10 @@ Reuses cabinet-flow decisions 21 and 22, narrowed by K-11 and K-15.
 2. Before evaluating each request the kernel reads the configuration file and
    compares the SHA-256 of its bytes with that of the last read; when they differ,
    or the file cannot be read, it re-reads it (K-15) and takes from it only the
-   token list. Exactly three checks apply to a re-read: the
+   token list. Exactly four checks apply to a re-read: the
    file can be read and parsed; every token is at least 43 characters; no two
-   tokens are equal. When all three hold, the new list replaces the old one.
+   tokens are equal; no two agent tokens share a name (M28). When all four
+   hold, the new list replaces the old one.
    When any fails, every request is refused, the owner's included, until a
    re-read passes, with the same one refusal as an unknown token (rule 1); the
    old list is not kept, since it may hold a revoked token.

@@ -51,8 +51,11 @@ record checked by `design_lint --state 2`, recorded as such in `30_trace.json`.
   inputs and function outputs, `effects` for service outputs — always
   through `store.put_value_bytes`, which stores equal bytes once (A18 rule 4);
   NodeExecution M23 is written by `effects` for the record that concludes an
-  operation element, because it must share `effects`' outcome transaction (A11
-  rule 1), and by `runs` for every other record.
+  operation element by a send, a pre-send failure or the owner's refusal,
+  because it must share `effects`' outcome transaction (A11 rule 1), and by
+  `runs` for every other record — an operation element concluded
+  `contract_violation` on a misfit input before `effects` is called included
+  (A13 rule 3).
 - **Reading records.** A module reads what a module it may know owns through
   that module's capability, and never decides from another module's raw
   records. The one exception is `surface` returning records as they are for
@@ -120,7 +123,8 @@ record checked by `design_lint --state 2`, recorded as such in `30_trace.json`.
   rule 1), its status being the outcome name of A09 rule 5 or rule 6, or
   `refused_by_owner` for a refusal (A10 rule 3). Every
   other record — function elements, skips, upstream failures, a map over an
-  empty list — is built and written by `runs`.
+  empty list, a receiving element of either kind refused a misfit input (A13
+  rule 3) — is built and written by `runs`.
 - **Order of records written together.** A15 rule 1 orders the records of nodes
   that become non-executable together: skips and upstream failures, all written
   by `runs` in one call. An operation's concluding record is an executed record,
@@ -470,7 +474,7 @@ re-read of the token list on every request when the file's digest changes, and
 the state "no valid list" after a failed re-read — including a file that
 cannot be read, which counts as changed (A16 rule 2) — in which `current_token_list`
 returns none and `surface` refuses every request, with
-the three checks of A16 rule 2; the selected manifest instance per service; the
+the four checks of A16 rule 2; the selected manifest instance per service; the
 manifest location and revision fixed at start (M28); resolution of a service
 credential only when a request to that service is built.
 
@@ -762,7 +766,8 @@ request that moves it, guards, maps and failures, waiting points, resume,
 cancel, the run's spool and its release, which ended runs no longer keep a
 spool at start, start-up recovery of runs left `running`, the conditions of
 capturing a failed execution (A15 rule 5), and the trace: every
-NodeExecution other than the one that concludes an operation element, the
+NodeExecution other than the one `effects` writes to conclude an operation
+element by a send, a pre-send failure or the owner's refusal, the
 order of records written together (A15 rule 1), and the class of function
 outputs and flow inputs (A07 rule 3).
 

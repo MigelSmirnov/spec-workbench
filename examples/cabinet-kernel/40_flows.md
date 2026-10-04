@@ -892,8 +892,9 @@ EffectAttempt M26 and the concluding NodeExecution M23 written by
 - A running kernel with a working sandbox, no `in_flight` attempt and no run
   left `running`; every run rests or has ended truthfully. Produced by the
   modules named in each step.
-- Spools of ended runs that keep none are gone; spools of `failed` unreleased
-  runs stay.
+- Spools of ended runs that keep none are removed, except one that cannot be
+  removed, which stays until a later start removes it; spools of `failed`
+  unreleased runs stay.
 
 ### Errors
 

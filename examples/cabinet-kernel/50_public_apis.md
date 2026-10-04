@@ -951,7 +951,7 @@ None.
 
 ### Enforces
 
-Re-read when the file's digest changed or it cannot be read; three checks only;
+Re-read when the file's digest changed or it cannot be read; the four checks only;
 a failed re-read leaves no list until one passes (A16 rule 2).
 
 ### Errors
@@ -2133,7 +2133,9 @@ The active StandingGrant — new, or the one already active.
 
 ### Observable effect
 
-Later sends of that node in runs of that version need no approval.
+Later sends of that node in runs of that version need no approval, except a
+resend after `not_applied`, which needs a fresh approval whatever grant exists
+(A10 rule 1).
 
 ### Enforces
 
@@ -2207,8 +2209,11 @@ send, outcome record.
 ### Inputs
 
 The run's id, its pinned flow version, the FlowActivation under which it
-started, that it has not ended, the node and element, the input values by port,
-the actor.
+started, that it has not ended, the node and element, the element's inputs by
+port as references — StoredValues and SpooledFiles, never bytes — the actor.
+`effects` reads their bytes through `store.read_value_bytes` to build the
+request and names the same references in the approval preview and the
+NodeExecution it writes.
 
 ### Outputs
 
@@ -2561,7 +2566,9 @@ Done.
 
 ### Observable effect
 
-Spools of ended runs that keep none are gone; runs left `running` rest or end.
+Spools of ended runs that keep none are removed — one that cannot be removed
+stays, unreported, and is removed again at the next start —; runs left
+`running` rest or end.
 
 ### Enforces
 
