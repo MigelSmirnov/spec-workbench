@@ -677,7 +677,8 @@ has not ended, and the element; EffectAttempt M26 is changed by
    waiting on `service_unreachable`. Otherwise it reaches every such element
    again in (`node_id`, `map_index`) order through
    `capability:effects.reach_operation_element`, authority checked as it
-   stands at the resume (A14 rule 2): for a `draft-write` element that is not
+   stands at the resume (A14 rule 2): none for a `read` element (A10 rule 6);
+   for a `draft-write` element that is not
    a resend after `not_applied`, the flow activation under which the run
    started; otherwise the unused approval first, then a grant still active;
    an element whose grant was revoked waits for approval instead.

@@ -217,8 +217,9 @@ outcomes map to NodeExecution statuses.
    an error response is not interpreted; at most `failure_detail_bytes_max` of it
    is kept as `failure_detail`, whose class is the highest of the execution's
    class and the classes the binding declares for its outputs, under A07 rule 5.
-   Before anything is kept, the whole body is searched for the bytes of the
-   credential value sent with the request; when they occur, the body is
+   Before anything is kept, the body as read — reading stops at the ceiling
+   (rule 5) — is searched, before it is cut, for the bytes of the credential
+   value sent with the request; when they occur, the body is
    dropped whole and `failure_detail` is exactly `error body withheld: it
    contained the credential` (A17 rule 2). Only that verbatim echo is
    searched for; a body carrying the credential in another encoding is kept

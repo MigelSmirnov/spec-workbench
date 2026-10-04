@@ -116,7 +116,8 @@ worker.
    own store change, which for an operation element is `effects'` — and
    named, like any value, by the records that receive it; a list whose
    canonical bytes exceed `stored_value_bytes_max` is not written: the node is
-   then failed for its dependants, derived like the list from the elements'
+   then failed for its dependants, which conclude `upstream_failed` and write
+   that record (A15 rule 1), derived like the list from the elements'
    records, which stay as they are (A15 rule 4); mapping over such a
    list gives each element the list's class; a file list is the
    elements' SpooledFiles in element order, each keeping its own record, and
@@ -188,8 +189,8 @@ Reuses cabinet-flow decision 18, narrowed by K-09: no timed retries, no reconcil
 2. Resume, by the owner or an agent, sends again, in (`node_id`, `map_index`)
    order — an element without `map_index` before index 0 — every element waiting
    on `service_unreachable`. Each is reached again by the order of A11 rule 1, so
-   its authority is checked as it stands at the resume (A10 rule 1): for a
-   `draft-write` element, the flow activation under which the run started,
+   its authority is checked as it stands at the resume (A10 rule 1): a `read`
+   element asks none (A10 rule 6); for a `draft-write` element, the flow activation under which the run started,
    unless it is a resend after `not_applied`; otherwise its unused approval
    (M24), which is used first when both exist, or a grant still active; an element whose grant was revoked meanwhile
    waits for approval instead. All these resends come first; only then does the
