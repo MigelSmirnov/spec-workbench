@@ -21,6 +21,9 @@ class Provider(Protocol):
         """Return the model's text and its usage."""
 
 
+LATER_DIR = "later"
+
+
 def _load_env(path: Path) -> None:
     if not path.is_file():
         return
@@ -93,7 +96,13 @@ class CodexCliProvider:
     `codex exec` once, ephemeral and read-only, in an empty temporary directory
     and without the user's Codex configuration, so no project file, rule or MCP
     server reaches the model.
+
+    `complete_with_files` is the one exception: the files it is given are
+    written under `later/` of that directory, the only files the model may
+    read there, so it searches them instead of receiving them whole.
     """
+
+    reads_files = True
 
     def __init__(self, model: str | None = None, reasoning: str | None = None):
         self.model = model or os.environ.get("DESIGN_QUESTIONS_CODEX_MODEL", DEFAULT_CODEX_MODEL)
@@ -101,13 +110,31 @@ class CodexCliProvider:
         self.name = f"codex-cli:{self.model}:{self.reasoning}"
 
     def complete(self, instruction: str, text: str) -> tuple[str, dict[str, Any]]:
-        prompt = (
-            f"{instruction}\n\n"
+        return self._exec(
+            instruction, text,
             "Answer from the text below alone. Do not run commands or read files; "
-            "reply with the requested output and nothing else.\n\n"
-            f"=== TEXT ===\n{text}"
+            "reply with the requested output and nothing else.",
+            {},
         )
+
+    def complete_with_files(self, instruction: str, text: str, files: dict[str, str]) -> tuple[str, dict[str, Any]]:
+        listing = ", ".join(f"{LATER_DIR}/{name}" for name in files)
+        return self._exec(
+            instruction, text,
+            f"Answer from the text below and from the files {listing} in the working "
+            "directory. You may search and read those files; read nothing else, change "
+            "nothing, and reply with the requested output and nothing else.",
+            files,
+        )
+
+    def _exec(self, instruction: str, text: str, rule: str, files: dict[str, str]) -> tuple[str, dict[str, Any]]:
+        prompt = f"{instruction}\n\n{rule}\n\n=== TEXT ===\n{text}"
         with tempfile.TemporaryDirectory(prefix="design-questions-codex-") as work:
+            if files:
+                later = Path(work) / LATER_DIR
+                later.mkdir()
+                for name, body in files.items():
+                    (later / name).write_text(body, encoding="utf-8")
             answer_file = Path(work) / "answer.txt"
             command = [
                 os.environ.get("DESIGN_QUESTIONS_CODEX_BIN", "codex"), "exec",

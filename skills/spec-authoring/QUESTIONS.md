@@ -53,9 +53,29 @@ repeated topic into one kind, and only two kinds keep a state open:
 | `contradiction` | two passages say different things | two quotes, verbatim in the texts | yes |
 | `consequential_gap` | two careful implementers build different behaviour that the owner, an agent, a caller or a service notices | the two behaviours and who notices | yes |
 | `answered` | the texts already answer it | the answering quote, verbatim in the texts | no |
+| `answered_later` | only with `--provider codex`: a later state's text already decides it | the deciding quote, verbatim in the later states' texts | no |
 | `later_state` | it belongs to a later state | a state number after this one | no |
 | `indifferent` | no one acts differently on any answer | the reason | no |
 | `preexisting` | only with `--since`: about a passage the change did not touch | the quote, verbatim in both versions | no |
+
+### Topics a later state already decides
+
+The reviews read States 0..N only, so a question whose answer was written
+later — an encoding in a State 7 note, a field in a State 6 contract — comes
+back as a gap every round. The generator reads those later texts too, so it does
+not guess there. Cabinet Kernel State 2 ran 66 rounds without closing, its
+points per review flat at 66–95; on 2026-10-04 its two blocking topics (the
+`idempotency_key_fields` of a `read` binding, the Content-Type of a JSON body)
+were both already decided in State 7 notes, and answering them again in State 2
+would have contradicted one of them.
+
+With `--provider codex` the judge therefore also gets the top-level documents of
+the states after N, as files under `later/` of its otherwise empty, read-only
+directory. It searches them instead of receiving them whole, so the context of a
+State 2 judge grows by what it reads, not by ~40k tokens of contracts and notes;
+the reviews are unchanged. Their digests are kept in the round's `judge` as
+`later_documents`; the state's closure still compares only States 0..N. A judge
+that cannot read files (the Responses API) is not offered `answered_later`.
 
 The judge is not trusted: a judgement whose evidence fails its check — a quote
 not found character for character, a "later" state that is not later — blocks

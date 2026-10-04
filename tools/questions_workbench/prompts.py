@@ -51,7 +51,7 @@ from those that need not. Judge each topic by exactly one kind:
   encodings, formats, schemas, signatures, field types and notes belong to
   State 6 or later). Name that state's number in "later_state".
 - "indifferent": any answer is acceptable, because no caller, owner or service
-  acts differently on the difference. Say why in "why".{preexisting}
+  acts differently on the difference. Say why in "why".{preexisting}{answered_later}
 
 Quotes are checked mechanically against the texts: copy them character for
 character, without ellipsis, at least a full clause. A quote not found in the
@@ -69,8 +69,18 @@ PREEXISTING = """
   that passage verbatim; it must appear unchanged in both versions."""
 
 
-def judge_instruction(state: int, reopened: bool) -> str:
-    return JUDGE.format(state=state, preexisting=PREEXISTING if reopened else "")
+ANSWERED_LATER = """
+- "answered_later": a later state's text already decides it, so the generator,
+  which reads that text too, does not guess. The later states' texts are the
+  files {files}; search them (by the names, fields and operations the topic
+  is about) before you judge a topic a consequential_gap. Quote the deciding
+  passage verbatim from those files. Never for a contradiction: two passages up
+  to State {state} that disagree are not reconciled by a later text."""
+
+
+def judge_instruction(state: int, reopened: bool, later_files: list[str] | None = None) -> str:
+    answered_later = ANSWERED_LATER.format(files=", ".join(later_files), state=state) if later_files else ""
+    return JUDGE.format(state=state, preexisting=PREEXISTING if reopened else "", answered_later=answered_later)
 
 
 def judge_input(texts: str, topics: list[dict], change: str | None) -> str:
