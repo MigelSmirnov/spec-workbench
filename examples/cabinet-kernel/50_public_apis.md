@@ -1068,8 +1068,9 @@ None.
 
 ### Enforces
 
-Resolved only when a request to that service is built; the value never enters a
-record, trace, preview, detail, log, argument or response (A17 rule 2).
+Resolved only when a request to that service is built; the kernel never puts the
+value into a record, trace, preview, detail, log, argument or response (A17
+rule 2); a service's error body echoing it verbatim is withheld (A09 rule 7).
 
 ### Errors
 

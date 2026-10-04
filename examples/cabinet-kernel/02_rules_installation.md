@@ -142,8 +142,12 @@ Reuses cabinet-flow decision 23, narrowed by K-16.
    is missing, unreadable, not such a file, not UTF-8, or holds an empty value
    or a control character, fails
    that request's pre-send check `credential_unresolved` and stops nothing
-   else. A resolved value is added as that header. It never enters the store, a record, a trace, a preview, a
-   failure detail, a log line, a process argument or a response.
+   else. A resolved value is added as that header. The kernel never puts it
+   into the store, a record, a trace, a preview, a failure detail, a log line,
+   a process argument or a response. A service's own answer is not the
+   kernel's text: an error body that echoes the value verbatim is withheld
+   (A09 rule 7); one that carries it in another encoding is not recognised,
+   and is protected only by the class of its `failure_detail`.
 3. A function never receives a credential: its environment holds only the hash
    seed (A03) and its
    inputs are values that crossed a proven edge.
@@ -154,7 +158,8 @@ Reuses cabinet-flow decision 23, narrowed by K-16.
 ### Formal invariants
 
 ```text
-credential IN {store, record, trace, preview, failure_detail, log, argv, response} -> never
+kernel_writes(credential) INTO {store, record, trace, preview, failure_detail, log, argv, response} -> never
+verbatim(credential) IN error_body -> body withheld (A09 rule 7)
 credential_resolved -> at_request_build AND for_its_service_only
 instance(service) = installation.selected(service)
 config_file_mode -> owner_only_readable
