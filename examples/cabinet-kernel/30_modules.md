@@ -774,7 +774,9 @@ outputs and flow inputs (A07 rule 3).
 ### Knows
 
 `models`, `data_provider`, `canonical_values`, `clock`, `store`, `sandbox`,
-`functions` (current activation), `flows` (active version), `effects`.
+`functions` (current activation, a function node's ports), `bindings` (an
+operation node's ports, through `bindings.read_binding`), `flows` (active
+version), `effects`.
 
 ### Must not own
 

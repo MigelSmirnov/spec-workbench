@@ -124,7 +124,8 @@ Reuses cabinet-flow decision 23, narrowed by K-16.
    the selected manifest instance name of each service it selects one for; at
    most one credential for each service it gives one: a header name — an HTTP
    field-name token, or the kernel refuses to start — and the reference that
-   resolves to its value on the host (a service with none fails only its own
+   resolves to its value on the host: the absolute path of a secret file, or
+   the kernel refuses to start (a service with none fails only its own
    requests, rule 2); and the
    address the kernel's one `mcp` entrance listens on, which the host's reverse
    proxy reaches (owner, 2026-10-03, raised by the pre-contract data closure).
@@ -132,12 +133,15 @@ Reuses cabinet-flow decision 23, narrowed by K-16.
    no environment variable. The file
    must be a regular file, not a symbolic link, owned by the kernel's user, with
    no permission for group or others; the kernel refuses to start otherwise.
-2. A credential is resolved only when a request to its service is built — a
-   service the installation gives no credential, or whose secret file is
-   missing, unreadable or holds an empty value or a control character, fails
+2. A credential is resolved only when a request to its service is built: its
+   secret file is read then, without following a symbolic link, and must be a
+   regular file owned by the kernel's user with no permission for group or
+   others; its content decoded as UTF-8, without one trailing newline, is the
+   value. A service the installation gives no credential, or whose secret file
+   is missing, unreadable, not such a file, not UTF-8, or holds an empty value
+   or a control character, fails
    that request's pre-send check `credential_unresolved` and stops nothing
-   else — and is
-   added as that header. It never enters the store, a record, a trace, a preview, a
+   else. A resolved value is added as that header. It never enters the store, a record, a trace, a preview, a
    failure detail, a log line, a process argument or a response.
 3. A function never receives a credential: its environment holds only the hash
    seed (A03) and its

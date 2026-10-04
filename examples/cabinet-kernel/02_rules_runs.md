@@ -113,7 +113,9 @@ worker.
    written in the store change that writes the node's last element record and
    named, like any value, by the records that receive it; mapping over such a
    list gives each element the list's class; a file list is the
-   elements' SpooledFiles in element order, each keeping its own record. A port's
+   elements' SpooledFiles in element order, each keeping its own record, and
+   the reference naming the list carries the list's class, so an empty one
+   keeps it. A port's
    reference to values names exactly one StoredValue, a `many` value being one
    JSON array.
 7. An element's conclusion is its NodeExecution's status, except that an

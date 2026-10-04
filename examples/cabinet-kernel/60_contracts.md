@@ -157,7 +157,10 @@ agent's and says why; the owner-facing rules they rest on are in State 2.
     recovered attempt's NodeExecution names its inputs (A11 rule 4).
     `FileFactsRef` gains `disclosure_class`: a trial execution's file output is
     recorded by facts only, and its class — the highest class of the case's
-    inputs (A07 rule 3) — must travel with it to be masked.
+    inputs (A07 rule 3) — must travel with it to be masked. `SpooledFilesRef`
+    gains `disclosure_class`, the class of the file list it names, so an empty
+    list keeps the class A13 rule 6 gives it and counts in an execution's
+    class (A07 rule 5).
 13. **Continuation token**: base64url without padding of the canonical JSON
     object of `record_type`, `filter_digest` and `store_position`; with no
     filter the digest is that of canonical `null`.

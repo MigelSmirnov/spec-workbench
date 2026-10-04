@@ -189,7 +189,8 @@ per-agent ceilings.
    gets its digest and class, and not its size, media type or spool facts. The
    owner receives every value.
 5. The class of an execution is the highest class among the values and files its
-   NodeExecution or TrialExecution names as inputs, and for an operation also
+   NodeExecution or TrialExecution names as inputs — a file list counting with
+   the class its reference carries, even when empty (A13 rule 6) — and for an operation also
    among its outputs; it is computed from those records, not stored. A
    `failure_detail` of an execution whose class is above `open` is returned to an
    agent only as its length and that class.
