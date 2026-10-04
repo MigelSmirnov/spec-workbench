@@ -1,0 +1,246 @@
+{
+ "open_points": [
+  {
+   "subject": "Flow node identifiers and endpoint ordering",
+   "kind": "identifier ambiguity",
+   "text": "A flow input or flow output endpoint has the empty string as its node, so it orders before every node.",
+   "question": "Must an actual FlowNode have a non-empty node_id, or may node_id be the empty string and collide with the representation of flow endpoints?",
+   "options": [
+    "Forbid an empty node_id",
+    "Allow it and represent flow endpoints with a separate tagged identity",
+    "Allow it and rely on surrounding endpoint fields to disambiguate"
+   ],
+   "default_guess": "Forbid an empty node_id."
+  },
+  {
+   "subject": "Flow constants and cardinality",
+   "kind": "missing rule",
+   "text": "the port exists and is an input port of a node — never a flow output — of value carriage, and the value fits its schema",
+   "question": "What must a constant targeting a many input contain, and may a constant supply a node's map_over port?",
+   "options": [
+    "Require a JSON array whose elements fit the port schema, and allow it to drive map_over",
+    "Refuse constants on many inputs",
+    "Treat the constant as one element rather than the collection"
+   ],
+   "default_guess": "Require a JSON array whose elements fit the port schema and allow it to drive map_over."
+  },
+  {
+   "subject": "Guard evaluation",
+   "kind": "undefined equality",
+   "text": "A guarded edge delivers only when its guard port's value equals its guard value.",
+   "question": "What exact equality relation is used for JSON guard values, including distinctions such as 1 versus 1.0 and true versus 1?",
+   "options": [
+    "Equality of canonical JSON bytes",
+    "Structural JSON equality with numbers compared mathematically",
+    "Host-language equality"
+   ],
+   "default_guess": "Use equality of canonical JSON bytes."
+  },
+  {
+   "subject": "Mapped node over an empty list",
+   "kind": "contradiction",
+   "text": "an empty list takes the class of the list the node mapped over, so no class is lowered",
+   "question": "If another repeated input to the mapped node has a higher disclosure class than the empty mapped list, what class do the empty output lists receive?",
+   "options": [
+    "The highest class among all node inputs",
+    "Only the mapped list's class",
+    "The proof-time maximum class that can reach any input"
+   ],
+   "default_guess": "Use the highest class among all actual node inputs."
+  },
+  {
+   "subject": "Retrying a waiting element",
+   "kind": "contradictory lifecycle",
+   "text": "runs every one that has no concluded record and does not wait — a concluded element is never executed again",
+   "question": "How can an element with a service_unreachable NodeExecution be sent again on resume, given that it already has a concluded record and the rule says concluded elements are never executed again?",
+   "options": [
+    "Only successful, failed, skipped and upstream-failed elements are terminal; waiting attempts may receive a new attempt",
+    "Remove or disregard the prior waiting NodeExecution before retrying",
+    "Treat service_unreachable as having no concluded record"
+   ],
+   "default_guess": "Treat the NodeExecution as a concluded attempt but the element as nonterminal, allowing a new numbered attempt."
+  },
+  {
+   "subject": "Startup recovery with mixed ready and waiting work",
+   "kind": "rule conflict",
+   "text": "advances, as the kernel actor, every run that derivation leaves running",
+   "question": "On restart, must the kernel advance ready independent nodes in a run that also has an approval or outcome waiting point and is therefore derived as awaiting_approval or pending?",
+   "options": [
+    "Advance ready work in every non-ended run",
+    "Advance only runs whose derived status is running",
+    "Rewrite such a run to running while ready work exists, then restore its waiting status"
+   ],
+   "default_guess": "Advance ready work in every non-ended run, then derive the resting status again."
+  },
+  {
+   "subject": "Resolution to not_applied",
+   "kind": "conflicting outcome",
+   "text": "not_applied: the element waits again with reason owner_approval ... In the owner's same request the kernel reaches the element again: the pre-send checks of A09 rule 6, then, finding no authority, it requests the fresh approval",
+   "question": "If a pre-send check fails immediately after the owner resolves an unknown attempt as not_applied, does the element wait for fresh approval or conclude operation_failed and make the run fail?",
+   "options": [
+    "Pre-send failure wins and the element concludes operation_failed",
+    "The element remains waiting for approval until pre-send checks can pass",
+    "Record the pre-send failure but retain an owner_approval waiting point"
+   ],
+   "default_guess": "Pre-send failure wins and the element concludes operation_failed."
+  },
+  {
+   "subject": "Sandbox filesystem access",
+   "kind": "text contradiction",
+   "text": "no filesystem beyond its input ... one private exchange directory ... an audit hook that raises ... on opening any path outside the exchange directory and the read-only runtime",
+   "question": "May agent code read arbitrary runtime files and create or read arbitrary files in the exchange directory, or is filesystem access limited strictly to files representing its declared inputs and outputs?",
+   "options": [
+    "Allow bounded exchange-directory access and read-only runtime access",
+    "Permit only declared input and output files",
+    "Permit runtime reads but restrict exchange paths to runner-assigned files"
+   ],
+   "default_guess": "Permit runtime reads and restrict exchange access to runner-assigned input and output paths."
+  },
+  {
+   "subject": "Deterministic function execution and admission",
+   "kind": "unsupported invariant",
+   "text": "The same implementation on the same input yields the same output digest twice.",
+   "question": "How is determinism guaranteed for Python facilities not frozen or trapped by the rules, such as id(), address-bearing repr values, interpreter or filesystem metadata, and scheduling near a resource deadline?",
+   "options": [
+    "Trap or stabilize every observable nondeterministic facility",
+    "Define determinism only as repeating the stated sandbox configuration, without guaranteeing equal output",
+    "Detect differing outputs across repeated executions and refuse the implementation"
+   ],
+   "default_guess": "Treat differing observations as an admission failure and expand the trapped or stabilized surface release by release."
+  },
+  {
+   "subject": "Caught resource-limit failures",
+   "kind": "unverifiable condition",
+   "text": "a limit hit (memory, process count, scratch, output_bytes) — resource_exhausted",
+   "question": "Does a denied allocation, fork or write still make the execution resource_exhausted when user code catches the resulting exception and returns valid output, and how must the parent observe that event?",
+   "options": [
+    "Any denial counts and must be reported through an out-of-process observable mechanism",
+    "Only externally observable exhaustion or termination counts",
+    "Caught denials may succeed unless the final measured usage exceeds the limit"
+   ],
+   "default_guess": "Any denial counts, using an out-of-process limit-event signal where the platform provides one."
+  },
+  {
+   "subject": "Sandbox stdout and stderr",
+   "kind": "missing bound",
+   "text": "Nothing the code prints or raises is interpreted by the kernel. The kernel keeps at most failure_detail_bytes_max of it as failure_detail, and only for the exception type and message, never stdout.",
+   "question": "Where do stdout and stderr go, how are they prevented from reaching logs or responses, and what happens if code emits an unbounded amount?",
+   "options": [
+    "Redirect both to a bounded discard sink and never count them as output",
+    "Count them against output_bytes",
+    "Close them so writes fail inside the sandbox"
+   ],
+   "default_guess": "Redirect both to a bounded discard sink that never reaches logs, records or responses."
+  },
+  {
+   "subject": "Read-operation idempotency metadata",
+   "kind": "undefined model value",
+   "text": "For a read operation the key is not used and not checked ... idempotency_key_fields: copied from the manifest record",
+   "question": "What is stored in OperationBinding.idempotency_key_fields when a read capability contains malformed, repeated or otherwise unparsable idempotency_key text?",
+   "options": [
+    "Always store an empty or absent field for reads",
+    "Parse and store it but do not validate referenced input ports",
+    "Copy the raw manifest text despite the model expecting fields"
+   ],
+   "default_guess": "Store no idempotency key fields for a read operation."
+  },
+  {
+   "subject": "Service base URL",
+   "kind": "underspecified URL",
+   "text": "one that is not an absolute http or https URL with a host counts as none ... The URL is the api_base_url without a trailing / followed by the declared path.",
+   "question": "Are user information, query, fragment and existing path components allowed in api_base_url, and exactly how are multiple trailing slashes or a base path joined to the operation path?",
+   "options": [
+    "Allow only scheme, host, optional port and an explicitly normalized base path; forbid user information, query and fragment",
+    "Require an origin only, with no base path",
+    "Allow any absolute URL and define component-aware URL resolution"
+   ],
+   "default_guess": "Forbid user information, query and fragment, allow a base path, remove all trailing slashes from that path, then append the declared path."
+  },
+  {
+   "subject": "Multipart request serialization",
+   "kind": "wire-format gap",
+   "text": "Content-Disposition: form-data; name=\"<port>\", with filename=\"<port>\" added for a file part",
+   "question": "How are quotes, backslashes, non-ASCII characters and control characters in port names encoded or refused, and how is a multipart boundary chosen so it cannot collide with part content?",
+   "options": [
+    "Restrict port names to a safe ASCII token grammar and choose a collision-checked boundary",
+    "Define standards-based quoted-string and filename encoding plus collision handling",
+    "Delegate serialization entirely to the HTTP library"
+   ],
+   "default_guess": "Restrict operation-binding port names used in multipart bodies to a safe ASCII grammar and use a collision-checked boundary."
+  },
+  {
+   "subject": "HTTP response content encoding",
+   "kind": "transport ambiguity",
+   "text": "The kernel asks for no content encoding (Accept-Encoding: identity); the size counted is the response body's bytes after transfer decoding.",
+   "question": "If a service nevertheless returns Content-Encoding such as gzip, does the kernel reject it, decode it before size and output validation, or treat the encoded bytes as the body?",
+   "options": [
+    "Reject any non-identity content encoding",
+    "Decode it and count decoded bytes",
+    "Do not decode it; validate the encoded bytes as received"
+   ],
+   "default_guess": "Reject any non-identity Content-Encoding."
+  },
+  {
+   "subject": "Live token-list reload",
+   "kind": "authorization ambiguity",
+   "text": "Exactly three checks apply to a re-read: the file can be read and parsed; every token is at least 43 characters; no two tokens are equal.",
+   "question": "What happens when a live re-read introduces duplicate agent names, a missing or invalid may-author flag, or another token-entry shape that was valid JSON but violates M27/M28's actor requirements?",
+   "options": [
+    "Parsing includes full token-entry schema validation and unique agent-name validation",
+    "Accept it because only the three listed checks apply",
+    "Refuse such changes only after restart"
+   ],
+   "default_guess": "Treat full token-entry shape and unique agent names as part of the parse check."
+  },
+  {
+   "subject": "Zero-input trial values",
+   "kind": "empty maximum",
+   "text": "a trial case's expected output the highest class among that case's inputs, as a trial execution's output does",
+   "question": "What disclosure class is assigned to expected and actual trial outputs for a contract with no input ports?",
+   "options": [
+    "open",
+    "business_confidential",
+    "Refuse trial cases for zero-input contracts"
+   ],
+   "default_guess": "Assign open."
+  },
+  {
+   "subject": "Many value StoredValue schema",
+   "kind": "model inconsistency",
+   "text": "value_schema ... A value list is one StoredValue ... whose value_schema is the array schema with the port's schema as items",
+   "question": "For a many value, is StoredValue.value_schema the port's declared element schema or a synthesized array schema, and which one participates in value_id and later validation?",
+   "options": [
+    "Use a synthesized array schema with the port schema as items",
+    "Store the port's declared element schema and let cardinality supply the array meaning",
+    "Store both schemas as distinct facts"
+   ],
+   "default_guess": "Use the synthesized array schema for the StoredValue while retaining the declared element schema on the port."
+  },
+  {
+   "subject": "Operation failure-detail disclosure",
+   "kind": "conflicting classification",
+   "text": "The class of an execution is the highest class among the values and files its NodeExecution or TrialExecution names as inputs, and for an operation also among its outputs ... The body of an error response ... is kept as failure_detail, whose class is the highest of the execution's class and the classes the binding declares for its outputs",
+   "question": "When an operation with open inputs and a declared personal_data output fails before producing any output, must an agent receive the failure detail or only its length and class?",
+   "options": [
+    "Redact according to the failure detail's separately computed class",
+    "Redact only according to the execution class derived from values actually named",
+    "Treat declared output classes as part of every operation execution's class"
+   ],
+   "default_guess": "Redact according to the failure detail's separately computed class, including declared output classes."
+  },
+  {
+   "subject": "Failure-detail length exposed to agents",
+   "kind": "undefined measurement",
+   "text": "returned to an agent only as its length and that class",
+   "question": "Is the reported length measured in UTF-8 bytes or Unicode characters, and is it the length before or after truncation to failure_detail_bytes_max?",
+   "options": [
+    "Stored UTF-8 byte length after truncation",
+    "Unicode character count after truncation",
+    "Original pre-truncation byte length"
+   ],
+   "default_guess": "Report the UTF-8 byte length of the stored, already truncated detail."
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"Flow node identifiers and endpoint ordering\",\"kind\":\"identifier ambiguity\",\"text\":\"A flow input or flow output endpoint has the empty string as its node, so it orders before every node.\",\"question\":\"Must an actual FlowNode have a non-empty node_id, or may node_id be the empty string and collide with the representation of flow endpoints?\",\"options\":[\"Forbid an empty node_id\",\"Allow it and represent flow endpoints with a separate tagged identity\",\"Allow it and rely on surrounding endpoint fields to disambiguate\"],\"default_guess\":\"Forbid an empty node_id.\"},{\"subject\":\"Flow constants and cardinality\",\"kind\":\"missing rule\",\"text\":\"the port exists and is an input port of a node — never a flow output — of value carriage, and the value fits its schema\",\"question\":\"What must a constant targeting a many input contain, and may a constant supply a node's map_over port?\",\"options\":[\"Require a JSON array whose elements fit the port schema, and allow it to drive map_over\",\"Refuse constants on many inputs\",\"Treat the constant as one element rather than the collection\"],\"default_guess\":\"Require a JSON array whose elements fit the port schema and allow it to drive map_over.\"},{\"subject\":\"Guard evaluation\",\"kind\":\"undefined equality\",\"text\":\"A guarded edge delivers only when its guard port's value equals its guard value.\",\"question\":\"What exact equality relation is used for JSON guard values, including distinctions such as 1 versus 1.0 and true versus 1?\",\"options\":[\"Equality of canonical JSON bytes\",\"Structural JSON equality with numbers compared mathematically\",\"Host-language equality\"],\"default_guess\":\"Use equality of canonical JSON bytes.\"},{\"subject\":\"Mapped node over an empty list\",\"kind\":\"contradiction\",\"text\":\"an empty list takes the class of the list the node mapped over, so no class is lowered\",\"question\":\"If another repeated input to the mapped node has a higher disclosure class than the empty mapped list, what class do the empty output lists receive?\",\"options\":[\"The highest class among all node inputs\",\"Only the mapped list's class\",\"The proof-time maximum class that can reach any input\"],\"default_guess\":\"Use the highest class among all actual node inputs.\"},{\"subject\":\"Retrying a waiting element\",\"kind\":\"contradictory lifecycle\",\"text\":\"runs every one that has no concluded record and does not wait — a concluded element is never executed again\",\"question\":\"How can an element with a service_unreachable NodeExecution be sent again on resume, given that it already has a concluded record and the rule says concluded elements are never executed again?\",\"options\":[\"Only successful, failed, skipped and upstream-failed elements are terminal; waiting attempts may receive a new attempt\",\"Remove or disregard the prior waiting NodeExecution before retrying\",\"Treat service_unreachable as having no concluded record\"],\"default_guess\":\"Treat the NodeExecution as a concluded attempt but the element as nonterminal, allowing a new numbered attempt.\"},{\"subject\":\"Startup recovery with mixed ready and waiting work\",\"kind\":\"rule conflict\",\"text\":\"advances, as the kernel actor, every run that derivation leaves running\",\"question\":\"On restart, must the kernel advance ready independent nodes in a run that also has an approval or outcome waiting point and is therefore derived as awaiting_approval or pending?\",\"options\":[\"Advance ready work in every non-ended run\",\"Advance only runs whose derived status is running\",\"Rewrite such a run to running while ready work exists, then restore its waiting status\"],\"default_guess\":\"Advance ready work in every non-ended run, then derive the resting status again.\"},{\"subject\":\"Resolution to not_applied\",\"kind\":\"conflicting outcome\",\"text\":\"not_applied: the element waits again with reason owner_approval ... In the owner's same request the kernel reaches the element again: the pre-send checks of A09 rule 6, then, finding no authority, it requests the fresh approval\",\"question\":\"If a pre-send check fails immediately after the owner resolves an unknown attempt as not_applied, does the element wait for fresh approval or conclude operation_failed and make the run fail?\",\"options\":[\"Pre-send failure wins and the element concludes operation_failed\",\"The element remains waiting for approval until pre-send checks can pass\",\"Record the pre-send failure but retain an owner_approval waiting point\"],\"default_guess\":\"Pre-send failure wins and the element concludes operation_failed.\"},{\"subject\":\"Sandbox filesystem access\",\"kind\":\"text contradiction\",\"text\":\"no filesystem beyond its input ... one private exchange directory ... an audit hook that raises ... on opening any path outside the exchange directory and the read-only runtime\",\"question\":\"May agent code read arbitrary runtime files and create or read arbitrary files in the exchange directory, or is filesystem access limited strictly to files representing its declared inputs and outputs?\",\"options\":[\"Allow bounded exchange-directory access and read-only runtime access\",\"Permit only declared input and output files\",\"Permit runtime reads but restrict exchange paths to runner-assigned files\"],\"default_guess\":\"Permit runtime reads and restrict exchange access to runner-assigned input and output paths.\"},{\"subject\":\"Deterministic function execution and admission\",\"kind\":\"unsupported invariant\",\"text\":\"The same implementation on the same input yields the same output digest twice.\",\"question\":\"How is determinism guaranteed for Python facilities not frozen or trapped by the rules, such as id(), address-bearing repr values, interpreter or filesystem metadata, and scheduling near a resource deadline?\",\"options\":[\"Trap or stabilize every observable nondeterministic facility\",\"Define determinism only as repeating the stated sandbox configuration, without guaranteeing equal output\",\"Detect differing outputs across repeated executions and refuse the implementation\"],\"default_guess\":\"Treat differing observations as an admission failure and expand the trapped or stabilized surface release by release.\"},{\"subject\":\"Caught resource-limit failures\",\"kind\":\"unverifiable condition\",\"text\":\"a limit hit (memory, process count, scratch, output_bytes) — resource_exhausted\",\"question\":\"Does a denied allocation, fork or write still make the execution resource_exhausted when user code catches the resulting exception and returns valid output, and how must the parent observe that event?\",\"options\":[\"Any denial counts and must be reported through an out-of-process observable mechanism\",\"Only externally observable exhaustion or termination counts\",\"Caught denials may succeed unless the final measured usage exceeds the limit\"],\"default_guess\":\"Any denial counts, using an out-of-process limit-event signal where the platform provides one.\"},{\"subject\":\"Sandbox stdout and stderr\",\"kind\":\"missing bound\",\"text\":\"Nothing the code prints or raises is interpreted by the kernel. The kernel keeps at most failure_detail_bytes_max of it as failure_detail, and only for the exception type and message, never stdout.\",\"question\":\"Where do stdout and stderr go, how are they prevented from reaching logs or responses, and what happens if code emits an unbounded amount?\",\"options\":[\"Redirect both to a bounded discard sink and never count them as output\",\"Count them against output_bytes\",\"Close them so writes fail inside the sandbox\"],\"default_guess\":\"Redirect both to a bounded discard sink that never reaches logs, records or responses.\"},{\"subject\":\"Read-operation idempotency metadata\",\"kind\":\"undefined model value\",\"text\":\"For a read operation the key is not used and not checked ... idempotency_key_fields: copied from the manifest record\",\"question\":\"What is stored in OperationBinding.idempotency_key_fields when a read capability contains malformed, repeated or otherwise unparsable idempotency_key text?\",\"options\":[\"Always store an empty or absent field for reads\",\"Parse and store it but do not validate referenced input ports\",\"Copy the raw manifest text despite the model expecting fields\"],\"default_guess\":\"Store no idempotency key fields for a read operation.\"},{\"subject\":\"Service base URL\",\"kind\":\"underspecified URL\",\"text\":\"one that is not an absolute http or https URL with a host counts as none ... The URL is the api_base_url without a trailing / followed by the declared path.\",\"question\":\"Are user information, query, fragment and existing path components allowed in api_base_url, and exactly how are multiple trailing slashes or a base path joined to the operation path?\",\"options\":[\"Allow only scheme, host, optional port and an explicitly normalized base path; forbid user information, query and fragment\",\"Require an origin only, with no base path\",\"Allow any absolute URL and define component-aware URL resolution\"],\"default_guess\":\"Forbid user information, query and fragment, allow a base path, remove all trailing slashes from that path, then append the declared path.\"},{\"subject\":\"Multipart request serialization\",\"kind\":\"wire-format gap\",\"text\":\"Content-Disposition: form-data; name=\\\"<port>\\\", with filename=\\\"<port>\\\" added for a file part\",\"question\":\"How are quotes, backslashes, non-ASCII characters and control characters in port names encoded or refused, and how is a multipart boundary chosen so it cannot collide with part content?\",\"options\":[\"Restrict port names to a safe ASCII token grammar and choose a collision-checked boundary\",\"Define standards-based quoted-string and filename encoding plus collision handling\",\"Delegate serialization entirely to the HTTP library\"],\"default_guess\":\"Restrict operation-binding port names used in multipart bodies to a safe ASCII grammar and use a collision-checked boundary.\"},{\"subject\":\"HTTP response content encoding\",\"kind\":\"transport ambiguity\",\"text\":\"The kernel asks for no content encoding (Accept-Encoding: identity); the size counted is the response body's bytes after transfer decoding.\",\"question\":\"If a service nevertheless returns Content-Encoding such as gzip, does the kernel reject it, decode it before size and output validation, or treat the encoded bytes as the body?\",\"options\":[\"Reject any non-identity content encoding\",\"Decode it and count decoded bytes\",\"Do not decode it; validate the encoded bytes as received\"],\"default_guess\":\"Reject any non-identity Content-Encoding.\"},{\"subject\":\"Live token-list reload\",\"kind\":\"authorization ambiguity\",\"text\":\"Exactly three checks apply to a re-read: the file can be read and parsed; every token is at least 43 characters; no two tokens are equal.\",\"question\":\"What happens when a live re-read introduces duplicate agent names, a missing or invalid may-author flag, or another token-entry shape that was valid JSON but violates M27/M28's actor requirements?\",\"options\":[\"Parsing includes full token-entry schema validation and unique agent-name validation\",\"Accept it because only the three listed checks apply\",\"Refuse such changes only after restart\"],\"default_guess\":\"Treat full token-entry shape and unique agent names as part of the parse check.\"},{\"subject\":\"Zero-input trial values\",\"kind\":\"empty maximum\",\"text\":\"a trial case's expected output the highest class among that case's inputs, as a trial execution's output does\",\"question\":\"What disclosure class is assigned to expected and actual trial outputs for a contract with no input ports?\",\"options\":[\"open\",\"business_confidential\",\"Refuse trial cases for zero-input contracts\"],\"default_guess\":\"Assign open.\"},{\"subject\":\"Many value StoredValue schema\",\"kind\":\"model inconsistency\",\"text\":\"value_schema ... A value list is one StoredValue ... whose value_schema is the array schema with the port's schema as items\",\"question\":\"For a many value, is StoredValue.value_schema the port's declared element schema or a synthesized array schema, and which one participates in value_id and later validation?\",\"options\":[\"Use a synthesized array schema with the port schema as items\",\"Store the port's declared element schema and let cardinality supply the array meaning\",\"Store both schemas as distinct facts\"],\"default_guess\":\"Use the synthesized array schema for the StoredValue while retaining the declared element schema on the port.\"},{\"subject\":\"Operation failure-detail disclosure\",\"kind\":\"conflicting classification\",\"text\":\"The class of an execution is the highest class among the values and files its NodeExecution or TrialExecution names as inputs, and for an operation also among its outputs ... The body of an error response ... is kept as failure_detail, whose class is the highest of the execution's class and the classes the binding declares for its outputs\",\"question\":\"When an operation with open inputs and a declared personal_data output fails before producing any output, must an agent receive the failure detail or only its length and class?\",\"options\":[\"Redact according to the failure detail's separately computed class\",\"Redact only according to the execution class derived from values actually named\",\"Treat declared output classes as part of every operation execution's class\"],\"default_guess\":\"Redact according to the failure detail's separately computed class, including declared output classes.\"},{\"subject\":\"Failure-detail length exposed to agents\",\"kind\":\"undefined measurement\",\"text\":\"returned to an agent only as its length and that class\",\"question\":\"Is the reported length measured in UTF-8 bytes or Unicode characters, and is it the length before or after truncation to failure_detail_bytes_max?\",\"options\":[\"Stored UTF-8 byte length after truncation\",\"Unicode character count after truncation\",\"Original pre-truncation byte length\"],\"default_guess\":\"Report the UTF-8 byte length of the stored, already truncated detail.\"}]}"
+}
