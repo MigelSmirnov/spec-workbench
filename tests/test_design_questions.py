@@ -249,6 +249,81 @@ def test_rounds_kept_before_the_judge_keep_their_rule(tmp_path):
     assert _repeated(case, {"kind": "later_state", "later_state": 6})[0]["closed"] is True
 
 
+class FilesProvider(FakeProvider):
+    """A provider that, like the Codex CLI, can search files it is given."""
+
+    reads_files = True
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.files: list[dict[str, str]] = []
+        self.instructions: list[str] = []
+
+    def complete_with_files(self, instruction: str, text: str, files: dict[str, str]):
+        self.files.append(dict(files))
+        self.instructions.append(instruction)
+        return self.complete(instruction, text)
+
+
+def _repeated_with_files(case, verdict):
+    provider = FilesProvider([[_point("M01")], [_point("M01")], []], verdict)
+    return service.ask_round(case, 1, provider), provider
+
+
+def test_later_documents_are_the_states_after_the_asked_one(tmp_path):
+    case = _case(tmp_path)
+    assert [p.name for _, p in documents.later_documents(case, 1)] == ["02_rules.md"]
+    assert documents.later_documents(case, 2) == []
+
+
+def test_a_judge_that_reads_files_gets_the_later_states_and_may_find_a_topic_decided_there(tmp_path):
+    case = _case(tmp_path)
+    summary, provider = _repeated_with_files(case, {"kind": "answered_later", "quotes": ["# State 2 — Demo rules"]})
+    assert provider.files == [{"02_rules.md": "# State 2 — Demo rules\n"}]
+    assert "later/02_rules.md" in provider.instructions[0]
+    assert "# State 2 — Demo rules" not in provider.judged[0]  # searched, not pasted
+    judgement = summary["topics"][0]["judgement"]
+    assert judgement["verified"] is True and summary["clear"] is True
+    assert set(summary["judge"]["later_documents"]) == {"02_rules.md"}
+
+
+def test_answered_later_needs_its_quote_in_the_later_states(tmp_path):
+    case = _case(tmp_path)
+    summary, _ = _repeated_with_files(case, {"kind": "answered_later", "quotes": ["## Model M01 — Thing"]})
+    judgement = summary["topics"][0]["judgement"]
+    assert judgement["blocking"] is True and "later states' texts" in judgement["failure"]
+
+
+def test_a_judge_without_files_cannot_answer_from_later_states(tmp_path):
+    case = _case(tmp_path)
+    summary, provider = _repeated(case, {"kind": "answered_later", "quotes": ["# State 2 — Demo rules"]})
+    assert "answered_later" not in provider.judged[0]
+    judgement = summary["topics"][0]["judgement"]
+    assert judgement["blocking"] is True and "only when" in judgement["failure"]
+    assert "later_documents" not in summary["judge"]
+
+
+def test_codex_provider_with_files_offers_only_those_under_later(monkeypatch):
+    seen = {}
+
+    def fake_run(command, input, cwd, capture_output, text, timeout):
+        seen["files"] = sorted(str(p.relative_to(cwd)) for p in Path(cwd).rglob("*") if p.is_file())
+        seen["body"] = (Path(cwd) / "later" / "80_notes.md").read_text(encoding="utf-8")
+        seen["prompt"] = input
+        seen["sandbox"] = command[command.index("--sandbox") + 1]
+        Path(command[command.index("-o") + 1]).write_text('{"judgements": []}', encoding="utf-8")
+        return provider.subprocess.CompletedProcess(command, 0, "", "")
+
+    monkeypatch.setattr(provider.subprocess, "run", fake_run)
+    asked = provider.CodexCliProvider("m", "low")
+    assert asked.reads_files is True
+    answer, _ = asked.complete_with_files("JUDGE", "TOPICS", {"80_notes.md": "NOTE TEXT"})
+    assert answer == '{"judgements": []}'
+    assert seen["files"] == ["later/80_notes.md"] and seen["body"] == "NOTE TEXT"
+    assert seen["sandbox"] == "read-only"
+    assert "later/80_notes.md" in seen["prompt"] and "NOTE TEXT" not in seen["prompt"]
+
+
 def test_codex_provider_asks_once_in_an_empty_directory_and_names_itself(monkeypatch):
     calls = []
 

@@ -33,6 +33,16 @@ def design_documents(case: Path, state: int) -> list[tuple[int, Path]]:
     return sorted(found, key=lambda item: (item[0], item[1].name))
 
 
+def later_documents(case: Path, state: int) -> list[tuple[int, Path]]:
+    """Top-level documents of the states after `state`, in state order."""
+    found = []
+    for path in sorted(case.glob("*.md")):
+        found_state = document_state(path)
+        if found_state is not None and found_state > state:
+            found.append((found_state, path))
+    return sorted(found, key=lambda item: (item[0], item[1].name))
+
+
 def question_scope(state: int, sequence_path: Path = SEQUENCE) -> str:
     """The stop rule of a state: which questions belong to it."""
     sequence = json.loads(sequence_path.read_text(encoding="utf-8"))
