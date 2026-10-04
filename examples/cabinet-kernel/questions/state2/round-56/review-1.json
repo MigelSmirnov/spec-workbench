@@ -1,0 +1,258 @@
+{
+ "open_points": [
+  {
+   "subject": "A04 trial-case validation",
+   "kind": "missing refusal condition",
+   "text": "\"its expected outputs, when present, fit the output ports\" does not say whether a present expected_outputs object must contain every output port or may contain only a subset, nor whether extra names are refused",
+   "question": "What exact set of output-port names must a present expected_outputs object contain?",
+   "options": [
+    "Exactly every output port",
+    "Any subset of output ports, comparing only those present",
+    "Any subset, including unknown names that are ignored"
+   ],
+   "default_guess": "Require exactly every output port when expected_outputs is present."
+  },
+  {
+   "subject": "A03 sandbox filesystem",
+   "kind": "contradiction",
+   "text": "K-02 says a function has \"no filesystem beyond its input\", while A03 gives it \"one private exchange directory\" and permits opening any path inside that directory",
+   "question": "May agent code create, modify and read arbitrary files in the exchange directory, or may it access only runner-managed input and output paths?",
+   "options": [
+    "Allow arbitrary access within the bounded exchange directory",
+    "Expose only runner-managed input and output paths",
+    "Expose no filesystem paths to user code"
+   ],
+   "default_guess": "Allow arbitrary access only within the bounded exchange directory."
+  },
+  {
+   "subject": "A03 printed output",
+   "kind": "unspecified handling",
+   "text": "\"Nothing the code prints or raises is interpreted by the kernel\" and \"never stdout\" do not say where stdout and stderr go or how they are bounded",
+   "question": "How must the runner handle stdout and stderr so printing cannot block, exhaust host storage, enter logs, or escape the output bounds?",
+   "options": [
+    "Discard both streams to a bounded sink",
+    "Capture and discard up to a release ceiling",
+    "Treat any write as a sandbox violation"
+   ],
+   "default_guess": "Discard both streams without logging them, using a bounded nonblocking sink."
+  },
+  {
+   "subject": "A03 resource-limit precedence",
+   "kind": "unverifiable invariant",
+   "text": "\"a limit hit (memory, process count, scratch, output_bytes) — resource_exhausted\" requires a limit hit to win even when Python code catches MemoryError, OSError or another denial and returns successfully, but no observable hit channel is specified",
+   "question": "How does the parent determine that a catchable memory, process or scratch limit was hit?",
+   "options": [
+    "Instrument each limit and report every denial to the parent",
+    "Classify only an externally observable termination or over-limit measurement",
+    "Let a caught denial disappear and classify the returned result normally"
+   ],
+   "default_guess": "Instrument the runner so every resource denial is irreversibly reported to the parent."
+  },
+  {
+   "subject": "A03 output-byte accounting",
+   "kind": "precedence gap",
+   "text": "\"The output count is the sum of the canonical JSON bytes of every value output\" while resource_exhausted is checked before contract_violation, but malformed values may be impossible to canonicalize",
+   "question": "How is output_bytes evaluated when a returned value is non-JSON, cyclic, contains a non-finite number, or otherwise cannot be canonicalized?",
+   "options": [
+    "Classify it as contract_violation without applying output-byte precedence",
+    "Measure an intermediate serialization and allow resource_exhausted to win",
+    "Treat canonicalization failure as crashed"
+   ],
+   "default_guess": "Classify non-canonicalizable returned values as contract_violation."
+  },
+  {
+   "subject": "A16 token-list reload",
+   "kind": "contradiction",
+   "text": "M27 says \"a configuration repeating [an agent name] is refused at start\", but A16 says \"Exactly three checks apply to a re-read\" and duplicate agent names are not one of them",
+   "question": "What happens when a live token-list reload introduces two agents with the same name?",
+   "options": [
+    "Refuse every request until names are unique",
+    "Accept the reload because only the three listed checks apply",
+    "Merge the entries sharing the name"
+   ],
+   "default_guess": "Refuse the reload and every request until agent names are unique."
+  },
+  {
+   "subject": "A16 token comparison",
+   "kind": "security ambiguity",
+   "text": "\"The kernel compares it in constant time with the owner token and with each agent token\" does not say whether every comparison must run or whether comparison stops after a match",
+   "question": "Must authentication compare the request token against the complete configured token list before deciding?",
+   "options": [
+    "Always compare against every configured token",
+    "Stop after the first constant-time equality match",
+    "Use a separate constant-time indexed lookup"
+   ],
+   "default_guess": "Compare against every configured token before deciding."
+  },
+  {
+   "subject": "A17 credential references",
+   "kind": "undefined resolution",
+   "text": "The configuration carries \"the reference that resolves to its value on the host\", while rule 2 mentions a \"secret file\", but no reference syntax, path resolution, ownership, permission or symbolic-link rule is given",
+   "question": "What credential-reference forms are valid, and what filesystem security checks apply when resolving one?",
+   "options": [
+    "Only an absolute regular file owned by the kernel user with no group/other permissions and no symlinks",
+    "Any readable file path",
+    "A named host-secret provider rather than a file path"
+   ],
+   "default_guess": "Allow only an absolute, non-symlink regular file owned by the kernel user and inaccessible to group or others."
+  },
+  {
+   "subject": "A18 data-directory startup checks",
+   "kind": "vague refusal condition",
+   "text": "\"The directory and everything in it are private to the kernel's user; the kernel refuses to start otherwise\" does not define private",
+   "question": "Which owners, file types and permission bits are accepted for the data directory, database, value area, fixtures and spool?",
+   "options": [
+    "Require kernel ownership and no group/other permission bits",
+    "Require only that other users cannot write",
+    "Rely on successful access and the exclusive lock"
+   ],
+   "default_guess": "Require kernel ownership and no group or other permission bits on every entry."
+  },
+  {
+   "subject": "A18 global store order",
+   "kind": "undefined ordering",
+   "text": "Many rules use \"the store's one order of records\", but no rule defines how positions are allocated when one transaction writes several records",
+   "question": "Is there one durable, unique, monotonically increasing position for every record, and in what order are positions assigned to records created by the same store call?",
+   "options": [
+    "One global sequence with an explicit per-operation write order",
+    "One sequence per table with a tie-breaker",
+    "Transaction positions only, with records in one transaction unordered"
+   ],
+   "default_guess": "Use one global monotonic sequence and specify the record order for every multi-record store call."
+  },
+  {
+   "subject": "A18 request serialization",
+   "kind": "undefined precedence",
+   "text": "\"Surface requests are handled one at a time in the order they arrive\" does not define arrival order for requests accepted concurrently by the MCP transport",
+   "question": "What observable event establishes the total order of concurrent requests?",
+   "options": [
+    "A sequence assigned when a complete request is received",
+    "The MCP transport's own delivery order",
+    "Whichever handler acquires the store lock first"
+   ],
+   "default_guess": "Assign a sequence when each complete request is received and process by that sequence."
+  },
+  {
+   "subject": "M28 and A08 manifest revision",
+   "kind": "undefined external read",
+   "text": "The manifest is read from a location \"at the configured manifest_revision\", but the texts do not say how that revision is selected or verified",
+   "question": "How must the kernel obtain a manifest file at manifest_revision?",
+   "options": [
+    "Read the blob directly from a version-control repository at that revision",
+    "Require manifest_location to be a checkout whose current revision exactly matches",
+    "Treat manifest_revision as descriptive and read the current files"
+   ],
+   "default_guess": "Read and verify the repository content at the exact configured revision."
+  },
+  {
+   "subject": "A08 manifest canonicalization",
+   "kind": "missing refusal condition",
+   "text": "record_digest is the digest of canonical JSON, but A08 only refuses a record that \"is not valid JSON\" and does not say how duplicate object members or non-finite numbers are classified",
+   "question": "Are manifest records that JCS cannot represent refused, and at which manifest-mismatch check?",
+   "options": [
+    "Refuse them as invalid JSON before inspecting fields",
+    "Refuse them as a separate non-canonical manifest error",
+    "Apply parser-specific duplicate-key behavior"
+   ],
+   "default_guess": "Refuse any non-JCS-representable manifest as invalid JSON before field checks."
+  },
+  {
+   "subject": "A09 base URL construction",
+   "kind": "underspecified URL rules",
+   "text": "A08 accepts any absolute http or https URL with a host, while A09 constructs the target by taking the api_base_url \"without a trailing /\" and appending the path",
+   "question": "Are user information, query strings, fragments and arbitrary base paths allowed in api_base_url, and how are trailing slashes removed?",
+   "options": [
+    "Allow only scheme, authority and an optional normalized base path, with no userinfo, query or fragment",
+    "Allow every absolute URL and append textually",
+    "Require origin-only URLs with no path, query, fragment or userinfo"
+   ],
+   "default_guess": "Allow an optional base path but refuse userinfo, query and fragment, and remove all terminal slashes before joining."
+  },
+  {
+   "subject": "A09 multipart field names",
+   "kind": "request-construction gap",
+   "text": "A02 places no syntax restriction on port names, while A09 inserts a port name verbatim into `Content-Disposition: form-data; name=\"<port>\"` and `filename=\"<port>\"`",
+   "question": "Which port names are legal for multipart bindings, or how are quotes, backslashes and control characters escaped?",
+   "options": [
+    "Restrict multipart port names to a safe ASCII field-name grammar",
+    "Define standards-compliant quoted-string escaping",
+    "Refuse only names that require escaping"
+   ],
+   "default_guess": "Restrict multipart port names to a safe ASCII identifier grammar at binding proposal."
+  },
+  {
+   "subject": "A09 response content encoding",
+   "kind": "unspecified transport behavior",
+   "text": "The kernel sends `Accept-Encoding: identity`, but the response rules do not say what happens if a service nevertheless sends a Content-Encoding such as gzip",
+   "question": "Are encoded response bodies rejected, decoded before size and schema checks, or treated as raw body bytes?",
+   "options": [
+    "Reject every non-identity Content-Encoding",
+    "Decode supported encodings and count decoded bytes",
+    "Treat encoded bytes as the response body"
+   ],
+   "default_guess": "Reject any non-identity Content-Encoding as contract_violation."
+  },
+  {
+   "subject": "A09 incomplete error responses",
+   "kind": "overlapping outcome rules",
+   "text": "\"no valid final response received\" is service_unreachable or outcome_unknown, while a 3xx, 4xx or 5xx is classified \"whatever the body's size\"; the rules do not cover a valid final status followed by a truncated or reset body",
+   "question": "Once valid final headers with a 3xx, 4xx or 5xx status arrive, does an incomplete body retain the status-based outcome or become a missing-valid-response outcome?",
+   "options": [
+    "Classify solely from the received final status and ignore body completeness",
+    "Require the error response framing to complete",
+    "Use the status only after failure_detail_bytes_max bytes are available"
+   ],
+   "default_guess": "Classify from valid final headers; error-body completeness does not change the outcome."
+  },
+  {
+   "subject": "A09, A10 and A11 not_applied effects",
+   "kind": "contradiction",
+   "text": "A09 makes a non-read 4xx an EffectAttempt `not_applied` with NodeExecution `operation_refused`; A13 makes `operation_refused` a terminal node failure, while K-08 and A10 say a send after `not_applied` waits for a fresh approval",
+   "question": "Can an effect that received a 4xx be resent in the same run, or is fresh-approval resend limited to an unknown attempt that the owner resolves as not_applied?",
+   "options": [
+    "Only owner-resolved unknown attempts may be resent",
+    "Every not_applied attempt, including a 4xx, waits for fresh approval",
+    "A 4xx is terminal but a new run may retry it"
+   ],
+   "default_guess": "Limit same-run resend to an unknown attempt resolved not_applied; a direct 4xx remains a terminal operation_refused failure."
+  },
+  {
+   "subject": "M26 EffectAttempt resolution time",
+   "kind": "lifecycle field gap",
+   "text": "EffectAttempt has `recorded_at`, `concluded_at` and `resolved_by`, and an unknown attempt later changes to applied or not_applied, but there is no `resolved_at` and no rule says whether concluded_at changes",
+   "question": "What timestamp represents the owner's resolution, and does resolving an unknown attempt mutate concluded_at?",
+   "options": [
+    "Add and record a distinct resolved_at while preserving concluded_at",
+    "Replace concluded_at with the resolution time",
+    "Keep the original concluded_at and record no resolution time"
+   ],
+   "default_guess": "Preserve concluded_at and add a distinct resolved_at for the owner's resolution."
+  },
+  {
+   "subject": "A10 multipart approval identity",
+   "kind": "contradiction",
+   "text": "State 0 says approval covers the fully built request and \"Any difference at send\" asks again, while A10 excludes the multipart boundary from both Content-Type and the body description so different wire bodies can have the same request_digest",
+   "question": "Must the multipart boundary be deterministic and fixed by the approval, or is boundary variation explicitly outside the exact-request rule?",
+   "options": [
+    "Use a deterministic boundary and include it in the approved request",
+    "Exclude boundary variation as an explicit exception",
+    "Generate any boundary but include its value and resulting bytes in request_digest"
+   ],
+   "default_guess": "Use a deterministic boundary and include the resulting header and wire body in the approved request digest."
+  },
+  {
+   "subject": "A13 advancement order",
+   "kind": "undefined scheduling order",
+   "text": "The next executable node is ordered by node_id, and A15 orders records for nodes that \"become non-executable together\", but neither text orders propagation of skipped_by_guard or upstream_failed records relative to ready-node execution",
+   "question": "When failure or guard propagation can conclude nodes while other nodes are ready, which records and executions occur first?",
+   "options": [
+    "Repeatedly conclude all non-executable nodes in node order before executing a ready node",
+    "Execute the smallest ready node first and propagate only when no node is ready",
+    "Choose the smallest node_id across ready and newly non-executable nodes"
+   ],
+   "default_guess": "Choose the smallest node_id across all nodes that can either execute or be concluded without execution."
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A04 trial-case validation\",\"kind\":\"missing refusal condition\",\"text\":\"\\\"its expected outputs, when present, fit the output ports\\\" does not say whether a present expected_outputs object must contain every output port or may contain only a subset, nor whether extra names are refused\",\"question\":\"What exact set of output-port names must a present expected_outputs object contain?\",\"options\":[\"Exactly every output port\",\"Any subset of output ports, comparing only those present\",\"Any subset, including unknown names that are ignored\"],\"default_guess\":\"Require exactly every output port when expected_outputs is present.\"},{\"subject\":\"A03 sandbox filesystem\",\"kind\":\"contradiction\",\"text\":\"K-02 says a function has \\\"no filesystem beyond its input\\\", while A03 gives it \\\"one private exchange directory\\\" and permits opening any path inside that directory\",\"question\":\"May agent code create, modify and read arbitrary files in the exchange directory, or may it access only runner-managed input and output paths?\",\"options\":[\"Allow arbitrary access within the bounded exchange directory\",\"Expose only runner-managed input and output paths\",\"Expose no filesystem paths to user code\"],\"default_guess\":\"Allow arbitrary access only within the bounded exchange directory.\"},{\"subject\":\"A03 printed output\",\"kind\":\"unspecified handling\",\"text\":\"\\\"Nothing the code prints or raises is interpreted by the kernel\\\" and \\\"never stdout\\\" do not say where stdout and stderr go or how they are bounded\",\"question\":\"How must the runner handle stdout and stderr so printing cannot block, exhaust host storage, enter logs, or escape the output bounds?\",\"options\":[\"Discard both streams to a bounded sink\",\"Capture and discard up to a release ceiling\",\"Treat any write as a sandbox violation\"],\"default_guess\":\"Discard both streams without logging them, using a bounded nonblocking sink.\"},{\"subject\":\"A03 resource-limit precedence\",\"kind\":\"unverifiable invariant\",\"text\":\"\\\"a limit hit (memory, process count, scratch, output_bytes) — resource_exhausted\\\" requires a limit hit to win even when Python code catches MemoryError, OSError or another denial and returns successfully, but no observable hit channel is specified\",\"question\":\"How does the parent determine that a catchable memory, process or scratch limit was hit?\",\"options\":[\"Instrument each limit and report every denial to the parent\",\"Classify only an externally observable termination or over-limit measurement\",\"Let a caught denial disappear and classify the returned result normally\"],\"default_guess\":\"Instrument the runner so every resource denial is irreversibly reported to the parent.\"},{\"subject\":\"A03 output-byte accounting\",\"kind\":\"precedence gap\",\"text\":\"\\\"The output count is the sum of the canonical JSON bytes of every value output\\\" while resource_exhausted is checked before contract_violation, but malformed values may be impossible to canonicalize\",\"question\":\"How is output_bytes evaluated when a returned value is non-JSON, cyclic, contains a non-finite number, or otherwise cannot be canonicalized?\",\"options\":[\"Classify it as contract_violation without applying output-byte precedence\",\"Measure an intermediate serialization and allow resource_exhausted to win\",\"Treat canonicalization failure as crashed\"],\"default_guess\":\"Classify non-canonicalizable returned values as contract_violation.\"},{\"subject\":\"A16 token-list reload\",\"kind\":\"contradiction\",\"text\":\"M27 says \\\"a configuration repeating [an agent name] is refused at start\\\", but A16 says \\\"Exactly three checks apply to a re-read\\\" and duplicate agent names are not one of them\",\"question\":\"What happens when a live token-list reload introduces two agents with the same name?\",\"options\":[\"Refuse every request until names are unique\",\"Accept the reload because only the three listed checks apply\",\"Merge the entries sharing the name\"],\"default_guess\":\"Refuse the reload and every request until agent names are unique.\"},{\"subject\":\"A16 token comparison\",\"kind\":\"security ambiguity\",\"text\":\"\\\"The kernel compares it in constant time with the owner token and with each agent token\\\" does not say whether every comparison must run or whether comparison stops after a match\",\"question\":\"Must authentication compare the request token against the complete configured token list before deciding?\",\"options\":[\"Always compare against every configured token\",\"Stop after the first constant-time equality match\",\"Use a separate constant-time indexed lookup\"],\"default_guess\":\"Compare against every configured token before deciding.\"},{\"subject\":\"A17 credential references\",\"kind\":\"undefined resolution\",\"text\":\"The configuration carries \\\"the reference that resolves to its value on the host\\\", while rule 2 mentions a \\\"secret file\\\", but no reference syntax, path resolution, ownership, permission or symbolic-link rule is given\",\"question\":\"What credential-reference forms are valid, and what filesystem security checks apply when resolving one?\",\"options\":[\"Only an absolute regular file owned by the kernel user with no group/other permissions and no symlinks\",\"Any readable file path\",\"A named host-secret provider rather than a file path\"],\"default_guess\":\"Allow only an absolute, non-symlink regular file owned by the kernel user and inaccessible to group or others.\"},{\"subject\":\"A18 data-directory startup checks\",\"kind\":\"vague refusal condition\",\"text\":\"\\\"The directory and everything in it are private to the kernel's user; the kernel refuses to start otherwise\\\" does not define private\",\"question\":\"Which owners, file types and permission bits are accepted for the data directory, database, value area, fixtures and spool?\",\"options\":[\"Require kernel ownership and no group/other permission bits\",\"Require only that other users cannot write\",\"Rely on successful access and the exclusive lock\"],\"default_guess\":\"Require kernel ownership and no group or other permission bits on every entry.\"},{\"subject\":\"A18 global store order\",\"kind\":\"undefined ordering\",\"text\":\"Many rules use \\\"the store's one order of records\\\", but no rule defines how positions are allocated when one transaction writes several records\",\"question\":\"Is there one durable, unique, monotonically increasing position for every record, and in what order are positions assigned to records created by the same store call?\",\"options\":[\"One global sequence with an explicit per-operation write order\",\"One sequence per table with a tie-breaker\",\"Transaction positions only, with records in one transaction unordered\"],\"default_guess\":\"Use one global monotonic sequence and specify the record order for every multi-record store call.\"},{\"subject\":\"A18 request serialization\",\"kind\":\"undefined precedence\",\"text\":\"\\\"Surface requests are handled one at a time in the order they arrive\\\" does not define arrival order for requests accepted concurrently by the MCP transport\",\"question\":\"What observable event establishes the total order of concurrent requests?\",\"options\":[\"A sequence assigned when a complete request is received\",\"The MCP transport's own delivery order\",\"Whichever handler acquires the store lock first\"],\"default_guess\":\"Assign a sequence when each complete request is received and process by that sequence.\"},{\"subject\":\"M28 and A08 manifest revision\",\"kind\":\"undefined external read\",\"text\":\"The manifest is read from a location \\\"at the configured manifest_revision\\\", but the texts do not say how that revision is selected or verified\",\"question\":\"How must the kernel obtain a manifest file at manifest_revision?\",\"options\":[\"Read the blob directly from a version-control repository at that revision\",\"Require manifest_location to be a checkout whose current revision exactly matches\",\"Treat manifest_revision as descriptive and read the current files\"],\"default_guess\":\"Read and verify the repository content at the exact configured revision.\"},{\"subject\":\"A08 manifest canonicalization\",\"kind\":\"missing refusal condition\",\"text\":\"record_digest is the digest of canonical JSON, but A08 only refuses a record that \\\"is not valid JSON\\\" and does not say how duplicate object members or non-finite numbers are classified\",\"question\":\"Are manifest records that JCS cannot represent refused, and at which manifest-mismatch check?\",\"options\":[\"Refuse them as invalid JSON before inspecting fields\",\"Refuse them as a separate non-canonical manifest error\",\"Apply parser-specific duplicate-key behavior\"],\"default_guess\":\"Refuse any non-JCS-representable manifest as invalid JSON before field checks.\"},{\"subject\":\"A09 base URL construction\",\"kind\":\"underspecified URL rules\",\"text\":\"A08 accepts any absolute http or https URL with a host, while A09 constructs the target by taking the api_base_url \\\"without a trailing /\\\" and appending the path\",\"question\":\"Are user information, query strings, fragments and arbitrary base paths allowed in api_base_url, and how are trailing slashes removed?\",\"options\":[\"Allow only scheme, authority and an optional normalized base path, with no userinfo, query or fragment\",\"Allow every absolute URL and append textually\",\"Require origin-only URLs with no path, query, fragment or userinfo\"],\"default_guess\":\"Allow an optional base path but refuse userinfo, query and fragment, and remove all terminal slashes before joining.\"},{\"subject\":\"A09 multipart field names\",\"kind\":\"request-construction gap\",\"text\":\"A02 places no syntax restriction on port names, while A09 inserts a port name verbatim into `Content-Disposition: form-data; name=\\\"<port>\\\"` and `filename=\\\"<port>\\\"`\",\"question\":\"Which port names are legal for multipart bindings, or how are quotes, backslashes and control characters escaped?\",\"options\":[\"Restrict multipart port names to a safe ASCII field-name grammar\",\"Define standards-compliant quoted-string escaping\",\"Refuse only names that require escaping\"],\"default_guess\":\"Restrict multipart port names to a safe ASCII identifier grammar at binding proposal.\"},{\"subject\":\"A09 response content encoding\",\"kind\":\"unspecified transport behavior\",\"text\":\"The kernel sends `Accept-Encoding: identity`, but the response rules do not say what happens if a service nevertheless sends a Content-Encoding such as gzip\",\"question\":\"Are encoded response bodies rejected, decoded before size and schema checks, or treated as raw body bytes?\",\"options\":[\"Reject every non-identity Content-Encoding\",\"Decode supported encodings and count decoded bytes\",\"Treat encoded bytes as the response body\"],\"default_guess\":\"Reject any non-identity Content-Encoding as contract_violation.\"},{\"subject\":\"A09 incomplete error responses\",\"kind\":\"overlapping outcome rules\",\"text\":\"\\\"no valid final response received\\\" is service_unreachable or outcome_unknown, while a 3xx, 4xx or 5xx is classified \\\"whatever the body's size\\\"; the rules do not cover a valid final status followed by a truncated or reset body\",\"question\":\"Once valid final headers with a 3xx, 4xx or 5xx status arrive, does an incomplete body retain the status-based outcome or become a missing-valid-response outcome?\",\"options\":[\"Classify solely from the received final status and ignore body completeness\",\"Require the error response framing to complete\",\"Use the status only after failure_detail_bytes_max bytes are available\"],\"default_guess\":\"Classify from valid final headers; error-body completeness does not change the outcome.\"},{\"subject\":\"A09, A10 and A11 not_applied effects\",\"kind\":\"contradiction\",\"text\":\"A09 makes a non-read 4xx an EffectAttempt `not_applied` with NodeExecution `operation_refused`; A13 makes `operation_refused` a terminal node failure, while K-08 and A10 say a send after `not_applied` waits for a fresh approval\",\"question\":\"Can an effect that received a 4xx be resent in the same run, or is fresh-approval resend limited to an unknown attempt that the owner resolves as not_applied?\",\"options\":[\"Only owner-resolved unknown attempts may be resent\",\"Every not_applied attempt, including a 4xx, waits for fresh approval\",\"A 4xx is terminal but a new run may retry it\"],\"default_guess\":\"Limit same-run resend to an unknown attempt resolved not_applied; a direct 4xx remains a terminal operation_refused failure.\"},{\"subject\":\"M26 EffectAttempt resolution time\",\"kind\":\"lifecycle field gap\",\"text\":\"EffectAttempt has `recorded_at`, `concluded_at` and `resolved_by`, and an unknown attempt later changes to applied or not_applied, but there is no `resolved_at` and no rule says whether concluded_at changes\",\"question\":\"What timestamp represents the owner's resolution, and does resolving an unknown attempt mutate concluded_at?\",\"options\":[\"Add and record a distinct resolved_at while preserving concluded_at\",\"Replace concluded_at with the resolution time\",\"Keep the original concluded_at and record no resolution time\"],\"default_guess\":\"Preserve concluded_at and add a distinct resolved_at for the owner's resolution.\"},{\"subject\":\"A10 multipart approval identity\",\"kind\":\"contradiction\",\"text\":\"State 0 says approval covers the fully built request and \\\"Any difference at send\\\" asks again, while A10 excludes the multipart boundary from both Content-Type and the body description so different wire bodies can have the same request_digest\",\"question\":\"Must the multipart boundary be deterministic and fixed by the approval, or is boundary variation explicitly outside the exact-request rule?\",\"options\":[\"Use a deterministic boundary and include it in the approved request\",\"Exclude boundary variation as an explicit exception\",\"Generate any boundary but include its value and resulting bytes in request_digest\"],\"default_guess\":\"Use a deterministic boundary and include the resulting header and wire body in the approved request digest.\"},{\"subject\":\"A13 advancement order\",\"kind\":\"undefined scheduling order\",\"text\":\"The next executable node is ordered by node_id, and A15 orders records for nodes that \\\"become non-executable together\\\", but neither text orders propagation of skipped_by_guard or upstream_failed records relative to ready-node execution\",\"question\":\"When failure or guard propagation can conclude nodes while other nodes are ready, which records and executions occur first?\",\"options\":[\"Repeatedly conclude all non-executable nodes in node order before executing a ready node\",\"Execute the smallest ready node first and propagate only when no node is ready\",\"Choose the smallest node_id across ready and newly non-executable nodes\"],\"default_guess\":\"Choose the smallest node_id across all nodes that can either execute or be concluded without execution.\"}]}"
+}

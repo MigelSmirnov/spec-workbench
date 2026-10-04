@@ -194,6 +194,11 @@ record checked by `design_lint --state 2`, recorded as such in `30_trace.json`.
   opened; it reads only the installation and the manifest, never the store. At send `service_invoker` judges only the
   instance facts the ManifestOperation carries, and reads nothing from
   `installation` but the credential.
+- **Stopping after an internal error.** `surface` owns it: every failure it
+  answers `internal_error` — a store failure, an unconfirmed cleanup, any
+  unexpected exception — is answered first, and then `surface.serve_kernel`
+  ends the process with a non-zero status, so the next start derives every
+  run (A14 rules 5 and 7). No other module ends the process.
 - **Pre-send order.** `effects` runs A09 rule 6 in its order: first
   `bindings.check_binding_current`, which returns the current ManifestOperation
   M10 — method, path, key fields, effect class, and the `base_url`,
@@ -202,8 +207,9 @@ record checked by `design_lint --state 2`, recorded as such in `30_trace.json`.
   selected — or `binding_stale`. `bindings` judges only the record itself (A08 rule 6) and
   passes the instance facts on as read, even when missing. Then
   `service_invoker.prepare_request` with that operation owns every instance
-  failure — no selected instance, no `api_base_url`, a repeated required header,
-  a plain `http` target not allowed (A09 rules 1, 4 and 6) — resolves the
+  failure in A09 rule 6's order — no selected instance, no `api_base_url`, a
+  plain `http` target not allowed, a repeated required header, an invalid
+  required header (A09 rules 1, 4 and 6, A08 rule 5) — resolves the
   credential through `installation` and places the inputs, in that order,
   naming the first failure.
 - **`read` against other classes.** `service_invoker` applies the A09 rule 5

@@ -1,0 +1,297 @@
+{
+ "open_points": [
+  {
+   "subject": "FlowVersion identity and proof ordering",
+   "kind": "unstable tie order",
+   "text": "A01 sorts edges only in “the edge order of A05” and constants only by (`to_node`, `to_port`), while A05 keeps versions containing duplicate-target constants or multiple edges with the same endpoint tuple until proof. Neither text gives a tie-breaker when those sort keys are equal.",
+   "question": "How are equal-key edges and constants ordered for canonical hashing and for selecting the first proof failure?",
+   "options": [
+    "Include every remaining edge or constant fact in a total tie-break order",
+    "Preserve submitted order for equal keys",
+    "Refuse equal sort keys as malformed before computing the version identity"
+   ],
+   "default_guess": "Use a total canonical tie-break over all meaning facts."
+  },
+  {
+   "subject": "Flow, node and port identifiers",
+   "kind": "missing validation",
+   "text": "Names are bounded strings and node ids are required only to be unique; no rule says they must be non-empty. A05 simultaneously assigns the empty string as the synthetic node identifier of a flow input or output and says it orders before every node.",
+   "question": "May `flow_id`, `slot_id`, `node_id` and port names be empty, and may a real node use the empty string reserved for flow endpoints?",
+   "options": [
+    "Require every identifier to be non-empty and forbid an empty `node_id`",
+    "Allow empty identifiers but use a non-string sentinel for flow endpoints",
+    "Allow an empty node id and define how it is distinguished from a flow endpoint"
+   ],
+   "default_guess": "Require non-empty identifiers and reserve the empty endpoint identifier."
+  },
+  {
+   "subject": "Purpose fields",
+   "kind": "vague refusal condition",
+   "text": "A01 says a request that creates a slot or flow “without a purpose” is refused, but does not say whether an empty or whitespace-only string counts as a purpose.",
+   "question": "What exact values satisfy the required `purpose` check?",
+   "options": [
+    "Any present string, including empty or whitespace-only",
+    "A non-empty string",
+    "A string containing at least one non-whitespace character"
+   ],
+   "default_guess": "Require at least one non-whitespace character."
+  },
+  {
+   "subject": "Many-cardinality values",
+   "kind": "conflicting validation model",
+   "text": "M01 gives every port one `value_schema`, A13 says a `many` value is an array whose every element fits that schema and stores it under an array schema with the port schema as `items`, but A05 says a constant's “value fits its schema” and A04 merely says trial values fit their ports.",
+   "question": "For constants, authored and captured trial cases, expected outputs, service outputs and stored-value identities, is a `many` value validated as one array against the port schema or as a list whose elements each satisfy the port schema, and which schema is stored in its `StoredValue`?",
+   "options": [
+    "Treat the port schema as the element schema and store an array wrapper schema",
+    "Require the port schema itself to describe the complete array",
+    "Use different rules for different sources"
+   ],
+   "default_guess": "Treat the port schema as the element schema everywhere and store the explicitly constructed array wrapper schema."
+  },
+  {
+   "subject": "File-port value_schema",
+   "kind": "undefined semantics",
+   "text": "M01 says every port has a JSON `value_schema`, A05 compares schemas on file edges, and A04 says trial inputs and outputs fit their ports; A03, A09 and K-10 validate file outputs only as bytes, size and media type and say the kernel does not inspect file content.",
+   "question": "What does a JSON Schema on a file port describe, and is anything about a file validated against it beyond canonical equality between connected ports?",
+   "options": [
+    "It is an opaque compatibility label and is never applied to file bytes",
+    "It validates file metadata such as size or media type",
+    "File ports must use one prescribed schema",
+    "File ports do not carry a value schema"
+   ],
+   "default_guess": "Treat it as an opaque schema used only for equality, with bytes validated only by type, size and media type."
+  },
+  {
+   "subject": "Multipart port names and media types",
+   "kind": "unsafe unspecified encoding",
+   "text": "A02 validates only the presence of a media type, and port names are otherwise arbitrary bounded text. A09 inserts port names directly into quoted `Content-Disposition` parameters and media types directly into `Content-Type` headers, with no syntax restriction or escaping rule.",
+   "question": "Which port-name and media-type syntax is accepted for bindings that can produce multipart requests, and how are quotes, backslashes, controls and non-ASCII characters handled?",
+   "options": [
+    "Restrict port names to a closed HTTP-safe token grammar and validate media types strictly",
+    "Define standards-based quoting and escaping for arbitrary names",
+    "Refuse only unsafe names when a multipart request is built"
+   ],
+   "default_guess": "Validate multipart-bound port names with a conservative token grammar and require a syntactically valid media type without control characters."
+  },
+  {
+   "subject": "GET and DELETE inputs with cardinality",
+   "kind": "shape ambiguity",
+   "text": "A09 validates query suitability from each input's schema type, while `many` cardinality independently turns a port value into a list. It permits schema type `array` as well as `many` ports but does not say how a `many` port whose element schema is itself an array is serialized or rejected.",
+   "question": "Which combinations of `cardinality` and schema type are invocable as query parameters?",
+   "options": [
+    "Allow only scalar-schema `one` or `many` ports, plus a `one` port whose schema is an array of scalars",
+    "Flatten nested lists",
+    "Encode nested arrays as JSON strings",
+    "Accept the binding but fail legal nested values at send time"
+   ],
+   "default_guess": "Reject declarations capable of producing nested query lists when the binding is proposed."
+  },
+  {
+   "subject": "Sandbox filesystem access",
+   "kind": "contradiction",
+   "text": "K-02 says a function has “no filesystem beyond its input,” while A03 permits opening paths in the exchange directory and the read-only runtime and provides a writable private exchange directory.",
+   "question": "May function code directly enumerate, read and write the exchange directory or read arbitrary runtime files, or must all filesystem access except the runner's own input/output handling be trapped?",
+   "options": [
+    "Permit private scratch and runtime reads as part of the function environment",
+    "Permit only runner-mediated input and output files",
+    "Permit runtime imports but trap user-initiated filesystem calls"
+   ],
+   "default_guess": "Permit imports from the runtime but trap user code's direct filesystem access except an explicitly defined private scratch API."
+  },
+  {
+   "subject": "Function determinism",
+   "kind": "unenforced invariant",
+   "text": "K-05 calls admission deterministic and A03 requires the same implementation and input to yield the same digest, but the closed traps do not cover sources such as process ids, object identities, filesystem metadata and ordering, resource observations, locale or other standard-library and OS observations.",
+   "question": "Is deterministic output a guaranteed sandbox property, a property tested by repeated executions, or merely an expectation of agent code?",
+   "options": [
+    "Expand isolation and traps to close every observable nondeterministic source",
+    "Run cases repeatedly and refuse differing results",
+    "Drop the deterministic-output guarantee while keeping verdict calculation deterministic for recorded executions"
+   ],
+   "default_guess": "Treat verdict computation as deterministic over recorded outcomes but do not claim that arbitrary Python code is deterministic unless additional enforcement is specified."
+  },
+  {
+   "subject": "Actor provenance in records",
+   "kind": "model contradiction",
+   "text": "K-15 says “The owner's actions, each agent's and the kernel's own are distinguishable in every record,” yet TrialExecution, AdmissionVerdict, NodeExecution and EffectAttempt have no actor or initiating-request reference. This especially loses who requested a try or whether recovery rather than a human request caused an execution.",
+   "question": "How does every execution, verdict and attempt identify the owner, named agent or kernel action that caused it?",
+   "options": [
+    "Add an actor or causation reference to each such record",
+    "Infer the actor from the enclosing run, approval or adjacent store records",
+    "Limit the K-15 guarantee to records that already carry an actor field"
+   ],
+   "default_guess": "Record an explicit actor or causation reference on every independently created observation."
+  },
+  {
+   "subject": "Agent identity across configuration reloads",
+   "kind": "identity lifecycle gap",
+   "text": "M27 says agent names are unique and distinguish actors, but A16's token-list re-read performs “exactly three checks” that do not include unique agent names or forbid assigning a previously used name to a different token.",
+   "question": "What happens when a reloaded token list contains duplicate agent names, reuses an old name for another token, or changes the name attached to an existing token?",
+   "options": [
+    "Reject duplicate names and permanently reserve every previously recorded agent name to one identity",
+    "Reject simultaneous duplicates but define same-name replacement as the same actor",
+    "Mint a durable agent identity independent of the configurable display name"
+   ],
+   "default_guess": "Reject simultaneous duplicate names and treat a reused name as the same recorded actor unless a durable identity is added."
+  },
+  {
+   "subject": "Repeat after not_applied",
+   "kind": "scope contradiction",
+   "text": "K-08 says the kernel “never repeats an effect without a fresh approval” and that sending again after `not_applied` needs fresh approval, while A10 and A11 define `resend_after_not_applied` only for the same run, node and element after resolving an unknown. A direct 4xx also records `not_applied` but A13 makes `operation_refused` a failure, and a later equal run may send under a grant or draft-write activation.",
+   "question": "What counts as repeating an effect: only another attempt of the same run element, or any later send with the same binding, request or idempotency key across runs; and can a direct 4xx attempt ever be resent?",
+   "options": [
+    "Fresh approval is required only for the A11 same-element retry after an owner resolution",
+    "Every later send matching a `not_applied` idempotency key requires fresh approval across runs",
+    "A direct 4xx may be retried in the same run through a new action",
+    "A direct 4xx ends the run and only a new run can send again"
+   ],
+   "default_guess": "Apply the detailed State 2 rule only to an A11 same-element retry; let a 4xx fail the run and treat a new run under its normal authority."
+  },
+  {
+   "subject": "Filesystem and database atomicity",
+   "kind": "unachievable transaction invariant",
+   "text": "A18 says a failed store call “changes nothing,” but value bytes and spooled files are renamed into place outside SQLite, completed unreferenced files are not removed on start, and only an unreferenced spooled file is explicitly replaced later.",
+   "question": "After a crash or database failure between publishing a file and committing its record, must the completed unreferenced file be removed, retained and reused, or considered outside the atomic-change guarantee?",
+   "options": [
+    "Journal and remove every unreferenced published file during recovery",
+    "Retain and reuse content-addressed value and fixture files but clean unreferenced spool files",
+    "Define `changes nothing` as applying only to logical records, permitting orphan bytes"
+   ],
+   "default_guess": "Retain reusable content-addressed value bytes, remove unreferenced spool files during recovery, and state that explicitly as the exception to transaction atomicity."
+  },
+  {
+   "subject": "Credential secrecy versus service error bodies",
+   "kind": "direct contradiction",
+   "text": "A17 says a credential never enters a failure detail, while A09 stores an excerpt of an untrusted service's error body as `failure_detail`. A service can echo the credential it received, and no detection or redaction rule is given.",
+   "question": "How is the no-credential-in-failure-detail invariant enforced when an untrusted service response can contain that credential verbatim or encoded?",
+   "options": [
+    "Never retain service error bodies for credentialed requests",
+    "Redact exact credential occurrences before persistence",
+    "Allow error excerpts and weaken the absolute secrecy invariant"
+   ],
+   "default_guess": "Do not persist service error-body excerpts for requests carrying credentials."
+  },
+  {
+   "subject": "Manifest record schema",
+   "kind": "incomplete external contract",
+   "text": "A08 describes selected fields and checks for absent or duplicate entries, but does not define the complete JSON shapes and types of `capabilities`, `exposed_as`, `idempotency_key`, instances or `required_headers`, nor what wrong-typed members mean.",
+   "question": "What exact manifest JSON structure is accepted, including duplicate selected-instance names, wrong field types, unknown fields and required-header representation?",
+   "options": [
+    "Define and validate one closed manifest schema",
+    "Accept unknown fields but strictly type every field the kernel reads",
+    "Treat every unrecognized or wrong-typed shape as the corresponding absent field"
+   ],
+   "default_guess": "Use a strict schema for all consumed fields, allow unrelated unknown fields, and classify a consumed field of the wrong type as manifest mismatch."
+  },
+  {
+   "subject": "Manifest revision access",
+   "kind": "undefined source behavior",
+   "text": "M28 says the manifest is read at a configured repository revision and A08 gives a filesystem path, but no rule says how a revision is resolved, whether files are read from a checkout or repository object database, or when an invalid revision is refused.",
+   "question": "How does the kernel read `<manifest_location>/<service_id>.json` at `manifest_revision`, and is an unavailable revision a startup failure or a per-proposal/per-send manifest failure?",
+   "options": [
+    "Require `manifest_location` to be an already materialized immutable tree and use the revision only as metadata",
+    "Read files directly from a version-control object at the named revision",
+    "Resolve and validate the revision at startup, then materialize or pin its tree"
+   ],
+   "default_guess": "Resolve and pin the revision at startup and refuse startup if it cannot be read."
+  },
+  {
+   "subject": "Service base URL",
+   "kind": "incomplete URL policy",
+   "text": "A08 accepts an absolute HTTP or HTTPS URL with a host, and A09 joins it by removing a trailing slash and appending the operation path. The texts do not address userinfo, an existing path, query, fragment, percent-encoded separators or non-default authority forms.",
+   "question": "Which exact `api_base_url` forms are permitted, and how are its path, query and fragment components combined with the declared operation path?",
+   "options": [
+    "Require a scheme and authority only, with no userinfo, query or fragment and at most a root path",
+    "Allow a base path but forbid userinfo, query and fragment",
+    "Allow general absolute URLs and define standards-based resolution"
+   ],
+   "default_guess": "Allow an optional base path, forbid userinfo, query and fragment, and concatenate the validated operation path without URL re-resolution."
+  },
+  {
+   "subject": "TLS and loopback classification",
+   "kind": "vague security rule",
+   "text": "A09 says “TLS is verified” and permits plain HTTP when the host “is a loopback address,” without defining trust roots, hostname verification, TLS policy, IP literal forms, DNS names resolving to loopback or the point at which loopback is judged.",
+   "question": "What verification policy and trust store are used for HTTPS, and exactly which URL hosts count as loopback for the HTTP exception?",
+   "options": [
+    "Use the release-pinned/system trust store with hostname verification and allow only canonical loopback IP literals",
+    "Also allow `localhost` names",
+    "Resolve the hostname and allow HTTP when every resolved address is loopback"
+   ],
+   "default_guess": "Use normal hostname verification with the host trust store and allow HTTP only for parsed IPv4 or IPv6 loopback literals."
+  },
+  {
+   "subject": "Partial HTTP responses",
+   "kind": "outcome precedence gap",
+   "text": "A09 classifies “no valid final response received” as unreachable or unknown, but also classifies 3xx, 4xx and 5xx “whatever the body's size.” It does not say whether a received final status and headers followed by a timeout, reset, malformed body framing or premature EOF counts as a valid final response.",
+   "question": "Once a final status line and headers are received, which transport failures while reading the body override the status-based outcome?",
+   "options": [
+    "Any incomplete or malformed response body means no valid final response",
+    "For 3xx, 4xx and 5xx the status is decisive once headers are complete; body failures only limit diagnostics",
+    "Status is decisive for all classes, with missing successful outputs becoming contract violations"
+   ],
+   "default_guess": "Treat complete headers as decisive for 3xx, 4xx and 5xx, but require a complete valid body for 2xx output processing."
+  },
+  {
+   "subject": "Failure-detail text",
+   "kind": "missing encoding rule",
+   "text": "A09 retains bytes from an arbitrary HTTP error body, A20 truncates `failure_detail` at a UTF-8 character boundary, and A07 returns its “length,” but no rule converts invalid UTF-8 bytes to text or defines whether the reported length is bytes or characters.",
+   "question": "How are arbitrary response bytes decoded and sanitized for `failure_detail`, and what unit is disclosed as its length?",
+   "options": [
+    "Store a UTF-8 replacement-decoded excerpt and report UTF-8 byte length",
+    "Store only valid UTF-8 and otherwise omit the detail",
+    "Store an encoded binary excerpt such as base64 and report decoded byte length"
+   ],
+   "default_guess": "Decode with UTF-8 replacement, truncate by encoded UTF-8 bytes and report the stored byte length."
+  },
+  {
+   "subject": "NodeExecution timestamps",
+   "kind": "undefined trace boundary",
+   "text": "M23 requires `started_at` and `ended_at`, but the rules do not say whether `started_at` is the first time an element is reached, the start of sandbox or pre-send work, the moment after approval, or the HTTP send. Waiting for approval creates no NodeExecution, and retries create later attempts.",
+   "question": "What events define `started_at` and `ended_at` for function calls, pre-send failures, approval refusals, service attempts, skips and upstream failures?",
+   "options": [
+    "Measure only the work of the concluded attempt, excluding approval waiting",
+    "Start at the element's first reach and include waiting time",
+    "Use status-specific timestamp definitions"
+   ],
+   "default_guess": "Measure only the work that produces that NodeExecution; instantaneous refusal, skip and propagation records use the record-writing time for both fields."
+  },
+  {
+   "subject": "Startup sequence",
+   "kind": "missing check precedence",
+   "text": "A03, A09, A14, A17 and A18 each impose startup checks or mutations, but only A03 says its sandbox check is before recovery. No total order is given for configuration security, token validation, manifest and credential-header checks, data-directory locking and permissions, cleanup, in-flight recovery and automatic run advancement.",
+   "question": "In what order are startup checks and recovery performed, which failure is reported when several apply, and which filesystem or run mutations may occur before all startup checks pass?",
+   "options": [
+    "Complete all read-only validation first, then lock, clean and recover",
+    "Lock and validate the store first, then validate dependencies and configuration, then recover",
+    "Define a fixed phase order with no recovery mutation until every prerequisite passes"
+   ],
+   "default_guess": "Validate configuration, manifest prerequisites, sandbox and store security without mutating runs; then take the lock, clean temporary artifacts and perform recovery."
+  },
+  {
+   "subject": "Data-directory creation and permissions",
+   "kind": "vague startup refusal",
+   "text": "A18 says the data directory and everything in it are “private to the kernel's user” and the kernel refuses to start otherwise, but does not define required ownership, permission bits, ACL handling, or whether a missing directory is created.",
+   "question": "What exact ownership and permission checks apply to the data directory and each contained file, and what happens when the configured directory does not exist?",
+   "options": [
+    "Require an existing owner-controlled directory and no group or other permissions on any entry",
+    "Create a missing directory securely and require owner-only permissions thereafter",
+    "Check only the directory and rely on no-follow opens for its contents"
+   ],
+   "default_guess": "Create a missing directory with owner-only permissions, then require the directory and all existing entries to be owned by the kernel user with no group or other access."
+  },
+  {
+   "subject": "Credential file value",
+   "kind": "missing byte grammar",
+   "text": "A17 refuses a secret value that is empty or contains a control character but does not state its encoding or whether non-UTF-8 bytes and obsolete HTTP header bytes are valid.",
+   "question": "What byte or character grammar must a resolved credential value satisfy before it is placed in an HTTP header?",
+   "options": [
+    "Require valid UTF-8 containing only permitted HTTP field-value characters",
+    "Permit arbitrary non-control bytes including non-UTF-8 bytes",
+    "Require printable ASCII only"
+   ],
+   "default_guess": "Require printable ASCII or valid UTF-8 characters that can be serialized unambiguously as one HTTP field value."
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"FlowVersion identity and proof ordering\",\"kind\":\"unstable tie order\",\"text\":\"A01 sorts edges only in “the edge order of A05” and constants only by (`to_node`, `to_port`), while A05 keeps versions containing duplicate-target constants or multiple edges with the same endpoint tuple until proof. Neither text gives a tie-breaker when those sort keys are equal.\",\"question\":\"How are equal-key edges and constants ordered for canonical hashing and for selecting the first proof failure?\",\"options\":[\"Include every remaining edge or constant fact in a total tie-break order\",\"Preserve submitted order for equal keys\",\"Refuse equal sort keys as malformed before computing the version identity\"],\"default_guess\":\"Use a total canonical tie-break over all meaning facts.\"},{\"subject\":\"Flow, node and port identifiers\",\"kind\":\"missing validation\",\"text\":\"Names are bounded strings and node ids are required only to be unique; no rule says they must be non-empty. A05 simultaneously assigns the empty string as the synthetic node identifier of a flow input or output and says it orders before every node.\",\"question\":\"May `flow_id`, `slot_id`, `node_id` and port names be empty, and may a real node use the empty string reserved for flow endpoints?\",\"options\":[\"Require every identifier to be non-empty and forbid an empty `node_id`\",\"Allow empty identifiers but use a non-string sentinel for flow endpoints\",\"Allow an empty node id and define how it is distinguished from a flow endpoint\"],\"default_guess\":\"Require non-empty identifiers and reserve the empty endpoint identifier.\"},{\"subject\":\"Purpose fields\",\"kind\":\"vague refusal condition\",\"text\":\"A01 says a request that creates a slot or flow “without a purpose” is refused, but does not say whether an empty or whitespace-only string counts as a purpose.\",\"question\":\"What exact values satisfy the required `purpose` check?\",\"options\":[\"Any present string, including empty or whitespace-only\",\"A non-empty string\",\"A string containing at least one non-whitespace character\"],\"default_guess\":\"Require at least one non-whitespace character.\"},{\"subject\":\"Many-cardinality values\",\"kind\":\"conflicting validation model\",\"text\":\"M01 gives every port one `value_schema`, A13 says a `many` value is an array whose every element fits that schema and stores it under an array schema with the port schema as `items`, but A05 says a constant's “value fits its schema” and A04 merely says trial values fit their ports.\",\"question\":\"For constants, authored and captured trial cases, expected outputs, service outputs and stored-value identities, is a `many` value validated as one array against the port schema or as a list whose elements each satisfy the port schema, and which schema is stored in its `StoredValue`?\",\"options\":[\"Treat the port schema as the element schema and store an array wrapper schema\",\"Require the port schema itself to describe the complete array\",\"Use different rules for different sources\"],\"default_guess\":\"Treat the port schema as the element schema everywhere and store the explicitly constructed array wrapper schema.\"},{\"subject\":\"File-port value_schema\",\"kind\":\"undefined semantics\",\"text\":\"M01 says every port has a JSON `value_schema`, A05 compares schemas on file edges, and A04 says trial inputs and outputs fit their ports; A03, A09 and K-10 validate file outputs only as bytes, size and media type and say the kernel does not inspect file content.\",\"question\":\"What does a JSON Schema on a file port describe, and is anything about a file validated against it beyond canonical equality between connected ports?\",\"options\":[\"It is an opaque compatibility label and is never applied to file bytes\",\"It validates file metadata such as size or media type\",\"File ports must use one prescribed schema\",\"File ports do not carry a value schema\"],\"default_guess\":\"Treat it as an opaque schema used only for equality, with bytes validated only by type, size and media type.\"},{\"subject\":\"Multipart port names and media types\",\"kind\":\"unsafe unspecified encoding\",\"text\":\"A02 validates only the presence of a media type, and port names are otherwise arbitrary bounded text. A09 inserts port names directly into quoted `Content-Disposition` parameters and media types directly into `Content-Type` headers, with no syntax restriction or escaping rule.\",\"question\":\"Which port-name and media-type syntax is accepted for bindings that can produce multipart requests, and how are quotes, backslashes, controls and non-ASCII characters handled?\",\"options\":[\"Restrict port names to a closed HTTP-safe token grammar and validate media types strictly\",\"Define standards-based quoting and escaping for arbitrary names\",\"Refuse only unsafe names when a multipart request is built\"],\"default_guess\":\"Validate multipart-bound port names with a conservative token grammar and require a syntactically valid media type without control characters.\"},{\"subject\":\"GET and DELETE inputs with cardinality\",\"kind\":\"shape ambiguity\",\"text\":\"A09 validates query suitability from each input's schema type, while `many` cardinality independently turns a port value into a list. It permits schema type `array` as well as `many` ports but does not say how a `many` port whose element schema is itself an array is serialized or rejected.\",\"question\":\"Which combinations of `cardinality` and schema type are invocable as query parameters?\",\"options\":[\"Allow only scalar-schema `one` or `many` ports, plus a `one` port whose schema is an array of scalars\",\"Flatten nested lists\",\"Encode nested arrays as JSON strings\",\"Accept the binding but fail legal nested values at send time\"],\"default_guess\":\"Reject declarations capable of producing nested query lists when the binding is proposed.\"},{\"subject\":\"Sandbox filesystem access\",\"kind\":\"contradiction\",\"text\":\"K-02 says a function has “no filesystem beyond its input,” while A03 permits opening paths in the exchange directory and the read-only runtime and provides a writable private exchange directory.\",\"question\":\"May function code directly enumerate, read and write the exchange directory or read arbitrary runtime files, or must all filesystem access except the runner's own input/output handling be trapped?\",\"options\":[\"Permit private scratch and runtime reads as part of the function environment\",\"Permit only runner-mediated input and output files\",\"Permit runtime imports but trap user-initiated filesystem calls\"],\"default_guess\":\"Permit imports from the runtime but trap user code's direct filesystem access except an explicitly defined private scratch API.\"},{\"subject\":\"Function determinism\",\"kind\":\"unenforced invariant\",\"text\":\"K-05 calls admission deterministic and A03 requires the same implementation and input to yield the same digest, but the closed traps do not cover sources such as process ids, object identities, filesystem metadata and ordering, resource observations, locale or other standard-library and OS observations.\",\"question\":\"Is deterministic output a guaranteed sandbox property, a property tested by repeated executions, or merely an expectation of agent code?\",\"options\":[\"Expand isolation and traps to close every observable nondeterministic source\",\"Run cases repeatedly and refuse differing results\",\"Drop the deterministic-output guarantee while keeping verdict calculation deterministic for recorded executions\"],\"default_guess\":\"Treat verdict computation as deterministic over recorded outcomes but do not claim that arbitrary Python code is deterministic unless additional enforcement is specified.\"},{\"subject\":\"Actor provenance in records\",\"kind\":\"model contradiction\",\"text\":\"K-15 says “The owner's actions, each agent's and the kernel's own are distinguishable in every record,” yet TrialExecution, AdmissionVerdict, NodeExecution and EffectAttempt have no actor or initiating-request reference. This especially loses who requested a try or whether recovery rather than a human request caused an execution.\",\"question\":\"How does every execution, verdict and attempt identify the owner, named agent or kernel action that caused it?\",\"options\":[\"Add an actor or causation reference to each such record\",\"Infer the actor from the enclosing run, approval or adjacent store records\",\"Limit the K-15 guarantee to records that already carry an actor field\"],\"default_guess\":\"Record an explicit actor or causation reference on every independently created observation.\"},{\"subject\":\"Agent identity across configuration reloads\",\"kind\":\"identity lifecycle gap\",\"text\":\"M27 says agent names are unique and distinguish actors, but A16's token-list re-read performs “exactly three checks” that do not include unique agent names or forbid assigning a previously used name to a different token.\",\"question\":\"What happens when a reloaded token list contains duplicate agent names, reuses an old name for another token, or changes the name attached to an existing token?\",\"options\":[\"Reject duplicate names and permanently reserve every previously recorded agent name to one identity\",\"Reject simultaneous duplicates but define same-name replacement as the same actor\",\"Mint a durable agent identity independent of the configurable display name\"],\"default_guess\":\"Reject simultaneous duplicate names and treat a reused name as the same recorded actor unless a durable identity is added.\"},{\"subject\":\"Repeat after not_applied\",\"kind\":\"scope contradiction\",\"text\":\"K-08 says the kernel “never repeats an effect without a fresh approval” and that sending again after `not_applied` needs fresh approval, while A10 and A11 define `resend_after_not_applied` only for the same run, node and element after resolving an unknown. A direct 4xx also records `not_applied` but A13 makes `operation_refused` a failure, and a later equal run may send under a grant or draft-write activation.\",\"question\":\"What counts as repeating an effect: only another attempt of the same run element, or any later send with the same binding, request or idempotency key across runs; and can a direct 4xx attempt ever be resent?\",\"options\":[\"Fresh approval is required only for the A11 same-element retry after an owner resolution\",\"Every later send matching a `not_applied` idempotency key requires fresh approval across runs\",\"A direct 4xx may be retried in the same run through a new action\",\"A direct 4xx ends the run and only a new run can send again\"],\"default_guess\":\"Apply the detailed State 2 rule only to an A11 same-element retry; let a 4xx fail the run and treat a new run under its normal authority.\"},{\"subject\":\"Filesystem and database atomicity\",\"kind\":\"unachievable transaction invariant\",\"text\":\"A18 says a failed store call “changes nothing,” but value bytes and spooled files are renamed into place outside SQLite, completed unreferenced files are not removed on start, and only an unreferenced spooled file is explicitly replaced later.\",\"question\":\"After a crash or database failure between publishing a file and committing its record, must the completed unreferenced file be removed, retained and reused, or considered outside the atomic-change guarantee?\",\"options\":[\"Journal and remove every unreferenced published file during recovery\",\"Retain and reuse content-addressed value and fixture files but clean unreferenced spool files\",\"Define `changes nothing` as applying only to logical records, permitting orphan bytes\"],\"default_guess\":\"Retain reusable content-addressed value bytes, remove unreferenced spool files during recovery, and state that explicitly as the exception to transaction atomicity.\"},{\"subject\":\"Credential secrecy versus service error bodies\",\"kind\":\"direct contradiction\",\"text\":\"A17 says a credential never enters a failure detail, while A09 stores an excerpt of an untrusted service's error body as `failure_detail`. A service can echo the credential it received, and no detection or redaction rule is given.\",\"question\":\"How is the no-credential-in-failure-detail invariant enforced when an untrusted service response can contain that credential verbatim or encoded?\",\"options\":[\"Never retain service error bodies for credentialed requests\",\"Redact exact credential occurrences before persistence\",\"Allow error excerpts and weaken the absolute secrecy invariant\"],\"default_guess\":\"Do not persist service error-body excerpts for requests carrying credentials.\"},{\"subject\":\"Manifest record schema\",\"kind\":\"incomplete external contract\",\"text\":\"A08 describes selected fields and checks for absent or duplicate entries, but does not define the complete JSON shapes and types of `capabilities`, `exposed_as`, `idempotency_key`, instances or `required_headers`, nor what wrong-typed members mean.\",\"question\":\"What exact manifest JSON structure is accepted, including duplicate selected-instance names, wrong field types, unknown fields and required-header representation?\",\"options\":[\"Define and validate one closed manifest schema\",\"Accept unknown fields but strictly type every field the kernel reads\",\"Treat every unrecognized or wrong-typed shape as the corresponding absent field\"],\"default_guess\":\"Use a strict schema for all consumed fields, allow unrelated unknown fields, and classify a consumed field of the wrong type as manifest mismatch.\"},{\"subject\":\"Manifest revision access\",\"kind\":\"undefined source behavior\",\"text\":\"M28 says the manifest is read at a configured repository revision and A08 gives a filesystem path, but no rule says how a revision is resolved, whether files are read from a checkout or repository object database, or when an invalid revision is refused.\",\"question\":\"How does the kernel read `<manifest_location>/<service_id>.json` at `manifest_revision`, and is an unavailable revision a startup failure or a per-proposal/per-send manifest failure?\",\"options\":[\"Require `manifest_location` to be an already materialized immutable tree and use the revision only as metadata\",\"Read files directly from a version-control object at the named revision\",\"Resolve and validate the revision at startup, then materialize or pin its tree\"],\"default_guess\":\"Resolve and pin the revision at startup and refuse startup if it cannot be read.\"},{\"subject\":\"Service base URL\",\"kind\":\"incomplete URL policy\",\"text\":\"A08 accepts an absolute HTTP or HTTPS URL with a host, and A09 joins it by removing a trailing slash and appending the operation path. The texts do not address userinfo, an existing path, query, fragment, percent-encoded separators or non-default authority forms.\",\"question\":\"Which exact `api_base_url` forms are permitted, and how are its path, query and fragment components combined with the declared operation path?\",\"options\":[\"Require a scheme and authority only, with no userinfo, query or fragment and at most a root path\",\"Allow a base path but forbid userinfo, query and fragment\",\"Allow general absolute URLs and define standards-based resolution\"],\"default_guess\":\"Allow an optional base path, forbid userinfo, query and fragment, and concatenate the validated operation path without URL re-resolution.\"},{\"subject\":\"TLS and loopback classification\",\"kind\":\"vague security rule\",\"text\":\"A09 says “TLS is verified” and permits plain HTTP when the host “is a loopback address,” without defining trust roots, hostname verification, TLS policy, IP literal forms, DNS names resolving to loopback or the point at which loopback is judged.\",\"question\":\"What verification policy and trust store are used for HTTPS, and exactly which URL hosts count as loopback for the HTTP exception?\",\"options\":[\"Use the release-pinned/system trust store with hostname verification and allow only canonical loopback IP literals\",\"Also allow `localhost` names\",\"Resolve the hostname and allow HTTP when every resolved address is loopback\"],\"default_guess\":\"Use normal hostname verification with the host trust store and allow HTTP only for parsed IPv4 or IPv6 loopback literals.\"},{\"subject\":\"Partial HTTP responses\",\"kind\":\"outcome precedence gap\",\"text\":\"A09 classifies “no valid final response received” as unreachable or unknown, but also classifies 3xx, 4xx and 5xx “whatever the body's size.” It does not say whether a received final status and headers followed by a timeout, reset, malformed body framing or premature EOF counts as a valid final response.\",\"question\":\"Once a final status line and headers are received, which transport failures while reading the body override the status-based outcome?\",\"options\":[\"Any incomplete or malformed response body means no valid final response\",\"For 3xx, 4xx and 5xx the status is decisive once headers are complete; body failures only limit diagnostics\",\"Status is decisive for all classes, with missing successful outputs becoming contract violations\"],\"default_guess\":\"Treat complete headers as decisive for 3xx, 4xx and 5xx, but require a complete valid body for 2xx output processing.\"},{\"subject\":\"Failure-detail text\",\"kind\":\"missing encoding rule\",\"text\":\"A09 retains bytes from an arbitrary HTTP error body, A20 truncates `failure_detail` at a UTF-8 character boundary, and A07 returns its “length,” but no rule converts invalid UTF-8 bytes to text or defines whether the reported length is bytes or characters.\",\"question\":\"How are arbitrary response bytes decoded and sanitized for `failure_detail`, and what unit is disclosed as its length?\",\"options\":[\"Store a UTF-8 replacement-decoded excerpt and report UTF-8 byte length\",\"Store only valid UTF-8 and otherwise omit the detail\",\"Store an encoded binary excerpt such as base64 and report decoded byte length\"],\"default_guess\":\"Decode with UTF-8 replacement, truncate by encoded UTF-8 bytes and report the stored byte length.\"},{\"subject\":\"NodeExecution timestamps\",\"kind\":\"undefined trace boundary\",\"text\":\"M23 requires `started_at` and `ended_at`, but the rules do not say whether `started_at` is the first time an element is reached, the start of sandbox or pre-send work, the moment after approval, or the HTTP send. Waiting for approval creates no NodeExecution, and retries create later attempts.\",\"question\":\"What events define `started_at` and `ended_at` for function calls, pre-send failures, approval refusals, service attempts, skips and upstream failures?\",\"options\":[\"Measure only the work of the concluded attempt, excluding approval waiting\",\"Start at the element's first reach and include waiting time\",\"Use status-specific timestamp definitions\"],\"default_guess\":\"Measure only the work that produces that NodeExecution; instantaneous refusal, skip and propagation records use the record-writing time for both fields.\"},{\"subject\":\"Startup sequence\",\"kind\":\"missing check precedence\",\"text\":\"A03, A09, A14, A17 and A18 each impose startup checks or mutations, but only A03 says its sandbox check is before recovery. No total order is given for configuration security, token validation, manifest and credential-header checks, data-directory locking and permissions, cleanup, in-flight recovery and automatic run advancement.\",\"question\":\"In what order are startup checks and recovery performed, which failure is reported when several apply, and which filesystem or run mutations may occur before all startup checks pass?\",\"options\":[\"Complete all read-only validation first, then lock, clean and recover\",\"Lock and validate the store first, then validate dependencies and configuration, then recover\",\"Define a fixed phase order with no recovery mutation until every prerequisite passes\"],\"default_guess\":\"Validate configuration, manifest prerequisites, sandbox and store security without mutating runs; then take the lock, clean temporary artifacts and perform recovery.\"},{\"subject\":\"Data-directory creation and permissions\",\"kind\":\"vague startup refusal\",\"text\":\"A18 says the data directory and everything in it are “private to the kernel's user” and the kernel refuses to start otherwise, but does not define required ownership, permission bits, ACL handling, or whether a missing directory is created.\",\"question\":\"What exact ownership and permission checks apply to the data directory and each contained file, and what happens when the configured directory does not exist?\",\"options\":[\"Require an existing owner-controlled directory and no group or other permissions on any entry\",\"Create a missing directory securely and require owner-only permissions thereafter\",\"Check only the directory and rely on no-follow opens for its contents\"],\"default_guess\":\"Create a missing directory with owner-only permissions, then require the directory and all existing entries to be owned by the kernel user with no group or other access.\"},{\"subject\":\"Credential file value\",\"kind\":\"missing byte grammar\",\"text\":\"A17 refuses a secret value that is empty or contains a control character but does not state its encoding or whether non-UTF-8 bytes and obsolete HTTP header bytes are valid.\",\"question\":\"What byte or character grammar must a resolved credential value satisfy before it is placed in an HTTP header?\",\"options\":[\"Require valid UTF-8 containing only permitted HTTP field-value characters\",\"Permit arbitrary non-control bytes including non-UTF-8 bytes\",\"Require printable ASCII only\"],\"default_guess\":\"Require printable ASCII or valid UTF-8 characters that can be serialized unambiguously as one HTTP field value.\"}]}"
+}

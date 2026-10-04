@@ -1,0 +1,306 @@
+{
+ "open_points": [
+  {
+   "subject": "Function filesystem access",
+   "kind": "contradiction",
+   "text": "K-02 says a function has \"no filesystem beyond its input\", while A03 permits opening paths in \"the exchange directory and the read-only runtime\" and provides a writable private exchange directory.",
+   "question": "May function code read runtime files and create or modify files in the exchange directory, or must all filesystem access other than reading its supplied inputs fail?",
+   "options": [
+    "Permit the runtime and exchange-directory access described by A03",
+    "Expose only input artifacts and reject every other filesystem operation",
+    "Permit runtime reads but no user-created exchange files"
+   ],
+   "default_guess": "Treat A03 as the detailed rule: permit runtime reads and bounded exchange-directory access."
+  },
+  {
+   "subject": "Function clock and randomness access",
+   "kind": "contradiction",
+   "text": "K-02 says functions have \"no clock, no randomness\", but A03 allows explicitly seeded random.Random and its closed trap list omits available clock-related APIs such as time.clock_gettime, time.thread_time, os.times and resource.getrusage.",
+   "question": "Does the prohibition cover deterministic pseudorandom generators and every API exposing time or timing, including APIs absent from A03's closed trap list?",
+   "options": [
+    "Forbid all clock observations but allow explicitly seeded pseudorandomness",
+    "Forbid both all clock observations and all pseudorandom APIs",
+    "Permit every API not named in A03's closed trap list"
+   ],
+   "default_guess": "Allow explicitly seeded pseudorandomness, but forbid every observable clock or timing API."
+  },
+  {
+   "subject": "Deterministic function execution and admission",
+   "kind": "unverifiable invariant",
+   "text": "A03 requires that \"The same implementation on the same input yields the same output digest twice\", while arbitrary Python can observe or create nondeterminism through threads, scheduling, object identities, process/runtime state and APIs not trapped; admission runs each case only once.",
+   "question": "What mechanism makes deterministic output enforceable, or what outcome is required when identical executions differ?",
+   "options": [
+    "Restrict additional Python facilities until determinism is enforceable",
+    "Run cases repeatedly and refuse differing results",
+    "Define determinism as an author obligation that the kernel does not verify"
+   ],
+   "default_guess": "Restrict known nondeterministic facilities and repeat trial executions to detect differing outputs."
+  },
+  {
+   "subject": "Sandbox stdout and stderr",
+   "kind": "missing behavior",
+   "text": "A03 says \"Nothing the code prints or raises is interpreted by the kernel\" and \"never stdout\", but does not say where stdout and stderr go or how their volume is bounded.",
+   "question": "Are stdout and stderr discarded, captured within a limit, or counted against a resource bound, and what outcome results from excessive output?",
+   "options": [
+    "Redirect both streams to a bounded discard sink",
+    "Count both streams against output_bytes and return resource_exhausted",
+    "Capture bounded excerpts without storing stdout in traces"
+   ],
+   "default_guess": "Redirect both streams to a bounded discard sink and never expose them."
+  },
+  {
+   "subject": "Sandbox resource-limit detection",
+   "kind": "vague condition",
+   "text": "A03 classifies \"a limit hit (memory, process count, scratch, output_bytes)\" as resource_exhausted, although setrlimit failures such as a denied allocation or process creation can be caught by user code and do not necessarily tell the parent that the limit was hit.",
+   "question": "What observable event constitutes a memory, process-count or scratch limit hit, especially when user code catches the resulting error and returns valid output?",
+   "options": [
+    "Any denied resource operation counts as a hit even if caught",
+    "Only forced termination or a measured excess counts as a hit",
+    "A caught denial may still yield a successful execution"
+   ],
+   "default_guess": "Instrument or externally measure limits so any denied limit-crossing operation counts as resource_exhausted."
+  },
+  {
+   "subject": "Authored trial expected outputs",
+   "kind": "missing refusal rule",
+   "text": "M06 says expected_outputs is either present or absent, and A04 says expected outputs \"when present, fit the output ports\", but neither says whether a present map must name exactly every output port or may name only a subset.",
+   "question": "When expected_outputs is present, must it contain exactly one value for every output port, and are unknown or duplicate output names refused?",
+   "options": [
+    "Require exactly all output ports",
+    "Allow a subset and compare only those outputs",
+    "Allow omission only for explicitly marked unconstrained ports"
+   ],
+   "default_guess": "Require exactly all output ports whenever expected_outputs is present."
+  },
+  {
+   "subject": "Rollback eligibility",
+   "kind": "ambiguous term",
+   "text": "Rollback selects \"an earlier implementation\" of the current contract version, but \"earlier\" is not defined after several activations, rollbacks and equal resubmissions.",
+   "question": "Is rollback allowed to select any non-current implementation admitted over the current corpus, only an implementation submitted before the current implementation, or only one that appeared in an earlier activation?",
+   "options": [
+    "Any non-current admitted implementation",
+    "Only an implementation issued earlier than the current implementation",
+    "Only an implementation selected by an earlier activation"
+   ],
+   "default_guess": "Allow any implementation of the current contract version already admitted over the current corpus."
+  },
+  {
+   "subject": "Activation from a cached admission verdict",
+   "kind": "contradiction",
+   "text": "M09 says kernel activation occurs \"on a new admitted verdict\", while A04 says an equal implementation submission reuses an existing verdict and an admitted verdict is followed by activation when that implementation is not currently active.",
+   "question": "Can resubmitting an implementation with a cached admitted verdict activate it without creating a new verdict?",
+   "options": [
+    "Yes, the cached verdict can cause a new activation",
+    "No, only a newly computed verdict can activate",
+    "Reuse the verdict but require the rollback action"
+   ],
+   "default_guess": "Follow A04 and let the cached admitted verdict cause a new activation."
+  },
+  {
+   "subject": "Disclosure across operation nodes",
+   "kind": "contradiction",
+   "text": "A07 says \"a disclosure class only rises\" and \"No function, edge or flow construct lowers a class\", but an operation output always takes the class declared by its binding, regardless of the classes of the operation's inputs.",
+   "question": "May an operation receiving personal_data or business_confidential input produce an output declared at a lower class, or must its effective output class be at least the highest input class?",
+   "options": [
+    "Allow an owner-accepted binding to declassify through an operation",
+    "Use max(binding output class, received input classes)",
+    "Refuse bindings or flows in which an operation could lower the class"
+   ],
+   "default_guess": "Use the maximum of the binding's declared output class and the classes actually received."
+  },
+  {
+   "subject": "Empty mapped operation output class",
+   "kind": "contradiction",
+   "text": "A07 and M21 say a binding output takes the class the binding declares, while A13 says every output of a mapped node over an empty list takes the class of the list mapped over.",
+   "question": "What class does an empty output list from a mapped operation node receive when the mapped input and binding output classes differ?",
+   "options": [
+    "The binding output's declared class",
+    "The mapped input list's class",
+    "The higher of the two classes"
+   ],
+   "default_guess": "Use the higher of the mapped input class and the binding output class."
+  },
+  {
+   "subject": "Oversized aggregate output of a mapped node",
+   "kind": "missing trace behavior",
+   "text": "A13 creates each many value output as one aggregate StoredValue when the last element record is written, while A15 says an oversized produced value concludes \"the producing element\" contract_violation; mapped nodes have no aggregate NodeExecution when elements ran.",
+   "question": "If individually successful mapped elements form an aggregate JSON array larger than stored_value_bytes_max, which NodeExecution records the failure, what happens to already written successful element records, and are any aggregate outputs retained?",
+   "options": [
+    "Change the last element's record to contract_violation before it is written",
+    "Write a separate aggregate NodeExecution for the mapped node",
+    "Keep all element records successful but derive a mapped-node failure without another record"
+   ],
+   "default_guess": "Detect the aggregate excess before writing the last element record, mark that element contract_violation, and retain no aggregate output."
+  },
+  {
+   "subject": "Platform manifest structural validation",
+   "kind": "incomplete refusal conditions",
+   "text": "A08 lists failures such as a record that \"lacks service or capabilities\" but does not define the required JSON types and shapes of capabilities, instances, exposed_as, required_headers and idempotency_key, or where malformed nested structures fall in the first-failure order.",
+   "question": "What complete manifest schema is accepted, and how are wrong types, duplicate JSON member names and malformed nested records classified and ordered?",
+   "options": [
+    "Define and validate a complete manifest schema before A08's semantic checks",
+    "Treat every malformed structure as not valid JSON",
+    "Handle malformed fields at the semantic check that first reads them"
+   ],
+   "default_guess": "Validate a complete duplicate-free manifest schema first, then run A08's ordered semantic checks."
+  },
+  {
+   "subject": "Read-operation idempotency declarations",
+   "kind": "missing behavior",
+   "text": "A08 says that for a read operation \"the key is not used and not checked\", while M10 and M11 still carry idempotency_key_fields copied from the manifest.",
+   "question": "For a read operation, are missing, malformed or non-text idempotency_key declarations accepted, and if accepted what value is stored in idempotency_key_fields?",
+   "options": [
+    "Ignore any declaration and store no key fields",
+    "Require null or valid syntax but do not use it",
+    "Parse valid declarations and reject malformed ones even for reads"
+   ],
+   "default_guess": "Require null or valid syntax, store the parsed fields, but never use them for reads."
+  },
+  {
+   "subject": "Binding port schemas",
+   "kind": "ambiguous validation",
+   "text": "M01 requires value_schema to use the kernel's supported subset, A02 checks that rule for contract ports, but A08 only explicitly carries over unique-name and media-type rules when validating binding ports.",
+   "question": "Must every proposed binding port schema be in the supported schema subset, and where does that check occur in A08's failure order?",
+   "options": [
+    "Apply the same supported-schema check as contract ports",
+    "Allow any JSON Schema on bindings",
+    "Validate only schemas used by the selected HTTP request shape"
+   ],
+   "default_guess": "Require every binding port schema to be in the same supported subset, before request-shape checks."
+  },
+  {
+   "subject": "Service base URL shape and joining",
+   "kind": "underspecified request construction",
+   "text": "A08 accepts any absolute http or https URL with a host, while A09 forms the request by taking api_base_url \"without a trailing /\" and appending the declared path; user information, an existing path, query, fragment, Unicode host, default ports and multiple trailing slashes are not addressed.",
+   "question": "Which base URL components are allowed, and what exact URL and Host header result from each accepted representation?",
+   "options": [
+    "Require scheme and authority only, with no userinfo, path, query or fragment",
+    "Allow a base path but forbid query, fragment and userinfo",
+    "Allow every absolute URL and define exact string concatenation"
+   ],
+   "default_guess": "Require an ASCII http/https URL containing only scheme and authority, optionally followed by one trailing slash."
+  },
+  {
+   "subject": "Path-placeholder port cardinality",
+   "kind": "missing proposal check",
+   "text": "A09 requires a placeholder input schema type of string or integer, but does not require the port cardinality to be one; at runtime a many port supplies a list that cannot be placed into one path segment.",
+   "question": "Must every path-placeholder input port have cardinality one, or may a binding be accepted that can only fail at send time?",
+   "options": [
+    "Require cardinality one when the binding is proposed",
+    "Accept many ports and reject their values at send time",
+    "Define an encoding for multiple path values"
+   ],
+   "default_guess": "Require path-placeholder ports to have cardinality one at proposal time."
+  },
+  {
+   "subject": "Multipart port names",
+   "kind": "missing encoding rule",
+   "text": "A09 inserts a port name verbatim into Content-Disposition name and filename quoted parameters, but no accepted character set or escaping rule is given for port names containing quotes, backslashes, controls or non-ASCII characters.",
+   "question": "Which port names are legal in multipart bindings, and how are legal non-token characters encoded in Content-Disposition parameters?",
+   "options": [
+    "Restrict multipart port names to a safe ASCII field-name grammar",
+    "Define quoted-string escaping and an encoding for non-ASCII names",
+    "Refuse only values that contain controls, quotes or backslashes"
+   ],
+   "default_guess": "Restrict multipart port names to a conservative ASCII field-name grammar at binding proposal."
+  },
+  {
+   "subject": "Multipart boundary",
+   "kind": "missing wire behavior",
+   "text": "A09 specifies every multipart part and A10 excludes the boundary from the approved request description, but neither defines how the wire boundary is selected or how collision with part content is prevented.",
+   "question": "How is the multipart boundary generated, and what happens if it occurs in a part's bytes?",
+   "options": [
+    "Generate a random boundary and regenerate after scanning for collisions",
+    "Derive a deterministic boundary from the part digests and verify no collision",
+    "Use the HTTP library's boundary without collision checks"
+   ],
+   "default_guess": "Derive or generate a boundary, scan every part, and regenerate until it cannot collide."
+  },
+  {
+   "subject": "Incomplete HTTP error responses",
+   "kind": "ambiguous outcome precedence",
+   "text": "A09 distinguishes \"no valid final response received\" from status 3xx, 4xx or 5xx \"whatever the body's size\", but does not say whether a received status and headers with a timed-out, reset or truncated body is a valid final response for those rows.",
+   "question": "If the status and headers are valid but the error-response body is incomplete, is the outcome determined by the status or treated as no valid final response?",
+   "options": [
+    "The status determines 3xx, 4xx and 5xx outcomes once headers are complete",
+    "Any incomplete framed response is no valid final response",
+    "4xx is determined by status, while 3xx and 5xx require a complete response"
+   ],
+   "default_guess": "Once a valid final status and headers arrive, use the 3xx, 4xx or 5xx row without requiring the error body to complete."
+  },
+  {
+   "subject": "Failure detail from arbitrary HTTP bytes",
+   "kind": "missing representation rule",
+   "text": "A09 may keep an error response body's bytes as failure_detail, while M23 treats failure_detail as bounded text and A20 truncates it at a UTF-8 character boundary; an error body need not be valid UTF-8.",
+   "question": "How is a non-UTF-8 error body represented in failure_detail, and is the byte limit applied before or after conversion?",
+   "options": [
+    "Decode as UTF-8 with replacement and then truncate",
+    "Store a bounded hexadecimal or base64 representation",
+    "Keep failure_detail absent for non-UTF-8 bodies"
+   ],
+   "default_guess": "Decode with UTF-8 replacement and truncate the encoded result to the limit at a character boundary."
+  },
+  {
+   "subject": "HTTPS verification policy",
+   "kind": "vague security rule",
+   "text": "A09 states only that \"TLS is verified for https\" and does not identify the trust store, hostname rules, minimum protocol versions, client-certificate behavior or whether host configuration can alter them.",
+   "question": "What exact TLS verification policy and trust roots must the HTTP invoker use?",
+   "options": [
+    "Use a release-pinned TLS policy with the host system CA store and hostname verification",
+    "Pin both the CA bundle and TLS policy in the kernel release",
+    "Use the HTTP library's platform defaults"
+   ],
+   "default_guess": "Use hostname verification with the system CA store, disable environment overrides, and pin minimum TLS behavior in the release."
+  },
+  {
+   "subject": "Agent-name uniqueness after token reload",
+   "kind": "contradiction",
+   "text": "M27 says repeated agent names make configuration start fail, but A16 says exactly three checks apply to a token-list re-read: parseability, minimum token length and token uniqueness; repeated agent names are not among them.",
+   "question": "What happens when a live configuration reload introduces two agent tokens with the same agent_name?",
+   "options": [
+    "Reject the re-read and all requests until fixed",
+    "Accept both tokens as the same Actor value",
+    "Accept the list but disambiguate actors by token"
+   ],
+   "default_guess": "Reject the re-read just as startup rejects duplicate agent names."
+  },
+  {
+   "subject": "Service credential references",
+   "kind": "underspecified secret handling",
+   "text": "A17 describes \"the reference that resolves to its value on the host\" and later calls it a secret file, but gives no reference syntax or ownership, permission, regular-file and symbolic-link rules for that secret.",
+   "question": "What forms of credential reference are allowed, and what filesystem security checks apply before reading the secret value?",
+   "options": [
+    "Only an absolute regular-file path owned by the kernel user with no group or other access and no symlinks",
+    "Any host path subject only to readability and value validation",
+    "A release-defined secret-provider URI rather than necessarily a file"
+   ],
+   "default_guess": "Allow only a non-symlink regular file owned by the kernel user with no group or other permissions."
+  },
+  {
+   "subject": "Pinned dependency versions",
+   "kind": "missing release data",
+   "text": "A20 says \"A release pins the exact versions of the kernel's Python dependencies and of the sandbox runtime\", but the accepted texts name only CPython 3.12 and do not list exact kernel-library, bubblewrap, SQLite or TLS/HTTP-stack versions.",
+   "question": "Which exact dependency versions constitute release v1 and are required for startup or build acceptance?",
+   "options": [
+    "List every exact version in the State 2 release definition",
+    "Use a checked-in lockfile as the normative list",
+    "Treat whatever versions the build environment resolves as release v1"
+   ],
+   "default_guess": "Make a checked-in lockfile and runtime manifest the normative exact dependency list for release v1."
+  },
+  {
+   "subject": "Release upgrade and existing admission verdicts",
+   "kind": "missing upgrade behavior",
+   "text": "A20 permits a new release to change dependencies and the sandbox runtime, while A04 reuses an existing AdmissionVerdict whenever the implementation and corpus digest match; implementations and verdicts do not record the release or runtime under which they were tested.",
+   "question": "After an upgrade changes Python or another execution dependency, may an old activation continue and may its cached verdict be reused without re-admission?",
+   "options": [
+    "Include the execution-release identity in verdict validity and re-admit before use",
+    "Forbid opening an existing store with a behavior-changing runtime",
+    "Promise runtime compatibility and continue using old verdicts"
+   ],
+   "default_guess": "Include a sandbox-runtime release identity in verdict validity and require re-admission before an implementation executes under a changed runtime."
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"Function filesystem access\",\"kind\":\"contradiction\",\"text\":\"K-02 says a function has \\\"no filesystem beyond its input\\\", while A03 permits opening paths in \\\"the exchange directory and the read-only runtime\\\" and provides a writable private exchange directory.\",\"question\":\"May function code read runtime files and create or modify files in the exchange directory, or must all filesystem access other than reading its supplied inputs fail?\",\"options\":[\"Permit the runtime and exchange-directory access described by A03\",\"Expose only input artifacts and reject every other filesystem operation\",\"Permit runtime reads but no user-created exchange files\"],\"default_guess\":\"Treat A03 as the detailed rule: permit runtime reads and bounded exchange-directory access.\"},{\"subject\":\"Function clock and randomness access\",\"kind\":\"contradiction\",\"text\":\"K-02 says functions have \\\"no clock, no randomness\\\", but A03 allows explicitly seeded random.Random and its closed trap list omits available clock-related APIs such as time.clock_gettime, time.thread_time, os.times and resource.getrusage.\",\"question\":\"Does the prohibition cover deterministic pseudorandom generators and every API exposing time or timing, including APIs absent from A03's closed trap list?\",\"options\":[\"Forbid all clock observations but allow explicitly seeded pseudorandomness\",\"Forbid both all clock observations and all pseudorandom APIs\",\"Permit every API not named in A03's closed trap list\"],\"default_guess\":\"Allow explicitly seeded pseudorandomness, but forbid every observable clock or timing API.\"},{\"subject\":\"Deterministic function execution and admission\",\"kind\":\"unverifiable invariant\",\"text\":\"A03 requires that \\\"The same implementation on the same input yields the same output digest twice\\\", while arbitrary Python can observe or create nondeterminism through threads, scheduling, object identities, process/runtime state and APIs not trapped; admission runs each case only once.\",\"question\":\"What mechanism makes deterministic output enforceable, or what outcome is required when identical executions differ?\",\"options\":[\"Restrict additional Python facilities until determinism is enforceable\",\"Run cases repeatedly and refuse differing results\",\"Define determinism as an author obligation that the kernel does not verify\"],\"default_guess\":\"Restrict known nondeterministic facilities and repeat trial executions to detect differing outputs.\"},{\"subject\":\"Sandbox stdout and stderr\",\"kind\":\"missing behavior\",\"text\":\"A03 says \\\"Nothing the code prints or raises is interpreted by the kernel\\\" and \\\"never stdout\\\", but does not say where stdout and stderr go or how their volume is bounded.\",\"question\":\"Are stdout and stderr discarded, captured within a limit, or counted against a resource bound, and what outcome results from excessive output?\",\"options\":[\"Redirect both streams to a bounded discard sink\",\"Count both streams against output_bytes and return resource_exhausted\",\"Capture bounded excerpts without storing stdout in traces\"],\"default_guess\":\"Redirect both streams to a bounded discard sink and never expose them.\"},{\"subject\":\"Sandbox resource-limit detection\",\"kind\":\"vague condition\",\"text\":\"A03 classifies \\\"a limit hit (memory, process count, scratch, output_bytes)\\\" as resource_exhausted, although setrlimit failures such as a denied allocation or process creation can be caught by user code and do not necessarily tell the parent that the limit was hit.\",\"question\":\"What observable event constitutes a memory, process-count or scratch limit hit, especially when user code catches the resulting error and returns valid output?\",\"options\":[\"Any denied resource operation counts as a hit even if caught\",\"Only forced termination or a measured excess counts as a hit\",\"A caught denial may still yield a successful execution\"],\"default_guess\":\"Instrument or externally measure limits so any denied limit-crossing operation counts as resource_exhausted.\"},{\"subject\":\"Authored trial expected outputs\",\"kind\":\"missing refusal rule\",\"text\":\"M06 says expected_outputs is either present or absent, and A04 says expected outputs \\\"when present, fit the output ports\\\", but neither says whether a present map must name exactly every output port or may name only a subset.\",\"question\":\"When expected_outputs is present, must it contain exactly one value for every output port, and are unknown or duplicate output names refused?\",\"options\":[\"Require exactly all output ports\",\"Allow a subset and compare only those outputs\",\"Allow omission only for explicitly marked unconstrained ports\"],\"default_guess\":\"Require exactly all output ports whenever expected_outputs is present.\"},{\"subject\":\"Rollback eligibility\",\"kind\":\"ambiguous term\",\"text\":\"Rollback selects \\\"an earlier implementation\\\" of the current contract version, but \\\"earlier\\\" is not defined after several activations, rollbacks and equal resubmissions.\",\"question\":\"Is rollback allowed to select any non-current implementation admitted over the current corpus, only an implementation submitted before the current implementation, or only one that appeared in an earlier activation?\",\"options\":[\"Any non-current admitted implementation\",\"Only an implementation issued earlier than the current implementation\",\"Only an implementation selected by an earlier activation\"],\"default_guess\":\"Allow any implementation of the current contract version already admitted over the current corpus.\"},{\"subject\":\"Activation from a cached admission verdict\",\"kind\":\"contradiction\",\"text\":\"M09 says kernel activation occurs \\\"on a new admitted verdict\\\", while A04 says an equal implementation submission reuses an existing verdict and an admitted verdict is followed by activation when that implementation is not currently active.\",\"question\":\"Can resubmitting an implementation with a cached admitted verdict activate it without creating a new verdict?\",\"options\":[\"Yes, the cached verdict can cause a new activation\",\"No, only a newly computed verdict can activate\",\"Reuse the verdict but require the rollback action\"],\"default_guess\":\"Follow A04 and let the cached admitted verdict cause a new activation.\"},{\"subject\":\"Disclosure across operation nodes\",\"kind\":\"contradiction\",\"text\":\"A07 says \\\"a disclosure class only rises\\\" and \\\"No function, edge or flow construct lowers a class\\\", but an operation output always takes the class declared by its binding, regardless of the classes of the operation's inputs.\",\"question\":\"May an operation receiving personal_data or business_confidential input produce an output declared at a lower class, or must its effective output class be at least the highest input class?\",\"options\":[\"Allow an owner-accepted binding to declassify through an operation\",\"Use max(binding output class, received input classes)\",\"Refuse bindings or flows in which an operation could lower the class\"],\"default_guess\":\"Use the maximum of the binding's declared output class and the classes actually received.\"},{\"subject\":\"Empty mapped operation output class\",\"kind\":\"contradiction\",\"text\":\"A07 and M21 say a binding output takes the class the binding declares, while A13 says every output of a mapped node over an empty list takes the class of the list mapped over.\",\"question\":\"What class does an empty output list from a mapped operation node receive when the mapped input and binding output classes differ?\",\"options\":[\"The binding output's declared class\",\"The mapped input list's class\",\"The higher of the two classes\"],\"default_guess\":\"Use the higher of the mapped input class and the binding output class.\"},{\"subject\":\"Oversized aggregate output of a mapped node\",\"kind\":\"missing trace behavior\",\"text\":\"A13 creates each many value output as one aggregate StoredValue when the last element record is written, while A15 says an oversized produced value concludes \\\"the producing element\\\" contract_violation; mapped nodes have no aggregate NodeExecution when elements ran.\",\"question\":\"If individually successful mapped elements form an aggregate JSON array larger than stored_value_bytes_max, which NodeExecution records the failure, what happens to already written successful element records, and are any aggregate outputs retained?\",\"options\":[\"Change the last element's record to contract_violation before it is written\",\"Write a separate aggregate NodeExecution for the mapped node\",\"Keep all element records successful but derive a mapped-node failure without another record\"],\"default_guess\":\"Detect the aggregate excess before writing the last element record, mark that element contract_violation, and retain no aggregate output.\"},{\"subject\":\"Platform manifest structural validation\",\"kind\":\"incomplete refusal conditions\",\"text\":\"A08 lists failures such as a record that \\\"lacks service or capabilities\\\" but does not define the required JSON types and shapes of capabilities, instances, exposed_as, required_headers and idempotency_key, or where malformed nested structures fall in the first-failure order.\",\"question\":\"What complete manifest schema is accepted, and how are wrong types, duplicate JSON member names and malformed nested records classified and ordered?\",\"options\":[\"Define and validate a complete manifest schema before A08's semantic checks\",\"Treat every malformed structure as not valid JSON\",\"Handle malformed fields at the semantic check that first reads them\"],\"default_guess\":\"Validate a complete duplicate-free manifest schema first, then run A08's ordered semantic checks.\"},{\"subject\":\"Read-operation idempotency declarations\",\"kind\":\"missing behavior\",\"text\":\"A08 says that for a read operation \\\"the key is not used and not checked\\\", while M10 and M11 still carry idempotency_key_fields copied from the manifest.\",\"question\":\"For a read operation, are missing, malformed or non-text idempotency_key declarations accepted, and if accepted what value is stored in idempotency_key_fields?\",\"options\":[\"Ignore any declaration and store no key fields\",\"Require null or valid syntax but do not use it\",\"Parse valid declarations and reject malformed ones even for reads\"],\"default_guess\":\"Require null or valid syntax, store the parsed fields, but never use them for reads.\"},{\"subject\":\"Binding port schemas\",\"kind\":\"ambiguous validation\",\"text\":\"M01 requires value_schema to use the kernel's supported subset, A02 checks that rule for contract ports, but A08 only explicitly carries over unique-name and media-type rules when validating binding ports.\",\"question\":\"Must every proposed binding port schema be in the supported schema subset, and where does that check occur in A08's failure order?\",\"options\":[\"Apply the same supported-schema check as contract ports\",\"Allow any JSON Schema on bindings\",\"Validate only schemas used by the selected HTTP request shape\"],\"default_guess\":\"Require every binding port schema to be in the same supported subset, before request-shape checks.\"},{\"subject\":\"Service base URL shape and joining\",\"kind\":\"underspecified request construction\",\"text\":\"A08 accepts any absolute http or https URL with a host, while A09 forms the request by taking api_base_url \\\"without a trailing /\\\" and appending the declared path; user information, an existing path, query, fragment, Unicode host, default ports and multiple trailing slashes are not addressed.\",\"question\":\"Which base URL components are allowed, and what exact URL and Host header result from each accepted representation?\",\"options\":[\"Require scheme and authority only, with no userinfo, path, query or fragment\",\"Allow a base path but forbid query, fragment and userinfo\",\"Allow every absolute URL and define exact string concatenation\"],\"default_guess\":\"Require an ASCII http/https URL containing only scheme and authority, optionally followed by one trailing slash.\"},{\"subject\":\"Path-placeholder port cardinality\",\"kind\":\"missing proposal check\",\"text\":\"A09 requires a placeholder input schema type of string or integer, but does not require the port cardinality to be one; at runtime a many port supplies a list that cannot be placed into one path segment.\",\"question\":\"Must every path-placeholder input port have cardinality one, or may a binding be accepted that can only fail at send time?\",\"options\":[\"Require cardinality one when the binding is proposed\",\"Accept many ports and reject their values at send time\",\"Define an encoding for multiple path values\"],\"default_guess\":\"Require path-placeholder ports to have cardinality one at proposal time.\"},{\"subject\":\"Multipart port names\",\"kind\":\"missing encoding rule\",\"text\":\"A09 inserts a port name verbatim into Content-Disposition name and filename quoted parameters, but no accepted character set or escaping rule is given for port names containing quotes, backslashes, controls or non-ASCII characters.\",\"question\":\"Which port names are legal in multipart bindings, and how are legal non-token characters encoded in Content-Disposition parameters?\",\"options\":[\"Restrict multipart port names to a safe ASCII field-name grammar\",\"Define quoted-string escaping and an encoding for non-ASCII names\",\"Refuse only values that contain controls, quotes or backslashes\"],\"default_guess\":\"Restrict multipart port names to a conservative ASCII field-name grammar at binding proposal.\"},{\"subject\":\"Multipart boundary\",\"kind\":\"missing wire behavior\",\"text\":\"A09 specifies every multipart part and A10 excludes the boundary from the approved request description, but neither defines how the wire boundary is selected or how collision with part content is prevented.\",\"question\":\"How is the multipart boundary generated, and what happens if it occurs in a part's bytes?\",\"options\":[\"Generate a random boundary and regenerate after scanning for collisions\",\"Derive a deterministic boundary from the part digests and verify no collision\",\"Use the HTTP library's boundary without collision checks\"],\"default_guess\":\"Derive or generate a boundary, scan every part, and regenerate until it cannot collide.\"},{\"subject\":\"Incomplete HTTP error responses\",\"kind\":\"ambiguous outcome precedence\",\"text\":\"A09 distinguishes \\\"no valid final response received\\\" from status 3xx, 4xx or 5xx \\\"whatever the body's size\\\", but does not say whether a received status and headers with a timed-out, reset or truncated body is a valid final response for those rows.\",\"question\":\"If the status and headers are valid but the error-response body is incomplete, is the outcome determined by the status or treated as no valid final response?\",\"options\":[\"The status determines 3xx, 4xx and 5xx outcomes once headers are complete\",\"Any incomplete framed response is no valid final response\",\"4xx is determined by status, while 3xx and 5xx require a complete response\"],\"default_guess\":\"Once a valid final status and headers arrive, use the 3xx, 4xx or 5xx row without requiring the error body to complete.\"},{\"subject\":\"Failure detail from arbitrary HTTP bytes\",\"kind\":\"missing representation rule\",\"text\":\"A09 may keep an error response body's bytes as failure_detail, while M23 treats failure_detail as bounded text and A20 truncates it at a UTF-8 character boundary; an error body need not be valid UTF-8.\",\"question\":\"How is a non-UTF-8 error body represented in failure_detail, and is the byte limit applied before or after conversion?\",\"options\":[\"Decode as UTF-8 with replacement and then truncate\",\"Store a bounded hexadecimal or base64 representation\",\"Keep failure_detail absent for non-UTF-8 bodies\"],\"default_guess\":\"Decode with UTF-8 replacement and truncate the encoded result to the limit at a character boundary.\"},{\"subject\":\"HTTPS verification policy\",\"kind\":\"vague security rule\",\"text\":\"A09 states only that \\\"TLS is verified for https\\\" and does not identify the trust store, hostname rules, minimum protocol versions, client-certificate behavior or whether host configuration can alter them.\",\"question\":\"What exact TLS verification policy and trust roots must the HTTP invoker use?\",\"options\":[\"Use a release-pinned TLS policy with the host system CA store and hostname verification\",\"Pin both the CA bundle and TLS policy in the kernel release\",\"Use the HTTP library's platform defaults\"],\"default_guess\":\"Use hostname verification with the system CA store, disable environment overrides, and pin minimum TLS behavior in the release.\"},{\"subject\":\"Agent-name uniqueness after token reload\",\"kind\":\"contradiction\",\"text\":\"M27 says repeated agent names make configuration start fail, but A16 says exactly three checks apply to a token-list re-read: parseability, minimum token length and token uniqueness; repeated agent names are not among them.\",\"question\":\"What happens when a live configuration reload introduces two agent tokens with the same agent_name?\",\"options\":[\"Reject the re-read and all requests until fixed\",\"Accept both tokens as the same Actor value\",\"Accept the list but disambiguate actors by token\"],\"default_guess\":\"Reject the re-read just as startup rejects duplicate agent names.\"},{\"subject\":\"Service credential references\",\"kind\":\"underspecified secret handling\",\"text\":\"A17 describes \\\"the reference that resolves to its value on the host\\\" and later calls it a secret file, but gives no reference syntax or ownership, permission, regular-file and symbolic-link rules for that secret.\",\"question\":\"What forms of credential reference are allowed, and what filesystem security checks apply before reading the secret value?\",\"options\":[\"Only an absolute regular-file path owned by the kernel user with no group or other access and no symlinks\",\"Any host path subject only to readability and value validation\",\"A release-defined secret-provider URI rather than necessarily a file\"],\"default_guess\":\"Allow only a non-symlink regular file owned by the kernel user with no group or other permissions.\"},{\"subject\":\"Pinned dependency versions\",\"kind\":\"missing release data\",\"text\":\"A20 says \\\"A release pins the exact versions of the kernel's Python dependencies and of the sandbox runtime\\\", but the accepted texts name only CPython 3.12 and do not list exact kernel-library, bubblewrap, SQLite or TLS/HTTP-stack versions.\",\"question\":\"Which exact dependency versions constitute release v1 and are required for startup or build acceptance?\",\"options\":[\"List every exact version in the State 2 release definition\",\"Use a checked-in lockfile as the normative list\",\"Treat whatever versions the build environment resolves as release v1\"],\"default_guess\":\"Make a checked-in lockfile and runtime manifest the normative exact dependency list for release v1.\"},{\"subject\":\"Release upgrade and existing admission verdicts\",\"kind\":\"missing upgrade behavior\",\"text\":\"A20 permits a new release to change dependencies and the sandbox runtime, while A04 reuses an existing AdmissionVerdict whenever the implementation and corpus digest match; implementations and verdicts do not record the release or runtime under which they were tested.\",\"question\":\"After an upgrade changes Python or another execution dependency, may an old activation continue and may its cached verdict be reused without re-admission?\",\"options\":[\"Include the execution-release identity in verdict validity and re-admit before use\",\"Forbid opening an existing store with a behavior-changing runtime\",\"Promise runtime compatibility and continue using old verdicts\"],\"default_guess\":\"Include a sandbox-runtime release identity in verdict validity and require re-admission before an implementation executes under a changed runtime.\"}]}"
+}

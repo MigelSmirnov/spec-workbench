@@ -1321,7 +1321,8 @@ The case is in the corpus; the corpus digest changed when new.
 ### Enforces
 
 Pinned version equals the one named; fit of every value; every file within
-`trial_fixture_bytes_max` by its facts; all before any byte is copied — only
+`trial_fixture_bytes_max` by its facts, read from its SpooledFile through
+`store.read_records`; all before any byte is copied — only
 then each spooled file is copied into the content-addressed area, so a refusal
 copies nothing; inputs take the port's class (A04 rule 1, A15 rule 5, M21).
 
@@ -2580,7 +2581,8 @@ The run's answer with `released_by` and `released_at`.
 
 ### Observable effect
 
-The run's spooled files are gone.
+The run's spool can no longer be read; its files are removed in this request
+or, when removal fails, at the next start (A18 rule 4).
 
 ### Enforces
 

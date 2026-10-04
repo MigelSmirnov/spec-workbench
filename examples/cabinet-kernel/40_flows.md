@@ -731,7 +731,8 @@ owner or an agent with the author right may roll the slot back.
 `capability:installation.current_token_list` (A16 rules 1–2) and admits the request — capture and rollback by the owner or an
 agent with the author right; release by the owner or any agent (A16 rule 3) —
 and assembles the repair view (A15 rule 6, K-12). `module:runs` owns the
-conditions of capture, copying the spooled inputs, and the release (A14 rule
+conditions of capture — the record, the run and its spool — and the release;
+`module:functions` copies the spooled inputs, after its own checks (A14 rule
 4, A15 rule 5). `module:functions` owns adding the case, admission and
 rollback (A04). `module:store` holds the content-addressed area, the spool and
 paging. `module:canonical_values` fits the captured values and computes the
@@ -850,8 +851,10 @@ EffectAttempt M26 and the concluding NodeExecution M23 written by
    distinct (A16 rule 1, A17 rule 1).
 3. `capability:bindings.check_installed_instances`: no credential header has,
    case-insensitively, the name of a required header of its instance or of a
-   header the kernel sets itself, `host` included (A09 rule    1). A selected service whose manifest record cannot be read stops the start
-   naming it; a selected instance the record does not list fails nothing here
+   header the kernel sets itself, `host` included (A09 rule    1). The services checked are those the installation holds a credential for, in
+   `service_id` order; for one it also selects an instance for, a manifest
+   record that cannot be read stops the start naming it; a selected instance
+   the record does not list fails nothing here
    (it is not invocable at send, A09 rule 6). It reads only the installation —
    `capability:installation.selected_instance_name` and
    `capability:installation.manifest_source` — and the manifest, never the
@@ -867,7 +870,11 @@ EffectAttempt M26 and the concluding NodeExecution M23 written by
    named, if any, is marked `used` (A11 rule 1). The service is not asked.
 7. `capability:runs.recover_running_runs`: first names to
    `capability:store.remove_run_spool` every ended run that does not keep its
-   spool (A14 rule 4, A18 rule 4); then, as the kernel actor, advances every
+   spool (A14 rule 4, A18 rule 4); then derives every run that has not ended — `running`, `awaiting_approval`
+   or `pending` — from its records, oldest first, rewriting a lagging status
+   or waiting point and reaching again, through
+   `capability:effects.reach_operation_element`, an operation element whose
+   wait no longer holds (A14 rule 5); then, as the kernel actor, advances every
    run left `running`, oldest first: a function element without a concluded
    record is executed again; a `read` element without one is sent again; an
    operation element of another class with neither a concluded record nor an
