@@ -1,0 +1,390 @@
+{
+ "open_points": [
+  {
+   "subject": "A05 proof order",
+   "kind": "non-total order",
+   "text": "Constants are ordered only by (`to_node`, `to_port`) and edges only by (`to_node`, `to_port`, `from_node`, `from_port`), although several constants or edges may have equal values for all those keys.",
+   "question": "How is the first failing constant or edge chosen when two items tie on every stated ordering key?",
+   "options": [
+    "Add a full-content tie-breaker",
+    "Reject tied constants and edges during composition",
+    "Preserve submission order"
+   ],
+   "default_guess": "Use canonical full-content order as the final tie-breaker."
+  },
+  {
+   "subject": "A01 flow-version identity",
+   "kind": "non-canonical identity",
+   "text": "Lists whose order carries no meaning are sorted before hashing, but constants are sorted only by (`to_node`, `to_port`) and edges only in A05's edge order.",
+   "question": "How are tied constants or edges canonically ordered so reordering equal-key items cannot change `flow_version_id`?",
+   "options": [
+    "Sort ties by their remaining canonical content",
+    "Treat equal-key items as malformed",
+    "Keep submitted order"
+   ],
+   "default_guess": "Sort ties by the canonical JSON of the complete item."
+  },
+  {
+   "subject": "K-02 and A03 filesystem access",
+   "kind": "contradiction",
+   "text": "K-02 says a function has “no filesystem beyond its input,” while A03 permits opening paths in the exchange directory and the read-only runtime.",
+   "question": "May agent code itself read or write the exchange directory or read runtime files, or are those paths accessible only to the runner and imports?",
+   "options": [
+    "Block user-code filesystem access entirely",
+    "Allow exchange-directory scratch and runtime reads",
+    "Allow runtime reads but not exchange-directory access"
+   ],
+   "default_guess": "Allow only runner-mediated input/output and imports; reject direct user-code file access."
+  },
+  {
+   "subject": "A03 clock traps",
+   "kind": "contradiction",
+   "text": "The runner “replaces every clock ... entry point,” but the exact closed list omits standard-library clock readers such as `time.clock_gettime` and `time.clock_gettime_ns`.",
+   "question": "Does the broad no-clock rule govern, or does the closed release list intentionally permit every omitted clock entry point?",
+   "options": [
+    "Trap every clock reader",
+    "Trap only the enumerated functions",
+    "Reject implementations importing omitted clock APIs"
+   ],
+   "default_guess": "Trap every standard-library clock reader and treat the written list as incomplete."
+  },
+  {
+   "subject": "A03 randomness traps",
+   "kind": "contradiction",
+   "text": "The runner “replaces every ... randomness entry point,” but the exact closed list does not cover every standard-library source, such as randomness exposed through `ssl`.",
+   "question": "Does an omitted standard-library randomness API remain usable because the list is closed, or must it be trapped under the no-randomness rule?",
+   "options": [
+    "Trap every randomness source",
+    "Trap only the enumerated APIs",
+    "Make omitted modules unavailable"
+   ],
+   "default_guess": "Trap every standard-library randomness source."
+  },
+  {
+   "subject": "A03 resource-limit outcome",
+   "kind": "unverifiable precedence",
+   "text": "A “limit hit” must produce `resource_exhausted` before `crashed` or success, while enforcement is specified only as `setrlimit` plus parent deadlines and counts.",
+   "question": "How does the kernel determine that memory or process limits were hit when Python catches the resulting error, the syscall merely fails, or the process exits without an unambiguous signal?",
+   "options": [
+    "Instrument and latch every limit event",
+    "Classify only externally observable limit terminations",
+    "Let caught limit errors produce the implementation's eventual result"
+   ],
+   "default_guess": "Latch an externally observed limit event and make it win even if user code catches the immediate error."
+  },
+  {
+   "subject": "A03 scratch bound",
+   "kind": "missing mechanism",
+   "text": "The exchange directory is “bounded by `sandbox_scratch_bytes_max`,” and a scratch limit hit is `resource_exhausted`, but no enforcement or measurement rule is given.",
+   "question": "What bytes count toward the scratch limit, and how is the limit atomically enforced and detected?",
+   "options": [
+    "Use a size-limited filesystem",
+    "Continuously account allocated file blocks",
+    "Account logical file sizes after writes"
+   ],
+   "default_guess": "Use an isolated size-limited filesystem and count allocated bytes."
+  },
+  {
+   "subject": "A03 stdout and stderr",
+   "kind": "uncovered output",
+   "text": "“Nothing the code prints or raises is interpreted by the kernel” and stdout is never kept, but the destination and handling of arbitrarily large stdout or stderr are not stated.",
+   "question": "Are stdout and stderr discarded, bounded, or allowed to block or exhaust resources, and which outcome results if they overflow?",
+   "options": [
+    "Redirect both to a null sink",
+    "Count both against `output_bytes`",
+    "Capture a bounded stream and classify overflow"
+   ],
+   "default_guess": "Redirect stdout and stderr directly to a null sink."
+  },
+  {
+   "subject": "A03 invalid Python outputs",
+   "kind": "missing outcome rule",
+   "text": "The output bound is measured using canonical JSON bytes before `contract_violation`, but an implementation may return a cyclic object, a non-JSON object, a non-finite number or another value that cannot be canonically encoded.",
+   "question": "How are unencodable outputs measured, and does encoding failure become `contract_violation`, `crashed` or `resource_exhausted`?",
+   "options": [
+    "Classify immediately as `contract_violation`",
+    "Treat runner encoding failure as `crashed`",
+    "Use a bounded structural encoder before classification"
+   ],
+   "default_guess": "Use a bounded structural encoder and classify an unencodable return as `contract_violation` unless a resource bound was already hit."
+  },
+  {
+   "subject": "K-05 and A04 deterministic admission",
+   "kind": "unverifiable invariant",
+   "text": "Admission is called deterministic and cached by implementation and corpus digest, but permitted Python can observe process-dependent facts such as object identities or other untrapped runtime state.",
+   "question": "What guarantees that repeated executions of the same implementation and case cannot disagree, and what happens if they do?",
+   "options": [
+    "Strengthen the sandbox until such observations are impossible",
+    "Accept nondeterminism and keep the first cached verdict",
+    "Detect disagreement and refuse the implementation"
+   ],
+   "default_guess": "Detect repeat disagreement during admission and refuse the implementation as a sandbox violation."
+  },
+  {
+   "subject": "M06 and A04 expected outputs",
+   "kind": "missing validation",
+   "text": "`expected_outputs` is either absent or “by output port,” while A04 says present expected outputs must fit output ports but does not say they must name exactly every output port.",
+   "question": "May a present expected-output map omit ports or contain extra ports, and if omissions are allowed, are omitted outputs ignored?",
+   "options": [
+    "Require exactly every output port",
+    "Allow a subset and compare only that subset",
+    "Allow omissions but require no extra ports"
+   ],
+   "default_guess": "Require exactly one expected value for every output port whenever `expected_outputs` is present."
+  },
+  {
+   "subject": "A08 binding port schemas",
+   "kind": "ambiguous applicability",
+   "text": "A proposal is refused if its ports “break a rule A02 sets for contract ports,” but the following explanation names uniqueness and media types while omitting A02's supported-schema check.",
+   "question": "Must every binding port's `value_schema` be in the same supported subset as a contract port?",
+   "options": [
+    "Apply the full contract-port schema rules",
+    "Apply only the explicitly repeated port rules",
+    "Use a separate binding schema subset"
+   ],
+   "default_guess": "Apply the same supported JSON Schema subset to binding ports."
+  },
+  {
+   "subject": "A08 read idempotency metadata",
+   "kind": "model conflict",
+   "text": "For a `read`, the manifest's `idempotency_key` “is not used and not checked,” while M10 and M11 require `idempotency_key_fields` to be read and copied.",
+   "question": "What is stored when a read operation has malformed, duplicate or otherwise unparsable idempotency-key text?",
+   "options": [
+    "Ignore it and store no key fields",
+    "Parse it but skip semantic validation",
+    "Refuse the manifest operation"
+   ],
+   "default_guess": "Ignore the field for reads and store an empty key-field list."
+  },
+  {
+   "subject": "A08 malformed manifest structures",
+   "kind": "incomplete refusal conditions",
+   "text": "Rule 5 covers an absent or invalid JSON record and selected missing fields, but not wrong structural types or malformed nested shapes for `capabilities`, entries, `exposed_as`, instances or headers.",
+   "question": "Which malformed manifest shapes are `manifest mismatch`, in what check order, and can any become `internal_error`?",
+   "options": [
+    "Treat every structural mismatch as ordered `manifest mismatch`",
+    "Validate against a complete manifest schema first",
+    "Allow the parser to reject them as internal errors"
+   ],
+   "default_guess": "Validate a closed manifest shape and report the first structural mismatch before semantic checks."
+  },
+  {
+   "subject": "M28 and A08 manifest revision",
+   "kind": "contradiction",
+   "text": "The operation is reread before every send, but the text also says a record changes for a running kernel only after restart with a new configured revision.",
+   "question": "How is `manifest_revision` resolved to an immutable snapshot, and what happens if files at the configured location change in place without a restart?",
+   "options": [
+    "Open an immutable revision snapshot at startup",
+    "Reread live files and allow same-revision changes",
+    "Verify on every read that the location still represents the configured revision"
+   ],
+   "default_guess": "Resolve and hold an immutable revision snapshot at startup."
+  },
+  {
+   "subject": "A08/A09 base URL",
+   "kind": "underspecified URL construction",
+   "text": "An `api_base_url` need only be an absolute HTTP(S) URL with a host, while the request URL is formed by removing a trailing slash and appending the declared path.",
+   "question": "Are user information, an existing path, query or fragment allowed in `api_base_url`, and exactly how are they combined with the operation path and `Host` authority?",
+   "options": [
+    "Require a bare origin with no user information, query or fragment",
+    "Allow a base path but forbid query, fragment and user information",
+    "Apply generic URL-reference resolution"
+   ],
+   "default_guess": "Allow an optional base path but forbid user information, query and fragment."
+  },
+  {
+   "subject": "A09 plain-HTTP loopback exception",
+   "kind": "ambiguous security check",
+   "text": "Plain HTTP is allowed when the `api_base_url` “host is a loopback address,” but it does not say whether this means a literal IP or a DNS name that resolves to loopback.",
+   "question": "Is loopback judged from URL syntax, DNS results, the connected address, or all of them, and how are address changes handled?",
+   "options": [
+    "Allow only literal loopback IP addresses",
+    "Allow names whose resolved address is loopback",
+    "Require both the resolved and connected addresses to be loopback"
+   ],
+   "default_guess": "Allow only literal IPv4 or IPv6 loopback addresses."
+  },
+  {
+   "subject": "A09 JSON request content type",
+   "kind": "missing wire value",
+   "text": "POST, PUT and PATCH value inputs form a JSON body, and A10 says `content-type` is sent with a body, but no value is specified for a non-multipart JSON body.",
+   "question": "What exact `Content-Type` header is sent for JSON requests?",
+   "options": [
+    "`application/json`",
+    "`application/json; charset=utf-8`",
+    "A manifest-declared value"
+   ],
+   "default_guess": "Send `application/json` without parameters."
+  },
+  {
+   "subject": "A09 multipart serialization",
+   "kind": "unsafe ambiguity",
+   "text": "Multipart parts use `name=\"<port>\"` and `filename=\"<port>\"`, but port names have no stated multipart-safe syntax or escaping rule; boundary selection and boundary collision handling are also unspecified.",
+   "question": "How are port names escaped, how is the boundary chosen, and what happens if the boundary occurs in file content?",
+   "options": [
+    "Restrict port names and choose a collision-checked boundary",
+    "Define RFC-compliant quoted-string escaping and collision checking",
+    "Use a fixed boundary"
+   ],
+   "default_guess": "Use RFC-compliant escaping and generate a boundary verified absent from every part."
+  },
+  {
+   "subject": "Owner-approved exact request",
+   "kind": "contradiction",
+   "text": "State 0 says approval covers the “fully built request,” but A10 omits the multipart boundary and the `content-length` value from the approval description even though both are sent on the wire.",
+   "question": "Does approval cover exact wire bytes, or the normalized semantic description defined by A10 even when on-wire boundary and length differ?",
+   "options": [
+    "Cover exact wire bytes including boundary and length",
+    "Cover the normalized A10 description",
+    "Freeze boundary and length when approval is requested but omit them from display"
+   ],
+   "default_guess": "Freeze the complete serialized request when approval is requested and include its boundary and length in the digest."
+  },
+  {
+   "subject": "A09 HTTP status classification",
+   "kind": "uncovered outcome",
+   "text": "The outcome table classifies only 1xx through 5xx responses.",
+   "question": "How is a syntactically valid final status outside those ranges classified?",
+   "options": [
+    "Treat it as a malformed response",
+    "Treat every non-2xx/3xx/4xx/5xx status as `operation_failed` or unknown",
+    "Reject such status lines at the HTTP parser"
+   ],
+   "default_guess": "Treat it as a malformed final response: `service_unreachable` for reads and `outcome_unknown` for effects."
+  },
+  {
+   "subject": "A09 response-body transport failure",
+   "kind": "overlapping rules",
+   "text": "“No valid final response received” includes reset, EOF and timeout, while later rows assign outcomes from a received 2xx, 4xx or 5xx status without stating what wins if the body fails after that status arrives.",
+   "question": "Does a reset, timeout or malformed chunked body after final response headers use the status row or the no-valid-response row?",
+   "options": [
+    "Status wins once final headers arrive",
+    "The response is invalid until its required body is complete",
+    "Status wins for error statuses but not 2xx"
+   ],
+   "default_guess": "Require the complete bounded body before the response is valid; otherwise use the no-valid-response outcome."
+  },
+  {
+   "subject": "A09 transport size limits",
+   "kind": "missing refusal conditions",
+   "text": "The release bounds response-body bytes but states no limit for response headers, status lines, constructed request headers, credential values or complete request serialization.",
+   "question": "What happens when those transport components exceed the HTTP implementation's practical limits, and may a library-specific hidden limit decide the outcome?",
+   "options": [
+    "Add explicit release ceilings",
+    "Stream without an additional kernel limit",
+    "Map client-library limit failures to a specified pre-send or transport outcome"
+   ],
+   "default_guess": "Define explicit release ceilings and map request-side overflow to pre-send `operation_failed` and response-header overflow to an invalid response."
+  },
+  {
+   "subject": "A17 credential secrecy and A09 error excerpts",
+   "kind": "contradiction",
+   "text": "A credential may never enter a failure detail or response, but A09 permits keeping an excerpt of an error response body, which a service may use to echo the credential.",
+   "question": "How does the kernel guarantee that a service-echoed credential is not persisted or returned in `failure_detail`?",
+   "options": [
+    "Never retain service error bodies",
+    "Redact exact credential values before storage",
+    "Retain excerpts only for services without credentials"
+   ],
+   "default_guess": "Do not retain service error-body text; keep only a bounded generic status detail."
+  },
+  {
+   "subject": "M19/M26 draft-write authority",
+   "kind": "missing pinned fact",
+   "text": "A draft-write EffectAttempt names “the flow activation under which the run started,” but M19 pins only `flow_version_id` and implementations, and the same version can have several FlowActivation records.",
+   "question": "How is the exact FlowActivation identified after a wait or restart?",
+   "options": [
+    "Store the FlowActivation identity on the Run",
+    "Infer the latest activation preceding the run in store order",
+    "Use any activation of the same version"
+   ],
+   "default_guess": "Pin the exact FlowActivation identity in the Run at creation."
+  },
+  {
+   "subject": "Mapped `many` file outputs",
+   "kind": "unrepresentable state",
+   "text": "A mapped empty list produces every output as an empty list with a disclosure class, while file lists are represented only by their individual SpooledFiles; an empty list has no SpooledFile on which to store class or provenance.",
+   "question": "How is an empty `many` file value, including its disclosure class, persisted, traced and delivered after restart?",
+   "options": [
+    "Add an aggregate file-list carrier record",
+    "Store list metadata on NodeExecution",
+    "Derive it recursively from the producer and mapped input"
+   ],
+   "default_guess": "Persist an aggregate file-list record that carries order, class and producer provenance."
+  },
+  {
+   "subject": "A07/A10 agent view of approval previews",
+   "kind": "undefined redaction",
+   "text": "The preview contains the built URL, headers and body, while an agent must receive personal-data inputs only as digest and class.",
+   "question": "How is personal data embedded in a URL path, query, JSON body or multipart description removed without leaking it through the built-request preview?",
+   "options": [
+    "Return only `request_digest` to agents for such previews",
+    "Return a structured preview with field-level redactions",
+    "Hide the whole approval preview from agents"
+   ],
+   "default_guess": "Return a structured preview with every personal-data-derived component replaced by digest and class."
+  },
+  {
+   "subject": "A16 token-list reread",
+   "kind": "ambiguous recovery",
+   "text": "When a reread fails, every request is refused “until a re-read passes,” but rereading is otherwise triggered by a byte digest change or read failure, and it is not stated which digest is remembered after invalid content.",
+   "question": "Is the invalid file retried on every request even when its bytes do not change, and is the comparison baseline the last valid file or the last attempted file?",
+   "options": [
+    "Retry every request and retain the last-valid digest",
+    "Remember the invalid digest and retry only after change",
+    "Enter a startup-required failure state"
+   ],
+   "default_guess": "Retry parsing on every request while invalid and retain the last-valid digest only."
+  },
+  {
+   "subject": "Kernel startup checks",
+   "kind": "missing precedence",
+   "text": "A03, A16, A17 and A18 each add startup refusals that “say why,” but no global order is given when configuration security, token rules, data-directory rules, locking and sandbox probes fail together.",
+   "question": "Which startup failure must be reported first?",
+   "options": [
+    "Define one global ordered startup checklist",
+    "Report all startup failures together",
+    "Allow module initialization order to decide"
+   ],
+   "default_guess": "Use a fixed order: configuration file security and parse, configuration semantics, data directory and lock, then sandbox probe."
+  },
+  {
+   "subject": "A18 database/file consistency",
+   "kind": "missing crash protocol",
+   "text": "Files are published by rename and records are committed in SQLite, but the ordering and recovery protocol that prevents a committed record from naming a missing file is not stated.",
+   "question": "Must publication precede the database commit, how are crashes between them handled, and how are unreferenced published files recognized?",
+   "options": [
+    "Publish first, then commit, leaving harmless orphans",
+    "Commit first with startup completion of pending renames",
+    "Use a journaled two-phase file protocol"
+   ],
+   "default_guess": "Publish and verify the file first, then commit its record; leave unreferenced files as inert orphans."
+  },
+  {
+   "subject": "A04 admission and activation durability",
+   "kind": "partial-operation ambiguity",
+   "text": "Admission writes TrialExecutions and a verdict, and an admitted verdict is “followed at once, in the same request” by activation, but no transaction or recovery boundary is specified for those records.",
+   "question": "Can a crash leave a verdict without its required activation or only part of the admission evidence, and how is such a state completed?",
+   "options": [
+    "Commit executions, verdict and activation atomically",
+    "Allow partial evidence but atomically commit verdict with activation",
+    "Recover and complete any admitted verdict lacking activation at startup"
+   ],
+   "default_guess": "Trial executions may be persisted separately, but the verdict and any resulting activation must be committed atomically."
+  },
+  {
+   "subject": "A07 failure-detail disclosure",
+   "kind": "ambiguous measurement",
+   "text": "An agent receives only “its length and that class” for a protected `failure_detail`, while all related bounds are expressed in UTF-8 bytes.",
+   "question": "Is the reported length measured in Unicode characters, UTF-8 bytes before truncation, or bytes after truncation?",
+   "options": [
+    "Original UTF-8 byte length",
+    "Stored truncated UTF-8 byte length",
+    "Unicode scalar count"
+   ],
+   "default_guess": "Report the original UTF-8 byte length while returning no text."
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A05 proof order\",\"kind\":\"non-total order\",\"text\":\"Constants are ordered only by (`to_node`, `to_port`) and edges only by (`to_node`, `to_port`, `from_node`, `from_port`), although several constants or edges may have equal values for all those keys.\",\"question\":\"How is the first failing constant or edge chosen when two items tie on every stated ordering key?\",\"options\":[\"Add a full-content tie-breaker\",\"Reject tied constants and edges during composition\",\"Preserve submission order\"],\"default_guess\":\"Use canonical full-content order as the final tie-breaker.\"},{\"subject\":\"A01 flow-version identity\",\"kind\":\"non-canonical identity\",\"text\":\"Lists whose order carries no meaning are sorted before hashing, but constants are sorted only by (`to_node`, `to_port`) and edges only in A05's edge order.\",\"question\":\"How are tied constants or edges canonically ordered so reordering equal-key items cannot change `flow_version_id`?\",\"options\":[\"Sort ties by their remaining canonical content\",\"Treat equal-key items as malformed\",\"Keep submitted order\"],\"default_guess\":\"Sort ties by the canonical JSON of the complete item.\"},{\"subject\":\"K-02 and A03 filesystem access\",\"kind\":\"contradiction\",\"text\":\"K-02 says a function has “no filesystem beyond its input,” while A03 permits opening paths in the exchange directory and the read-only runtime.\",\"question\":\"May agent code itself read or write the exchange directory or read runtime files, or are those paths accessible only to the runner and imports?\",\"options\":[\"Block user-code filesystem access entirely\",\"Allow exchange-directory scratch and runtime reads\",\"Allow runtime reads but not exchange-directory access\"],\"default_guess\":\"Allow only runner-mediated input/output and imports; reject direct user-code file access.\"},{\"subject\":\"A03 clock traps\",\"kind\":\"contradiction\",\"text\":\"The runner “replaces every clock ... entry point,” but the exact closed list omits standard-library clock readers such as `time.clock_gettime` and `time.clock_gettime_ns`.\",\"question\":\"Does the broad no-clock rule govern, or does the closed release list intentionally permit every omitted clock entry point?\",\"options\":[\"Trap every clock reader\",\"Trap only the enumerated functions\",\"Reject implementations importing omitted clock APIs\"],\"default_guess\":\"Trap every standard-library clock reader and treat the written list as incomplete.\"},{\"subject\":\"A03 randomness traps\",\"kind\":\"contradiction\",\"text\":\"The runner “replaces every ... randomness entry point,” but the exact closed list does not cover every standard-library source, such as randomness exposed through `ssl`.\",\"question\":\"Does an omitted standard-library randomness API remain usable because the list is closed, or must it be trapped under the no-randomness rule?\",\"options\":[\"Trap every randomness source\",\"Trap only the enumerated APIs\",\"Make omitted modules unavailable\"],\"default_guess\":\"Trap every standard-library randomness source.\"},{\"subject\":\"A03 resource-limit outcome\",\"kind\":\"unverifiable precedence\",\"text\":\"A “limit hit” must produce `resource_exhausted` before `crashed` or success, while enforcement is specified only as `setrlimit` plus parent deadlines and counts.\",\"question\":\"How does the kernel determine that memory or process limits were hit when Python catches the resulting error, the syscall merely fails, or the process exits without an unambiguous signal?\",\"options\":[\"Instrument and latch every limit event\",\"Classify only externally observable limit terminations\",\"Let caught limit errors produce the implementation's eventual result\"],\"default_guess\":\"Latch an externally observed limit event and make it win even if user code catches the immediate error.\"},{\"subject\":\"A03 scratch bound\",\"kind\":\"missing mechanism\",\"text\":\"The exchange directory is “bounded by `sandbox_scratch_bytes_max`,” and a scratch limit hit is `resource_exhausted`, but no enforcement or measurement rule is given.\",\"question\":\"What bytes count toward the scratch limit, and how is the limit atomically enforced and detected?\",\"options\":[\"Use a size-limited filesystem\",\"Continuously account allocated file blocks\",\"Account logical file sizes after writes\"],\"default_guess\":\"Use an isolated size-limited filesystem and count allocated bytes.\"},{\"subject\":\"A03 stdout and stderr\",\"kind\":\"uncovered output\",\"text\":\"“Nothing the code prints or raises is interpreted by the kernel” and stdout is never kept, but the destination and handling of arbitrarily large stdout or stderr are not stated.\",\"question\":\"Are stdout and stderr discarded, bounded, or allowed to block or exhaust resources, and which outcome results if they overflow?\",\"options\":[\"Redirect both to a null sink\",\"Count both against `output_bytes`\",\"Capture a bounded stream and classify overflow\"],\"default_guess\":\"Redirect stdout and stderr directly to a null sink.\"},{\"subject\":\"A03 invalid Python outputs\",\"kind\":\"missing outcome rule\",\"text\":\"The output bound is measured using canonical JSON bytes before `contract_violation`, but an implementation may return a cyclic object, a non-JSON object, a non-finite number or another value that cannot be canonically encoded.\",\"question\":\"How are unencodable outputs measured, and does encoding failure become `contract_violation`, `crashed` or `resource_exhausted`?\",\"options\":[\"Classify immediately as `contract_violation`\",\"Treat runner encoding failure as `crashed`\",\"Use a bounded structural encoder before classification\"],\"default_guess\":\"Use a bounded structural encoder and classify an unencodable return as `contract_violation` unless a resource bound was already hit.\"},{\"subject\":\"K-05 and A04 deterministic admission\",\"kind\":\"unverifiable invariant\",\"text\":\"Admission is called deterministic and cached by implementation and corpus digest, but permitted Python can observe process-dependent facts such as object identities or other untrapped runtime state.\",\"question\":\"What guarantees that repeated executions of the same implementation and case cannot disagree, and what happens if they do?\",\"options\":[\"Strengthen the sandbox until such observations are impossible\",\"Accept nondeterminism and keep the first cached verdict\",\"Detect disagreement and refuse the implementation\"],\"default_guess\":\"Detect repeat disagreement during admission and refuse the implementation as a sandbox violation.\"},{\"subject\":\"M06 and A04 expected outputs\",\"kind\":\"missing validation\",\"text\":\"`expected_outputs` is either absent or “by output port,” while A04 says present expected outputs must fit output ports but does not say they must name exactly every output port.\",\"question\":\"May a present expected-output map omit ports or contain extra ports, and if omissions are allowed, are omitted outputs ignored?\",\"options\":[\"Require exactly every output port\",\"Allow a subset and compare only that subset\",\"Allow omissions but require no extra ports\"],\"default_guess\":\"Require exactly one expected value for every output port whenever `expected_outputs` is present.\"},{\"subject\":\"A08 binding port schemas\",\"kind\":\"ambiguous applicability\",\"text\":\"A proposal is refused if its ports “break a rule A02 sets for contract ports,” but the following explanation names uniqueness and media types while omitting A02's supported-schema check.\",\"question\":\"Must every binding port's `value_schema` be in the same supported subset as a contract port?\",\"options\":[\"Apply the full contract-port schema rules\",\"Apply only the explicitly repeated port rules\",\"Use a separate binding schema subset\"],\"default_guess\":\"Apply the same supported JSON Schema subset to binding ports.\"},{\"subject\":\"A08 read idempotency metadata\",\"kind\":\"model conflict\",\"text\":\"For a `read`, the manifest's `idempotency_key` “is not used and not checked,” while M10 and M11 require `idempotency_key_fields` to be read and copied.\",\"question\":\"What is stored when a read operation has malformed, duplicate or otherwise unparsable idempotency-key text?\",\"options\":[\"Ignore it and store no key fields\",\"Parse it but skip semantic validation\",\"Refuse the manifest operation\"],\"default_guess\":\"Ignore the field for reads and store an empty key-field list.\"},{\"subject\":\"A08 malformed manifest structures\",\"kind\":\"incomplete refusal conditions\",\"text\":\"Rule 5 covers an absent or invalid JSON record and selected missing fields, but not wrong structural types or malformed nested shapes for `capabilities`, entries, `exposed_as`, instances or headers.\",\"question\":\"Which malformed manifest shapes are `manifest mismatch`, in what check order, and can any become `internal_error`?\",\"options\":[\"Treat every structural mismatch as ordered `manifest mismatch`\",\"Validate against a complete manifest schema first\",\"Allow the parser to reject them as internal errors\"],\"default_guess\":\"Validate a closed manifest shape and report the first structural mismatch before semantic checks.\"},{\"subject\":\"M28 and A08 manifest revision\",\"kind\":\"contradiction\",\"text\":\"The operation is reread before every send, but the text also says a record changes for a running kernel only after restart with a new configured revision.\",\"question\":\"How is `manifest_revision` resolved to an immutable snapshot, and what happens if files at the configured location change in place without a restart?\",\"options\":[\"Open an immutable revision snapshot at startup\",\"Reread live files and allow same-revision changes\",\"Verify on every read that the location still represents the configured revision\"],\"default_guess\":\"Resolve and hold an immutable revision snapshot at startup.\"},{\"subject\":\"A08/A09 base URL\",\"kind\":\"underspecified URL construction\",\"text\":\"An `api_base_url` need only be an absolute HTTP(S) URL with a host, while the request URL is formed by removing a trailing slash and appending the declared path.\",\"question\":\"Are user information, an existing path, query or fragment allowed in `api_base_url`, and exactly how are they combined with the operation path and `Host` authority?\",\"options\":[\"Require a bare origin with no user information, query or fragment\",\"Allow a base path but forbid query, fragment and user information\",\"Apply generic URL-reference resolution\"],\"default_guess\":\"Allow an optional base path but forbid user information, query and fragment.\"},{\"subject\":\"A09 plain-HTTP loopback exception\",\"kind\":\"ambiguous security check\",\"text\":\"Plain HTTP is allowed when the `api_base_url` “host is a loopback address,” but it does not say whether this means a literal IP or a DNS name that resolves to loopback.\",\"question\":\"Is loopback judged from URL syntax, DNS results, the connected address, or all of them, and how are address changes handled?\",\"options\":[\"Allow only literal loopback IP addresses\",\"Allow names whose resolved address is loopback\",\"Require both the resolved and connected addresses to be loopback\"],\"default_guess\":\"Allow only literal IPv4 or IPv6 loopback addresses.\"},{\"subject\":\"A09 JSON request content type\",\"kind\":\"missing wire value\",\"text\":\"POST, PUT and PATCH value inputs form a JSON body, and A10 says `content-type` is sent with a body, but no value is specified for a non-multipart JSON body.\",\"question\":\"What exact `Content-Type` header is sent for JSON requests?\",\"options\":[\"`application/json`\",\"`application/json; charset=utf-8`\",\"A manifest-declared value\"],\"default_guess\":\"Send `application/json` without parameters.\"},{\"subject\":\"A09 multipart serialization\",\"kind\":\"unsafe ambiguity\",\"text\":\"Multipart parts use `name=\\\"<port>\\\"` and `filename=\\\"<port>\\\"`, but port names have no stated multipart-safe syntax or escaping rule; boundary selection and boundary collision handling are also unspecified.\",\"question\":\"How are port names escaped, how is the boundary chosen, and what happens if the boundary occurs in file content?\",\"options\":[\"Restrict port names and choose a collision-checked boundary\",\"Define RFC-compliant quoted-string escaping and collision checking\",\"Use a fixed boundary\"],\"default_guess\":\"Use RFC-compliant escaping and generate a boundary verified absent from every part.\"},{\"subject\":\"Owner-approved exact request\",\"kind\":\"contradiction\",\"text\":\"State 0 says approval covers the “fully built request,” but A10 omits the multipart boundary and the `content-length` value from the approval description even though both are sent on the wire.\",\"question\":\"Does approval cover exact wire bytes, or the normalized semantic description defined by A10 even when on-wire boundary and length differ?\",\"options\":[\"Cover exact wire bytes including boundary and length\",\"Cover the normalized A10 description\",\"Freeze boundary and length when approval is requested but omit them from display\"],\"default_guess\":\"Freeze the complete serialized request when approval is requested and include its boundary and length in the digest.\"},{\"subject\":\"A09 HTTP status classification\",\"kind\":\"uncovered outcome\",\"text\":\"The outcome table classifies only 1xx through 5xx responses.\",\"question\":\"How is a syntactically valid final status outside those ranges classified?\",\"options\":[\"Treat it as a malformed response\",\"Treat every non-2xx/3xx/4xx/5xx status as `operation_failed` or unknown\",\"Reject such status lines at the HTTP parser\"],\"default_guess\":\"Treat it as a malformed final response: `service_unreachable` for reads and `outcome_unknown` for effects.\"},{\"subject\":\"A09 response-body transport failure\",\"kind\":\"overlapping rules\",\"text\":\"“No valid final response received” includes reset, EOF and timeout, while later rows assign outcomes from a received 2xx, 4xx or 5xx status without stating what wins if the body fails after that status arrives.\",\"question\":\"Does a reset, timeout or malformed chunked body after final response headers use the status row or the no-valid-response row?\",\"options\":[\"Status wins once final headers arrive\",\"The response is invalid until its required body is complete\",\"Status wins for error statuses but not 2xx\"],\"default_guess\":\"Require the complete bounded body before the response is valid; otherwise use the no-valid-response outcome.\"},{\"subject\":\"A09 transport size limits\",\"kind\":\"missing refusal conditions\",\"text\":\"The release bounds response-body bytes but states no limit for response headers, status lines, constructed request headers, credential values or complete request serialization.\",\"question\":\"What happens when those transport components exceed the HTTP implementation's practical limits, and may a library-specific hidden limit decide the outcome?\",\"options\":[\"Add explicit release ceilings\",\"Stream without an additional kernel limit\",\"Map client-library limit failures to a specified pre-send or transport outcome\"],\"default_guess\":\"Define explicit release ceilings and map request-side overflow to pre-send `operation_failed` and response-header overflow to an invalid response.\"},{\"subject\":\"A17 credential secrecy and A09 error excerpts\",\"kind\":\"contradiction\",\"text\":\"A credential may never enter a failure detail or response, but A09 permits keeping an excerpt of an error response body, which a service may use to echo the credential.\",\"question\":\"How does the kernel guarantee that a service-echoed credential is not persisted or returned in `failure_detail`?\",\"options\":[\"Never retain service error bodies\",\"Redact exact credential values before storage\",\"Retain excerpts only for services without credentials\"],\"default_guess\":\"Do not retain service error-body text; keep only a bounded generic status detail.\"},{\"subject\":\"M19/M26 draft-write authority\",\"kind\":\"missing pinned fact\",\"text\":\"A draft-write EffectAttempt names “the flow activation under which the run started,” but M19 pins only `flow_version_id` and implementations, and the same version can have several FlowActivation records.\",\"question\":\"How is the exact FlowActivation identified after a wait or restart?\",\"options\":[\"Store the FlowActivation identity on the Run\",\"Infer the latest activation preceding the run in store order\",\"Use any activation of the same version\"],\"default_guess\":\"Pin the exact FlowActivation identity in the Run at creation.\"},{\"subject\":\"Mapped `many` file outputs\",\"kind\":\"unrepresentable state\",\"text\":\"A mapped empty list produces every output as an empty list with a disclosure class, while file lists are represented only by their individual SpooledFiles; an empty list has no SpooledFile on which to store class or provenance.\",\"question\":\"How is an empty `many` file value, including its disclosure class, persisted, traced and delivered after restart?\",\"options\":[\"Add an aggregate file-list carrier record\",\"Store list metadata on NodeExecution\",\"Derive it recursively from the producer and mapped input\"],\"default_guess\":\"Persist an aggregate file-list record that carries order, class and producer provenance.\"},{\"subject\":\"A07/A10 agent view of approval previews\",\"kind\":\"undefined redaction\",\"text\":\"The preview contains the built URL, headers and body, while an agent must receive personal-data inputs only as digest and class.\",\"question\":\"How is personal data embedded in a URL path, query, JSON body or multipart description removed without leaking it through the built-request preview?\",\"options\":[\"Return only `request_digest` to agents for such previews\",\"Return a structured preview with field-level redactions\",\"Hide the whole approval preview from agents\"],\"default_guess\":\"Return a structured preview with every personal-data-derived component replaced by digest and class.\"},{\"subject\":\"A16 token-list reread\",\"kind\":\"ambiguous recovery\",\"text\":\"When a reread fails, every request is refused “until a re-read passes,” but rereading is otherwise triggered by a byte digest change or read failure, and it is not stated which digest is remembered after invalid content.\",\"question\":\"Is the invalid file retried on every request even when its bytes do not change, and is the comparison baseline the last valid file or the last attempted file?\",\"options\":[\"Retry every request and retain the last-valid digest\",\"Remember the invalid digest and retry only after change\",\"Enter a startup-required failure state\"],\"default_guess\":\"Retry parsing on every request while invalid and retain the last-valid digest only.\"},{\"subject\":\"Kernel startup checks\",\"kind\":\"missing precedence\",\"text\":\"A03, A16, A17 and A18 each add startup refusals that “say why,” but no global order is given when configuration security, token rules, data-directory rules, locking and sandbox probes fail together.\",\"question\":\"Which startup failure must be reported first?\",\"options\":[\"Define one global ordered startup checklist\",\"Report all startup failures together\",\"Allow module initialization order to decide\"],\"default_guess\":\"Use a fixed order: configuration file security and parse, configuration semantics, data directory and lock, then sandbox probe.\"},{\"subject\":\"A18 database/file consistency\",\"kind\":\"missing crash protocol\",\"text\":\"Files are published by rename and records are committed in SQLite, but the ordering and recovery protocol that prevents a committed record from naming a missing file is not stated.\",\"question\":\"Must publication precede the database commit, how are crashes between them handled, and how are unreferenced published files recognized?\",\"options\":[\"Publish first, then commit, leaving harmless orphans\",\"Commit first with startup completion of pending renames\",\"Use a journaled two-phase file protocol\"],\"default_guess\":\"Publish and verify the file first, then commit its record; leave unreferenced files as inert orphans.\"},{\"subject\":\"A04 admission and activation durability\",\"kind\":\"partial-operation ambiguity\",\"text\":\"Admission writes TrialExecutions and a verdict, and an admitted verdict is “followed at once, in the same request” by activation, but no transaction or recovery boundary is specified for those records.\",\"question\":\"Can a crash leave a verdict without its required activation or only part of the admission evidence, and how is such a state completed?\",\"options\":[\"Commit executions, verdict and activation atomically\",\"Allow partial evidence but atomically commit verdict with activation\",\"Recover and complete any admitted verdict lacking activation at startup\"],\"default_guess\":\"Trial executions may be persisted separately, but the verdict and any resulting activation must be committed atomically.\"},{\"subject\":\"A07 failure-detail disclosure\",\"kind\":\"ambiguous measurement\",\"text\":\"An agent receives only “its length and that class” for a protected `failure_detail`, while all related bounds are expressed in UTF-8 bytes.\",\"question\":\"Is the reported length measured in Unicode characters, UTF-8 bytes before truncation, or bytes after truncation?\",\"options\":[\"Original UTF-8 byte length\",\"Stored truncated UTF-8 byte length\",\"Unicode scalar count\"],\"default_guess\":\"Report the original UTF-8 byte length while returning no text.\"}]}"
+}

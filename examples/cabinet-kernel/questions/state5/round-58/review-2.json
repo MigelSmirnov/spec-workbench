@@ -1,0 +1,162 @@
+{
+ "open_points": [
+  {
+   "subject": "canonical_values.content_identity",
+   "kind": "ambiguous digest domain",
+   "text": "“Compute the SHA-256 identity of a content record or value from its canonical form” and “Inputs: One content record's meaning facts as State 1 names them for that record, or one value.”",
+   "question": "How does the operation distinguish a raw value digest, a StoredValue value_id, a content-record identity, a manifest-entry digest, a request_digest, a corpus digest and an idempotency key, whose hashed facts and list-order rules differ?",
+   "options": [
+    "Pass an explicit identity kind with the facts",
+    "Expose separate operations for each digest domain",
+    "Require callers to preassemble an unambiguously tagged canonical object"
+   ],
+   "default_guess": "Pass an explicit identity kind and reject facts that do not match that kind."
+  },
+  {
+   "subject": "file content digests",
+   "kind": "missing operation",
+   "text": "“Files in checks. A check is given a file as facts — digest, size, media type — never bytes; a caller holding bytes computes the facts first.”",
+   "question": "Which module operation computes the SHA-256 digest of raw file bytes for trial fixtures, sandbox file outputs, multipart request descriptions and SpooledFiles, since canonical_bytes and content_identity accept JSON values rather than arbitrary bytes?",
+   "options": [
+    "Add a canonical_values operation for raw-byte digests",
+    "Let every byte-holding module compute SHA-256 itself",
+    "Make store.spool_file and put_value_bytes compute and return all file facts"
+   ],
+   "default_guess": "Add one canonical_values raw-byte digest operation and use it everywhere."
+  },
+  {
+   "subject": "value size limits",
+   "kind": "undefined measurement",
+   "text": "“one candidate ... a JSON value, checked against the port's schema, its size bound applying to the whole value”",
+   "question": "For stored_value_bytes_max and other value-size checks, is size the received JSON text, the RFC 8785 canonical bytes, decoded in-memory size, or another representation?",
+   "options": [
+    "Length of RFC 8785 canonical bytes",
+    "Length of the received JSON encoding",
+    "Implementation-specific decoded size"
+   ],
+   "default_guess": "Use the length of the RFC 8785 canonical bytes."
+  },
+  {
+   "subject": "record-reading operations",
+   "kind": "contradictory output projection",
+   "text": "“Records reach a caller as they are” conflicts with outputs such as read_contract_version returning only “Its ports and bounds”, read_implementation returning only “Its code, contract version and that version's ports and bounds”, read_binding listing only selected facts, and read_flow_version returning only “Its ports, nodes, edges, guards and constants.”",
+   "question": "Do get/read operations return the complete State 1 record, including identity, provenance and timestamps, or only the fields enumerated in each public operation's Outputs section?",
+   "options": [
+    "Return complete records plus any explicitly named derived data",
+    "Return only each operation's enumerated projection",
+    "Use different projections for module callers and MCP callers"
+   ],
+   "default_guess": "Return only the enumerated projection, adding the named identity so the result is self-identifying."
+  },
+  {
+   "subject": "actor attribution on generated records",
+   "kind": "contradiction",
+   "text": "“The owner's actions, each agent's and the kernel's own are distinguishable in every record” and “Every operation that writes a record receives the acting Actor M27” conflict with TrialExecution, AdmissionVerdict, NodeExecution, EffectApproval requests and EffectAttempt having no field that records that acting actor.",
+   "question": "Which records store the acting actor, and for run advancement is that actor the request initiator, the kernel, or the authority that permitted an effect?",
+   "options": [
+    "Add an acting_actor field to every written record",
+    "Keep actor only on records whose State 1 model already names one",
+    "Store actor as generic store metadata outside the State 1 records"
+   ],
+   "default_guess": "Add acting_actor to every independently written record; use the request actor during requests and kernel during admission and recovery."
+  },
+  {
+   "subject": "NodeExecution timestamps without execution or send",
+   "kind": "undefined timestamp semantics",
+   "text": "“a started_at when the execution or send begins” does not cover skipped_by_guard, upstream_failed, refused_by_owner, a pre-send operation_failed, a receiving-node contract_violation, or an empty mapped node, all of which write NodeExecution records.",
+   "question": "What are started_at and ended_at for a NodeExecution when no execution or HTTP send began?",
+   "options": [
+    "Set both to the time the conclusion is recorded",
+    "Omit started_at and keep only ended_at",
+    "Use the time the node first became reachable as started_at"
+   ],
+   "default_guess": "Set both timestamps to the time the conclusion check is recorded."
+  },
+  {
+   "subject": "EffectAttempt resolution time",
+   "kind": "ambiguous lifecycle timestamp",
+   "text": "“recorded_at, concluded_at; resolved_by: the owner, when an unknown was resolved” and “a lifecycle change ... (`concluded_at`) updates those fields of the entity's one record in place”",
+   "question": "When an unknown attempt is resolved later, does concluded_at retain the time it became unknown, change to the resolution time, or is a separate resolved_at required?",
+   "options": [
+    "Keep concluded_at as the transport-attempt conclusion and add resolved_at",
+    "Replace concluded_at with the resolution time",
+    "Keep concluded_at and record no resolution timestamp"
+   ],
+   "default_guess": "Keep concluded_at as the attempt conclusion and add resolved_at."
+  },
+  {
+   "subject": "effects.operation_element_conclusion",
+   "kind": "undefined record selection",
+   "text": "“Return an operation element's conclusion from its records”",
+   "question": "When an element has several NodeExecutions, EffectAttempts and approvals after resumes or a not_applied resolution, which record order and precedence determine its current conclusion?",
+   "options": [
+    "Use the greatest attempt_number, then any outstanding approval for the next attempt",
+    "Use the newest record in store order regardless of kind",
+    "Fold all records with an explicitly specified state machine"
+   ],
+   "default_guess": "Fold records by attempt_number, using the latest attempt and then the requested approval for the next attempt."
+  },
+  {
+   "subject": "store.record_change invariants",
+   "kind": "vague validation boundary",
+   "text": "“store checks only its own invariants — attempt numbers, unique and existing identities, links”",
+   "question": "Exactly which identities and links must each named store change validate, and which failures are refused versus internal_error?",
+   "options": [
+    "Define required foreign-key and lifecycle checks separately for every named change",
+    "Validate only physical uniqueness and leave every cross-record link to callers",
+    "Enforce all model references and lifecycle transitions in store"
+   ],
+   "default_guess": "Define a per-change table of required existing identities, legal lifecycle updates and error classification."
+  },
+  {
+   "subject": "failure_detail construction",
+   "kind": "undefined observable encoding",
+   "text": "“only for the exception type and message” and “at most failure_detail_bytes_max of it is kept as failure_detail” and “it is cut to failure_detail_bytes_max at a UTF-8 character boundary”",
+   "question": "What exact text is stored for sandbox exceptions and HTTP error bodies, which end of an overlong detail is retained, and how are non-UTF-8 HTTP body bytes converted before UTF-8-boundary truncation?",
+   "options": [
+    "A fixed type-and-message format; UTF-8 replacement decoding; retain the prefix",
+    "Preserve raw bytes and encode them for the record",
+    "Allow each producer to define its own bounded excerpt"
+   ],
+   "default_guess": "Use a fixed type-and-message format for exceptions and UTF-8 replacement decoding for HTTP bodies, retaining the prefix."
+  },
+  {
+   "subject": "service base URL validation and joining",
+   "kind": "underspecified request construction",
+   "text": "“The URL is the api_base_url without a trailing `/` followed by the declared path” while api_base_url is required only to be “an absolute `http` or `https` URL with a host.”",
+   "question": "Are userinfo, query, fragment and non-root path components allowed in api_base_url, are one or all trailing slashes removed, and how is the Host authority derived for IPv6 and default or explicit ports?",
+   "options": [
+    "Restrict base URLs to scheme, host and optional port with no path, query, fragment or userinfo",
+    "Permit a path prefix but forbid query, fragment and userinfo, with a fixed join algorithm",
+    "Accept every absolute URL and use standard URL resolution"
+   ],
+   "default_guess": "Permit a path prefix, forbid query, fragment and userinfo, remove all trailing slashes, append the declared path, and derive Host from the parsed authority."
+  },
+  {
+   "subject": "multipart port names",
+   "kind": "undefined encoding and validation",
+   "text": "“Content-Disposition: form-data; name=\"<port>\"” and “filename=\"<port>\" added for a file part” while port names are otherwise only bounded text and unique.",
+   "question": "How are quotes, backslashes, non-ASCII characters and control characters in port names represented in multipart Content-Disposition, or are such port names refused for bindings that use multipart?",
+   "options": [
+    "Restrict multipart port names to a closed safe ASCII grammar at proposal time",
+    "Define exact quoted-string escaping and filename encoding",
+    "Treat an unencodable name as input_not_placeable at send time"
+   ],
+   "default_guess": "Restrict multipart port names to a safe ASCII token grammar during binding proposal."
+  },
+  {
+   "subject": "canonicalization failures below the surface",
+   "kind": "undefined error mapping",
+   "text": "“canonical_values.canonical_bytes ... Errors: refused for a value JCS cannot represent” while sandbox executions and service responses must end in one of their closed outcome sets.",
+   "question": "How is a canonical_bytes refusal mapped when the invalid value comes from sandbox output, a service response, a manifest entry or another internal producer rather than directly from an MCP request?",
+   "options": [
+    "Map sandbox and service values to contract_violation, manifest values to manifest mismatch, and caller defects to internal_error",
+    "Propagate refused unchanged from every caller",
+    "Use invalid_request for every canonicalization failure"
+   ],
+   "default_guess": "Map it at the trust boundary: contract_violation for sandbox or service output, manifest mismatch for manifest data, invalid_request for request data, and internal_error for trusted internal facts."
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"canonical_values.content_identity\",\"kind\":\"ambiguous digest domain\",\"text\":\"“Compute the SHA-256 identity of a content record or value from its canonical form” and “Inputs: One content record's meaning facts as State 1 names them for that record, or one value.”\",\"question\":\"How does the operation distinguish a raw value digest, a StoredValue value_id, a content-record identity, a manifest-entry digest, a request_digest, a corpus digest and an idempotency key, whose hashed facts and list-order rules differ?\",\"options\":[\"Pass an explicit identity kind with the facts\",\"Expose separate operations for each digest domain\",\"Require callers to preassemble an unambiguously tagged canonical object\"],\"default_guess\":\"Pass an explicit identity kind and reject facts that do not match that kind.\"},{\"subject\":\"file content digests\",\"kind\":\"missing operation\",\"text\":\"“Files in checks. A check is given a file as facts — digest, size, media type — never bytes; a caller holding bytes computes the facts first.”\",\"question\":\"Which module operation computes the SHA-256 digest of raw file bytes for trial fixtures, sandbox file outputs, multipart request descriptions and SpooledFiles, since canonical_bytes and content_identity accept JSON values rather than arbitrary bytes?\",\"options\":[\"Add a canonical_values operation for raw-byte digests\",\"Let every byte-holding module compute SHA-256 itself\",\"Make store.spool_file and put_value_bytes compute and return all file facts\"],\"default_guess\":\"Add one canonical_values raw-byte digest operation and use it everywhere.\"},{\"subject\":\"value size limits\",\"kind\":\"undefined measurement\",\"text\":\"“one candidate ... a JSON value, checked against the port's schema, its size bound applying to the whole value”\",\"question\":\"For stored_value_bytes_max and other value-size checks, is size the received JSON text, the RFC 8785 canonical bytes, decoded in-memory size, or another representation?\",\"options\":[\"Length of RFC 8785 canonical bytes\",\"Length of the received JSON encoding\",\"Implementation-specific decoded size\"],\"default_guess\":\"Use the length of the RFC 8785 canonical bytes.\"},{\"subject\":\"record-reading operations\",\"kind\":\"contradictory output projection\",\"text\":\"“Records reach a caller as they are” conflicts with outputs such as read_contract_version returning only “Its ports and bounds”, read_implementation returning only “Its code, contract version and that version's ports and bounds”, read_binding listing only selected facts, and read_flow_version returning only “Its ports, nodes, edges, guards and constants.”\",\"question\":\"Do get/read operations return the complete State 1 record, including identity, provenance and timestamps, or only the fields enumerated in each public operation's Outputs section?\",\"options\":[\"Return complete records plus any explicitly named derived data\",\"Return only each operation's enumerated projection\",\"Use different projections for module callers and MCP callers\"],\"default_guess\":\"Return only the enumerated projection, adding the named identity so the result is self-identifying.\"},{\"subject\":\"actor attribution on generated records\",\"kind\":\"contradiction\",\"text\":\"“The owner's actions, each agent's and the kernel's own are distinguishable in every record” and “Every operation that writes a record receives the acting Actor M27” conflict with TrialExecution, AdmissionVerdict, NodeExecution, EffectApproval requests and EffectAttempt having no field that records that acting actor.\",\"question\":\"Which records store the acting actor, and for run advancement is that actor the request initiator, the kernel, or the authority that permitted an effect?\",\"options\":[\"Add an acting_actor field to every written record\",\"Keep actor only on records whose State 1 model already names one\",\"Store actor as generic store metadata outside the State 1 records\"],\"default_guess\":\"Add acting_actor to every independently written record; use the request actor during requests and kernel during admission and recovery.\"},{\"subject\":\"NodeExecution timestamps without execution or send\",\"kind\":\"undefined timestamp semantics\",\"text\":\"“a started_at when the execution or send begins” does not cover skipped_by_guard, upstream_failed, refused_by_owner, a pre-send operation_failed, a receiving-node contract_violation, or an empty mapped node, all of which write NodeExecution records.\",\"question\":\"What are started_at and ended_at for a NodeExecution when no execution or HTTP send began?\",\"options\":[\"Set both to the time the conclusion is recorded\",\"Omit started_at and keep only ended_at\",\"Use the time the node first became reachable as started_at\"],\"default_guess\":\"Set both timestamps to the time the conclusion check is recorded.\"},{\"subject\":\"EffectAttempt resolution time\",\"kind\":\"ambiguous lifecycle timestamp\",\"text\":\"“recorded_at, concluded_at; resolved_by: the owner, when an unknown was resolved” and “a lifecycle change ... (`concluded_at`) updates those fields of the entity's one record in place”\",\"question\":\"When an unknown attempt is resolved later, does concluded_at retain the time it became unknown, change to the resolution time, or is a separate resolved_at required?\",\"options\":[\"Keep concluded_at as the transport-attempt conclusion and add resolved_at\",\"Replace concluded_at with the resolution time\",\"Keep concluded_at and record no resolution timestamp\"],\"default_guess\":\"Keep concluded_at as the attempt conclusion and add resolved_at.\"},{\"subject\":\"effects.operation_element_conclusion\",\"kind\":\"undefined record selection\",\"text\":\"“Return an operation element's conclusion from its records”\",\"question\":\"When an element has several NodeExecutions, EffectAttempts and approvals after resumes or a not_applied resolution, which record order and precedence determine its current conclusion?\",\"options\":[\"Use the greatest attempt_number, then any outstanding approval for the next attempt\",\"Use the newest record in store order regardless of kind\",\"Fold all records with an explicitly specified state machine\"],\"default_guess\":\"Fold records by attempt_number, using the latest attempt and then the requested approval for the next attempt.\"},{\"subject\":\"store.record_change invariants\",\"kind\":\"vague validation boundary\",\"text\":\"“store checks only its own invariants — attempt numbers, unique and existing identities, links”\",\"question\":\"Exactly which identities and links must each named store change validate, and which failures are refused versus internal_error?\",\"options\":[\"Define required foreign-key and lifecycle checks separately for every named change\",\"Validate only physical uniqueness and leave every cross-record link to callers\",\"Enforce all model references and lifecycle transitions in store\"],\"default_guess\":\"Define a per-change table of required existing identities, legal lifecycle updates and error classification.\"},{\"subject\":\"failure_detail construction\",\"kind\":\"undefined observable encoding\",\"text\":\"“only for the exception type and message” and “at most failure_detail_bytes_max of it is kept as failure_detail” and “it is cut to failure_detail_bytes_max at a UTF-8 character boundary”\",\"question\":\"What exact text is stored for sandbox exceptions and HTTP error bodies, which end of an overlong detail is retained, and how are non-UTF-8 HTTP body bytes converted before UTF-8-boundary truncation?\",\"options\":[\"A fixed type-and-message format; UTF-8 replacement decoding; retain the prefix\",\"Preserve raw bytes and encode them for the record\",\"Allow each producer to define its own bounded excerpt\"],\"default_guess\":\"Use a fixed type-and-message format for exceptions and UTF-8 replacement decoding for HTTP bodies, retaining the prefix.\"},{\"subject\":\"service base URL validation and joining\",\"kind\":\"underspecified request construction\",\"text\":\"“The URL is the api_base_url without a trailing `/` followed by the declared path” while api_base_url is required only to be “an absolute `http` or `https` URL with a host.”\",\"question\":\"Are userinfo, query, fragment and non-root path components allowed in api_base_url, are one or all trailing slashes removed, and how is the Host authority derived for IPv6 and default or explicit ports?\",\"options\":[\"Restrict base URLs to scheme, host and optional port with no path, query, fragment or userinfo\",\"Permit a path prefix but forbid query, fragment and userinfo, with a fixed join algorithm\",\"Accept every absolute URL and use standard URL resolution\"],\"default_guess\":\"Permit a path prefix, forbid query, fragment and userinfo, remove all trailing slashes, append the declared path, and derive Host from the parsed authority.\"},{\"subject\":\"multipart port names\",\"kind\":\"undefined encoding and validation\",\"text\":\"“Content-Disposition: form-data; name=\\\"<port>\\\"” and “filename=\\\"<port>\\\" added for a file part” while port names are otherwise only bounded text and unique.\",\"question\":\"How are quotes, backslashes, non-ASCII characters and control characters in port names represented in multipart Content-Disposition, or are such port names refused for bindings that use multipart?\",\"options\":[\"Restrict multipart port names to a closed safe ASCII grammar at proposal time\",\"Define exact quoted-string escaping and filename encoding\",\"Treat an unencodable name as input_not_placeable at send time\"],\"default_guess\":\"Restrict multipart port names to a safe ASCII token grammar during binding proposal.\"},{\"subject\":\"canonicalization failures below the surface\",\"kind\":\"undefined error mapping\",\"text\":\"“canonical_values.canonical_bytes ... Errors: refused for a value JCS cannot represent” while sandbox executions and service responses must end in one of their closed outcome sets.\",\"question\":\"How is a canonical_bytes refusal mapped when the invalid value comes from sandbox output, a service response, a manifest entry or another internal producer rather than directly from an MCP request?\",\"options\":[\"Map sandbox and service values to contract_violation, manifest values to manifest mismatch, and caller defects to internal_error\",\"Propagate refused unchanged from every caller\",\"Use invalid_request for every canonicalization failure\"],\"default_guess\":\"Map it at the trust boundary: contract_violation for sandbox or service output, manifest mismatch for manifest data, invalid_request for request data, and internal_error for trusted internal facts.\"}]}"
+}
