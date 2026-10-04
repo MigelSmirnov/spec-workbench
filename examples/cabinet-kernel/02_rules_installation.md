@@ -34,7 +34,8 @@ Reuses cabinet-flow decisions 21 and 22, narrowed by K-11 and K-15.
    A missing, unknown or revoked token gets one refusal that reveals nothing about
    any record. Abuse control against guessing is the reverse proxy's (State 0);
    the installation refuses to start with any token shorter than 43 characters
-   (32 bytes in base64url) or with two equal tokens. That tokens are random is
+   (32 bytes in base64url), with two equal tokens or with two agent tokens of
+   one name (M28 `agent_name`). That tokens are random is
    the installer's duty; the kernel cannot check it.
 2. Before evaluating each request the kernel reads the configuration file and
    compares the SHA-256 of its bytes with that of the last read; when they differ,

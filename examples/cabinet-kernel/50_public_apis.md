@@ -971,8 +971,12 @@ None.
 
 ### Enforces
 
-A regular private file of the kernel's user, not a link; tokens of at least 43
-characters, pairwise distinct (A16 rule 1, A17 rule 1).
+Checks in this order, the first failing one named: a regular private file of
+the kernel's user, not a link; one JSON object with exactly the installation's
+fields; no service twice among the selected instances or among the credentials;
+every credential header name an HTTP field-name token; tokens of at least 43
+characters; tokens pairwise distinct; agent names pairwise distinct (A16 rule 1,
+A17 rule 1, M28).
 
 ### Errors
 
