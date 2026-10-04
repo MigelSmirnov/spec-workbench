@@ -257,13 +257,14 @@ not a record: a digest no verdict covers answers none. "Runs by status" and
 
 Records reach a caller as they are (State 3), with values resolved by
 `module:surface`: a `value` StoredValue as its JSON content; a file —
-StoredValue fixture or SpooledFile — as digest, size and media type, its bytes
-only through `read_spooled_file`. For an agent, every `personal_data` value
+StoredValue fixture or SpooledFile — as digest, size and media type, a spooled
+file's bytes only through `read_spooled_file` and a fixture's only through
+`read_fixture_file`. For an agent, every `personal_data` value
 or file is its digest and class only, with no `value_id` (A07 rule 4), and a
 classified `failure_detail` its length and class (A07 rule 5). A
 `map_index` is absent for an element of a node that is not mapped.
 Wherever an answer shows a spooled file — a trace record, an approval
-preview's file input — it carries the SpooledFile's full identity, so that the owner can pass it to `read_spooled_file` — except a
+preview's file input — it carries the SpooledFile's full identity, so that the owner can pass it to `read_spooled_file`, and wherever it shows a trial case's file fixture it carries the fixture's `value_id`, so that the owner can pass it to `read_fixture_file` — except a
 `personal_data` file shown to an agent, which is its digest and class only
 (A07 rule 4).
 
@@ -318,6 +319,7 @@ rules 4–5. Field schemas and bounds are State 6's. "Agent" means any agent,
 | `get_run` | owner, agent | `runs.read_run` |
 | `list_records` | owner, agent | `store.page_records`; for runs, each run's answer from `runs.read_run` (State 3, "Runs are listed from their records") |
 | `read_spooled_file` | owner | `store.read_value_bytes` |
+| `read_fixture_file` | owner | `store.read_records`, `store.read_value_bytes` |
 
 `list_records` is the inspect and read-a-trace action over one record type,
 with no filter or one condition — equal to a value, or in a set of values —
@@ -365,6 +367,17 @@ rule 2). Checks run in that order of A16 rule 1: the actor; then the record's
 existence, through `store.read_records`; then whether its run holds its
 spool, from `runs.read_run`; only then are the bytes read through
 `store.read_value_bytes`.
+
+`read_fixture_file` takes only the `value_id` of a trial case's file fixture
+— a StoredValue with carriage `file`, the only kind (M21, K-10) — as the
+request's only field, and returns that StoredValue with its bytes whole, at
+most `trial_fixture_bytes_max` (A04 rule 1). A fixture is kept for as long
+as the kernel keeps its trial case, so it has no spool check. Checks run in
+the order of A16 rule 1: the actor — an agent gets `not_permitted`; then the
+record's existence, through `store.read_records` — a `value_id` naming no
+StoredValue is `unknown_reference`; then its carriage — a StoredValue of
+carriage `value` is `refused`, its content is in the answers that name it;
+only then are the bytes read through `store.read_value_bytes`.
 
 ## `public_op:canonical_values.canonical_bytes`
 
