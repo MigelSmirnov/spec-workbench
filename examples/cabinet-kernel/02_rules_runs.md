@@ -116,9 +116,12 @@ worker.
    named, like any value, by the records that receive it; mapping over such a
    list gives each element the list's class; a file list is the
    elements' SpooledFiles in element order, each keeping its own record, and
-   the reference naming the list — stored in the node's NodeExecution outputs
-   and in every record that receives the list — carries the list's class, so
-   an empty one keeps it across restarts. A port's
+   the reference naming it carries the list's class. A non-empty list has no
+   record of its own: the elements' NodeExecutions are its durable facts, and
+   the list — its StoredValue identity, its files, its class — is derived from
+   them in element order whenever it is delivered, after a restart too, and
+   then named by every record that receives it. An empty list is named, with
+   its class, by the one NodeExecution the node writes over an empty list. A port's
    reference to values names exactly one StoredValue, a `many` value being one
    JSON array.
 7. An element's conclusion is its NodeExecution's status, except that an
