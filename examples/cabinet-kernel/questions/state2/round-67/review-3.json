@@ -1,0 +1,186 @@
+{
+ "open_points": [
+  {
+   "subject": "Sandbox filesystem access",
+   "kind": "contradiction",
+   "text": "K-02 says a function has \"no filesystem beyond its input\", while A03 rules 1 and 4 mount a read-only runtime and permit opening paths inside both that runtime and the exchange directory.",
+   "question": "May user code read arbitrary runtime or exchange-directory files, or must filesystem access be restricted to the declared inputs exposed through run()?",
+   "options": [
+    "Permit reads anywhere in the mounted runtime and exchange directory",
+    "Permit only files representing declared inputs",
+    "Expose no filesystem API to user code"
+   ],
+   "default_guess": "Permit only the declared run() inputs and imports required from the fixed runtime."
+  },
+  {
+   "subject": "Function determinism and forbidden clocks/randomness",
+   "kind": "unverifiable invariant",
+   "text": "K-02 forbids clocks and randomness, A03 claims repeated execution, but A03 rule 4 traps only a closed list of entry points and explicitly says missing entry points wait for a new release.",
+   "question": "What must happen when code obtains nondeterministic data through an unlisted standard-library or runtime source such as another clock API, process metadata or runtime filesystem metadata?",
+   "options": [
+    "It is permitted until a later release traps it",
+    "It must be detected as sandbox_violation",
+    "The runtime must prevent all such sources independently of the closed trap list"
+   ],
+   "default_guess": "Treat any access to a clock, entropy or other nondeterministic runtime state as sandbox_violation and make the isolation/runtime enforce that invariant."
+  },
+  {
+   "subject": "Sandbox outcome precedence after cleanup failure",
+   "kind": "contradictory precedence",
+   "text": "A03 rule 5 says the outcome is the first of timeout, resource_exhausted, sandbox_violation, crashed, contract_violation and succeeded, while rule 7 says an unconfirmed cleanup records crashed with cleanup_failed.",
+   "question": "If an execution has already timed out, exhausted a resource or hit a sandbox trap and cleanup then cannot be confirmed, which outcome is recorded?",
+   "options": [
+    "Always crashed with cleanup_failed",
+    "Keep the rule 5 outcome and record cleanup failure separately",
+    "Apply cleanup_failed only when no earlier outcome exists"
+   ],
+   "default_guess": "Keep the first rule 5 outcome and stop the kernel while recording cleanup failure separately."
+  },
+  {
+   "subject": "Counting output_bytes for malformed returns",
+   "kind": "missing rule",
+   "text": "A03 rule 5 checks output_bytes before contract_violation and defines the count using canonical JSON bytes and file bytes, but malformed returns may not be canonicalizable or may contain a non-bytes file value.",
+   "question": "How is output_bytes evaluated when the returned object or an output value cannot be encoded as the required JSON/file representation?",
+   "options": [
+    "Skip the size check and classify contract_violation",
+    "Count the runner's raw serialization before validating it",
+    "Classify the inability to measure as crashed"
+   ],
+   "default_guess": "Classify contract_violation unless the bytes actually emitted before validation already exceed the output bound."
+  },
+  {
+   "subject": "Authored trial expected_outputs",
+   "kind": "missing condition",
+   "text": "M06 permits expected_outputs to be present or absent, and A04 says \"every output's digest equals the expected one\", but neither says whether a present expected_outputs map must contain exactly every output port.",
+   "question": "Can an authored trial case specify expected values for only some output ports, and if so are unspecified outputs merely required to validate?",
+   "options": [
+    "Expected outputs are either wholly absent or exact for every output port",
+    "Partial expected outputs are allowed and compare only named ports",
+    "Every case must always provide expected outputs"
+   ],
+   "default_guess": "Require either no expected_outputs or exactly one expected value for every output port."
+  },
+  {
+   "subject": "Manifest record validation",
+   "kind": "incomplete refusal rules",
+   "text": "A08 rule 5 lists an absent or invalid record, missing service or capabilities, duplicate operation names and several invalid operation fields, but does not define the result or ordering for wrong JSON types or missing nested fields such as capability name, exposed_as, effect_class, idempotency_key, instance fields or required_headers.",
+   "question": "What complete manifest shape is required, and where do missing or wrongly typed nested fields fall in the manifest-mismatch check order?",
+   "options": [
+    "Every malformed or missing field is manifest mismatch under a fixed field order",
+    "Unlisted malformed fields make the operation absent",
+    "Only the explicitly listed fields are validated and other shapes are tolerated"
+   ],
+   "default_guess": "Treat every missing or wrongly typed required field as manifest mismatch and define a complete deterministic field-check order."
+  },
+  {
+   "subject": "Binding port validation inherited from A02",
+   "kind": "ambiguous rule reference",
+   "text": "A08 rule 5 refuses ports that \"break a rule A02 sets for contract ports\" but then names only unique names and media-type placement, while A02 also contains disclosure, supported-schema, output-presence and resource-bound rules that do not all apply to bindings.",
+   "question": "Exactly which A02 port rules apply to an OperationBinding proposal and acceptance?",
+   "options": [
+    "All A02 rules that can syntactically apply to ports",
+    "Only unique names and carriage/media-type rules",
+    "Unique names, carriage/media type and supported-schema validation, with binding-specific disclosure rules replacing contract disclosure rules"
+   ],
+   "default_guess": "Apply unique names, carriage/media type and supported-schema validation, then the binding-specific disclosure and request-shape rules."
+  },
+  {
+   "subject": "Multipart port names",
+   "kind": "missing refusal condition",
+   "text": "A09 rule 2 inserts an agent-chosen port name verbatim inside Content-Disposition name and filename quoted strings, while no rule restricts or escapes quotes, backslashes, CR, LF or other unsafe characters in those names.",
+   "question": "Which port names are valid for multipart bindings, and are quoted-string characters escaped or refused?",
+   "options": [
+    "Restrict multipart port names to a safe token syntax",
+    "Apply a defined HTTP quoted-string escaping algorithm",
+    "Allow all bounded strings verbatim"
+   ],
+   "default_guess": "Refuse a multipart binding unless every part name is a conservative ASCII token."
+  },
+  {
+   "subject": "Manifest and credential header wire encoding",
+   "kind": "missing encoding rule",
+   "text": "A08 permits required-header values that are nonempty and contain no control character, and A17 accepts credential values decoded as UTF-8, but A09 does not define how non-ASCII header values become HTTP wire bytes or request-digest values.",
+   "question": "Are non-ASCII required-header and credential values allowed, and if so what exact wire encoding is used?",
+   "options": [
+    "Require all header values to be ASCII",
+    "Permit RFC-defined field bytes through a specified encoding",
+    "Encode Unicode as UTF-8 bytes"
+   ],
+   "default_guess": "Require ASCII header values and refuse any value that cannot be represented directly and unambiguously."
+  },
+  {
+   "subject": "Service base URL shape and joining",
+   "kind": "underspecified URL rules",
+   "text": "A08 accepts any absolute http or https URL with a host, while A09 joins it by removing a trailing slash and appending the operation path without saying whether user information, a query, a fragment, a non-root base path, Unicode hosts or noncanonical authorities are allowed.",
+   "question": "What exact api_base_url syntax is valid, and how are its authority, path and host represented for connection, Host and approval-digest purposes?",
+   "options": [
+    "Allow only scheme, host and optional port with no userinfo, query, fragment or base path",
+    "Allow a base path but forbid userinfo, query and fragment",
+    "Allow every absolute URL and define a complete RFC-based resolution and normalization algorithm"
+   ],
+   "default_guess": "Allow only scheme, host and optional port, with no userinfo, query, fragment or base path."
+  },
+  {
+   "subject": "Plain HTTP loopback exception",
+   "kind": "vague condition",
+   "text": "A09 rule 4 permits plain HTTP when the api_base_url \"host is a loopback address\" but does not say whether this means only a literal loopback IP, a hostname such as localhost, or any name that resolves to a loopback address.",
+   "question": "How is the loopback exception determined, including IPv4, IPv6, mapped addresses and DNS names?",
+   "options": [
+    "Only an IP literal classified as loopback",
+    "localhost plus loopback IP literals",
+    "Any hostname whose resolved address is loopback"
+   ],
+   "default_guess": "Permit only IPv4 or IPv6 literals classified as loopback, without DNS-based qualification."
+  },
+  {
+   "subject": "Manifest file links and filesystem traversal",
+   "kind": "missing security rule",
+   "text": "A08 fixes the manifest path as <manifest_location>/<service_id>.json but, unlike A17 and A18, says nothing about symbolic links or the ownership and permissions of manifest files and their parent path.",
+   "question": "May manifest reads follow symbolic links or read files outside the configured manifest tree through linked path components?",
+   "options": [
+    "Follow links normally",
+    "Refuse a linked manifest file only",
+    "Refuse symbolic links in every manifest path component and require an approved ownership/permission policy"
+   ],
+   "default_guess": "Do not follow symbolic links in the manifest path or file."
+  },
+  {
+   "subject": "Data-directory privacy check",
+   "kind": "vague refusal condition",
+   "text": "A18 rule 2 says the data directory and everything in it are \"private to the kernel's user\" and the kernel refuses to start otherwise, without defining required owners or permission bits for directories and files.",
+   "question": "What exact ownership and permission checks define private for the data directory, database, value area, fixtures and spool?",
+   "options": [
+    "Owned by the kernel user with no group or other permissions",
+    "Merely not writable by group or others",
+    "Rely on successful exclusive access and ignore mode bits"
+   ],
+   "default_guess": "Require ownership by the kernel user and no group or other permission bits on every existing entry."
+  },
+  {
+   "subject": "Error-response failure_detail",
+   "kind": "missing representation rule",
+   "text": "A09 rule 7 keeps up to failure_detail_bytes_max of an error response body as failure_detail, while A20 truncates failure_detail at a UTF-8 character boundary; an HTTP error body need not be UTF-8.",
+   "question": "How is an arbitrary error-response byte sequence converted to bounded failure_detail text?",
+   "options": [
+    "Decode strict UTF-8 and omit detail when invalid",
+    "Decode UTF-8 with a specified replacement policy",
+    "Store a bounded hexadecimal or base64 representation"
+   ],
+   "default_guess": "Decode as UTF-8 with replacement, then truncate at a character boundary."
+  },
+  {
+   "subject": "EffectAttempt resolution timestamps",
+   "kind": "ambiguous lifecycle field",
+   "text": "M26 has recorded_at and concluded_at and changes unknown to applied or not_applied with resolved_by, but it has no resolved_at and A11 does not say whether concluded_at is the original unknown conclusion time or the owner's resolution time.",
+   "question": "What timestamp records an owner's resolution of an unknown EffectAttempt, and may concluded_at change during that transition?",
+   "options": [
+    "concluded_at remains the original transport conclusion and no resolution time is stored",
+    "concluded_at is replaced with the resolution time",
+    "Add a distinct resolved_at timestamp"
+   ],
+   "default_guess": "Keep concluded_at as the transport conclusion and record a distinct resolved_at."
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"Sandbox filesystem access\",\"kind\":\"contradiction\",\"text\":\"K-02 says a function has \\\"no filesystem beyond its input\\\", while A03 rules 1 and 4 mount a read-only runtime and permit opening paths inside both that runtime and the exchange directory.\",\"question\":\"May user code read arbitrary runtime or exchange-directory files, or must filesystem access be restricted to the declared inputs exposed through run()?\",\"options\":[\"Permit reads anywhere in the mounted runtime and exchange directory\",\"Permit only files representing declared inputs\",\"Expose no filesystem API to user code\"],\"default_guess\":\"Permit only the declared run() inputs and imports required from the fixed runtime.\"},{\"subject\":\"Function determinism and forbidden clocks/randomness\",\"kind\":\"unverifiable invariant\",\"text\":\"K-02 forbids clocks and randomness, A03 claims repeated execution, but A03 rule 4 traps only a closed list of entry points and explicitly says missing entry points wait for a new release.\",\"question\":\"What must happen when code obtains nondeterministic data through an unlisted standard-library or runtime source such as another clock API, process metadata or runtime filesystem metadata?\",\"options\":[\"It is permitted until a later release traps it\",\"It must be detected as sandbox_violation\",\"The runtime must prevent all such sources independently of the closed trap list\"],\"default_guess\":\"Treat any access to a clock, entropy or other nondeterministic runtime state as sandbox_violation and make the isolation/runtime enforce that invariant.\"},{\"subject\":\"Sandbox outcome precedence after cleanup failure\",\"kind\":\"contradictory precedence\",\"text\":\"A03 rule 5 says the outcome is the first of timeout, resource_exhausted, sandbox_violation, crashed, contract_violation and succeeded, while rule 7 says an unconfirmed cleanup records crashed with cleanup_failed.\",\"question\":\"If an execution has already timed out, exhausted a resource or hit a sandbox trap and cleanup then cannot be confirmed, which outcome is recorded?\",\"options\":[\"Always crashed with cleanup_failed\",\"Keep the rule 5 outcome and record cleanup failure separately\",\"Apply cleanup_failed only when no earlier outcome exists\"],\"default_guess\":\"Keep the first rule 5 outcome and stop the kernel while recording cleanup failure separately.\"},{\"subject\":\"Counting output_bytes for malformed returns\",\"kind\":\"missing rule\",\"text\":\"A03 rule 5 checks output_bytes before contract_violation and defines the count using canonical JSON bytes and file bytes, but malformed returns may not be canonicalizable or may contain a non-bytes file value.\",\"question\":\"How is output_bytes evaluated when the returned object or an output value cannot be encoded as the required JSON/file representation?\",\"options\":[\"Skip the size check and classify contract_violation\",\"Count the runner's raw serialization before validating it\",\"Classify the inability to measure as crashed\"],\"default_guess\":\"Classify contract_violation unless the bytes actually emitted before validation already exceed the output bound.\"},{\"subject\":\"Authored trial expected_outputs\",\"kind\":\"missing condition\",\"text\":\"M06 permits expected_outputs to be present or absent, and A04 says \\\"every output's digest equals the expected one\\\", but neither says whether a present expected_outputs map must contain exactly every output port.\",\"question\":\"Can an authored trial case specify expected values for only some output ports, and if so are unspecified outputs merely required to validate?\",\"options\":[\"Expected outputs are either wholly absent or exact for every output port\",\"Partial expected outputs are allowed and compare only named ports\",\"Every case must always provide expected outputs\"],\"default_guess\":\"Require either no expected_outputs or exactly one expected value for every output port.\"},{\"subject\":\"Manifest record validation\",\"kind\":\"incomplete refusal rules\",\"text\":\"A08 rule 5 lists an absent or invalid record, missing service or capabilities, duplicate operation names and several invalid operation fields, but does not define the result or ordering for wrong JSON types or missing nested fields such as capability name, exposed_as, effect_class, idempotency_key, instance fields or required_headers.\",\"question\":\"What complete manifest shape is required, and where do missing or wrongly typed nested fields fall in the manifest-mismatch check order?\",\"options\":[\"Every malformed or missing field is manifest mismatch under a fixed field order\",\"Unlisted malformed fields make the operation absent\",\"Only the explicitly listed fields are validated and other shapes are tolerated\"],\"default_guess\":\"Treat every missing or wrongly typed required field as manifest mismatch and define a complete deterministic field-check order.\"},{\"subject\":\"Binding port validation inherited from A02\",\"kind\":\"ambiguous rule reference\",\"text\":\"A08 rule 5 refuses ports that \\\"break a rule A02 sets for contract ports\\\" but then names only unique names and media-type placement, while A02 also contains disclosure, supported-schema, output-presence and resource-bound rules that do not all apply to bindings.\",\"question\":\"Exactly which A02 port rules apply to an OperationBinding proposal and acceptance?\",\"options\":[\"All A02 rules that can syntactically apply to ports\",\"Only unique names and carriage/media-type rules\",\"Unique names, carriage/media type and supported-schema validation, with binding-specific disclosure rules replacing contract disclosure rules\"],\"default_guess\":\"Apply unique names, carriage/media type and supported-schema validation, then the binding-specific disclosure and request-shape rules.\"},{\"subject\":\"Multipart port names\",\"kind\":\"missing refusal condition\",\"text\":\"A09 rule 2 inserts an agent-chosen port name verbatim inside Content-Disposition name and filename quoted strings, while no rule restricts or escapes quotes, backslashes, CR, LF or other unsafe characters in those names.\",\"question\":\"Which port names are valid for multipart bindings, and are quoted-string characters escaped or refused?\",\"options\":[\"Restrict multipart port names to a safe token syntax\",\"Apply a defined HTTP quoted-string escaping algorithm\",\"Allow all bounded strings verbatim\"],\"default_guess\":\"Refuse a multipart binding unless every part name is a conservative ASCII token.\"},{\"subject\":\"Manifest and credential header wire encoding\",\"kind\":\"missing encoding rule\",\"text\":\"A08 permits required-header values that are nonempty and contain no control character, and A17 accepts credential values decoded as UTF-8, but A09 does not define how non-ASCII header values become HTTP wire bytes or request-digest values.\",\"question\":\"Are non-ASCII required-header and credential values allowed, and if so what exact wire encoding is used?\",\"options\":[\"Require all header values to be ASCII\",\"Permit RFC-defined field bytes through a specified encoding\",\"Encode Unicode as UTF-8 bytes\"],\"default_guess\":\"Require ASCII header values and refuse any value that cannot be represented directly and unambiguously.\"},{\"subject\":\"Service base URL shape and joining\",\"kind\":\"underspecified URL rules\",\"text\":\"A08 accepts any absolute http or https URL with a host, while A09 joins it by removing a trailing slash and appending the operation path without saying whether user information, a query, a fragment, a non-root base path, Unicode hosts or noncanonical authorities are allowed.\",\"question\":\"What exact api_base_url syntax is valid, and how are its authority, path and host represented for connection, Host and approval-digest purposes?\",\"options\":[\"Allow only scheme, host and optional port with no userinfo, query, fragment or base path\",\"Allow a base path but forbid userinfo, query and fragment\",\"Allow every absolute URL and define a complete RFC-based resolution and normalization algorithm\"],\"default_guess\":\"Allow only scheme, host and optional port, with no userinfo, query, fragment or base path.\"},{\"subject\":\"Plain HTTP loopback exception\",\"kind\":\"vague condition\",\"text\":\"A09 rule 4 permits plain HTTP when the api_base_url \\\"host is a loopback address\\\" but does not say whether this means only a literal loopback IP, a hostname such as localhost, or any name that resolves to a loopback address.\",\"question\":\"How is the loopback exception determined, including IPv4, IPv6, mapped addresses and DNS names?\",\"options\":[\"Only an IP literal classified as loopback\",\"localhost plus loopback IP literals\",\"Any hostname whose resolved address is loopback\"],\"default_guess\":\"Permit only IPv4 or IPv6 literals classified as loopback, without DNS-based qualification.\"},{\"subject\":\"Manifest file links and filesystem traversal\",\"kind\":\"missing security rule\",\"text\":\"A08 fixes the manifest path as <manifest_location>/<service_id>.json but, unlike A17 and A18, says nothing about symbolic links or the ownership and permissions of manifest files and their parent path.\",\"question\":\"May manifest reads follow symbolic links or read files outside the configured manifest tree through linked path components?\",\"options\":[\"Follow links normally\",\"Refuse a linked manifest file only\",\"Refuse symbolic links in every manifest path component and require an approved ownership/permission policy\"],\"default_guess\":\"Do not follow symbolic links in the manifest path or file.\"},{\"subject\":\"Data-directory privacy check\",\"kind\":\"vague refusal condition\",\"text\":\"A18 rule 2 says the data directory and everything in it are \\\"private to the kernel's user\\\" and the kernel refuses to start otherwise, without defining required owners or permission bits for directories and files.\",\"question\":\"What exact ownership and permission checks define private for the data directory, database, value area, fixtures and spool?\",\"options\":[\"Owned by the kernel user with no group or other permissions\",\"Merely not writable by group or others\",\"Rely on successful exclusive access and ignore mode bits\"],\"default_guess\":\"Require ownership by the kernel user and no group or other permission bits on every existing entry.\"},{\"subject\":\"Error-response failure_detail\",\"kind\":\"missing representation rule\",\"text\":\"A09 rule 7 keeps up to failure_detail_bytes_max of an error response body as failure_detail, while A20 truncates failure_detail at a UTF-8 character boundary; an HTTP error body need not be UTF-8.\",\"question\":\"How is an arbitrary error-response byte sequence converted to bounded failure_detail text?\",\"options\":[\"Decode strict UTF-8 and omit detail when invalid\",\"Decode UTF-8 with a specified replacement policy\",\"Store a bounded hexadecimal or base64 representation\"],\"default_guess\":\"Decode as UTF-8 with replacement, then truncate at a character boundary.\"},{\"subject\":\"EffectAttempt resolution timestamps\",\"kind\":\"ambiguous lifecycle field\",\"text\":\"M26 has recorded_at and concluded_at and changes unknown to applied or not_applied with resolved_by, but it has no resolved_at and A11 does not say whether concluded_at is the original unknown conclusion time or the owner's resolution time.\",\"question\":\"What timestamp records an owner's resolution of an unknown EffectAttempt, and may concluded_at change during that transition?\",\"options\":[\"concluded_at remains the original transport conclusion and no resolution time is stored\",\"concluded_at is replaced with the resolution time\",\"Add a distinct resolved_at timestamp\"],\"default_guess\":\"Keep concluded_at as the transport conclusion and record a distinct resolved_at.\"}]}"
+}

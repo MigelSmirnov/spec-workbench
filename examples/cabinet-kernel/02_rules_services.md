@@ -217,6 +217,12 @@ outcomes map to NodeExecution statuses.
    an error response is not interpreted; at most `failure_detail_bytes_max` of it
    is kept as `failure_detail`, whose class is the highest of the execution's
    class and the classes the binding declares for its outputs, under A07 rule 5.
+   Before anything is kept, the whole body is searched for the bytes of the
+   credential value sent with the request; when they occur, the body is
+   dropped whole and `failure_detail` is exactly `error body withheld: it
+   contained the credential` (A17 rule 2). Only that verbatim echo is
+   searched for; a body carrying the credential in another encoding is kept
+   like any other and is protected only by its class.
 
 ### Formal invariants
 
@@ -229,6 +235,7 @@ non_read AND (possibly_sent AND no_valid_answer) -> outcome_unknown
 non_read AND 4xx -> not_applied
 non_read AND 2xx -> applied
 read AND (not_sent OR no_answer OR 5xx) -> service_unreachable
+credential_bytes IN error_body -> failure_detail = withheld_note
 ```
 
 ### Required tests
@@ -243,6 +250,9 @@ read AND (not_sent OR no_answer OR 5xx) -> service_unreachable
 5. A redirect to another host is not followed and a production `http` target on a
    non-loopback host is refused before sending.
 6. A proxy variable in the environment does not change where the request goes.
+7. A 401 whose body echoes the credential value keeps `failure_detail` exactly
+   `error body withheld: it contained the credential`, and the credential
+   appears in no record.
 
 ### Consequence
 
