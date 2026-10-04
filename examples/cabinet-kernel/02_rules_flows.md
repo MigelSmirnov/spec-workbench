@@ -18,8 +18,9 @@ edges into one input, of flow outputs under guards, and of proving again later.
    1. nodes, by `node_id`: a function node names an existing contract version; an
       operation node names a binding in status `accepted`;
    2. constants, by (`to_node`, `to_port`): the port exists and is an input port
-      of a node — never a flow output — of `value` carriage, and the value fits its
-      schema;
+      of a node — never a flow output — of `value` carriage, the constant's
+      declared schema is the port's stored schema (M21), and the value fits the
+      port;
    3. edges, by (`to_node`, `to_port`, `from_node`, `from_port`): both ports exist
       with the right direction; both carry the same schema, the same carriage and,
       for files, the same media type (K-06) — cardinality is phase 5's; a flow

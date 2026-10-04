@@ -961,7 +961,14 @@ Candidate fields:
 - `carriage`: `value`, or `file` only for a trial case's file fixture (K-10); a
   file moving during a run is a SpooledFile (M22), never a StoredValue;
 - `media_type`: present exactly for a `file`;
-- `value_schema`;
+- `value_schema`: the stored schema of the port the value is written for — the
+  port's `value_schema` for a `one` port; for a `many` port, whose value is a
+  JSON array, the array schema with the port's `value_schema` as `items`
+  (A13 rule 6) — whatever wrote it: a flow input, a function or binding
+  output, a mapped node's list, a trial case's value. A constant keeps the
+  schema its agent declares, which the proof requires to be that stored
+  schema (A05). The same array under a `one` port whose own schema accepts it
+  is another StoredValue;
 - `disclosure_class` (K-14): for a function's output, the class the execution
   actually received; for a flow input, the class its flow input port declares, assigned by the
   kernel — a caller does not declare a class;

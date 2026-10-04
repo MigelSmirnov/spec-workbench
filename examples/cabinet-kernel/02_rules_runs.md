@@ -108,7 +108,8 @@ worker.
    takes the class of the list the node mapped over, so no class is lowered;
    any failed element makes it failed for its dependants. A value list is one
    StoredValue, the JSON array of the elements' values in element order, whose
-   `value_schema` is the array schema with the port's schema as `items`,
+   `value_schema` is the array schema with the port's schema as `items`, as
+   for every value of a `many` port (M21),
    written in the store change that writes the node's last element record and
    named, like any value, by the records that receive it; mapping over such a
    list gives each element the list's class; a file list is the
