@@ -35,7 +35,9 @@ is.
    be a list of distinct plain field names, and for an operation other than `read` each
    name must equal the name of one `value` input port of the proposal — a file
    is never a key field. For a `read` operation
-   the key is not used and not checked: a read writes no EffectAttempt. The rest of the syntax is
+   the key is not used and not checked: a read writes no EffectAttempt, and its
+   binding still copies the text split on `+` and trimmed, in manifest order,
+   as `idempotency_key_fields`, whatever those parts are. The rest of the syntax is
    State 6's. The key travels to the service as those input fields themselves, in
    the places A09 rule 2 gives them; the kernel adds no header or field of its own
    (K-08: "the declared idempotency key"). The EffectAttempt's `idempotency_key`
@@ -141,7 +143,9 @@ outcomes map to NodeExecution statuses.
    parameters, each a string, integer, number or boolean (`true`/`false`) or a
    list of those sent as a repeated parameter, and a `null` value, or a `null`
    element of a list, is omitted; for
-   `POST`, `PUT` and `PATCH` they form one JSON object body keyed by port name.
+   `POST`, `PUT` and `PATCH` they form one JSON object body keyed by port name,
+   sent as its canonical JSON bytes (State 1) with `Content-Type:
+   application/json`, without parameters.
    Query parameters follow port name order by Unicode code point, list elements
    in list order as `name=a&name=b`; numbers and booleans are written as in
    canonical JSON; names and string values are UTF-8 percent-encoded except the
