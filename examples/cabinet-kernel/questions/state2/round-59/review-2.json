@@ -1,0 +1,281 @@
+{
+ "open_points": [
+  {
+   "subject": "Function sandbox filesystem access",
+   "kind": "contradiction",
+   "text": "K-02 says a function has “no filesystem beyond its input”; A03 rule 1 gives it “one private exchange directory”, and rule 4 permits opening paths inside that directory.",
+   "question": "May implementation code create, read, enumerate or modify files in the exchange directory, or is that directory accessible only to the runner?",
+   "options": [
+    "Implementation code may use the bounded exchange directory as scratch space",
+    "Only the runner may access the exchange directory; implementation code receives inputs and outputs solely as Python objects"
+   ],
+   "default_guess": "Only the runner may access it, preserving K-02."
+  },
+  {
+   "subject": "Function access to clocks",
+   "kind": "contradiction",
+   "text": "K-02 says a function has “no clock”, while A03 rule 4 traps only a closed list that omits standard-library clock sources such as `time.clock_gettime`, `time.thread_time`, `os.times`, `resource.getrusage` and filesystem timestamps.",
+   "question": "Are all ways of observing time forbidden, or only the entry points explicitly listed in A03?",
+   "options": [
+    "Forbid every clock source and extend isolation/traps accordingly",
+    "Permit every clock source not present in the frozen trap list"
+   ],
+   "default_guess": "Forbid all clock sources because K-02 states the invariant."
+  },
+  {
+   "subject": "Deterministic function execution and admission",
+   "kind": "unverifiable invariant",
+   "text": "K-05 calls admission “a deterministic verdict”, and A03 requires “The same implementation on the same input yields the same output digest twice”, but permitted Python can observe nondeterministic facts such as object identities, scheduling and resource timing.",
+   "question": "What exact determinism guarantee must the sandbox enforce, and how are permitted nondeterministic Python or OS observations handled?",
+   "options": [
+    "Reject or isolate every observable nondeterministic source",
+    "Define determinism only as fixed evaluation rules over whatever execution outcomes occur",
+    "Remove the repeat-output guarantee"
+   ],
+   "default_guess": "Treat admission ordering and verdict calculation as deterministic, without promising byte-identical executions."
+  },
+  {
+   "subject": "Sandbox resource-bound semantics",
+   "kind": "vague enforcement",
+   "text": "A03 rule 5 says ResourceBounds are enforced with “`setrlimit` (address space, processes)” and that a “limit hit (memory, process count, scratch, `output_bytes`)” is `resource_exhausted`.",
+   "question": "Are memory and process limits per process or aggregate across the whole sandbox, what counts toward scratch usage, and what observable event proves each limit was hit?",
+   "options": [
+    "All bounds apply to the aggregate sandbox environment",
+    "`setrlimit` bounds apply per process while scratch/output are aggregate",
+    "Use implementation-specific enforcement semantics"
+   ],
+   "default_guess": "Apply every bound to the aggregate sandbox execution."
+  },
+  {
+   "subject": "Bubblewrap release dependency",
+   "kind": "missing release rule",
+   "text": "A20 says “A release pins the exact versions of the kernel's Python dependencies and of the sandbox runtime”, while A03 requires only that `bubblewrap` “is present”.",
+   "question": "Is the bubblewrap version also pinned or constrained, and what happens when the host supplies another version?",
+   "options": [
+    "Pin an exact bubblewrap version",
+    "Declare a tested minimum/compatible range",
+    "Accept any version whose startup probe succeeds"
+   ],
+   "default_guess": "Require a release-pinned compatible version in addition to the probe."
+  },
+  {
+   "subject": "Existing admissions after a kernel runtime upgrade",
+   "kind": "missing lifecycle rule",
+   "text": "A03 says the Python interpreter and standard library are “fixed by the kernel release”; A20 says a vulnerable dependency is answered by “a new release”; no rule says what happens to existing AdmissionVerdicts and Activations after that change.",
+   "question": "After upgrading the Python runtime or sandbox dependencies, do existing admitted implementations remain active, require re-admission, or execute under their original runtime?",
+   "options": [
+    "Keep existing activations and execute them under the new runtime",
+    "Invalidate verdicts and re-admit before execution",
+    "Retain each implementation's original runtime"
+   ],
+   "default_guess": "Require re-admission under the new runtime before an implementation can serve."
+  },
+  {
+   "subject": "Flow node identifier namespace",
+   "kind": "missing validity rule",
+   "text": "A05 rule 2 says “A flow input or flow output endpoint has the empty string as its node, so it orders before every node”, but no rule forbids an empty `node_id`.",
+   "question": "May a flow node use the empty string, and if so how is it distinguished and ordered against flow endpoints?",
+   "options": [
+    "Forbid an empty `node_id`",
+    "Use tagged endpoint kinds so an empty node id remains valid",
+    "Define a separate sentinel outside the string namespace"
+   ],
+   "default_guess": "Forbid an empty `node_id`."
+  },
+  {
+   "subject": "Cardinality versus value-schema validation",
+   "kind": "contradictory wording",
+   "text": "A13 says a `many` value is an array “each element of which must fit the port's `value_schema`”, while A09 says each response member “must validate against the port”; A03 and A04 likewise refer generally to a value fitting its port schema.",
+   "question": "For a `many` value port, is `value_schema` applied to each element or to the array as a whole, especially when the schema itself has type `array`?",
+   "options": [
+    "Validate each element against `value_schema`; cardinality supplies the outer array",
+    "Validate the whole array against `value_schema`",
+    "Require `value_schema` itself to describe the outer array"
+   ],
+   "default_guess": "Validate each element; cardinality supplies the outer array."
+  },
+  {
+   "subject": "Draft-write FlowActivation authority",
+   "kind": "missing model fact",
+   "text": "M26 requires a draft-write attempt to name “the flow activation under which the run started”, but M19 and A12 pin only `flow_version_id` and function implementations, not the identity of the FlowActivation.",
+   "question": "How is the exact FlowActivation recovered after the same version has been activated multiple times or after a restart?",
+   "options": [
+    "Add the FlowActivation store position to the Run's pins",
+    "Infer the latest activation preceding the Run in store order",
+    "Use any activation of the pinned version"
+   ],
+   "default_guess": "Pin the exact FlowActivation position in the Run at creation."
+  },
+  {
+   "subject": "Approval request identity for multipart sends",
+   "kind": "contradiction",
+   "text": "State 0 says approval covers “the fully built request” and “Any difference at send” asks again; A10 rule 7 excludes the multipart boundary and the `content-length` value from the request description.",
+   "question": "Does a changed multipart boundary or resulting Content-Length make a request different for approval purposes?",
+   "options": [
+    "Yes; digest the exact wire request",
+    "No; multipart requests are identified by their semantic parts and derived length",
+    "Use a deterministic fixed boundary so no difference occurs"
+   ],
+   "default_guess": "Use a deterministic boundary and include the resulting Content-Length in the covered request."
+  },
+  {
+   "subject": "Retry after a direct `not_applied` outcome",
+   "kind": "missing transition",
+   "text": "K-08 and M26 say sending again after `not_applied` requires a fresh approval, but A09 maps a direct 4xx to `operation_refused`/`not_applied`, and A13 makes `operation_refused` a failure with no same-run retry action; A11 creates a new approval only when an `unknown` attempt is resolved `not_applied`.",
+   "question": "Can a direct 4xx `not_applied` attempt be resent in the same run, and if so which action requests that resend? Is a later equal run considered a resend requiring fresh approval?",
+   "options": [
+    "Direct 4xx permanently fails that run; a new run is independent",
+    "Direct 4xx waits for a fresh approval just like resolution to `not_applied`",
+    "Add an explicit retry action for failed `not_applied` attempts"
+   ],
+   "default_guess": "Direct 4xx fails the run; a separately started run is independent."
+  },
+  {
+   "subject": "Cancelling a running run",
+   "kind": "contradictory execution model",
+   "text": "State 0 allows cancelling any run that is not finished, while A13 advances inside one request and A18 says “one request, including the run advancement it causes, ends before the next begins”.",
+   "question": "Can the owner interrupt a run currently executing a function or HTTP request, or can cancellation apply only after the run has returned in a waiting state?",
+   "options": [
+    "Cancellation is only possible for resting runs",
+    "Provide an out-of-band interrupt checked during advancement",
+    "Queue cancellation and apply it after the current node or request finishes"
+   ],
+   "default_guess": "Cancellation applies only to a run resting between requests."
+  },
+  {
+   "subject": "Credential secrecy against untrusted service responses",
+   "kind": "unverifiable invariant",
+   "text": "A17 says a credential “never enters the store, a record, a trace, a preview, a failure detail, a log line, a process argument or a response”; A09 allows an untrusted service's error body to be stored as `failure_detail` and successful bodies as output values.",
+   "question": "What must the kernel do if a service echoes the credential value in an error or successful response?",
+   "options": [
+    "Scan and refuse or redact any response containing the resolved credential",
+    "Limit the invariant to credentials inserted by the kernel, not equal bytes returned by a service",
+    "Trust services never to echo credentials"
+   ],
+   "default_guess": "Refuse to persist or return response content containing the resolved credential."
+  },
+  {
+   "subject": "Tokens and host paths inside user-controlled data",
+   "kind": "overbroad invariant",
+   "text": "A16 rule 5 says agent text is “stored and returned verbatim”, while rule 7 says “No response carries a token, a service credential, a host path or a stack trace”.",
+   "question": "Does rule 7 also prohibit returning user-supplied text or values that happen to contain a token or host-path string, and if so how are they detected and represented?",
+   "options": [
+    "Rule 7 covers only kernel-originated authentication data, paths and diagnostics",
+    "Scan and redact matching tokens and path-like strings in all returned data",
+    "Refuse such input when authored"
+   ],
+   "default_guess": "Interpret rule 7 as applying only to kernel-originated sensitive material."
+  },
+  {
+   "subject": "Agent-token configuration hot reload",
+   "kind": "contradiction",
+   "text": "M27 says “a configuration repeating [an agent name] is refused at start”; A16 rule 2 says exactly three checks apply on re-read—parseability, token length and token uniqueness—and the changed token list then replaces the old one.",
+   "question": "May a hot-reloaded token list contain duplicate or missing agent names, invalid `may_author` values, or a missing owner token, and how is the actor determined then?",
+   "options": [
+    "Apply the full token-list schema and unique-agent-name checks on every re-read",
+    "Apply only the three listed checks and accept any otherwise parseable token-list shape",
+    "Require restart for changes other than token removal/addition within the existing shape"
+   ],
+   "default_guess": "Apply the complete token-list schema and unique-agent-name checks on every re-read."
+  },
+  {
+   "subject": "Service-credential reference resolution",
+   "kind": "missing protocol",
+   "text": "M28 calls service credentials “references to secrets”; A17 says a reference “resolves to its value on the host” and later refers to “its secret file”, without defining the reference syntax or file-security rules.",
+   "question": "What forms of credential reference are valid, how are they resolved, and what ownership, permission and symlink checks apply to the referenced secret file?",
+   "options": [
+    "References are absolute file paths with the same ownership/no-symlink/private-mode checks as configuration",
+    "References use a named host secret provider",
+    "Any host path readable by the kernel is accepted"
+   ],
+   "default_guess": "Use explicit file references with owner-only permissions and no symlink traversal."
+  },
+  {
+   "subject": "Reading a manifest at `manifest_revision`",
+   "kind": "missing protocol",
+   "text": "M28 provides `manifest_location` and `manifest_revision`; A08 says the record is read from a path “at the configured `manifest_revision`”, but defines no repository or snapshot access operation.",
+   "question": "How does the kernel resolve a file at a revision, and what is refused when the location is not a repository, the revision is missing, or the working tree differs?",
+   "options": [
+    "Read blobs directly from a specified Git revision",
+    "Require `manifest_location` to be an immutable directory already materialized at that revision",
+    "Treat the revision as metadata and read the current filesystem"
+   ],
+   "default_guess": "Read the exact file blob from the configured Git revision without using the working tree."
+  },
+  {
+   "subject": "Permitted `api_base_url` form and URL joining",
+   "kind": "incomplete refusal conditions",
+   "text": "A08 accepts any absolute `http` or `https` URL with a host; A09 constructs the target as “the `api_base_url` without a trailing `/` followed by the declared path”.",
+   "question": "Are user information, query strings, fragments, percent-encoded separators and a base path allowed in `api_base_url`, and exactly how are they combined with the operation path?",
+   "options": [
+    "Permit only scheme, host, optional port and an optional normalized base path; forbid userinfo, query and fragment",
+    "Allow every absolute URL and concatenate strings literally",
+    "Resolve the operation path using standard URL-reference rules"
+   ],
+   "default_guess": "Forbid userinfo, query and fragment; allow a validated base path and concatenate it literally with the declared path."
+  },
+  {
+   "subject": "Plain-HTTP loopback classification",
+   "kind": "vague refusal condition",
+   "text": "A09 permits plain HTTP when the `api_base_url` “host is a loopback address”.",
+   "question": "Does this mean only a literal loopback IP, or also names such as `localhost` or any hostname that resolves to loopback, and when is resolution checked?",
+   "options": [
+    "Only literal IPv4/IPv6 loopback addresses",
+    "Literal loopback addresses and `localhost`",
+    "Any hostname whose current DNS result is exclusively loopback"
+   ],
+   "default_guess": "Allow only literal loopback IP addresses."
+  },
+  {
+   "subject": "Error-response failure detail encoding",
+   "kind": "missing representation rule",
+   "text": "A09 keeps up to `failure_detail_bytes_max` of an error response body as `failure_detail`; A20 says failure detail is cut “at a UTF-8 character boundary”, but error bodies are not required to be UTF-8.",
+   "question": "How is an arbitrary binary or invalid-UTF-8 error body represented in `failure_detail`?",
+   "options": [
+    "Decode as UTF-8 and replace invalid sequences",
+    "Store a bounded base64 encoding",
+    "Omit non-UTF-8 bodies",
+    "Store bytes rather than text"
+   ],
+   "default_guess": "Decode as UTF-8 with replacement and truncate the resulting text at a character boundary."
+  },
+  {
+   "subject": "EffectAttempt resolution time",
+   "kind": "missing model fact",
+   "text": "M26 carries `recorded_at`, `concluded_at` and `resolved_by`, while A11 says changing `unknown` to `applied` or `not_applied` is “the only record of the resolution”; no `resolved_at` or update rule for `concluded_at` is given.",
+   "question": "Which timestamp records the owner's resolution, and does `concluded_at` mean the original unknown outcome time or the later resolution time?",
+   "options": [
+    "Add `resolved_at` and keep `concluded_at` as the transport outcome time",
+    "Overwrite `concluded_at` at resolution",
+    "Use no resolution timestamp"
+   ],
+   "default_guess": "Add `resolved_at` and preserve the original `concluded_at`."
+  },
+  {
+   "subject": "Capturing failures after refused or cancelled runs",
+   "kind": "contradiction",
+   "text": "State 0 says capture is refused when the execution succeeded, was skipped, belongs to another contract version, or “whose run was already released”; A15 permits capture only while the run still holds its spool, excluding every ended `refused`, `cancelled` or `succeeded` run even when the failed execution had only value inputs.",
+   "question": "May a value-only failed function execution be captured after its run ended `refused` or `cancelled`, or is every such capture refused because the run no longer holds a spool?",
+   "options": [
+    "Permit capture when all required inputs remain available, regardless of spool lifecycle",
+    "Permit capture only before the run ends or from an unreleased failed run",
+    "Keep value inputs but refuse only when a required file is gone"
+   ],
+   "default_guess": "Permit capture whenever all named inputs still exist; require a live spool only when file inputs are involved."
+  },
+  {
+   "subject": "Data-directory privacy check",
+   "kind": "vague refusal condition",
+   "text": "A18 says the data directory “and everything in it are private to the kernel's user; the kernel refuses to start otherwise”.",
+   "question": "Which owners and permission bits count as private for directories, database files, lock files, value files and spool files?",
+   "options": [
+    "Require kernel-user ownership and no group/other permission bits",
+    "Require exact modes such as 0700 for directories and 0600 for files",
+    "Accept any access-control configuration that grants access only to the kernel user"
+   ],
+   "default_guess": "Require kernel-user ownership and no group/other permission bits, allowing stricter owner permissions."
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"Function sandbox filesystem access\",\"kind\":\"contradiction\",\"text\":\"K-02 says a function has “no filesystem beyond its input”; A03 rule 1 gives it “one private exchange directory”, and rule 4 permits opening paths inside that directory.\",\"question\":\"May implementation code create, read, enumerate or modify files in the exchange directory, or is that directory accessible only to the runner?\",\"options\":[\"Implementation code may use the bounded exchange directory as scratch space\",\"Only the runner may access the exchange directory; implementation code receives inputs and outputs solely as Python objects\"],\"default_guess\":\"Only the runner may access it, preserving K-02.\"},{\"subject\":\"Function access to clocks\",\"kind\":\"contradiction\",\"text\":\"K-02 says a function has “no clock”, while A03 rule 4 traps only a closed list that omits standard-library clock sources such as `time.clock_gettime`, `time.thread_time`, `os.times`, `resource.getrusage` and filesystem timestamps.\",\"question\":\"Are all ways of observing time forbidden, or only the entry points explicitly listed in A03?\",\"options\":[\"Forbid every clock source and extend isolation/traps accordingly\",\"Permit every clock source not present in the frozen trap list\"],\"default_guess\":\"Forbid all clock sources because K-02 states the invariant.\"},{\"subject\":\"Deterministic function execution and admission\",\"kind\":\"unverifiable invariant\",\"text\":\"K-05 calls admission “a deterministic verdict”, and A03 requires “The same implementation on the same input yields the same output digest twice”, but permitted Python can observe nondeterministic facts such as object identities, scheduling and resource timing.\",\"question\":\"What exact determinism guarantee must the sandbox enforce, and how are permitted nondeterministic Python or OS observations handled?\",\"options\":[\"Reject or isolate every observable nondeterministic source\",\"Define determinism only as fixed evaluation rules over whatever execution outcomes occur\",\"Remove the repeat-output guarantee\"],\"default_guess\":\"Treat admission ordering and verdict calculation as deterministic, without promising byte-identical executions.\"},{\"subject\":\"Sandbox resource-bound semantics\",\"kind\":\"vague enforcement\",\"text\":\"A03 rule 5 says ResourceBounds are enforced with “`setrlimit` (address space, processes)” and that a “limit hit (memory, process count, scratch, `output_bytes`)” is `resource_exhausted`.\",\"question\":\"Are memory and process limits per process or aggregate across the whole sandbox, what counts toward scratch usage, and what observable event proves each limit was hit?\",\"options\":[\"All bounds apply to the aggregate sandbox environment\",\"`setrlimit` bounds apply per process while scratch/output are aggregate\",\"Use implementation-specific enforcement semantics\"],\"default_guess\":\"Apply every bound to the aggregate sandbox execution.\"},{\"subject\":\"Bubblewrap release dependency\",\"kind\":\"missing release rule\",\"text\":\"A20 says “A release pins the exact versions of the kernel's Python dependencies and of the sandbox runtime”, while A03 requires only that `bubblewrap` “is present”.\",\"question\":\"Is the bubblewrap version also pinned or constrained, and what happens when the host supplies another version?\",\"options\":[\"Pin an exact bubblewrap version\",\"Declare a tested minimum/compatible range\",\"Accept any version whose startup probe succeeds\"],\"default_guess\":\"Require a release-pinned compatible version in addition to the probe.\"},{\"subject\":\"Existing admissions after a kernel runtime upgrade\",\"kind\":\"missing lifecycle rule\",\"text\":\"A03 says the Python interpreter and standard library are “fixed by the kernel release”; A20 says a vulnerable dependency is answered by “a new release”; no rule says what happens to existing AdmissionVerdicts and Activations after that change.\",\"question\":\"After upgrading the Python runtime or sandbox dependencies, do existing admitted implementations remain active, require re-admission, or execute under their original runtime?\",\"options\":[\"Keep existing activations and execute them under the new runtime\",\"Invalidate verdicts and re-admit before execution\",\"Retain each implementation's original runtime\"],\"default_guess\":\"Require re-admission under the new runtime before an implementation can serve.\"},{\"subject\":\"Flow node identifier namespace\",\"kind\":\"missing validity rule\",\"text\":\"A05 rule 2 says “A flow input or flow output endpoint has the empty string as its node, so it orders before every node”, but no rule forbids an empty `node_id`.\",\"question\":\"May a flow node use the empty string, and if so how is it distinguished and ordered against flow endpoints?\",\"options\":[\"Forbid an empty `node_id`\",\"Use tagged endpoint kinds so an empty node id remains valid\",\"Define a separate sentinel outside the string namespace\"],\"default_guess\":\"Forbid an empty `node_id`.\"},{\"subject\":\"Cardinality versus value-schema validation\",\"kind\":\"contradictory wording\",\"text\":\"A13 says a `many` value is an array “each element of which must fit the port's `value_schema`”, while A09 says each response member “must validate against the port”; A03 and A04 likewise refer generally to a value fitting its port schema.\",\"question\":\"For a `many` value port, is `value_schema` applied to each element or to the array as a whole, especially when the schema itself has type `array`?\",\"options\":[\"Validate each element against `value_schema`; cardinality supplies the outer array\",\"Validate the whole array against `value_schema`\",\"Require `value_schema` itself to describe the outer array\"],\"default_guess\":\"Validate each element; cardinality supplies the outer array.\"},{\"subject\":\"Draft-write FlowActivation authority\",\"kind\":\"missing model fact\",\"text\":\"M26 requires a draft-write attempt to name “the flow activation under which the run started”, but M19 and A12 pin only `flow_version_id` and function implementations, not the identity of the FlowActivation.\",\"question\":\"How is the exact FlowActivation recovered after the same version has been activated multiple times or after a restart?\",\"options\":[\"Add the FlowActivation store position to the Run's pins\",\"Infer the latest activation preceding the Run in store order\",\"Use any activation of the pinned version\"],\"default_guess\":\"Pin the exact FlowActivation position in the Run at creation.\"},{\"subject\":\"Approval request identity for multipart sends\",\"kind\":\"contradiction\",\"text\":\"State 0 says approval covers “the fully built request” and “Any difference at send” asks again; A10 rule 7 excludes the multipart boundary and the `content-length` value from the request description.\",\"question\":\"Does a changed multipart boundary or resulting Content-Length make a request different for approval purposes?\",\"options\":[\"Yes; digest the exact wire request\",\"No; multipart requests are identified by their semantic parts and derived length\",\"Use a deterministic fixed boundary so no difference occurs\"],\"default_guess\":\"Use a deterministic boundary and include the resulting Content-Length in the covered request.\"},{\"subject\":\"Retry after a direct `not_applied` outcome\",\"kind\":\"missing transition\",\"text\":\"K-08 and M26 say sending again after `not_applied` requires a fresh approval, but A09 maps a direct 4xx to `operation_refused`/`not_applied`, and A13 makes `operation_refused` a failure with no same-run retry action; A11 creates a new approval only when an `unknown` attempt is resolved `not_applied`.\",\"question\":\"Can a direct 4xx `not_applied` attempt be resent in the same run, and if so which action requests that resend? Is a later equal run considered a resend requiring fresh approval?\",\"options\":[\"Direct 4xx permanently fails that run; a new run is independent\",\"Direct 4xx waits for a fresh approval just like resolution to `not_applied`\",\"Add an explicit retry action for failed `not_applied` attempts\"],\"default_guess\":\"Direct 4xx fails the run; a separately started run is independent.\"},{\"subject\":\"Cancelling a running run\",\"kind\":\"contradictory execution model\",\"text\":\"State 0 allows cancelling any run that is not finished, while A13 advances inside one request and A18 says “one request, including the run advancement it causes, ends before the next begins”.\",\"question\":\"Can the owner interrupt a run currently executing a function or HTTP request, or can cancellation apply only after the run has returned in a waiting state?\",\"options\":[\"Cancellation is only possible for resting runs\",\"Provide an out-of-band interrupt checked during advancement\",\"Queue cancellation and apply it after the current node or request finishes\"],\"default_guess\":\"Cancellation applies only to a run resting between requests.\"},{\"subject\":\"Credential secrecy against untrusted service responses\",\"kind\":\"unverifiable invariant\",\"text\":\"A17 says a credential “never enters the store, a record, a trace, a preview, a failure detail, a log line, a process argument or a response”; A09 allows an untrusted service's error body to be stored as `failure_detail` and successful bodies as output values.\",\"question\":\"What must the kernel do if a service echoes the credential value in an error or successful response?\",\"options\":[\"Scan and refuse or redact any response containing the resolved credential\",\"Limit the invariant to credentials inserted by the kernel, not equal bytes returned by a service\",\"Trust services never to echo credentials\"],\"default_guess\":\"Refuse to persist or return response content containing the resolved credential.\"},{\"subject\":\"Tokens and host paths inside user-controlled data\",\"kind\":\"overbroad invariant\",\"text\":\"A16 rule 5 says agent text is “stored and returned verbatim”, while rule 7 says “No response carries a token, a service credential, a host path or a stack trace”.\",\"question\":\"Does rule 7 also prohibit returning user-supplied text or values that happen to contain a token or host-path string, and if so how are they detected and represented?\",\"options\":[\"Rule 7 covers only kernel-originated authentication data, paths and diagnostics\",\"Scan and redact matching tokens and path-like strings in all returned data\",\"Refuse such input when authored\"],\"default_guess\":\"Interpret rule 7 as applying only to kernel-originated sensitive material.\"},{\"subject\":\"Agent-token configuration hot reload\",\"kind\":\"contradiction\",\"text\":\"M27 says “a configuration repeating [an agent name] is refused at start”; A16 rule 2 says exactly three checks apply on re-read—parseability, token length and token uniqueness—and the changed token list then replaces the old one.\",\"question\":\"May a hot-reloaded token list contain duplicate or missing agent names, invalid `may_author` values, or a missing owner token, and how is the actor determined then?\",\"options\":[\"Apply the full token-list schema and unique-agent-name checks on every re-read\",\"Apply only the three listed checks and accept any otherwise parseable token-list shape\",\"Require restart for changes other than token removal/addition within the existing shape\"],\"default_guess\":\"Apply the complete token-list schema and unique-agent-name checks on every re-read.\"},{\"subject\":\"Service-credential reference resolution\",\"kind\":\"missing protocol\",\"text\":\"M28 calls service credentials “references to secrets”; A17 says a reference “resolves to its value on the host” and later refers to “its secret file”, without defining the reference syntax or file-security rules.\",\"question\":\"What forms of credential reference are valid, how are they resolved, and what ownership, permission and symlink checks apply to the referenced secret file?\",\"options\":[\"References are absolute file paths with the same ownership/no-symlink/private-mode checks as configuration\",\"References use a named host secret provider\",\"Any host path readable by the kernel is accepted\"],\"default_guess\":\"Use explicit file references with owner-only permissions and no symlink traversal.\"},{\"subject\":\"Reading a manifest at `manifest_revision`\",\"kind\":\"missing protocol\",\"text\":\"M28 provides `manifest_location` and `manifest_revision`; A08 says the record is read from a path “at the configured `manifest_revision`”, but defines no repository or snapshot access operation.\",\"question\":\"How does the kernel resolve a file at a revision, and what is refused when the location is not a repository, the revision is missing, or the working tree differs?\",\"options\":[\"Read blobs directly from a specified Git revision\",\"Require `manifest_location` to be an immutable directory already materialized at that revision\",\"Treat the revision as metadata and read the current filesystem\"],\"default_guess\":\"Read the exact file blob from the configured Git revision without using the working tree.\"},{\"subject\":\"Permitted `api_base_url` form and URL joining\",\"kind\":\"incomplete refusal conditions\",\"text\":\"A08 accepts any absolute `http` or `https` URL with a host; A09 constructs the target as “the `api_base_url` without a trailing `/` followed by the declared path”.\",\"question\":\"Are user information, query strings, fragments, percent-encoded separators and a base path allowed in `api_base_url`, and exactly how are they combined with the operation path?\",\"options\":[\"Permit only scheme, host, optional port and an optional normalized base path; forbid userinfo, query and fragment\",\"Allow every absolute URL and concatenate strings literally\",\"Resolve the operation path using standard URL-reference rules\"],\"default_guess\":\"Forbid userinfo, query and fragment; allow a validated base path and concatenate it literally with the declared path.\"},{\"subject\":\"Plain-HTTP loopback classification\",\"kind\":\"vague refusal condition\",\"text\":\"A09 permits plain HTTP when the `api_base_url` “host is a loopback address”.\",\"question\":\"Does this mean only a literal loopback IP, or also names such as `localhost` or any hostname that resolves to loopback, and when is resolution checked?\",\"options\":[\"Only literal IPv4/IPv6 loopback addresses\",\"Literal loopback addresses and `localhost`\",\"Any hostname whose current DNS result is exclusively loopback\"],\"default_guess\":\"Allow only literal loopback IP addresses.\"},{\"subject\":\"Error-response failure detail encoding\",\"kind\":\"missing representation rule\",\"text\":\"A09 keeps up to `failure_detail_bytes_max` of an error response body as `failure_detail`; A20 says failure detail is cut “at a UTF-8 character boundary”, but error bodies are not required to be UTF-8.\",\"question\":\"How is an arbitrary binary or invalid-UTF-8 error body represented in `failure_detail`?\",\"options\":[\"Decode as UTF-8 and replace invalid sequences\",\"Store a bounded base64 encoding\",\"Omit non-UTF-8 bodies\",\"Store bytes rather than text\"],\"default_guess\":\"Decode as UTF-8 with replacement and truncate the resulting text at a character boundary.\"},{\"subject\":\"EffectAttempt resolution time\",\"kind\":\"missing model fact\",\"text\":\"M26 carries `recorded_at`, `concluded_at` and `resolved_by`, while A11 says changing `unknown` to `applied` or `not_applied` is “the only record of the resolution”; no `resolved_at` or update rule for `concluded_at` is given.\",\"question\":\"Which timestamp records the owner's resolution, and does `concluded_at` mean the original unknown outcome time or the later resolution time?\",\"options\":[\"Add `resolved_at` and keep `concluded_at` as the transport outcome time\",\"Overwrite `concluded_at` at resolution\",\"Use no resolution timestamp\"],\"default_guess\":\"Add `resolved_at` and preserve the original `concluded_at`.\"},{\"subject\":\"Capturing failures after refused or cancelled runs\",\"kind\":\"contradiction\",\"text\":\"State 0 says capture is refused when the execution succeeded, was skipped, belongs to another contract version, or “whose run was already released”; A15 permits capture only while the run still holds its spool, excluding every ended `refused`, `cancelled` or `succeeded` run even when the failed execution had only value inputs.\",\"question\":\"May a value-only failed function execution be captured after its run ended `refused` or `cancelled`, or is every such capture refused because the run no longer holds a spool?\",\"options\":[\"Permit capture when all required inputs remain available, regardless of spool lifecycle\",\"Permit capture only before the run ends or from an unreleased failed run\",\"Keep value inputs but refuse only when a required file is gone\"],\"default_guess\":\"Permit capture whenever all named inputs still exist; require a live spool only when file inputs are involved.\"},{\"subject\":\"Data-directory privacy check\",\"kind\":\"vague refusal condition\",\"text\":\"A18 says the data directory “and everything in it are private to the kernel's user; the kernel refuses to start otherwise”.\",\"question\":\"Which owners and permission bits count as private for directories, database files, lock files, value files and spool files?\",\"options\":[\"Require kernel-user ownership and no group/other permission bits\",\"Require exact modes such as 0700 for directories and 0600 for files\",\"Accept any access-control configuration that grants access only to the kernel user\"],\"default_guess\":\"Require kernel-user ownership and no group/other permission bits, allowing stricter owner permissions.\"}]}"
+}

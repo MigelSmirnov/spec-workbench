@@ -1,0 +1,271 @@
+{
+ "open_points": [
+  {
+   "subject": "Function sandbox filesystem access",
+   "kind": "contradiction",
+   "text": "K-02 says a function has “no filesystem beyond its input”, while A03 rule 1 gives it a writable exchange directory and rule 4 permits opening paths inside both that directory and the read-only runtime.",
+   "question": "May function code read runtime files or create/read arbitrary files in the exchange directory, or must filesystem access be limited to the files representing its declared inputs and outputs?",
+   "options": [
+    "Permit all access inside the exchange directory and runtime",
+    "Permit only declared input/output files",
+    "Expose no filesystem API to function code"
+   ],
+   "default_guess": "Permit only declared input/output files in the exchange directory and deny user-code access to other runtime paths."
+  },
+  {
+   "subject": "Function determinism and absence of clock/randomness",
+   "kind": "unverifiable invariant",
+   "text": "A03 claims functions have no clock or randomness and requires identical output digests, but its closed trap list omits nondeterministic standard-library and runtime facilities such as other clock APIs, process/runtime observations, thread scheduling and cryptographic randomness exposed outside the named modules.",
+   "question": "What complete enforceable boundary makes execution deterministic, and what is the required outcome when code uses an unlisted nondeterministic facility?",
+   "options": [
+    "Broaden syscall/runtime isolation to enforce determinism",
+    "Expand the closed trap list to every permitted facility",
+    "Drop the guarantee and treat repeatability as unverified"
+   ],
+   "default_guess": "Enforce a syscall-level allowlist and classify any disallowed observation as sandbox_violation."
+  },
+  {
+   "subject": "Sandbox resource-limit outcome classification",
+   "kind": "missing refusal rule",
+   "text": "A03 rule 5 says “a limit hit” takes precedence and yields resource_exhausted, but does not define how a memory, process-count or scratch limit is recognized when Python catches the resulting exception or the operating system reports it as an ordinary failure.",
+   "question": "What observable evidence constitutes each limit being hit, including when user code catches the error, and how is it distinguished from crashed?",
+   "options": [
+    "Externally monitor and record every limit event",
+    "Classify specified OS signals and error codes as limit hits",
+    "Classify only directly measured limits as resource_exhausted"
+   ],
+   "default_guess": "Use external accounting or kernel-enforced events and let a recorded limit event win even if the code catches an exception."
+  },
+  {
+   "subject": "Authored TrialCase input and expected-output shape",
+   "kind": "missing validation rule",
+   "text": "A04 rule 1 requires that input values and expected outputs “fit” the contract ports, but does not say whether every input must be present, whether extra names are refused, or whether a present expected_outputs must contain every output port rather than a subset.",
+   "question": "What exact key set is required for trial inputs and for a present expected_outputs object?",
+   "options": [
+    "Require exact input and output port sets",
+    "Require exact inputs but allow partial expected outputs",
+    "Allow partial inputs and outputs"
+   ],
+   "default_guess": "Require exactly every input port and, when expected_outputs is present, exactly every output port, with no extra names."
+  },
+  {
+   "subject": "TrialExecution failure details",
+   "kind": "model-rule contradiction",
+   "text": "A03 rule 6 says the kernel keeps bounded exception type and message as failure_detail, and A07 rule 5 defines disclosure of a TrialExecution failure_detail, but M07 TrialExecution has no failure_detail field.",
+   "question": "Do trial executions persist a failure detail, and if so what field and disclosure rules apply?",
+   "options": [
+    "Add bounded failure_detail to TrialExecution",
+    "Discard all trial failure detail",
+    "Store failure detail in a separate trace record"
+   ],
+   "default_guess": "Add the same bounded failure_detail field and disclosure treatment used for NodeExecution."
+  },
+  {
+   "subject": "Flow node identifiers and flow endpoints",
+   "kind": "ambiguous identity",
+   "text": "A05 rule 2 represents a flow input or output endpoint with the empty string for ordering, but no rule forbids a FlowNode whose node_id is the empty string or explains how an edge structurally distinguishes that node from a flow endpoint.",
+   "question": "Are empty node identifiers forbidden, or are flow endpoints represented by a separate tagged form?",
+   "options": [
+    "Forbid empty node_id",
+    "Use tagged node and flow endpoint variants",
+    "Allow empty node_id with another discriminator"
+   ],
+   "default_guess": "Forbid an empty node_id and represent flow endpoints explicitly in the edge model."
+  },
+  {
+   "subject": "Mapped value-output aggregation limits",
+   "kind": "missing execution rule",
+   "text": "A13 rule 6 creates one StoredValue containing all mapped value results, while A15 rule 4 says an oversized node-produced value concludes “the element” contract_violation; a mapped node has no aggregate NodeExecution and its last element may already have succeeded.",
+   "question": "What happens when individually valid mapped results form an aggregate array larger than stored_value_bytes_max, and which NodeExecution records that failure?",
+   "options": [
+    "Fail the last element and replace its result",
+    "Write a separate mapped-node aggregate record",
+    "Prevent mapping when the aggregate cannot fit",
+    "Fail the run without a NodeExecution"
+   ],
+   "default_guess": "Write an explicit aggregate failure record for the mapped node and discard the aggregate value."
+  },
+  {
+   "subject": "Element conclusion across multiple attempts",
+   "kind": "missing precedence rule",
+   "text": "A13 rule 7 says an element’s conclusion is “its NodeExecution’s status”, but an element can have several NodeExecutions after service_unreachable, not_sent, unknown resolution and resend; it does not identify which record controls the current conclusion.",
+   "question": "How is the current conclusion derived from an element’s ordered sequence of attempts and resolutions?",
+   "options": [
+    "Use the highest attempt_number only",
+    "Fold all attempts with an explicit state-transition table",
+    "Let any failed historical attempt permanently fail the element"
+   ],
+   "default_guess": "Use the highest attempt number, interpreting an outcome_unknown record together with its EffectAttempt resolution."
+  },
+  {
+   "subject": "Manifest structural validation",
+   "kind": "incomplete validation",
+   "text": "A08 rule 5 handles absent or invalid JSON and selected missing fields, but later rules assume capabilities, instances, exposed_as, required_headers, paths and idempotency_key have particular JSON types and shapes without defining refusals for other valid-JSON shapes.",
+   "question": "What complete manifest schema is validated, in what order, and how are malformed-but-valid-JSON field types classified?",
+   "options": [
+    "Define a complete manifest schema and ordered validation",
+    "Treat every unlisted shape as manifest mismatch with one generic reason",
+    "Permit coercion of compatible shapes"
+   ],
+   "default_guess": "Define a complete strict schema and classify the first schema violation as manifest mismatch."
+  },
+  {
+   "subject": "Manifest revision lookup",
+   "kind": "undefined external read",
+   "text": "M28 and A08 require reading `<manifest_location>/<service_id>.json` “at the configured manifest_revision”, but do not define how a revision is resolved, checked out, verified or associated with the bytes read.",
+   "question": "What exact mechanism maps manifest_location plus manifest_revision to immutable file bytes?",
+   "options": [
+    "Read through a version-control repository API",
+    "Require manifest_location to be an immutable revision directory",
+    "Ignore revision and read the working tree"
+   ],
+   "default_guess": "Require manifest_location to resolve to an immutable directory whose revision is verified at startup."
+  },
+  {
+   "subject": "Per-service credentials",
+   "kind": "contradiction",
+   "text": "A17 rule 1 says the configuration holds “per service, the selected manifest instance name and one credential”, while rule 2 explicitly defines behavior for “a service the installation gives no credential”.",
+   "question": "May a configured service omit a credential, and if so is omission accepted at startup or refused only when an invocation is built?",
+   "options": [
+    "Credential is optional and invocation fails pre-send",
+    "Every selected service must have a credential at startup",
+    "Manifest declares whether a credential is required"
+   ],
+   "default_guess": "Allow omission at startup and produce credential_unresolved only when that service is invoked."
+  },
+  {
+   "subject": "Credential file decoding",
+   "kind": "missing validation rule",
+   "text": "A17 rule 2 refuses a secret file whose value is empty or contains a control character, but does not define the file encoding, whether a final newline is stripped, or what happens for invalid UTF-8.",
+   "question": "How are credential-file bytes converted to an HTTP header value?",
+   "options": [
+    "Require exact nonempty UTF-8 with no trimming",
+    "Strip one line ending then validate UTF-8",
+    "Treat the secret as opaque header bytes"
+   ],
+   "default_guess": "Require UTF-8, strip one conventional trailing line ending, then reject empty values, controls and invalid header characters."
+  },
+  {
+   "subject": "Service base URL validity and joining",
+   "kind": "incomplete URL rule",
+   "text": "A08 accepts any absolute http or https URL with a host, while A09 forms the target by removing a trailing slash and appending the operation path; userinfo, query, fragment, unusual base paths and multiple trailing slashes are not addressed.",
+   "question": "Which URL components and canonical forms are allowed in api_base_url, and what exact joining rule applies?",
+   "options": [
+    "Allow only scheme, host, optional port and normalized base path",
+    "Allow all absolute URLs with standards-based resolution",
+    "Treat the base URL as literal text and append the path"
+   ],
+   "default_guess": "Reject userinfo, query and fragment, normalize only the explicitly permitted trailing slash, and append to a validated base path."
+  },
+  {
+   "subject": "Path-placeholder port cardinality",
+   "kind": "missing proposal check",
+   "text": "A09 rule 2 requires a placeholder’s schema type to be string or integer but does not require its port cardinality to be one; a many port always supplies a list and therefore can never be placed in the path.",
+   "question": "Must every input used by a path placeholder have cardinality one at binding proposal time?",
+   "options": [
+    "Require cardinality one",
+    "Use one placeholder segment per list element",
+    "Allow the proposal and fail each send"
+   ],
+   "default_guess": "Require cardinality one and refuse the binding proposal otherwise."
+  },
+  {
+   "subject": "Port names used in multipart headers",
+   "kind": "injection gap",
+   "text": "A09 constructs `Content-Disposition` parameters directly from port names, including `name=\"<port>\"` and `filename=\"<port>\"`, but no rule constrains or escapes quotes, backslashes, control characters or non-ASCII characters in port names.",
+   "question": "What port-name grammar or escaping algorithm makes multipart headers unambiguous and injection-safe?",
+   "options": [
+    "Restrict all port names to a safe identifier grammar",
+    "Apply a specified multipart quoted-string encoding",
+    "Use RFC 5987 extended parameters"
+   ],
+   "default_guess": "Restrict port names to a conservative ASCII identifier grammar when contracts and bindings are issued."
+  },
+  {
+   "subject": "Media-type syntax and comparison",
+   "kind": "undefined equality",
+   "text": "A02 requires a media type on file ports, A05 compares media types for equality, and A09 compares a response on type and subtype while ignoring parameters, but no rule defines valid media-type syntax, case normalization or whether declared parameters are allowed.",
+   "question": "What media types may be declared, how are they canonicalized, and what equality rule is used by proofs and HTTP validation?",
+   "options": [
+    "Require lowercase bare type/subtype",
+    "Allow parameters with a canonical parser",
+    "Treat declarations as opaque strings except for HTTP responses"
+   ],
+   "default_guess": "Require a valid bare type/subtype, canonicalize it to lowercase, and use that canonical value everywhere."
+  },
+  {
+   "subject": "Credentials in service error bodies and diagnostics",
+   "kind": "security contradiction",
+   "text": "A17 says a credential never enters a failure detail, log line or response, while A09 rule 7 stores an excerpt of an untrusted error body as failure_detail; a service can echo the credential or an HTTP client exception can include request headers.",
+   "question": "How must credentials be prevented from entering error excerpts, exceptions and logs?",
+   "options": [
+    "Redact exact resolved credential values before persistence or logging",
+    "Never retain service error bodies or transport exception text",
+    "Rely on services and HTTP libraries not to echo credentials"
+   ],
+   "default_guess": "Never log request headers and redact exact credential values from every diagnostic before it crosses the invoker boundary."
+  },
+  {
+   "subject": "Personal data in approval request previews",
+   "kind": "disclosure contradiction",
+   "text": "M24 and A10 say an approval preview includes the built request, including URL, query and JSON body, while A07 says an agent reading an approval receives personal data only as digest and class. Personal-data inputs can be embedded directly in that request representation.",
+   "question": "What redacted representation of a built request is returned to an agent so that personal data cannot leak indirectly through its URL, query, body or multipart description?",
+   "options": [
+    "Redact every request component derived from personal data",
+    "Return only request_digest and structural metadata to agents",
+    "Forbid agents from inspecting approvals containing personal data"
+   ],
+   "default_guess": "Return the request digest and a structural request description with every personal-data-derived component replaced by digest and class."
+  },
+  {
+   "subject": "HTTP failure-detail text encoding",
+   "kind": "undefined conversion",
+   "text": "A09 retains bytes from an arbitrary error response as failure_detail, M23 models failure_detail as bounded text, and A20 truncates it at a UTF-8 character boundary, but an error body need not be valid UTF-8.",
+   "question": "How are arbitrary response bytes decoded and truncated into failure_detail?",
+   "options": [
+    "Require valid UTF-8 or omit the detail",
+    "Decode UTF-8 with replacement",
+    "Store a bounded base64 or hexadecimal representation"
+   ],
+   "default_guess": "Decode as UTF-8 with replacement and truncate the resulting text at a character boundary."
+  },
+  {
+   "subject": "List continuation-token scope",
+   "kind": "missing authorization rule",
+   "text": "A16 rule 6 defines a continuation token only as the store position of the last item and rejects one naming no position, but does not bind it to the list operation, filters, actor or disclosure view that created it.",
+   "question": "Can a continuation token from one list or query be reused for another, and what request facts must the token authenticate?",
+   "options": [
+    "Bind it to operation, filters and actor/view",
+    "Bind it only to the list kind and filters",
+    "Allow any existing store position in any list"
+   ],
+   "default_guess": "Bind the token to the list operation, normalized filters and caller disclosure view, in addition to the store position."
+  },
+  {
+   "subject": "Token-list reread recovery",
+   "kind": "ambiguous state transition",
+   "text": "A16 rule 2 says an invalid reread discards the old list and refuses every request until a reread passes, but does not say whether the failed file hash becomes the “last read” hash or how a later restoration to identical earlier bytes triggers another parse.",
+   "question": "What state and hash are retained after a failed configuration reread, and exactly when is the file retried?",
+   "options": [
+    "Retry reading and parsing on every request while invalid",
+    "Store the invalid hash and retry only after bytes change",
+    "Keep the last valid hash but separately force retries"
+   ],
+   "default_guess": "Enter an invalid-configuration state and retry the full read and validation on every request until it succeeds."
+  },
+  {
+   "subject": "Release dependency closure",
+   "kind": "missing release data",
+   "text": "A20 says a release pins the exact versions of every kernel dependency and sandbox runtime, but release v1 specifies only “CPython 3.12” and no patch version, dependency list, versions or bubblewrap version.",
+   "question": "What exact runtime, bubblewrap and kernel dependency versions constitute release v1?",
+   "options": [
+    "List and hash every artifact in the design",
+    "Define a checked-in lockfile and runtime image as normative release data",
+    "Leave exact versions to the implementation build"
+   ],
+   "default_guess": "Make a checked-in lockfile plus hashed CPython runtime and bubblewrap build the normative release-v1 dependency set."
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"Function sandbox filesystem access\",\"kind\":\"contradiction\",\"text\":\"K-02 says a function has “no filesystem beyond its input”, while A03 rule 1 gives it a writable exchange directory and rule 4 permits opening paths inside both that directory and the read-only runtime.\",\"question\":\"May function code read runtime files or create/read arbitrary files in the exchange directory, or must filesystem access be limited to the files representing its declared inputs and outputs?\",\"options\":[\"Permit all access inside the exchange directory and runtime\",\"Permit only declared input/output files\",\"Expose no filesystem API to function code\"],\"default_guess\":\"Permit only declared input/output files in the exchange directory and deny user-code access to other runtime paths.\"},{\"subject\":\"Function determinism and absence of clock/randomness\",\"kind\":\"unverifiable invariant\",\"text\":\"A03 claims functions have no clock or randomness and requires identical output digests, but its closed trap list omits nondeterministic standard-library and runtime facilities such as other clock APIs, process/runtime observations, thread scheduling and cryptographic randomness exposed outside the named modules.\",\"question\":\"What complete enforceable boundary makes execution deterministic, and what is the required outcome when code uses an unlisted nondeterministic facility?\",\"options\":[\"Broaden syscall/runtime isolation to enforce determinism\",\"Expand the closed trap list to every permitted facility\",\"Drop the guarantee and treat repeatability as unverified\"],\"default_guess\":\"Enforce a syscall-level allowlist and classify any disallowed observation as sandbox_violation.\"},{\"subject\":\"Sandbox resource-limit outcome classification\",\"kind\":\"missing refusal rule\",\"text\":\"A03 rule 5 says “a limit hit” takes precedence and yields resource_exhausted, but does not define how a memory, process-count or scratch limit is recognized when Python catches the resulting exception or the operating system reports it as an ordinary failure.\",\"question\":\"What observable evidence constitutes each limit being hit, including when user code catches the error, and how is it distinguished from crashed?\",\"options\":[\"Externally monitor and record every limit event\",\"Classify specified OS signals and error codes as limit hits\",\"Classify only directly measured limits as resource_exhausted\"],\"default_guess\":\"Use external accounting or kernel-enforced events and let a recorded limit event win even if the code catches an exception.\"},{\"subject\":\"Authored TrialCase input and expected-output shape\",\"kind\":\"missing validation rule\",\"text\":\"A04 rule 1 requires that input values and expected outputs “fit” the contract ports, but does not say whether every input must be present, whether extra names are refused, or whether a present expected_outputs must contain every output port rather than a subset.\",\"question\":\"What exact key set is required for trial inputs and for a present expected_outputs object?\",\"options\":[\"Require exact input and output port sets\",\"Require exact inputs but allow partial expected outputs\",\"Allow partial inputs and outputs\"],\"default_guess\":\"Require exactly every input port and, when expected_outputs is present, exactly every output port, with no extra names.\"},{\"subject\":\"TrialExecution failure details\",\"kind\":\"model-rule contradiction\",\"text\":\"A03 rule 6 says the kernel keeps bounded exception type and message as failure_detail, and A07 rule 5 defines disclosure of a TrialExecution failure_detail, but M07 TrialExecution has no failure_detail field.\",\"question\":\"Do trial executions persist a failure detail, and if so what field and disclosure rules apply?\",\"options\":[\"Add bounded failure_detail to TrialExecution\",\"Discard all trial failure detail\",\"Store failure detail in a separate trace record\"],\"default_guess\":\"Add the same bounded failure_detail field and disclosure treatment used for NodeExecution.\"},{\"subject\":\"Flow node identifiers and flow endpoints\",\"kind\":\"ambiguous identity\",\"text\":\"A05 rule 2 represents a flow input or output endpoint with the empty string for ordering, but no rule forbids a FlowNode whose node_id is the empty string or explains how an edge structurally distinguishes that node from a flow endpoint.\",\"question\":\"Are empty node identifiers forbidden, or are flow endpoints represented by a separate tagged form?\",\"options\":[\"Forbid empty node_id\",\"Use tagged node and flow endpoint variants\",\"Allow empty node_id with another discriminator\"],\"default_guess\":\"Forbid an empty node_id and represent flow endpoints explicitly in the edge model.\"},{\"subject\":\"Mapped value-output aggregation limits\",\"kind\":\"missing execution rule\",\"text\":\"A13 rule 6 creates one StoredValue containing all mapped value results, while A15 rule 4 says an oversized node-produced value concludes “the element” contract_violation; a mapped node has no aggregate NodeExecution and its last element may already have succeeded.\",\"question\":\"What happens when individually valid mapped results form an aggregate array larger than stored_value_bytes_max, and which NodeExecution records that failure?\",\"options\":[\"Fail the last element and replace its result\",\"Write a separate mapped-node aggregate record\",\"Prevent mapping when the aggregate cannot fit\",\"Fail the run without a NodeExecution\"],\"default_guess\":\"Write an explicit aggregate failure record for the mapped node and discard the aggregate value.\"},{\"subject\":\"Element conclusion across multiple attempts\",\"kind\":\"missing precedence rule\",\"text\":\"A13 rule 7 says an element’s conclusion is “its NodeExecution’s status”, but an element can have several NodeExecutions after service_unreachable, not_sent, unknown resolution and resend; it does not identify which record controls the current conclusion.\",\"question\":\"How is the current conclusion derived from an element’s ordered sequence of attempts and resolutions?\",\"options\":[\"Use the highest attempt_number only\",\"Fold all attempts with an explicit state-transition table\",\"Let any failed historical attempt permanently fail the element\"],\"default_guess\":\"Use the highest attempt number, interpreting an outcome_unknown record together with its EffectAttempt resolution.\"},{\"subject\":\"Manifest structural validation\",\"kind\":\"incomplete validation\",\"text\":\"A08 rule 5 handles absent or invalid JSON and selected missing fields, but later rules assume capabilities, instances, exposed_as, required_headers, paths and idempotency_key have particular JSON types and shapes without defining refusals for other valid-JSON shapes.\",\"question\":\"What complete manifest schema is validated, in what order, and how are malformed-but-valid-JSON field types classified?\",\"options\":[\"Define a complete manifest schema and ordered validation\",\"Treat every unlisted shape as manifest mismatch with one generic reason\",\"Permit coercion of compatible shapes\"],\"default_guess\":\"Define a complete strict schema and classify the first schema violation as manifest mismatch.\"},{\"subject\":\"Manifest revision lookup\",\"kind\":\"undefined external read\",\"text\":\"M28 and A08 require reading `<manifest_location>/<service_id>.json` “at the configured manifest_revision”, but do not define how a revision is resolved, checked out, verified or associated with the bytes read.\",\"question\":\"What exact mechanism maps manifest_location plus manifest_revision to immutable file bytes?\",\"options\":[\"Read through a version-control repository API\",\"Require manifest_location to be an immutable revision directory\",\"Ignore revision and read the working tree\"],\"default_guess\":\"Require manifest_location to resolve to an immutable directory whose revision is verified at startup.\"},{\"subject\":\"Per-service credentials\",\"kind\":\"contradiction\",\"text\":\"A17 rule 1 says the configuration holds “per service, the selected manifest instance name and one credential”, while rule 2 explicitly defines behavior for “a service the installation gives no credential”.\",\"question\":\"May a configured service omit a credential, and if so is omission accepted at startup or refused only when an invocation is built?\",\"options\":[\"Credential is optional and invocation fails pre-send\",\"Every selected service must have a credential at startup\",\"Manifest declares whether a credential is required\"],\"default_guess\":\"Allow omission at startup and produce credential_unresolved only when that service is invoked.\"},{\"subject\":\"Credential file decoding\",\"kind\":\"missing validation rule\",\"text\":\"A17 rule 2 refuses a secret file whose value is empty or contains a control character, but does not define the file encoding, whether a final newline is stripped, or what happens for invalid UTF-8.\",\"question\":\"How are credential-file bytes converted to an HTTP header value?\",\"options\":[\"Require exact nonempty UTF-8 with no trimming\",\"Strip one line ending then validate UTF-8\",\"Treat the secret as opaque header bytes\"],\"default_guess\":\"Require UTF-8, strip one conventional trailing line ending, then reject empty values, controls and invalid header characters.\"},{\"subject\":\"Service base URL validity and joining\",\"kind\":\"incomplete URL rule\",\"text\":\"A08 accepts any absolute http or https URL with a host, while A09 forms the target by removing a trailing slash and appending the operation path; userinfo, query, fragment, unusual base paths and multiple trailing slashes are not addressed.\",\"question\":\"Which URL components and canonical forms are allowed in api_base_url, and what exact joining rule applies?\",\"options\":[\"Allow only scheme, host, optional port and normalized base path\",\"Allow all absolute URLs with standards-based resolution\",\"Treat the base URL as literal text and append the path\"],\"default_guess\":\"Reject userinfo, query and fragment, normalize only the explicitly permitted trailing slash, and append to a validated base path.\"},{\"subject\":\"Path-placeholder port cardinality\",\"kind\":\"missing proposal check\",\"text\":\"A09 rule 2 requires a placeholder’s schema type to be string or integer but does not require its port cardinality to be one; a many port always supplies a list and therefore can never be placed in the path.\",\"question\":\"Must every input used by a path placeholder have cardinality one at binding proposal time?\",\"options\":[\"Require cardinality one\",\"Use one placeholder segment per list element\",\"Allow the proposal and fail each send\"],\"default_guess\":\"Require cardinality one and refuse the binding proposal otherwise.\"},{\"subject\":\"Port names used in multipart headers\",\"kind\":\"injection gap\",\"text\":\"A09 constructs `Content-Disposition` parameters directly from port names, including `name=\\\"<port>\\\"` and `filename=\\\"<port>\\\"`, but no rule constrains or escapes quotes, backslashes, control characters or non-ASCII characters in port names.\",\"question\":\"What port-name grammar or escaping algorithm makes multipart headers unambiguous and injection-safe?\",\"options\":[\"Restrict all port names to a safe identifier grammar\",\"Apply a specified multipart quoted-string encoding\",\"Use RFC 5987 extended parameters\"],\"default_guess\":\"Restrict port names to a conservative ASCII identifier grammar when contracts and bindings are issued.\"},{\"subject\":\"Media-type syntax and comparison\",\"kind\":\"undefined equality\",\"text\":\"A02 requires a media type on file ports, A05 compares media types for equality, and A09 compares a response on type and subtype while ignoring parameters, but no rule defines valid media-type syntax, case normalization or whether declared parameters are allowed.\",\"question\":\"What media types may be declared, how are they canonicalized, and what equality rule is used by proofs and HTTP validation?\",\"options\":[\"Require lowercase bare type/subtype\",\"Allow parameters with a canonical parser\",\"Treat declarations as opaque strings except for HTTP responses\"],\"default_guess\":\"Require a valid bare type/subtype, canonicalize it to lowercase, and use that canonical value everywhere.\"},{\"subject\":\"Credentials in service error bodies and diagnostics\",\"kind\":\"security contradiction\",\"text\":\"A17 says a credential never enters a failure detail, log line or response, while A09 rule 7 stores an excerpt of an untrusted error body as failure_detail; a service can echo the credential or an HTTP client exception can include request headers.\",\"question\":\"How must credentials be prevented from entering error excerpts, exceptions and logs?\",\"options\":[\"Redact exact resolved credential values before persistence or logging\",\"Never retain service error bodies or transport exception text\",\"Rely on services and HTTP libraries not to echo credentials\"],\"default_guess\":\"Never log request headers and redact exact credential values from every diagnostic before it crosses the invoker boundary.\"},{\"subject\":\"Personal data in approval request previews\",\"kind\":\"disclosure contradiction\",\"text\":\"M24 and A10 say an approval preview includes the built request, including URL, query and JSON body, while A07 says an agent reading an approval receives personal data only as digest and class. Personal-data inputs can be embedded directly in that request representation.\",\"question\":\"What redacted representation of a built request is returned to an agent so that personal data cannot leak indirectly through its URL, query, body or multipart description?\",\"options\":[\"Redact every request component derived from personal data\",\"Return only request_digest and structural metadata to agents\",\"Forbid agents from inspecting approvals containing personal data\"],\"default_guess\":\"Return the request digest and a structural request description with every personal-data-derived component replaced by digest and class.\"},{\"subject\":\"HTTP failure-detail text encoding\",\"kind\":\"undefined conversion\",\"text\":\"A09 retains bytes from an arbitrary error response as failure_detail, M23 models failure_detail as bounded text, and A20 truncates it at a UTF-8 character boundary, but an error body need not be valid UTF-8.\",\"question\":\"How are arbitrary response bytes decoded and truncated into failure_detail?\",\"options\":[\"Require valid UTF-8 or omit the detail\",\"Decode UTF-8 with replacement\",\"Store a bounded base64 or hexadecimal representation\"],\"default_guess\":\"Decode as UTF-8 with replacement and truncate the resulting text at a character boundary.\"},{\"subject\":\"List continuation-token scope\",\"kind\":\"missing authorization rule\",\"text\":\"A16 rule 6 defines a continuation token only as the store position of the last item and rejects one naming no position, but does not bind it to the list operation, filters, actor or disclosure view that created it.\",\"question\":\"Can a continuation token from one list or query be reused for another, and what request facts must the token authenticate?\",\"options\":[\"Bind it to operation, filters and actor/view\",\"Bind it only to the list kind and filters\",\"Allow any existing store position in any list\"],\"default_guess\":\"Bind the token to the list operation, normalized filters and caller disclosure view, in addition to the store position.\"},{\"subject\":\"Token-list reread recovery\",\"kind\":\"ambiguous state transition\",\"text\":\"A16 rule 2 says an invalid reread discards the old list and refuses every request until a reread passes, but does not say whether the failed file hash becomes the “last read” hash or how a later restoration to identical earlier bytes triggers another parse.\",\"question\":\"What state and hash are retained after a failed configuration reread, and exactly when is the file retried?\",\"options\":[\"Retry reading and parsing on every request while invalid\",\"Store the invalid hash and retry only after bytes change\",\"Keep the last valid hash but separately force retries\"],\"default_guess\":\"Enter an invalid-configuration state and retry the full read and validation on every request until it succeeds.\"},{\"subject\":\"Release dependency closure\",\"kind\":\"missing release data\",\"text\":\"A20 says a release pins the exact versions of every kernel dependency and sandbox runtime, but release v1 specifies only “CPython 3.12” and no patch version, dependency list, versions or bubblewrap version.\",\"question\":\"What exact runtime, bubblewrap and kernel dependency versions constitute release v1?\",\"options\":[\"List and hash every artifact in the design\",\"Define a checked-in lockfile and runtime image as normative release data\",\"Leave exact versions to the implementation build\"],\"default_guess\":\"Make a checked-in lockfile plus hashed CPython runtime and bubblewrap build the normative release-v1 dependency set.\"}]}"
+}
