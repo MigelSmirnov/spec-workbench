@@ -186,7 +186,10 @@ per-agent ceilings.
    return one to an agent — run inputs and outputs, trial cases and executions,
    approval previews, trace records — it returns only the value's digest and class
    (K-14), and no `value_id`. The same holds for a `personal_data` file: an agent
-   gets its digest and class, and not its size, media type or spool facts. The
+   gets its digest and class, and not its size, media type or spool facts. An
+   approval preview's built request carries input values inside its path,
+   query, headers and body, so an agent gets no built request for a preview
+   any of whose inputs is `personal_data` — only the request's digest. The
    owner receives every value.
 5. The class of an execution is the highest class among the values and files its
    NodeExecution or TrialExecution names as inputs — a file list counting with

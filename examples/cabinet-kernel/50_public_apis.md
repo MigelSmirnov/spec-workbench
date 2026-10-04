@@ -66,7 +66,10 @@ Python signatures are State 6's.
   none of them and have no such refusal.
 - **Naming records.** A record with a minted or computed identity is named by
   it. A start-up operation passes the kernel as the Actor of the store changes
-  it makes. A NodeExecution and an EffectAttempt are named by (`run_id`,
+  it makes. Every other operation passes the request's actor, except where it
+  acts as the kernel (admission, the activation that follows it, the
+  activation of a read-only flow); the actor lands only in the by-fields of
+  the records written, and a record with none names no actor (M27). A NodeExecution and an EffectAttempt are named by (`run_id`,
   `node_id`, `map_index`, `attempt_number`); a SpooledFile as
   `read_spooled_file` says; an Activation or FlowActivation by its store
   position.
@@ -260,7 +263,9 @@ Records reach a caller as they are (State 3), with values resolved by
 StoredValue fixture or SpooledFile — as digest, size and media type, a spooled
 file's bytes only through `read_spooled_file` and a fixture's only through
 `read_fixture_file`. For an agent, every `personal_data` value
-or file is its digest and class only, with no `value_id` (A07 rule 4), and a
+or file is its digest and class only, with no `value_id` (A07 rule 4), an
+approval preview with any `personal_data` input carries no built request,
+only the approval's `request_digest` (A07 rule 4), and a
 classified `failure_detail` its length and class (A07 rule 5). A
 `map_index` is absent for an element of a node that is not mapped.
 Wherever an answer shows a spooled file — a trace record, an approval
