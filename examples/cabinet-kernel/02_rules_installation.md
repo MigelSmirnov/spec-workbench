@@ -74,11 +74,14 @@ Reuses cabinet-flow decisions 21 and 22, narrowed by K-11 and K-15.
    only in the sandbox (A03).
 6. Every list operation returns `page_size_default` items unless the caller asks
    for another size; a size above `page_size_max` or below 1 is refused, and so is
-   a continuation token that is malformed or names no position of that list. Items come
+   a continuation token that is malformed or names no record of that type. Items come
    newest first, in reverse store order (K-17). The continuation token is the
    store position of the last item returned; the next page starts below it, so a
-   record added meanwhile never shifts, repeats or hides an item. Paging never
-   changes what A07 lets the caller see.
+   record added meanwhile never shifts, repeats or hides an item. Each page
+   applies the filter to the records as they are at its own request: a record
+   whose filtered field (a status) changes between pages leaves or enters the
+   pages still to come, and the token stays valid when the record it names no
+   longer matches. Paging never changes what A07 lets the caller see.
 7. No response carries a token, a service credential, a host path or a stack
    trace, including on an internal error.
 

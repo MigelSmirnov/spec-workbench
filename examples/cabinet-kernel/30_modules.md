@@ -249,7 +249,7 @@ record checked by `design_lint --state 2`, recorded as such in `30_trace.json`.
   copy and the case's write can leave bytes no record names; they are never
   served and enter no case (A18 rule 4).
 - **Continuation tokens.** `surface` checks the token's form; whether it names
-  a position of that list is answered by `store.page_records`, which refuses
+  a record of that type is answered by `store.page_records`, which refuses
   one that does not (A16 rule 6).
 
 ## `models`

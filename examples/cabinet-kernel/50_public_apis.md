@@ -646,7 +646,7 @@ Takes the lock; removes temporary files only.
 ### Owner
 
 `module:store`. Page one record type in reverse store order under a caller filter, refusing a
-token that names no position.
+token that names no record of that type.
 
 ### Callers
 
@@ -669,11 +669,14 @@ None.
 ### Enforces
 
 A record added meanwhile never shifts, repeats or hides an item; the token is a
-store position (A16 rule 6).
+store position (A16 rule 6). The filter is applied as of each page's request:
+a record whose filtered field changed since an earlier page is judged by its
+value now, and the token stays valid when the record it names no longer
+matches.
 
 ### Errors
 
-`invalid_request` for a token that names no position of that list — a token is
+`invalid_request` for a token that names no record of that type — a token is
 bound to its record type and filter. Allowed fields and the number of
 conditions are checked by `surface` before the call.
 
