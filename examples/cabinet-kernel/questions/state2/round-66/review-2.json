@@ -1,0 +1,390 @@
+{
+ "open_points": [
+  {
+   "subject": "Function filesystem isolation",
+   "kind": "contradiction",
+   "text": "K-02 says a function has “no filesystem beyond its input”, while A03 rule 1 mounts a read-only runtime and a private exchange directory, and rule 4 permits opening any path inside either.",
+   "question": "May agent code read arbitrary runtime files and read or write arbitrary exchange-directory files, or may it access only the specific input and output artifacts exposed by the runner?",
+   "options": [
+    "Allow arbitrary access inside both mounted areas",
+    "Restrict access to designated input and output artifacts",
+    "Treat any non-runner filesystem access as a sandbox violation"
+   ],
+   "default_guess": "Restrict agent code to designated input and output artifacts while allowing imports from the runtime."
+  },
+  {
+   "subject": "Function clock prohibition",
+   "kind": "contradiction",
+   "text": "K-02 says functions have “no clock”, but A03 rule 4 defines a closed trap list that omits standard-library clock-related entry points such as `time.clock_gettime`, `time.thread_time`, `time.get_clock_info`, `os.times`, filesystem timestamps and resource-usage times.",
+   "question": "Does “no clock” forbid every observable time source, or only the entry points explicitly listed in A03 rule 4?",
+   "options": [
+    "Only the closed trap list is forbidden",
+    "Every wall, monotonic, CPU and filesystem time source is forbidden",
+    "Unlisted time sources are allowed but must not affect admission"
+   ],
+   "default_guess": "Enforce the broader no-clock invariant and refuse every accessible time source."
+  },
+  {
+   "subject": "Deterministic admission",
+   "kind": "unverifiable invariant",
+   "text": "K-05 calls admission “a deterministic verdict”, and A03 requires the same implementation and input to yield the same output digest, but the sandbox rules do not exclude all nondeterministic observations or scheduling effects available through Python and the operating system.",
+   "question": "What exact determinism guarantee must the sandbox enforce, and what happens when repeated executions of the same implementation and input disagree?",
+   "options": [
+    "Determinism is guaranteed and all nondeterministic facilities must be blocked",
+    "Determinism is assumed but not verified",
+    "Admission reruns cases and refuses implementations whose repetitions disagree"
+   ],
+   "default_guess": "Treat determinism as a required sandbox property and refuse an execution when a detectable nondeterministic facility is used."
+  },
+  {
+   "subject": "Sandbox resource accounting",
+   "kind": "undefined boundary",
+   "text": "A03 rule 5 says ResourceBounds are enforced with address-space and process limits and a parent wall deadline, but does not say whether interpreter startup, module loading, runner processes, input staging, output serialization and cleanup count against each bound.",
+   "question": "What interval and which processes and bytes count toward `wall_time_ms`, `memory_bytes`, `process_count`, `output_bytes` and `sandbox_scratch_bytes_max`?",
+   "options": [
+    "Count the complete environment lifecycle and every process",
+    "Count only the user `run` call and its children",
+    "Use different explicitly defined scopes for each bound"
+   ],
+   "default_guess": "Count the complete sandbox lifecycle, with the runner included in memory and scratch but excluded from the author’s process-count allowance."
+  },
+  {
+   "subject": "Sandbox input staging failure",
+   "kind": "missing outcome",
+   "text": "A03 gives the exchange directory a `sandbox_scratch_bytes_max` bound but does not say what record or outcome results when code, inputs or file fixtures cannot be staged before the implementation begins.",
+   "question": "Does a pre-execution exchange-directory overflow create a TrialExecution or NodeExecution, and which outcome does it receive?",
+   "options": [
+    "Record `resource_exhausted`",
+    "Record `crashed`",
+    "Refuse the enclosing request before an execution exists"
+   ],
+   "default_guess": "Create the execution record with `resource_exhausted`."
+  },
+  {
+   "subject": "Invalid implementation submission",
+   "kind": "contradiction",
+   "text": "State 0 says “invalid contract or code refused with the reason”, while A04 admits an implementation over its corpus and an empty corpus runs no execution, so syntactically invalid Python can be stored and refused only as `empty_corpus`.",
+   "question": "Must Python source be parsed or otherwise validated when submitted, even when the corpus is empty, and is invalid source retained as an Implementation?",
+   "options": [
+    "Reject invalid Python before storing it",
+    "Store it and let admission or trial report `crashed`",
+    "Store it but return a separate code-validation refusal"
+   ],
+   "default_guess": "Store immutable source, but parse it before admission and refuse syntactically invalid source without creating the Implementation."
+  },
+  {
+   "subject": "Trial-case port coverage",
+   "kind": "missing validation rule",
+   "text": "A04 rule 1 requires trial inputs and expected outputs to “fit” their ports but does not say whether inputs must contain exactly every input port, whether unknown ports are refused, or whether present expected outputs may be partial.",
+   "question": "What exact key sets are valid for `inputs` and for present `expected_outputs`?",
+   "options": [
+    "Both must exactly match all corresponding ports",
+    "Inputs must be exact but expected outputs may be partial",
+    "Missing optional-schema ports are allowed and unknown ports are refused"
+   ],
+   "default_guess": "Require inputs and present expected outputs to match their respective port sets exactly."
+  },
+  {
+   "subject": "Implementation admission transaction and recovery",
+   "kind": "missing crash rule",
+   "text": "A04 says submission runs all cases, writes TrialExecutions, decides a verdict and activates “at once, in the same request”, while K-17 and A18 require each change to be one store call and one transaction; no rule says what survives or resumes if the process stops between these changes.",
+   "question": "After a crash or store failure during admission, which of the Implementation, TrialExecutions, AdmissionVerdict and Activation may exist, and does resubmission reuse or rerun partial evidence?",
+   "options": [
+    "Publish all admission records atomically after every execution finishes",
+    "Keep completed TrialExecutions and rerun the whole admission on resubmission",
+    "Persist an admission-in-progress record and resume it"
+   ],
+   "default_guess": "Keep the Implementation, discard or ignore partial admission executions, and rerun the whole corpus on resubmission."
+  },
+  {
+   "subject": "NodeExecution identity",
+   "kind": "model contradiction",
+   "text": "M23 declares `Identity: value`, but its identity evidence says “an attempt's record is issued once” and A15 treats each record as one immutable occurrence; unlike other entities, it has no minted identifier.",
+   "question": "Is a NodeExecution a value identified by all of its facts, or an entity uniquely identified by `(run_id, node_id, map_index, attempt_number)`?",
+   "options": [
+    "Value identified by its complete content",
+    "Entity identified by the attempt tuple",
+    "Entity with a separately minted identifier"
+   ],
+   "default_guess": "Treat it as an entity identified by the attempt tuple."
+  },
+  {
+   "subject": "Draft-write activation authority",
+   "kind": "missing persisted fact",
+   "text": "M26 requires a draft-write EffectAttempt to name “the flow activation under which the run started”, but M19 pins only `flow_version_id` and implementations, not the FlowActivation record; the same version may be activated more than once.",
+   "question": "Where is the exact FlowActivation used to authorize a run persisted so it can be recovered after later activations or a restart?",
+   "options": [
+    "Add the FlowActivation position to Run",
+    "Derive the latest matching activation at run start and persist it only in each EffectAttempt",
+    "Use any activation of the pinned version"
+   ],
+   "default_guess": "Pin the exact FlowActivation position in the Run at creation."
+  },
+  {
+   "subject": "Mapped value element references",
+   "kind": "missing representation",
+   "text": "M23 requires each element's inputs and outputs to reference StoredValues by `value_id`, while M21 stores a `many` value as one JSON-array StoredValue and A13 does not say how an individual mapped element becomes a StoredValue.",
+   "question": "What does a mapped element's NodeExecution reference for the mapped input and its scalar outputs, especially when the source list came directly from a flow input or an unmapped node?",
+   "options": [
+    "Create a scalar StoredValue for each element",
+    "Reference the parent array plus `map_index`",
+    "Permit element references that are not StoredValues"
+   ],
+   "default_guess": "Create or reuse a scalar StoredValue for each mapped element and reference it by `value_id`."
+  },
+  {
+   "subject": "Guard value comparison",
+   "kind": "undefined equality",
+   "text": "A13 rule 4 says a guarded edge delivers when the guard port's value “equals” its guard value, without defining equality for JSON numbers, arrays or objects.",
+   "question": "What equality relation decides a guard—decoded JSON equality, schema-specific equality, or equality of canonical JSON bytes?",
+   "options": [
+    "Canonical JSON byte equality",
+    "Decoded JSON structural equality",
+    "Only scalar enum values are permitted as guards"
+   ],
+   "default_guess": "Use canonical JSON byte equality."
+  },
+  {
+   "subject": "Flow node identifiers",
+   "kind": "reserved-value gap",
+   "text": "A05 rule 2 assigns the empty string as the node identifier of a flow input or output endpoint, but no composition rule forbids a FlowNode whose `node_id` is the empty string.",
+   "question": "Is an empty `node_id` forbidden, or must endpoint kind always disambiguate it from the empty-string ordering sentinel?",
+   "options": [
+    "Forbid empty node identifiers",
+    "Allow them and compare endpoint kind separately",
+    "Replace the sentinel with a non-user value"
+   ],
+   "default_guess": "Forbid an empty `node_id` at composition."
+  },
+  {
+   "subject": "Flow-port schema validity",
+   "kind": "missing refusal condition",
+   "text": "A05 rule 7 rejects repeated names, file carriage and disclosure-class errors before keeping a version, but does not require a flow input or output schema to be in the supported JSON Schema subset.",
+   "question": "Are unsupported flow-port schemas malformed composition requests, proof failures, or accepted until run-time validation?",
+   "options": [
+    "Refuse composition before keeping the version",
+    "Keep the version and fail its proof",
+    "Allow them and defer behavior to runtime"
+   ],
+   "default_guess": "Refuse composition before keeping the version."
+  },
+  {
+   "subject": "Binding-port schema validity",
+   "kind": "missing refusal condition",
+   "text": "A08 rule 5 applies request-shape checks and names only selected A02 port rules, but does not clearly require every binding port's `value_schema` to belong to the supported schema subset.",
+   "question": "Must a binding proposal reject unsupported schemas, and where in rule 5's first-failure order does that check occur?",
+   "options": [
+    "Reject them with the other port-shape checks",
+    "Apply every A02 port rule to bindings",
+    "Allow any schema that exposes a usable top-level `type`"
+   ],
+   "default_guess": "Reject unsupported binding schemas during the port checks, before request-shape compatibility is evaluated."
+  },
+  {
+   "subject": "Port names in multipart headers",
+   "kind": "unsafe unspecified encoding",
+   "text": "A09 rule 2 inserts a port name verbatim into `Content-Disposition: form-data; name=\"<port>\"` and `filename=\"<port>\"`, while A02 places no syntax restriction on port names.",
+   "question": "Which port names are legal for multipart bindings, and how are quotes, backslashes, non-ASCII characters and control characters encoded or refused?",
+   "options": [
+    "Restrict multipart port names to a safe ASCII token grammar",
+    "Define quoted-string escaping and extended parameter encoding",
+    "Allow every bounded string verbatim"
+   ],
+   "default_guess": "Refuse multipart bindings whose relevant port names are not safe ASCII field names."
+  },
+  {
+   "subject": "Media types used as HTTP headers",
+   "kind": "missing validation rule",
+   "text": "A02 requires a file port to declare one `media_type`, and A09 writes it as a `Content-Type` header, but no rule defines valid media-type syntax or rejects control characters and parameters.",
+   "question": "What media-type grammar is accepted for a file port, and are parameters allowed?",
+   "options": [
+    "Require a parameter-free RFC media type",
+    "Allow valid media types with parameters",
+    "Treat media type as an arbitrary bounded string"
+   ],
+   "default_guess": "Require a parameter-free `type/subtype` media type with valid HTTP token components."
+  },
+  {
+   "subject": "Read-operation idempotency declaration",
+   "kind": "model contradiction",
+   "text": "A08 rule 4 says a read operation's `idempotency_key` “is not used and not checked”, while M10 and M11 require `idempotency_key_fields` to be a parsed field list copied from the manifest.",
+   "question": "If a read operation contains malformed or otherwise unparsable idempotency-key text, what value is stored in `idempotency_key_fields`?",
+   "options": [
+    "Ignore it and store an empty or absent field list",
+    "Parse its syntax but skip port validation",
+    "Reject the manifest entry"
+   ],
+   "default_guess": "Ignore it completely and store no key fields for a read binding."
+  },
+  {
+   "subject": "Missing idempotency_key field",
+   "kind": "missing manifest rule",
+   "text": "A08 says `idempotency_key: null` means none but does not say what happens when the capability entry omits `idempotency_key` altogether.",
+   "question": "Is an absent `idempotency_key` equivalent to `null`, or is it a manifest mismatch?",
+   "options": [
+    "Equivalent to `null`",
+    "Manifest mismatch for every operation",
+    "Manifest mismatch only for non-read operations"
+   ],
+   "default_guess": "Treat absence as a manifest mismatch because the manifest record is meant to declare the operation explicitly."
+  },
+  {
+   "subject": "Manifest record structure",
+   "kind": "incomplete refusal conditions",
+   "text": "A08 rule 5 covers an absent or invalid record and missing top-level fields, but does not define the result when `capabilities` has the wrong JSON type, a capability is not an object, its `name` is absent or non-string, or selected-instance fields have unexpected types.",
+   "question": "What complete structural conditions make a manifest operation readable, and where do their failures fall in rule 5's order?",
+   "options": [
+    "Validate against a closed manifest schema before the listed semantic checks",
+    "Treat every malformed nested field as the nearest listed missing or mismatch check",
+    "Permit unmentioned shapes and let later checks fail"
+   ],
+   "default_guess": "Validate a closed manifest schema first, with deterministic field and list ordering for the first error."
+  },
+  {
+   "subject": "Manifest revision access",
+   "kind": "undefined mechanism",
+   "text": "A08 requires reading `<manifest_location>/<service_id>.json` “at the configured `manifest_revision`”, but the texts do not define how a filesystem location is resolved at a repository revision or what happens when the revision is absent, invalid or cannot be checked out.",
+   "question": "How does the kernel read a file at `manifest_revision`, and which observable refusal or startup failure represents an unusable revision?",
+   "options": [
+    "Read through a pinned Git object without modifying a checkout",
+    "Require `manifest_location` already to contain exactly that revision",
+    "Delegate revision resolution to an external manifest provider"
+   ],
+   "default_guess": "Read the file directly from the configured Git commit object and refuse startup if the revision cannot be resolved."
+  },
+  {
+   "subject": "Service base URL",
+   "kind": "incomplete URL constraints",
+   "text": "A08 accepts an absolute `http` or `https` URL with a host, and A09 forms a URL from the base “without a trailing `/` followed by the declared path”; it does not address user information, an existing path, query, fragment, multiple trailing slashes, IPv6 authority formatting or percent-encoded path components.",
+   "question": "What exact `api_base_url` forms are valid and what exact join operation produces the request URL?",
+   "options": [
+    "Require a scheme-and-authority URL with no userinfo, query or fragment and a normalized optional base path",
+    "Require a bare origin with no path",
+    "Allow all absolute URLs and define a standards-based URL join"
+   ],
+   "default_guess": "Require a bare origin with no userinfo, query or fragment, and remove exactly the optional final slash before appending the declared path."
+  },
+  {
+   "subject": "Plain-HTTP loopback exception",
+   "kind": "ambiguous security check",
+   "text": "A09 rule 4 permits plain HTTP when the `api_base_url` “host is a loopback address” but does not say whether this means a literal loopback IP, a hostname that resolves to loopback, or every resolved address being loopback.",
+   "question": "How is the loopback exception determined, and is DNS re-resolution checked at connection time?",
+   "options": [
+    "Only literal loopback IP addresses qualify",
+    "A hostname qualifies if its selected address is loopback",
+    "A hostname qualifies only if every resolved address is loopback"
+   ],
+   "default_guess": "Allow the exception only for literal loopback IP addresses."
+  },
+  {
+   "subject": "JSON request Content-Type",
+   "kind": "missing request fact",
+   "text": "A09 defines JSON bodies for POST, PUT and PATCH and A10 says a request with a body includes `content-type`, but no rule states the value of that header for a non-multipart JSON request.",
+   "question": "What exact `Content-Type` value is sent and included in the approval request description for a JSON body?",
+   "options": [
+    "`application/json`",
+    "`application/json; charset=utf-8`",
+    "A value declared by the manifest"
+   ],
+   "default_guess": "Use `application/json` without parameters."
+  },
+  {
+   "subject": "Multipart approval exactness",
+   "kind": "contradiction",
+   "text": "State 0 decision 18 says approval covers the fully built request and “Any difference at send” asks again, while A10 rule 7 excludes the multipart boundary and hashes a logical list of parts so different wire bodies can have the same `request_digest`.",
+   "question": "Does a multipart approval cover the exact wire-level boundary and body bytes, or only the logical ordered parts described by A10?",
+   "options": [
+    "Cover exact wire headers and body bytes including the boundary",
+    "Cover logical parts and deliberately ignore boundary differences",
+    "Derive a deterministic boundary so both definitions coincide"
+   ],
+   "default_guess": "Derive a deterministic boundary from the logical request and include the resulting exact wire request in the digest."
+  },
+  {
+   "subject": "Credential-header collision startup check",
+   "kind": "undefined check scope",
+   "text": "A09 rule 1 says a credential header colliding with a required or kernel-set header “refuses to start”, but required headers belong to selected manifest instances and manifest records are otherwise read on demand at a configured revision.",
+   "question": "Which services and manifest records are read at startup to perform this collision check, and does an absent or malformed manifest prevent startup or merely make that service uninvocable?",
+   "options": [
+    "Check every selected service and fail startup on any unreadable record",
+    "Check only credential names against kernel-set names at startup and required headers at send time",
+    "Load a closed installation manifest snapshot at startup"
+   ],
+   "default_guess": "Check kernel-set collisions at startup and treat required-header collisions as a per-service pre-send failure."
+  },
+  {
+   "subject": "Token configuration re-read",
+   "kind": "ambiguous state transition",
+   "text": "A16 rule 2 compares the file bytes with “the last read”, re-reads when they differ or cannot be read, and discards the old token list when validation fails, but does not say whether failed bytes become the new comparison baseline or which read wins if the file changes between comparison and re-read.",
+   "question": "After an unreadable or invalid update, when and from which exact byte snapshot is validation retried, and when is the remembered digest updated?",
+   "options": [
+    "Read one snapshot per request and remember its digest even when invalid",
+    "Remember only the last valid digest so every request retries invalid content",
+    "Perform a second read and use only that second snapshot"
+   ],
+   "default_guess": "Use one atomic byte snapshot per request, remember only the last valid digest, and retry validation on every request until a valid snapshot appears."
+  },
+  {
+   "subject": "Agent identity across token replacement",
+   "kind": "identity gap",
+   "text": "M27 identifies an agent only by `agent_name`, and A16 forbids duplicate names only within the current configuration; nothing forbids removing a token and later assigning the same name to a different agent.",
+   "question": "Does reusing an agent name preserve the same Actor identity, or must historical agents remain distinguishable after token replacement?",
+   "options": [
+    "A name permanently denotes one agent identity",
+    "A reused name is intentionally the same Actor",
+    "Actor records also carry an immutable installation-assigned agent identifier"
+   ],
+   "default_guess": "Forbid reuse of an agent name for a different principal within one store."
+  },
+  {
+   "subject": "Data-directory privacy check",
+   "kind": "vague refusal condition",
+   "text": "A18 says the data directory and everything in it are “private to the kernel's user”, without defining required ownership, mode bits, ACL treatment, parent-directory requirements or behavior on platforms without Unix ownership semantics.",
+   "question": "What exact filesystem metadata must pass the privacy check?",
+   "options": [
+    "Owner must be the kernel user and group/other mode bits must be zero",
+    "Require exactly mode 0700 for directories and 0600 for files",
+    "Also reject permissive ACLs and unsafe parent directories"
+   ],
+   "default_guess": "Require kernel-user ownership, no group or other permissions, no granting ACL entries, and private directories."
+  },
+  {
+   "subject": "Bubblewrap dependency version",
+   "kind": "dependency contradiction",
+   "text": "A20 says one release fixes every dependency, but A03 only checks that host `bubblewrap` is present and a probe succeeds; no version or accepted behavior set is pinned.",
+   "question": "Is the bubblewrap version part of the release, subject to a minimum or allowlist, or accepted solely by the probe?",
+   "options": [
+    "Bundle and pin an exact bubblewrap version",
+    "Require an explicit compatible version range plus probes",
+    "Accept any version that passes the probe"
+   ],
+   "default_guess": "Pin and ship the exact bubblewrap version as part of the release."
+  },
+  {
+   "subject": "Purpose presence",
+   "kind": "undefined refusal condition",
+   "text": "A01 and the models require a purpose when a slot or flow is created but do not define whether an empty string or whitespace-only string counts as a purpose.",
+   "question": "What textual values satisfy the required-purpose check?",
+   "options": [
+    "Any present string, including empty",
+    "A non-empty UTF-8 string",
+    "A string containing at least one non-whitespace character"
+   ],
+   "default_guess": "Require at least one non-whitespace character."
+  },
+  {
+   "subject": "HTTP response Content-Type multiplicity",
+   "kind": "ambiguous parsing rule",
+   "text": "A09 says a file response with no `Content-Type` or “with two” is a contract violation, but HTTP libraries may expose repeated fields as separate fields or as one comma-joined value, and the rule does not define how either form is counted or parsed.",
+   "question": "How are repeated, comma-joined, malformed or parameterized `Content-Type` fields interpreted before media-type comparison?",
+   "options": [
+    "Require exactly one raw header field and parse one valid media type",
+    "Apply HTTP list-combination rules before parsing",
+    "Accept the client library's normalized single value"
+   ],
+   "default_guess": "Require exactly one raw `Content-Type` field containing one syntactically valid media type; ignore valid parameters only during type/subtype comparison."
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"Function filesystem isolation\",\"kind\":\"contradiction\",\"text\":\"K-02 says a function has “no filesystem beyond its input”, while A03 rule 1 mounts a read-only runtime and a private exchange directory, and rule 4 permits opening any path inside either.\",\"question\":\"May agent code read arbitrary runtime files and read or write arbitrary exchange-directory files, or may it access only the specific input and output artifacts exposed by the runner?\",\"options\":[\"Allow arbitrary access inside both mounted areas\",\"Restrict access to designated input and output artifacts\",\"Treat any non-runner filesystem access as a sandbox violation\"],\"default_guess\":\"Restrict agent code to designated input and output artifacts while allowing imports from the runtime.\"},{\"subject\":\"Function clock prohibition\",\"kind\":\"contradiction\",\"text\":\"K-02 says functions have “no clock”, but A03 rule 4 defines a closed trap list that omits standard-library clock-related entry points such as `time.clock_gettime`, `time.thread_time`, `time.get_clock_info`, `os.times`, filesystem timestamps and resource-usage times.\",\"question\":\"Does “no clock” forbid every observable time source, or only the entry points explicitly listed in A03 rule 4?\",\"options\":[\"Only the closed trap list is forbidden\",\"Every wall, monotonic, CPU and filesystem time source is forbidden\",\"Unlisted time sources are allowed but must not affect admission\"],\"default_guess\":\"Enforce the broader no-clock invariant and refuse every accessible time source.\"},{\"subject\":\"Deterministic admission\",\"kind\":\"unverifiable invariant\",\"text\":\"K-05 calls admission “a deterministic verdict”, and A03 requires the same implementation and input to yield the same output digest, but the sandbox rules do not exclude all nondeterministic observations or scheduling effects available through Python and the operating system.\",\"question\":\"What exact determinism guarantee must the sandbox enforce, and what happens when repeated executions of the same implementation and input disagree?\",\"options\":[\"Determinism is guaranteed and all nondeterministic facilities must be blocked\",\"Determinism is assumed but not verified\",\"Admission reruns cases and refuses implementations whose repetitions disagree\"],\"default_guess\":\"Treat determinism as a required sandbox property and refuse an execution when a detectable nondeterministic facility is used.\"},{\"subject\":\"Sandbox resource accounting\",\"kind\":\"undefined boundary\",\"text\":\"A03 rule 5 says ResourceBounds are enforced with address-space and process limits and a parent wall deadline, but does not say whether interpreter startup, module loading, runner processes, input staging, output serialization and cleanup count against each bound.\",\"question\":\"What interval and which processes and bytes count toward `wall_time_ms`, `memory_bytes`, `process_count`, `output_bytes` and `sandbox_scratch_bytes_max`?\",\"options\":[\"Count the complete environment lifecycle and every process\",\"Count only the user `run` call and its children\",\"Use different explicitly defined scopes for each bound\"],\"default_guess\":\"Count the complete sandbox lifecycle, with the runner included in memory and scratch but excluded from the author’s process-count allowance.\"},{\"subject\":\"Sandbox input staging failure\",\"kind\":\"missing outcome\",\"text\":\"A03 gives the exchange directory a `sandbox_scratch_bytes_max` bound but does not say what record or outcome results when code, inputs or file fixtures cannot be staged before the implementation begins.\",\"question\":\"Does a pre-execution exchange-directory overflow create a TrialExecution or NodeExecution, and which outcome does it receive?\",\"options\":[\"Record `resource_exhausted`\",\"Record `crashed`\",\"Refuse the enclosing request before an execution exists\"],\"default_guess\":\"Create the execution record with `resource_exhausted`.\"},{\"subject\":\"Invalid implementation submission\",\"kind\":\"contradiction\",\"text\":\"State 0 says “invalid contract or code refused with the reason”, while A04 admits an implementation over its corpus and an empty corpus runs no execution, so syntactically invalid Python can be stored and refused only as `empty_corpus`.\",\"question\":\"Must Python source be parsed or otherwise validated when submitted, even when the corpus is empty, and is invalid source retained as an Implementation?\",\"options\":[\"Reject invalid Python before storing it\",\"Store it and let admission or trial report `crashed`\",\"Store it but return a separate code-validation refusal\"],\"default_guess\":\"Store immutable source, but parse it before admission and refuse syntactically invalid source without creating the Implementation.\"},{\"subject\":\"Trial-case port coverage\",\"kind\":\"missing validation rule\",\"text\":\"A04 rule 1 requires trial inputs and expected outputs to “fit” their ports but does not say whether inputs must contain exactly every input port, whether unknown ports are refused, or whether present expected outputs may be partial.\",\"question\":\"What exact key sets are valid for `inputs` and for present `expected_outputs`?\",\"options\":[\"Both must exactly match all corresponding ports\",\"Inputs must be exact but expected outputs may be partial\",\"Missing optional-schema ports are allowed and unknown ports are refused\"],\"default_guess\":\"Require inputs and present expected outputs to match their respective port sets exactly.\"},{\"subject\":\"Implementation admission transaction and recovery\",\"kind\":\"missing crash rule\",\"text\":\"A04 says submission runs all cases, writes TrialExecutions, decides a verdict and activates “at once, in the same request”, while K-17 and A18 require each change to be one store call and one transaction; no rule says what survives or resumes if the process stops between these changes.\",\"question\":\"After a crash or store failure during admission, which of the Implementation, TrialExecutions, AdmissionVerdict and Activation may exist, and does resubmission reuse or rerun partial evidence?\",\"options\":[\"Publish all admission records atomically after every execution finishes\",\"Keep completed TrialExecutions and rerun the whole admission on resubmission\",\"Persist an admission-in-progress record and resume it\"],\"default_guess\":\"Keep the Implementation, discard or ignore partial admission executions, and rerun the whole corpus on resubmission.\"},{\"subject\":\"NodeExecution identity\",\"kind\":\"model contradiction\",\"text\":\"M23 declares `Identity: value`, but its identity evidence says “an attempt's record is issued once” and A15 treats each record as one immutable occurrence; unlike other entities, it has no minted identifier.\",\"question\":\"Is a NodeExecution a value identified by all of its facts, or an entity uniquely identified by `(run_id, node_id, map_index, attempt_number)`?\",\"options\":[\"Value identified by its complete content\",\"Entity identified by the attempt tuple\",\"Entity with a separately minted identifier\"],\"default_guess\":\"Treat it as an entity identified by the attempt tuple.\"},{\"subject\":\"Draft-write activation authority\",\"kind\":\"missing persisted fact\",\"text\":\"M26 requires a draft-write EffectAttempt to name “the flow activation under which the run started”, but M19 pins only `flow_version_id` and implementations, not the FlowActivation record; the same version may be activated more than once.\",\"question\":\"Where is the exact FlowActivation used to authorize a run persisted so it can be recovered after later activations or a restart?\",\"options\":[\"Add the FlowActivation position to Run\",\"Derive the latest matching activation at run start and persist it only in each EffectAttempt\",\"Use any activation of the pinned version\"],\"default_guess\":\"Pin the exact FlowActivation position in the Run at creation.\"},{\"subject\":\"Mapped value element references\",\"kind\":\"missing representation\",\"text\":\"M23 requires each element's inputs and outputs to reference StoredValues by `value_id`, while M21 stores a `many` value as one JSON-array StoredValue and A13 does not say how an individual mapped element becomes a StoredValue.\",\"question\":\"What does a mapped element's NodeExecution reference for the mapped input and its scalar outputs, especially when the source list came directly from a flow input or an unmapped node?\",\"options\":[\"Create a scalar StoredValue for each element\",\"Reference the parent array plus `map_index`\",\"Permit element references that are not StoredValues\"],\"default_guess\":\"Create or reuse a scalar StoredValue for each mapped element and reference it by `value_id`.\"},{\"subject\":\"Guard value comparison\",\"kind\":\"undefined equality\",\"text\":\"A13 rule 4 says a guarded edge delivers when the guard port's value “equals” its guard value, without defining equality for JSON numbers, arrays or objects.\",\"question\":\"What equality relation decides a guard—decoded JSON equality, schema-specific equality, or equality of canonical JSON bytes?\",\"options\":[\"Canonical JSON byte equality\",\"Decoded JSON structural equality\",\"Only scalar enum values are permitted as guards\"],\"default_guess\":\"Use canonical JSON byte equality.\"},{\"subject\":\"Flow node identifiers\",\"kind\":\"reserved-value gap\",\"text\":\"A05 rule 2 assigns the empty string as the node identifier of a flow input or output endpoint, but no composition rule forbids a FlowNode whose `node_id` is the empty string.\",\"question\":\"Is an empty `node_id` forbidden, or must endpoint kind always disambiguate it from the empty-string ordering sentinel?\",\"options\":[\"Forbid empty node identifiers\",\"Allow them and compare endpoint kind separately\",\"Replace the sentinel with a non-user value\"],\"default_guess\":\"Forbid an empty `node_id` at composition.\"},{\"subject\":\"Flow-port schema validity\",\"kind\":\"missing refusal condition\",\"text\":\"A05 rule 7 rejects repeated names, file carriage and disclosure-class errors before keeping a version, but does not require a flow input or output schema to be in the supported JSON Schema subset.\",\"question\":\"Are unsupported flow-port schemas malformed composition requests, proof failures, or accepted until run-time validation?\",\"options\":[\"Refuse composition before keeping the version\",\"Keep the version and fail its proof\",\"Allow them and defer behavior to runtime\"],\"default_guess\":\"Refuse composition before keeping the version.\"},{\"subject\":\"Binding-port schema validity\",\"kind\":\"missing refusal condition\",\"text\":\"A08 rule 5 applies request-shape checks and names only selected A02 port rules, but does not clearly require every binding port's `value_schema` to belong to the supported schema subset.\",\"question\":\"Must a binding proposal reject unsupported schemas, and where in rule 5's first-failure order does that check occur?\",\"options\":[\"Reject them with the other port-shape checks\",\"Apply every A02 port rule to bindings\",\"Allow any schema that exposes a usable top-level `type`\"],\"default_guess\":\"Reject unsupported binding schemas during the port checks, before request-shape compatibility is evaluated.\"},{\"subject\":\"Port names in multipart headers\",\"kind\":\"unsafe unspecified encoding\",\"text\":\"A09 rule 2 inserts a port name verbatim into `Content-Disposition: form-data; name=\\\"<port>\\\"` and `filename=\\\"<port>\\\"`, while A02 places no syntax restriction on port names.\",\"question\":\"Which port names are legal for multipart bindings, and how are quotes, backslashes, non-ASCII characters and control characters encoded or refused?\",\"options\":[\"Restrict multipart port names to a safe ASCII token grammar\",\"Define quoted-string escaping and extended parameter encoding\",\"Allow every bounded string verbatim\"],\"default_guess\":\"Refuse multipart bindings whose relevant port names are not safe ASCII field names.\"},{\"subject\":\"Media types used as HTTP headers\",\"kind\":\"missing validation rule\",\"text\":\"A02 requires a file port to declare one `media_type`, and A09 writes it as a `Content-Type` header, but no rule defines valid media-type syntax or rejects control characters and parameters.\",\"question\":\"What media-type grammar is accepted for a file port, and are parameters allowed?\",\"options\":[\"Require a parameter-free RFC media type\",\"Allow valid media types with parameters\",\"Treat media type as an arbitrary bounded string\"],\"default_guess\":\"Require a parameter-free `type/subtype` media type with valid HTTP token components.\"},{\"subject\":\"Read-operation idempotency declaration\",\"kind\":\"model contradiction\",\"text\":\"A08 rule 4 says a read operation's `idempotency_key` “is not used and not checked”, while M10 and M11 require `idempotency_key_fields` to be a parsed field list copied from the manifest.\",\"question\":\"If a read operation contains malformed or otherwise unparsable idempotency-key text, what value is stored in `idempotency_key_fields`?\",\"options\":[\"Ignore it and store an empty or absent field list\",\"Parse its syntax but skip port validation\",\"Reject the manifest entry\"],\"default_guess\":\"Ignore it completely and store no key fields for a read binding.\"},{\"subject\":\"Missing idempotency_key field\",\"kind\":\"missing manifest rule\",\"text\":\"A08 says `idempotency_key: null` means none but does not say what happens when the capability entry omits `idempotency_key` altogether.\",\"question\":\"Is an absent `idempotency_key` equivalent to `null`, or is it a manifest mismatch?\",\"options\":[\"Equivalent to `null`\",\"Manifest mismatch for every operation\",\"Manifest mismatch only for non-read operations\"],\"default_guess\":\"Treat absence as a manifest mismatch because the manifest record is meant to declare the operation explicitly.\"},{\"subject\":\"Manifest record structure\",\"kind\":\"incomplete refusal conditions\",\"text\":\"A08 rule 5 covers an absent or invalid record and missing top-level fields, but does not define the result when `capabilities` has the wrong JSON type, a capability is not an object, its `name` is absent or non-string, or selected-instance fields have unexpected types.\",\"question\":\"What complete structural conditions make a manifest operation readable, and where do their failures fall in rule 5's order?\",\"options\":[\"Validate against a closed manifest schema before the listed semantic checks\",\"Treat every malformed nested field as the nearest listed missing or mismatch check\",\"Permit unmentioned shapes and let later checks fail\"],\"default_guess\":\"Validate a closed manifest schema first, with deterministic field and list ordering for the first error.\"},{\"subject\":\"Manifest revision access\",\"kind\":\"undefined mechanism\",\"text\":\"A08 requires reading `<manifest_location>/<service_id>.json` “at the configured `manifest_revision`”, but the texts do not define how a filesystem location is resolved at a repository revision or what happens when the revision is absent, invalid or cannot be checked out.\",\"question\":\"How does the kernel read a file at `manifest_revision`, and which observable refusal or startup failure represents an unusable revision?\",\"options\":[\"Read through a pinned Git object without modifying a checkout\",\"Require `manifest_location` already to contain exactly that revision\",\"Delegate revision resolution to an external manifest provider\"],\"default_guess\":\"Read the file directly from the configured Git commit object and refuse startup if the revision cannot be resolved.\"},{\"subject\":\"Service base URL\",\"kind\":\"incomplete URL constraints\",\"text\":\"A08 accepts an absolute `http` or `https` URL with a host, and A09 forms a URL from the base “without a trailing `/` followed by the declared path”; it does not address user information, an existing path, query, fragment, multiple trailing slashes, IPv6 authority formatting or percent-encoded path components.\",\"question\":\"What exact `api_base_url` forms are valid and what exact join operation produces the request URL?\",\"options\":[\"Require a scheme-and-authority URL with no userinfo, query or fragment and a normalized optional base path\",\"Require a bare origin with no path\",\"Allow all absolute URLs and define a standards-based URL join\"],\"default_guess\":\"Require a bare origin with no userinfo, query or fragment, and remove exactly the optional final slash before appending the declared path.\"},{\"subject\":\"Plain-HTTP loopback exception\",\"kind\":\"ambiguous security check\",\"text\":\"A09 rule 4 permits plain HTTP when the `api_base_url` “host is a loopback address” but does not say whether this means a literal loopback IP, a hostname that resolves to loopback, or every resolved address being loopback.\",\"question\":\"How is the loopback exception determined, and is DNS re-resolution checked at connection time?\",\"options\":[\"Only literal loopback IP addresses qualify\",\"A hostname qualifies if its selected address is loopback\",\"A hostname qualifies only if every resolved address is loopback\"],\"default_guess\":\"Allow the exception only for literal loopback IP addresses.\"},{\"subject\":\"JSON request Content-Type\",\"kind\":\"missing request fact\",\"text\":\"A09 defines JSON bodies for POST, PUT and PATCH and A10 says a request with a body includes `content-type`, but no rule states the value of that header for a non-multipart JSON request.\",\"question\":\"What exact `Content-Type` value is sent and included in the approval request description for a JSON body?\",\"options\":[\"`application/json`\",\"`application/json; charset=utf-8`\",\"A value declared by the manifest\"],\"default_guess\":\"Use `application/json` without parameters.\"},{\"subject\":\"Multipart approval exactness\",\"kind\":\"contradiction\",\"text\":\"State 0 decision 18 says approval covers the fully built request and “Any difference at send” asks again, while A10 rule 7 excludes the multipart boundary and hashes a logical list of parts so different wire bodies can have the same `request_digest`.\",\"question\":\"Does a multipart approval cover the exact wire-level boundary and body bytes, or only the logical ordered parts described by A10?\",\"options\":[\"Cover exact wire headers and body bytes including the boundary\",\"Cover logical parts and deliberately ignore boundary differences\",\"Derive a deterministic boundary so both definitions coincide\"],\"default_guess\":\"Derive a deterministic boundary from the logical request and include the resulting exact wire request in the digest.\"},{\"subject\":\"Credential-header collision startup check\",\"kind\":\"undefined check scope\",\"text\":\"A09 rule 1 says a credential header colliding with a required or kernel-set header “refuses to start”, but required headers belong to selected manifest instances and manifest records are otherwise read on demand at a configured revision.\",\"question\":\"Which services and manifest records are read at startup to perform this collision check, and does an absent or malformed manifest prevent startup or merely make that service uninvocable?\",\"options\":[\"Check every selected service and fail startup on any unreadable record\",\"Check only credential names against kernel-set names at startup and required headers at send time\",\"Load a closed installation manifest snapshot at startup\"],\"default_guess\":\"Check kernel-set collisions at startup and treat required-header collisions as a per-service pre-send failure.\"},{\"subject\":\"Token configuration re-read\",\"kind\":\"ambiguous state transition\",\"text\":\"A16 rule 2 compares the file bytes with “the last read”, re-reads when they differ or cannot be read, and discards the old token list when validation fails, but does not say whether failed bytes become the new comparison baseline or which read wins if the file changes between comparison and re-read.\",\"question\":\"After an unreadable or invalid update, when and from which exact byte snapshot is validation retried, and when is the remembered digest updated?\",\"options\":[\"Read one snapshot per request and remember its digest even when invalid\",\"Remember only the last valid digest so every request retries invalid content\",\"Perform a second read and use only that second snapshot\"],\"default_guess\":\"Use one atomic byte snapshot per request, remember only the last valid digest, and retry validation on every request until a valid snapshot appears.\"},{\"subject\":\"Agent identity across token replacement\",\"kind\":\"identity gap\",\"text\":\"M27 identifies an agent only by `agent_name`, and A16 forbids duplicate names only within the current configuration; nothing forbids removing a token and later assigning the same name to a different agent.\",\"question\":\"Does reusing an agent name preserve the same Actor identity, or must historical agents remain distinguishable after token replacement?\",\"options\":[\"A name permanently denotes one agent identity\",\"A reused name is intentionally the same Actor\",\"Actor records also carry an immutable installation-assigned agent identifier\"],\"default_guess\":\"Forbid reuse of an agent name for a different principal within one store.\"},{\"subject\":\"Data-directory privacy check\",\"kind\":\"vague refusal condition\",\"text\":\"A18 says the data directory and everything in it are “private to the kernel's user”, without defining required ownership, mode bits, ACL treatment, parent-directory requirements or behavior on platforms without Unix ownership semantics.\",\"question\":\"What exact filesystem metadata must pass the privacy check?\",\"options\":[\"Owner must be the kernel user and group/other mode bits must be zero\",\"Require exactly mode 0700 for directories and 0600 for files\",\"Also reject permissive ACLs and unsafe parent directories\"],\"default_guess\":\"Require kernel-user ownership, no group or other permissions, no granting ACL entries, and private directories.\"},{\"subject\":\"Bubblewrap dependency version\",\"kind\":\"dependency contradiction\",\"text\":\"A20 says one release fixes every dependency, but A03 only checks that host `bubblewrap` is present and a probe succeeds; no version or accepted behavior set is pinned.\",\"question\":\"Is the bubblewrap version part of the release, subject to a minimum or allowlist, or accepted solely by the probe?\",\"options\":[\"Bundle and pin an exact bubblewrap version\",\"Require an explicit compatible version range plus probes\",\"Accept any version that passes the probe\"],\"default_guess\":\"Pin and ship the exact bubblewrap version as part of the release.\"},{\"subject\":\"Purpose presence\",\"kind\":\"undefined refusal condition\",\"text\":\"A01 and the models require a purpose when a slot or flow is created but do not define whether an empty string or whitespace-only string counts as a purpose.\",\"question\":\"What textual values satisfy the required-purpose check?\",\"options\":[\"Any present string, including empty\",\"A non-empty UTF-8 string\",\"A string containing at least one non-whitespace character\"],\"default_guess\":\"Require at least one non-whitespace character.\"},{\"subject\":\"HTTP response Content-Type multiplicity\",\"kind\":\"ambiguous parsing rule\",\"text\":\"A09 says a file response with no `Content-Type` or “with two” is a contract violation, but HTTP libraries may expose repeated fields as separate fields or as one comma-joined value, and the rule does not define how either form is counted or parsed.\",\"question\":\"How are repeated, comma-joined, malformed or parameterized `Content-Type` fields interpreted before media-type comparison?\",\"options\":[\"Require exactly one raw header field and parse one valid media type\",\"Apply HTTP list-combination rules before parsing\",\"Accept the client library's normalized single value\"],\"default_guess\":\"Require exactly one raw `Content-Type` field containing one syntactically valid media type; ignore valid parameters only during type/subtype comparison.\"}]}"
+}

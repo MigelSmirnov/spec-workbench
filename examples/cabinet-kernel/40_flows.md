@@ -478,7 +478,10 @@ records are the trace and the rest state.
   and input placement by `module:service_invoker`; both concluded
   `operation_failed` by `module:effects`. Send outcomes `operation_refused`,
   `operation_failed` (3xx), `contract_violation`: named by
-  `module:service_invoker`, recorded by `module:effects`.
+  `module:service_invoker`, recorded by `module:effects` — except a returned
+  file over the run's spool ceiling, which `module:effects` names
+  `contract_violation` itself when it spools the file, since
+  `module:service_invoker` never sees the spool (State 3).
   `service_unreachable` is a wait, not a failure (A13 rule 5).
 - A failed node stops only its dependants (`upstream_failed`); independent
   branches finish (K-09).

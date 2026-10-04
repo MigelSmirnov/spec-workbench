@@ -1,0 +1,178 @@
+{
+ "open_points": [
+  {
+   "subject": "sandbox filesystem access",
+   "kind": "contradiction",
+   "text": "K-02 says a function has `no filesystem beyond its input`; A03 allows opening paths inside `the exchange directory and the read-only runtime`.",
+   "question": "May agent-written code directly read or write the exchange directory or runtime, and if so, which paths and operations are allowed?",
+   "options": [
+    "deny user filesystem access and reserve the exchange directory for the runner",
+    "allow arbitrary access inside the bounded exchange directory and reads from the runtime",
+    "allow only designated input and output paths"
+   ],
+   "default_guess": "Allow access inside the bounded exchange directory and read-only runtime, following the more specific A03 rule."
+  },
+  {
+   "subject": "sandbox deterministic random generator",
+   "kind": "contradiction",
+   "text": "K-02 says a function has `no randomness`; A03 says `random.Random(seed) with an explicit seed stays usable`.",
+   "question": "Does `no randomness` prohibit deterministic pseudorandom generation, or only unseeded and nondeterministic sources?",
+   "options": [
+    "prohibit every pseudorandom API",
+    "allow only explicitly seeded deterministic generators",
+    "allow any generator after fixing a kernel seed"
+   ],
+   "default_guess": "Allow only explicitly seeded deterministic generators."
+  },
+  {
+   "subject": "trial value output above stored_value_bytes_max",
+   "kind": "missing outcome",
+   "text": "`sandbox.execute_function` says `stored_value_bytes_max ... are not the sandbox's`, while `record_trial_execution` writes `the StoredValues of its value outputs`; no rule says what happens when a successful trial output exceeds that storage ceiling.",
+   "question": "What TrialExecution outcome and persisted output result when a valid value output is within `output_bytes` but exceeds `stored_value_bytes_max`?",
+   "options": [
+    "record `contract_violation` with `value_too_large` and no output",
+    "record only its digest without a StoredValue",
+    "return `internal_error`",
+    "store the oversized value for trials"
+   ],
+   "default_guess": "Record `contract_violation` with `value_too_large` and no output."
+  },
+  {
+   "subject": "flow-version canonical ordering",
+   "kind": "nondeterministic identity",
+   "text": "A01 sorts edges only in `the edge order of A05` and constants only by `to_node`, `to_port`, but distinct guarded edges can have identical endpoints and multiple constants can target the same port before proof rejects them.",
+   "question": "What tie-breaker canonicalizes distinct edges or constants with the same stated sorting key, so submission order cannot change `flow_version_id` or the first proof item?",
+   "options": [
+    "compare the full canonical edge or constant after the stated key",
+    "preserve submitted order for tied items",
+    "refuse tied edges and constants during composition"
+   ],
+   "default_guess": "Use the full canonical edge or constant as a secondary code-point byte ordering key."
+  },
+  {
+   "subject": "canonical JSON duplicate-key rejection",
+   "kind": "boundary ambiguity",
+   "text": "`canonical_values.canonical_bytes` takes `One JSON value` but must refuse `a duplicate key`; an ordinary decoded JSON value no longer contains evidence that a duplicate key occurred.",
+   "question": "Which module receives the raw member sequence and detects duplicate object keys before decoding loses them?",
+   "options": [
+    "surface rejects duplicates while parsing raw JSON",
+    "canonical_values accepts raw JSON text or a pair-preserving representation",
+    "the protocol parser guarantees duplicate rejection"
+   ],
+   "default_guess": "Have the surface parser reject duplicates before constructing the JSON value passed to `canonical_bytes`."
+  },
+  {
+   "subject": "binding checks with duplicate port names",
+   "kind": "ambiguous check order",
+   "text": "A08 checks key fields and request shape before checking whether ports have `unique names per direction`, although those earlier checks refer to `the input port of that name`.",
+   "question": "How are key-field and request-shape checks evaluated when two proposed input ports have the same name, especially when their carriage or schemas differ?",
+   "options": [
+    "treat a non-unique lookup as failure of the earlier key or request-shape check",
+    "perform uniqueness before all name-based lookups despite the listed order",
+    "choose one duplicate by proposal order"
+   ],
+   "default_guess": "Treat a non-unique lookup as failure at the first earlier check that needs that name."
+  },
+  {
+   "subject": "store first-use initialization",
+   "kind": "missing lifecycle",
+   "text": "`store.open_store` says to `Take the exclusive lock, check the data directory and remove temporary files`, but does not say whether a missing directory, database, content area or spool is created or refused.",
+   "question": "What must already exist on first start, what does `open_store` create, and how are an empty or incompatible existing database handled?",
+   "options": [
+    "require a pre-created private directory but create the database and internal areas",
+    "create the directory and the entire store",
+    "require every store artifact to be provisioned externally",
+    "refuse an incompatible database with a specified start error"
+   ],
+   "default_guess": "Require an existing private data directory, create a new database and internal areas atomically when absent, and refuse an incompatible database."
+  },
+  {
+   "subject": "service base URL composition",
+   "kind": "underspecified request",
+   "text": "The URL is defined as `the api_base_url without a trailing / followed by the declared path`, while validation requires only `an absolute http or https URL with a host`.",
+   "question": "Are user information, query, fragment and arbitrary base-path components allowed, does `without a trailing /` remove one or all trailing slashes, and is the declared path concatenated literally or resolved using URL rules?",
+   "options": [
+    "restrict base URLs to scheme, authority and an optional path, strip all trailing slashes, then concatenate",
+    "apply RFC URL-reference resolution",
+    "concatenate literally after removing exactly one trailing slash"
+   ],
+   "default_guess": "Reject user information, query and fragment, preserve an optional base path, strip all trailing slashes, and concatenate the declared absolute path."
+  },
+  {
+   "subject": "plain-HTTP loopback exception",
+   "kind": "vague security boundary",
+   "text": "Plain HTTP is allowed when `api_base_url host is a loopback address`.",
+   "question": "Does this mean only a literal IP classified as loopback, a hostname such as `localhost`, or any hostname whose DNS result is loopback, and must every resolved address be loopback?",
+   "options": [
+    "literal loopback IP only",
+    "literal loopback IP or `localhost`",
+    "DNS resolution where every result is loopback",
+    "DNS resolution where any result is loopback"
+   ],
+   "default_guess": "Allow only a literal IPv4 or IPv6 address classified as loopback."
+  },
+  {
+   "subject": "HTTP response header ceiling",
+   "kind": "undefined size accounting",
+   "text": "`The status line and headers are read up to service_response_bytes_max bytes together`, without defining which wire bytes, delimiters or decoded representations count.",
+   "question": "How exactly is the status-line-and-header byte count calculated at the ceiling?",
+   "options": [
+    "raw received octets through the terminating empty line, including delimiters",
+    "decoded status and header name/value bytes without framing",
+    "the HTTP library's reported header size"
+   ],
+   "default_guess": "Count raw received octets from the status line through and including the terminating empty line."
+  },
+  {
+   "subject": "NodeExecution failure code and diagnostic text",
+   "kind": "model-output mismatch",
+   "text": "State 5 defines closed details such as `binding_stale`, `redirect_not_followed` and `value_too_large`, while M23 provides only one bounded `failure_detail`, and A09 also permits an error-response body excerpt as `failure_detail`.",
+   "question": "How does one NodeExecution represent both a stable machine-actionable detail code and optional diagnostic text, particularly for a read 3xx response that has `redirect_not_followed` and a response body?",
+   "options": [
+    "store only the closed detail code in `failure_detail`",
+    "add separate code and diagnostic fields",
+    "encode both in one specified structured value",
+    "prefer the body excerpt and omit the code"
+   ],
+   "default_guess": "Use the closed detail code as `failure_detail` whenever one is defined; otherwise use a bounded diagnostic excerpt."
+  },
+  {
+   "subject": "service failure_detail construction",
+   "kind": "undefined output",
+   "text": "`send_prepared_request` returns `a bounded failure_detail`, but the texts do not fix its presence or content for timeouts, resets, malformed responses, validation failures, 4xx, 5xx and successful outcomes.",
+   "question": "For each service outcome, is `failure_detail` absent, a fixed diagnostic, or an excerpt of particular response or transport data, and from which end is it truncated?",
+   "options": [
+    "define one fixed detail per transport or validation failure and use a prefix of error bodies",
+    "omit diagnostics except for the closed detail codes",
+    "always retain a bounded response or exception excerpt"
+   ],
+   "default_guess": "Use fixed non-sensitive diagnostics for transport and validation failures, a UTF-8 prefix of eligible error bodies, and no detail on success."
+  },
+  {
+   "subject": "credential value echoed by a service",
+   "kind": "contradiction",
+   "text": "A17 says a resolved credential value `never enters the store, a record, a trace, a preview, a failure detail, a log line, a process argument or a response`, while A09 permits storing service response values and an error-body excerpt from an untrusted service.",
+   "question": "Is the prohibition provenance-based, or must the kernel detect and suppress any service response bytes equal to or containing the credential value?",
+   "options": [
+    "treat the rule as provenance-based and do not content-scan service data",
+    "scan error details only and omit or redact credential occurrences",
+    "scan all service outputs and diagnostics and reject any credential occurrence"
+   ],
+   "default_guess": "Treat the rule as provenance-based, while never copying the configured credential itself into records or diagnostics."
+  },
+  {
+   "subject": "Observable effect declarations",
+   "kind": "contradiction",
+   "text": "`functions.try_implementation` says `Observable effect None` but has `State impact One record_trial_execution per case`; `effects.recover_in_flight_attempts` and `effects.resolve_unknown_outcome` likewise say `Observable effect None` while changing durable records.",
+   "question": "Does `Observable effect` exclude durable kernel-state changes, or are these declarations incorrect?",
+   "options": [
+    "define it as external non-store effects only",
+    "list durable record changes as observable effects",
+    "remove the field where State impact already defines the effect"
+   ],
+   "default_guess": "Interpret `Observable effect` as external non-store effects only, with `State impact` authoritative for durable changes."
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"sandbox filesystem access\",\"kind\":\"contradiction\",\"text\":\"K-02 says a function has `no filesystem beyond its input`; A03 allows opening paths inside `the exchange directory and the read-only runtime`.\",\"question\":\"May agent-written code directly read or write the exchange directory or runtime, and if so, which paths and operations are allowed?\",\"options\":[\"deny user filesystem access and reserve the exchange directory for the runner\",\"allow arbitrary access inside the bounded exchange directory and reads from the runtime\",\"allow only designated input and output paths\"],\"default_guess\":\"Allow access inside the bounded exchange directory and read-only runtime, following the more specific A03 rule.\"},{\"subject\":\"sandbox deterministic random generator\",\"kind\":\"contradiction\",\"text\":\"K-02 says a function has `no randomness`; A03 says `random.Random(seed) with an explicit seed stays usable`.\",\"question\":\"Does `no randomness` prohibit deterministic pseudorandom generation, or only unseeded and nondeterministic sources?\",\"options\":[\"prohibit every pseudorandom API\",\"allow only explicitly seeded deterministic generators\",\"allow any generator after fixing a kernel seed\"],\"default_guess\":\"Allow only explicitly seeded deterministic generators.\"},{\"subject\":\"trial value output above stored_value_bytes_max\",\"kind\":\"missing outcome\",\"text\":\"`sandbox.execute_function` says `stored_value_bytes_max ... are not the sandbox's`, while `record_trial_execution` writes `the StoredValues of its value outputs`; no rule says what happens when a successful trial output exceeds that storage ceiling.\",\"question\":\"What TrialExecution outcome and persisted output result when a valid value output is within `output_bytes` but exceeds `stored_value_bytes_max`?\",\"options\":[\"record `contract_violation` with `value_too_large` and no output\",\"record only its digest without a StoredValue\",\"return `internal_error`\",\"store the oversized value for trials\"],\"default_guess\":\"Record `contract_violation` with `value_too_large` and no output.\"},{\"subject\":\"flow-version canonical ordering\",\"kind\":\"nondeterministic identity\",\"text\":\"A01 sorts edges only in `the edge order of A05` and constants only by `to_node`, `to_port`, but distinct guarded edges can have identical endpoints and multiple constants can target the same port before proof rejects them.\",\"question\":\"What tie-breaker canonicalizes distinct edges or constants with the same stated sorting key, so submission order cannot change `flow_version_id` or the first proof item?\",\"options\":[\"compare the full canonical edge or constant after the stated key\",\"preserve submitted order for tied items\",\"refuse tied edges and constants during composition\"],\"default_guess\":\"Use the full canonical edge or constant as a secondary code-point byte ordering key.\"},{\"subject\":\"canonical JSON duplicate-key rejection\",\"kind\":\"boundary ambiguity\",\"text\":\"`canonical_values.canonical_bytes` takes `One JSON value` but must refuse `a duplicate key`; an ordinary decoded JSON value no longer contains evidence that a duplicate key occurred.\",\"question\":\"Which module receives the raw member sequence and detects duplicate object keys before decoding loses them?\",\"options\":[\"surface rejects duplicates while parsing raw JSON\",\"canonical_values accepts raw JSON text or a pair-preserving representation\",\"the protocol parser guarantees duplicate rejection\"],\"default_guess\":\"Have the surface parser reject duplicates before constructing the JSON value passed to `canonical_bytes`.\"},{\"subject\":\"binding checks with duplicate port names\",\"kind\":\"ambiguous check order\",\"text\":\"A08 checks key fields and request shape before checking whether ports have `unique names per direction`, although those earlier checks refer to `the input port of that name`.\",\"question\":\"How are key-field and request-shape checks evaluated when two proposed input ports have the same name, especially when their carriage or schemas differ?\",\"options\":[\"treat a non-unique lookup as failure of the earlier key or request-shape check\",\"perform uniqueness before all name-based lookups despite the listed order\",\"choose one duplicate by proposal order\"],\"default_guess\":\"Treat a non-unique lookup as failure at the first earlier check that needs that name.\"},{\"subject\":\"store first-use initialization\",\"kind\":\"missing lifecycle\",\"text\":\"`store.open_store` says to `Take the exclusive lock, check the data directory and remove temporary files`, but does not say whether a missing directory, database, content area or spool is created or refused.\",\"question\":\"What must already exist on first start, what does `open_store` create, and how are an empty or incompatible existing database handled?\",\"options\":[\"require a pre-created private directory but create the database and internal areas\",\"create the directory and the entire store\",\"require every store artifact to be provisioned externally\",\"refuse an incompatible database with a specified start error\"],\"default_guess\":\"Require an existing private data directory, create a new database and internal areas atomically when absent, and refuse an incompatible database.\"},{\"subject\":\"service base URL composition\",\"kind\":\"underspecified request\",\"text\":\"The URL is defined as `the api_base_url without a trailing / followed by the declared path`, while validation requires only `an absolute http or https URL with a host`.\",\"question\":\"Are user information, query, fragment and arbitrary base-path components allowed, does `without a trailing /` remove one or all trailing slashes, and is the declared path concatenated literally or resolved using URL rules?\",\"options\":[\"restrict base URLs to scheme, authority and an optional path, strip all trailing slashes, then concatenate\",\"apply RFC URL-reference resolution\",\"concatenate literally after removing exactly one trailing slash\"],\"default_guess\":\"Reject user information, query and fragment, preserve an optional base path, strip all trailing slashes, and concatenate the declared absolute path.\"},{\"subject\":\"plain-HTTP loopback exception\",\"kind\":\"vague security boundary\",\"text\":\"Plain HTTP is allowed when `api_base_url host is a loopback address`.\",\"question\":\"Does this mean only a literal IP classified as loopback, a hostname such as `localhost`, or any hostname whose DNS result is loopback, and must every resolved address be loopback?\",\"options\":[\"literal loopback IP only\",\"literal loopback IP or `localhost`\",\"DNS resolution where every result is loopback\",\"DNS resolution where any result is loopback\"],\"default_guess\":\"Allow only a literal IPv4 or IPv6 address classified as loopback.\"},{\"subject\":\"HTTP response header ceiling\",\"kind\":\"undefined size accounting\",\"text\":\"`The status line and headers are read up to service_response_bytes_max bytes together`, without defining which wire bytes, delimiters or decoded representations count.\",\"question\":\"How exactly is the status-line-and-header byte count calculated at the ceiling?\",\"options\":[\"raw received octets through the terminating empty line, including delimiters\",\"decoded status and header name/value bytes without framing\",\"the HTTP library's reported header size\"],\"default_guess\":\"Count raw received octets from the status line through and including the terminating empty line.\"},{\"subject\":\"NodeExecution failure code and diagnostic text\",\"kind\":\"model-output mismatch\",\"text\":\"State 5 defines closed details such as `binding_stale`, `redirect_not_followed` and `value_too_large`, while M23 provides only one bounded `failure_detail`, and A09 also permits an error-response body excerpt as `failure_detail`.\",\"question\":\"How does one NodeExecution represent both a stable machine-actionable detail code and optional diagnostic text, particularly for a read 3xx response that has `redirect_not_followed` and a response body?\",\"options\":[\"store only the closed detail code in `failure_detail`\",\"add separate code and diagnostic fields\",\"encode both in one specified structured value\",\"prefer the body excerpt and omit the code\"],\"default_guess\":\"Use the closed detail code as `failure_detail` whenever one is defined; otherwise use a bounded diagnostic excerpt.\"},{\"subject\":\"service failure_detail construction\",\"kind\":\"undefined output\",\"text\":\"`send_prepared_request` returns `a bounded failure_detail`, but the texts do not fix its presence or content for timeouts, resets, malformed responses, validation failures, 4xx, 5xx and successful outcomes.\",\"question\":\"For each service outcome, is `failure_detail` absent, a fixed diagnostic, or an excerpt of particular response or transport data, and from which end is it truncated?\",\"options\":[\"define one fixed detail per transport or validation failure and use a prefix of error bodies\",\"omit diagnostics except for the closed detail codes\",\"always retain a bounded response or exception excerpt\"],\"default_guess\":\"Use fixed non-sensitive diagnostics for transport and validation failures, a UTF-8 prefix of eligible error bodies, and no detail on success.\"},{\"subject\":\"credential value echoed by a service\",\"kind\":\"contradiction\",\"text\":\"A17 says a resolved credential value `never enters the store, a record, a trace, a preview, a failure detail, a log line, a process argument or a response`, while A09 permits storing service response values and an error-body excerpt from an untrusted service.\",\"question\":\"Is the prohibition provenance-based, or must the kernel detect and suppress any service response bytes equal to or containing the credential value?\",\"options\":[\"treat the rule as provenance-based and do not content-scan service data\",\"scan error details only and omit or redact credential occurrences\",\"scan all service outputs and diagnostics and reject any credential occurrence\"],\"default_guess\":\"Treat the rule as provenance-based, while never copying the configured credential itself into records or diagnostics.\"},{\"subject\":\"Observable effect declarations\",\"kind\":\"contradiction\",\"text\":\"`functions.try_implementation` says `Observable effect None` but has `State impact One record_trial_execution per case`; `effects.recover_in_flight_attempts` and `effects.resolve_unknown_outcome` likewise say `Observable effect None` while changing durable records.\",\"question\":\"Does `Observable effect` exclude durable kernel-state changes, or are these declarations incorrect?\",\"options\":[\"define it as external non-store effects only\",\"list durable record changes as observable effects\",\"remove the field where State impact already defines the effect\"],\"default_guess\":\"Interpret `Observable effect` as external non-store effects only, with `State impact` authoritative for durable changes.\"}]}"
+}
