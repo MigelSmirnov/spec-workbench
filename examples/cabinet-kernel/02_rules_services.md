@@ -163,7 +163,10 @@ outcomes map to NodeExecution statuses.
    accepted. A value that still does not fit at send time is a pre-send refusal
    (rule 6).
 3. The kernel asks for no content encoding (`Accept-Encoding: identity`); the
-   size counted is the response body's bytes after transfer decoding. A
+   size counted is the response body's bytes after transfer decoding. The
+   status line and headers are read up to `service_response_bytes_max` bytes
+   together; a longer header section is a malformed response (rule 5: may
+   have been sent, no valid final response). A
    response is used only when its status is 2xx, its size is within
    `service_response_bytes_max` and it arrived within `transport_timeout_ms`
    (A20). A binding with a `file` output has no other output port and that port

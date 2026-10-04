@@ -67,9 +67,10 @@ Python signatures are State 6's.
 - **Naming records.** A record with a minted or computed identity is named by
   it. A start-up operation passes the kernel as the Actor of the store changes
   it makes. Every other operation passes the request's actor, except where it
-  acts as the kernel (admission, the activation that follows it, the
-  activation of a read-only flow); the actor lands only in the by-fields of
-  the records written, and a record with none names no actor (M27). A NodeExecution and an EffectAttempt are named by (`run_id`,
+  acts as the kernel (admission and its trial executions, the activation that
+  follows it, the activation of a read-only flow); the actor lands only in the
+  by-fields of the records written — an explicit try's in the TrialExecution's
+  `executed_by` — and a record with none is the kernel's own work (M27). A NodeExecution and an EffectAttempt are named by (`run_id`,
   `node_id`, `map_index`, `attempt_number`); a SpooledFile as
   `read_spooled_file` says; an Activation or FlowActivation by its store
   position.

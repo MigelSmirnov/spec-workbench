@@ -326,7 +326,9 @@ Candidate fields:
   StoredValue — and for a `many` file port a list of such facts in output order,
   a repeated file kept as often as it occurs;
 - `resources_used`;
-- `executed_at`.
+- `executed_at`;
+- `executed_by` (K-15): the agent whose explicit try ran it, or `kernel` for
+  admission.
 
 ### Identity
 
@@ -1308,14 +1310,16 @@ Candidate fields:
 A record holds an actor only in its by-fields (`created_by`, `issued_by`,
 `started_by`, `decided_by` and the others its model names). Each is the actor
 of the request that performed the action the field names, except where the
-kernel acts on its own — an activation after admission, the activation of a
-proven read-only flow, start-up recovery — where it is `kernel`. A record with
-no by-field (AdmissionVerdict, TrialExecution, NodeExecution, EffectAttempt
-apart from its `resolved_by`, an EffectApproval until decided, StoredValue,
-SpooledFile) names no actor: it is the kernel's work, and the request that
-caused it is told by the record it hangs from — the run's `started_by` and
-resumptions, the approval's `decided_by`, the implementation's
-`submitted_by`. No actor is inferred from an effect's authority.
+kernel acts on its own — admission and its trial executions, an activation
+after admission, the activation of a proven read-only flow, start-up
+recovery — where it is `kernel`; an agent's explicit try records the agent in
+the TrialExecution's `executed_by`. A record with no by-field
+(AdmissionVerdict, NodeExecution, EffectAttempt apart from its `resolved_by`,
+an EffectApproval until decided, StoredValue, SpooledFile) is the kernel's own
+work, which is how K-15 tells it apart; the request that caused it is told by
+the record it hangs from — the run's `started_by` and resumptions, the
+approval's `decided_by`, the implementation's `submitted_by`. No actor is
+inferred from an effect's authority.
 
 ### Identity
 

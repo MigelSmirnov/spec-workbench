@@ -1,0 +1,210 @@
+{
+ "open_points": [
+  {
+   "subject": "Function sandbox filesystem access",
+   "kind": "contradiction",
+   "text": "K-02 says a function has \"no filesystem beyond its input\", while A03 gives the environment \"one private exchange directory\" and traps only paths \"outside the exchange directory and the read-only runtime\".",
+   "question": "May agent code itself read or write arbitrary paths in the exchange directory or read the runtime, or are those paths accessible only to the sandbox runner?",
+   "options": [
+    "Agent code may use the exchange directory as bounded scratch and read the runtime",
+    "Agent code may access only its declared file inputs and outputs",
+    "The runner may access those paths but agent code is denied"
+   ],
+   "default_guess": "Permit only runner-managed declared inputs and outputs; deny other filesystem access to agent code."
+  },
+  {
+   "subject": "Function determinism and admission",
+   "kind": "unverifiable invariant",
+   "text": "K-05 calls admission deterministic, A03 requires that the same implementation on the same input yield the same output digest twice, but A03 blocks only a closed list of clock and randomness entry points and otherwise exposes Python features that can vary between executions.",
+   "question": "What happens when permitted Python code produces different results for the same inputs, and how is such nondeterminism detected or refused?",
+   "options": [
+    "Admission uses the single observed execution and makes no reproducibility guarantee",
+    "Each case is repeated and disagreement refuses admission",
+    "The sandbox must eliminate or trap every remaining observable source of nondeterminism"
+   ],
+   "default_guess": "Repeat each case at least twice during admission and refuse differing outcomes as a sandbox violation."
+  },
+  {
+   "subject": "Admission across kernel releases",
+   "kind": "contradiction",
+   "text": "A04 reuses an existing verdict for the same implementation and corpus, while A20 allows a new release to change the pinned Python runtime and dependencies under which that implementation executes.",
+   "question": "Does an admission verdict remain valid after the sandbox runtime or dependencies change, or must the release/runtime identity participate in admission and activation?",
+   "options": [
+    "Old verdicts remain valid under the new runtime",
+    "A release change invalidates verdicts and requires readmission",
+    "Runs and implementations continue using the original release runtime"
+   ],
+   "default_guess": "Bind verdicts to the sandbox runtime identity and require readmission after it changes."
+  },
+  {
+   "subject": "Run pinning of flow activation",
+   "kind": "missing state",
+   "text": "M26 requires a draft-write attempt to name \"the flow activation under which the run started\", but M19 and A12 pin only the flow version and function implementations, not the FlowActivation record.",
+   "question": "How is the exact FlowActivation authority for a delayed or recovered draft-write send durably identified?",
+   "options": [
+    "Store the FlowActivation position on the Run",
+    "Infer the latest preceding activation from store order",
+    "Use whichever activation of that version is current when sending"
+   ],
+   "default_guess": "Store the exact FlowActivation position on the Run at creation."
+  },
+  {
+   "subject": "Rollback eligibility",
+   "kind": "vague condition",
+   "text": "A04 permits rollback to \"an earlier implementation\" but does not define whether earlier means earlier submission, an earlier activation, or simply any non-current implementation of the current contract version.",
+   "question": "Exactly which implementations are eligible for rollback?",
+   "options": [
+    "Any non-current implementation with a current-corpus admitted verdict",
+    "Only an implementation appearing earlier in activation history",
+    "Only an implementation submitted before the current implementation"
+   ],
+   "default_guess": "Allow any non-current implementation of the current contract version with an admitted verdict over the current corpus."
+  },
+  {
+   "subject": "Implementation submission and admission persistence",
+   "kind": "missing crash semantics",
+   "text": "A04 says submission runs the whole corpus and immediately records a verdict and activation, while A18 requires each change to be one store call and one transaction; no rule defines the durable boundaries around the external sandbox executions.",
+   "question": "After a crash partway through admission, which of the Implementation, TrialExecutions, AdmissionVerdict and Activation may exist, and how does resubmission continue?",
+   "options": [
+    "Persist each trial execution; retry performs a new complete admission",
+    "Keep all admission evidence, verdict and activation atomic and retain nothing on interruption",
+    "Persist the implementation first but discard incomplete admission executions"
+   ],
+   "default_guess": "Persist the implementation first, persist trial executions as observations, and on retry run a new complete admission before atomically recording its verdict and activation."
+  },
+  {
+   "subject": "Guard value comparison",
+   "kind": "undefined equality",
+   "text": "A13 says a guarded edge delivers when its guard port's value \"equals its guard value\", without defining equality for JSON values.",
+   "question": "Is guard equality based on canonical JSON bytes, JSON structural equality, or host-language equality, particularly for numeric forms such as 1 and 1.0?",
+   "options": [
+    "Equal canonical JSON bytes",
+    "JSON structural equality with numeric values compared mathematically",
+    "Python equality after decoding"
+   ],
+   "default_guess": "Compare canonical JSON bytes."
+  },
+  {
+   "subject": "Filtered list pagination",
+   "kind": "contradiction",
+   "text": "A16 says the continuation token is the position of the last item returned and the next page starts below it, but also says a record whose filtered status changes between pages \"leaves or enters the pages still to come\".",
+   "question": "What happens when a previously nonmatching record above the cursor changes status and begins matching before the next page?",
+   "options": [
+    "It is omitted because pagination never revisits positions above the cursor",
+    "It appears on a later page, requiring snapshot or different cursor semantics",
+    "Any status change invalidates the continuation token"
+   ],
+   "default_guess": "Use a snapshot for the whole pagination sequence so membership cannot change between pages."
+  },
+  {
+   "subject": "Token configuration reload",
+   "kind": "ambiguous recovery",
+   "text": "A16 compares the configuration bytes with \"the last read\" and says an invalid reread refuses every request \"until a re-read passes\", but does not say whether invalid bytes become the comparison baseline.",
+   "question": "If an invalid changed configuration remains byte-for-byte unchanged, is it parsed again on every request or skipped because its hash equals the last attempted read?",
+   "options": [
+    "Compare only with the last successfully accepted configuration hash",
+    "Retry parsing the invalid file on every request",
+    "Remember the invalid hash and retry only after its bytes change"
+   ],
+   "default_guess": "Keep the last successfully accepted hash and retry the invalid configuration on every request."
+  },
+  {
+   "subject": "Platform manifest validation",
+   "kind": "incomplete refusal conditions",
+   "text": "A08 lists selected missing and invalid manifest facts but does not define the accepted types, unknown-field policy or size/count bounds for the service record, capabilities, instances and required headers.",
+   "question": "How are wrong-typed fields, malformed capability entries, unknown fields, and oversized manifest structures classified and ordered during proposal, acceptance and send checks?",
+   "options": [
+    "Validate against a closed manifest schema with explicit bounds",
+    "Accept unknown fields and classify every unusable typed field as manifest mismatch",
+    "Rely on the manifest reader or JSON library's own validation and limits"
+   ],
+   "default_guess": "Validate against a closed, bounded manifest schema and report failures in an explicitly stated order."
+  },
+  {
+   "subject": "Read-operation idempotency declaration",
+   "kind": "undefined model value",
+   "text": "A08 says a read operation's idempotency key \"is not used and not checked\", while M10 and M11 require `idempotency_key_fields` to be read or copied from the manifest.",
+   "question": "What value is stored when a read operation has a malformed, non-string or otherwise unparsable `idempotency_key` entry?",
+   "options": [
+    "Ignore it and store no key fields for reads",
+    "Parse it but do not validate the named ports",
+    "Refuse malformed syntax even for reads"
+   ],
+   "default_guess": "Ignore the manifest field for reads and store no idempotency-key fields."
+  },
+  {
+   "subject": "Path-placeholder cardinality",
+   "kind": "missing validation",
+   "text": "A09 proposal validation requires a path placeholder's input schema type to be string or integer, but does not require cardinality `one`; at send time the value itself must be a non-null string or integer.",
+   "question": "May a `many` input port be used as a path placeholder, and if so how is its list represented?",
+   "options": [
+    "Refuse a `many` path-placeholder port at binding proposal",
+    "Allow it only when the runtime list contains one element",
+    "Encode the whole list into one path segment"
+   ],
+   "default_guess": "Require every path-placeholder input port to have cardinality `one`."
+  },
+  {
+   "subject": "Service base URL grammar and joining",
+   "kind": "undefined URL behavior",
+   "text": "A08 accepts any absolute HTTP or HTTPS URL with a host, while A09 joins it by removing a trailing slash and appending the declared path; no rule addresses base URLs containing a path, query, fragment, user information, or multiple trailing slashes.",
+   "question": "Which exact `api_base_url` forms are valid, and what exact URL results for each allowed form?",
+   "options": [
+    "Require scheme and authority only, with no path except optional `/`, query, fragment or user information",
+    "Allow a base path and append the operation path to it",
+    "Apply a standard URL-resolution algorithm"
+   ],
+   "default_guess": "Require an HTTP(S) scheme and authority only, allowing at most a single root slash and forbidding user information, query and fragment."
+  },
+  {
+   "subject": "HTTP response metadata bounds",
+   "kind": "missing resource limit",
+   "text": "A09 bounds the response body and timeout but gives no bound for the status line, header bytes, header count or individual header size, despite treating malformed status lines and headers as transport outcomes.",
+   "question": "What limits apply while reading response metadata, and how is exceeding one classified for read and non-read operations?",
+   "options": [
+    "Add fixed release ceilings and treat excess as no valid final response",
+    "Use the HTTP library's built-in limits and classifications",
+    "Leave response metadata unbounded"
+   ],
+   "default_guess": "Define release ceilings for total and individual response-header sizes and classify excess as no valid final response."
+  },
+  {
+   "subject": "Credential secrecy in service errors",
+   "kind": "contradiction",
+   "text": "A17 says a credential never enters a failure detail, while A09 stores an excerpt of an untrusted error-response body without specifying redaction; a service can echo the credential it received.",
+   "question": "How does the kernel prevent a service credential echoed in an error body from being persisted as `failure_detail`?",
+   "options": [
+    "Redact exact resolved credential values before persistence",
+    "Never persist bodies from authenticated service errors",
+    "Trust services not to echo credentials"
+   ],
+   "default_guess": "Do not persist error-response bodies from requests carrying credentials; retain only a bounded transport/status description."
+  },
+  {
+   "subject": "Data-directory privacy check",
+   "kind": "vague refusal condition",
+   "text": "A18 says the data directory and everything in it must be \"private to the kernel's user\" and the kernel refuses to start otherwise, without defining the accepted ownership and permission modes.",
+   "question": "Which owners, file types and permission bits pass the startup privacy check for the directory, database, value area, fixtures and spool?",
+   "options": [
+    "Require kernel-user ownership and no group/other permission on every entry",
+    "Require only that entries are not writable by group or others",
+    "Check only the top-level directory and rely on its permissions"
+   ],
+   "default_guess": "Require kernel-user ownership, directories mode 0700 or stricter, regular files mode 0600 or stricter, and reject every other file type."
+  },
+  {
+   "subject": "Spooled-file deduplication and deletion",
+   "kind": "contradiction",
+   "text": "A18 says the spool has one subdirectory per run and that \"Equal bytes are stored once\", while K-10 and A15 make spool bytes belong to one run and delete them independently when that run ends or is released.",
+   "question": "Are identical spooled files shared across runs or attempts, and if so how can one run's spool be deleted without affecting another run?",
+   "options": [
+    "Do not deduplicate run-spool bytes across runs",
+    "Use shared content blobs with durable reference counting and per-run references",
+    "Use filesystem hard links while treating each run entry independently"
+   ],
+   "default_guess": "Do not deduplicate temporary spool bytes across runs; restrict content deduplication to durable values and trial fixtures."
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"Function sandbox filesystem access\",\"kind\":\"contradiction\",\"text\":\"K-02 says a function has \\\"no filesystem beyond its input\\\", while A03 gives the environment \\\"one private exchange directory\\\" and traps only paths \\\"outside the exchange directory and the read-only runtime\\\".\",\"question\":\"May agent code itself read or write arbitrary paths in the exchange directory or read the runtime, or are those paths accessible only to the sandbox runner?\",\"options\":[\"Agent code may use the exchange directory as bounded scratch and read the runtime\",\"Agent code may access only its declared file inputs and outputs\",\"The runner may access those paths but agent code is denied\"],\"default_guess\":\"Permit only runner-managed declared inputs and outputs; deny other filesystem access to agent code.\"},{\"subject\":\"Function determinism and admission\",\"kind\":\"unverifiable invariant\",\"text\":\"K-05 calls admission deterministic, A03 requires that the same implementation on the same input yield the same output digest twice, but A03 blocks only a closed list of clock and randomness entry points and otherwise exposes Python features that can vary between executions.\",\"question\":\"What happens when permitted Python code produces different results for the same inputs, and how is such nondeterminism detected or refused?\",\"options\":[\"Admission uses the single observed execution and makes no reproducibility guarantee\",\"Each case is repeated and disagreement refuses admission\",\"The sandbox must eliminate or trap every remaining observable source of nondeterminism\"],\"default_guess\":\"Repeat each case at least twice during admission and refuse differing outcomes as a sandbox violation.\"},{\"subject\":\"Admission across kernel releases\",\"kind\":\"contradiction\",\"text\":\"A04 reuses an existing verdict for the same implementation and corpus, while A20 allows a new release to change the pinned Python runtime and dependencies under which that implementation executes.\",\"question\":\"Does an admission verdict remain valid after the sandbox runtime or dependencies change, or must the release/runtime identity participate in admission and activation?\",\"options\":[\"Old verdicts remain valid under the new runtime\",\"A release change invalidates verdicts and requires readmission\",\"Runs and implementations continue using the original release runtime\"],\"default_guess\":\"Bind verdicts to the sandbox runtime identity and require readmission after it changes.\"},{\"subject\":\"Run pinning of flow activation\",\"kind\":\"missing state\",\"text\":\"M26 requires a draft-write attempt to name \\\"the flow activation under which the run started\\\", but M19 and A12 pin only the flow version and function implementations, not the FlowActivation record.\",\"question\":\"How is the exact FlowActivation authority for a delayed or recovered draft-write send durably identified?\",\"options\":[\"Store the FlowActivation position on the Run\",\"Infer the latest preceding activation from store order\",\"Use whichever activation of that version is current when sending\"],\"default_guess\":\"Store the exact FlowActivation position on the Run at creation.\"},{\"subject\":\"Rollback eligibility\",\"kind\":\"vague condition\",\"text\":\"A04 permits rollback to \\\"an earlier implementation\\\" but does not define whether earlier means earlier submission, an earlier activation, or simply any non-current implementation of the current contract version.\",\"question\":\"Exactly which implementations are eligible for rollback?\",\"options\":[\"Any non-current implementation with a current-corpus admitted verdict\",\"Only an implementation appearing earlier in activation history\",\"Only an implementation submitted before the current implementation\"],\"default_guess\":\"Allow any non-current implementation of the current contract version with an admitted verdict over the current corpus.\"},{\"subject\":\"Implementation submission and admission persistence\",\"kind\":\"missing crash semantics\",\"text\":\"A04 says submission runs the whole corpus and immediately records a verdict and activation, while A18 requires each change to be one store call and one transaction; no rule defines the durable boundaries around the external sandbox executions.\",\"question\":\"After a crash partway through admission, which of the Implementation, TrialExecutions, AdmissionVerdict and Activation may exist, and how does resubmission continue?\",\"options\":[\"Persist each trial execution; retry performs a new complete admission\",\"Keep all admission evidence, verdict and activation atomic and retain nothing on interruption\",\"Persist the implementation first but discard incomplete admission executions\"],\"default_guess\":\"Persist the implementation first, persist trial executions as observations, and on retry run a new complete admission before atomically recording its verdict and activation.\"},{\"subject\":\"Guard value comparison\",\"kind\":\"undefined equality\",\"text\":\"A13 says a guarded edge delivers when its guard port's value \\\"equals its guard value\\\", without defining equality for JSON values.\",\"question\":\"Is guard equality based on canonical JSON bytes, JSON structural equality, or host-language equality, particularly for numeric forms such as 1 and 1.0?\",\"options\":[\"Equal canonical JSON bytes\",\"JSON structural equality with numeric values compared mathematically\",\"Python equality after decoding\"],\"default_guess\":\"Compare canonical JSON bytes.\"},{\"subject\":\"Filtered list pagination\",\"kind\":\"contradiction\",\"text\":\"A16 says the continuation token is the position of the last item returned and the next page starts below it, but also says a record whose filtered status changes between pages \\\"leaves or enters the pages still to come\\\".\",\"question\":\"What happens when a previously nonmatching record above the cursor changes status and begins matching before the next page?\",\"options\":[\"It is omitted because pagination never revisits positions above the cursor\",\"It appears on a later page, requiring snapshot or different cursor semantics\",\"Any status change invalidates the continuation token\"],\"default_guess\":\"Use a snapshot for the whole pagination sequence so membership cannot change between pages.\"},{\"subject\":\"Token configuration reload\",\"kind\":\"ambiguous recovery\",\"text\":\"A16 compares the configuration bytes with \\\"the last read\\\" and says an invalid reread refuses every request \\\"until a re-read passes\\\", but does not say whether invalid bytes become the comparison baseline.\",\"question\":\"If an invalid changed configuration remains byte-for-byte unchanged, is it parsed again on every request or skipped because its hash equals the last attempted read?\",\"options\":[\"Compare only with the last successfully accepted configuration hash\",\"Retry parsing the invalid file on every request\",\"Remember the invalid hash and retry only after its bytes change\"],\"default_guess\":\"Keep the last successfully accepted hash and retry the invalid configuration on every request.\"},{\"subject\":\"Platform manifest validation\",\"kind\":\"incomplete refusal conditions\",\"text\":\"A08 lists selected missing and invalid manifest facts but does not define the accepted types, unknown-field policy or size/count bounds for the service record, capabilities, instances and required headers.\",\"question\":\"How are wrong-typed fields, malformed capability entries, unknown fields, and oversized manifest structures classified and ordered during proposal, acceptance and send checks?\",\"options\":[\"Validate against a closed manifest schema with explicit bounds\",\"Accept unknown fields and classify every unusable typed field as manifest mismatch\",\"Rely on the manifest reader or JSON library's own validation and limits\"],\"default_guess\":\"Validate against a closed, bounded manifest schema and report failures in an explicitly stated order.\"},{\"subject\":\"Read-operation idempotency declaration\",\"kind\":\"undefined model value\",\"text\":\"A08 says a read operation's idempotency key \\\"is not used and not checked\\\", while M10 and M11 require `idempotency_key_fields` to be read or copied from the manifest.\",\"question\":\"What value is stored when a read operation has a malformed, non-string or otherwise unparsable `idempotency_key` entry?\",\"options\":[\"Ignore it and store no key fields for reads\",\"Parse it but do not validate the named ports\",\"Refuse malformed syntax even for reads\"],\"default_guess\":\"Ignore the manifest field for reads and store no idempotency-key fields.\"},{\"subject\":\"Path-placeholder cardinality\",\"kind\":\"missing validation\",\"text\":\"A09 proposal validation requires a path placeholder's input schema type to be string or integer, but does not require cardinality `one`; at send time the value itself must be a non-null string or integer.\",\"question\":\"May a `many` input port be used as a path placeholder, and if so how is its list represented?\",\"options\":[\"Refuse a `many` path-placeholder port at binding proposal\",\"Allow it only when the runtime list contains one element\",\"Encode the whole list into one path segment\"],\"default_guess\":\"Require every path-placeholder input port to have cardinality `one`.\"},{\"subject\":\"Service base URL grammar and joining\",\"kind\":\"undefined URL behavior\",\"text\":\"A08 accepts any absolute HTTP or HTTPS URL with a host, while A09 joins it by removing a trailing slash and appending the declared path; no rule addresses base URLs containing a path, query, fragment, user information, or multiple trailing slashes.\",\"question\":\"Which exact `api_base_url` forms are valid, and what exact URL results for each allowed form?\",\"options\":[\"Require scheme and authority only, with no path except optional `/`, query, fragment or user information\",\"Allow a base path and append the operation path to it\",\"Apply a standard URL-resolution algorithm\"],\"default_guess\":\"Require an HTTP(S) scheme and authority only, allowing at most a single root slash and forbidding user information, query and fragment.\"},{\"subject\":\"HTTP response metadata bounds\",\"kind\":\"missing resource limit\",\"text\":\"A09 bounds the response body and timeout but gives no bound for the status line, header bytes, header count or individual header size, despite treating malformed status lines and headers as transport outcomes.\",\"question\":\"What limits apply while reading response metadata, and how is exceeding one classified for read and non-read operations?\",\"options\":[\"Add fixed release ceilings and treat excess as no valid final response\",\"Use the HTTP library's built-in limits and classifications\",\"Leave response metadata unbounded\"],\"default_guess\":\"Define release ceilings for total and individual response-header sizes and classify excess as no valid final response.\"},{\"subject\":\"Credential secrecy in service errors\",\"kind\":\"contradiction\",\"text\":\"A17 says a credential never enters a failure detail, while A09 stores an excerpt of an untrusted error-response body without specifying redaction; a service can echo the credential it received.\",\"question\":\"How does the kernel prevent a service credential echoed in an error body from being persisted as `failure_detail`?\",\"options\":[\"Redact exact resolved credential values before persistence\",\"Never persist bodies from authenticated service errors\",\"Trust services not to echo credentials\"],\"default_guess\":\"Do not persist error-response bodies from requests carrying credentials; retain only a bounded transport/status description.\"},{\"subject\":\"Data-directory privacy check\",\"kind\":\"vague refusal condition\",\"text\":\"A18 says the data directory and everything in it must be \\\"private to the kernel's user\\\" and the kernel refuses to start otherwise, without defining the accepted ownership and permission modes.\",\"question\":\"Which owners, file types and permission bits pass the startup privacy check for the directory, database, value area, fixtures and spool?\",\"options\":[\"Require kernel-user ownership and no group/other permission on every entry\",\"Require only that entries are not writable by group or others\",\"Check only the top-level directory and rely on its permissions\"],\"default_guess\":\"Require kernel-user ownership, directories mode 0700 or stricter, regular files mode 0600 or stricter, and reject every other file type.\"},{\"subject\":\"Spooled-file deduplication and deletion\",\"kind\":\"contradiction\",\"text\":\"A18 says the spool has one subdirectory per run and that \\\"Equal bytes are stored once\\\", while K-10 and A15 make spool bytes belong to one run and delete them independently when that run ends or is released.\",\"question\":\"Are identical spooled files shared across runs or attempts, and if so how can one run's spool be deleted without affecting another run?\",\"options\":[\"Do not deduplicate run-spool bytes across runs\",\"Use shared content blobs with durable reference counting and per-run references\",\"Use filesystem hard links while treating each run entry independently\"],\"default_guess\":\"Do not deduplicate temporary spool bytes across runs; restrict content deduplication to durable values and trial fixtures.\"}]}"
+}

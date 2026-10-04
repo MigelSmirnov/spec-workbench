@@ -848,10 +848,16 @@ EffectAttempt M26 and the concluding NodeExecution M23 written by
 ### Steps
 
 1. `capability:surface.serve_kernel` calls, in this order, every step
-   required and stopping the start with its reason on the first failure:
+   required and stopping the start with its reason on the first failure — a
+   run spool that cannot be removed in step 7 is not a failure: it stays until
+   a later start removes it (A18 rule 4):
 2. `capability:installation.load_installation`: the file is a regular private
-   file of the kernel's user; tokens at least 43 characters and pairwise
-   distinct (A16 rule 1, A17 rule 1).
+   file of the kernel's user, one JSON object of the installation's fields; no
+   service twice among the selected instances or the credentials; every
+   credential header name an HTTP field-name token and every secret file
+   reference an absolute path; tokens at least 43 characters and pairwise
+   distinct; agent names pairwise distinct — in that order, the first failing
+   one named (A16 rule 1, A17 rule 1, M28).
 3. `capability:bindings.check_installed_instances`: no credential header has,
    case-insensitively, the name of a required header of its instance or of a
    header the kernel sets itself, `host` included (A09 rule    1). The services checked are those the installation holds a credential for, in
