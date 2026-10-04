@@ -26,6 +26,7 @@ from .provider import LATER_DIR, Provider
 SCHEMA = "spec_workbench_question_round.v2"
 DEFAULT_RUNS = 3
 REPEATED = 2
+PRECEDENT_ROUNDS = 3
 
 
 class QuestionRoundError(ValueError):
@@ -103,13 +104,42 @@ def _texts_at(case: Path, names: list[str], ref: str) -> dict[str, str]:
     return old
 
 
+def _round_number(path: Path) -> int:
+    part = path.parent.name.split("-")[1]
+    return int(part) if part.isdigit() else 0
+
+
+def _precedents(case: Path, state: int) -> list[dict[str, Any]]:
+    """The verified non-blocking judgements of the state's latest judged rounds,
+    newest first, one per topic. A judgement that itself followed a precedent
+    passes that precedent's kind and quotes on."""
+    rounds = sorted(rounds_dir(case, state).glob("round-*/summary.json"), key=_round_number)
+    found: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    judged = [json.loads(p.read_text(encoding="utf-8")) for p in rounds]
+    for summary in [s for s in judged if "judge" in s][-PRECEDENT_ROUNDS:][::-1]:
+        for topic in summary.get("topics", []):
+            judgement = topic.get("judgement") or {}
+            if not judgement.get("verified") or judgement.get("blocking") or topic["topic"] in seen:
+                continue
+            source = judgement.get("precedent") or judgement
+            seen.add(topic["topic"])
+            found.append({"id": f"P{len(found) + 1}", "round": source.get("round", summary["round"]),
+                          "topic": topic["topic"], "kind": source["kind"],
+                          "quotes": list(source.get("quotes") or []), "why": source.get("why", "")})
+    return found
+
+
 def _judge(provider: Provider, state: int, text: str, texts: list[tuple[int, str, str]],
            repeated: list[dict[str, Any]], old: dict[str, str] | None,
-           later: dict[str, str] | None = None) -> dict[str, Any]:
+           later: dict[str, str] | None = None,
+           precedents: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     """Judge the repeated topics. `later` maps the later states' documents to
     their texts; a provider that reads files gets them as files to search, so
     the judge can find a topic already decided below without receiving them
-    whole. Other providers judge without them."""
+    whole. Other providers judge without them. `precedents` are the state's
+    prior non-blocking judgements, which the judge may follow for the same
+    question on unchanged passages."""
     change = None
     if old is not None:
         change = "".join(
@@ -122,17 +152,19 @@ def _judge(provider: Provider, state: int, text: str, texts: list[tuple[int, str
         items.append({"id": topic["id"], "topic": topic["topic"], "points": topic.get("points", topic["questions"])})
     later = later if later and getattr(provider, "reads_files", False) else None
     later_files = [f"{LATER_DIR}/{name}" for name in sorted(later)] if later else None
-    instruction = prompts.judge_instruction(state, old is not None, later_files)
+    instruction = prompts.judge_instruction(state, old is not None, later_files, bool(precedents))
+    judge_text = prompts.judge_input(text, items, change, precedents)
     if later:
-        answer = provider.complete_with_files(instruction, prompts.judge_input(text, items, change), later)[0]
+        answer = provider.complete_with_files(instruction, judge_text, later)[0]
     else:
-        answer = provider.complete(instruction, prompts.judge_input(text, items, change))[0]
+        answer = provider.complete(instruction, judge_text)[0]
     judgements = {j.get("id"): j for j in _json_object(answer).get("judgements") or [] if isinstance(j, dict)}
     body = "\n\n".join(b for _, _, b in texts)
     old_body = None if old is None else "\n\n".join(old.values())
     for topic in repeated:
         topic["judgement"] = judge.check(judgements.get(topic["id"]), state, body, old_body,
-                                         "\n\n".join(later.values()) if later else None)
+                                         "\n\n".join(later.values()) if later else None,
+                                         {p["id"]: p for p in precedents or []})
     result = {"provider": provider.name, "raw": answer}
     if later:
         result["later_documents"] = {name: hashlib.sha256(body.encode("utf-8")).hexdigest()
@@ -168,7 +200,7 @@ def ask_round(case: Path, state: int, provider: Provider, runs: int = DEFAULT_RU
     repeated = [t for t in topics if len(t["runs"]) >= REPEATED]
     old = _texts_at(case, [name for _, name, _ in texts], since) if since else None
     later = {p.name: p.read_text(encoding="utf-8") for _, p in documents.later_documents(case, state)}
-    judged = (_judge(provider, state, text, texts, repeated, old, later) if repeated
+    judged = (_judge(provider, state, text, texts, repeated, old, later, _precedents(case, state)) if repeated
               else {"provider": provider.name})
     for topic in topics:
         topic.pop("points", None)

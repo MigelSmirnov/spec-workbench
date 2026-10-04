@@ -324,6 +324,56 @@ def test_codex_provider_with_files_offers_only_those_under_later(monkeypatch):
     assert "later/80_notes.md" in seen["prompt"] and "NOTE TEXT" not in seen["prompt"]
 
 
+def test_a_topic_judged_non_blocking_before_may_follow_that_judgement(tmp_path):
+    case = _case(tmp_path)
+    _repeated(case, {"kind": "answered", "quotes": ["## Model M01 — Thing"]})
+    summary, provider = _repeated(case, {"kind": "judged_before", "precedent": "P1"})
+    assert "=== PRIOR JUDGEMENTS" in provider.judged[0] and "P1 (round-01, answered): M01" in provider.judged[0]
+    judgement = summary["topics"][0]["judgement"]
+    assert judgement["verified"] is True and summary["clear"] is True
+    assert judgement["precedent"]["kind"] == "answered" and judgement["precedent"]["round"] == "round-01"
+
+
+def test_a_followed_precedent_passes_on_its_original_judgement(tmp_path):
+    case = _case(tmp_path)
+    _repeated(case, {"kind": "answered", "quotes": ["## Model M01 — Thing"]})
+    _repeated(case, {"kind": "judged_before", "precedent": "P1"})
+    _, provider = _repeated(case, {"kind": "judged_before", "precedent": "P1"})
+    assert "P1 (round-01, answered): M01" in provider.judged[0]
+
+
+def test_judged_before_needs_an_offered_precedent(tmp_path):
+    case = _case(tmp_path)
+    summary, provider = _repeated(case, {"kind": "judged_before", "precedent": "P1"})
+    assert "=== PRIOR JUDGEMENTS" not in provider.judged[0]
+    judgement = summary["topics"][0]["judgement"]
+    assert judgement["blocking"] is True and "prior judgements offered" in judgement["failure"]
+
+
+def test_a_blocking_judgement_is_no_precedent(tmp_path):
+    case = _case(tmp_path)
+    _repeated(case, {"kind": "consequential_gap", "divergence": "a or b; the owner notices"})
+    _, provider = _repeated(case, {"kind": "judged_before", "precedent": "P1"})
+    assert "=== PRIOR JUDGEMENTS" not in provider.judged[0]
+
+
+def test_a_precedent_whose_quoted_passage_changed_no_longer_holds(tmp_path):
+    case = _case(tmp_path)
+    _repeated(case, {"kind": "answered", "quotes": ["## Model M01 — Thing"]})
+    (case / "01_models.md").write_text("# State 1 — Demo models\n\n## Model M01 — Item\n", encoding="utf-8")
+    summary, _ = _repeated(case, {"kind": "judged_before", "precedent": "P1"})
+    judgement = summary["topics"][0]["judgement"]
+    assert judgement["blocking"] is True and "no longer found" in judgement["failure"]
+
+
+def test_precedents_come_from_the_latest_judged_rounds_only(tmp_path):
+    case = _case(tmp_path)
+    _repeated(case, {"kind": "answered", "quotes": ["## Model M01 — Thing"]})
+    for _ in range(service.PRECEDENT_ROUNDS):
+        _repeated(case, {"kind": "consequential_gap", "divergence": "a or b; the owner notices"})
+    assert service._precedents(case, 1) == []
+
+
 def test_codex_provider_asks_once_in_an_empty_directory_and_names_itself(monkeypatch):
     calls = []
 
