@@ -70,8 +70,9 @@ record checked by `design_lint --state 2`, recorded as such in `30_trace.json`.
   passes to `effects` the run's id, its pinned flow version and that the run has
   not ended, with every call about one of its elements — which is how a grant
   is checked against the pinned version (A10 rule 1) — and passes to
-  `functions.add_captured_trial_case` the pinned contract version and the
-  inputs of the record it captures, spooled files as their SpooledFiles;
+  `functions.add_captured_trial_case` the executed implementation and the
+  inputs of the record it captures, spooled files as their SpooledFiles, with
+  the contract version the caller named;
   `functions` copies those files' bytes after its checks and writes the
   file-carriage StoredValues for them (M21) and the TrialCase that names them.
 - **Inspection, traces and the repair view.** `surface`, which may know every
@@ -107,8 +108,9 @@ record checked by `design_lint --state 2`, recorded as such in `30_trace.json`.
   record — a function element that ran in the sandbox and did not succeed
   (M06) — and then the run and its spool (A15 rule 5); it then calls
   `functions.add_captured_trial_case` with the record's inputs as references,
-  spooled files as their SpooledFiles. `functions` checks that the record's
-  pinned contract version is the one named and the case's fit and sizes to it
+  spooled files as their SpooledFiles, and its executed implementation.
+  `functions` reads that implementation's own record, checks that its
+  contract version is the one named, and checks the case's fit and sizes to it
   on the values and the files' facts, and only then copies each spooled file's
   bytes into the content-addressed area through `store` and adds the case to
   the corpus (A04 rule 1, M06). A refused capture copies nothing.

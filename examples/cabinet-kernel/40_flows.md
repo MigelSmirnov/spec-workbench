@@ -743,8 +743,8 @@ case's identity.
 Crossing models: NodeExecution M23 of the failed element and Run M19 are read
 by `module:runs`; the spooled input files cross into the content-addressed
 area through `module:store` and become digests; from `module:runs` to
-`module:functions` the pinned contract version, the record's inputs and those
-digests; TrialCase M06 and its StoredValues M21 written by `module:functions`;
+`module:functions` the record's executed implementation, the contract version
+named, the record's inputs and those digests; TrialCase M06 and its StoredValues M21 written by `module:functions`;
 for the repair view, the slot's contract versions and implementations and a
 page of NodeExecutions cross into `module:surface`.
 
@@ -755,9 +755,10 @@ page of NodeExecutions cross into `module:surface`.
    order, the record — a function element that ran in the sandbox and did not
    succeed (M06) — then the run and its spool: not ended, or ended `failed` and
    not released (A15 rule 5). It calls `capability:functions.add_captured_trial_case`
-   with the pinned contract version and the record's inputs as references,
-   spooled files as their SpooledFiles. `module:functions` checks that the
-   record's contract version is the one named, fits each value with
+   with the record's executed implementation, the contract version named and
+   the record's inputs as references, spooled files as their SpooledFiles.
+   `module:functions` reads that implementation's own record and checks that
+   its contract version is the one named, fits each value with
    `capability:canonical_values.fit_port_value` and each file by its facts
    against `trial_fixture_bytes_max` (A04 rule 1), and only then copies each
    spooled file into the content-addressed area — read through

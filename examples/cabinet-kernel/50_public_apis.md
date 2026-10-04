@@ -1326,7 +1326,7 @@ corpus.
 
 ### Inputs
 
-The contract version the record pinned, the contract version named, the
+The implementation the record executed, the contract version named, the
 record's inputs as references — StoredValues, and spooled files as their
 SpooledFiles —, the source NodeExecution, the actor.
 
@@ -1340,7 +1340,8 @@ The case is in the corpus; the corpus digest changed when new.
 
 ### Enforces
 
-Pinned version equals the one named; fit of every value; every file within
+The executed implementation exists and its contract version, read from its own
+record, is the one named; fit of every value; every file within
 `trial_fixture_bytes_max` by its facts, read from its SpooledFile through
 `store.read_records`; all before any byte is copied — only
 then each spooled file is copied into the content-addressed area, so a refusal
