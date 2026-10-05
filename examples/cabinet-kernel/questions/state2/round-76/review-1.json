@@ -1,0 +1,292 @@
+{
+ "open_points": [
+  {
+   "subject": "K-02 and A03 sandbox randomness",
+   "kind": "contradiction",
+   "text": "K-02 says a function has \"no randomness\"; A03 rule 4 says \"random.Random(seed) with an explicit seed stays usable\".",
+   "question": "May function code use a seeded pseudorandom generator, or must every randomness API be forbidden?",
+   "options": [
+    "Forbid all randomness APIs, including explicitly seeded generators",
+    "Permit explicitly seeded pseudorandom generators as deterministic computation"
+   ],
+   "default_guess": "Permit explicitly seeded pseudorandom generators because A03 is the more specific rule."
+  },
+  {
+   "subject": "K-02 and A03 sandbox filesystem",
+   "kind": "contradiction",
+   "text": "K-02 says \"no filesystem beyond its input\"; A03 permits \"one private exchange directory\" and traps only paths \"outside the exchange directory and the read-only runtime\".",
+   "question": "May agent code freely create, read and modify files inside the exchange directory, or is that directory accessible only to the runner for transporting declared inputs and outputs?",
+   "options": [
+    "Allow agent code to use the exchange directory as bounded scratch space",
+    "Restrict agent code to declared file inputs and outputs; only the runner uses the directory"
+   ],
+   "default_guess": "Allow bounded scratch access because A03 explicitly permits opens inside the exchange directory."
+  },
+  {
+   "subject": "Determinism of function execution and admission",
+   "kind": "unverifiable invariant",
+   "text": "A03 requires \"The same implementation on the same input yields the same output digest twice\", but the permitted Python runtime still exposes process- or execution-dependent observations such as process identifiers, object identities and scheduling effects.",
+   "question": "How must the kernel make deterministic execution true for all admitted code, and what happens when equal executions produce different outputs?",
+   "options": [
+    "Further restrict or virtualize every nondeterministic runtime observation",
+    "Run executions more than once and refuse detected nondeterminism",
+    "Treat admission as a verdict only on the executions observed, without guaranteeing repeatability"
+   ],
+   "default_guess": "Treat admission as observational and refuse only failures actually seen, while not claiming universal determinism."
+  },
+  {
+   "subject": "Sandbox stdout and stderr",
+   "kind": "missing resource rule",
+   "text": "A03 says \"Nothing the code prints or raises is interpreted by the kernel\" and \"never stdout\", but `output_bytes` counts only returned value and file outputs.",
+   "question": "Where do stdout and stderr go, are their bytes bounded or counted, and which outcome results if code writes indefinitely?",
+   "options": [
+    "Discard both streams without buffering",
+    "Bound them separately and classify overflow as `resource_exhausted`",
+    "Count them within `output_bytes`"
+   ],
+   "default_guess": "Discard stdout and stderr without buffering so printing cannot block or consume unbounded parent memory."
+  },
+  {
+   "subject": "Cleanup failure during a request",
+   "kind": "missing observable outcome",
+   "text": "A03 rule 7 says cleanup failure records `crashed` with `cleanup_failed` and \"the kernel process stops\"; A04 says no admission verdict is recorded, but neither says what response the initiating request receives.",
+   "question": "What observable result does the caller receive when sandbox cleanup cannot be confirmed before the process stops?",
+   "options": [
+    "Return `internal_error`, then stop",
+    "Return the recorded failed execution, then stop",
+    "Terminate without a response and let the caller observe transport failure"
+   ],
+   "default_guess": "Return `internal_error` if a response can be sent, then stop."
+  },
+  {
+   "subject": "Non-canonical function output",
+   "kind": "missing outcome mapping",
+   "text": "A01 says a value JCS cannot represent \"is refused where it enters\"; A03 does not classify a returned Python value such as `NaN` that may satisfy a schema but cannot be encoded as canonical JSON.",
+   "question": "Which execution outcome applies when a function returns a value that cannot be represented by JCS?",
+   "options": [
+    "`contract_violation`",
+    "`crashed`",
+    "`resource_exhausted`"
+   ],
+   "default_guess": "Classify it as `contract_violation`."
+  },
+  {
+   "subject": "A05 disclosure phase on cyclic graphs",
+   "kind": "undefined proof calculation",
+   "text": "Disclosure is checked in phase 8, while cycles are not reported until phase 7, and A07 defines a function output as \"the highest class that can reach any of its inputs\".",
+   "question": "How is the reachable disclosure class computed for a cyclic graph, especially a closed cycle with no rooted flow input, constant or operation output?",
+   "options": [
+    "Compute a least fixed point, using `open` when no rooted class reaches the cycle",
+    "Compute a greatest fixed point",
+    "Detect the cycle internally and skip disclosure checks for that graph while still reporting it in phase 7"
+   ],
+   "default_guess": "Compute the least fixed point and use `open` for a cycle reached by no classified source."
+  },
+  {
+   "subject": "Disclosure through guards",
+   "kind": "missing information-flow rule",
+   "text": "A07 says \"No function, edge or flow construct lowers a class\", but A05/A07 do not say whether the class of a guard value taints the value delivered by the guarded edge or the visible `skipped_by_guard` result.",
+   "question": "When a personal-data guard controls an otherwise lower-class edge, what class applies to the delivered value and to guard-derived trace/output metadata visible to an agent?",
+   "options": [
+    "Join the guard's class into the delivered value and protect guard-derived metadata at that class",
+    "Keep only the data edge's class and expose ordinary skip metadata",
+    "Forbid guards whose class exceeds the guarded data's class"
+   ],
+   "default_guess": "Keep the data value's existing class and expose skip metadata, because no control-dependency taint rule is stated."
+  },
+  {
+   "subject": "A04 trial-case validation",
+   "kind": "conflicting check order",
+   "text": "A04 first orders \"input values fit\", then \"expected outputs ... fit\", then size limits, but immediately says that for one port the order is \"presence, carriage, schema, then size\".",
+   "question": "Is size checked per input port before expected outputs are validated, or only after all input and expected-output shape/schema checks, and where does file media-type validation occur?",
+   "options": [
+    "Validate each input port completely, including media type and size, then each expected-output port",
+    "Validate all input and expected-output presence/carriage/schema/media type first, then all sizes",
+    "Use the listed global groups but define a separate media-type phase"
+   ],
+   "default_guess": "Validate each input port completely in name order, then each expected-output port completely in name order."
+  },
+  {
+   "subject": "A18 private data directory",
+   "kind": "vague refusal condition",
+   "text": "A18 says \"The directory and everything in it are private to the kernel's user; the kernel refuses to start otherwise\" without defining `private`.",
+   "question": "Which ownership, permission, file-type and ancestor-directory conditions constitute a private data directory?",
+   "options": [
+    "Every entry must be owned by the kernel user and grant no permissions to group or others",
+    "Only the data-directory root must meet those ownership and mode conditions",
+    "Require the root conditions plus explicit allowed file types and safe ancestor permissions"
+   ],
+   "default_guess": "Require the root and every contained entry to be owned by the kernel user with no group or other permissions."
+  },
+  {
+   "subject": "Manifest location and revision",
+   "kind": "missing source-resolution rule",
+   "text": "M28 provides `manifest_location` and `manifest_revision`; A08 says the record is read from a path \"at the configured `manifest_revision`\" but never defines how that revision selects bytes.",
+   "question": "How does the kernel resolve a manifest file at a revision, and when is a missing or invalid repository/revision detected?",
+   "options": [
+    "Read the file directly from a Git object at the named revision",
+    "Require `manifest_location` to be an already checked-out immutable snapshot and verify its revision",
+    "Treat the revision as a subdirectory or snapshot identifier under the location"
+   ],
+   "default_guess": "Read the file from the Git object named by `manifest_revision` without changing the working tree."
+  },
+  {
+   "subject": "A20 ceilings across releases",
+   "kind": "missing upgrade rule",
+   "text": "A20 says new ceilings \"bind contract versions issued after it\" and explicitly preserves old contract resource bounds, but most listed ceilings do not belong to contract versions.",
+   "question": "After an upgrade lowers code, stored-value, fixture, spool, response, request or text ceilings, which limits govern existing implementations, cases, constants, flows and newly started runs using them?",
+   "options": [
+    "The new release limits every future operation except execution under an old contract's four resource bounds",
+    "Each persisted artifact retains every ceiling in force when it was created",
+    "Refuse startup or use of any existing artifact exceeding a new ceiling"
+   ],
+   "default_guess": "Apply current operational ceilings to future requests and runs, except that old contracts retain their four recorded execution bounds."
+  },
+  {
+   "subject": "A13 retries of waiting elements",
+   "kind": "contradiction",
+   "text": "A13 rule 2 says \"a concluded element is never executed again\"; A09, A11 and A14 write a NodeExecution for `service_unreachable` or `outcome_unknown` and later resend that same element.",
+   "question": "Which NodeExecution statuses conclude the element permanently, and which conclude only an attempt while leaving the element retryable?",
+   "options": [
+    "Treat `service_unreachable` and unresolved or resolved-`not_applied` `outcome_unknown` as retryable attempt conclusions",
+    "Treat any NodeExecution as permanent and model a resend as a new element",
+    "Use a separate explicit element-conclusion state distinct from attempt records"
+   ],
+   "default_guess": "Treat waiting statuses as conclusions of attempts, not permanent conclusions of the element."
+  },
+  {
+   "subject": "Mapped-node aggregate output failure",
+   "kind": "missing atomicity and order",
+   "text": "A13 says a mapped value list is written \"when the list is first delivered\", only delivered outputs are measured, and an oversized list fails the mapped node, but it gives no delivery order or atomicity for several outputs and consumers.",
+   "question": "If a mapped node has several used outputs and one aggregate exceeds `stored_value_bytes_max`, can another output already be delivered or consumed, and in what order are aggregate outputs checked?",
+   "options": [
+    "Build and validate all used aggregates atomically in output-port order; deliver none if any fails",
+    "Validate and deliver edge by edge, preserving earlier deliveries",
+    "Validate each aggregate on first consumer access but prevent all dependants from running until every used aggregate passes"
+   ],
+   "default_guess": "Validate all used aggregate outputs atomically in output-port name order and deliver none if any is oversized."
+  },
+  {
+   "subject": "Read-operation idempotency declaration",
+   "kind": "undefined manifest input",
+   "text": "A08 says `null` means none and \"otherwise the text split on `+`\"; for a read it copies the split parts \"whatever those parts are\" and does not check their syntax.",
+   "question": "What happens when a read operation's non-null `idempotency_key` is not a string, and are empty or repeated split parts retained exactly?",
+   "options": [
+    "Require only `null` or a string for reads, while retaining any string's trimmed parts including empty or repeated ones",
+    "Ignore the field entirely for reads regardless of its JSON type",
+    "Apply the same syntax validation as non-read operations"
+   ],
+   "default_guess": "Require `null` or a string, but perform no further syntax or uniqueness checks for a read."
+  },
+  {
+   "subject": "OperationBinding port schemas",
+   "kind": "missing refusal condition",
+   "text": "M01 says `value_schema` is \"written in the subset of JSON Schema the kernel supports\"; A08's exhaustive proposal checks mention only unique names, media types and disclosure classes from the contract-port rules, not supported-schema validation.",
+   "question": "Must binding input and output schemas belong to the supported JSON Schema subset, and where does that check occur in the proposal's first-failure order?",
+   "options": [
+    "Apply the same supported-schema check as contracts during proposal validation",
+    "Allow arbitrary schemas on bindings",
+    "Validate only the schema features A09 needs for HTTP placement"
+   ],
+   "default_guess": "Apply the same supported-schema validation as contracts, after media-type checks and before disclosure-class checks."
+  },
+  {
+   "subject": "HTTP placement versus port cardinality",
+   "kind": "missing compatibility rule",
+   "text": "A09 validates path and query placement using the port schema's `type`, while M01/M21 make a `many` port's delivered value an array whose items use that schema.",
+   "question": "Which cardinality/schema combinations are legal for path placeholders and query parameters, including a `many` path port or a `many` port whose element schema is itself an array?",
+   "options": [
+    "Path placeholders require cardinality `one`; query encoding validates the effective delivered shape and allows only one array level of scalar values",
+    "Ignore cardinality at proposal time and let unplaceable values fail pre-send",
+    "Forbid every `many` input on GET and DELETE"
+   ],
+   "default_guess": "Require path ports to be `one` and allow query `many` only when its element schema is a supported scalar type."
+  },
+  {
+   "subject": "Many-valued service outputs",
+   "kind": "ambiguous validation target",
+   "text": "A09 says each JSON member \"must validate against the port\", while M21 says a `many` port stores an array schema with the port's `value_schema` as `items`.",
+   "question": "For a `many` value output, must the response member be an array whose elements validate against `value_schema`, or must the array itself validate directly against `value_schema`?",
+   "options": [
+    "Require an array and validate each element against the port's `value_schema`",
+    "Validate the entire member directly against `value_schema`",
+    "Forbid `many` value outputs on bindings"
+   ],
+   "default_guess": "Require an array and validate each element against the port's `value_schema`."
+  },
+  {
+   "subject": "Accepted binding recheck after manifest change",
+   "kind": "unclear precedence",
+   "text": "A08 rule 7 says a proposed binding is checked again by every rule 5 check and is refused with `binding_stale` \"when only the digest differs\".",
+   "question": "If the digest differs and the changed entry also fails another proposal check against the stored ports, which failure wins, and at what point in rule 5's order is digest comparison performed?",
+   "options": [
+    "Run all rule 5 checks first; report their first failure, and use `binding_stale` only if all pass but the digest differs",
+    "Compare the digest before all port and instance checks and always report `binding_stale` on any change",
+    "Report the earliest record check, then digest mismatch, then instance and port checks"
+   ],
+   "default_guess": "Run rule 5 in its stated order and report its first failure; report `binding_stale` only when those checks pass and only the digest differs."
+  },
+  {
+   "subject": "Service `api_base_url`",
+   "kind": "incomplete URL validation",
+   "text": "A08 accepts any absolute `http` or `https` URL with a host; A09 forms the request from the base URL \"without a trailing `/` followed by the declared path\".",
+   "question": "Are user information, query strings, fragments, percent escapes, multiple trailing slashes and non-root base paths allowed, and exactly how are they combined with the operation path?",
+   "options": [
+    "Restrict the base URL to scheme, authority and an optional normalized path, with no user information, query or fragment",
+    "Allow every absolute URL and concatenate strings literally after removing one trailing slash",
+    "Use a standard URL-resolution algorithm"
+   ],
+   "default_guess": "Reject user information, query and fragment; preserve an optional base path and remove all trailing slashes before appending the declared path."
+  },
+  {
+   "subject": "Plain HTTP loopback exception",
+   "kind": "vague security check",
+   "text": "A09 permits plain HTTP when the `api_base_url` \"host is a loopback address\" but does not say whether this is based on URL syntax or DNS resolution.",
+   "question": "Does the exception cover only literal loopback IP addresses, hostnames such as `localhost`, or any hostname currently resolving to loopback, and must the connected address be rechecked?",
+   "options": [
+    "Only literal IPv4 or IPv6 loopback addresses qualify",
+    "`localhost` and literal loopback addresses qualify",
+    "Any hostname whose resolved and connected address is loopback qualifies"
+   ],
+   "default_guess": "Only literal loopback IP addresses qualify."
+  },
+  {
+   "subject": "Incomplete HTTP responses after final status",
+   "kind": "undefined outcome precedence",
+   "text": "A09 classifies \"timeout, reset, EOF\" as no valid final response, but separately classifies 3xx, 4xx, 5xx and 2xx by status without saying what happens when final headers arrive and the body then times out, resets or ends early.",
+   "question": "Once a final status line and headers have arrived, does that status determine the effect outcome despite an incomplete body, or does incomplete framing mean no valid final response and therefore `outcome_unknown` for a non-read effect?",
+   "options": [
+    "Any incomplete response is no valid final response, regardless of received status",
+    "A final status determines 3xx/4xx/5xx; a complete body is required only for usable 2xx output",
+    "The status always determines applied/not-applied semantics, with body failure becoming `contract_violation`"
+   ],
+   "default_guess": "Use the received final status for 3xx/4xx/5xx, but treat an incomplete 2xx response as no valid final response."
+  },
+  {
+   "subject": "Approving a stale request preview",
+   "kind": "contradiction",
+   "text": "A10 rule 3 says \"Approving sends the effect at once\"; rules 1 and 2 say a changed `request_digest` leaves that approval approved and unused, then uses a grant or asks for a new approval instead.",
+   "question": "What exactly does the approve action do and return when the approved preview no longer matches the rebuilt request?",
+   "options": [
+    "Mark the old approval `approved` and unused, send under a current grant if available, otherwise create a new requested approval and return the waiting run",
+    "Refuse the decision because the preview is stale",
+    "Mark the old approval used even though no request is sent, then request another"
+   ],
+   "default_guess": "Mark the old approval approved and unused, then use a grant or create a new approval request without sending under the stale approval."
+  },
+  {
+   "subject": "Standing grants for non-operation nodes",
+   "kind": "missing refusal condition",
+   "text": "A10 permits a grant for \"a node of the flow's active version whose effect class is not `destructive`\", but function nodes have no effect class.",
+   "question": "Is a grant request for a function node refused, and if so at which check and with what governing condition?",
+   "options": [
+    "Refuse because only operation nodes can receive grants",
+    "Accept a grant that will never be used",
+    "Treat a function node as `read` for grant eligibility"
+   ],
+   "default_guess": "Refuse grants for every non-operation node."
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"K-02 and A03 sandbox randomness\",\"kind\":\"contradiction\",\"text\":\"K-02 says a function has \\\"no randomness\\\"; A03 rule 4 says \\\"random.Random(seed) with an explicit seed stays usable\\\".\",\"question\":\"May function code use a seeded pseudorandom generator, or must every randomness API be forbidden?\",\"options\":[\"Forbid all randomness APIs, including explicitly seeded generators\",\"Permit explicitly seeded pseudorandom generators as deterministic computation\"],\"default_guess\":\"Permit explicitly seeded pseudorandom generators because A03 is the more specific rule.\"},{\"subject\":\"K-02 and A03 sandbox filesystem\",\"kind\":\"contradiction\",\"text\":\"K-02 says \\\"no filesystem beyond its input\\\"; A03 permits \\\"one private exchange directory\\\" and traps only paths \\\"outside the exchange directory and the read-only runtime\\\".\",\"question\":\"May agent code freely create, read and modify files inside the exchange directory, or is that directory accessible only to the runner for transporting declared inputs and outputs?\",\"options\":[\"Allow agent code to use the exchange directory as bounded scratch space\",\"Restrict agent code to declared file inputs and outputs; only the runner uses the directory\"],\"default_guess\":\"Allow bounded scratch access because A03 explicitly permits opens inside the exchange directory.\"},{\"subject\":\"Determinism of function execution and admission\",\"kind\":\"unverifiable invariant\",\"text\":\"A03 requires \\\"The same implementation on the same input yields the same output digest twice\\\", but the permitted Python runtime still exposes process- or execution-dependent observations such as process identifiers, object identities and scheduling effects.\",\"question\":\"How must the kernel make deterministic execution true for all admitted code, and what happens when equal executions produce different outputs?\",\"options\":[\"Further restrict or virtualize every nondeterministic runtime observation\",\"Run executions more than once and refuse detected nondeterminism\",\"Treat admission as a verdict only on the executions observed, without guaranteeing repeatability\"],\"default_guess\":\"Treat admission as observational and refuse only failures actually seen, while not claiming universal determinism.\"},{\"subject\":\"Sandbox stdout and stderr\",\"kind\":\"missing resource rule\",\"text\":\"A03 says \\\"Nothing the code prints or raises is interpreted by the kernel\\\" and \\\"never stdout\\\", but `output_bytes` counts only returned value and file outputs.\",\"question\":\"Where do stdout and stderr go, are their bytes bounded or counted, and which outcome results if code writes indefinitely?\",\"options\":[\"Discard both streams without buffering\",\"Bound them separately and classify overflow as `resource_exhausted`\",\"Count them within `output_bytes`\"],\"default_guess\":\"Discard stdout and stderr without buffering so printing cannot block or consume unbounded parent memory.\"},{\"subject\":\"Cleanup failure during a request\",\"kind\":\"missing observable outcome\",\"text\":\"A03 rule 7 says cleanup failure records `crashed` with `cleanup_failed` and \\\"the kernel process stops\\\"; A04 says no admission verdict is recorded, but neither says what response the initiating request receives.\",\"question\":\"What observable result does the caller receive when sandbox cleanup cannot be confirmed before the process stops?\",\"options\":[\"Return `internal_error`, then stop\",\"Return the recorded failed execution, then stop\",\"Terminate without a response and let the caller observe transport failure\"],\"default_guess\":\"Return `internal_error` if a response can be sent, then stop.\"},{\"subject\":\"Non-canonical function output\",\"kind\":\"missing outcome mapping\",\"text\":\"A01 says a value JCS cannot represent \\\"is refused where it enters\\\"; A03 does not classify a returned Python value such as `NaN` that may satisfy a schema but cannot be encoded as canonical JSON.\",\"question\":\"Which execution outcome applies when a function returns a value that cannot be represented by JCS?\",\"options\":[\"`contract_violation`\",\"`crashed`\",\"`resource_exhausted`\"],\"default_guess\":\"Classify it as `contract_violation`.\"},{\"subject\":\"A05 disclosure phase on cyclic graphs\",\"kind\":\"undefined proof calculation\",\"text\":\"Disclosure is checked in phase 8, while cycles are not reported until phase 7, and A07 defines a function output as \\\"the highest class that can reach any of its inputs\\\".\",\"question\":\"How is the reachable disclosure class computed for a cyclic graph, especially a closed cycle with no rooted flow input, constant or operation output?\",\"options\":[\"Compute a least fixed point, using `open` when no rooted class reaches the cycle\",\"Compute a greatest fixed point\",\"Detect the cycle internally and skip disclosure checks for that graph while still reporting it in phase 7\"],\"default_guess\":\"Compute the least fixed point and use `open` for a cycle reached by no classified source.\"},{\"subject\":\"Disclosure through guards\",\"kind\":\"missing information-flow rule\",\"text\":\"A07 says \\\"No function, edge or flow construct lowers a class\\\", but A05/A07 do not say whether the class of a guard value taints the value delivered by the guarded edge or the visible `skipped_by_guard` result.\",\"question\":\"When a personal-data guard controls an otherwise lower-class edge, what class applies to the delivered value and to guard-derived trace/output metadata visible to an agent?\",\"options\":[\"Join the guard's class into the delivered value and protect guard-derived metadata at that class\",\"Keep only the data edge's class and expose ordinary skip metadata\",\"Forbid guards whose class exceeds the guarded data's class\"],\"default_guess\":\"Keep the data value's existing class and expose skip metadata, because no control-dependency taint rule is stated.\"},{\"subject\":\"A04 trial-case validation\",\"kind\":\"conflicting check order\",\"text\":\"A04 first orders \\\"input values fit\\\", then \\\"expected outputs ... fit\\\", then size limits, but immediately says that for one port the order is \\\"presence, carriage, schema, then size\\\".\",\"question\":\"Is size checked per input port before expected outputs are validated, or only after all input and expected-output shape/schema checks, and where does file media-type validation occur?\",\"options\":[\"Validate each input port completely, including media type and size, then each expected-output port\",\"Validate all input and expected-output presence/carriage/schema/media type first, then all sizes\",\"Use the listed global groups but define a separate media-type phase\"],\"default_guess\":\"Validate each input port completely in name order, then each expected-output port completely in name order.\"},{\"subject\":\"A18 private data directory\",\"kind\":\"vague refusal condition\",\"text\":\"A18 says \\\"The directory and everything in it are private to the kernel's user; the kernel refuses to start otherwise\\\" without defining `private`.\",\"question\":\"Which ownership, permission, file-type and ancestor-directory conditions constitute a private data directory?\",\"options\":[\"Every entry must be owned by the kernel user and grant no permissions to group or others\",\"Only the data-directory root must meet those ownership and mode conditions\",\"Require the root conditions plus explicit allowed file types and safe ancestor permissions\"],\"default_guess\":\"Require the root and every contained entry to be owned by the kernel user with no group or other permissions.\"},{\"subject\":\"Manifest location and revision\",\"kind\":\"missing source-resolution rule\",\"text\":\"M28 provides `manifest_location` and `manifest_revision`; A08 says the record is read from a path \\\"at the configured `manifest_revision`\\\" but never defines how that revision selects bytes.\",\"question\":\"How does the kernel resolve a manifest file at a revision, and when is a missing or invalid repository/revision detected?\",\"options\":[\"Read the file directly from a Git object at the named revision\",\"Require `manifest_location` to be an already checked-out immutable snapshot and verify its revision\",\"Treat the revision as a subdirectory or snapshot identifier under the location\"],\"default_guess\":\"Read the file from the Git object named by `manifest_revision` without changing the working tree.\"},{\"subject\":\"A20 ceilings across releases\",\"kind\":\"missing upgrade rule\",\"text\":\"A20 says new ceilings \\\"bind contract versions issued after it\\\" and explicitly preserves old contract resource bounds, but most listed ceilings do not belong to contract versions.\",\"question\":\"After an upgrade lowers code, stored-value, fixture, spool, response, request or text ceilings, which limits govern existing implementations, cases, constants, flows and newly started runs using them?\",\"options\":[\"The new release limits every future operation except execution under an old contract's four resource bounds\",\"Each persisted artifact retains every ceiling in force when it was created\",\"Refuse startup or use of any existing artifact exceeding a new ceiling\"],\"default_guess\":\"Apply current operational ceilings to future requests and runs, except that old contracts retain their four recorded execution bounds.\"},{\"subject\":\"A13 retries of waiting elements\",\"kind\":\"contradiction\",\"text\":\"A13 rule 2 says \\\"a concluded element is never executed again\\\"; A09, A11 and A14 write a NodeExecution for `service_unreachable` or `outcome_unknown` and later resend that same element.\",\"question\":\"Which NodeExecution statuses conclude the element permanently, and which conclude only an attempt while leaving the element retryable?\",\"options\":[\"Treat `service_unreachable` and unresolved or resolved-`not_applied` `outcome_unknown` as retryable attempt conclusions\",\"Treat any NodeExecution as permanent and model a resend as a new element\",\"Use a separate explicit element-conclusion state distinct from attempt records\"],\"default_guess\":\"Treat waiting statuses as conclusions of attempts, not permanent conclusions of the element.\"},{\"subject\":\"Mapped-node aggregate output failure\",\"kind\":\"missing atomicity and order\",\"text\":\"A13 says a mapped value list is written \\\"when the list is first delivered\\\", only delivered outputs are measured, and an oversized list fails the mapped node, but it gives no delivery order or atomicity for several outputs and consumers.\",\"question\":\"If a mapped node has several used outputs and one aggregate exceeds `stored_value_bytes_max`, can another output already be delivered or consumed, and in what order are aggregate outputs checked?\",\"options\":[\"Build and validate all used aggregates atomically in output-port order; deliver none if any fails\",\"Validate and deliver edge by edge, preserving earlier deliveries\",\"Validate each aggregate on first consumer access but prevent all dependants from running until every used aggregate passes\"],\"default_guess\":\"Validate all used aggregate outputs atomically in output-port name order and deliver none if any is oversized.\"},{\"subject\":\"Read-operation idempotency declaration\",\"kind\":\"undefined manifest input\",\"text\":\"A08 says `null` means none and \\\"otherwise the text split on `+`\\\"; for a read it copies the split parts \\\"whatever those parts are\\\" and does not check their syntax.\",\"question\":\"What happens when a read operation's non-null `idempotency_key` is not a string, and are empty or repeated split parts retained exactly?\",\"options\":[\"Require only `null` or a string for reads, while retaining any string's trimmed parts including empty or repeated ones\",\"Ignore the field entirely for reads regardless of its JSON type\",\"Apply the same syntax validation as non-read operations\"],\"default_guess\":\"Require `null` or a string, but perform no further syntax or uniqueness checks for a read.\"},{\"subject\":\"OperationBinding port schemas\",\"kind\":\"missing refusal condition\",\"text\":\"M01 says `value_schema` is \\\"written in the subset of JSON Schema the kernel supports\\\"; A08's exhaustive proposal checks mention only unique names, media types and disclosure classes from the contract-port rules, not supported-schema validation.\",\"question\":\"Must binding input and output schemas belong to the supported JSON Schema subset, and where does that check occur in the proposal's first-failure order?\",\"options\":[\"Apply the same supported-schema check as contracts during proposal validation\",\"Allow arbitrary schemas on bindings\",\"Validate only the schema features A09 needs for HTTP placement\"],\"default_guess\":\"Apply the same supported-schema validation as contracts, after media-type checks and before disclosure-class checks.\"},{\"subject\":\"HTTP placement versus port cardinality\",\"kind\":\"missing compatibility rule\",\"text\":\"A09 validates path and query placement using the port schema's `type`, while M01/M21 make a `many` port's delivered value an array whose items use that schema.\",\"question\":\"Which cardinality/schema combinations are legal for path placeholders and query parameters, including a `many` path port or a `many` port whose element schema is itself an array?\",\"options\":[\"Path placeholders require cardinality `one`; query encoding validates the effective delivered shape and allows only one array level of scalar values\",\"Ignore cardinality at proposal time and let unplaceable values fail pre-send\",\"Forbid every `many` input on GET and DELETE\"],\"default_guess\":\"Require path ports to be `one` and allow query `many` only when its element schema is a supported scalar type.\"},{\"subject\":\"Many-valued service outputs\",\"kind\":\"ambiguous validation target\",\"text\":\"A09 says each JSON member \\\"must validate against the port\\\", while M21 says a `many` port stores an array schema with the port's `value_schema` as `items`.\",\"question\":\"For a `many` value output, must the response member be an array whose elements validate against `value_schema`, or must the array itself validate directly against `value_schema`?\",\"options\":[\"Require an array and validate each element against the port's `value_schema`\",\"Validate the entire member directly against `value_schema`\",\"Forbid `many` value outputs on bindings\"],\"default_guess\":\"Require an array and validate each element against the port's `value_schema`.\"},{\"subject\":\"Accepted binding recheck after manifest change\",\"kind\":\"unclear precedence\",\"text\":\"A08 rule 7 says a proposed binding is checked again by every rule 5 check and is refused with `binding_stale` \\\"when only the digest differs\\\".\",\"question\":\"If the digest differs and the changed entry also fails another proposal check against the stored ports, which failure wins, and at what point in rule 5's order is digest comparison performed?\",\"options\":[\"Run all rule 5 checks first; report their first failure, and use `binding_stale` only if all pass but the digest differs\",\"Compare the digest before all port and instance checks and always report `binding_stale` on any change\",\"Report the earliest record check, then digest mismatch, then instance and port checks\"],\"default_guess\":\"Run rule 5 in its stated order and report its first failure; report `binding_stale` only when those checks pass and only the digest differs.\"},{\"subject\":\"Service `api_base_url`\",\"kind\":\"incomplete URL validation\",\"text\":\"A08 accepts any absolute `http` or `https` URL with a host; A09 forms the request from the base URL \\\"without a trailing `/` followed by the declared path\\\".\",\"question\":\"Are user information, query strings, fragments, percent escapes, multiple trailing slashes and non-root base paths allowed, and exactly how are they combined with the operation path?\",\"options\":[\"Restrict the base URL to scheme, authority and an optional normalized path, with no user information, query or fragment\",\"Allow every absolute URL and concatenate strings literally after removing one trailing slash\",\"Use a standard URL-resolution algorithm\"],\"default_guess\":\"Reject user information, query and fragment; preserve an optional base path and remove all trailing slashes before appending the declared path.\"},{\"subject\":\"Plain HTTP loopback exception\",\"kind\":\"vague security check\",\"text\":\"A09 permits plain HTTP when the `api_base_url` \\\"host is a loopback address\\\" but does not say whether this is based on URL syntax or DNS resolution.\",\"question\":\"Does the exception cover only literal loopback IP addresses, hostnames such as `localhost`, or any hostname currently resolving to loopback, and must the connected address be rechecked?\",\"options\":[\"Only literal IPv4 or IPv6 loopback addresses qualify\",\"`localhost` and literal loopback addresses qualify\",\"Any hostname whose resolved and connected address is loopback qualifies\"],\"default_guess\":\"Only literal loopback IP addresses qualify.\"},{\"subject\":\"Incomplete HTTP responses after final status\",\"kind\":\"undefined outcome precedence\",\"text\":\"A09 classifies \\\"timeout, reset, EOF\\\" as no valid final response, but separately classifies 3xx, 4xx, 5xx and 2xx by status without saying what happens when final headers arrive and the body then times out, resets or ends early.\",\"question\":\"Once a final status line and headers have arrived, does that status determine the effect outcome despite an incomplete body, or does incomplete framing mean no valid final response and therefore `outcome_unknown` for a non-read effect?\",\"options\":[\"Any incomplete response is no valid final response, regardless of received status\",\"A final status determines 3xx/4xx/5xx; a complete body is required only for usable 2xx output\",\"The status always determines applied/not-applied semantics, with body failure becoming `contract_violation`\"],\"default_guess\":\"Use the received final status for 3xx/4xx/5xx, but treat an incomplete 2xx response as no valid final response.\"},{\"subject\":\"Approving a stale request preview\",\"kind\":\"contradiction\",\"text\":\"A10 rule 3 says \\\"Approving sends the effect at once\\\"; rules 1 and 2 say a changed `request_digest` leaves that approval approved and unused, then uses a grant or asks for a new approval instead.\",\"question\":\"What exactly does the approve action do and return when the approved preview no longer matches the rebuilt request?\",\"options\":[\"Mark the old approval `approved` and unused, send under a current grant if available, otherwise create a new requested approval and return the waiting run\",\"Refuse the decision because the preview is stale\",\"Mark the old approval used even though no request is sent, then request another\"],\"default_guess\":\"Mark the old approval approved and unused, then use a grant or create a new approval request without sending under the stale approval.\"},{\"subject\":\"Standing grants for non-operation nodes\",\"kind\":\"missing refusal condition\",\"text\":\"A10 permits a grant for \\\"a node of the flow's active version whose effect class is not `destructive`\\\", but function nodes have no effect class.\",\"question\":\"Is a grant request for a function node refused, and if so at which check and with what governing condition?\",\"options\":[\"Refuse because only operation nodes can receive grants\",\"Accept a grant that will never be used\",\"Treat a function node as `read` for grant eligibility\"],\"default_guess\":\"Refuse grants for every non-operation node.\"}]}"
+}

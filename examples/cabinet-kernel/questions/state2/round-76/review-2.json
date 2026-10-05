@@ -1,0 +1,272 @@
+{
+ "open_points": [
+  {
+   "subject": "Sandbox filesystem access",
+   "kind": "contradiction",
+   "text": "K-02 says a function has “no filesystem beyond its input”, while A03 rule 1 provides a private exchange directory and rule 4 permits opening paths inside that directory and the read-only runtime.",
+   "question": "May agent-written code read or write the exchange directory or inspect files in the runtime, and if so, what filesystem access is permitted beyond the input values passed to run?",
+   "options": [
+    "Agent code may access the exchange directory and runtime",
+    "Only the sandbox runner may access them; agent code may not",
+    "Agent code may read the runtime but may only access input files in the exchange directory"
+   ],
+   "default_guess": "Only the sandbox runner may use the filesystem; agent code receives files as bytes and all its filesystem attempts are sandbox violations."
+  },
+  {
+   "subject": "Clock isolation and deterministic execution",
+   "kind": "contradiction",
+   "text": "A03 rule 4 says the runner replaces “every clock and randomness entry point” and K-02 says functions have no clock, but the closed list omits CPython 3.12 clock APIs such as time.clock_gettime, time.clock_gettime_ns, time.thread_time and time.thread_time_ns; A03 required test 6 nevertheless requires the same implementation and input to yield the same digest twice.",
+   "question": "Are all unlisted clock and nondeterminism sources forbidden, or are only the explicitly listed entry points trapped despite the no-clock and repeatability requirements?",
+   "options": [
+    "Trap every clock or nondeterminism source, including unlisted APIs",
+    "Trap only the closed list and weaken the no-clock/determinism claim",
+    "Reject implementations that import or access any module exposing an unlisted source"
+   ],
+   "default_guess": "Treat all clock and entropy sources as forbidden and extend the release trap list to cover every CPython 3.12 entry point."
+  },
+  {
+   "subject": "Determinism invariant",
+   "kind": "unverifiable invariant",
+   "text": "A03 required test 6 says “The same implementation on the same input yields the same output digest twice”, although permitted Python can observe implementation-dependent state such as object addresses, runtime files or system information that the stated isolation and trap list do not eliminate.",
+   "question": "Is byte-for-byte repeatability a guaranteed sandbox invariant, merely a test of conforming functions, or only an expectation used when evaluating a particular implementation?",
+   "options": [
+    "The sandbox must guarantee repeatability for arbitrary admitted code",
+    "Admission must run repeated trials and refuse nondeterministic code",
+    "No general repeatability guarantee exists beyond the listed restrictions"
+   ],
+   "default_guess": "Do not claim universal repeatability; admission records the actual executions and only the explicitly forbidden sources are enforced."
+  },
+  {
+   "subject": "Authored trial expected outputs",
+   "kind": "missing refusal condition",
+   "text": "M06 calls expected_outputs values “by output port”, while A04 says only that expected outputs “when present, fit the output ports” and later compares “every output's digest” with the expected one.",
+   "question": "When expected_outputs is present, must it contain exactly every output port, may it assert only a subset, and is an empty expected-output object distinct from absence?",
+   "options": [
+    "It must contain exactly all output ports",
+    "It may contain any non-empty subset and only those outputs are compared",
+    "It may contain any subset, including an empty object"
+   ],
+   "default_guess": "Require exactly one expected value for every output port whenever expected_outputs is present."
+  },
+  {
+   "subject": "Rollback eligibility",
+   "kind": "vague condition",
+   "text": "State 0 and A04 rule 5 call the target “an earlier implementation”, but the operative check only requires an admitted verdict over the current corpus.",
+   "question": "Does rollback accept every non-current implementation with the required verdict, only an implementation created before the current one, or only one that appears earlier in activation history?",
+   "options": [
+    "Any non-current implementation admitted over the current corpus",
+    "Only an implementation submitted earlier than the current implementation",
+    "Only a previously active implementation earlier in activation history"
+   ],
+   "default_guess": "Allow any non-current implementation of the current contract version that has an admitted verdict over the current corpus."
+  },
+  {
+   "subject": "Proof failure result",
+   "kind": "model-rule contradiction",
+   "text": "M17 and State 0 describe an unproven result as “the first failing edge or node”, but A05 can first fail on a constant, a flow input or output, duplicate flow-port names, or another composition item that is neither an edge nor a node.",
+   "question": "How does ProofResult identify failures whose subject is not a node or edge?",
+   "options": [
+    "Add a general failure-subject kind covering constants and flow ports",
+    "Attribute each such failure to its target node or endpoint",
+    "Return only phase and reason without an item identity for those failures"
+   ],
+   "default_guess": "Use a tagged failure subject that can identify a node, edge, constant, flow input or flow output."
+  },
+  {
+   "subject": "Proof ordering for empty node identifiers",
+   "kind": "non-total order",
+   "text": "A05 rule 2 assigns the empty string as the node identifier of every flow input or output endpoint, while no rule forbids a FlowNode node_id from being the empty string.",
+   "question": "Is an empty node_id forbidden, or how are a real node with that id and a flow endpoint distinguished when ordering otherwise equal edge keys and selecting the first failure?",
+   "options": [
+    "Forbid an empty node_id at composition",
+    "Include endpoint kind as an additional ordering key",
+    "Permit ties and define a separate tie-breaker"
+   ],
+   "default_guess": "Forbid empty node identifiers during composition."
+  },
+  {
+   "subject": "Guard value equality",
+   "kind": "undefined comparison",
+   "text": "A05 says an edge is enabled when a guard-port value “equals” its guard value and treats different guard values as mutually exclusive, but it does not define equality for JSON values in a closed set.",
+   "question": "What equality determines guard delivery and whether two guard values are different, especially for numbers, arrays and objects?",
+   "options": [
+    "Equality of RFC 8785 canonical JSON bytes",
+    "JSON structural equality with a specified numeric rule",
+    "Restrict guard schemas to scalar string-like enumeration members"
+   ],
+   "default_guess": "Compare the RFC 8785 canonical JSON bytes of the runtime value and declared guard value."
+  },
+  {
+   "subject": "Operation-binding schemas",
+   "kind": "missing validation",
+   "text": "A08 rule 5 imports only selected A02 port checks—“unique names per direction, a media type exactly on file ports”—and never says that a binding port's value_schema must belong to the supported JSON Schema subset, although proof and invocation must use it.",
+   "question": "Must every proposed binding port schema be validated against the kernel's supported schema subset, and where does that check occur in the proposal and acceptance order?",
+   "options": [
+    "Validate all binding schemas during proposal and again during acceptance",
+    "Accept arbitrary binding schemas and fail only when proving or invoking",
+    "Treat the omitted validation as implicitly inherited from all of A02"
+   ],
+   "default_guess": "Validate every binding schema during proposal and acceptance, after request-shape checks and before disclosure-class checks."
+  },
+  {
+   "subject": "Missing manifest idempotency_key",
+   "kind": "missing case",
+   "text": "A08 rule 4 defines idempotency_key when it is null or text, but does not say what happens when the capability entry omits the field entirely.",
+   "question": "Does an absent idempotency_key mean no key, or is the manifest operation invalid, particularly for a non-read operation?",
+   "options": [
+    "Absent is equivalent to null",
+    "Absent is a manifest mismatch for every operation",
+    "Absent is allowed for reads but a mismatch for effectful operations"
+   ],
+   "default_guess": "Treat absence as a manifest mismatch; use explicit null to declare that there is no key."
+  },
+  {
+   "subject": "Idempotency-key digest input",
+   "kind": "undefined canonical form",
+   "text": "A08 rule 4 defines the EffectAttempt idempotency_key as SHA-256 of canonical JSON of “those fields' values” without saying whether that JSON is an object, an ordered list, or another structure.",
+   "question": "What exact JSON value is hashed when one or more idempotency-key fields are declared?",
+   "options": [
+    "An object mapping field names to values",
+    "A list of values in manifest field order",
+    "A list of name/value pairs in manifest field order"
+   ],
+   "default_guess": "Hash a JSON object mapping each declared field name to its value."
+  },
+  {
+   "subject": "api_base_url acceptance and joining",
+   "kind": "underspecified URL rule",
+   "text": "A08 requires only an absolute http or https URL with a host, while A09 constructs the target as “the api_base_url without a trailing / followed by the declared path”. It does not address user information, query, fragment, an existing base path, or multiple trailing slashes.",
+   "question": "Which api_base_url shapes are valid, and what exact URL results when the base contains a path, query, fragment, user information or multiple trailing slashes?",
+   "options": [
+    "Require a scheme, host and optional port only",
+    "Allow a base path but forbid user information, query and fragment",
+    "Allow every absolute URL and define a precise URL-resolution algorithm"
+   ],
+   "default_guess": "Allow an optional base path, strip all trailing slashes, and forbid user information, query and fragment."
+  },
+  {
+   "subject": "Plain-HTTP loopback exception",
+   "kind": "undefined classification",
+   "text": "A09 rule 4 permits plain HTTP when the api_base_url “host is a loopback address” but does not define whether this means only an IP literal or also a hostname such as localhost or a name that resolves to a loopback address.",
+   "question": "Which hosts qualify for the loopback exception, and is the decision made from URL text or DNS results?",
+   "options": [
+    "Only IPv4 or IPv6 loopback literals",
+    "Loopback literals and the exact hostname localhost",
+    "Any hostname whose resolved address is loopback"
+   ],
+   "default_guess": "Permit only IP literals classified as loopback, avoiding a DNS-dependent authority decision."
+  },
+  {
+   "subject": "Multipart request serialization",
+   "kind": "underspecified wire format",
+   "text": "A09 rule 2 names multipart parts and their two headers but does not define boundary generation, CRLF framing, final-boundary form, Content-Disposition quoting or escaping, while port names are not restricted against quote or control characters.",
+   "question": "What exact multipart wire encoding is used, and which port names are refused or escaped before being placed in Content-Disposition?",
+   "options": [
+    "Specify one canonical multipart encoder and restrict unsafe names",
+    "Use a standard library encoder and accept its chosen serialization",
+    "Percent-encode or quote-escape arbitrary port names under an explicit rule"
+   ],
+   "default_guess": "Require port names safe in a quoted Content-Disposition parameter and define one fixed CRLF-based multipart serialization with a generated boundary."
+  },
+  {
+   "subject": "Agent-supplied names in HTTP serialization",
+   "kind": "contradiction",
+   "text": "A16 rule 5 says agent-supplied “purposes, code, names” are never “formats or interprets” inside the kernel process, while A09 necessarily inserts port names into query parameters, JSON object keys and multipart Content-Disposition headers.",
+   "question": "Is A16 intended to prohibit only evaluation and template interpretation, or does it also prohibit serializing names into outbound requests?",
+   "options": [
+    "It prohibits only evaluation or use as a format/template program",
+    "It prohibits all insertion of agent names into protocol syntax",
+    "Only names passing protocol-specific safe-character validation may be serialized"
+   ],
+   "default_guess": "Interpret A16 as forbidding evaluation and template interpretation, while allowing structured, escaping-aware protocol serialization."
+  },
+  {
+   "subject": "Approval request_digest body representation",
+   "kind": "undefined canonical form",
+   "text": "A10 rule 7 says a JSON body's bytes are placed in a description whose request_digest is the SHA-256 of canonical JSON, but JSON has no byte-string type and no encoding of those bytes is specified.",
+   "question": "How are raw JSON-body bytes represented inside the canonical JSON request description before hashing?",
+   "options": [
+    "As a lowercase hexadecimal string",
+    "As an unpadded base64url string",
+    "As the parsed JSON value rather than its bytes",
+    "By hashing the body separately and storing that digest"
+   ],
+   "default_guess": "Represent the body by its lowercase SHA-256 digest in the request description."
+  },
+  {
+   "subject": "Credential newline removal",
+   "kind": "ambiguous normalization",
+   "text": "A17 rule 2 says credential content is decoded as UTF-8 “without one trailing newline” without defining whether newline means LF only, CRLF as one newline, or any Unicode line terminator, or what happens with multiple trailing newlines.",
+   "question": "Exactly which trailing bytes are removed from a credential file?",
+   "options": [
+    "Remove one final LF and a preceding CR if present",
+    "Remove exactly one final LF only",
+    "Remove one Unicode line terminator after UTF-8 decoding",
+    "Reject values with more than one trailing line ending"
+   ],
+   "default_guess": "Remove one terminal LF and, if immediately preceded by CR, remove that CR as part of the same line ending."
+  },
+  {
+   "subject": "Credential control characters",
+   "kind": "undefined refusal condition",
+   "text": "A17 refuses a credential value that “holds a control character” but does not define the character set after the permitted trailing newline has been removed.",
+   "question": "Which Unicode code points count as control characters for credential validation?",
+   "options": [
+    "ASCII C0 and DEL only",
+    "All Unicode General Category Cc characters",
+    "C0, DEL and C1 control characters"
+   ],
+   "default_guess": "Reject every Unicode character in General Category Cc."
+  },
+  {
+   "subject": "Standing grant target kind",
+   "kind": "missing refusal condition",
+   "text": "A10 rule 5 permits a grant “for a node of the flow's active version whose effect class is not destructive”, but it never explicitly says what happens when the named node is a function node and therefore has no effect class.",
+   "question": "Must a grant request naming a function node be refused, and at which check in the grant operation's order?",
+   "options": [
+    "Refuse because only operation nodes are grantable",
+    "Treat a function node as read and create an unused grant",
+    "Treat the missing effect class as an unknown or malformed reference"
+   ],
+   "default_guess": "Refuse a function-node target after confirming the active version and node exist, because grants apply only to operation nodes."
+  },
+  {
+   "subject": "Data-directory privacy check",
+   "kind": "vague startup condition",
+   "text": "A18 rule 2 says the data directory and “everything in it are private to the kernel's user” but does not define required ownership, directory modes, file modes, ACL handling or whether parent directories are checked.",
+   "question": "What exact filesystem ownership and permission conditions make the data directory and its contents private?",
+   "options": [
+    "Kernel-user ownership and no group/other permission bits on every entry",
+    "Only the top-level directory must be mode 0700 and owned by the kernel user",
+    "Check effective access including ACLs and all path ancestors"
+   ],
+   "default_guess": "Require every directory and file below the data directory to be owned by the kernel user with no group or other permission bits; do not inspect ancestors above it."
+  },
+  {
+   "subject": "Kernel startup validation",
+   "kind": "missing precedence",
+   "text": "A03, A16, A17, A18 and A20 each impose startup checks, but no rule orders configuration validation, token validation, data-directory locking and permission checks, store cleanup, dependency and sandbox probing, manifest-related configuration checks, and run recovery.",
+   "question": "When several startup conditions fail, which check is reported first, and which checks or mutations may occur before that failure?",
+   "options": [
+    "Define one global startup phase order",
+    "Run all non-mutating checks and report an aggregate",
+    "Allow implementation-defined order because startup never opens the surface"
+   ],
+   "default_guess": "Validate and secure the configuration and data directory first, take the lock and open the store second, verify dependencies and sandbox third, perform cleanup fourth, and recover runs last."
+  },
+  {
+   "subject": "Repair evidence scope",
+   "kind": "ambiguous inspection result",
+   "text": "K-12 says repair receives “one contract” and recent evidence, while A15 rule 6 says it receives “one slot's contract, its current implementation, its trial cases and executions” but explicitly takes NodeExecutions from any contract version of the slot.",
+   "question": "Are the returned contract, trial cases and TrialExecutions limited to the current contract version, or are historical contract versions and their corpora also included?",
+   "options": [
+    "Only the current contract and its trial evidence; NodeExecutions may span all versions",
+    "Every contract version and all trial evidence for the slot",
+    "Current contract plus a bounded recent selection of evidence across versions"
+   ],
+   "default_guess": "Return the current contract version, its current implementation and its complete current corpus/evidence, plus the explicitly bounded recent NodeExecutions across all versions."
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"Sandbox filesystem access\",\"kind\":\"contradiction\",\"text\":\"K-02 says a function has “no filesystem beyond its input”, while A03 rule 1 provides a private exchange directory and rule 4 permits opening paths inside that directory and the read-only runtime.\",\"question\":\"May agent-written code read or write the exchange directory or inspect files in the runtime, and if so, what filesystem access is permitted beyond the input values passed to run?\",\"options\":[\"Agent code may access the exchange directory and runtime\",\"Only the sandbox runner may access them; agent code may not\",\"Agent code may read the runtime but may only access input files in the exchange directory\"],\"default_guess\":\"Only the sandbox runner may use the filesystem; agent code receives files as bytes and all its filesystem attempts are sandbox violations.\"},{\"subject\":\"Clock isolation and deterministic execution\",\"kind\":\"contradiction\",\"text\":\"A03 rule 4 says the runner replaces “every clock and randomness entry point” and K-02 says functions have no clock, but the closed list omits CPython 3.12 clock APIs such as time.clock_gettime, time.clock_gettime_ns, time.thread_time and time.thread_time_ns; A03 required test 6 nevertheless requires the same implementation and input to yield the same digest twice.\",\"question\":\"Are all unlisted clock and nondeterminism sources forbidden, or are only the explicitly listed entry points trapped despite the no-clock and repeatability requirements?\",\"options\":[\"Trap every clock or nondeterminism source, including unlisted APIs\",\"Trap only the closed list and weaken the no-clock/determinism claim\",\"Reject implementations that import or access any module exposing an unlisted source\"],\"default_guess\":\"Treat all clock and entropy sources as forbidden and extend the release trap list to cover every CPython 3.12 entry point.\"},{\"subject\":\"Determinism invariant\",\"kind\":\"unverifiable invariant\",\"text\":\"A03 required test 6 says “The same implementation on the same input yields the same output digest twice”, although permitted Python can observe implementation-dependent state such as object addresses, runtime files or system information that the stated isolation and trap list do not eliminate.\",\"question\":\"Is byte-for-byte repeatability a guaranteed sandbox invariant, merely a test of conforming functions, or only an expectation used when evaluating a particular implementation?\",\"options\":[\"The sandbox must guarantee repeatability for arbitrary admitted code\",\"Admission must run repeated trials and refuse nondeterministic code\",\"No general repeatability guarantee exists beyond the listed restrictions\"],\"default_guess\":\"Do not claim universal repeatability; admission records the actual executions and only the explicitly forbidden sources are enforced.\"},{\"subject\":\"Authored trial expected outputs\",\"kind\":\"missing refusal condition\",\"text\":\"M06 calls expected_outputs values “by output port”, while A04 says only that expected outputs “when present, fit the output ports” and later compares “every output's digest” with the expected one.\",\"question\":\"When expected_outputs is present, must it contain exactly every output port, may it assert only a subset, and is an empty expected-output object distinct from absence?\",\"options\":[\"It must contain exactly all output ports\",\"It may contain any non-empty subset and only those outputs are compared\",\"It may contain any subset, including an empty object\"],\"default_guess\":\"Require exactly one expected value for every output port whenever expected_outputs is present.\"},{\"subject\":\"Rollback eligibility\",\"kind\":\"vague condition\",\"text\":\"State 0 and A04 rule 5 call the target “an earlier implementation”, but the operative check only requires an admitted verdict over the current corpus.\",\"question\":\"Does rollback accept every non-current implementation with the required verdict, only an implementation created before the current one, or only one that appears earlier in activation history?\",\"options\":[\"Any non-current implementation admitted over the current corpus\",\"Only an implementation submitted earlier than the current implementation\",\"Only a previously active implementation earlier in activation history\"],\"default_guess\":\"Allow any non-current implementation of the current contract version that has an admitted verdict over the current corpus.\"},{\"subject\":\"Proof failure result\",\"kind\":\"model-rule contradiction\",\"text\":\"M17 and State 0 describe an unproven result as “the first failing edge or node”, but A05 can first fail on a constant, a flow input or output, duplicate flow-port names, or another composition item that is neither an edge nor a node.\",\"question\":\"How does ProofResult identify failures whose subject is not a node or edge?\",\"options\":[\"Add a general failure-subject kind covering constants and flow ports\",\"Attribute each such failure to its target node or endpoint\",\"Return only phase and reason without an item identity for those failures\"],\"default_guess\":\"Use a tagged failure subject that can identify a node, edge, constant, flow input or flow output.\"},{\"subject\":\"Proof ordering for empty node identifiers\",\"kind\":\"non-total order\",\"text\":\"A05 rule 2 assigns the empty string as the node identifier of every flow input or output endpoint, while no rule forbids a FlowNode node_id from being the empty string.\",\"question\":\"Is an empty node_id forbidden, or how are a real node with that id and a flow endpoint distinguished when ordering otherwise equal edge keys and selecting the first failure?\",\"options\":[\"Forbid an empty node_id at composition\",\"Include endpoint kind as an additional ordering key\",\"Permit ties and define a separate tie-breaker\"],\"default_guess\":\"Forbid empty node identifiers during composition.\"},{\"subject\":\"Guard value equality\",\"kind\":\"undefined comparison\",\"text\":\"A05 says an edge is enabled when a guard-port value “equals” its guard value and treats different guard values as mutually exclusive, but it does not define equality for JSON values in a closed set.\",\"question\":\"What equality determines guard delivery and whether two guard values are different, especially for numbers, arrays and objects?\",\"options\":[\"Equality of RFC 8785 canonical JSON bytes\",\"JSON structural equality with a specified numeric rule\",\"Restrict guard schemas to scalar string-like enumeration members\"],\"default_guess\":\"Compare the RFC 8785 canonical JSON bytes of the runtime value and declared guard value.\"},{\"subject\":\"Operation-binding schemas\",\"kind\":\"missing validation\",\"text\":\"A08 rule 5 imports only selected A02 port checks—“unique names per direction, a media type exactly on file ports”—and never says that a binding port's value_schema must belong to the supported JSON Schema subset, although proof and invocation must use it.\",\"question\":\"Must every proposed binding port schema be validated against the kernel's supported schema subset, and where does that check occur in the proposal and acceptance order?\",\"options\":[\"Validate all binding schemas during proposal and again during acceptance\",\"Accept arbitrary binding schemas and fail only when proving or invoking\",\"Treat the omitted validation as implicitly inherited from all of A02\"],\"default_guess\":\"Validate every binding schema during proposal and acceptance, after request-shape checks and before disclosure-class checks.\"},{\"subject\":\"Missing manifest idempotency_key\",\"kind\":\"missing case\",\"text\":\"A08 rule 4 defines idempotency_key when it is null or text, but does not say what happens when the capability entry omits the field entirely.\",\"question\":\"Does an absent idempotency_key mean no key, or is the manifest operation invalid, particularly for a non-read operation?\",\"options\":[\"Absent is equivalent to null\",\"Absent is a manifest mismatch for every operation\",\"Absent is allowed for reads but a mismatch for effectful operations\"],\"default_guess\":\"Treat absence as a manifest mismatch; use explicit null to declare that there is no key.\"},{\"subject\":\"Idempotency-key digest input\",\"kind\":\"undefined canonical form\",\"text\":\"A08 rule 4 defines the EffectAttempt idempotency_key as SHA-256 of canonical JSON of “those fields' values” without saying whether that JSON is an object, an ordered list, or another structure.\",\"question\":\"What exact JSON value is hashed when one or more idempotency-key fields are declared?\",\"options\":[\"An object mapping field names to values\",\"A list of values in manifest field order\",\"A list of name/value pairs in manifest field order\"],\"default_guess\":\"Hash a JSON object mapping each declared field name to its value.\"},{\"subject\":\"api_base_url acceptance and joining\",\"kind\":\"underspecified URL rule\",\"text\":\"A08 requires only an absolute http or https URL with a host, while A09 constructs the target as “the api_base_url without a trailing / followed by the declared path”. It does not address user information, query, fragment, an existing base path, or multiple trailing slashes.\",\"question\":\"Which api_base_url shapes are valid, and what exact URL results when the base contains a path, query, fragment, user information or multiple trailing slashes?\",\"options\":[\"Require a scheme, host and optional port only\",\"Allow a base path but forbid user information, query and fragment\",\"Allow every absolute URL and define a precise URL-resolution algorithm\"],\"default_guess\":\"Allow an optional base path, strip all trailing slashes, and forbid user information, query and fragment.\"},{\"subject\":\"Plain-HTTP loopback exception\",\"kind\":\"undefined classification\",\"text\":\"A09 rule 4 permits plain HTTP when the api_base_url “host is a loopback address” but does not define whether this means only an IP literal or also a hostname such as localhost or a name that resolves to a loopback address.\",\"question\":\"Which hosts qualify for the loopback exception, and is the decision made from URL text or DNS results?\",\"options\":[\"Only IPv4 or IPv6 loopback literals\",\"Loopback literals and the exact hostname localhost\",\"Any hostname whose resolved address is loopback\"],\"default_guess\":\"Permit only IP literals classified as loopback, avoiding a DNS-dependent authority decision.\"},{\"subject\":\"Multipart request serialization\",\"kind\":\"underspecified wire format\",\"text\":\"A09 rule 2 names multipart parts and their two headers but does not define boundary generation, CRLF framing, final-boundary form, Content-Disposition quoting or escaping, while port names are not restricted against quote or control characters.\",\"question\":\"What exact multipart wire encoding is used, and which port names are refused or escaped before being placed in Content-Disposition?\",\"options\":[\"Specify one canonical multipart encoder and restrict unsafe names\",\"Use a standard library encoder and accept its chosen serialization\",\"Percent-encode or quote-escape arbitrary port names under an explicit rule\"],\"default_guess\":\"Require port names safe in a quoted Content-Disposition parameter and define one fixed CRLF-based multipart serialization with a generated boundary.\"},{\"subject\":\"Agent-supplied names in HTTP serialization\",\"kind\":\"contradiction\",\"text\":\"A16 rule 5 says agent-supplied “purposes, code, names” are never “formats or interprets” inside the kernel process, while A09 necessarily inserts port names into query parameters, JSON object keys and multipart Content-Disposition headers.\",\"question\":\"Is A16 intended to prohibit only evaluation and template interpretation, or does it also prohibit serializing names into outbound requests?\",\"options\":[\"It prohibits only evaluation or use as a format/template program\",\"It prohibits all insertion of agent names into protocol syntax\",\"Only names passing protocol-specific safe-character validation may be serialized\"],\"default_guess\":\"Interpret A16 as forbidding evaluation and template interpretation, while allowing structured, escaping-aware protocol serialization.\"},{\"subject\":\"Approval request_digest body representation\",\"kind\":\"undefined canonical form\",\"text\":\"A10 rule 7 says a JSON body's bytes are placed in a description whose request_digest is the SHA-256 of canonical JSON, but JSON has no byte-string type and no encoding of those bytes is specified.\",\"question\":\"How are raw JSON-body bytes represented inside the canonical JSON request description before hashing?\",\"options\":[\"As a lowercase hexadecimal string\",\"As an unpadded base64url string\",\"As the parsed JSON value rather than its bytes\",\"By hashing the body separately and storing that digest\"],\"default_guess\":\"Represent the body by its lowercase SHA-256 digest in the request description.\"},{\"subject\":\"Credential newline removal\",\"kind\":\"ambiguous normalization\",\"text\":\"A17 rule 2 says credential content is decoded as UTF-8 “without one trailing newline” without defining whether newline means LF only, CRLF as one newline, or any Unicode line terminator, or what happens with multiple trailing newlines.\",\"question\":\"Exactly which trailing bytes are removed from a credential file?\",\"options\":[\"Remove one final LF and a preceding CR if present\",\"Remove exactly one final LF only\",\"Remove one Unicode line terminator after UTF-8 decoding\",\"Reject values with more than one trailing line ending\"],\"default_guess\":\"Remove one terminal LF and, if immediately preceded by CR, remove that CR as part of the same line ending.\"},{\"subject\":\"Credential control characters\",\"kind\":\"undefined refusal condition\",\"text\":\"A17 refuses a credential value that “holds a control character” but does not define the character set after the permitted trailing newline has been removed.\",\"question\":\"Which Unicode code points count as control characters for credential validation?\",\"options\":[\"ASCII C0 and DEL only\",\"All Unicode General Category Cc characters\",\"C0, DEL and C1 control characters\"],\"default_guess\":\"Reject every Unicode character in General Category Cc.\"},{\"subject\":\"Standing grant target kind\",\"kind\":\"missing refusal condition\",\"text\":\"A10 rule 5 permits a grant “for a node of the flow's active version whose effect class is not destructive”, but it never explicitly says what happens when the named node is a function node and therefore has no effect class.\",\"question\":\"Must a grant request naming a function node be refused, and at which check in the grant operation's order?\",\"options\":[\"Refuse because only operation nodes are grantable\",\"Treat a function node as read and create an unused grant\",\"Treat the missing effect class as an unknown or malformed reference\"],\"default_guess\":\"Refuse a function-node target after confirming the active version and node exist, because grants apply only to operation nodes.\"},{\"subject\":\"Data-directory privacy check\",\"kind\":\"vague startup condition\",\"text\":\"A18 rule 2 says the data directory and “everything in it are private to the kernel's user” but does not define required ownership, directory modes, file modes, ACL handling or whether parent directories are checked.\",\"question\":\"What exact filesystem ownership and permission conditions make the data directory and its contents private?\",\"options\":[\"Kernel-user ownership and no group/other permission bits on every entry\",\"Only the top-level directory must be mode 0700 and owned by the kernel user\",\"Check effective access including ACLs and all path ancestors\"],\"default_guess\":\"Require every directory and file below the data directory to be owned by the kernel user with no group or other permission bits; do not inspect ancestors above it.\"},{\"subject\":\"Kernel startup validation\",\"kind\":\"missing precedence\",\"text\":\"A03, A16, A17, A18 and A20 each impose startup checks, but no rule orders configuration validation, token validation, data-directory locking and permission checks, store cleanup, dependency and sandbox probing, manifest-related configuration checks, and run recovery.\",\"question\":\"When several startup conditions fail, which check is reported first, and which checks or mutations may occur before that failure?\",\"options\":[\"Define one global startup phase order\",\"Run all non-mutating checks and report an aggregate\",\"Allow implementation-defined order because startup never opens the surface\"],\"default_guess\":\"Validate and secure the configuration and data directory first, take the lock and open the store second, verify dependencies and sandbox third, perform cleanup fourth, and recover runs last.\"},{\"subject\":\"Repair evidence scope\",\"kind\":\"ambiguous inspection result\",\"text\":\"K-12 says repair receives “one contract” and recent evidence, while A15 rule 6 says it receives “one slot's contract, its current implementation, its trial cases and executions” but explicitly takes NodeExecutions from any contract version of the slot.\",\"question\":\"Are the returned contract, trial cases and TrialExecutions limited to the current contract version, or are historical contract versions and their corpora also included?\",\"options\":[\"Only the current contract and its trial evidence; NodeExecutions may span all versions\",\"Every contract version and all trial evidence for the slot\",\"Current contract plus a bounded recent selection of evidence across versions\"],\"default_guess\":\"Return the current contract version, its current implementation and its complete current corpus/evidence, plus the explicitly bounded recent NodeExecutions across all versions.\"}]}"
+}

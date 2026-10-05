@@ -1,0 +1,198 @@
+{
+ "open_points": [
+  {
+   "subject": "A01/A05 edge and constant ordering",
+   "kind": "non-total order",
+   "text": "Lists whose order carries no meaning are sorted before hashing — edges in the edge order of A05, constants by (`to_node`, `to_port`) — so the same content in another order has the same identity; A05's edge order omits the guard, and the constant order has no tie-breaker.",
+   "question": "How are edges with identical endpoints but different guards, and multiple constants for the same destination, totally ordered for identity and first-failure selection?",
+   "options": [
+    "Add the guard and constant content as tie-breakers",
+    "Treat their submitted order as meaningful",
+    "Refuse duplicate endpoint/destination keys at composition"
+   ],
+   "default_guess": "Use canonical JSON of the complete edge or constant as the final tie-breaker."
+  },
+  {
+   "subject": "TrialCase authored inputs and expected outputs",
+   "kind": "missing refusal rule",
+   "text": "A trial case is added only when its input values fit the contract version's input ports, its expected outputs, when present, fit the output ports.",
+   "question": "Must inputs contain exactly every input port and no extras, and when expected outputs are present must they contain exactly every output port, or may expected outputs be partial?",
+   "options": [
+    "Exact inputs and exact-or-absent expected outputs",
+    "Exact inputs with partial expected outputs allowed",
+    "Partial inputs and partial expected outputs allowed"
+   ],
+   "default_guess": "Require exact inputs and require expected outputs either to be absent or to contain exactly all output ports."
+  },
+  {
+   "subject": "Sandbox filesystem access",
+   "kind": "contradiction",
+   "text": "K-02 says a function has “no filesystem beyond its input”; A03 gives it “one private exchange directory” and permits opening paths inside that directory.",
+   "question": "May function code create, read and modify arbitrary files in the exchange directory, or is filesystem access limited to kernel-created representations of its inputs and outputs?",
+   "options": [
+    "Permit arbitrary bounded exchange-directory access",
+    "Permit only designated input/output paths",
+    "Expose no filesystem to function code"
+   ],
+   "default_guess": "Permit only kernel-designated exchange files needed by the runner."
+  },
+  {
+   "subject": "Sandbox randomness",
+   "kind": "contradiction",
+   "text": "K-02 says a function has “no randomness”; A03 permits `random.Random(seed)` with an explicit seed and says this is what “no randomness” asks.",
+   "question": "Does “no randomness” prohibit every random-number API, or only entropy-dependent and nondeterministic randomness?",
+   "options": [
+    "Allow explicitly seeded deterministic PRNGs",
+    "Prohibit every random API",
+    "Allow seeded PRNGs only with a seed derived from inputs"
+   ],
+   "default_guess": "Allow explicitly seeded deterministic PRNGs, following the more specific A03 rule."
+  },
+  {
+   "subject": "Sandbox determinism",
+   "kind": "unverifiable invariant",
+   "text": "Admission is called a deterministic verdict and A03 requires “The same implementation on the same input yields the same output digest twice,” but unrestricted Python and its standard library still expose nondeterminism such as thread scheduling, object identities, process/runtime observations and unlisted timing sources.",
+   "question": "Is repeatable output a guaranteed sandbox property, and if so what additional APIs or language features are prohibited or controlled to make it enforceable?",
+   "options": [
+    "Define and enforce a larger deterministic Python subset",
+    "Treat repeatability as best-effort and cache the first verdict",
+    "Run executions repeatedly and refuse inconsistent results"
+   ],
+   "default_guess": "Define determinism as best-effort isolation plus a cached verdict, because the stated unrestricted standard library cannot guarantee identical output."
+  },
+  {
+   "subject": "Resource-bound outcome detection",
+   "kind": "unverifiable check",
+   "text": "A03 says “a limit hit (memory, process count, scratch, `output_bytes`)” decides `resource_exhausted`, including before `crashed` or success, while enforcement uses `setrlimit`.",
+   "question": "How does the parent determine that memory or process limits were hit when Python receives and catches `MemoryError` or an OS error and then returns a valid result?",
+   "options": [
+    "Any caught limit failure still forces `resource_exhausted` via an observable side channel",
+    "Only an externally observable termination or measured excess counts",
+    "A caught failure may return successfully"
+   ],
+   "default_guess": "Count only externally observable termination or measurable excess; caught allocation or fork failures may otherwise succeed."
+  },
+  {
+   "subject": "Invalid function output and output-byte accounting",
+   "kind": "undefined precedence",
+   "text": "The output count is the canonical JSON bytes of every value output plus file bytes, but `resource_exhausted` is checked before `contract_violation`; malformed outputs, non-JSON values and non-finite numbers have no canonical JSON byte representation.",
+   "question": "How is `output_bytes` measured, and which outcome wins, when the returned object cannot be canonically encoded or does not have the required output shape?",
+   "options": [
+    "Validate shape and JSON representability before byte accounting",
+    "Encode provisionally and classify encoding failure as `contract_violation`",
+    "Classify inability to account output as `crashed`"
+   ],
+   "default_guess": "Validate representability and output shape first, classify failures as `contract_violation`, then enforce the output-byte bound on valid outputs."
+  },
+  {
+   "subject": "Sandbox stdout and stderr",
+   "kind": "missing resource behavior",
+   "text": "A03 says printed text is never kept as `failure_detail`, while `output_bytes` counts only returned value and file outputs; it does not say how stdout and stderr are connected, drained or bounded.",
+   "question": "What happens when function code writes unbounded stdout or stderr?",
+   "options": [
+    "Discard both streams through bounded nonblocking sinks",
+    "Count them against a resource limit",
+    "Allow pipe blocking to end in timeout"
+   ],
+   "default_guess": "Discard them through bounded nonblocking sinks and never expose their contents."
+  },
+  {
+   "subject": "Draft-write authority across a run",
+   "kind": "missing persisted fact",
+   "text": "M26 requires a draft-write attempt to name “the flow activation under which the run started,” but M19 stores only `flow_version_id`, and the same version can be activated again with a different store position.",
+   "question": "Where is the exact FlowActivation pinned at run start recorded so it can be recovered unambiguously after later activations or a restart?",
+   "options": [
+    "Add the FlowActivation identity to Run",
+    "Derive the activation from store order and `started_at`",
+    "Use whichever activation of that version is current at send time"
+   ],
+   "default_guess": "Persist the exact FlowActivation identity on the Run at creation."
+  },
+  {
+   "subject": "MCP entrance and authentication",
+   "kind": "unspecified protocol",
+   "text": "The kernel exposes operations “over `mcp`,” has an `mcp_listen_address`, every request carries one token, and request size is counted as “the bytes of the request message as received.”",
+   "question": "Which MCP transport and protocol version are used, where is the token carried, and exactly which serialized bytes count toward `surface_request_bytes_max`?",
+   "options": [
+    "Streamable HTTP MCP with an authorization header and the complete HTTP message body counted",
+    "JSON-RPC MCP with the token inside each operation envelope",
+    "A release-pinned transport and authentication framing defined separately"
+   ],
+   "default_guess": "Use a release-pinned Streamable HTTP MCP transport, carry the token in an authorization header, and count the serialized MCP request body."
+  },
+  {
+   "subject": "Service base URL",
+   "kind": "incomplete URL rules",
+   "text": "A08 accepts any absolute `http` or `https` URL with a host; A09 forms the target from the base URL “without a trailing `/` followed by the declared path,” while userinfo, a base path, query, fragment, multiple trailing slashes and noncanonical authorities are not addressed.",
+   "question": "Which components may `api_base_url` contain, and what exact joining rule applies to every accepted base URL?",
+   "options": [
+    "Allow only scheme plus authority with no userinfo, path, query or fragment",
+    "Allow a base path but prohibit query, fragment and userinfo",
+    "Allow every absolute URL and define textual concatenation"
+   ],
+   "default_guess": "Allow only scheme plus authority, optionally followed by one removable trailing slash."
+  },
+  {
+   "subject": "Plain-HTTP loopback exception",
+   "kind": "vague predicate",
+   "text": "Plain `http` is allowed when the `api_base_url` host “is a loopback address.”",
+   "question": "Does this mean only a literal loopback IP, or also names such as `localhost`, DNS names resolving to loopback, IPv4-mapped IPv6 addresses and other loopback notations?",
+   "options": [
+    "Literal IP classified as loopback",
+    "Literal IP or `localhost`",
+    "Resolve the hostname and require every address to be loopback"
+   ],
+   "default_guess": "Accept only an IP literal that the platform IP parser classifies as loopback."
+  },
+  {
+   "subject": "Multipart port names",
+   "kind": "undefined serialization",
+   "text": "A09 emits `Content-Disposition: form-data; name=\"<port>\"` and `filename=\"<port>\"`, while port names have no stated HTTP-safe grammar or escaping rule.",
+   "question": "How are quotes, backslashes, control characters, non-ASCII text and other unsafe characters in multipart port names handled?",
+   "options": [
+    "Restrict port names to an HTTP-safe ASCII grammar",
+    "Define quoted-string escaping and filename encoding",
+    "Percent-encode port names in multipart headers"
+   ],
+   "default_guess": "Restrict every port name usable in multipart to a conservative ASCII identifier grammar at binding proposal."
+  },
+  {
+   "subject": "HTTP header wire encoding",
+   "kind": "undefined serialization",
+   "text": "Required-header and credential values are sent “verbatim”; they are forbidden from being empty, containing control characters or surrounding whitespace, but non-ASCII UTF-8 values remain allowed.",
+   "question": "How are non-ASCII header values serialized on the HTTP wire, or must all header names and values be ASCII?",
+   "options": [
+    "Require ASCII header values",
+    "Encode values as UTF-8 bytes",
+    "Use the selected HTTP library's header encoding"
+   ],
+   "default_guess": "Require visible ASCII header values and refuse other values."
+  },
+  {
+   "subject": "Credential secrecy",
+   "kind": "contradiction",
+   "text": "State 0 says secrets “never enter a function, a flow, a trace or an answer”; A17 and A09 say a credential returned in another encoding is not recognised and is kept like any other value, protected only by its disclosure class.",
+   "question": "May a transformed or encoded credential be stored and returned as an ordinary service output, or must the kernel uphold the absolute State 0 prohibition?",
+   "options": [
+    "Only verbatim credential bytes are blocked",
+    "Decoded textual and structured equivalents are also blocked",
+    "No practical transformed-secret detection is promised, and State 0 is narrowed explicitly"
+   ],
+   "default_guess": "Follow A17's implementable verbatim-byte rule, but amend the absolute State 0 statement to match it."
+  },
+  {
+   "subject": "Redacted failure-detail length",
+   "kind": "undefined unit",
+   "text": "A07 returns a protected `failure_detail` to an agent “only as its length and that class.”",
+   "question": "Is the reported length counted in Unicode code points, UTF-8 bytes before truncation, or UTF-8 bytes after truncation?",
+   "options": [
+    "UTF-8 bytes after stored truncation",
+    "Unicode code points after truncation",
+    "Original UTF-8 byte length before truncation"
+   ],
+   "default_guess": "Report the UTF-8 byte length of the stored, already-truncated detail."
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A01/A05 edge and constant ordering\",\"kind\":\"non-total order\",\"text\":\"Lists whose order carries no meaning are sorted before hashing — edges in the edge order of A05, constants by (`to_node`, `to_port`) — so the same content in another order has the same identity; A05's edge order omits the guard, and the constant order has no tie-breaker.\",\"question\":\"How are edges with identical endpoints but different guards, and multiple constants for the same destination, totally ordered for identity and first-failure selection?\",\"options\":[\"Add the guard and constant content as tie-breakers\",\"Treat their submitted order as meaningful\",\"Refuse duplicate endpoint/destination keys at composition\"],\"default_guess\":\"Use canonical JSON of the complete edge or constant as the final tie-breaker.\"},{\"subject\":\"TrialCase authored inputs and expected outputs\",\"kind\":\"missing refusal rule\",\"text\":\"A trial case is added only when its input values fit the contract version's input ports, its expected outputs, when present, fit the output ports.\",\"question\":\"Must inputs contain exactly every input port and no extras, and when expected outputs are present must they contain exactly every output port, or may expected outputs be partial?\",\"options\":[\"Exact inputs and exact-or-absent expected outputs\",\"Exact inputs with partial expected outputs allowed\",\"Partial inputs and partial expected outputs allowed\"],\"default_guess\":\"Require exact inputs and require expected outputs either to be absent or to contain exactly all output ports.\"},{\"subject\":\"Sandbox filesystem access\",\"kind\":\"contradiction\",\"text\":\"K-02 says a function has “no filesystem beyond its input”; A03 gives it “one private exchange directory” and permits opening paths inside that directory.\",\"question\":\"May function code create, read and modify arbitrary files in the exchange directory, or is filesystem access limited to kernel-created representations of its inputs and outputs?\",\"options\":[\"Permit arbitrary bounded exchange-directory access\",\"Permit only designated input/output paths\",\"Expose no filesystem to function code\"],\"default_guess\":\"Permit only kernel-designated exchange files needed by the runner.\"},{\"subject\":\"Sandbox randomness\",\"kind\":\"contradiction\",\"text\":\"K-02 says a function has “no randomness”; A03 permits `random.Random(seed)` with an explicit seed and says this is what “no randomness” asks.\",\"question\":\"Does “no randomness” prohibit every random-number API, or only entropy-dependent and nondeterministic randomness?\",\"options\":[\"Allow explicitly seeded deterministic PRNGs\",\"Prohibit every random API\",\"Allow seeded PRNGs only with a seed derived from inputs\"],\"default_guess\":\"Allow explicitly seeded deterministic PRNGs, following the more specific A03 rule.\"},{\"subject\":\"Sandbox determinism\",\"kind\":\"unverifiable invariant\",\"text\":\"Admission is called a deterministic verdict and A03 requires “The same implementation on the same input yields the same output digest twice,” but unrestricted Python and its standard library still expose nondeterminism such as thread scheduling, object identities, process/runtime observations and unlisted timing sources.\",\"question\":\"Is repeatable output a guaranteed sandbox property, and if so what additional APIs or language features are prohibited or controlled to make it enforceable?\",\"options\":[\"Define and enforce a larger deterministic Python subset\",\"Treat repeatability as best-effort and cache the first verdict\",\"Run executions repeatedly and refuse inconsistent results\"],\"default_guess\":\"Define determinism as best-effort isolation plus a cached verdict, because the stated unrestricted standard library cannot guarantee identical output.\"},{\"subject\":\"Resource-bound outcome detection\",\"kind\":\"unverifiable check\",\"text\":\"A03 says “a limit hit (memory, process count, scratch, `output_bytes`)” decides `resource_exhausted`, including before `crashed` or success, while enforcement uses `setrlimit`.\",\"question\":\"How does the parent determine that memory or process limits were hit when Python receives and catches `MemoryError` or an OS error and then returns a valid result?\",\"options\":[\"Any caught limit failure still forces `resource_exhausted` via an observable side channel\",\"Only an externally observable termination or measured excess counts\",\"A caught failure may return successfully\"],\"default_guess\":\"Count only externally observable termination or measurable excess; caught allocation or fork failures may otherwise succeed.\"},{\"subject\":\"Invalid function output and output-byte accounting\",\"kind\":\"undefined precedence\",\"text\":\"The output count is the canonical JSON bytes of every value output plus file bytes, but `resource_exhausted` is checked before `contract_violation`; malformed outputs, non-JSON values and non-finite numbers have no canonical JSON byte representation.\",\"question\":\"How is `output_bytes` measured, and which outcome wins, when the returned object cannot be canonically encoded or does not have the required output shape?\",\"options\":[\"Validate shape and JSON representability before byte accounting\",\"Encode provisionally and classify encoding failure as `contract_violation`\",\"Classify inability to account output as `crashed`\"],\"default_guess\":\"Validate representability and output shape first, classify failures as `contract_violation`, then enforce the output-byte bound on valid outputs.\"},{\"subject\":\"Sandbox stdout and stderr\",\"kind\":\"missing resource behavior\",\"text\":\"A03 says printed text is never kept as `failure_detail`, while `output_bytes` counts only returned value and file outputs; it does not say how stdout and stderr are connected, drained or bounded.\",\"question\":\"What happens when function code writes unbounded stdout or stderr?\",\"options\":[\"Discard both streams through bounded nonblocking sinks\",\"Count them against a resource limit\",\"Allow pipe blocking to end in timeout\"],\"default_guess\":\"Discard them through bounded nonblocking sinks and never expose their contents.\"},{\"subject\":\"Draft-write authority across a run\",\"kind\":\"missing persisted fact\",\"text\":\"M26 requires a draft-write attempt to name “the flow activation under which the run started,” but M19 stores only `flow_version_id`, and the same version can be activated again with a different store position.\",\"question\":\"Where is the exact FlowActivation pinned at run start recorded so it can be recovered unambiguously after later activations or a restart?\",\"options\":[\"Add the FlowActivation identity to Run\",\"Derive the activation from store order and `started_at`\",\"Use whichever activation of that version is current at send time\"],\"default_guess\":\"Persist the exact FlowActivation identity on the Run at creation.\"},{\"subject\":\"MCP entrance and authentication\",\"kind\":\"unspecified protocol\",\"text\":\"The kernel exposes operations “over `mcp`,” has an `mcp_listen_address`, every request carries one token, and request size is counted as “the bytes of the request message as received.”\",\"question\":\"Which MCP transport and protocol version are used, where is the token carried, and exactly which serialized bytes count toward `surface_request_bytes_max`?\",\"options\":[\"Streamable HTTP MCP with an authorization header and the complete HTTP message body counted\",\"JSON-RPC MCP with the token inside each operation envelope\",\"A release-pinned transport and authentication framing defined separately\"],\"default_guess\":\"Use a release-pinned Streamable HTTP MCP transport, carry the token in an authorization header, and count the serialized MCP request body.\"},{\"subject\":\"Service base URL\",\"kind\":\"incomplete URL rules\",\"text\":\"A08 accepts any absolute `http` or `https` URL with a host; A09 forms the target from the base URL “without a trailing `/` followed by the declared path,” while userinfo, a base path, query, fragment, multiple trailing slashes and noncanonical authorities are not addressed.\",\"question\":\"Which components may `api_base_url` contain, and what exact joining rule applies to every accepted base URL?\",\"options\":[\"Allow only scheme plus authority with no userinfo, path, query or fragment\",\"Allow a base path but prohibit query, fragment and userinfo\",\"Allow every absolute URL and define textual concatenation\"],\"default_guess\":\"Allow only scheme plus authority, optionally followed by one removable trailing slash.\"},{\"subject\":\"Plain-HTTP loopback exception\",\"kind\":\"vague predicate\",\"text\":\"Plain `http` is allowed when the `api_base_url` host “is a loopback address.”\",\"question\":\"Does this mean only a literal loopback IP, or also names such as `localhost`, DNS names resolving to loopback, IPv4-mapped IPv6 addresses and other loopback notations?\",\"options\":[\"Literal IP classified as loopback\",\"Literal IP or `localhost`\",\"Resolve the hostname and require every address to be loopback\"],\"default_guess\":\"Accept only an IP literal that the platform IP parser classifies as loopback.\"},{\"subject\":\"Multipart port names\",\"kind\":\"undefined serialization\",\"text\":\"A09 emits `Content-Disposition: form-data; name=\\\"<port>\\\"` and `filename=\\\"<port>\\\"`, while port names have no stated HTTP-safe grammar or escaping rule.\",\"question\":\"How are quotes, backslashes, control characters, non-ASCII text and other unsafe characters in multipart port names handled?\",\"options\":[\"Restrict port names to an HTTP-safe ASCII grammar\",\"Define quoted-string escaping and filename encoding\",\"Percent-encode port names in multipart headers\"],\"default_guess\":\"Restrict every port name usable in multipart to a conservative ASCII identifier grammar at binding proposal.\"},{\"subject\":\"HTTP header wire encoding\",\"kind\":\"undefined serialization\",\"text\":\"Required-header and credential values are sent “verbatim”; they are forbidden from being empty, containing control characters or surrounding whitespace, but non-ASCII UTF-8 values remain allowed.\",\"question\":\"How are non-ASCII header values serialized on the HTTP wire, or must all header names and values be ASCII?\",\"options\":[\"Require ASCII header values\",\"Encode values as UTF-8 bytes\",\"Use the selected HTTP library's header encoding\"],\"default_guess\":\"Require visible ASCII header values and refuse other values.\"},{\"subject\":\"Credential secrecy\",\"kind\":\"contradiction\",\"text\":\"State 0 says secrets “never enter a function, a flow, a trace or an answer”; A17 and A09 say a credential returned in another encoding is not recognised and is kept like any other value, protected only by its disclosure class.\",\"question\":\"May a transformed or encoded credential be stored and returned as an ordinary service output, or must the kernel uphold the absolute State 0 prohibition?\",\"options\":[\"Only verbatim credential bytes are blocked\",\"Decoded textual and structured equivalents are also blocked\",\"No practical transformed-secret detection is promised, and State 0 is narrowed explicitly\"],\"default_guess\":\"Follow A17's implementable verbatim-byte rule, but amend the absolute State 0 statement to match it.\"},{\"subject\":\"Redacted failure-detail length\",\"kind\":\"undefined unit\",\"text\":\"A07 returns a protected `failure_detail` to an agent “only as its length and that class.”\",\"question\":\"Is the reported length counted in Unicode code points, UTF-8 bytes before truncation, or UTF-8 bytes after truncation?\",\"options\":[\"UTF-8 bytes after stored truncation\",\"Unicode code points after truncation\",\"Original UTF-8 byte length before truncation\"],\"default_guess\":\"Report the UTF-8 byte length of the stored, already-truncated detail.\"}]}"
+}
