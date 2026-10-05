@@ -1,0 +1,210 @@
+{
+ "open_points": [
+  {
+   "subject": "Flow-version identity and proof ordering",
+   "kind": "incomplete ordering",
+   "text": "“edges in the edge order of A05, constants by (`to_node`, `to_port`)” and “edges, by (`to_node`, `to_port`, `from_node`, `from_port`)”",
+   "question": "How are edges or constants ordered when those keys are equal, particularly allowed parallel guarded edges with different guard values and multiple constants targeting the same port?",
+   "options": [
+    "Add the guard value and then full canonical edge content as edge tie-breakers, and full canonical constant content as constant tie-breakers",
+    "Preserve request order for equal sort keys",
+    "Refuse every duplicate sort key during composition"
+   ],
+   "default_guess": "Use full canonical content as the final tie-breaker so request order cannot change identity or the reported first failure."
+  },
+  {
+   "subject": "Function filesystem access",
+   "kind": "contradiction",
+   "text": "K-02 says a function has “no filesystem beyond its input”; A03 permits “a read-only runtime, and one private exchange directory” and traps opening only paths “outside the exchange directory and the read-only runtime.”",
+   "question": "May agent code open and inspect files in the runtime or exchange directory, or must all filesystem access by agent code be refused?",
+   "options": [
+    "Permit reads within the runtime and exchange directory",
+    "Permit only runner-controlled input/output paths, not arbitrary agent file access",
+    "Refuse every filesystem operation by agent code"
+   ],
+   "default_guess": "Permit only runner-controlled input/output paths needed by the sandbox protocol and refuse arbitrary file access."
+  },
+  {
+   "subject": "Function randomness",
+   "kind": "contradiction",
+   "text": "K-02 says a function has “no randomness”; A03 says “`random.Random(seed)` with an explicit seed stays usable.”",
+   "question": "Is deterministic pseudorandom generation part of the permitted function language, or is every randomness API forbidden regardless of seeding?",
+   "options": [
+    "Allow explicitly seeded deterministic pseudorandom generators",
+    "Forbid all randomness APIs",
+    "Allow only a kernel-defined deterministic generator derived from inputs"
+   ],
+   "default_guess": "Allow explicitly seeded deterministic pseudorandom generators, following the more specific A03 rule."
+  },
+  {
+   "subject": "Purity and repeatability of sandbox executions",
+   "kind": "unverifiable invariant",
+   "text": "The required test says “The same implementation on the same input yields the same output digest twice,” while the sandbox restrictions enumerate selected clock and randomness APIs but do not cover other observable process or runtime state.",
+   "question": "What rule prevents code from using values such as process identifiers, object identities, filesystem metadata or ordering, locale, interpreter/platform facts, or other standard-library state to produce different outputs for equal inputs?",
+   "options": [
+    "Expand the forbidden observations to a closed release list",
+    "Define and normalize every observable runtime fact",
+    "Withdraw the universal repeatability guarantee and treat admission as deterministic only for the recorded executions"
+   ],
+   "default_guess": "Expand the forbidden observations and fix all exposed runtime facts needed to enforce equal-input repeatability."
+  },
+  {
+   "subject": "Sandbox resource-limit outcomes",
+   "kind": "ambiguous detection",
+   "text": "A03 says “a limit hit (memory, process count, scratch, `output_bytes`) — `resource_exhausted`” even when the implementation may catch an allocation, file-write, or process-creation error and return normally.",
+   "question": "What exactly counts as a limit being hit, and how does the parent reliably distinguish a caught limit denial from an ordinary exception or successful execution?",
+   "options": [
+    "Any attempted operation denied by an enforced limit records a parent-visible hit",
+    "Only termination or an uncaught limit error counts as a hit",
+    "A conforming return wins when code catches the denial"
+   ],
+   "default_guess": "Any denial caused by an enforced limit records a parent-visible hit and yields `resource_exhausted`."
+  },
+  {
+   "subject": "Failed-attempt spool files",
+   "kind": "contradiction",
+   "text": "A13 first says “the files its attempt spooled are discarded with no SpooledFile record naming them,” then says “after any other failure they stay in the run's spool unnamed.”",
+   "question": "After a non-spool-ceiling failure, are files produced by that failed attempt deleted immediately or retained unnamed until the run spool is removed or the position is replaced?",
+   "options": [
+    "Delete them after every unsuccessful attempt",
+    "Delete them only for spool-ceiling failures and retain them unnamed for other failures",
+    "Retain them for every failure"
+   ],
+   "default_guess": "Delete only the files of a spool-ceiling failure and retain other failed-attempt files unnamed, following the later and more specific sentence."
+  },
+  {
+   "subject": "Retrying service-unreachable elements",
+   "kind": "contradiction",
+   "text": "A13 says “a concluded element is never executed again”; A14 says resume “sends again ... every element waiting on `service_unreachable`,” and A11 assigns the resend a new attempt number.",
+   "question": "Does a `service_unreachable` NodeExecution conclude the element permanently, or is it a concluded attempt while the element itself remains retryable?",
+   "options": [
+    "It concludes only that attempt and resume may create another attempt",
+    "It concludes the element and resume must not resend it",
+    "Do not write a concluded NodeExecution for an unreachable attempt"
+   ],
+   "default_guess": "It concludes only the attempt; the element remains waiting and resume may create a new attempt."
+  },
+  {
+   "subject": "Start-up recovery with both waits and ready work",
+   "kind": "contradictory advancement rules",
+   "text": "A13 says “While some elements wait, every other ready node keeps executing”; A14 advances at startup only “every run that derivation leaves `running`,” while M19 makes a run `awaiting_approval` or `pending` whenever any waiting point exists.",
+   "question": "After restart, should a run that has a waiting element and an independent ready element advance the ready element before the surface opens?",
+   "options": [
+    "Advance every recoverable run until no ready node remains, even when it also has waits",
+    "Advance only runs whose derived status is `running`",
+    "Leave such work until an approval, resolution, or resume request happens"
+   ],
+   "default_guess": "Advance every non-ended run that has ready work, then derive its resting status."
+  },
+  {
+   "subject": "Draft-write activation authority",
+   "kind": "missing persisted fact",
+   "text": "M19 pins only `flow_version_id`, while M26 requires a draft-write attempt to name “the flow activation under which the run started” by that activation's store position.",
+   "question": "How can a later draft-write send recover the exact FlowActivation when the same flow version may have been deactivated and activated again after the run started?",
+   "options": [
+    "Persist the FlowActivation position on the Run",
+    "Derive it from store order and the run's creation position",
+    "Use whichever activation of that version is current when the send occurs"
+   ],
+   "default_guess": "Persist the exact FlowActivation position on the Run at start."
+  },
+  {
+   "subject": "EffectAttempt resolution time",
+   "kind": "incomplete lifecycle",
+   "text": "M26 has one `concluded_at` and `resolved_by`; A11 changes an attempt from `unknown` to `applied` or `not_applied` and says the EffectAttempt is “the only record of the resolution.”",
+   "question": "Does `concluded_at` remain the time the transport outcome became unknown, change to the owner's resolution time, or is a separate resolution timestamp required?",
+   "options": [
+    "Keep the original `concluded_at` and add `resolved_at`",
+    "Replace `concluded_at` with the resolution time",
+    "Keep only the original `concluded_at` and record no resolution time"
+   ],
+   "default_guess": "Keep the transport conclusion time and add a separate `resolved_at` timestamp."
+  },
+  {
+   "subject": "Malformed platform-manifest structures",
+   "kind": "incomplete refusal conditions",
+   "text": "A08 defines failures for an absent or invalid-JSON record and selected missing fields, but does not state the result for valid JSON with wrong-shaped `capabilities`, instance, operation, `exposed_as`, `required_headers`, or other fields used by the rules.",
+   "question": "Which structural and type errors make the record a manifest mismatch, in what order are they checked, and which detail is reported first?",
+   "options": [
+    "Validate the whole manifest record against a closed schema before A08's semantic checks",
+    "Treat each malformed field as the corresponding absent-field condition",
+    "Let each consuming check reject malformed data when reached"
+   ],
+   "default_guess": "Validate against a closed manifest schema first and report its first deterministic structural failure."
+  },
+  {
+   "subject": "Manifest revision access",
+   "kind": "unspecified source behavior",
+   "text": "The kernel reads `<manifest_location>/<service_id>.json` “at the configured `manifest_revision`,” but no rule says how a filesystem location is read at a repository revision or what happens when that revision cannot be resolved.",
+   "question": "What mechanism selects the configured revision, and how are a missing revision, non-repository location, checkout failure, or revision/path mismatch classified?",
+   "options": [
+    "Require `manifest_location` already to expose exactly the configured revision",
+    "Have the kernel read repository objects directly at the revision",
+    "Have the kernel perform or manage a checkout"
+   ],
+   "default_guess": "Require the configured location to expose the selected revision read-only and fail startup when the revision cannot be verified."
+  },
+  {
+   "subject": "Service base URL",
+   "kind": "underspecified URL rules",
+   "text": "A08 accepts an “absolute `http` or `https` URL with a host”; A09 forms the target as “the `api_base_url` without a trailing `/` followed by the declared path.”",
+   "question": "Are user information, query, fragment, an existing base path, percent escapes, IPv6 zone identifiers, or multiple trailing slashes allowed, and exactly how is the base URL joined to the operation path?",
+   "options": [
+    "Restrict the base URL to scheme, authority and an optional normalized base path",
+    "Allow all absolute HTTP URLs and define a literal concatenation algorithm",
+    "Use standard URL-reference resolution"
+   ],
+   "default_guess": "Restrict the base URL to scheme, authority, and an optional path with no query, fragment, or user information, then define literal joining."
+  },
+  {
+   "subject": "Multipart request bytes",
+   "kind": "missing wire format",
+   "text": "A09 specifies multipart parts and headers but says only that the boundary is “the kernel's framing”; it does not specify boundary generation, quoting, CRLF placement, header escaping, final delimiters, or collision handling.",
+   "question": "What exact multipart serialization must every implementation produce, and how is a boundary selected so it cannot occur ambiguously in part content?",
+   "options": [
+    "Define one canonical multipart encoder and deterministic boundary rule",
+    "Use a random boundary while excluding it from request identity",
+    "Delegate serialization to the chosen HTTP library"
+   ],
+   "default_guess": "Define one release-pinned canonical multipart encoder and deterministic collision-safe boundary rule."
+  },
+  {
+   "subject": "Loopback exception for plain HTTP",
+   "kind": "ambiguous security check",
+   "text": "A09 permits plain HTTP when the `api_base_url` “host is a loopback address.”",
+   "question": "Does this mean only a literal loopback IP, the hostname `localhost`, or any hostname whose DNS resolution currently yields a loopback address, and how are mixed or changing DNS answers handled?",
+   "options": [
+    "Only literal IPv4 or IPv6 loopback addresses",
+    "Literal loopback addresses plus `localhost`",
+    "Any hostname resolving exclusively to loopback addresses"
+   ],
+   "default_guess": "Allow only literal IPv4 or IPv6 loopback addresses."
+  },
+  {
+   "subject": "Release ceiling changes and persisted artifacts",
+   "kind": "incomplete upgrade rule",
+   "text": "A20 says a new release may change ceilings and explicitly preserves old contract resource bounds, but gives no rule for existing implementations, StoredValues, constants, trial fixtures, flow versions, or runs that exceed a newly lowered non-contract ceiling.",
+   "question": "After an upgrade lowers a non-contract ceiling, may existing oversized records still be inspected, admitted, activated, or run, and at which operation is a new limit applied?",
+   "options": [
+    "Grandfather all persisted artifacts and apply new limits only to newly supplied or produced data",
+    "Apply new limits whenever an old artifact is next consumed",
+    "Refuse startup until incompatible persisted artifacts are migrated"
+   ],
+   "default_guess": "Grandfather persisted artifacts and apply new ceilings only to new requests and newly produced data, except runtime transport and spool limits."
+  },
+  {
+   "subject": "Data-directory privacy check",
+   "kind": "vague start condition",
+   "text": "A18 says the data directory and everything in it are “private to the kernel's user” and the kernel refuses to start otherwise, without defining ownership, file types, or permitted mode bits.",
+   "question": "What exact ownership and permission checks apply to the directory, database, value area, fixtures, spool directories, lock file, and their ancestors?",
+   "options": [
+    "Require kernel-user ownership and no group/other permissions for every entry",
+    "Require only the top-level directory to be private",
+    "Apply different fixed modes by entry type"
+   ],
+   "default_guess": "Require every managed entry to be owned by the kernel user with no group or other permissions, and reject unsupported file types."
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"Flow-version identity and proof ordering\",\"kind\":\"incomplete ordering\",\"text\":\"“edges in the edge order of A05, constants by (`to_node`, `to_port`)” and “edges, by (`to_node`, `to_port`, `from_node`, `from_port`)”\",\"question\":\"How are edges or constants ordered when those keys are equal, particularly allowed parallel guarded edges with different guard values and multiple constants targeting the same port?\",\"options\":[\"Add the guard value and then full canonical edge content as edge tie-breakers, and full canonical constant content as constant tie-breakers\",\"Preserve request order for equal sort keys\",\"Refuse every duplicate sort key during composition\"],\"default_guess\":\"Use full canonical content as the final tie-breaker so request order cannot change identity or the reported first failure.\"},{\"subject\":\"Function filesystem access\",\"kind\":\"contradiction\",\"text\":\"K-02 says a function has “no filesystem beyond its input”; A03 permits “a read-only runtime, and one private exchange directory” and traps opening only paths “outside the exchange directory and the read-only runtime.”\",\"question\":\"May agent code open and inspect files in the runtime or exchange directory, or must all filesystem access by agent code be refused?\",\"options\":[\"Permit reads within the runtime and exchange directory\",\"Permit only runner-controlled input/output paths, not arbitrary agent file access\",\"Refuse every filesystem operation by agent code\"],\"default_guess\":\"Permit only runner-controlled input/output paths needed by the sandbox protocol and refuse arbitrary file access.\"},{\"subject\":\"Function randomness\",\"kind\":\"contradiction\",\"text\":\"K-02 says a function has “no randomness”; A03 says “`random.Random(seed)` with an explicit seed stays usable.”\",\"question\":\"Is deterministic pseudorandom generation part of the permitted function language, or is every randomness API forbidden regardless of seeding?\",\"options\":[\"Allow explicitly seeded deterministic pseudorandom generators\",\"Forbid all randomness APIs\",\"Allow only a kernel-defined deterministic generator derived from inputs\"],\"default_guess\":\"Allow explicitly seeded deterministic pseudorandom generators, following the more specific A03 rule.\"},{\"subject\":\"Purity and repeatability of sandbox executions\",\"kind\":\"unverifiable invariant\",\"text\":\"The required test says “The same implementation on the same input yields the same output digest twice,” while the sandbox restrictions enumerate selected clock and randomness APIs but do not cover other observable process or runtime state.\",\"question\":\"What rule prevents code from using values such as process identifiers, object identities, filesystem metadata or ordering, locale, interpreter/platform facts, or other standard-library state to produce different outputs for equal inputs?\",\"options\":[\"Expand the forbidden observations to a closed release list\",\"Define and normalize every observable runtime fact\",\"Withdraw the universal repeatability guarantee and treat admission as deterministic only for the recorded executions\"],\"default_guess\":\"Expand the forbidden observations and fix all exposed runtime facts needed to enforce equal-input repeatability.\"},{\"subject\":\"Sandbox resource-limit outcomes\",\"kind\":\"ambiguous detection\",\"text\":\"A03 says “a limit hit (memory, process count, scratch, `output_bytes`) — `resource_exhausted`” even when the implementation may catch an allocation, file-write, or process-creation error and return normally.\",\"question\":\"What exactly counts as a limit being hit, and how does the parent reliably distinguish a caught limit denial from an ordinary exception or successful execution?\",\"options\":[\"Any attempted operation denied by an enforced limit records a parent-visible hit\",\"Only termination or an uncaught limit error counts as a hit\",\"A conforming return wins when code catches the denial\"],\"default_guess\":\"Any denial caused by an enforced limit records a parent-visible hit and yields `resource_exhausted`.\"},{\"subject\":\"Failed-attempt spool files\",\"kind\":\"contradiction\",\"text\":\"A13 first says “the files its attempt spooled are discarded with no SpooledFile record naming them,” then says “after any other failure they stay in the run's spool unnamed.”\",\"question\":\"After a non-spool-ceiling failure, are files produced by that failed attempt deleted immediately or retained unnamed until the run spool is removed or the position is replaced?\",\"options\":[\"Delete them after every unsuccessful attempt\",\"Delete them only for spool-ceiling failures and retain them unnamed for other failures\",\"Retain them for every failure\"],\"default_guess\":\"Delete only the files of a spool-ceiling failure and retain other failed-attempt files unnamed, following the later and more specific sentence.\"},{\"subject\":\"Retrying service-unreachable elements\",\"kind\":\"contradiction\",\"text\":\"A13 says “a concluded element is never executed again”; A14 says resume “sends again ... every element waiting on `service_unreachable`,” and A11 assigns the resend a new attempt number.\",\"question\":\"Does a `service_unreachable` NodeExecution conclude the element permanently, or is it a concluded attempt while the element itself remains retryable?\",\"options\":[\"It concludes only that attempt and resume may create another attempt\",\"It concludes the element and resume must not resend it\",\"Do not write a concluded NodeExecution for an unreachable attempt\"],\"default_guess\":\"It concludes only the attempt; the element remains waiting and resume may create a new attempt.\"},{\"subject\":\"Start-up recovery with both waits and ready work\",\"kind\":\"contradictory advancement rules\",\"text\":\"A13 says “While some elements wait, every other ready node keeps executing”; A14 advances at startup only “every run that derivation leaves `running`,” while M19 makes a run `awaiting_approval` or `pending` whenever any waiting point exists.\",\"question\":\"After restart, should a run that has a waiting element and an independent ready element advance the ready element before the surface opens?\",\"options\":[\"Advance every recoverable run until no ready node remains, even when it also has waits\",\"Advance only runs whose derived status is `running`\",\"Leave such work until an approval, resolution, or resume request happens\"],\"default_guess\":\"Advance every non-ended run that has ready work, then derive its resting status.\"},{\"subject\":\"Draft-write activation authority\",\"kind\":\"missing persisted fact\",\"text\":\"M19 pins only `flow_version_id`, while M26 requires a draft-write attempt to name “the flow activation under which the run started” by that activation's store position.\",\"question\":\"How can a later draft-write send recover the exact FlowActivation when the same flow version may have been deactivated and activated again after the run started?\",\"options\":[\"Persist the FlowActivation position on the Run\",\"Derive it from store order and the run's creation position\",\"Use whichever activation of that version is current when the send occurs\"],\"default_guess\":\"Persist the exact FlowActivation position on the Run at start.\"},{\"subject\":\"EffectAttempt resolution time\",\"kind\":\"incomplete lifecycle\",\"text\":\"M26 has one `concluded_at` and `resolved_by`; A11 changes an attempt from `unknown` to `applied` or `not_applied` and says the EffectAttempt is “the only record of the resolution.”\",\"question\":\"Does `concluded_at` remain the time the transport outcome became unknown, change to the owner's resolution time, or is a separate resolution timestamp required?\",\"options\":[\"Keep the original `concluded_at` and add `resolved_at`\",\"Replace `concluded_at` with the resolution time\",\"Keep only the original `concluded_at` and record no resolution time\"],\"default_guess\":\"Keep the transport conclusion time and add a separate `resolved_at` timestamp.\"},{\"subject\":\"Malformed platform-manifest structures\",\"kind\":\"incomplete refusal conditions\",\"text\":\"A08 defines failures for an absent or invalid-JSON record and selected missing fields, but does not state the result for valid JSON with wrong-shaped `capabilities`, instance, operation, `exposed_as`, `required_headers`, or other fields used by the rules.\",\"question\":\"Which structural and type errors make the record a manifest mismatch, in what order are they checked, and which detail is reported first?\",\"options\":[\"Validate the whole manifest record against a closed schema before A08's semantic checks\",\"Treat each malformed field as the corresponding absent-field condition\",\"Let each consuming check reject malformed data when reached\"],\"default_guess\":\"Validate against a closed manifest schema first and report its first deterministic structural failure.\"},{\"subject\":\"Manifest revision access\",\"kind\":\"unspecified source behavior\",\"text\":\"The kernel reads `<manifest_location>/<service_id>.json` “at the configured `manifest_revision`,” but no rule says how a filesystem location is read at a repository revision or what happens when that revision cannot be resolved.\",\"question\":\"What mechanism selects the configured revision, and how are a missing revision, non-repository location, checkout failure, or revision/path mismatch classified?\",\"options\":[\"Require `manifest_location` already to expose exactly the configured revision\",\"Have the kernel read repository objects directly at the revision\",\"Have the kernel perform or manage a checkout\"],\"default_guess\":\"Require the configured location to expose the selected revision read-only and fail startup when the revision cannot be verified.\"},{\"subject\":\"Service base URL\",\"kind\":\"underspecified URL rules\",\"text\":\"A08 accepts an “absolute `http` or `https` URL with a host”; A09 forms the target as “the `api_base_url` without a trailing `/` followed by the declared path.”\",\"question\":\"Are user information, query, fragment, an existing base path, percent escapes, IPv6 zone identifiers, or multiple trailing slashes allowed, and exactly how is the base URL joined to the operation path?\",\"options\":[\"Restrict the base URL to scheme, authority and an optional normalized base path\",\"Allow all absolute HTTP URLs and define a literal concatenation algorithm\",\"Use standard URL-reference resolution\"],\"default_guess\":\"Restrict the base URL to scheme, authority, and an optional path with no query, fragment, or user information, then define literal joining.\"},{\"subject\":\"Multipart request bytes\",\"kind\":\"missing wire format\",\"text\":\"A09 specifies multipart parts and headers but says only that the boundary is “the kernel's framing”; it does not specify boundary generation, quoting, CRLF placement, header escaping, final delimiters, or collision handling.\",\"question\":\"What exact multipart serialization must every implementation produce, and how is a boundary selected so it cannot occur ambiguously in part content?\",\"options\":[\"Define one canonical multipart encoder and deterministic boundary rule\",\"Use a random boundary while excluding it from request identity\",\"Delegate serialization to the chosen HTTP library\"],\"default_guess\":\"Define one release-pinned canonical multipart encoder and deterministic collision-safe boundary rule.\"},{\"subject\":\"Loopback exception for plain HTTP\",\"kind\":\"ambiguous security check\",\"text\":\"A09 permits plain HTTP when the `api_base_url` “host is a loopback address.”\",\"question\":\"Does this mean only a literal loopback IP, the hostname `localhost`, or any hostname whose DNS resolution currently yields a loopback address, and how are mixed or changing DNS answers handled?\",\"options\":[\"Only literal IPv4 or IPv6 loopback addresses\",\"Literal loopback addresses plus `localhost`\",\"Any hostname resolving exclusively to loopback addresses\"],\"default_guess\":\"Allow only literal IPv4 or IPv6 loopback addresses.\"},{\"subject\":\"Release ceiling changes and persisted artifacts\",\"kind\":\"incomplete upgrade rule\",\"text\":\"A20 says a new release may change ceilings and explicitly preserves old contract resource bounds, but gives no rule for existing implementations, StoredValues, constants, trial fixtures, flow versions, or runs that exceed a newly lowered non-contract ceiling.\",\"question\":\"After an upgrade lowers a non-contract ceiling, may existing oversized records still be inspected, admitted, activated, or run, and at which operation is a new limit applied?\",\"options\":[\"Grandfather all persisted artifacts and apply new limits only to newly supplied or produced data\",\"Apply new limits whenever an old artifact is next consumed\",\"Refuse startup until incompatible persisted artifacts are migrated\"],\"default_guess\":\"Grandfather persisted artifacts and apply new ceilings only to new requests and newly produced data, except runtime transport and spool limits.\"},{\"subject\":\"Data-directory privacy check\",\"kind\":\"vague start condition\",\"text\":\"A18 says the data directory and everything in it are “private to the kernel's user” and the kernel refuses to start otherwise, without defining ownership, file types, or permitted mode bits.\",\"question\":\"What exact ownership and permission checks apply to the directory, database, value area, fixtures, spool directories, lock file, and their ancestors?\",\"options\":[\"Require kernel-user ownership and no group/other permissions for every entry\",\"Require only the top-level directory to be private\",\"Apply different fixed modes by entry type\"],\"default_guess\":\"Require every managed entry to be owned by the kernel user with no group or other permissions, and reject unsupported file types.\"}]}"
+}
