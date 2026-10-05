@@ -215,7 +215,9 @@ outcomes map to NodeExecution statuses.
    exists for it, and its approval stays unused.
 7. A response status never by itself means more than this table says. The body of
    an answer that is not used is not interpreted; at most `failure_detail_bytes_max` of it
-   is kept as `failure_detail`, whose class is the highest of the execution's
+   is kept as `failure_detail` — the body decoded as UTF-8, each invalid
+   sequence replaced by U+FFFD, then cut at a character boundary to its
+   longest prefix that fits as UTF-8 bytes — whose class is the highest of the execution's
    class and the classes the binding declares for its outputs, under A07 rule 5.
    Every body as read, whatever its status — reading stops at the ceiling
    (rule 5) — is searched, before it is parsed or cut, for the bytes of the credential

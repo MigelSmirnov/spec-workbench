@@ -115,15 +115,17 @@ worker.
    written by `runs` when the list is first delivered — never in an element's
    own store change, which for an operation element is `effects'` — and
    named, like any value, by the records that receive it; a list whose
-   canonical bytes exceed `stored_value_bytes_max` is not written: the node is
-   then failed for its dependants, which conclude `upstream_failed` and write
-   that record (A15 rule 1), derived like the list from the elements'
-   records, which stay as they are (A15 rule 4). No record states that
-   failure itself, and none is needed: the dependants' `upstream_failed`
-   records, written in the change that first derives it, are its durable
-   fact, and until they exist nothing has observed it, so a derivation after
-   a restart — under a release whose ceiling may differ — decides afresh with
-   nothing to contradict; mapping over such a
+   canonical bytes exceed `stored_value_bytes_max` is not written. Instead
+   `runs` writes, in the change that first derives that list, one
+   NodeExecution of the node without `map_index` — number 1 by A11 rule 1,
+   `executed` naming what it pins, status `contract_violation`, no outputs,
+   and `failure_detail` naming `value_too_large` and the first output port, in
+   port order, whose list is over the ceiling. The node is then failed: none
+   of its outputs is delivered, its dependants conclude `upstream_failed`
+   (A15 rule 1), and the elements' records stay as they are (A15 rule 4).
+   That record is the trace's fact of the failure (A15), so a run whose list
+   feeds only a flow output explains it too, and a restart reads it and never
+   derives that list again; mapping over such a
    list gives each element the list's class; a file list is the
    elements' SpooledFiles in element order, each keeping its own record, and
    the reference naming it carries the list's class. A non-empty list has no
@@ -292,8 +294,8 @@ spool, files only as fixtures beyond a run.
    `stored_value_bytes_max` is checked only after the execution or the response
    has otherwise succeeded, so A03's `resource_exhausted` for `output_bytes` wins
    when both hold; it concludes the element `contract_violation` with detail
-   `value_too_large`; a mapped node's value list above it fails the node for
-   its dependants without changing any element's record (A13 rule 6); a constant or a trial value above it is refused when
+   `value_too_large`; a mapped node's value list above it fails the node by
+   a record of the node's own, without changing any element's record (A13 rule 6); a constant or a trial value above it is refused when
    authored, by the surface's request bound (A16 rule 4) before any check of
    composition or of the trial case; a flow input above it refuses the start (A12).
 5. Capturing a failed execution into a trial corpus (M06) is allowed only for
