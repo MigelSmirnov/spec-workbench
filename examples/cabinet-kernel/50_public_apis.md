@@ -1070,7 +1070,7 @@ None.
 
 Resolved only when a request to that service is built; the kernel never puts the
 value into a record, trace, preview, detail, log, argument or response (A17
-rule 2); a service's error body echoing it verbatim is withheld (A09 rule 7).
+rule 2); a service's body echoing it verbatim, 2xx included, is withheld and not used (A09 rule 7).
 
 ### Errors
 

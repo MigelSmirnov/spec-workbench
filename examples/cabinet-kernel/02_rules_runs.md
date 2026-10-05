@@ -118,7 +118,12 @@ worker.
    canonical bytes exceed `stored_value_bytes_max` is not written: the node is
    then failed for its dependants, which conclude `upstream_failed` and write
    that record (A15 rule 1), derived like the list from the elements'
-   records, which stay as they are (A15 rule 4); mapping over such a
+   records, which stay as they are (A15 rule 4). No record states that
+   failure itself, and none is needed: the dependants' `upstream_failed`
+   records, written in the change that first derives it, are its durable
+   fact, and until they exist nothing has observed it, so a derivation after
+   a restart — under a release whose ceiling may differ — decides afresh with
+   nothing to contradict; mapping over such a
    list gives each element the list's class; a file list is the
    elements' SpooledFiles in element order, each keeping its own record, and
    the reference naming it carries the list's class. A non-empty list has no

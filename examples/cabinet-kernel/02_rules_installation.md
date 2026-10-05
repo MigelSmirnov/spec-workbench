@@ -145,9 +145,9 @@ Reuses cabinet-flow decision 23, narrowed by K-16.
    else. A resolved value is added as that header. The kernel never puts it
    into the store, a record, a trace, a preview, a failure detail, a log line,
    a process argument or a response. A service's own answer is not the
-   kernel's text: an error body that echoes the value verbatim is withheld
-   (A09 rule 7); one that carries it in another encoding is not recognised,
-   and is protected only by the class of its `failure_detail`.
+   kernel's text: a body that echoes the value verbatim, 2xx or not, is
+   withheld and never used as an output (A09 rule 7); one that carries it in
+   another encoding is not recognised, and is protected only by its class.
 3. A function never receives a credential: its environment holds only the hash
    seed (A03) and its
    inputs are values that crossed a proven edge.
@@ -159,7 +159,7 @@ Reuses cabinet-flow decision 23, narrowed by K-16.
 
 ```text
 kernel_writes(credential) INTO {store, record, trace, preview, failure_detail, log, argv, response} -> never
-verbatim(credential) IN error_body -> body withheld (A09 rule 7)
+verbatim(credential) IN response_body -> body withheld, not used (A09 rule 7)
 credential_resolved -> at_request_build AND for_its_service_only
 instance(service) = installation.selected(service)
 config_file_mode -> owner_only_readable

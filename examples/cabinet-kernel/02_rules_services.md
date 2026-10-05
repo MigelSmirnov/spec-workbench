@@ -198,7 +198,7 @@ outcomes map to NodeExecution statuses.
    | request may have been sent, no valid final response received (timeout, reset, EOF, a malformed status line or headers, only `1xx`) | `service_unreachable` | `outcome_unknown`, attempt `unknown` |
    | status 3xx or 5xx, whatever the body's size — reading stops at the ceiling | `service_unreachable` for 5xx, `operation_failed` for 3xx | `outcome_unknown`, attempt `unknown` |
    | status 4xx, whatever the body's size — reading stops at the ceiling | `operation_refused` | `operation_refused`, attempt `not_applied` |
-   | status 2xx, outputs do not fit rule 3, or the body exceeds `service_response_bytes_max`, `stored_value_bytes_max` or the spool ceilings | `contract_violation` | `contract_violation`, attempt `applied` |
+   | status 2xx, the body echoes the credential (rule 7), outputs do not fit rule 3, or the body exceeds `service_response_bytes_max`, `stored_value_bytes_max` or the spool ceilings | `contract_violation` | `contract_violation`, attempt `applied` |
    | status 2xx, outputs fit | `succeeded` | `succeeded`, attempt `applied` |
 
    "Nothing could be sent" holds only when the failure happened before the
@@ -214,14 +214,18 @@ outcomes map to NodeExecution statuses.
    concludes `operation_failed` with a detail naming the check, no EffectAttempt
    exists for it, and its approval stays unused.
 7. A response status never by itself means more than this table says. The body of
-   an error response is not interpreted; at most `failure_detail_bytes_max` of it
+   an answer that is not used is not interpreted; at most `failure_detail_bytes_max` of it
    is kept as `failure_detail`, whose class is the highest of the execution's
    class and the classes the binding declares for its outputs, under A07 rule 5.
-   Before anything is kept, the body as read — reading stops at the ceiling
-   (rule 5) — is searched, before it is cut, for the bytes of the credential
+   Every body as read, whatever its status — reading stops at the ceiling
+   (rule 5) — is searched, before it is parsed or cut, for the bytes of the credential
    value sent with the request; when they occur, the body is
    dropped whole and `failure_detail` is exactly `error body withheld: it
-   contained the credential` (A17 rule 2). Only that verbatim echo is
+   contained the credential` (A17 rule 2). A 2xx body that echoes it is
+   therefore not used: the answer is `contract_violation` (rule 5), no output
+   is stored or spooled, and for a non-read operation the attempt is `applied`
+   (owner, 2026-10-05: a stored output holding the credential would be the
+   kernel writing it). Only that verbatim echo is
    searched for; a body carrying the credential in another encoding is kept
    like any other and is protected only by its class.
 
@@ -236,7 +240,7 @@ non_read AND (possibly_sent AND no_valid_answer) -> outcome_unknown
 non_read AND 4xx -> not_applied
 non_read AND 2xx -> applied
 read AND (not_sent OR no_answer OR 5xx) -> service_unreachable
-credential_bytes IN error_body -> failure_detail = withheld_note
+credential_bytes IN body -> failure_detail = withheld_note AND outputs = none
 ```
 
 ### Required tests
@@ -254,6 +258,9 @@ credential_bytes IN error_body -> failure_detail = withheld_note
 7. A 401 whose body echoes the credential value keeps `failure_detail` exactly
    `error body withheld: it contained the credential`, and the credential
    appears in no record.
+8. A 2xx JSON body that echoes the credential value in a member an output port
+   takes concludes `contract_violation` with that same `failure_detail`, and
+   no StoredValue holds the credential.
 
 ### Consequence
 

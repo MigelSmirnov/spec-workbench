@@ -558,7 +558,7 @@ A09: building one HTTP request from a binding, the selected instance and the
 node's inputs — URL, query and body encoding, headers, the credential — and
 sending it once with no redirect, proxy or retry; the outcome table of A09 rule
 5; the pre-send checks of the instance and the inputs (A09 rule 6). Withholding
-an error body that echoes the credential before it becomes `failure_detail`
+any body that echoes the credential before it becomes an output or `failure_detail`
 (A09 rule 7), since only it holds the credential at the answer. The request
 description and its `request_digest` (A10 rule 7), since only the builder knows
 what will be sent. The shape rules a binding's ports must satisfy to be

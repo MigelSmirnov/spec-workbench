@@ -220,7 +220,12 @@ cleanup_unconfirmed -> output_discarded AND kernel_process_stops
    `resource_exhausted`; no process survives.
 3. An output one byte over `output_bytes` is `resource_exhausted`, not truncated.
 4. A module without `run`, and one with a syntax error, are `crashed`; neither
-   raises inside the kernel process.
+   raises inside the kernel process. Submitting code never compiles, imports
+   or parses it — the kernel process never interprets agent text (A16 rule 5)
+   — so a module that cannot load is stored as an implementation like any
+   other, its trial executions are `crashed` and admission refuses it (A04
+   rule 3). State 0's "invalid … code refused" is the refusal of the request
+   itself: code over its bound or a request off its schema (A16 rule 4).
 5. A returned dict with an extra key is `contract_violation`.
 6. The same implementation on the same input yields the same output digest twice.
 7. With `bubblewrap` absent the kernel does not start and names the missing
