@@ -61,7 +61,10 @@ Python signatures are State 6's.
   index comes before index 0 (A14 rule 2).
 - **Naming an element.** A run or a node of its pinned version that does not
   exist is `unknown_reference`; a `map_index` given for a node that is not
-  mapped, or absent for one that is, is `refused`; a well-formed element with no
+  mapped, or absent for one that is, is `refused` — a mapped node's own
+  record without `map_index` (A15 rule 1: it ran no element) records no
+  execution, so no operation that names an element addresses it; it is read
+  with the run's trace; a well-formed element with no
   record yet is a result — not reached, or empty — never a refusal. Every
   operation that takes an element makes these checks, except one whose Enforces
   says it trusts the facts its caller passes down (State 3) —
@@ -2537,7 +2540,7 @@ Through `effects` — the resolution, and after `not_applied` a pre-send failure
 
 ### Owner
 
-`module:runs`. Return a run's answer computed from its trace.
+`module:runs`. Return a run's answer from its Run record and its trace.
 
 ### Callers
 
@@ -2562,7 +2565,9 @@ None.
 
 ### Enforces
 
-Computed from the trace when asked, never stored (State 3).
+Assembled when asked from the Run record — its status, produced outputs and
+waiting points as `runs` wrote them — and the trace, which gives the reason
+per missing output; reading stores nothing (State 3).
 
 ### Errors
 

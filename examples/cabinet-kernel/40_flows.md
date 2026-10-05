@@ -74,13 +74,14 @@ AdmissionVerdict M08 and Activation M09 are written by `module:functions`.
 1. **Issue a contract version.**
    `capability:functions.issue_contract_version` takes the contract content.
    It checks the purpose rule first (A01 rule 5: a new slot name needs a
-   purpose; an existing slot refuses a different one), then the A02 rule 1
+   purpose; an existing slot refuses a different one). It then computes
+   `contract_version_id` with `capability:canonical_values.content_identity`;
+   an equal version is returned unchanged and does not become current again
+   (A01 rule 4), without the A02 rule 1 checks, which bind only a new version —
+   so an equal one is returned even after a release lowered a ceiling below its
+   bounds (A20 rule 4). A new version is checked against the A02 rule 1
    conditions in their order, naming the first failure; a bound above its
-   ceiling or omitted is refused, never clamped (A02 rule 2). It computes
-   `contract_version_id` with `capability:canonical_values.content_identity`; an equal version is returned unchanged and does not
-   become current again (A01 rule 4) — the A02 rule 1 ceiling checks bind only
-   a new version, so an equal one is returned even after a release lowered a
-   ceiling below its bounds (A20 rule 4). Otherwise one
+   ceiling or omitted is refused, never clamped (A02 rule 2). Then one
    `capability:store.record_change` writes the ContractVersion, and the Slot
    when the name is new, and makes it the slot's current contract version.
    The answer is the version with its identity. Next decision: the agent's.

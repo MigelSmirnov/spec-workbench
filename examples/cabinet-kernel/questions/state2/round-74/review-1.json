@@ -1,0 +1,246 @@
+{
+ "open_points": [
+  {
+   "subject": "FlowVersion content identity",
+   "kind": "contradictory ordering",
+   "text": "A01 says lists whose order carries no meaning are sorted before hashing, including “edges in the edge order of A05” and “constants by (`to_node`, `to_port`)”, so reordered equal content has the same identity. Those keys are not total: edges with the same endpoints but different guards, and multiple constants targeting one port, can tie.",
+   "question": "How are tied edges and constants ordered before hashing so that input order cannot change `flow_version_id`?",
+   "options": [
+    "Add a canonical tie-break using every remaining meaning fact",
+    "Treat the original list order as meaningful for tied items",
+    "Refuse all items whose canonical sort keys tie before hashing"
+   ],
+   "default_guess": "Use canonical JSON of the complete edge or constant as the final tie-break."
+  },
+  {
+   "subject": "Flow node and flow-endpoint identity",
+   "kind": "ambiguous identifier",
+   "text": "A05 says “A flow input or flow output endpoint has the empty string as its node”, but no rule refuses an empty `node_id` or defines a separate endpoint discriminator.",
+   "question": "May a flow node have the empty identifier, and if so how is it distinguished from a flow input or output endpoint?",
+   "options": [
+    "Refuse an empty `node_id` at composition",
+    "Represent endpoint kind separately from `node_id`",
+    "Allow the collision and resolve it contextually"
+   ],
+   "default_guess": "Refuse an empty `node_id` before keeping the version."
+  },
+  {
+   "subject": "Guarded edges",
+   "kind": "missing refusal conditions",
+   "text": "M15 permits a FlowEdge source to be “a node's output port or a flow input”, while its guard must be “an output port of the same source node”; A05 requires only that the guard be a `one` output with a closed-set schema and does not require `value` carriage.",
+   "question": "Are guarded edges from flow inputs allowed, and may a file output be used as a guard?",
+   "options": [
+    "Allow guards only on edges sourced from a node and only on `value` outputs",
+    "Allow flow-input guards and define their guard source separately",
+    "Allow file guards and define how file bytes compare with a closed JSON value"
+   ],
+   "default_guess": "Refuse guards unless the edge source is a node and the guard port is a `one` `value` output of that node."
+  },
+  {
+   "subject": "ProofResult identity and stability",
+   "kind": "contradiction",
+   "text": "M17 says “proving the same version gives the same result”, while A05 says a version that failed because a binding was `proposed` is proven after acceptance “with no new version” and then gives a different result.",
+   "question": "What makes two ProofResults the same value when the same `flow_version_id` can produce different results as binding status changes?",
+   "options": [
+    "ProofResult identity includes all result facts, so the same version may yield different values",
+    "ProofResult includes a snapshot or digest of binding statuses",
+    "The first result is immutable and acceptance requires a new flow version"
+   ],
+   "default_guess": "Treat each complete computed result as a value; `flow_version_id` alone does not identify the ProofResult."
+  },
+  {
+   "subject": "TrialCase input and expected-output shape",
+   "kind": "missing validation",
+   "text": "A04 requires that “its input values fit the contract version's input ports” and that expected outputs “fit the output ports”, but does not say whether every input must be present, whether extra names are refused, or whether present `expected_outputs` must contain every output.",
+   "question": "What exact port-name set must an authored trial case supply for inputs and for present expected outputs?",
+   "options": [
+    "Inputs must exactly match all input ports; expected outputs are either absent or exactly match all output ports",
+    "Inputs must be exact but expected outputs may be partial",
+    "Both inputs and expected outputs may be partial"
+   ],
+   "default_guess": "Require exactly all input ports, and require either no expected outputs or exactly all output ports."
+  },
+  {
+   "subject": "Sandbox filesystem access",
+   "kind": "contradiction",
+   "text": "K-02 says a function has “no filesystem beyond its input”, but A03 mounts a private exchange directory and a read-only runtime and permits opening paths inside both.",
+   "question": "May agent code itself read arbitrary runtime files and create, enumerate or reread files in the exchange directory, or are those paths accessible only to the runner?",
+   "options": [
+    "User code may use the exchange directory and read the runtime",
+    "Only the runner may access exchange files; user code receives only Python values and bytes",
+    "User code may read inputs in exchange storage but may not create or inspect other files"
+   ],
+   "default_guess": "Expose no filesystem API to user code beyond the byte values passed to `run`; reserve exchange access for the runner."
+  },
+  {
+   "subject": "Sandbox clock prohibition",
+   "kind": "contradictory closed list",
+   "text": "A03 says the runner replaces “every clock ... entry point” and then declares an exact closed list that omits standard-library clock access such as `time.clock_gettime`, `time.clock_gettime_ns`, `os.times` and resource-usage clocks.",
+   "question": "Is the function prohibited from every observable clock, or only from the entry points in the written closed list?",
+   "options": [
+    "The closed list is authoritative and omitted clock APIs remain usable",
+    "All clock APIs are prohibited and the release list must include the omitted APIs",
+    "Only civil or wall time is prohibited; process and resource clocks are allowed"
+   ],
+   "default_guess": "Treat every clock source as prohibited and extend the closed release list accordingly."
+  },
+  {
+   "subject": "Function determinism",
+   "kind": "unverifiable invariant",
+   "text": "K-05 calls admission deterministic, and A03 requires “The same implementation on the same input yields the same output digest twice”, but allowed Python can create threads and observe scheduling or other runtime state not covered by the trap list.",
+   "question": "What must the kernel do when permitted code can produce different results for equal inputs?",
+   "options": [
+    "Determinism is best-effort and recorded executions are authoritative",
+    "Prohibit every remaining nondeterministic facility, including concurrent execution",
+    "Run cases repeatedly and refuse an implementation when digests differ"
+   ],
+   "default_guess": "Treat the sandbox restrictions as best-effort determinism and make each recorded observation authoritative."
+  },
+  {
+   "subject": "Startup-recovery actor provenance",
+   "kind": "missing trace fact",
+   "text": "A27 says startup recovery is an automatic action of actor `kernel`, and that the request causing a NodeExecution is identified through the run's `started_by` or `resumptions`; A14 can execute functions and resend reads during startup without recording a resumption or another actor-bearing recovery record.",
+   "question": "How can a trace distinguish a NodeExecution caused by startup recovery from one caused by the original start or a resume request?",
+   "options": [
+    "Record a kernel recovery/resumption event before advancing the run",
+    "Add a cause or actor field to NodeExecution",
+    "Do not distinguish startup recovery in the durable trace"
+   ],
+   "default_guess": "Record a kernel-authored recovery event that the resulting executions reference or follow unambiguously."
+  },
+  {
+   "subject": "Unfinished runs across kernel releases",
+   "kind": "missing version pin",
+   "text": "A12 says a run pins its flow and implementations, A14 may re-execute a function after restart, and A20 allows a new release to change the sandbox runtime, dependencies and ceilings; no run records the release whose execution semantics it uses.",
+   "question": "Which runtime, dependency set and non-contract ceilings govern an unfinished run resumed or recovered after an upgrade?",
+   "options": [
+    "Use the newly installed release",
+    "Pin and retain the release/runtime used when the run started",
+    "Refuse startup or upgrade while unfinished runs require the old release"
+   ],
+   "default_guess": "Use the current release because no release identity or old runtime is stored."
+  },
+  {
+   "subject": "Mapped-list size failure after a release change",
+   "kind": "contradiction",
+   "text": "A13 says an oversized mapped value list has no failure record and is derived from element records and `stored_value_bytes_max` “the same way by every reader of the trace”; A20 permits a new release to change that ceiling and says recorded executions are never reinterpreted.",
+   "question": "Which release's `stored_value_bytes_max` is used to derive a mapped-list failure after restart or when reading an old trace?",
+   "options": [
+    "Pin the ceiling to the run and use it forever",
+    "Record the derived overflow failure when it first occurs",
+    "Use the current release ceiling even if the old run's derived result changes"
+   ],
+   "default_guess": "Use the ceiling in effect when the list was first delivered and persist enough information to preserve that result."
+  },
+  {
+   "subject": "Credential, token and path non-disclosure",
+   "kind": "unverifiable invariant",
+   "text": "A17 formally states that the kernel never writes `verbatim(credential)` into a store, preview or response, and A16 says no response carries a token or host path, while ordinary caller values and agent text can coincidentally equal those byte strings and are stored and returned without a matching rule.",
+   "question": "Are these prohibitions about data provenance or about literal byte equality wherever the same text occurs?",
+   "options": [
+    "Only values sourced from protected configuration are prohibited",
+    "Every coincidental byte match must be detected and withheld",
+    "Byte matching applies only in the explicitly defined service-response credential scan"
+   ],
+   "default_guess": "Interpret the prohibition by provenance, with byte matching only for the explicitly specified response-body scan."
+  },
+  {
+   "subject": "Manifest instance `api_base_url`",
+   "kind": "vague validation",
+   "text": "A08 accepts any absolute `http` or `https` URL with a host, and A09 constructs the target by removing a trailing slash and appending the operation path; the rules do not decide whether userinfo, a query, a fragment, an existing path, multiple trailing slashes, an internationalized host or a percent-encoded authority is allowed.",
+   "question": "What exact canonical shape must `api_base_url` have before joining an operation path?",
+   "options": [
+    "Require scheme plus host and optional port only, with no userinfo, query, fragment or path",
+    "Allow a base path but forbid userinfo, query and fragment",
+    "Allow every absolute URL and define an exact URL-resolution algorithm"
+   ],
+   "default_guess": "Require only scheme, host and optional port, with no userinfo, query, fragment or base path."
+  },
+  {
+   "subject": "Plain-HTTP loopback exception",
+   "kind": "vague predicate",
+   "text": "A09 permits plain HTTP when the `api_base_url` “host is a loopback address” but does not define whether this is a textual IP test, a DNS-resolution result, whether `localhost` counts, or how IPv4-mapped and IPv6 addresses are handled.",
+   "question": "What exact predicate determines that a target host is loopback?",
+   "options": [
+    "Only an IP literal in an operating-system loopback range",
+    "An IP literal or the exact hostname `localhost`",
+    "Any hostname whose resolved address is loopback, checked on every connection"
+   ],
+   "default_guess": "Accept only IPv4 or IPv6 literals classified as loopback; do not infer loopback through DNS names."
+  },
+  {
+   "subject": "HTTP header values",
+   "kind": "undefined wire encoding",
+   "text": "A08 and A17 reject empty, whitespace-padded or control-containing required and credential header values, but otherwise allow text; A09 says those values are sent verbatim without defining their byte encoding, maximum size or handling when the HTTP client cannot serialize them.",
+   "question": "Which header-value characters and sizes are wire-valid, and how is an invalid or oversized value classified before a send?",
+   "options": [
+    "Restrict values to visible ASCII and a fixed release bound",
+    "Allow an explicitly defined Latin-1-compatible range",
+    "Allow UTF-8 bytes under a stated HTTP profile"
+   ],
+   "default_guess": "Require visible ASCII-compatible header values within a release-defined bound and classify violations as pre-send failures."
+  },
+  {
+   "subject": "Multipart field names",
+   "kind": "undefined escaping",
+   "text": "A09 places arbitrary port names directly into `Content-Disposition: form-data; name=\"<port>\"` and `filename=\"<port>\"`, while contract and binding rules impose no quoted-string-safe syntax or escaping algorithm on port names.",
+   "question": "How are quotes, backslashes, non-ASCII characters and line breaks in multipart port names handled?",
+   "options": [
+    "Restrict multipart-used port names to a safe ASCII field-name grammar",
+    "Define exact quoted-string escaping and filename encoding",
+    "Reject a binding only when such a port is actually sent"
+   ],
+   "default_guess": "Refuse bindings with multipart-used port names outside a conservative ASCII identifier grammar."
+  },
+  {
+   "subject": "HTTP protocol and content decoding",
+   "kind": "missing transport profile",
+   "text": "A09 and A10 specify a `host` header, exact sent headers, response bytes “after transfer decoding” and `Accept-Encoding: identity`, but do not select HTTP/1.1 versus HTTP/2 or say what happens when a service nevertheless sends `Content-Encoding`.",
+   "question": "Which HTTP protocol versions are permitted, and are content-encoded response bodies rejected, decoded or treated as raw bytes?",
+   "options": [
+    "Use HTTP/1.1 only and reject any non-identity content encoding",
+    "Permit negotiated HTTP versions and define equivalent header/request semantics",
+    "Treat content encoding as raw body metadata and never decompress"
+   ],
+   "default_guess": "Use HTTP/1.1 only, disable automatic decompression and reject non-identity content encodings as malformed responses."
+  },
+  {
+   "subject": "TLS verification policy",
+   "kind": "vague security rule",
+   "text": "A09 says only “TLS is verified for `https`” without naming the trust roots, hostname rules, minimum TLS version, revocation behavior or whether the system trust store may change independently of the release.",
+   "question": "What exact TLS verification policy determines whether a request may be sent?",
+   "options": [
+    "Use the host system trust store and standard hostname verification",
+    "Pin a trust store and TLS policy in each kernel release",
+    "Configure service-specific trust roots in the protected installation"
+   ],
+   "default_guess": "Use the host system trust store with standard hostname verification and the runtime's secure protocol defaults."
+  },
+  {
+   "subject": "Pre-send HTTP client failures",
+   "kind": "unclassified outcome",
+   "text": "A09 classifies DNS, connection and TLS failures before the first byte and lists specific kernel pre-send checks, but does not classify other local failures before sending, such as URL serialization, unsupported header encoding, client header limits or multipart construction failure.",
+   "question": "What NodeExecution status and detail apply when the local HTTP stack refuses a request before writing its first byte for a reason not in A09 rule 6?",
+   "options": [
+    "Treat it as `operation_failed` with a closed pre-send detail",
+    "Treat it as `service_unreachable` and, for effects, `not_sent`",
+    "Treat it as an internal error that stops the kernel"
+   ],
+   "default_guess": "Conclude `operation_failed` with a closed local-request-build detail and write no EffectAttempt."
+  },
+  {
+   "subject": "Proof failure location for constants",
+   "kind": "model mismatch",
+   "text": "M17 defines failure as “the first failing edge or node”, while A05 phase 2 can fail on a constant and says the result carries “its phase, its node or edge and its reason”; a constant is neither an edge nor a node and multiple constants may target the same node.",
+   "question": "How is a failing constant identified in ProofResult?",
+   "options": [
+    "Identify the constant by its target node and port",
+    "Add a constant location as a third failure-location kind",
+    "Attribute every constant failure only to its target node"
+   ],
+   "default_guess": "Add a constant failure location identified by (`to_node`, `to_port`) and, if duplicates are retained, a canonical tie-break."
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"FlowVersion content identity\",\"kind\":\"contradictory ordering\",\"text\":\"A01 says lists whose order carries no meaning are sorted before hashing, including “edges in the edge order of A05” and “constants by (`to_node`, `to_port`)”, so reordered equal content has the same identity. Those keys are not total: edges with the same endpoints but different guards, and multiple constants targeting one port, can tie.\",\"question\":\"How are tied edges and constants ordered before hashing so that input order cannot change `flow_version_id`?\",\"options\":[\"Add a canonical tie-break using every remaining meaning fact\",\"Treat the original list order as meaningful for tied items\",\"Refuse all items whose canonical sort keys tie before hashing\"],\"default_guess\":\"Use canonical JSON of the complete edge or constant as the final tie-break.\"},{\"subject\":\"Flow node and flow-endpoint identity\",\"kind\":\"ambiguous identifier\",\"text\":\"A05 says “A flow input or flow output endpoint has the empty string as its node”, but no rule refuses an empty `node_id` or defines a separate endpoint discriminator.\",\"question\":\"May a flow node have the empty identifier, and if so how is it distinguished from a flow input or output endpoint?\",\"options\":[\"Refuse an empty `node_id` at composition\",\"Represent endpoint kind separately from `node_id`\",\"Allow the collision and resolve it contextually\"],\"default_guess\":\"Refuse an empty `node_id` before keeping the version.\"},{\"subject\":\"Guarded edges\",\"kind\":\"missing refusal conditions\",\"text\":\"M15 permits a FlowEdge source to be “a node's output port or a flow input”, while its guard must be “an output port of the same source node”; A05 requires only that the guard be a `one` output with a closed-set schema and does not require `value` carriage.\",\"question\":\"Are guarded edges from flow inputs allowed, and may a file output be used as a guard?\",\"options\":[\"Allow guards only on edges sourced from a node and only on `value` outputs\",\"Allow flow-input guards and define their guard source separately\",\"Allow file guards and define how file bytes compare with a closed JSON value\"],\"default_guess\":\"Refuse guards unless the edge source is a node and the guard port is a `one` `value` output of that node.\"},{\"subject\":\"ProofResult identity and stability\",\"kind\":\"contradiction\",\"text\":\"M17 says “proving the same version gives the same result”, while A05 says a version that failed because a binding was `proposed` is proven after acceptance “with no new version” and then gives a different result.\",\"question\":\"What makes two ProofResults the same value when the same `flow_version_id` can produce different results as binding status changes?\",\"options\":[\"ProofResult identity includes all result facts, so the same version may yield different values\",\"ProofResult includes a snapshot or digest of binding statuses\",\"The first result is immutable and acceptance requires a new flow version\"],\"default_guess\":\"Treat each complete computed result as a value; `flow_version_id` alone does not identify the ProofResult.\"},{\"subject\":\"TrialCase input and expected-output shape\",\"kind\":\"missing validation\",\"text\":\"A04 requires that “its input values fit the contract version's input ports” and that expected outputs “fit the output ports”, but does not say whether every input must be present, whether extra names are refused, or whether present `expected_outputs` must contain every output.\",\"question\":\"What exact port-name set must an authored trial case supply for inputs and for present expected outputs?\",\"options\":[\"Inputs must exactly match all input ports; expected outputs are either absent or exactly match all output ports\",\"Inputs must be exact but expected outputs may be partial\",\"Both inputs and expected outputs may be partial\"],\"default_guess\":\"Require exactly all input ports, and require either no expected outputs or exactly all output ports.\"},{\"subject\":\"Sandbox filesystem access\",\"kind\":\"contradiction\",\"text\":\"K-02 says a function has “no filesystem beyond its input”, but A03 mounts a private exchange directory and a read-only runtime and permits opening paths inside both.\",\"question\":\"May agent code itself read arbitrary runtime files and create, enumerate or reread files in the exchange directory, or are those paths accessible only to the runner?\",\"options\":[\"User code may use the exchange directory and read the runtime\",\"Only the runner may access exchange files; user code receives only Python values and bytes\",\"User code may read inputs in exchange storage but may not create or inspect other files\"],\"default_guess\":\"Expose no filesystem API to user code beyond the byte values passed to `run`; reserve exchange access for the runner.\"},{\"subject\":\"Sandbox clock prohibition\",\"kind\":\"contradictory closed list\",\"text\":\"A03 says the runner replaces “every clock ... entry point” and then declares an exact closed list that omits standard-library clock access such as `time.clock_gettime`, `time.clock_gettime_ns`, `os.times` and resource-usage clocks.\",\"question\":\"Is the function prohibited from every observable clock, or only from the entry points in the written closed list?\",\"options\":[\"The closed list is authoritative and omitted clock APIs remain usable\",\"All clock APIs are prohibited and the release list must include the omitted APIs\",\"Only civil or wall time is prohibited; process and resource clocks are allowed\"],\"default_guess\":\"Treat every clock source as prohibited and extend the closed release list accordingly.\"},{\"subject\":\"Function determinism\",\"kind\":\"unverifiable invariant\",\"text\":\"K-05 calls admission deterministic, and A03 requires “The same implementation on the same input yields the same output digest twice”, but allowed Python can create threads and observe scheduling or other runtime state not covered by the trap list.\",\"question\":\"What must the kernel do when permitted code can produce different results for equal inputs?\",\"options\":[\"Determinism is best-effort and recorded executions are authoritative\",\"Prohibit every remaining nondeterministic facility, including concurrent execution\",\"Run cases repeatedly and refuse an implementation when digests differ\"],\"default_guess\":\"Treat the sandbox restrictions as best-effort determinism and make each recorded observation authoritative.\"},{\"subject\":\"Startup-recovery actor provenance\",\"kind\":\"missing trace fact\",\"text\":\"A27 says startup recovery is an automatic action of actor `kernel`, and that the request causing a NodeExecution is identified through the run's `started_by` or `resumptions`; A14 can execute functions and resend reads during startup without recording a resumption or another actor-bearing recovery record.\",\"question\":\"How can a trace distinguish a NodeExecution caused by startup recovery from one caused by the original start or a resume request?\",\"options\":[\"Record a kernel recovery/resumption event before advancing the run\",\"Add a cause or actor field to NodeExecution\",\"Do not distinguish startup recovery in the durable trace\"],\"default_guess\":\"Record a kernel-authored recovery event that the resulting executions reference or follow unambiguously.\"},{\"subject\":\"Unfinished runs across kernel releases\",\"kind\":\"missing version pin\",\"text\":\"A12 says a run pins its flow and implementations, A14 may re-execute a function after restart, and A20 allows a new release to change the sandbox runtime, dependencies and ceilings; no run records the release whose execution semantics it uses.\",\"question\":\"Which runtime, dependency set and non-contract ceilings govern an unfinished run resumed or recovered after an upgrade?\",\"options\":[\"Use the newly installed release\",\"Pin and retain the release/runtime used when the run started\",\"Refuse startup or upgrade while unfinished runs require the old release\"],\"default_guess\":\"Use the current release because no release identity or old runtime is stored.\"},{\"subject\":\"Mapped-list size failure after a release change\",\"kind\":\"contradiction\",\"text\":\"A13 says an oversized mapped value list has no failure record and is derived from element records and `stored_value_bytes_max` “the same way by every reader of the trace”; A20 permits a new release to change that ceiling and says recorded executions are never reinterpreted.\",\"question\":\"Which release's `stored_value_bytes_max` is used to derive a mapped-list failure after restart or when reading an old trace?\",\"options\":[\"Pin the ceiling to the run and use it forever\",\"Record the derived overflow failure when it first occurs\",\"Use the current release ceiling even if the old run's derived result changes\"],\"default_guess\":\"Use the ceiling in effect when the list was first delivered and persist enough information to preserve that result.\"},{\"subject\":\"Credential, token and path non-disclosure\",\"kind\":\"unverifiable invariant\",\"text\":\"A17 formally states that the kernel never writes `verbatim(credential)` into a store, preview or response, and A16 says no response carries a token or host path, while ordinary caller values and agent text can coincidentally equal those byte strings and are stored and returned without a matching rule.\",\"question\":\"Are these prohibitions about data provenance or about literal byte equality wherever the same text occurs?\",\"options\":[\"Only values sourced from protected configuration are prohibited\",\"Every coincidental byte match must be detected and withheld\",\"Byte matching applies only in the explicitly defined service-response credential scan\"],\"default_guess\":\"Interpret the prohibition by provenance, with byte matching only for the explicitly specified response-body scan.\"},{\"subject\":\"Manifest instance `api_base_url`\",\"kind\":\"vague validation\",\"text\":\"A08 accepts any absolute `http` or `https` URL with a host, and A09 constructs the target by removing a trailing slash and appending the operation path; the rules do not decide whether userinfo, a query, a fragment, an existing path, multiple trailing slashes, an internationalized host or a percent-encoded authority is allowed.\",\"question\":\"What exact canonical shape must `api_base_url` have before joining an operation path?\",\"options\":[\"Require scheme plus host and optional port only, with no userinfo, query, fragment or path\",\"Allow a base path but forbid userinfo, query and fragment\",\"Allow every absolute URL and define an exact URL-resolution algorithm\"],\"default_guess\":\"Require only scheme, host and optional port, with no userinfo, query, fragment or base path.\"},{\"subject\":\"Plain-HTTP loopback exception\",\"kind\":\"vague predicate\",\"text\":\"A09 permits plain HTTP when the `api_base_url` “host is a loopback address” but does not define whether this is a textual IP test, a DNS-resolution result, whether `localhost` counts, or how IPv4-mapped and IPv6 addresses are handled.\",\"question\":\"What exact predicate determines that a target host is loopback?\",\"options\":[\"Only an IP literal in an operating-system loopback range\",\"An IP literal or the exact hostname `localhost`\",\"Any hostname whose resolved address is loopback, checked on every connection\"],\"default_guess\":\"Accept only IPv4 or IPv6 literals classified as loopback; do not infer loopback through DNS names.\"},{\"subject\":\"HTTP header values\",\"kind\":\"undefined wire encoding\",\"text\":\"A08 and A17 reject empty, whitespace-padded or control-containing required and credential header values, but otherwise allow text; A09 says those values are sent verbatim without defining their byte encoding, maximum size or handling when the HTTP client cannot serialize them.\",\"question\":\"Which header-value characters and sizes are wire-valid, and how is an invalid or oversized value classified before a send?\",\"options\":[\"Restrict values to visible ASCII and a fixed release bound\",\"Allow an explicitly defined Latin-1-compatible range\",\"Allow UTF-8 bytes under a stated HTTP profile\"],\"default_guess\":\"Require visible ASCII-compatible header values within a release-defined bound and classify violations as pre-send failures.\"},{\"subject\":\"Multipart field names\",\"kind\":\"undefined escaping\",\"text\":\"A09 places arbitrary port names directly into `Content-Disposition: form-data; name=\\\"<port>\\\"` and `filename=\\\"<port>\\\"`, while contract and binding rules impose no quoted-string-safe syntax or escaping algorithm on port names.\",\"question\":\"How are quotes, backslashes, non-ASCII characters and line breaks in multipart port names handled?\",\"options\":[\"Restrict multipart-used port names to a safe ASCII field-name grammar\",\"Define exact quoted-string escaping and filename encoding\",\"Reject a binding only when such a port is actually sent\"],\"default_guess\":\"Refuse bindings with multipart-used port names outside a conservative ASCII identifier grammar.\"},{\"subject\":\"HTTP protocol and content decoding\",\"kind\":\"missing transport profile\",\"text\":\"A09 and A10 specify a `host` header, exact sent headers, response bytes “after transfer decoding” and `Accept-Encoding: identity`, but do not select HTTP/1.1 versus HTTP/2 or say what happens when a service nevertheless sends `Content-Encoding`.\",\"question\":\"Which HTTP protocol versions are permitted, and are content-encoded response bodies rejected, decoded or treated as raw bytes?\",\"options\":[\"Use HTTP/1.1 only and reject any non-identity content encoding\",\"Permit negotiated HTTP versions and define equivalent header/request semantics\",\"Treat content encoding as raw body metadata and never decompress\"],\"default_guess\":\"Use HTTP/1.1 only, disable automatic decompression and reject non-identity content encodings as malformed responses.\"},{\"subject\":\"TLS verification policy\",\"kind\":\"vague security rule\",\"text\":\"A09 says only “TLS is verified for `https`” without naming the trust roots, hostname rules, minimum TLS version, revocation behavior or whether the system trust store may change independently of the release.\",\"question\":\"What exact TLS verification policy determines whether a request may be sent?\",\"options\":[\"Use the host system trust store and standard hostname verification\",\"Pin a trust store and TLS policy in each kernel release\",\"Configure service-specific trust roots in the protected installation\"],\"default_guess\":\"Use the host system trust store with standard hostname verification and the runtime's secure protocol defaults.\"},{\"subject\":\"Pre-send HTTP client failures\",\"kind\":\"unclassified outcome\",\"text\":\"A09 classifies DNS, connection and TLS failures before the first byte and lists specific kernel pre-send checks, but does not classify other local failures before sending, such as URL serialization, unsupported header encoding, client header limits or multipart construction failure.\",\"question\":\"What NodeExecution status and detail apply when the local HTTP stack refuses a request before writing its first byte for a reason not in A09 rule 6?\",\"options\":[\"Treat it as `operation_failed` with a closed pre-send detail\",\"Treat it as `service_unreachable` and, for effects, `not_sent`\",\"Treat it as an internal error that stops the kernel\"],\"default_guess\":\"Conclude `operation_failed` with a closed local-request-build detail and write no EffectAttempt.\"},{\"subject\":\"Proof failure location for constants\",\"kind\":\"model mismatch\",\"text\":\"M17 defines failure as “the first failing edge or node”, while A05 phase 2 can fail on a constant and says the result carries “its phase, its node or edge and its reason”; a constant is neither an edge nor a node and multiple constants may target the same node.\",\"question\":\"How is a failing constant identified in ProofResult?\",\"options\":[\"Identify the constant by its target node and port\",\"Add a constant location as a third failure-location kind\",\"Attribute every constant failure only to its target node\"],\"default_guess\":\"Add a constant failure location identified by (`to_node`, `to_port`) and, if duplicates are retained, a canonical tie-break.\"}]}"
+}
