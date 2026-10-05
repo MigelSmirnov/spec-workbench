@@ -120,20 +120,13 @@ worker.
    written by `runs` when the list is first delivered — never in an element's
    own store change, which for an operation element is `effects'` — and
    named, like any value, by the records that receive it; a list whose
-   canonical bytes exceed `stored_value_bytes_max` is not written. Instead
-   `runs` writes, in the change that first derives that list, one
-   NodeExecution of the node without `map_index` — number 1 by A11 rule 1,
-   `executed` naming what it pins, status `contract_violation`, as inputs by port
-   the references the node received — the mapped port naming the whole list,
-   not an element — no outputs, no resources used, starting and ending
-   at the time of that change, and `failure_detail` naming `value_too_large`
-   and the first output port, in port order, whose list is over the ceiling.
-   It records no sandbox execution, so it is never captured (A15 rule 5). The node is then failed: none
-   of its outputs is delivered, its dependants conclude `upstream_failed`
-   (A15 rule 1), and the elements' records stay as they are (A15 rule 4).
-   That record is the trace's fact of the failure (A15), so a run whose list
-   feeds only a flow output explains it too, and a restart reads it and never
-   derives that list again; mapping over such a
+   canonical bytes exceed `stored_value_bytes_max` is not written: the node is
+   then failed for its dependants, which conclude `upstream_failed` and write
+   that record (A15 rule 1), derived like the list from the elements'
+   records, which stay as they are (A15 rule 4). No record of the node states
+   that failure: like the list, it is derived from the elements' records and
+   `stored_value_bytes_max`, the same way by every reader of the trace (A15;
+   owner, 2026-10-05, as the advance_run note decides); mapping over such a
    list gives each element the list's class; a file list is the
    elements' SpooledFiles in element order, each keeping its own record, and
    the reference naming it carries the list's class. A non-empty list has no
@@ -283,9 +276,7 @@ spool, files only as fixtures beyond a run.
    resolution of an unknown outcome writes none (A11). A mapped node's trace is
    its elements' records; it has a record of its own, without `map_index`, only
    when it ran no element: over an empty list (A13 rule 6), or when it was
-   skipped or `upstream_failed` before any element; and one more after its
-   elements, when a value list it would deliver is over
-   `stored_value_bytes_max` (A13 rule 6). Records of nodes that become
+   skipped or `upstream_failed` before any element. Records of nodes that become
    non-executable together are written in (`node_id`, `map_index`) order, a
    record without `map_index` before index 0, as in A14 rule 2. No operation edits
    or deletes one. `succeeded` is written only after the outputs validated.
@@ -304,8 +295,8 @@ spool, files only as fixtures beyond a run.
    `stored_value_bytes_max` is checked only after the execution or the response
    has otherwise succeeded, so A03's `resource_exhausted` for `output_bytes` wins
    when both hold; it concludes the element `contract_violation` with detail
-   `value_too_large`; a mapped node's value list above it fails the node by
-   a record of the node's own, without changing any element's record (A13 rule 6); a constant or a trial value above it is refused when
+   `value_too_large`; a mapped node's value list above it fails the node for
+   its dependants without changing any element's record (A13 rule 6); a constant or a trial value above it is refused when
    authored, by the surface's request bound (A16 rule 4) before any check of
    composition or of the trial case; a flow input above it refuses the start (A12).
 5. Capturing a failed execution into a trial corpus (M06) is allowed only for
