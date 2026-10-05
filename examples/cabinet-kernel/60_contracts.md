@@ -127,7 +127,14 @@ not review fields, classes or formats, so each is the agent's and says why.
    git repository and `manifest_revision` a commit of it; `bindings` reads
    `<service_id>.json` of that directory at that commit as a git object, never
    from the working tree, so a record changes only with the configured revision
-   (A08 rules 1 and 6).
+   (A08 rules 1 and 6). The manifest, like the installation file, is the
+   owner's trusted input at a revision the owner chose: the release's closed
+   list of ceilings (A20 rule 1) has none for it, and none for the headers or
+   capabilities it declares. What reaches a service or an agent stays bounded
+   where it is used — a request's input values by `stored_value_bytes_max`, a
+   response by `service_response_bytes_max`, a refusal's reason by
+   `bounded_text_bytes_max`; a record too large to read is one that cannot be
+   read (State 5, closed question 8).
 9. **The manifest record model** names the record's members (`service`,
    `capabilities`, `instances`, `name`, `exposed_as`, `effect_class`,
    `idempotency_key`, `api_base_url`, `required_headers`) with four

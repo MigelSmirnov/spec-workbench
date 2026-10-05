@@ -639,7 +639,9 @@ An open store holding the exclusive lock.
 ### Observable effect
 
 The store's own temporary files — those it writes before a rename (A18 rule 4)
-— are removed; nothing else is.
+— are removed, and nothing else is; the database schema, the
+content-addressed area and the spool area are created inside the data
+directory when absent. A failed check creates and removes nothing.
 
 ### Enforces
 
@@ -656,7 +658,8 @@ content-addressed area and the spool area when absent.
 
 ### State impact
 
-Takes the lock; removes temporary files only.
+Takes the lock; removes temporary files only; creates the store's own areas
+when absent.
 
 ## `public_op:store.page_records`
 
@@ -1496,7 +1499,8 @@ omitted is refused, never clamped (A02 rule 2).
 
 ### Owner
 
-`module:functions`. Return one contract version's ports and bounds.
+`module:functions`. Return one contract version as it is recorded, its ports
+and bounds among its fields.
 
 ### Callers
 

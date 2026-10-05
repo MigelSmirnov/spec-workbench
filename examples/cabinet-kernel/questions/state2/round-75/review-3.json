@@ -1,0 +1,342 @@
+{
+ "open_points": [
+  {
+   "subject": "Function sandbox filesystem access",
+   "kind": "contradiction",
+   "text": "K-02 says a function has “no filesystem beyond its input”, while A03 rule 1 gives it a private exchange directory and a readable runtime, and rule 4 permits opening paths inside both.",
+   "question": "May agent code read or write the exchange directory and read arbitrary runtime files, or must those paths be accessible only to the runner?",
+   "options": [
+    "Agent code may use the exchange directory and read the runtime",
+    "Only the runner may access them; agent code gets inputs through objects only",
+    "Agent code may read inputs there but may not create, modify or enumerate other files"
+   ],
+   "default_guess": "Expose inputs through Python objects only and deny agent code direct filesystem access."
+  },
+  {
+   "subject": "Function sandbox randomness",
+   "kind": "contradiction",
+   "text": "K-02 requires “no randomness”, but A03 rule 4 explicitly permits `random.Random(seed)` and says deterministic pseudorandom output satisfies that requirement.",
+   "question": "Does “no randomness” forbid all random APIs, or only entropy and unseeded nondeterminism?",
+   "options": [
+    "Forbid all random APIs",
+    "Allow explicitly seeded deterministic pseudorandom generators",
+    "Allow any generator whose seed is derived solely from inputs"
+   ],
+   "default_guess": "Allow only explicitly seeded deterministic pseudorandom generators, following A03."
+  },
+  {
+   "subject": "Function sandbox clock isolation",
+   "kind": "incomplete prohibition",
+   "text": "K-02 says functions have “no clock”, while A03 rule 4 traps only its closed list of entry points and omits other observable time sources such as `time.clock_gettime*`, `time.thread_time*`, filesystem timestamps and resource-usage clocks.",
+   "question": "Is the closed trap list the complete meaning of “no clock”, or must every route by which code can observe time be unavailable?",
+   "options": [
+    "Only the listed entry points are forbidden",
+    "Every wall, monotonic, CPU and filesystem time source is forbidden",
+    "Only wall-clock time is forbidden"
+   ],
+   "default_guess": "Forbid every observable time source, including unlisted standard-library and filesystem sources."
+  },
+  {
+   "subject": "Sandbox audit-hook violations",
+   "kind": "vague refusal condition",
+   "text": "A03 rule 4 says the audit hook “raises on socket, subprocess, `ctypes` and on opening any path outside” allowed directories, but it does not name the audit events, operations or containment rules that constitute those categories.",
+   "question": "Exactly which Python audit events and filesystem path-resolution cases must record a sandbox violation?",
+   "options": [
+    "Define a closed release-specific event list and symlink-safe containment algorithm",
+    "Treat any audit event with those textual prefixes as a violation",
+    "Leave event selection to the sandbox implementation"
+   ],
+   "default_guess": "Define a closed release-specific audit-event list and resolve paths without following escapes through symlinks."
+  },
+  {
+   "subject": "Sandbox resource outcomes",
+   "kind": "vague classification",
+   "text": "A03 rule 5 assigns `resource_exhausted` when “a limit hit” but does not define how signals, allocation failures, failed forks, short writes, full scratch storage or child-process failures prove that a particular limit was hit rather than a crash.",
+   "question": "What observations classify an execution as `resource_exhausted`, and how are ambiguous process exits classified?",
+   "options": [
+    "Specify an exhaustive mapping from observable OS conditions to each outcome",
+    "Treat only supervisor-confirmed limit events as `resource_exhausted` and all ambiguous exits as `crashed`",
+    "Treat any likely resource-related exit as `resource_exhausted`"
+   ],
+   "default_guess": "Use `resource_exhausted` only for supervisor-confirmed limit events; classify ambiguous abnormal exits as `crashed`."
+  },
+  {
+   "subject": "Invalid Python return values",
+   "kind": "missing outcome rule",
+   "text": "A03 counts canonical JSON bytes before declaring success, while A01 says values JCS cannot represent are refused where they enter; no rule classifies a returned NaN, infinity, lone surrogate, out-of-range JCS number or other Python value that cannot be canonically encoded.",
+   "question": "Which execution outcome applies when a returned value cannot be represented as canonical JSON, and does this check occur before output-size accounting?",
+   "options": [
+    "`contract_violation`, before canonical-size accounting",
+    "`crashed` because serialization failed",
+    "`resource_exhausted` if serialization or size accounting cannot complete"
+   ],
+   "default_guess": "Record `contract_violation` before canonical-size accounting."
+  },
+  {
+   "subject": "Authored trial-case port coverage",
+   "kind": "missing validation rule",
+   "text": "A04 rule 1 says trial inputs and expected outputs must “fit” the contract ports but never says whether inputs must contain exactly every input port or whether present expected outputs must contain exactly every output port.",
+   "question": "What port presence and extra-key rules apply to authored trial cases?",
+   "options": [
+    "Inputs and present expected outputs must exactly match their respective ports",
+    "Inputs must be exact, while expected outputs may be a subset",
+    "Missing or extra entries are allowed when each supplied value fits a port"
+   ],
+   "default_guess": "Require inputs to match all input ports exactly and, when expected outputs are present, require all output ports exactly."
+  },
+  {
+   "subject": "Admission verdict and activation durability",
+   "kind": "crash atomicity gap",
+   "text": "A04 rule 4 says an admitted verdict is “followed at once, in the same request” by activation, while A18 only makes each store call transactional and does not say whether verdict and activation share a call or how a crash between them is recovered.",
+   "question": "Can an admitted verdict persist without its required activation after a crash?",
+   "options": [
+    "Write verdict and activation atomically in one store call",
+    "Allow the gap and activate on restart",
+    "Allow the gap until the implementation is submitted again"
+   ],
+   "default_guess": "Write the admitted verdict and its activation atomically."
+  },
+  {
+   "subject": "Flow-port schemas",
+   "kind": "missing refusal condition",
+   "text": "A02 requires contract-port schemas to be in the supported subset, but A05 rule 7 does not reject unsupported schemas on flow inputs or outputs even though runs must validate values against them.",
+   "question": "Must composition reject a flow port whose schema is outside the supported JSON Schema subset?",
+   "options": [
+    "Reject it as a malformed composition request",
+    "Keep the version and fail its proof",
+    "Permit it and defer behavior to runtime"
+   ],
+   "default_guess": "Reject it before keeping the flow version."
+  },
+  {
+   "subject": "Operation-binding schemas",
+   "kind": "missing refusal condition",
+   "text": "A08 rule 5 names uniqueness, media-type and disclosure checks for binding ports but does not clearly apply A02's supported-schema-subset rule to them.",
+   "question": "Must a binding proposal be refused when an input or output schema is outside the kernel's supported subset?",
+   "options": [
+    "Refuse the proposal as a port-shape mismatch",
+    "Accept the proposal but make any flow using it fail proof",
+    "Accept it and let invocation-time validation decide"
+   ],
+   "default_guess": "Refuse the binding proposal."
+  },
+  {
+   "subject": "Proof failure ordering within an edge",
+   "kind": "determinism gap",
+   "text": "A05 requires the first failure and says conditions are checked in written order, but phase 3 only says “both ports exist with the right direction” without ordering source existence, source direction, target existence and target direction.",
+   "question": "Which reason is returned when more than one endpoint defect exists on the first edge?",
+   "options": [
+    "Check source existence, source direction, target existence, target direction",
+    "Check target existence and direction before the source",
+    "Return one combined invalid-endpoint reason"
+   ],
+   "default_guess": "Check source existence and direction before target existence and direction."
+  },
+  {
+   "subject": "Guard comparison",
+   "kind": "undefined equality",
+   "text": "A05 and M15 enable an edge when a produced value “equals” its guard value, without defining equality for numbers, arrays and objects.",
+   "question": "What equality relation decides a guard, including cases such as `1` versus `1.0` and objects with different member order?",
+   "options": [
+    "Equality of canonical JSON bytes",
+    "JSON data-model equality with numeric equivalence",
+    "Host-language equality"
+   ],
+   "default_guess": "Compare canonical JSON bytes."
+  },
+  {
+   "subject": "Personal-data-dependent guards",
+   "kind": "disclosure gap",
+   "text": "A07 hides personal-data values from agents, but A13 exposes `skipped_by_guard`, node statuses and produced-output presence without saying whether those control-flow facts are hidden when the guard value is `personal_data`.",
+   "question": "May an agent observe which branch a personal-data guard selected?",
+   "options": [
+    "Expose all statuses and branch outcomes",
+    "Redact guard-dependent statuses and output-presence facts",
+    "Refuse guards whose controlling value can be personal data"
+   ],
+   "default_guess": "Redact personal-data-dependent branch outcomes from agents."
+  },
+  {
+   "subject": "Mapped empty file outputs",
+   "kind": "model representation gap",
+   "text": "A13 rule 6 says an empty mapped node writes one NodeExecution with every output as an empty list, but M23 permits outputs only as StoredValue references or SpooledFile facts, and M21 forbids run files from being StoredValues.",
+   "question": "How is an empty `many` file output represented durably in a NodeExecution?",
+   "options": [
+    "Add an explicit empty file-list reference with class",
+    "Represent it as a StoredValue despite M21",
+    "Represent it by absence and derive emptiness from the empty-map record"
+   ],
+   "default_guess": "Use an explicit empty file-list reference carrying its disclosure class."
+  },
+  {
+   "subject": "Mapped file-list disclosure class",
+   "kind": "unverifiable invariant",
+   "text": "A13 says a file-list reference carries the list's class, while M23 only names SpooledFiles by their facts and M22 stores each file's own class; no durable fact records a distinct aggregate-list class.",
+   "question": "Where is the disclosure class of a mapped file list stored so it can be reconstructed after restart?",
+   "options": [
+    "Store the class on the NodeExecution's list reference",
+    "Derive it from all element executions and shared inputs",
+    "Use the maximum class stored on the individual SpooledFiles"
+   ],
+   "default_guess": "Store it explicitly on the NodeExecution's file-list reference."
+  },
+  {
+   "subject": "Resolution as not applied",
+   "kind": "contradictory transition",
+   "text": "A11 rule 3 and its invariant say resolution to `not_applied` makes the element wait for fresh approval, but the same rule first reruns A09 pre-send checks; a failing check writes `operation_failed`, which is a terminal node failure rather than an approval wait.",
+   "question": "After resolving `not_applied`, what happens if rebuilding the resend fails a pre-send check?",
+   "options": [
+    "The element fails `operation_failed`",
+    "It remains waiting for fresh approval until the pre-send problem is fixed",
+    "Create the approval request before running pre-send checks"
+   ],
+   "default_guess": "Follow the normal A11 order and fail the element as `operation_failed`, while narrowing the unconditional invariant."
+  },
+  {
+   "subject": "Draft-write activation authority",
+   "kind": "missing durable association",
+   "text": "M26 must name the exact FlowActivation under which a draft-write run started, but M19 pins only `flow_version_id` and does not state how the activation record is retained or derived when the same version has multiple activation records.",
+   "question": "How does a later draft-write send identify the exact FlowActivation that authorized its run?",
+   "options": [
+    "Pin the FlowActivation identity in the Run",
+    "Derive the latest activation preceding the Run in store order",
+    "Use whichever activation of that version is current at send time"
+   ],
+   "default_guess": "Pin the exact FlowActivation identity when the run is created."
+  },
+  {
+   "subject": "HTTP path inputs with cardinality `many`",
+   "kind": "inconsistent shape validation",
+   "text": "A09 accepts a path placeholder port when its schema type is `string` or `integer`, without considering cardinality; a `many` port with such an element schema supplies a list at runtime and can never satisfy the required non-null scalar path value.",
+   "question": "May a path-placeholder input have cardinality `many`?",
+   "options": [
+    "No; proposals must require cardinality `one`",
+    "Yes; use one request per element",
+    "Yes; serialize the whole list into one segment"
+   ],
+   "default_guess": "Require path-placeholder ports to have cardinality `one`."
+  },
+  {
+   "subject": "HTTP query inputs and cardinality",
+   "kind": "inconsistent shape validation",
+   "text": "A09 validates GET/DELETE query shape using the port schema's `type`, while runtime cardinality independently wraps a `many` port in a list; this leaves nested-list and `one`-array cases with no unambiguous encoding rule.",
+   "question": "How do port cardinality and an array-valued schema combine when encoding query parameters?",
+   "options": [
+    "Only cardinality `many` creates repeated parameters; reject array schemas there",
+    "Allow a `one` array and `many` scalars, but reject `many` array elements",
+    "Define recursive query serialization"
+   ],
+   "default_guess": "Allow repeated parameters for `many` scalar ports and for `one` array-of-scalar ports, but reject nested arrays."
+  },
+  {
+   "subject": "Path integer serialization",
+   "kind": "wire-format gap",
+   "text": "A09 says path values are percent-encoded but specifies canonical JSON spelling only for query numbers and booleans, not for integer path values.",
+   "question": "What exact text is percent-encoded for an integer path placeholder?",
+   "options": [
+    "Its RFC 8785/JCS number spelling",
+    "Base-10 integer spelling without exponent",
+    "The host language's string conversion"
+   ],
+   "default_guess": "Use RFC 8785/JCS number spelling."
+  },
+  {
+   "subject": "Service base URL",
+   "kind": "missing refusal conditions",
+   "text": "A08 accepts any absolute `http` or `https` URL with a host, while A09 constructs requests by removing a trailing slash and appending a path; it does not decide whether userinfo, query, fragment, a non-root base path, percent-escapes, IPv6 zone identifiers or unusual port forms are accepted.",
+   "question": "What exact grammar and normalization rules apply to `api_base_url` before joining the declared path?",
+   "options": [
+    "Allow only scheme, host and optional port with no userinfo, query, fragment or base path",
+    "Allow a base path but forbid userinfo, query and fragment",
+    "Accept every standards-valid absolute HTTP URL and define a full URL-resolution algorithm"
+   ],
+   "default_guess": "Allow only scheme, host and optional port, with no userinfo, query, fragment or base path."
+  },
+  {
+   "subject": "Plain-HTTP loopback exception",
+   "kind": "undefined classification",
+   "text": "A09 allows plain HTTP when the `api_base_url` host “is a loopback address” but does not say whether this means a literal loopback IP, a hostname that resolves to loopback, or every resolved address being loopback.",
+   "question": "How is the loopback exception determined and protected against DNS changes?",
+   "options": [
+    "Only literal IPv4 or IPv6 loopback addresses qualify",
+    "A hostname qualifies when all current resolutions are loopback",
+    "A hostname qualifies when any resolution is loopback"
+   ],
+   "default_guess": "Only literal loopback IP addresses qualify."
+  },
+  {
+   "subject": "HTTP header values",
+   "kind": "wire-format and refusal gap",
+   "text": "A09 sends required-header and credential values “verbatim”, but A08 and A17 permit non-ASCII UTF-8 values and do not define HTTP byte encoding or semantic validation of special values such as `Host`.",
+   "question": "Which header-value characters and encodings are accepted, and what happens when the HTTP client cannot transmit a value verbatim?",
+   "options": [
+    "Require visible ASCII plus permitted horizontal space and validate `Host` syntax",
+    "Encode Unicode header values as UTF-8 bytes",
+    "Permit the HTTP library's native encoding and reject only if it errors"
+   ],
+   "default_guess": "Require an explicitly defined ASCII field-value grammar and validate `Host` separately before sending."
+  },
+  {
+   "subject": "Multipart request construction",
+   "kind": "unsafe ambiguous encoding",
+   "text": "A09 inserts arbitrary port names and media types into multipart headers and says parts have exact headers, but it gives no escaping or refusal rule for quotes, backslashes, non-ASCII text or other characters, and no exact boundary/framing or boundary-collision rule.",
+   "question": "What port-name and media-type grammar, quoting, boundary generation and CRLF framing produce the multipart bytes?",
+   "options": [
+    "Restrict names and media types to safe token grammars and define exact multipart framing",
+    "Escape arbitrary names using a specified multipart standard",
+    "Delegate serialization to the HTTP library"
+   ],
+   "default_guess": "Restrict names and media types to safe grammars and specify exact framing plus collision-safe boundary generation."
+  },
+  {
+   "subject": "Manifest reads at a configured revision",
+   "kind": "undefined external read",
+   "text": "M28 and A08 require reading `<manifest_location>/<service_id>.json` “at the configured `manifest_revision`” but do not define the repository type, revision resolution, checkout rules or behavior when the working tree differs.",
+   "question": "How exactly does the kernel read a file at `manifest_revision`?",
+   "options": [
+    "Read a Git blob directly from the named commit",
+    "Require `manifest_location` to be an immutable materialized directory for that revision",
+    "Read the working-tree file and merely record the configured revision"
+   ],
+   "default_guess": "Read the Git blob directly from an already resolved commit without changing the working tree."
+  },
+  {
+   "subject": "Manifest and request-construction bounds",
+   "kind": "unbounded accepted data",
+   "text": "A08 places no byte, nesting, header-count or header-value bound on manifest records, while A10 can persist required-header values in approval previews and K-09/K-10 require bounded records and values.",
+   "question": "What release ceilings bound manifest files, capability entries, instance headers and approval-preview request descriptions, and what refusal occurs when one is exceeded?",
+   "options": [
+    "Add explicit release ceilings and refuse the manifest reading or send",
+    "Apply `surface_request_bytes_max` and `bounded_text_bytes_max` to manifest-derived data",
+    "Treat the manifest as trusted and unbounded"
+   ],
+   "default_guess": "Add explicit manifest and built-request ceilings with deterministic pre-send failures."
+  },
+  {
+   "subject": "Spool file ceiling",
+   "kind": "unverifiable invariant",
+   "text": "A20 sets `output_bytes` to 64 MiB, `service_response_bytes_max` to 128 MiB and `spool_file_bytes_max` to 128 MiB. A function cannot produce a file large enough to cross the spool ceiling before its lower output ceiling, and a service file crosses the response and spool ceilings at the same byte.",
+   "question": "Is `spool_file_bytes_max` intended to be independently observable, and which limit wins when the service-response and spool-file ceilings are crossed together?",
+   "options": [
+    "Lower the spool-file ceiling so it can bind independently",
+    "Raise the other relevant ceilings",
+    "Keep the values and define the response-size check as the winning reason"
+   ],
+   "default_guess": "Keep the values and make the response-size check win, while removing claims that independently testing the spool-file ceiling is required."
+  },
+  {
+   "subject": "Data-directory privacy",
+   "kind": "vague start condition",
+   "text": "A18 says the data directory and everything in it are “private to the kernel's user” but, unlike A17's configuration rules, gives no exact owner, permission-bit, ACL or parent-directory checks.",
+   "question": "What filesystem ownership and permission conditions must hold for the data directory and each contained file?",
+   "options": [
+    "Require kernel-user ownership and no group/other permissions on every object",
+    "Require only the top-level directory to be mode 0700",
+    "Accept any permissions that deny effective access to other users, including ACLs"
+   ],
+   "default_guess": "Require kernel-user ownership and no group/other permission bits on every object, with symlinks forbidden."
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"Function sandbox filesystem access\",\"kind\":\"contradiction\",\"text\":\"K-02 says a function has “no filesystem beyond its input”, while A03 rule 1 gives it a private exchange directory and a readable runtime, and rule 4 permits opening paths inside both.\",\"question\":\"May agent code read or write the exchange directory and read arbitrary runtime files, or must those paths be accessible only to the runner?\",\"options\":[\"Agent code may use the exchange directory and read the runtime\",\"Only the runner may access them; agent code gets inputs through objects only\",\"Agent code may read inputs there but may not create, modify or enumerate other files\"],\"default_guess\":\"Expose inputs through Python objects only and deny agent code direct filesystem access.\"},{\"subject\":\"Function sandbox randomness\",\"kind\":\"contradiction\",\"text\":\"K-02 requires “no randomness”, but A03 rule 4 explicitly permits `random.Random(seed)` and says deterministic pseudorandom output satisfies that requirement.\",\"question\":\"Does “no randomness” forbid all random APIs, or only entropy and unseeded nondeterminism?\",\"options\":[\"Forbid all random APIs\",\"Allow explicitly seeded deterministic pseudorandom generators\",\"Allow any generator whose seed is derived solely from inputs\"],\"default_guess\":\"Allow only explicitly seeded deterministic pseudorandom generators, following A03.\"},{\"subject\":\"Function sandbox clock isolation\",\"kind\":\"incomplete prohibition\",\"text\":\"K-02 says functions have “no clock”, while A03 rule 4 traps only its closed list of entry points and omits other observable time sources such as `time.clock_gettime*`, `time.thread_time*`, filesystem timestamps and resource-usage clocks.\",\"question\":\"Is the closed trap list the complete meaning of “no clock”, or must every route by which code can observe time be unavailable?\",\"options\":[\"Only the listed entry points are forbidden\",\"Every wall, monotonic, CPU and filesystem time source is forbidden\",\"Only wall-clock time is forbidden\"],\"default_guess\":\"Forbid every observable time source, including unlisted standard-library and filesystem sources.\"},{\"subject\":\"Sandbox audit-hook violations\",\"kind\":\"vague refusal condition\",\"text\":\"A03 rule 4 says the audit hook “raises on socket, subprocess, `ctypes` and on opening any path outside” allowed directories, but it does not name the audit events, operations or containment rules that constitute those categories.\",\"question\":\"Exactly which Python audit events and filesystem path-resolution cases must record a sandbox violation?\",\"options\":[\"Define a closed release-specific event list and symlink-safe containment algorithm\",\"Treat any audit event with those textual prefixes as a violation\",\"Leave event selection to the sandbox implementation\"],\"default_guess\":\"Define a closed release-specific audit-event list and resolve paths without following escapes through symlinks.\"},{\"subject\":\"Sandbox resource outcomes\",\"kind\":\"vague classification\",\"text\":\"A03 rule 5 assigns `resource_exhausted` when “a limit hit” but does not define how signals, allocation failures, failed forks, short writes, full scratch storage or child-process failures prove that a particular limit was hit rather than a crash.\",\"question\":\"What observations classify an execution as `resource_exhausted`, and how are ambiguous process exits classified?\",\"options\":[\"Specify an exhaustive mapping from observable OS conditions to each outcome\",\"Treat only supervisor-confirmed limit events as `resource_exhausted` and all ambiguous exits as `crashed`\",\"Treat any likely resource-related exit as `resource_exhausted`\"],\"default_guess\":\"Use `resource_exhausted` only for supervisor-confirmed limit events; classify ambiguous abnormal exits as `crashed`.\"},{\"subject\":\"Invalid Python return values\",\"kind\":\"missing outcome rule\",\"text\":\"A03 counts canonical JSON bytes before declaring success, while A01 says values JCS cannot represent are refused where they enter; no rule classifies a returned NaN, infinity, lone surrogate, out-of-range JCS number or other Python value that cannot be canonically encoded.\",\"question\":\"Which execution outcome applies when a returned value cannot be represented as canonical JSON, and does this check occur before output-size accounting?\",\"options\":[\"`contract_violation`, before canonical-size accounting\",\"`crashed` because serialization failed\",\"`resource_exhausted` if serialization or size accounting cannot complete\"],\"default_guess\":\"Record `contract_violation` before canonical-size accounting.\"},{\"subject\":\"Authored trial-case port coverage\",\"kind\":\"missing validation rule\",\"text\":\"A04 rule 1 says trial inputs and expected outputs must “fit” the contract ports but never says whether inputs must contain exactly every input port or whether present expected outputs must contain exactly every output port.\",\"question\":\"What port presence and extra-key rules apply to authored trial cases?\",\"options\":[\"Inputs and present expected outputs must exactly match their respective ports\",\"Inputs must be exact, while expected outputs may be a subset\",\"Missing or extra entries are allowed when each supplied value fits a port\"],\"default_guess\":\"Require inputs to match all input ports exactly and, when expected outputs are present, require all output ports exactly.\"},{\"subject\":\"Admission verdict and activation durability\",\"kind\":\"crash atomicity gap\",\"text\":\"A04 rule 4 says an admitted verdict is “followed at once, in the same request” by activation, while A18 only makes each store call transactional and does not say whether verdict and activation share a call or how a crash between them is recovered.\",\"question\":\"Can an admitted verdict persist without its required activation after a crash?\",\"options\":[\"Write verdict and activation atomically in one store call\",\"Allow the gap and activate on restart\",\"Allow the gap until the implementation is submitted again\"],\"default_guess\":\"Write the admitted verdict and its activation atomically.\"},{\"subject\":\"Flow-port schemas\",\"kind\":\"missing refusal condition\",\"text\":\"A02 requires contract-port schemas to be in the supported subset, but A05 rule 7 does not reject unsupported schemas on flow inputs or outputs even though runs must validate values against them.\",\"question\":\"Must composition reject a flow port whose schema is outside the supported JSON Schema subset?\",\"options\":[\"Reject it as a malformed composition request\",\"Keep the version and fail its proof\",\"Permit it and defer behavior to runtime\"],\"default_guess\":\"Reject it before keeping the flow version.\"},{\"subject\":\"Operation-binding schemas\",\"kind\":\"missing refusal condition\",\"text\":\"A08 rule 5 names uniqueness, media-type and disclosure checks for binding ports but does not clearly apply A02's supported-schema-subset rule to them.\",\"question\":\"Must a binding proposal be refused when an input or output schema is outside the kernel's supported subset?\",\"options\":[\"Refuse the proposal as a port-shape mismatch\",\"Accept the proposal but make any flow using it fail proof\",\"Accept it and let invocation-time validation decide\"],\"default_guess\":\"Refuse the binding proposal.\"},{\"subject\":\"Proof failure ordering within an edge\",\"kind\":\"determinism gap\",\"text\":\"A05 requires the first failure and says conditions are checked in written order, but phase 3 only says “both ports exist with the right direction” without ordering source existence, source direction, target existence and target direction.\",\"question\":\"Which reason is returned when more than one endpoint defect exists on the first edge?\",\"options\":[\"Check source existence, source direction, target existence, target direction\",\"Check target existence and direction before the source\",\"Return one combined invalid-endpoint reason\"],\"default_guess\":\"Check source existence and direction before target existence and direction.\"},{\"subject\":\"Guard comparison\",\"kind\":\"undefined equality\",\"text\":\"A05 and M15 enable an edge when a produced value “equals” its guard value, without defining equality for numbers, arrays and objects.\",\"question\":\"What equality relation decides a guard, including cases such as `1` versus `1.0` and objects with different member order?\",\"options\":[\"Equality of canonical JSON bytes\",\"JSON data-model equality with numeric equivalence\",\"Host-language equality\"],\"default_guess\":\"Compare canonical JSON bytes.\"},{\"subject\":\"Personal-data-dependent guards\",\"kind\":\"disclosure gap\",\"text\":\"A07 hides personal-data values from agents, but A13 exposes `skipped_by_guard`, node statuses and produced-output presence without saying whether those control-flow facts are hidden when the guard value is `personal_data`.\",\"question\":\"May an agent observe which branch a personal-data guard selected?\",\"options\":[\"Expose all statuses and branch outcomes\",\"Redact guard-dependent statuses and output-presence facts\",\"Refuse guards whose controlling value can be personal data\"],\"default_guess\":\"Redact personal-data-dependent branch outcomes from agents.\"},{\"subject\":\"Mapped empty file outputs\",\"kind\":\"model representation gap\",\"text\":\"A13 rule 6 says an empty mapped node writes one NodeExecution with every output as an empty list, but M23 permits outputs only as StoredValue references or SpooledFile facts, and M21 forbids run files from being StoredValues.\",\"question\":\"How is an empty `many` file output represented durably in a NodeExecution?\",\"options\":[\"Add an explicit empty file-list reference with class\",\"Represent it as a StoredValue despite M21\",\"Represent it by absence and derive emptiness from the empty-map record\"],\"default_guess\":\"Use an explicit empty file-list reference carrying its disclosure class.\"},{\"subject\":\"Mapped file-list disclosure class\",\"kind\":\"unverifiable invariant\",\"text\":\"A13 says a file-list reference carries the list's class, while M23 only names SpooledFiles by their facts and M22 stores each file's own class; no durable fact records a distinct aggregate-list class.\",\"question\":\"Where is the disclosure class of a mapped file list stored so it can be reconstructed after restart?\",\"options\":[\"Store the class on the NodeExecution's list reference\",\"Derive it from all element executions and shared inputs\",\"Use the maximum class stored on the individual SpooledFiles\"],\"default_guess\":\"Store it explicitly on the NodeExecution's file-list reference.\"},{\"subject\":\"Resolution as not applied\",\"kind\":\"contradictory transition\",\"text\":\"A11 rule 3 and its invariant say resolution to `not_applied` makes the element wait for fresh approval, but the same rule first reruns A09 pre-send checks; a failing check writes `operation_failed`, which is a terminal node failure rather than an approval wait.\",\"question\":\"After resolving `not_applied`, what happens if rebuilding the resend fails a pre-send check?\",\"options\":[\"The element fails `operation_failed`\",\"It remains waiting for fresh approval until the pre-send problem is fixed\",\"Create the approval request before running pre-send checks\"],\"default_guess\":\"Follow the normal A11 order and fail the element as `operation_failed`, while narrowing the unconditional invariant.\"},{\"subject\":\"Draft-write activation authority\",\"kind\":\"missing durable association\",\"text\":\"M26 must name the exact FlowActivation under which a draft-write run started, but M19 pins only `flow_version_id` and does not state how the activation record is retained or derived when the same version has multiple activation records.\",\"question\":\"How does a later draft-write send identify the exact FlowActivation that authorized its run?\",\"options\":[\"Pin the FlowActivation identity in the Run\",\"Derive the latest activation preceding the Run in store order\",\"Use whichever activation of that version is current at send time\"],\"default_guess\":\"Pin the exact FlowActivation identity when the run is created.\"},{\"subject\":\"HTTP path inputs with cardinality `many`\",\"kind\":\"inconsistent shape validation\",\"text\":\"A09 accepts a path placeholder port when its schema type is `string` or `integer`, without considering cardinality; a `many` port with such an element schema supplies a list at runtime and can never satisfy the required non-null scalar path value.\",\"question\":\"May a path-placeholder input have cardinality `many`?\",\"options\":[\"No; proposals must require cardinality `one`\",\"Yes; use one request per element\",\"Yes; serialize the whole list into one segment\"],\"default_guess\":\"Require path-placeholder ports to have cardinality `one`.\"},{\"subject\":\"HTTP query inputs and cardinality\",\"kind\":\"inconsistent shape validation\",\"text\":\"A09 validates GET/DELETE query shape using the port schema's `type`, while runtime cardinality independently wraps a `many` port in a list; this leaves nested-list and `one`-array cases with no unambiguous encoding rule.\",\"question\":\"How do port cardinality and an array-valued schema combine when encoding query parameters?\",\"options\":[\"Only cardinality `many` creates repeated parameters; reject array schemas there\",\"Allow a `one` array and `many` scalars, but reject `many` array elements\",\"Define recursive query serialization\"],\"default_guess\":\"Allow repeated parameters for `many` scalar ports and for `one` array-of-scalar ports, but reject nested arrays.\"},{\"subject\":\"Path integer serialization\",\"kind\":\"wire-format gap\",\"text\":\"A09 says path values are percent-encoded but specifies canonical JSON spelling only for query numbers and booleans, not for integer path values.\",\"question\":\"What exact text is percent-encoded for an integer path placeholder?\",\"options\":[\"Its RFC 8785/JCS number spelling\",\"Base-10 integer spelling without exponent\",\"The host language's string conversion\"],\"default_guess\":\"Use RFC 8785/JCS number spelling.\"},{\"subject\":\"Service base URL\",\"kind\":\"missing refusal conditions\",\"text\":\"A08 accepts any absolute `http` or `https` URL with a host, while A09 constructs requests by removing a trailing slash and appending a path; it does not decide whether userinfo, query, fragment, a non-root base path, percent-escapes, IPv6 zone identifiers or unusual port forms are accepted.\",\"question\":\"What exact grammar and normalization rules apply to `api_base_url` before joining the declared path?\",\"options\":[\"Allow only scheme, host and optional port with no userinfo, query, fragment or base path\",\"Allow a base path but forbid userinfo, query and fragment\",\"Accept every standards-valid absolute HTTP URL and define a full URL-resolution algorithm\"],\"default_guess\":\"Allow only scheme, host and optional port, with no userinfo, query, fragment or base path.\"},{\"subject\":\"Plain-HTTP loopback exception\",\"kind\":\"undefined classification\",\"text\":\"A09 allows plain HTTP when the `api_base_url` host “is a loopback address” but does not say whether this means a literal loopback IP, a hostname that resolves to loopback, or every resolved address being loopback.\",\"question\":\"How is the loopback exception determined and protected against DNS changes?\",\"options\":[\"Only literal IPv4 or IPv6 loopback addresses qualify\",\"A hostname qualifies when all current resolutions are loopback\",\"A hostname qualifies when any resolution is loopback\"],\"default_guess\":\"Only literal loopback IP addresses qualify.\"},{\"subject\":\"HTTP header values\",\"kind\":\"wire-format and refusal gap\",\"text\":\"A09 sends required-header and credential values “verbatim”, but A08 and A17 permit non-ASCII UTF-8 values and do not define HTTP byte encoding or semantic validation of special values such as `Host`.\",\"question\":\"Which header-value characters and encodings are accepted, and what happens when the HTTP client cannot transmit a value verbatim?\",\"options\":[\"Require visible ASCII plus permitted horizontal space and validate `Host` syntax\",\"Encode Unicode header values as UTF-8 bytes\",\"Permit the HTTP library's native encoding and reject only if it errors\"],\"default_guess\":\"Require an explicitly defined ASCII field-value grammar and validate `Host` separately before sending.\"},{\"subject\":\"Multipart request construction\",\"kind\":\"unsafe ambiguous encoding\",\"text\":\"A09 inserts arbitrary port names and media types into multipart headers and says parts have exact headers, but it gives no escaping or refusal rule for quotes, backslashes, non-ASCII text or other characters, and no exact boundary/framing or boundary-collision rule.\",\"question\":\"What port-name and media-type grammar, quoting, boundary generation and CRLF framing produce the multipart bytes?\",\"options\":[\"Restrict names and media types to safe token grammars and define exact multipart framing\",\"Escape arbitrary names using a specified multipart standard\",\"Delegate serialization to the HTTP library\"],\"default_guess\":\"Restrict names and media types to safe grammars and specify exact framing plus collision-safe boundary generation.\"},{\"subject\":\"Manifest reads at a configured revision\",\"kind\":\"undefined external read\",\"text\":\"M28 and A08 require reading `<manifest_location>/<service_id>.json` “at the configured `manifest_revision`” but do not define the repository type, revision resolution, checkout rules or behavior when the working tree differs.\",\"question\":\"How exactly does the kernel read a file at `manifest_revision`?\",\"options\":[\"Read a Git blob directly from the named commit\",\"Require `manifest_location` to be an immutable materialized directory for that revision\",\"Read the working-tree file and merely record the configured revision\"],\"default_guess\":\"Read the Git blob directly from an already resolved commit without changing the working tree.\"},{\"subject\":\"Manifest and request-construction bounds\",\"kind\":\"unbounded accepted data\",\"text\":\"A08 places no byte, nesting, header-count or header-value bound on manifest records, while A10 can persist required-header values in approval previews and K-09/K-10 require bounded records and values.\",\"question\":\"What release ceilings bound manifest files, capability entries, instance headers and approval-preview request descriptions, and what refusal occurs when one is exceeded?\",\"options\":[\"Add explicit release ceilings and refuse the manifest reading or send\",\"Apply `surface_request_bytes_max` and `bounded_text_bytes_max` to manifest-derived data\",\"Treat the manifest as trusted and unbounded\"],\"default_guess\":\"Add explicit manifest and built-request ceilings with deterministic pre-send failures.\"},{\"subject\":\"Spool file ceiling\",\"kind\":\"unverifiable invariant\",\"text\":\"A20 sets `output_bytes` to 64 MiB, `service_response_bytes_max` to 128 MiB and `spool_file_bytes_max` to 128 MiB. A function cannot produce a file large enough to cross the spool ceiling before its lower output ceiling, and a service file crosses the response and spool ceilings at the same byte.\",\"question\":\"Is `spool_file_bytes_max` intended to be independently observable, and which limit wins when the service-response and spool-file ceilings are crossed together?\",\"options\":[\"Lower the spool-file ceiling so it can bind independently\",\"Raise the other relevant ceilings\",\"Keep the values and define the response-size check as the winning reason\"],\"default_guess\":\"Keep the values and make the response-size check win, while removing claims that independently testing the spool-file ceiling is required.\"},{\"subject\":\"Data-directory privacy\",\"kind\":\"vague start condition\",\"text\":\"A18 says the data directory and everything in it are “private to the kernel's user” but, unlike A17's configuration rules, gives no exact owner, permission-bit, ACL or parent-directory checks.\",\"question\":\"What filesystem ownership and permission conditions must hold for the data directory and each contained file?\",\"options\":[\"Require kernel-user ownership and no group/other permissions on every object\",\"Require only the top-level directory to be mode 0700\",\"Accept any permissions that deny effective access to other users, including ACLs\"],\"default_guess\":\"Require kernel-user ownership and no group/other permission bits on every object, with symlinks forbidden.\"}]}"
+}
