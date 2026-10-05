@@ -83,7 +83,11 @@ worker.
    used, and starts and ends at the time of the check. An element that does not
       succeed keeps no output: its NodeExecution names none, a value it produced
    is not stored, and the files its attempt spooled are discarded with no
-   SpooledFile record naming them.
+   SpooledFile record naming them: no operation removes them at once — they stay
+   in the run's spool, counted toward `spool_run_bytes_max`, until that spool is
+   removed (A18 rule 4) or a later write to the same position replaces them —
+   and value bytes it published stay in the content-addressed area unnamed, to
+   be reused by equal bytes; nothing reads either.
 4. A guarded edge delivers only when its guard port's value equals its guard
    value. An input port that can no longer receive a value because every edge into
    it is disabled, or comes from a skipped node, makes its node `skipped_by_guard`
@@ -118,9 +122,11 @@ worker.
    canonical bytes exceed `stored_value_bytes_max` is not written. Instead
    `runs` writes, in the change that first derives that list, one
    NodeExecution of the node without `map_index` — number 1 by A11 rule 1,
-   `executed` naming what it pins, status `contract_violation`, no outputs,
-   and `failure_detail` naming `value_too_large` and the first output port, in
-   port order, whose list is over the ceiling. The node is then failed: none
+   `executed` naming what it pins, status `contract_violation`, the inputs
+   the elements received, no outputs, no resources used, starting and ending
+   at the time of that change, and `failure_detail` naming `value_too_large`
+   and the first output port, in port order, whose list is over the ceiling.
+   It records no sandbox execution, so it is never captured (A15 rule 5). The node is then failed: none
    of its outputs is delivered, its dependants conclude `upstream_failed`
    (A15 rule 1), and the elements' records stay as they are (A15 rule 4).
    That record is the trace's fact of the failure (A15), so a run whose list
@@ -275,7 +281,9 @@ spool, files only as fixtures beyond a run.
    resolution of an unknown outcome writes none (A11). A mapped node's trace is
    its elements' records; it has a record of its own, without `map_index`, only
    when it ran no element: over an empty list (A13 rule 6), or when it was
-   skipped or `upstream_failed` before any element. Records of nodes that become
+   skipped or `upstream_failed` before any element; and one more after its
+   elements, when a value list it would deliver is over
+   `stored_value_bytes_max` (A13 rule 6). Records of nodes that become
    non-executable together are written in (`node_id`, `map_index`) order, a
    record without `map_index` before index 0, as in A14 rule 2. No operation edits
    or deletes one. `succeeded` is written only after the outputs validated.

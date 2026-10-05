@@ -1,0 +1,242 @@
+{
+ "open_points": [
+  {
+   "subject": "Sandbox filesystem access",
+   "kind": "contradiction",
+   "text": "K-02 says a function has \"no filesystem beyond its input\", while A03 permits \"one private exchange directory\" and traps only \"opening any path outside the exchange directory and the read-only runtime.\"",
+   "question": "May agent code open, create, read and modify arbitrary files inside the exchange directory, or is that directory accessible only to the runner for passing declared inputs and outputs?",
+   "options": [
+    "Permit agent code to use the exchange directory as bounded scratch storage",
+    "Deny agent code direct filesystem access and reserve the directory for the runner"
+   ],
+   "default_guess": "Deny direct filesystem access except through the declared file-port interface."
+  },
+  {
+   "subject": "Sandbox randomness",
+   "kind": "contradiction",
+   "text": "K-02 says a function has \"no randomness\", but A03 says \"random.Random(seed) with an explicit seed stays usable.\"",
+   "question": "Does \"no randomness\" prohibit seeded pseudorandom computation too, or only nondeterministic entropy sources?",
+   "options": [
+    "Allow explicitly seeded deterministic pseudorandom generators",
+    "Trap every random API, including explicitly seeded generators"
+   ],
+   "default_guess": "Allow explicitly seeded deterministic pseudorandom generators and interpret the prohibition as nondeterministic randomness."
+  },
+  {
+   "subject": "Sandbox clock prohibition",
+   "kind": "incomplete enforcement",
+   "text": "A03 says the runner replaces \"every clock and randomness entry point\" and that the replaced entry points are \"exactly\" the listed functions, but the list omits CPython 3.12 clock sources such as `time.clock_gettime`, `time.thread_time`, `os.times` and `resource.getrusage`.",
+   "question": "Must release v1 trap all standard-library ways to observe time, or is only the written list prohibited despite K-02's \"no clock\" rule?",
+   "options": [
+    "Expand the v1 trap list to cover every available clock source",
+    "Treat only the enumerated APIs as prohibited and weaken the no-clock invariant"
+   ],
+   "default_guess": "Expand the trap list and test it against the pinned CPython runtime."
+  },
+  {
+   "subject": "Function determinism",
+   "kind": "unverifiable invariant",
+   "text": "K-05 calls admission \"a deterministic verdict\", and A03 requires that the same implementation and input produce the same digest twice, but permitted code can observe process-specific facts such as process IDs, object identities and exchange-directory details.",
+   "question": "Is deterministic output for equal code and input a required invariant, and if so, what closes or detects all remaining nondeterministic observations?",
+   "options": [
+    "Prohibit or virtualize every process-specific observation available to sandbox code",
+    "Allow nondeterministic implementations and define admission as deterministic only for the executions actually recorded",
+    "Run repeated trials and refuse detected nondeterminism without claiming complete enforcement"
+   ],
+   "default_guess": "Prohibit observable process-specific state where practical and avoid claiming that two trial runs prove determinism."
+  },
+  {
+   "subject": "Sandbox output classification",
+   "kind": "undefined precedence",
+   "text": "A03 says output counting is \"the sum of the canonical JSON bytes of every `value` output\" and checks `resource_exhausted` before `contract_violation`, but it also allows a returned value that cannot be represented as canonical JSON to become `contract_violation`.",
+   "question": "How is `output_bytes` evaluated when an output is not JSON-representable, contains a cycle or otherwise cannot be canonicalized?",
+   "options": [
+    "Classify it immediately as `contract_violation` before applying the output-byte check",
+    "Count a bounded serialization attempt and let `resource_exhausted` take precedence if its bound is crossed",
+    "Classify canonicalization failure as `crashed`"
+   ],
+   "default_guess": "Classify a non-canonicalizable returned value as `contract_violation`; apply the byte limit while canonicalizing valid JSON values."
+  },
+  {
+   "subject": "Mapped-node aggregate failure trace",
+   "kind": "contradiction",
+   "text": "A13 says an oversized mapped output list writes \"one NodeExecution of the node without `map_index`\", while A15 says a mapped node \"has a record of its own, without `map_index`, only when it ran no element.\"",
+   "question": "Does a non-empty mapped node whose aggregate output is too large receive a node-level NodeExecution in addition to its element records?",
+   "options": [
+    "Write the aggregate `contract_violation` record required by A13",
+    "Write no aggregate record and derive the failure solely from element records or another run fact"
+   ],
+   "default_guess": "Write the aggregate record required by A13 and amend A15's exclusivity statement."
+  },
+  {
+   "subject": "Mapped-node aggregate resources",
+   "kind": "missing model value",
+   "text": "M23 requires `resources_used` \"for a function node\", but A13's node-level `contract_violation` for an oversized mapped result represents no single sandbox execution and does not define `resources_used`.",
+   "question": "What does `resources_used` contain on this aggregate NodeExecution?",
+   "options": [
+    "It is absent because no sandbox call corresponds to the aggregate record",
+    "It is the sum of all element executions",
+    "It is a separately defined aggregate of element resource observations"
+   ],
+   "default_guess": "Make it absent and explicitly identify this record as an aggregate post-processing failure."
+  },
+  {
+   "subject": "Trial-case port coverage",
+   "kind": "unspecified refusal",
+   "text": "A04 requires that trial inputs and expected outputs \"fit\" the contract ports and later compares \"every output's digest\" with the expected one, but it never says whether the supplied maps must contain exactly the declared ports or whether partial or extra entries are allowed.",
+   "question": "Must authored trial inputs contain every and only input port, and, when `expected_outputs` is present, every and only output port?",
+   "options": [
+    "Require exact input and output key sets",
+    "Require all declared ports but ignore extra entries",
+    "Allow partial expected outputs and compare only those supplied"
+   ],
+   "default_guess": "Require exact input keys and, when expected outputs are present, exact output keys."
+  },
+  {
+   "subject": "Disclosure class of empty-input executions",
+   "kind": "undefined empty maximum",
+   "text": "A07 defines a function output as `open` when the function has no inputs, but rule 5 defines an execution's class as \"the highest class among\" its named inputs and, for an operation, outputs, without defining the empty case.",
+   "question": "What is the execution class for a failed zero-input function or for an operation with neither inputs nor outputs?",
+   "options": [
+    "Use `open` for an empty set",
+    "Use a separately declared class from the node or binding",
+    "Treat such executions as invalid"
+   ],
+   "default_guess": "Use `open` for an empty set."
+  },
+  {
+   "subject": "Trial expected-output disclosure",
+   "kind": "undefined empty maximum",
+   "text": "M21 and A07 say a trial case's expected output takes \"the highest class\" of the case's inputs, but contracts may have no input ports and no empty-set result is stated there.",
+   "question": "What disclosure class does an expected output of a zero-input trial case receive?",
+   "options": [
+    "`open`",
+    "The output port receives a declared class",
+    "Zero-input trial cases with expected outputs are refused"
+   ],
+   "default_guess": "`open`."
+  },
+  {
+   "subject": "Surface request serialization",
+   "kind": "ambiguous ordering",
+   "text": "A18 says \"Surface requests are handled one at a time in the order they arrive,\" but no event defines arrival order when requests are concurrently received or partially read.",
+   "question": "What observable event orders concurrent MCP requests for serialization and store order?",
+   "options": [
+    "Order by completion of receiving and validating the full message",
+    "Assign a sequence when the transport accepts the request",
+    "Permit any order chosen by the server event loop"
+   ],
+   "default_guess": "Assign a monotonic sequence when a complete request message is received."
+  },
+  {
+   "subject": "Data-directory protection",
+   "kind": "vague refusal condition",
+   "text": "A18 says \"The directory and everything in it are private to the kernel's user; the kernel refuses to start otherwise.\"",
+   "question": "Which ownership, file-type and permission-bit conditions exactly constitute \"private\" for the directory, database, lock, value area, fixtures and spool contents?",
+   "options": [
+    "Require ownership by the kernel user and no group/other permission bits on every entry",
+    "Require only that no group/other read permission exists",
+    "Accept any permissions when host access controls otherwise prevent access"
+   ],
+   "default_guess": "Require ownership by the kernel user and no group or other permission bits on every entry."
+  },
+  {
+   "subject": "Token-list hot reload",
+   "kind": "ambiguous validation",
+   "text": "A16 says a changed configuration is parsed and the kernel \"takes from it only the token list\", while the re-read check says \"the file can be read and parsed.\"",
+   "question": "During token hot reload, does parsing validate the entire installation configuration or only JSON syntax and the token fields, and do invalid non-token fields refuse every request?",
+   "options": [
+    "Validate only syntax and token fields; ignore all other changed fields until restart",
+    "Validate the full installation schema even though only tokens take effect",
+    "Continue using the prior non-token fields but require their serialized forms to remain unchanged"
+   ],
+   "default_guess": "Validate JSON syntax and the token section only; all other fields remain the start-time values until restart."
+  },
+  {
+   "subject": "Draft-write activation authority",
+   "kind": "missing persistent reference",
+   "text": "M26 requires the authority to identify \"the flow activation under which the run started\" by its store position, but M19 and A12 pin only `flow_version_id` and implementations, not the FlowActivation record.",
+   "question": "How is the exact FlowActivation authority for a later draft-write send determined and verified after intervening reactivations or restart?",
+   "options": [
+    "Persist the FlowActivation position on the Run",
+    "Derive the latest activation preceding the Run's store position",
+    "Use the current activation at send time"
+   ],
+   "default_guess": "Persist the FlowActivation position on the Run at start."
+  },
+  {
+   "subject": "Service base URL",
+   "kind": "underspecified URL shape",
+   "text": "A08 accepts any absolute `http` or `https` URL with a host, and A09 builds the target as \"the `api_base_url` without a trailing `/` followed by the declared path.\"",
+   "question": "May `api_base_url` contain user information, a path, query, fragment or multiple trailing slashes, and exactly how are those forms joined with the operation path?",
+   "options": [
+    "Require an origin-only URL with no user information, query or fragment and at most an optional root slash",
+    "Permit a fixed base path but forbid user information, query and fragment, with a defined path-join algorithm",
+    "Accept every absolute URL and use literal string concatenation"
+   ],
+   "default_guess": "Require an origin-only URL and remove one optional trailing root slash before appending the declared path."
+  },
+  {
+   "subject": "Plain-HTTP loopback exception",
+   "kind": "ambiguous refusal condition",
+   "text": "A09 permits plain HTTP when \"the `api_base_url` host is a loopback address\" but does not say whether that means a literal loopback IP or a hostname that resolves to one.",
+   "question": "How is the loopback exception determined, especially for `localhost`, DNS names with mixed answers and DNS rebinding?",
+   "options": [
+    "Allow only literal IPv4 or IPv6 loopback addresses",
+    "Resolve the hostname and require every result to be loopback",
+    "Allow when the particular connected address is loopback"
+   ],
+   "default_guess": "Allow only a literal loopback IP address."
+  },
+  {
+   "subject": "Multipart port names",
+   "kind": "unsafe serialization gap",
+   "text": "A09 emits `Content-Disposition: form-data; name=\"<port>\"` and `filename=\"<port>\"`, but port names are only bounded strings and no escaping or restricted character set is defined.",
+   "question": "Which port names are legal in multipart headers, and are quotes, backslashes, non-ASCII characters or other header-significant characters escaped or refused?",
+   "options": [
+    "Restrict multipart-used port names to a safe ASCII field-name grammar",
+    "Define exact quoted-string escaping and filename encoding",
+    "Use an RFC 5987-style encoded parameter for non-ASCII names"
+   ],
+   "default_guess": "Restrict multipart-used port names to a conservative ASCII identifier grammar at binding proposal."
+  },
+  {
+   "subject": "Multipart wire encoding",
+   "kind": "underspecified request",
+   "text": "A09 defines multipart parts and A10 deliberately describes the content type without its boundary, but neither text defines boundary selection, collision checking, line endings or the exact byte framing of parts.",
+   "question": "How are multipart bodies serialized so that rebuilding an approved request is valid and a boundary cannot collide with file or value content?",
+   "options": [
+    "Use a deterministic content-derived boundary and reject or alter it on collision",
+    "Generate a fresh cryptographic boundary and scan all part content for collisions",
+    "Adopt one named multipart encoder whose exact wire format is release-pinned"
+   ],
+   "default_guess": "Use a release-pinned encoder with a fresh boundary and collision checking; keep the boundary excluded from approval identity as A10 requires."
+  },
+  {
+   "subject": "HTTP header value encoding",
+   "kind": "underspecified wire format",
+   "text": "Required-header values and credential values are UTF-8 text with only selected whitespace and control-character checks, and A09 says they are sent \"verbatim,\" but no conversion from Unicode text to HTTP header bytes is defined.",
+   "question": "Are non-ASCII header values permitted, and if so, what exact wire encoding is used; otherwise, at which check are they refused?",
+   "options": [
+    "Require every configured header value to be printable ASCII",
+    "Encode allowed Unicode values as UTF-8 header bytes",
+    "Delegate encoding and rejection to the HTTP library"
+   ],
+   "default_guess": "Require printable ASCII for configured HTTP header values and refuse other values before sending."
+  },
+  {
+   "subject": "HTTP response interrupted after status",
+   "kind": "overlapping outcome rules",
+   "text": "A09 first classifies \"timeout, reset, EOF\" with \"no valid final response received\", but later classifies 3xx, 4xx and 5xx \"whatever the body's size\" once a status exists.",
+   "question": "Which row applies when a valid final status and headers arrive but the body times out, resets, ends early or has invalid transfer framing?",
+   "options": [
+    "Treat the response as invalid and apply the earlier no-valid-response row",
+    "Classify solely by the received status and keep any available bounded body detail",
+    "Use status-based classification only when the complete declared body is received"
+   ],
+   "default_guess": "Treat incomplete or invalid body framing as no valid final response; apply status-based rows only after a complete response or an intentional ceiling stop."
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"Sandbox filesystem access\",\"kind\":\"contradiction\",\"text\":\"K-02 says a function has \\\"no filesystem beyond its input\\\", while A03 permits \\\"one private exchange directory\\\" and traps only \\\"opening any path outside the exchange directory and the read-only runtime.\\\"\",\"question\":\"May agent code open, create, read and modify arbitrary files inside the exchange directory, or is that directory accessible only to the runner for passing declared inputs and outputs?\",\"options\":[\"Permit agent code to use the exchange directory as bounded scratch storage\",\"Deny agent code direct filesystem access and reserve the directory for the runner\"],\"default_guess\":\"Deny direct filesystem access except through the declared file-port interface.\"},{\"subject\":\"Sandbox randomness\",\"kind\":\"contradiction\",\"text\":\"K-02 says a function has \\\"no randomness\\\", but A03 says \\\"random.Random(seed) with an explicit seed stays usable.\\\"\",\"question\":\"Does \\\"no randomness\\\" prohibit seeded pseudorandom computation too, or only nondeterministic entropy sources?\",\"options\":[\"Allow explicitly seeded deterministic pseudorandom generators\",\"Trap every random API, including explicitly seeded generators\"],\"default_guess\":\"Allow explicitly seeded deterministic pseudorandom generators and interpret the prohibition as nondeterministic randomness.\"},{\"subject\":\"Sandbox clock prohibition\",\"kind\":\"incomplete enforcement\",\"text\":\"A03 says the runner replaces \\\"every clock and randomness entry point\\\" and that the replaced entry points are \\\"exactly\\\" the listed functions, but the list omits CPython 3.12 clock sources such as `time.clock_gettime`, `time.thread_time`, `os.times` and `resource.getrusage`.\",\"question\":\"Must release v1 trap all standard-library ways to observe time, or is only the written list prohibited despite K-02's \\\"no clock\\\" rule?\",\"options\":[\"Expand the v1 trap list to cover every available clock source\",\"Treat only the enumerated APIs as prohibited and weaken the no-clock invariant\"],\"default_guess\":\"Expand the trap list and test it against the pinned CPython runtime.\"},{\"subject\":\"Function determinism\",\"kind\":\"unverifiable invariant\",\"text\":\"K-05 calls admission \\\"a deterministic verdict\\\", and A03 requires that the same implementation and input produce the same digest twice, but permitted code can observe process-specific facts such as process IDs, object identities and exchange-directory details.\",\"question\":\"Is deterministic output for equal code and input a required invariant, and if so, what closes or detects all remaining nondeterministic observations?\",\"options\":[\"Prohibit or virtualize every process-specific observation available to sandbox code\",\"Allow nondeterministic implementations and define admission as deterministic only for the executions actually recorded\",\"Run repeated trials and refuse detected nondeterminism without claiming complete enforcement\"],\"default_guess\":\"Prohibit observable process-specific state where practical and avoid claiming that two trial runs prove determinism.\"},{\"subject\":\"Sandbox output classification\",\"kind\":\"undefined precedence\",\"text\":\"A03 says output counting is \\\"the sum of the canonical JSON bytes of every `value` output\\\" and checks `resource_exhausted` before `contract_violation`, but it also allows a returned value that cannot be represented as canonical JSON to become `contract_violation`.\",\"question\":\"How is `output_bytes` evaluated when an output is not JSON-representable, contains a cycle or otherwise cannot be canonicalized?\",\"options\":[\"Classify it immediately as `contract_violation` before applying the output-byte check\",\"Count a bounded serialization attempt and let `resource_exhausted` take precedence if its bound is crossed\",\"Classify canonicalization failure as `crashed`\"],\"default_guess\":\"Classify a non-canonicalizable returned value as `contract_violation`; apply the byte limit while canonicalizing valid JSON values.\"},{\"subject\":\"Mapped-node aggregate failure trace\",\"kind\":\"contradiction\",\"text\":\"A13 says an oversized mapped output list writes \\\"one NodeExecution of the node without `map_index`\\\", while A15 says a mapped node \\\"has a record of its own, without `map_index`, only when it ran no element.\\\"\",\"question\":\"Does a non-empty mapped node whose aggregate output is too large receive a node-level NodeExecution in addition to its element records?\",\"options\":[\"Write the aggregate `contract_violation` record required by A13\",\"Write no aggregate record and derive the failure solely from element records or another run fact\"],\"default_guess\":\"Write the aggregate record required by A13 and amend A15's exclusivity statement.\"},{\"subject\":\"Mapped-node aggregate resources\",\"kind\":\"missing model value\",\"text\":\"M23 requires `resources_used` \\\"for a function node\\\", but A13's node-level `contract_violation` for an oversized mapped result represents no single sandbox execution and does not define `resources_used`.\",\"question\":\"What does `resources_used` contain on this aggregate NodeExecution?\",\"options\":[\"It is absent because no sandbox call corresponds to the aggregate record\",\"It is the sum of all element executions\",\"It is a separately defined aggregate of element resource observations\"],\"default_guess\":\"Make it absent and explicitly identify this record as an aggregate post-processing failure.\"},{\"subject\":\"Trial-case port coverage\",\"kind\":\"unspecified refusal\",\"text\":\"A04 requires that trial inputs and expected outputs \\\"fit\\\" the contract ports and later compares \\\"every output's digest\\\" with the expected one, but it never says whether the supplied maps must contain exactly the declared ports or whether partial or extra entries are allowed.\",\"question\":\"Must authored trial inputs contain every and only input port, and, when `expected_outputs` is present, every and only output port?\",\"options\":[\"Require exact input and output key sets\",\"Require all declared ports but ignore extra entries\",\"Allow partial expected outputs and compare only those supplied\"],\"default_guess\":\"Require exact input keys and, when expected outputs are present, exact output keys.\"},{\"subject\":\"Disclosure class of empty-input executions\",\"kind\":\"undefined empty maximum\",\"text\":\"A07 defines a function output as `open` when the function has no inputs, but rule 5 defines an execution's class as \\\"the highest class among\\\" its named inputs and, for an operation, outputs, without defining the empty case.\",\"question\":\"What is the execution class for a failed zero-input function or for an operation with neither inputs nor outputs?\",\"options\":[\"Use `open` for an empty set\",\"Use a separately declared class from the node or binding\",\"Treat such executions as invalid\"],\"default_guess\":\"Use `open` for an empty set.\"},{\"subject\":\"Trial expected-output disclosure\",\"kind\":\"undefined empty maximum\",\"text\":\"M21 and A07 say a trial case's expected output takes \\\"the highest class\\\" of the case's inputs, but contracts may have no input ports and no empty-set result is stated there.\",\"question\":\"What disclosure class does an expected output of a zero-input trial case receive?\",\"options\":[\"`open`\",\"The output port receives a declared class\",\"Zero-input trial cases with expected outputs are refused\"],\"default_guess\":\"`open`.\"},{\"subject\":\"Surface request serialization\",\"kind\":\"ambiguous ordering\",\"text\":\"A18 says \\\"Surface requests are handled one at a time in the order they arrive,\\\" but no event defines arrival order when requests are concurrently received or partially read.\",\"question\":\"What observable event orders concurrent MCP requests for serialization and store order?\",\"options\":[\"Order by completion of receiving and validating the full message\",\"Assign a sequence when the transport accepts the request\",\"Permit any order chosen by the server event loop\"],\"default_guess\":\"Assign a monotonic sequence when a complete request message is received.\"},{\"subject\":\"Data-directory protection\",\"kind\":\"vague refusal condition\",\"text\":\"A18 says \\\"The directory and everything in it are private to the kernel's user; the kernel refuses to start otherwise.\\\"\",\"question\":\"Which ownership, file-type and permission-bit conditions exactly constitute \\\"private\\\" for the directory, database, lock, value area, fixtures and spool contents?\",\"options\":[\"Require ownership by the kernel user and no group/other permission bits on every entry\",\"Require only that no group/other read permission exists\",\"Accept any permissions when host access controls otherwise prevent access\"],\"default_guess\":\"Require ownership by the kernel user and no group or other permission bits on every entry.\"},{\"subject\":\"Token-list hot reload\",\"kind\":\"ambiguous validation\",\"text\":\"A16 says a changed configuration is parsed and the kernel \\\"takes from it only the token list\\\", while the re-read check says \\\"the file can be read and parsed.\\\"\",\"question\":\"During token hot reload, does parsing validate the entire installation configuration or only JSON syntax and the token fields, and do invalid non-token fields refuse every request?\",\"options\":[\"Validate only syntax and token fields; ignore all other changed fields until restart\",\"Validate the full installation schema even though only tokens take effect\",\"Continue using the prior non-token fields but require their serialized forms to remain unchanged\"],\"default_guess\":\"Validate JSON syntax and the token section only; all other fields remain the start-time values until restart.\"},{\"subject\":\"Draft-write activation authority\",\"kind\":\"missing persistent reference\",\"text\":\"M26 requires the authority to identify \\\"the flow activation under which the run started\\\" by its store position, but M19 and A12 pin only `flow_version_id` and implementations, not the FlowActivation record.\",\"question\":\"How is the exact FlowActivation authority for a later draft-write send determined and verified after intervening reactivations or restart?\",\"options\":[\"Persist the FlowActivation position on the Run\",\"Derive the latest activation preceding the Run's store position\",\"Use the current activation at send time\"],\"default_guess\":\"Persist the FlowActivation position on the Run at start.\"},{\"subject\":\"Service base URL\",\"kind\":\"underspecified URL shape\",\"text\":\"A08 accepts any absolute `http` or `https` URL with a host, and A09 builds the target as \\\"the `api_base_url` without a trailing `/` followed by the declared path.\\\"\",\"question\":\"May `api_base_url` contain user information, a path, query, fragment or multiple trailing slashes, and exactly how are those forms joined with the operation path?\",\"options\":[\"Require an origin-only URL with no user information, query or fragment and at most an optional root slash\",\"Permit a fixed base path but forbid user information, query and fragment, with a defined path-join algorithm\",\"Accept every absolute URL and use literal string concatenation\"],\"default_guess\":\"Require an origin-only URL and remove one optional trailing root slash before appending the declared path.\"},{\"subject\":\"Plain-HTTP loopback exception\",\"kind\":\"ambiguous refusal condition\",\"text\":\"A09 permits plain HTTP when \\\"the `api_base_url` host is a loopback address\\\" but does not say whether that means a literal loopback IP or a hostname that resolves to one.\",\"question\":\"How is the loopback exception determined, especially for `localhost`, DNS names with mixed answers and DNS rebinding?\",\"options\":[\"Allow only literal IPv4 or IPv6 loopback addresses\",\"Resolve the hostname and require every result to be loopback\",\"Allow when the particular connected address is loopback\"],\"default_guess\":\"Allow only a literal loopback IP address.\"},{\"subject\":\"Multipart port names\",\"kind\":\"unsafe serialization gap\",\"text\":\"A09 emits `Content-Disposition: form-data; name=\\\"<port>\\\"` and `filename=\\\"<port>\\\"`, but port names are only bounded strings and no escaping or restricted character set is defined.\",\"question\":\"Which port names are legal in multipart headers, and are quotes, backslashes, non-ASCII characters or other header-significant characters escaped or refused?\",\"options\":[\"Restrict multipart-used port names to a safe ASCII field-name grammar\",\"Define exact quoted-string escaping and filename encoding\",\"Use an RFC 5987-style encoded parameter for non-ASCII names\"],\"default_guess\":\"Restrict multipart-used port names to a conservative ASCII identifier grammar at binding proposal.\"},{\"subject\":\"Multipart wire encoding\",\"kind\":\"underspecified request\",\"text\":\"A09 defines multipart parts and A10 deliberately describes the content type without its boundary, but neither text defines boundary selection, collision checking, line endings or the exact byte framing of parts.\",\"question\":\"How are multipart bodies serialized so that rebuilding an approved request is valid and a boundary cannot collide with file or value content?\",\"options\":[\"Use a deterministic content-derived boundary and reject or alter it on collision\",\"Generate a fresh cryptographic boundary and scan all part content for collisions\",\"Adopt one named multipart encoder whose exact wire format is release-pinned\"],\"default_guess\":\"Use a release-pinned encoder with a fresh boundary and collision checking; keep the boundary excluded from approval identity as A10 requires.\"},{\"subject\":\"HTTP header value encoding\",\"kind\":\"underspecified wire format\",\"text\":\"Required-header values and credential values are UTF-8 text with only selected whitespace and control-character checks, and A09 says they are sent \\\"verbatim,\\\" but no conversion from Unicode text to HTTP header bytes is defined.\",\"question\":\"Are non-ASCII header values permitted, and if so, what exact wire encoding is used; otherwise, at which check are they refused?\",\"options\":[\"Require every configured header value to be printable ASCII\",\"Encode allowed Unicode values as UTF-8 header bytes\",\"Delegate encoding and rejection to the HTTP library\"],\"default_guess\":\"Require printable ASCII for configured HTTP header values and refuse other values before sending.\"},{\"subject\":\"HTTP response interrupted after status\",\"kind\":\"overlapping outcome rules\",\"text\":\"A09 first classifies \\\"timeout, reset, EOF\\\" with \\\"no valid final response received\\\", but later classifies 3xx, 4xx and 5xx \\\"whatever the body's size\\\" once a status exists.\",\"question\":\"Which row applies when a valid final status and headers arrive but the body times out, resets, ends early or has invalid transfer framing?\",\"options\":[\"Treat the response as invalid and apply the earlier no-valid-response row\",\"Classify solely by the received status and keep any available bounded body detail\",\"Use status-based classification only when the complete declared body is received\"],\"default_guess\":\"Treat incomplete or invalid body framing as no valid final response; apply status-based rows only after a complete response or an intentional ceiling stop.\"}]}"
+}

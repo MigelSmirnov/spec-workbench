@@ -1,0 +1,290 @@
+{
+ "open_points": [
+  {
+   "subject": "A05 flow identifiers and endpoint ordering",
+   "kind": "missing refusal",
+   "text": "“A flow input or flow output endpoint has the empty string as its node, so it orders before every node.” No rule refuses a FlowNode whose `node_id` is the empty string.",
+   "question": "May `node_id` be empty, and if so how is it distinguished and ordered against a flow endpoint?",
+   "options": [
+    "Refuse an empty `node_id` at composition",
+    "Allow it and represent/order endpoint kinds separately"
+   ],
+   "default_guess": "Refuse an empty `node_id` at composition."
+  },
+  {
+   "subject": "A03 filesystem access by functions",
+   "kind": "contradiction",
+   "text": "K-02 says a function has “no filesystem beyond its input,” while A03 permits opening paths inside “the exchange directory and the read-only runtime” and describes a bounded scratch directory.",
+   "question": "May function code read and write arbitrary files in the exchange directory and read arbitrary runtime files, or may it access only its declared input and output representations?",
+   "options": [
+    "Permit arbitrary exchange-directory access and read-only runtime access",
+    "Restrict access to designated input/output files only"
+   ],
+   "default_guess": "Permit exchange-directory access because A03 is the more specific rule."
+  },
+  {
+   "subject": "A03 clock isolation",
+   "kind": "contradiction",
+   "text": "The rule says the runner replaces “every clock … entry point,” then says the replaced entry points are “exactly” a list that omits CPython clock sources such as `time.thread_time`, `time.thread_time_ns`, `os.times` and resource-usage timers.",
+   "question": "Are unlisted clock-like APIs allowed, or must all ways for function code to observe elapsed or process time be blocked?",
+   "options": [
+    "Only the closed enumerated list is trapped",
+    "All clock-like APIs are prohibited even when absent from the list"
+   ],
+   "default_guess": "Apply the closed enumerated list, leaving unlisted APIs available."
+  },
+  {
+   "subject": "A03 deterministic execution",
+   "kind": "unverifiable invariant",
+   "text": "A03 requires that “The same implementation on the same input yields the same output digest twice,” but the sandbox rules do not prohibit all process identity, runtime metadata, scheduling or other nondeterministic observations.",
+   "question": "Is deterministic output a guaranteed invariant, and if so which remaining nondeterministic observations must be blocked?",
+   "options": [
+    "Guarantee determinism and define a complete blocked-source set",
+    "Treat determinism as an expected property tested by the corpus, not a sandbox guarantee"
+   ],
+   "default_guess": "Treat it as an expected property rather than a fully enforceable guarantee."
+  },
+  {
+   "subject": "A03 resource-limit outcomes",
+   "kind": "vague condition",
+   "text": "“a limit hit (memory, process count, scratch, `output_bytes`) — `resource_exhausted`” does not define how a hit is detected when the operating system returns an error that user code catches or when the process exits because of a limit.",
+   "question": "Exactly which observable events count as a memory, process-count or scratch limit hit, and do they override a caught error and otherwise conforming return?",
+   "options": [
+    "Any kernel-observed denial or limit signal counts, even if caught",
+    "Only termination or a parent-observed size excess counts",
+    "Caught allocation or process errors remain ordinary program behavior"
+   ],
+   "default_guess": "Count any reliably observed limit denial or limit signal as `resource_exhausted`."
+  },
+  {
+   "subject": "A03 output classification",
+   "kind": "precedence gap",
+   "text": "The output count is “the sum of the canonical JSON bytes of every `value` output,” while outcome order checks `resource_exhausted` before `contract_violation`; the text does not say how to count an output that cannot be canonically encoded or has the wrong shape or type.",
+   "question": "When an invalid output is also apparently oversized, or cannot be canonically encoded to measure it, is the outcome `resource_exhausted` or `contract_violation`?",
+   "options": [
+    "Validate encodability and type first, producing `contract_violation`",
+    "Measure any available serialization first and let `resource_exhausted` win",
+    "Define a separate bounded capture representation for measuring invalid output"
+   ],
+   "default_guess": "Return `contract_violation` when canonical output bytes cannot be formed; otherwise let the stated size precedence apply."
+  },
+  {
+   "subject": "A03 cleanup failure outcome",
+   "kind": "contradiction",
+   "text": "Rule 5 says the first of timeout, resource exhaustion, sandbox violation, crash and contract violation decides; rule 7 says that if cleanup cannot be confirmed “the execution is recorded `crashed` with detail `cleanup_failed`.”",
+   "question": "If an execution already timed out, exhausted a resource or violated the sandbox and cleanup then cannot be confirmed, which status is recorded?",
+   "options": [
+    "Always override with `crashed/cleanup_failed`",
+    "Keep the earlier outcome and stop the kernel",
+    "Apply the rule-5 precedence including cleanup failure as a crash candidate"
+   ],
+   "default_guess": "Override with `crashed/cleanup_failed` because rule 7 states that outcome directly."
+  },
+  {
+   "subject": "A13/A15 mapped aggregate failure trace",
+   "kind": "contradiction",
+   "text": "A13 rule 6 requires a mapped node whose collected value list is too large to write a NodeExecution without `map_index`; A15 rule 1 says a mapped node has its own record without `map_index` “only when it ran no element.”",
+   "question": "Is the aggregate `value_too_large` NodeExecution an allowed additional node-level record after mapped elements ran?",
+   "options": [
+    "Yes, add the aggregate record as an explicit exception to A15",
+    "No, represent the aggregate failure without another NodeExecution",
+    "Replace or alter an element record"
+   ],
+   "default_guess": "Add the aggregate node-level record as an explicit exception."
+  },
+  {
+   "subject": "NodeExecution timestamps for non-executed records",
+   "kind": "missing behavior",
+   "text": "M23 requires `started_at` and `ended_at`, but A13 and A15 do not define their values for `skipped_by_guard`, `upstream_failed`, an empty mapped node, or the mapped aggregate `value_too_large` record.",
+   "question": "What timestamps are recorded for NodeExecutions that do not correspond to an actual node invocation?",
+   "options": [
+    "Use the time the conclusion is derived for both fields",
+    "Use the enclosing advancement request's start and derivation times",
+    "Make one or both timestamps absent for non-executed records"
+   ],
+   "default_guess": "Use the derivation time for both `started_at` and `ended_at`."
+  },
+  {
+   "subject": "M26 unknown-outcome resolution time",
+   "kind": "missing model fact",
+   "text": "The owner’s resolution is “the only record of the resolution,” but EffectAttempt has `recorded_at`, `concluded_at` and `resolved_by` with no `resolved_at`, and the text does not say whether `concluded_at` changes on resolution.",
+   "question": "How is the time of an owner’s unknown-outcome resolution represented?",
+   "options": [
+    "Add or define a `resolved_at` fact",
+    "Replace `concluded_at` with the resolution time",
+    "Keep the original conclusion time and record no resolution time"
+   ],
+   "default_guess": "Record a separate `resolved_at` timestamp."
+  },
+  {
+   "subject": "Draft-write activation authority",
+   "kind": "underspecified reference",
+   "text": "M26 requires the authority to be “the flow activation under which the run started,” but M19 and A12 pin only `flow_version_id`, not the particular FlowActivation record; the same version can be activated more than once.",
+   "question": "How is the exact FlowActivation authorizing a draft-write run identified after later reactivations or restart?",
+   "options": [
+    "Store the FlowActivation position on the Run",
+    "Derive the latest activation preceding the Run in store order",
+    "Treat any activation of the pinned version as equivalent"
+   ],
+   "default_guess": "Store the exact FlowActivation position on the Run."
+  },
+  {
+   "subject": "A20 release ceilings across upgrades",
+   "kind": "contradiction",
+   "text": "Rule 1 says no contract “raises” a release ceiling, while rule 4 says an earlier contract “executes under” its old bounds even when those bounds exceed the new release’s ceilings.",
+   "question": "After an upgrade lowers a ceiling, may execution exceed the current release constant to honor an older contract?",
+   "options": [
+    "Honor the old contract bound despite the new release ceiling",
+    "Cap or refuse the old contract under the new ceiling",
+    "Prevent releases from lowering any contract resource ceiling"
+   ],
+   "default_guess": "Honor the old contract bound because rule 4 specifically addresses upgrades."
+  },
+  {
+   "subject": "Manifest revision lookup",
+   "kind": "missing behavior",
+   "text": "The kernel reads `<manifest_location>/<service_id>.json` “at the configured `manifest_revision`,” but nothing defines how a location and revision resolve to bytes.",
+   "question": "What mechanism reads a file at `manifest_revision`, and what counts as an absent or unreadable revision?",
+   "options": [
+    "Treat `manifest_location` as a version-controlled repository and read the named revision",
+    "Treat the revision as a subdirectory or immutable snapshot identifier",
+    "Read the working tree and use revision only as metadata"
+   ],
+   "default_guess": "Read the file from the named revision of a version-controlled repository."
+  },
+  {
+   "subject": "Manifest document validity",
+   "kind": "refusal gap",
+   "text": "A08 refuses a record that “is not valid JSON, lacks `service` or `capabilities`,” but does not cover duplicate object member names, wrong container types, unnamed capability entries or multiple fields within an entry, all of which affect JCS digesting and lookup.",
+   "question": "Which malformed or non-canonical manifest structures are refused, and where do those refusals fall in rule 5’s order?",
+   "options": [
+    "Require a closed manifest schema and reject duplicate JSON names",
+    "Accept any JSON whose fields used by the rule can be interpreted",
+    "Defer all structural validation to the platform manifest reader"
+   ],
+   "default_guess": "Require a closed schema and reject duplicate JSON member names."
+  },
+  {
+   "subject": "OperationBinding schemas",
+   "kind": "missing validation",
+   "text": "A08 rule 5 checks request shape and selected contract-port rules, but does not explicitly require every binding port’s `value_schema` to belong to the kernel’s supported JSON Schema subset.",
+   "question": "Can a binding be proposed or accepted with a schema outside the supported subset?",
+   "options": [
+    "Refuse it like an invalid contract port",
+    "Allow it if request-shape inspection succeeds",
+    "Allow proposal but fail proof or invocation later"
+   ],
+   "default_guess": "Refuse it during proposal and acceptance."
+  },
+  {
+   "subject": "Service base URL",
+   "kind": "vague validation",
+   "text": "A08 accepts an absolute `http` or `https` URL with a host, and A09 constructs the target from “the `api_base_url` without a trailing `/` followed by the declared path”; it does not decide whether user information, query, fragment, an existing path, or multiple trailing slashes are allowed.",
+   "question": "What exact grammar is accepted for `api_base_url`, and exactly how is its path joined to the operation path?",
+   "options": [
+    "Require scheme and authority only, with no userinfo, query, fragment or base path",
+    "Allow a base path but forbid userinfo, query and fragment",
+    "Allow every absolute URL and define literal concatenation"
+   ],
+   "default_guess": "Allow a base path, forbid userinfo/query/fragment, and remove all trailing slashes before joining."
+  },
+  {
+   "subject": "Loopback HTTP classification",
+   "kind": "vague condition",
+   "text": "Plain HTTP is allowed when the `api_base_url` “host is a loopback address,” without saying whether this is based on literal IP syntax, DNS resolution, IPv4-mapped IPv6 addresses or all resolved addresses.",
+   "question": "Exactly which hosts qualify as loopback for the plain-HTTP exception?",
+   "options": [
+    "Only literal IPv4 or IPv6 loopback addresses",
+    "Names such as `localhost` and addresses resolving solely to loopback also qualify",
+    "Any host with at least one loopback resolution qualifies"
+   ],
+   "default_guess": "Only literal loopback IP addresses qualify."
+  },
+  {
+   "subject": "Path placeholder port carriage",
+   "kind": "missing refusal",
+   "text": "A09 requires a placeholder to name an input port whose schema type is `string` or `integer`, but does not say that the port must have `value` carriage or cardinality `one`.",
+   "question": "Are file or `many` ports whose schemas otherwise match allowed as path placeholders?",
+   "options": [
+    "Require a `one` `value` port at proposal time",
+    "Allow them and fail the send when the runtime value is not a scalar",
+    "Define extraction of one value from a collection or file"
+   ],
+   "default_guess": "Require a `one` `value` port at proposal time."
+  },
+  {
+   "subject": "Multipart field names",
+   "kind": "encoding gap",
+   "text": "Multipart parts use `name=\"<port>\"` and `filename=\"<port>\"`, while port names have no character restriction or escaping rule beyond a byte bound.",
+   "question": "How are quotes, backslashes, control characters, non-ASCII characters or an empty port name represented in multipart headers, or are such names refused?",
+   "options": [
+    "Restrict multipart-used port names to a safe ASCII token",
+    "Define quoted-string escaping and filename encoding",
+    "Use an extended RFC parameter encoding"
+   ],
+   "default_guess": "Restrict multipart-used port names to a safe ASCII form at binding proposal."
+  },
+  {
+   "subject": "Many-valued service outputs",
+   "kind": "validation ambiguity",
+   "text": "For a JSON response, “each output port takes the member of the same name, which must validate against the port,” while M21 says a `many` port stores an array whose elements validate against the port’s element schema.",
+   "question": "Does a `many` output member validate as an array of the port schema, or is the member itself validated directly against the port schema?",
+   "options": [
+    "Require an array and validate each element against the port schema",
+    "Validate the whole member directly against the declared schema",
+    "Require the declared schema itself to describe the array"
+   ],
+   "default_guess": "Require an array and validate each element against the port schema."
+  },
+  {
+   "subject": "Spool byte accounting",
+   "kind": "ambiguous invariant",
+   "text": "A15 limits “a run whose spooled files together” and formalizes `sum(spool(run))`, while A18 says “Equal bytes are stored once” and M22 makes equal files from different attempts distinct SpooledFiles.",
+   "question": "Do repeated equal files count once or once per SpooledFile occurrence toward `spool_run_bytes_max`, and are files from the currently failing attempt included atomically?",
+   "options": [
+    "Count every logical SpooledFile occurrence",
+    "Count unique stored byte blobs only",
+    "Count physical allocated bytes"
+   ],
+   "default_guess": "Count every logical SpooledFile occurrence, including the entire prospective attempt before committing it."
+  },
+  {
+   "subject": "Installation data-directory permissions",
+   "kind": "vague start condition",
+   "text": "A18 says the data directory “and everything in it are private to the kernel’s user; the kernel refuses to start otherwise,” without defining accepted ownership, file types or permission bits.",
+   "question": "What exact ownership and mode checks make the data directory, database, value area, fixtures and spool private enough to start?",
+   "options": [
+    "Require kernel-user ownership and no group/other permission on every entry",
+    "Require only that group/other cannot read",
+    "Rely on the top-level directory mode and do not inspect all descendants"
+   ],
+   "default_guess": "Require kernel-user ownership and no group/other permissions on every persistent entry."
+  },
+  {
+   "subject": "Owner and agent token syntax",
+   "kind": "vague refusal",
+   "text": "Tokens must be “at least 43 characters (32 bytes in base64url),” but the rules do not say whether base64url syntax, padding or decoded length is validated.",
+   "question": "What strings are valid tokens at start or configuration reload?",
+   "options": [
+    "Require unpadded base64url decoding to at least 32 bytes",
+    "Require only at least 43 characters of any kind",
+    "Require exactly 43 unpadded base64url characters"
+   ],
+   "default_guess": "Require unpadded base64url that decodes to at least 32 bytes."
+  },
+  {
+   "subject": "A18 equal-byte publication",
+   "kind": "storage contradiction",
+   "text": "A18 says “Equal bytes are stored once,” while spooled files are addressed by run, producer, attempt, port and list index, and “a spooled file no record names … is replaced at its position.”",
+   "question": "Are spool bytes content-addressed and shared, or is each SpooledFile stored at its attempt-specific position?",
+   "options": [
+    "Store one content-addressed blob and separate attempt references",
+    "Store a separate file at every SpooledFile position",
+    "Deduplicate only durable values and trial fixtures, not run spools"
+   ],
+   "default_guess": "Deduplicate durable values and fixtures, but keep attempt-specific spool files."
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A05 flow identifiers and endpoint ordering\",\"kind\":\"missing refusal\",\"text\":\"“A flow input or flow output endpoint has the empty string as its node, so it orders before every node.” No rule refuses a FlowNode whose `node_id` is the empty string.\",\"question\":\"May `node_id` be empty, and if so how is it distinguished and ordered against a flow endpoint?\",\"options\":[\"Refuse an empty `node_id` at composition\",\"Allow it and represent/order endpoint kinds separately\"],\"default_guess\":\"Refuse an empty `node_id` at composition.\"},{\"subject\":\"A03 filesystem access by functions\",\"kind\":\"contradiction\",\"text\":\"K-02 says a function has “no filesystem beyond its input,” while A03 permits opening paths inside “the exchange directory and the read-only runtime” and describes a bounded scratch directory.\",\"question\":\"May function code read and write arbitrary files in the exchange directory and read arbitrary runtime files, or may it access only its declared input and output representations?\",\"options\":[\"Permit arbitrary exchange-directory access and read-only runtime access\",\"Restrict access to designated input/output files only\"],\"default_guess\":\"Permit exchange-directory access because A03 is the more specific rule.\"},{\"subject\":\"A03 clock isolation\",\"kind\":\"contradiction\",\"text\":\"The rule says the runner replaces “every clock … entry point,” then says the replaced entry points are “exactly” a list that omits CPython clock sources such as `time.thread_time`, `time.thread_time_ns`, `os.times` and resource-usage timers.\",\"question\":\"Are unlisted clock-like APIs allowed, or must all ways for function code to observe elapsed or process time be blocked?\",\"options\":[\"Only the closed enumerated list is trapped\",\"All clock-like APIs are prohibited even when absent from the list\"],\"default_guess\":\"Apply the closed enumerated list, leaving unlisted APIs available.\"},{\"subject\":\"A03 deterministic execution\",\"kind\":\"unverifiable invariant\",\"text\":\"A03 requires that “The same implementation on the same input yields the same output digest twice,” but the sandbox rules do not prohibit all process identity, runtime metadata, scheduling or other nondeterministic observations.\",\"question\":\"Is deterministic output a guaranteed invariant, and if so which remaining nondeterministic observations must be blocked?\",\"options\":[\"Guarantee determinism and define a complete blocked-source set\",\"Treat determinism as an expected property tested by the corpus, not a sandbox guarantee\"],\"default_guess\":\"Treat it as an expected property rather than a fully enforceable guarantee.\"},{\"subject\":\"A03 resource-limit outcomes\",\"kind\":\"vague condition\",\"text\":\"“a limit hit (memory, process count, scratch, `output_bytes`) — `resource_exhausted`” does not define how a hit is detected when the operating system returns an error that user code catches or when the process exits because of a limit.\",\"question\":\"Exactly which observable events count as a memory, process-count or scratch limit hit, and do they override a caught error and otherwise conforming return?\",\"options\":[\"Any kernel-observed denial or limit signal counts, even if caught\",\"Only termination or a parent-observed size excess counts\",\"Caught allocation or process errors remain ordinary program behavior\"],\"default_guess\":\"Count any reliably observed limit denial or limit signal as `resource_exhausted`.\"},{\"subject\":\"A03 output classification\",\"kind\":\"precedence gap\",\"text\":\"The output count is “the sum of the canonical JSON bytes of every `value` output,” while outcome order checks `resource_exhausted` before `contract_violation`; the text does not say how to count an output that cannot be canonically encoded or has the wrong shape or type.\",\"question\":\"When an invalid output is also apparently oversized, or cannot be canonically encoded to measure it, is the outcome `resource_exhausted` or `contract_violation`?\",\"options\":[\"Validate encodability and type first, producing `contract_violation`\",\"Measure any available serialization first and let `resource_exhausted` win\",\"Define a separate bounded capture representation for measuring invalid output\"],\"default_guess\":\"Return `contract_violation` when canonical output bytes cannot be formed; otherwise let the stated size precedence apply.\"},{\"subject\":\"A03 cleanup failure outcome\",\"kind\":\"contradiction\",\"text\":\"Rule 5 says the first of timeout, resource exhaustion, sandbox violation, crash and contract violation decides; rule 7 says that if cleanup cannot be confirmed “the execution is recorded `crashed` with detail `cleanup_failed`.”\",\"question\":\"If an execution already timed out, exhausted a resource or violated the sandbox and cleanup then cannot be confirmed, which status is recorded?\",\"options\":[\"Always override with `crashed/cleanup_failed`\",\"Keep the earlier outcome and stop the kernel\",\"Apply the rule-5 precedence including cleanup failure as a crash candidate\"],\"default_guess\":\"Override with `crashed/cleanup_failed` because rule 7 states that outcome directly.\"},{\"subject\":\"A13/A15 mapped aggregate failure trace\",\"kind\":\"contradiction\",\"text\":\"A13 rule 6 requires a mapped node whose collected value list is too large to write a NodeExecution without `map_index`; A15 rule 1 says a mapped node has its own record without `map_index` “only when it ran no element.”\",\"question\":\"Is the aggregate `value_too_large` NodeExecution an allowed additional node-level record after mapped elements ran?\",\"options\":[\"Yes, add the aggregate record as an explicit exception to A15\",\"No, represent the aggregate failure without another NodeExecution\",\"Replace or alter an element record\"],\"default_guess\":\"Add the aggregate node-level record as an explicit exception.\"},{\"subject\":\"NodeExecution timestamps for non-executed records\",\"kind\":\"missing behavior\",\"text\":\"M23 requires `started_at` and `ended_at`, but A13 and A15 do not define their values for `skipped_by_guard`, `upstream_failed`, an empty mapped node, or the mapped aggregate `value_too_large` record.\",\"question\":\"What timestamps are recorded for NodeExecutions that do not correspond to an actual node invocation?\",\"options\":[\"Use the time the conclusion is derived for both fields\",\"Use the enclosing advancement request's start and derivation times\",\"Make one or both timestamps absent for non-executed records\"],\"default_guess\":\"Use the derivation time for both `started_at` and `ended_at`.\"},{\"subject\":\"M26 unknown-outcome resolution time\",\"kind\":\"missing model fact\",\"text\":\"The owner’s resolution is “the only record of the resolution,” but EffectAttempt has `recorded_at`, `concluded_at` and `resolved_by` with no `resolved_at`, and the text does not say whether `concluded_at` changes on resolution.\",\"question\":\"How is the time of an owner’s unknown-outcome resolution represented?\",\"options\":[\"Add or define a `resolved_at` fact\",\"Replace `concluded_at` with the resolution time\",\"Keep the original conclusion time and record no resolution time\"],\"default_guess\":\"Record a separate `resolved_at` timestamp.\"},{\"subject\":\"Draft-write activation authority\",\"kind\":\"underspecified reference\",\"text\":\"M26 requires the authority to be “the flow activation under which the run started,” but M19 and A12 pin only `flow_version_id`, not the particular FlowActivation record; the same version can be activated more than once.\",\"question\":\"How is the exact FlowActivation authorizing a draft-write run identified after later reactivations or restart?\",\"options\":[\"Store the FlowActivation position on the Run\",\"Derive the latest activation preceding the Run in store order\",\"Treat any activation of the pinned version as equivalent\"],\"default_guess\":\"Store the exact FlowActivation position on the Run.\"},{\"subject\":\"A20 release ceilings across upgrades\",\"kind\":\"contradiction\",\"text\":\"Rule 1 says no contract “raises” a release ceiling, while rule 4 says an earlier contract “executes under” its old bounds even when those bounds exceed the new release’s ceilings.\",\"question\":\"After an upgrade lowers a ceiling, may execution exceed the current release constant to honor an older contract?\",\"options\":[\"Honor the old contract bound despite the new release ceiling\",\"Cap or refuse the old contract under the new ceiling\",\"Prevent releases from lowering any contract resource ceiling\"],\"default_guess\":\"Honor the old contract bound because rule 4 specifically addresses upgrades.\"},{\"subject\":\"Manifest revision lookup\",\"kind\":\"missing behavior\",\"text\":\"The kernel reads `<manifest_location>/<service_id>.json` “at the configured `manifest_revision`,” but nothing defines how a location and revision resolve to bytes.\",\"question\":\"What mechanism reads a file at `manifest_revision`, and what counts as an absent or unreadable revision?\",\"options\":[\"Treat `manifest_location` as a version-controlled repository and read the named revision\",\"Treat the revision as a subdirectory or immutable snapshot identifier\",\"Read the working tree and use revision only as metadata\"],\"default_guess\":\"Read the file from the named revision of a version-controlled repository.\"},{\"subject\":\"Manifest document validity\",\"kind\":\"refusal gap\",\"text\":\"A08 refuses a record that “is not valid JSON, lacks `service` or `capabilities`,” but does not cover duplicate object member names, wrong container types, unnamed capability entries or multiple fields within an entry, all of which affect JCS digesting and lookup.\",\"question\":\"Which malformed or non-canonical manifest structures are refused, and where do those refusals fall in rule 5’s order?\",\"options\":[\"Require a closed manifest schema and reject duplicate JSON names\",\"Accept any JSON whose fields used by the rule can be interpreted\",\"Defer all structural validation to the platform manifest reader\"],\"default_guess\":\"Require a closed schema and reject duplicate JSON member names.\"},{\"subject\":\"OperationBinding schemas\",\"kind\":\"missing validation\",\"text\":\"A08 rule 5 checks request shape and selected contract-port rules, but does not explicitly require every binding port’s `value_schema` to belong to the kernel’s supported JSON Schema subset.\",\"question\":\"Can a binding be proposed or accepted with a schema outside the supported subset?\",\"options\":[\"Refuse it like an invalid contract port\",\"Allow it if request-shape inspection succeeds\",\"Allow proposal but fail proof or invocation later\"],\"default_guess\":\"Refuse it during proposal and acceptance.\"},{\"subject\":\"Service base URL\",\"kind\":\"vague validation\",\"text\":\"A08 accepts an absolute `http` or `https` URL with a host, and A09 constructs the target from “the `api_base_url` without a trailing `/` followed by the declared path”; it does not decide whether user information, query, fragment, an existing path, or multiple trailing slashes are allowed.\",\"question\":\"What exact grammar is accepted for `api_base_url`, and exactly how is its path joined to the operation path?\",\"options\":[\"Require scheme and authority only, with no userinfo, query, fragment or base path\",\"Allow a base path but forbid userinfo, query and fragment\",\"Allow every absolute URL and define literal concatenation\"],\"default_guess\":\"Allow a base path, forbid userinfo/query/fragment, and remove all trailing slashes before joining.\"},{\"subject\":\"Loopback HTTP classification\",\"kind\":\"vague condition\",\"text\":\"Plain HTTP is allowed when the `api_base_url` “host is a loopback address,” without saying whether this is based on literal IP syntax, DNS resolution, IPv4-mapped IPv6 addresses or all resolved addresses.\",\"question\":\"Exactly which hosts qualify as loopback for the plain-HTTP exception?\",\"options\":[\"Only literal IPv4 or IPv6 loopback addresses\",\"Names such as `localhost` and addresses resolving solely to loopback also qualify\",\"Any host with at least one loopback resolution qualifies\"],\"default_guess\":\"Only literal loopback IP addresses qualify.\"},{\"subject\":\"Path placeholder port carriage\",\"kind\":\"missing refusal\",\"text\":\"A09 requires a placeholder to name an input port whose schema type is `string` or `integer`, but does not say that the port must have `value` carriage or cardinality `one`.\",\"question\":\"Are file or `many` ports whose schemas otherwise match allowed as path placeholders?\",\"options\":[\"Require a `one` `value` port at proposal time\",\"Allow them and fail the send when the runtime value is not a scalar\",\"Define extraction of one value from a collection or file\"],\"default_guess\":\"Require a `one` `value` port at proposal time.\"},{\"subject\":\"Multipart field names\",\"kind\":\"encoding gap\",\"text\":\"Multipart parts use `name=\\\"<port>\\\"` and `filename=\\\"<port>\\\"`, while port names have no character restriction or escaping rule beyond a byte bound.\",\"question\":\"How are quotes, backslashes, control characters, non-ASCII characters or an empty port name represented in multipart headers, or are such names refused?\",\"options\":[\"Restrict multipart-used port names to a safe ASCII token\",\"Define quoted-string escaping and filename encoding\",\"Use an extended RFC parameter encoding\"],\"default_guess\":\"Restrict multipart-used port names to a safe ASCII form at binding proposal.\"},{\"subject\":\"Many-valued service outputs\",\"kind\":\"validation ambiguity\",\"text\":\"For a JSON response, “each output port takes the member of the same name, which must validate against the port,” while M21 says a `many` port stores an array whose elements validate against the port’s element schema.\",\"question\":\"Does a `many` output member validate as an array of the port schema, or is the member itself validated directly against the port schema?\",\"options\":[\"Require an array and validate each element against the port schema\",\"Validate the whole member directly against the declared schema\",\"Require the declared schema itself to describe the array\"],\"default_guess\":\"Require an array and validate each element against the port schema.\"},{\"subject\":\"Spool byte accounting\",\"kind\":\"ambiguous invariant\",\"text\":\"A15 limits “a run whose spooled files together” and formalizes `sum(spool(run))`, while A18 says “Equal bytes are stored once” and M22 makes equal files from different attempts distinct SpooledFiles.\",\"question\":\"Do repeated equal files count once or once per SpooledFile occurrence toward `spool_run_bytes_max`, and are files from the currently failing attempt included atomically?\",\"options\":[\"Count every logical SpooledFile occurrence\",\"Count unique stored byte blobs only\",\"Count physical allocated bytes\"],\"default_guess\":\"Count every logical SpooledFile occurrence, including the entire prospective attempt before committing it.\"},{\"subject\":\"Installation data-directory permissions\",\"kind\":\"vague start condition\",\"text\":\"A18 says the data directory “and everything in it are private to the kernel’s user; the kernel refuses to start otherwise,” without defining accepted ownership, file types or permission bits.\",\"question\":\"What exact ownership and mode checks make the data directory, database, value area, fixtures and spool private enough to start?\",\"options\":[\"Require kernel-user ownership and no group/other permission on every entry\",\"Require only that group/other cannot read\",\"Rely on the top-level directory mode and do not inspect all descendants\"],\"default_guess\":\"Require kernel-user ownership and no group/other permissions on every persistent entry.\"},{\"subject\":\"Owner and agent token syntax\",\"kind\":\"vague refusal\",\"text\":\"Tokens must be “at least 43 characters (32 bytes in base64url),” but the rules do not say whether base64url syntax, padding or decoded length is validated.\",\"question\":\"What strings are valid tokens at start or configuration reload?\",\"options\":[\"Require unpadded base64url decoding to at least 32 bytes\",\"Require only at least 43 characters of any kind\",\"Require exactly 43 unpadded base64url characters\"],\"default_guess\":\"Require unpadded base64url that decodes to at least 32 bytes.\"},{\"subject\":\"A18 equal-byte publication\",\"kind\":\"storage contradiction\",\"text\":\"A18 says “Equal bytes are stored once,” while spooled files are addressed by run, producer, attempt, port and list index, and “a spooled file no record names … is replaced at its position.”\",\"question\":\"Are spool bytes content-addressed and shared, or is each SpooledFile stored at its attempt-specific position?\",\"options\":[\"Store one content-addressed blob and separate attempt references\",\"Store a separate file at every SpooledFile position\",\"Deduplicate only durable values and trial fixtures, not run spools\"],\"default_guess\":\"Deduplicate durable values and fixtures, but keep attempt-specific spool files.\"}]}"
+}

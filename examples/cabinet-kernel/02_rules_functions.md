@@ -158,7 +158,8 @@ and no detection promises the runtime cannot keep.
    and every other function the module exports), any method of
    `random.SystemRandom`, and `random.Random` constructed without a seed or with
    `None`; `random.Random(seed)`
-   with an explicit seed stays usable. The list is closed for the release; an
+   with an explicit seed stays usable: it draws no entropy, so equal inputs
+   still give equal outputs, which is what State 0's "no randomness" asks. The list is closed for the release; an
    entry point found missing is added by a new release. "Every function the
    module exports" is the release interpreter's `random.__all__` without the
    classes `Random` and `SystemRandom`; for release v1 (CPython 3.12, A20 rule 3)
@@ -260,7 +261,10 @@ admission order and of resubmitting an equal implementation.
    corpus digest is the SHA-256 of the canonical JSON of the list of its
    `trial_case_id`s in corpus order.
    Admission executes the implementation on every case of the corpus, in corpus
-   order, each as one TrialExecution M07, and never stops early.
+   order, each as one TrialExecution M07, and never stops early — save for an
+   execution whose cleanup cannot be confirmed: it is recorded `crashed` with
+   `cleanup_failed` and the kernel stops (A03 rule 7), with no verdict
+   recorded; after the restart a submission runs admission afresh.
 3. A case passes when the execution succeeded and, if the case states expected
    outputs, every output's digest equals the expected one — a file output is
    recorded in the TrialExecution by digest, size and media type, keeps no bytes,

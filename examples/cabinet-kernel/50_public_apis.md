@@ -725,7 +725,9 @@ failure, nothing published.
 
 ### State impact
 
-Adds content-addressed bytes; writes no record.
+Adds content-addressed bytes; writes no record. Bytes whose record never
+follows — a later failure of the caller's attempt — stay unnamed; nothing
+removes them and equal bytes reuse them (A13 rule 3).
 
 ## `public_op:store.read_records`
 
@@ -931,6 +933,10 @@ attempt spooled before (A15 rule 3); the caller concludes the element
 ### State impact
 
 Adds a spooled file; the SpooledFile record is written by the caller's change.
+When that attempt fails for another reason the file stays unnamed in the run's
+spool, counted toward the spool ceiling, until `remove_run_spool` or a later
+write to its position (A13 rule 3); no operation removes one attempt's files
+except this one's own refusal.
 
 ## `public_op:installation.current_token_list`
 
