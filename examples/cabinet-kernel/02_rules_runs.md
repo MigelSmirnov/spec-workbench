@@ -126,8 +126,12 @@ worker.
    records, which stay as they are (A15 rule 4). No record of the node states
    that failure: like the list, it is derived from the elements' records and
    `stored_value_bytes_max`, the same way by every reader of the trace (A15;
-   owner, 2026-10-05, as the advance_run note decides); mapping over such a
-   list gives each element the list's class; a file list is the
+   owner, 2026-10-05, as the advance_run note decides). By the same
+   derivation the node counts as failed when the run ends (rule 7), so a list
+   that feeds only a flow output ends the run `failed`. Only a list that is
+   delivered — to a node or a flow output — is measured; an output no edge
+   takes fails nothing. Mapping over a delivered list gives each element the
+   list's class; a file list is the
    elements' SpooledFiles in element order, each keeping its own record, and
    the reference naming it carries the list's class. A non-empty list has no
    record of its own: the elements' NodeExecutions are its durable facts, and
@@ -314,7 +318,7 @@ spool, files only as fixtures beyond a run.
    way a run's file outlives its run (K-10).
 6. For repair an agent receives one slot's contract, its current implementation,
    its trial cases and executions, and the latest NodeExecutions, in reverse store
-   order, of function nodes pinned to any contract version of that slot, at most
+   order, that executed an implementation of any contract version of that slot, at most
    `page_size_max` of them (K-12), under A07.
 7. The trace is the only source the kernel uses to explain or continue a run;
    process logs are never an input to a kernel decision.
@@ -357,8 +361,8 @@ state named and must be closed there:
   refused.
 - State 6: the supported JSON Schema subset and the syntax of idempotency-key
   fields, as State 1 carries; canonical bytes are RFC 8785 (A01).
-- Release build: the frozen list of trapped standard-library entry points (A03
-  rule 4), shipped with the runtime.
+- Release build: the frozen list of trapped standard-library entry points —
+  closed: A03 rule 4 lists them, and the release passes them as data (A20).
 - State 5: the closed set of reason codes a refusal or an `operation_failed`
   detail names — only where a caller acts on the difference (K-17); State 2 fixes
   which check is named first.

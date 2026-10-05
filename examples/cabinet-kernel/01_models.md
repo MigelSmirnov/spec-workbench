@@ -326,6 +326,9 @@ Candidate fields:
   StoredValue — and for a `many` file port a list of such facts in output order,
   a repeated file kept as often as it occurs;
 - `resources_used`;
+- `detail_code`: the closed detail of State 5 when the outcome has one —
+  `cleanup_failed` for a `crashed` execution whose cleanup was not confirmed
+  (A03 rule 7), `value_too_large` (A15 rule 4) — none otherwise;
 - `executed_at`;
 - `executed_by` (K-15): the agent whose explicit try ran it, or `kernel` for
   admission.
@@ -411,7 +414,7 @@ None.
 ### Meaning
 
 The selection of one admitted implementation for one contract version (K-04):
-by the kernel on a new admitted verdict, or as a rollback by the owner or an
+by the kernel on an admitted verdict of a submission, new or reused, or as a rollback by the owner or an
 agent with the author right choosing an earlier implementation admitted over the
 current corpus.
 Read when a run pins its function nodes. The current activation of a contract
@@ -437,7 +440,7 @@ value (SPEC_STANDARD 15.1.1; pre-contract data closure, 2026-10-03).
 
 ### Source of truth
 
-The kernel on a new admitted verdict; the owner or an agent with the author right
+The kernel on an admitted verdict of a submission, new or reused; the owner or an agent with the author right
 for a rollback to an earlier admitted implementation.
 
 ### Lifecycle candidate
@@ -828,9 +831,10 @@ entity
 
 ### Identity evidence
 
-Substitution: fails — each activation is one issued selection; activating the
-same flow version again is a new record with its own position in the store's
-order (A01 rule 3), not the earlier one. Continuity: trivial; it is issued once
+Substitution: fails — each activation is one issued selection; activating again a
+flow version that is not the active one is a new record with its own position in
+the store's order (A01 rule 3), not the earlier one; asking for the active
+version records nothing (A06 rule 4). Continuity: trivial; it is issued once
 and never changed. Switching back is another activation. Entity issued once, not
 a value (SPEC_STANDARD 15.1.1; pre-contract data closure, 2026-10-03).
 

@@ -218,7 +218,8 @@ minting again on a collision.
 7. **How a grant learns a node's effect class** (State 4 round 4):
    `effects` reads the node's binding through `bindings.read_binding`.
 8. **A manifest that cannot be read at start** in
-   `bindings.check_installed_instances`: the start stops and names it; every
+   `bindings.check_installed_instances`: a record that cannot be read or fails
+   a check of the record itself (A08 rule 5) stops the start and names it; every
    start step is required (State 3, "Start").
 
 ## Relations of `store.read_records`
@@ -254,7 +255,7 @@ not a record: a digest no verdict covers answers none. "Runs by status" and
 | latest activation of a flow | `flows` | the FlowActivation M18, or none |
 | latest activation of a flow version before a run's record in store order | `runs` | the FlowActivation; none cannot occur, and finding none is `internal_error` (closed question 3) |
 | executions of a run | `runs` | NodeExecutions M23 with their SpooledFiles M22 |
-| executions of an element | `effects` | the element's NodeExecutions M23 with their SpooledFiles M22, from which it reads an operation element's conclusion (A11 rule 3) and the attempt number a read send's file is spooled under |
+| executions of an element | `effects`, `runs` | the element's NodeExecutions M23 with their SpooledFiles M22, from which it reads an operation element's conclusion (A11 rule 3) and the attempt number a read send's file — or, for `runs`, a function element's file — is spooled under |
 | runs by status | `runs` | Runs M19 with that status, oldest first (A14 rule 5) |
 | approvals of an element | `effects` | EffectApprovals M24 |
 | attempts of an element | `effects` | EffectAttempts M26 |
@@ -1161,8 +1162,9 @@ succeeded (A15 rules 3 and 4).
 
 ### Errors
 
-`stop_required` with outcome `crashed` and detail `cleanup_failed` when cleanup
-cannot be confirmed; the caller records it and stops (State 3).
+None: an unconfirmed cleanup is the result `crashed` with detail
+`cleanup_failed`; the caller writes the record and returns `stop_required`
+(Conventions; State 3).
 
 ### State impact
 
@@ -1309,7 +1311,8 @@ One prepared request and the operation's effect class.
 
 One outcome name of the A09 rule 5 table for that class, and for
 `operation_failed` its detail code from the closed set (`redirect_not_followed`
-for a `read` answered 3xx); when the response is used, the output values by
+for a `read` answered 3xx), and `value_too_large` for a `contract_violation`
+whose output value exceeds `stored_value_bytes_max` (A15 rule 4); when the response is used, the output values by
 port — none for a binding without output ports, whose body is ignored — or for
 a file output its bytes with the port's media type, which `effects` spools; and
 a bounded `failure_detail`.
@@ -1830,7 +1833,8 @@ fails nothing here: it is not invocable at send (A09 rule 6).
 
 `refused` naming the first failing service, services taken in `service_id`
 code-point order and each one's manifest record read in its turn — an
-unreadable record fails at its service; the start stops.
+unreadable record, or one failing a check of the record itself (A08 rule 5),
+fails at its service; the start stops.
 
 ### State impact
 
@@ -2012,8 +2016,8 @@ Purpose rule first; A05 rule 7 pre-proof refusals in order; identity per A01
 rule 1. A constant's StoredValue takes the `value_schema` and class the
 composing agent declared with it (State 6, decision 5), never its target's, so
 a version whose constant targets a missing port, or one whose stored schema
-is not the declared one, is still kept and fails its proof (A05 phases 2 and
-3); a constant whose value does not fit its own declared schema is a pre-proof
+is not the declared one, is still kept and fails its proof (A05 phase 2);
+a constant whose value does not fit its own declared schema is a pre-proof
 refusal (A05 rule 7).
 
 ### Errors

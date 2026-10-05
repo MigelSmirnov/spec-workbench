@@ -29,7 +29,9 @@ Reuses cabinet-flow decision 05, narrowed to the records this kernel keeps.
    to create a record; it supplies one only to name an existing record.
 3. Activation M09 and FlowActivation M18 records are identified by their position
    in the store's one order of records (K-17); a later activation of the same
-   implementation or flow version is a new record, never the old one again.
+   implementation or flow version, after another was active, is a new record,
+   never the old one again; asking for the one already active records nothing
+   (A04 rules 4 and 5, A06 rule 4).
 4. Submitting content whose computed identity already exists returns the existing
    record unchanged: its first author and time stay, nothing new is recorded for
    it, and it does not become "the one issued last". In particular an equal
@@ -258,8 +260,8 @@ admission order and of resubmitting an equal implementation.
 2. Submitting an implementation — new, or equal to an existing one — runs
    admission unless an AdmissionVerdict M08 for that implementation and the
    current corpus digest already exists, in which case that verdict is used. The
-   corpus digest is the SHA-256 of the canonical JSON of the list of its
-   `trial_case_id`s in corpus order.
+   corpus digest is the content identity (State 6, decision 14) of the list of
+   its `trial_case_id`s in corpus order.
    Admission executes the implementation on every case of the corpus, in corpus
    order, each as one TrialExecution M07, and never stops early — save for an
    execution whose cleanup cannot be confirmed: it is recorded `crashed` with

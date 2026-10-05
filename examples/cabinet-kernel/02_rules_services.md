@@ -219,6 +219,8 @@ outcomes map to NodeExecution statuses.
    sequence replaced by U+FFFD, then cut at a character boundary to its
    longest prefix that fits as UTF-8 bytes — whose class is the highest of the execution's
    class and the classes the binding declares for its outputs, under A07 rule 5.
+   An answer refused only by the spool ceilings (A15 rule 3), which the invoker
+   never sees, keeps no `failure_detail`.
    Every body as read, whatever its status — reading stops at the ceiling
    (rule 5) — is searched, before it is parsed or cut, for the bytes of the credential
    value sent with the request; when they occur, the body is

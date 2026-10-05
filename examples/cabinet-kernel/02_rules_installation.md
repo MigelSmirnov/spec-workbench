@@ -28,7 +28,9 @@ Reuses cabinet-flow decisions 21 and 22, narrowed by K-11 and K-15.
    (A05 rule 2); a list's elements in list order. A request naming a record
    that does not exist — a flow, a flow version, a run, a binding, any other —
    is refused as State 0's unknown reference before that record's own checks,
-   never as a proof failure or a missing activation; refusal codes are State
+   never as a proof failure or a missing activation — a record the request names
+   directly; a contract version or binding named inside a composed flow
+   version's content is a phase 1 proof failure (A05); refusal codes are State
    5's. Every request over `mcp` carries one token. The kernel compares it in constant
    time with the owner token and with each agent token of the installation (M28).
    A missing, unknown or revoked token gets one refusal that reveals nothing about
@@ -59,7 +61,8 @@ Reuses cabinet-flow decisions 21 and 22, narrowed by K-11 and K-15.
    - any agent only: try an implementation, propose a binding, compose and prove a
      flow;
    - owner or any agent: inspect, activate a flow (an agent only a `read` version,
-     A06), run, resume, release a failed run, read a trace.
+     A06), run, resume, release a failed run, read a trace — except that reading
+     a spooled file's or a trial fixture's bytes is owner only (A10 rule 2).
    No request field names or changes the actor.
 4. The surface is one fixed set of typed operations (K-11). Every request is
    validated against its schema at the step rule 1 gives it — after its size and
@@ -85,7 +88,9 @@ Reuses cabinet-flow decisions 21 and 22, narrowed by K-11 and K-15.
    the position, already passed, is not shown again whatever it becomes; the
    token stays valid when the record it names no longer matches. Paging never changes what A07 lets the caller see.
 7. No response carries a token, a service credential, a host path or a stack
-   trace, including on an internal error.
+   trace, including on an internal error — a credential meaning the value the
+   kernel holds; a service's echo of it in another encoding is protected only
+   by its class (A17 rule 2).
 
 ### Formal invariants
 
@@ -158,7 +163,7 @@ Reuses cabinet-flow decision 23, narrowed by K-16.
 ### Formal invariants
 
 ```text
-kernel_writes(credential) INTO {store, record, trace, preview, failure_detail, log, argv, response} -> never
+kernel_writes(verbatim(credential)) INTO {store, record, trace, preview, failure_detail, log, argv, response} -> never
 verbatim(credential) IN response_body -> body withheld, not used (A09 rule 7)
 credential_resolved -> at_request_build AND for_its_service_only
 instance(service) = installation.selected(service)
@@ -196,8 +201,9 @@ concurrent connections.
 3. Only the store module opens the database. Every change is one call to the
    store module and one transaction inside it; callers never open, name or pass a
    transaction (K-17). A call that fails writes and changes no record; the only
-   trace it can leave is a published file no record names, which nothing reads
-   and which is replaced at its position (rule 4). Surface requests are
+   trace it can leave is a published file no record names, which nothing reads:
+   a spooled file is replaced at its position, value bytes are reused by equal
+   bytes (rule 4). Surface requests are
    handled one at a time in the order they arrive: one request, including the run
    advancement it causes (A13), ends before the next begins, so an approval, a
    cancellation and a resume of one run never race.
@@ -305,9 +311,10 @@ reads.
    The first four are the ceilings of the ResourceBounds M04 fields of the same
    name. Bytes are exact integers; times are integer milliseconds.
 2. Over a ceiling is always a refusal or a failure, never a truncation — for
-   code, values, files, requests, responses and outputs. The one exception is
-   `failure_detail`, a diagnostic excerpt, not a value: it is cut to
-   `failure_detail_bytes_max` at a UTF-8 character boundary.
+   code, values, files, requests, responses and outputs. The exceptions are
+   diagnostic texts, not values: `failure_detail`, cut to
+   `failure_detail_bytes_max`, and a refusal's reason, cut to
+   `bounded_text_bytes_max`, each at a UTF-8 character boundary.
 3. A release pins the exact versions of the kernel's Python dependencies and of
    the sandbox runtime (A03); the sandbox interpreter of release v1 is CPython
    3.12, whose `random` module gives A03 rule 4 its list. A vulnerable dependency is answered by a new
@@ -369,7 +376,7 @@ State 3 is blocked if any referenced decision is removed or loses its boundary.
 Security review: PERFORMED
 
 - authentication_credential_abuse: APPLICABLE; references: A16, A17; affected: M27, M28, owner token, agent tokens, mcp channel, reverse proxy
-- secrets: APPLICABLE; references: A03, A15, A16, A17; affected: M23, M24, M28, service credentials, tokens, traces, previews, failure details
+- secrets: APPLICABLE; references: A03, A09, A15, A16, A17; affected: M21, M22, M23, M24, M28, service credentials, tokens, traces, previews, failure details
 - authorization: APPLICABLE; references: A06, A08, A10, A16; affected: M11, M18, M24, M25, M26, M27, owner-only and author actions
 - injection_interpreted_input: APPLICABLE; references: A03, A05, A09, A16; affected: M05, M13, submitted code, agent-supplied text, request paths and bodies built from node inputs
 - external_callbacks_webhooks: APPLICABLE; references: A08, A09, A11; affected: M10, M11, M26, outbound service calls and untrusted service responses (no inbound callback exists)

@@ -93,8 +93,10 @@ not review fields, classes or formats, so each is the agent's and says why.
    name, or a name that is not `[A-Za-z_][A-Za-z0-9_]*` is a manifest mismatch.
    `idempotency_key_fields` keeps the manifest's order; the key is the SHA-256
    of the canonical JSON object of those fields, keyed by name, so the order
-   does not change it. A key field whose value is `null` is not refused: `null`
-   is the value the service receives, and the key covers it.
+   does not change it. A key field whose value is `null` is not refused for
+   being a key field: the key covers `null`, and the service receives the
+   field as A09 rule 2 places it (omitted from a query; a null path
+   placeholder is `input_not_placeable`).
 4. **Continuation tokens** (A16 rule 6, carried by State 2): `store` issues the
    base64url text, without padding, of the canonical JSON of the record type, the
    SHA-256 of the canonical filter, and the store position of the last item
@@ -140,7 +142,7 @@ not review fields, classes or formats, so each is the agent's and says why.
     when any input of the element is `personal_data`: its URL, query or body
     would carry the value (A07 rule 4); the agent still sees `request_digest`
     and every input as its digest and class.
-11. **A NodeExecution carries `detail_code`** beside `failure_detail`: the closed
+11. **A NodeExecution and a TrialExecution carry `detail_code`** beside `failure_detail`: the closed
     detail of State 5 is a code, the excerpt is text, and the owner acts on the
     code.
 

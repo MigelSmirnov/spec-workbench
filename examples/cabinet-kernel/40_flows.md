@@ -78,7 +78,9 @@ AdmissionVerdict M08 and Activation M09 are written by `module:functions`.
    conditions in their order, naming the first failure; a bound above its
    ceiling or omitted is refused, never clamped (A02 rule 2). It computes
    `contract_version_id` with `capability:canonical_values.content_identity`; an equal version is returned unchanged and does not
-   become current again (A01 rule 4). Otherwise one
+   become current again (A01 rule 4) — the A02 rule 1 ceiling checks bind only
+   a new version, so an equal one is returned even after a release lowered a
+   ceiling below its bounds (A20 rule 4). Otherwise one
    `capability:store.record_change` writes the ContractVersion, and the Slot
    when the name is new, and makes it the slot's current contract version.
    The answer is the version with its identity. Next decision: the agent's.
@@ -870,7 +872,8 @@ EffectAttempt M26 and the concluding NodeExecution M23 written by
    case-insensitively, the name of a required header of its instance or of a
    header the kernel sets itself, `host` included (A09 rule    1). The services checked are those the installation holds a credential for, in
    `service_id` order; for one it also selects an instance for, a manifest
-   record that cannot be read stops the start naming it; a selected instance
+   record that cannot be read or fails a check of the record itself (A08 rule
+   5) stops the start naming it; a selected instance
    the record does not list fails nothing here
    (it is not invocable at send, A09 rule 6). It reads only the installation —
    `capability:installation.selected_instance_name` and

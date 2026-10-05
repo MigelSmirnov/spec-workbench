@@ -201,8 +201,9 @@ per-agent ceilings.
    NodeExecution or TrialExecution names as inputs — a file list counting with
    the class its reference carries, even when empty (A13 rule 6) — and for an operation also
    among its outputs; it is computed from those records, not stored. A
-   `failure_detail` of an execution whose class is above `open` is returned to an
-   agent only as its length and that class.
+   `failure_detail` whose class is above `open` — the execution's class, raised
+   for an operation's detail by the classes its binding declares for its outputs
+   (A09 rule 7) — is returned to an agent only as its length and that class.
 
 ### Formal invariants
 
