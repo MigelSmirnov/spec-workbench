@@ -218,9 +218,9 @@ minting again on a collision.
 7. **How a grant learns a node's effect class** (State 4 round 4):
    `effects` reads the node's binding through `bindings.read_binding`.
 8. **A manifest that cannot be read at start** in
-   `bindings.check_installed_instances`: a record that cannot be read or fails
-   a check of the record itself (A08 rule 5) stops the start and names it; every
-   start step is required (State 3, "Start").
+   `bindings.check_installed_instances`: the start stops and names it; every
+   start step is required (State 3, "Start"). A record that fails a check of
+   the record itself (A08 rule 5) counts here as one that cannot be read.
 
 ## Relations of `store.read_records`
 
@@ -645,8 +645,11 @@ nothing else is removed (A18 rules 1, 2, 4).
 
 ### Errors
 
-`refused` naming the lock held, a directory not private, or a symbolic link;
-the start stops.
+`refused` naming a data directory that does not exist, the lock held, a
+directory not private, or a symbolic link; the start stops. The kernel never
+creates the data directory itself: the owner creates it, private to the
+kernel's user; inside it `open_store` creates the database schema, the
+content-addressed area and the spool area when absent.
 
 ### State impact
 

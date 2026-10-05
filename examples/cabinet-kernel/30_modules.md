@@ -100,10 +100,12 @@ record checked by `design_lint --state 2`, recorded as such in `30_trace.json`.
   the records it returns only (A07 rule 5), and the class of an operation
   execution's `failure_detail` from that class and the output classes
   `bindings.read_binding` declares (A09 rule 7). A run is read through `runs.read_run` (below).
-- **Run answers.** The run's answer — status, outputs, and per flow output its
-  value or the reason `skipped_by_guard` or `not_produced` (A13 rule 7) — is
-  computed by `runs` from the trace when asked and is not stored; `runs.read_run`
-  and every `runs` capability that moves a run return it. A run that rests
+- **Run answers.** The run's status, its WaitingPoints and its produced
+  outputs are written by `runs` in its store calls, derived from the trace
+  (M19, M20); the reason per flow output not produced, `skipped_by_guard` or
+  `not_produced` (A13 rule 7), is computed from the trace when asked and is
+  not stored. `runs.read_run` and every `runs` capability that moves a run
+  return that answer. A run that rests
   carries only the outputs produced so far; the reasons appear once it has
   ended (A13 rule 7).
 - **Capture.** Capturing a failed execution enters through

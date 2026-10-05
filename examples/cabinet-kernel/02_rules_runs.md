@@ -82,12 +82,15 @@ worker.
    what it pinned as `executed`, the inputs it had, no outputs and no resources
    used, and starts and ends at the time of the check. An element that does not
       succeed keeps no output: its NodeExecution names none, a value it produced
-   is not stored, and the files its attempt spooled are discarded with no
-   SpooledFile record naming them. A spool-ceiling refusal removes that
-   attempt's files at once (A15 rule 3); after any other failure they stay in
-   the run's spool unnamed, counted toward `spool_run_bytes_max`, until that
-   spool is removed (A18 rule 4) or a later write to the same position
-   replaces them. Value bytes it published stay in the content-addressed area
+   is not stored, and the files its attempt spooled are discarded: no
+   SpooledFile record names them and nothing reads them. Their bytes are
+   removed at once only by a spool-ceiling refusal (A15 rule 3); after any
+   other failure they stay in the run's spool, counted toward
+   `spool_run_bytes_max`, until that spool is removed (A18 rule 4) or a later
+   write to the same position replaces them — a position being the run, node,
+   `map_index`, attempt number, port and list index, which only a retry of
+   the same attempt number writes again, after a restart left that attempt
+   without a record. Value bytes it published stay in the content-addressed area
    unnamed, to be reused by equal bytes; nothing reads either.
 4. A guarded edge delivers only when its guard port's value equals its guard
    value. An input port that can no longer receive a value because every edge into
