@@ -2766,7 +2766,12 @@ masking under A07 for every request (A16, A07 rules 4–5).
 ### Errors
 
 Any start step's refusal stops the start; `stop_required` ends the process
-after the record (State 3).
+after the record (State 3). Opening the entrance is the last start step: an
+`mcp_listen_address` that cannot be parsed or bound stops the start like any
+other step — named on standard error, non-zero exit, no retry, recovery
+already committed stays (owner, 2026-10-04: no partial start). A listener
+lost while serving ends the process with a non-zero exit; the next start
+runs the whole sequence again.
 
 ### State impact
 
