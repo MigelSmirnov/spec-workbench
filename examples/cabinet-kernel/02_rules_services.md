@@ -198,7 +198,7 @@ outcomes map to NodeExecution statuses.
    | request may have been sent, no valid final response received (timeout, reset, EOF, a malformed status line or headers, only `1xx`) | `service_unreachable` | `outcome_unknown`, attempt `unknown` |
    | status 3xx or 5xx, whatever the body's size — reading stops at the ceiling | `service_unreachable` for 5xx, `operation_failed` for 3xx | `outcome_unknown`, attempt `unknown` |
    | status 4xx, whatever the body's size — reading stops at the ceiling | `operation_refused` | `operation_refused`, attempt `not_applied` |
-   | status 2xx, the body echoes the credential (rule 7), outputs do not fit rule 3, or the body exceeds `service_response_bytes_max`, `stored_value_bytes_max` or the spool ceilings | `contract_violation` | `contract_violation`, attempt `applied` |
+   | status 2xx, the body echoes the credential (rule 7), outputs do not fit rule 3, the body exceeds `service_response_bytes_max`, an output value exceeds `stored_value_bytes_max` (A15 rule 4, per output port, never the whole body) or a file output the spool ceilings | `contract_violation` | `contract_violation`, attempt `applied` |
    | status 2xx, outputs fit | `succeeded` | `succeeded`, attempt `applied` |
 
    "Nothing could be sent" holds only when the failure happened before the
@@ -357,7 +357,9 @@ generated statements, no suspension.
    `content-length`; the HTTP client adds no other header (no user agent, no
    connection header). The body is described as the JSON body's bytes, or for
    `multipart/form-data` as the parts in order, each as its name, filename when
-   present, media type and the SHA-256 of its content, so the boundary is not
+   present, media type and the SHA-256 of its content — the boundary, and the
+   `content-length` it changes, are the kernel's framing of the parts the
+   owner was shown, not a difference State 0 asks again for — so the boundary is not
    part of it: equal parts give equal descriptions. The `request_digest` is the SHA-256 of the canonical JSON of that
    description. The credential's value is never shown, so rotating it voids no
    approval; any other difference, whatever caused it, is a different request

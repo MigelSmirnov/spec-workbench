@@ -48,7 +48,11 @@ Python signatures are State 6's.
   the first of them in the order the operation's Inputs list them (A16 rule 1:
   checks in the order listed).
 - **Reason.** A refusal's reason is at most `bounded_text_bytes_max`, cut at a
-  UTF-8 character boundary.
+  UTF-8 character boundary. It is text for a reader, naming the failed check
+  and the record or field it concerns; it is not a machine identifier, and no
+  caller branches on it — callers act only on the code, which is why codes are
+  closed and reasons are not (K-17). A missing record is `unknown_reference`
+  naming it, whatever operation looked it up.
 - **Order.** Every collection in an output is in store order unless the
   operation names another order.
 - **`map_index`** is absent, never a sentinel, for an element of a node that

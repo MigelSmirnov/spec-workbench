@@ -83,11 +83,12 @@ worker.
    used, and starts and ends at the time of the check. An element that does not
       succeed keeps no output: its NodeExecution names none, a value it produced
    is not stored, and the files its attempt spooled are discarded with no
-   SpooledFile record naming them: no operation removes them at once — they stay
-   in the run's spool, counted toward `spool_run_bytes_max`, until that spool is
-   removed (A18 rule 4) or a later write to the same position replaces them —
-   and value bytes it published stay in the content-addressed area unnamed, to
-   be reused by equal bytes; nothing reads either.
+   SpooledFile record naming them. A spool-ceiling refusal removes that
+   attempt's files at once (A15 rule 3); after any other failure they stay in
+   the run's spool unnamed, counted toward `spool_run_bytes_max`, until that
+   spool is removed (A18 rule 4) or a later write to the same position
+   replaces them. Value bytes it published stay in the content-addressed area
+   unnamed, to be reused by equal bytes; nothing reads either.
 4. A guarded edge delivers only when its guard port's value equals its guard
    value. An input port that can no longer receive a value because every edge into
    it is disabled, or comes from a skipped node, makes its node `skipped_by_guard`
@@ -122,8 +123,9 @@ worker.
    canonical bytes exceed `stored_value_bytes_max` is not written. Instead
    `runs` writes, in the change that first derives that list, one
    NodeExecution of the node without `map_index` — number 1 by A11 rule 1,
-   `executed` naming what it pins, status `contract_violation`, the inputs
-   the elements received, no outputs, no resources used, starting and ending
+   `executed` naming what it pins, status `contract_violation`, as inputs by port
+   the references the node received — the mapped port naming the whole list,
+   not an element — no outputs, no resources used, starting and ending
    at the time of that change, and `failure_detail` naming `value_too_large`
    and the first output port, in port order, whose list is over the ceiling.
    It records no sandbox execution, so it is never captured (A15 rule 5). The node is then failed: none

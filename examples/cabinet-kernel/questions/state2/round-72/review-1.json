@@ -1,0 +1,330 @@
+{
+ "open_points": [
+  {
+   "subject": "A03 sandbox filesystem access",
+   "kind": "contradiction",
+   "text": "K-02 says a function has “no filesystem beyond its input”, while A03 permits opening paths inside “the exchange directory and the read-only runtime”.",
+   "question": "May function code read runtime files or create/read arbitrary exchange-directory files, or may it access only its supplied inputs and declared outputs?",
+   "options": [
+    "Allow the read-only runtime and unrestricted exchange-directory access",
+    "Expose only supplied inputs and declared outputs",
+    "Treat any other filesystem access as a sandbox violation"
+   ],
+   "default_guess": "Treat any access unrelated to supplied inputs or declared outputs as a sandbox violation."
+  },
+  {
+   "subject": "A03 clock prohibition",
+   "kind": "incomplete closed set",
+   "text": "The runner “replaces every clock ... entry point”, but the declared exact list omits other clock-bearing APIs such as time.clock_gettime, time.thread_time, os.times, resource usage times and filesystem timestamps.",
+   "question": "Are unlisted clock or time-observation APIs allowed, trapped, or grounds for a sandbox violation when used?",
+   "options": [
+    "Only the written list is trapped; other APIs are allowed",
+    "All APIs capable of revealing time are trapped",
+    "The isolation boundary hides or fixes every time source"
+   ],
+   "default_guess": "Trap every standard-library API that can reveal wall, monotonic, CPU or filesystem time."
+  },
+  {
+   "subject": "Deterministic function execution and admission",
+   "kind": "unverifiable invariant",
+   "text": "A03 requires that “the same implementation on the same input yields the same output digest twice”, but permits observable nondeterministic state such as process identifiers, object identities, runtime-file metadata and potentially directory ordering.",
+   "question": "What rule detects or prevents outputs that vary despite passing all listed sandbox traps?",
+   "options": [
+    "Expand isolation and traps until all observable inputs are deterministic",
+    "Run each trial repeatedly and refuse differing outputs",
+    "Do not guarantee deterministic outputs; cache the first admission verdict"
+   ],
+   "default_guess": "Run each admission case at least twice and refuse differing output digests, in addition to hiding known nondeterministic sources."
+  },
+  {
+   "subject": "A03 scratch limit",
+   "kind": "undefined accounting",
+   "text": "The sandbox has “one private exchange directory bounded by sandbox_scratch_bytes_max”, without saying which files and bytes count or when the bound is measured.",
+   "question": "Do staged inputs, runner protocol files, temporary user files, declared outputs, deleted files and filesystem metadata count toward the scratch limit, and how is an exceedance detected?",
+   "options": [
+    "Count current regular-file contents only",
+    "Count all bytes ever written during the execution",
+    "Exclude kernel-staged inputs and protocol files but count all user-created and output bytes"
+   ],
+   "default_guess": "Exclude immutable staged inputs and runner metadata; count the peak allocated bytes of user-created and output files."
+  },
+  {
+   "subject": "A03 output limit and invalid return values",
+   "kind": "undefined precedence",
+   "text": "The output count is “the sum of the canonical JSON bytes of every value output and the bytes of every file output”, while resource exhaustion is checked before contract violation, but invalid return objects may not be canonicalizable or may contain unknown ports or non-bytes file values.",
+   "question": "Which returned objects count toward output_bytes, and what outcome applies when their size cannot be canonically computed?",
+   "options": [
+    "Validate the return shape and types first, then apply the size bound",
+    "Measure every serializable returned entry before checking the contract",
+    "Classify an unmeasurable return immediately as contract_violation"
+   ],
+   "default_guess": "Classify an unmeasurable or wrongly typed return as contract_violation; otherwise measure all returned declared outputs before schema validation."
+  },
+  {
+   "subject": "A03 stdout and stderr",
+   "kind": "missing limit behavior",
+   "text": "“Nothing the code prints or raises is interpreted by the kernel” and stdout is never retained, but no destination, draining rule or byte limit is defined for stdout or stderr.",
+   "question": "Are stdout and stderr discarded continuously, bounded as output or scratch, or allowed to block the process and cause a timeout?",
+   "options": [
+    "Redirect both to a continuously drained null sink",
+    "Count both toward output_bytes",
+    "Capture them in a separate bounded diagnostic stream"
+   ],
+   "default_guess": "Redirect stdout and stderr to a continuously drained null sink."
+  },
+  {
+   "subject": "A03 resource outcome classification",
+   "kind": "ambiguous outcome",
+   "text": "A03 distinguishes “a limit hit” as resource_exhausted from a process that “exited abnormally” as crashed, without defining how an external kill, allocation failure, fork failure or scratch-write error proves which condition occurred.",
+   "question": "What observable evidence makes an abnormal termination resource_exhausted rather than crashed when several limits or signals could explain it?",
+   "options": [
+    "Classify by the supervising kernel's recorded limit event",
+    "Classify specified signals and errno values as resource_exhausted",
+    "Use crashed whenever the exact limiting resource cannot be proven"
+   ],
+   "default_guess": "Use resource_exhausted only when the supervisor can attribute the failure to a specific enforced limit; otherwise use crashed."
+  },
+  {
+   "subject": "A04 authored expected outputs",
+   "kind": "missing refusal condition",
+   "text": "A trial case may have “expected_outputs ... absent when only the absence of failure is required”, and A04 says expected outputs “when present, fit the output ports”, but does not say whether a present map must contain every output port exactly once.",
+   "question": "May an authored case assert only a subset of outputs, or must expected_outputs be either wholly absent or exactly match all contract outputs?",
+   "options": [
+    "Require every output port when expected_outputs is present",
+    "Allow any non-empty subset and compare only those outputs",
+    "Allow an empty expected_outputs map distinct from absence"
+   ],
+   "default_guess": "Require expected_outputs, when present, to contain exactly every output port."
+  },
+  {
+   "subject": "A02 contract validation order",
+   "kind": "undefined tie order",
+   "text": "A02 gives an order of validation conditions but no total order for choosing among multiple invalid ports; A16 falls back to the smallest identifier, while input and output ports may legally share the same name.",
+   "question": "When several ports fail the same condition, including equal names in opposite directions, which port is reported first?",
+   "options": [
+    "Order ports by direction then name as A01 hashes them",
+    "Order by name then direction",
+    "Report the first port in the submitted request"
+   ],
+   "default_guess": "Order by direction and then name, both by Unicode code point."
+  },
+  {
+   "subject": "A08 manifest record shape",
+   "kind": "incomplete refusal rules",
+   "text": "A08 handles an absent or invalid-JSON record and one that “lacks service or capabilities”, but does not define outcomes for a non-array capabilities value, non-object entries, missing or non-string capability names, missing idempotency_key, malformed instance collections or malformed required_headers containers.",
+   "question": "What complete manifest shape is required, and where do each of these malformed structures fall in the ordered manifest-mismatch checks?",
+   "options": [
+    "Define and validate a complete manifest JSON schema before the listed semantic checks",
+    "Treat every unlisted structural defect as invalid JSON",
+    "Map each malformed field to the nearest listed check"
+   ],
+   "default_guess": "Validate a closed manifest schema first, then perform A08's semantic checks in their written order."
+  },
+  {
+   "subject": "Manifest revision reading",
+   "kind": "undefined mechanism",
+   "text": "The kernel reads `<manifest_location>/<service_id>.json` “at the configured manifest_revision”, yet no rule explains how the revision selects file contents, and A08 also claims a record changes only after restart with a new configured revision.",
+   "question": "How is manifest_revision applied, and what happens if files at manifest_location change while the configured revision and running process do not?",
+   "options": [
+    "manifest_location is an immutable snapshot already corresponding to the revision",
+    "The kernel reads files through a version-control operation at the named revision",
+    "The kernel detects any live file change and treats the binding as stale"
+   ],
+   "default_guess": "Require manifest_location to resolve to an immutable snapshot whose content is verified against manifest_revision at startup."
+  },
+  {
+   "subject": "A09 api_base_url validity and URL joining",
+   "kind": "missing refusal conditions",
+   "text": "A08 accepts any absolute http or https URL with a host, while A09 joins it by removing a trailing slash and appending the operation path; user information, a query, a fragment or unusual path components in api_base_url are not addressed.",
+   "question": "Which path, query, fragment, user-information, percent-encoding and port forms are legal in api_base_url, and exactly how are they joined to the declared path?",
+   "options": [
+    "Require an origin-only URL with no path, query, fragment or user information",
+    "Allow a fixed base path but forbid query, fragment and user information",
+    "Apply standard URL-reference resolution"
+   ],
+   "default_guess": "Allow an optional normalized base path, but forbid user information, query and fragment."
+  },
+  {
+   "subject": "A09 loopback exception",
+   "kind": "vague security condition",
+   "text": "Plain HTTP is allowed when the api_base_url “host is a loopback address”, without defining whether this means an IP literal, localhost, a DNS name resolving only to loopback, or the address selected after DNS resolution.",
+   "question": "What exact host representations qualify for the loopback exception, and how are DNS changes or multiple resolved addresses handled?",
+   "options": [
+    "Only canonical loopback IP literals qualify",
+    "localhost and loopback IP literals qualify",
+    "Any hostname whose every resolved address is loopback qualifies"
+   ],
+   "default_guess": "Only IPv4 or IPv6 loopback IP literals qualify."
+  },
+  {
+   "subject": "A09 multipart field names",
+   "kind": "undefined encoding",
+   "text": "Multipart Content-Disposition is written as `name=\"<port>\"` and `filename=\"<port>\"`, but port names are not restricted here to characters safe inside quoted header parameters and no escaping algorithm is given.",
+   "question": "Which port names are valid for multipart bindings, and how are quotes, backslashes, non-ASCII characters or control characters encoded or refused?",
+   "options": [
+    "Restrict multipart port names to a safe ASCII token grammar",
+    "Escape quoted-string characters using HTTP quoted-string rules",
+    "Use RFC 5987 extended parameters for non-ASCII names"
+   ],
+   "default_guess": "Restrict multipart port names to a conservative ASCII token grammar at binding proposal."
+  },
+  {
+   "subject": "Effect approval request coverage",
+   "kind": "contradiction",
+   "text": "State 0 says approval covers “the fully built request ... headers and body” and “any difference at send ... asks again”, while A10 excludes the multipart boundary from Content-Type and describes multipart bodies only by part metadata and content digests; content-length also appears by name only.",
+   "question": "Do changes in multipart boundary and resulting wire body or Content-Length invalidate an approval?",
+   "options": [
+    "Yes; approval covers the exact wire bytes",
+    "No; approval covers the canonical semantic multipart description in A10",
+    "Boundary may vary but Content-Length must remain equal"
+   ],
+   "default_guess": "Treat A10's canonical multipart description as the approved request and explicitly exempt boundary and derived Content-Length differences."
+  },
+  {
+   "subject": "A09 JSON response size",
+   "kind": "contradiction",
+   "text": "A09's outcome table says a 2xx “body exceeds ... stored_value_bytes_max” is contract_violation, while M21 and A15 apply stored_value_bytes_max to each produced StoredValue; a JSON response can contain several individually valid outputs whose combined body exceeds that ceiling.",
+   "question": "Is stored_value_bytes_max enforced on the whole JSON response body, on each output member separately, or both?",
+   "options": [
+    "Whole JSON body only",
+    "Each output StoredValue only",
+    "Both the whole body and each output"
+   ],
+   "default_guess": "Apply service_response_bytes_max to the whole body and stored_value_bytes_max separately to each output value."
+  },
+  {
+   "subject": "A09 incomplete response body",
+   "kind": "ambiguous transport outcome",
+   "text": "The table treats “no valid final response received (timeout, reset, EOF...)” as unreachable or unknown, but also classifies 2xx responses with invalid or oversized bodies as contract_violation/applied.",
+   "question": "If a valid 2xx status and headers arrive but the body times out, resets or ends before its declared framing completes, is that an unknown transport outcome or an applied contract violation?",
+   "options": [
+    "Treat it as no valid final response: unreachable for read and unknown for effects",
+    "Treat it as a 2xx contract violation and applied for effects",
+    "Distinguish clean premature EOF from timeout or reset"
+   ],
+   "default_guess": "Treat an incomplete framed body as no valid final response: service_unreachable for reads and outcome_unknown for effects."
+  },
+  {
+   "subject": "HTTP header character and wire rules",
+   "kind": "undefined lexical rules",
+   "text": "Required headers and credential values reject a “control character” and otherwise are sent “verbatim”, but control character is undefined and no wire encoding is specified for permitted non-ASCII Unicode values.",
+   "question": "Which characters are permitted in header values, how are they encoded on the wire, and do C1 controls, DEL, tabs, leading spaces or non-ASCII text cause refusal?",
+   "options": [
+    "Require visible ASCII plus permitted internal spaces",
+    "Use an HTTP Latin-1 byte mapping",
+    "Encode Unicode as UTF-8 header bytes"
+   ],
+   "default_guess": "Require visible ASCII, allowing internal space and horizontal tab only if explicitly chosen, and refuse all non-ASCII and control characters."
+  },
+  {
+   "subject": "Standing grants for function nodes",
+   "kind": "missing refusal condition",
+   "text": "A10 allows a grant for “a node of the flow's active version whose effect class is not destructive”, but function nodes have no effect class.",
+   "question": "Is a grant request naming a function node refused, accepted but unused, or interpreted as a read-class node?",
+   "options": [
+    "Refuse grants for every non-operation node",
+    "Accept an unused grant for a function node",
+    "Treat function nodes as read for grant purposes"
+   ],
+   "default_guess": "Refuse a grant unless the named node is an operation node."
+  },
+  {
+   "subject": "Draft-write activation authority",
+   "kind": "missing pin",
+   "text": "M26 records “the flow activation under which the run started” and distinguishes repeated activations by store position, but M19 and A12 pin only flow_version_id, not the particular FlowActivation record.",
+   "question": "How does a run durably identify which activation authorized its draft-write sends when the same flow version has been activated more than once?",
+   "options": [
+    "Store the FlowActivation position in the Run",
+    "Derive the last activation preceding the Run in store order",
+    "Use whichever activation is current when the send occurs"
+   ],
+   "default_guess": "Pin and store the active FlowActivation's store position when the run is created."
+  },
+  {
+   "subject": "A13 and A14 retryable NodeExecutions",
+   "kind": "contradiction",
+   "text": "A13 says a mapped pass runs elements with “no concluded record” and that “a concluded element is never executed again”, while A14 resumes service_unreachable elements even though each unreachable attempt already wrote a NodeExecution.",
+   "question": "Which NodeExecution statuses leave an element retryable, and does “concluded” mean a concluded attempt or a final element conclusion?",
+   "options": [
+    "service_unreachable records conclude attempts but not elements and are retryable only by resume",
+    "Any non-final status may be retried during normal advancement",
+    "Retries replace the prior NodeExecution rather than adding one"
+   ],
+   "default_guess": "Define service_unreachable as a concluded attempt but a waiting, non-final element; retry it only through resume and append a new NodeExecution."
+  },
+  {
+   "subject": "Mapped aggregate failure trace",
+   "kind": "undefined record content",
+   "text": "When a mapped output list is too large, A13 writes a node-level NodeExecution whose inputs are “the inputs the elements received”, but M23 permits one reference per input port while different elements received different mapped-port values.",
+   "question": "What exact input references does the aggregate no-map_index NodeExecution contain for the mapped port and for shared ports?",
+   "options": [
+    "Reference the original many input list and each shared input",
+    "Reference every element's input list in a new aggregate structure",
+    "Leave aggregate inputs empty and derive them from element records"
+   ],
+   "default_guess": "Reference the original many input value plus each shared input supplied to the mapped node."
+  },
+  {
+   "subject": "Oversized failed output files in the spool",
+   "kind": "contradiction",
+   "text": "A13 says failed-attempt files “stay in the run's spool, counted toward spool_run_bytes_max, until that spool is removed”, while A15 says “only the files of that attempt are discarded” and its required test says an oversized function file “leaves nothing in the spool”.",
+   "question": "Are bytes from an oversized or otherwise failed output physically removed immediately, retained unnamed until spool cleanup, or retained only for some failure classes?",
+   "options": [
+    "Remove all files of the failed attempt immediately",
+    "Retain them unnamed and counted until spool cleanup",
+    "Retain valid-size files but immediately remove the file that exceeded a ceiling"
+   ],
+   "default_guess": "Remove every file of the failed attempt immediately and do not count it after the failure transaction."
+  },
+  {
+   "subject": "A15 spool-file limit testability",
+   "kind": "unverifiable invariant",
+   "text": "The required test asks a function to write a file one byte over spool_file_bytes_max, but release v1 caps a function's output_bytes at 67108864 while spool_file_bytes_max is 134217728, so output_bytes fails first.",
+   "question": "How can the function-side spool_file_bytes_max behavior be observed independently of the lower mandatory output_bytes ceiling?",
+   "options": [
+    "Remove the function-specific test and test the spool ceiling through operation outputs",
+    "Lower spool_file_bytes_max below output_bytes",
+    "Permit an old contract with a larger output_bytes bound as the fixture"
+   ],
+   "default_guess": "Test spool_file_bytes_max using an operation file response and retain a separate function output_bytes test."
+  },
+  {
+   "subject": "A07 redacted failure-detail length",
+   "kind": "undefined representation",
+   "text": "For a non-open execution, failure_detail is returned to an agent “only as its length and that class”, without defining the length unit.",
+   "question": "Is the disclosed length measured in Unicode characters, UTF-8 bytes before truncation, UTF-8 bytes after truncation, or the original unbounded diagnostic length?",
+   "options": [
+    "UTF-8 bytes of the stored truncated detail",
+    "Unicode scalar count of the stored detail",
+    "Original diagnostic byte length before truncation"
+   ],
+   "default_guess": "Return the UTF-8 byte length of the stored, already truncated failure_detail."
+  },
+  {
+   "subject": "A18 data-directory privacy check",
+   "kind": "vague refusal condition",
+   "text": "“The directory and everything in it are private to the kernel's user; the kernel refuses to start otherwise”, without defining ownership, acceptable mode bits, ACLs, hard links or parent-directory requirements.",
+   "question": "What exact filesystem ownership and permission conditions must every directory and file satisfy at startup?",
+   "options": [
+    "Require kernel-user ownership and no group/other permission bits",
+    "Also reject ACL access and files with multiple hard links",
+    "Check only the top-level data directory"
+   ],
+   "default_guess": "Require kernel-user ownership and no group/other permission bits for the root and every contained object, reject symlinks and unexpected hard links."
+  },
+  {
+   "subject": "A20 pinned runtime and dependency versions",
+   "kind": "missing release facts",
+   "text": "A20 says a release “pins the exact versions” of dependencies and the sandbox runtime, but release v1 specifies only “CPython 3.12” and gives no exact patch version, bubblewrap version or dependency lock.",
+   "question": "Which exact CPython, bubblewrap and kernel dependency versions define release v1?",
+   "options": [
+    "Add an explicit version table to the accepted text",
+    "Define the checked-in lock/build manifest as the normative source",
+    "Allow any compatible CPython 3.12 and host bubblewrap"
+   ],
+   "default_guess": "Make a checked-in release lock/build manifest normative and pin exact patch and package versions there."
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A03 sandbox filesystem access\",\"kind\":\"contradiction\",\"text\":\"K-02 says a function has “no filesystem beyond its input”, while A03 permits opening paths inside “the exchange directory and the read-only runtime”.\",\"question\":\"May function code read runtime files or create/read arbitrary exchange-directory files, or may it access only its supplied inputs and declared outputs?\",\"options\":[\"Allow the read-only runtime and unrestricted exchange-directory access\",\"Expose only supplied inputs and declared outputs\",\"Treat any other filesystem access as a sandbox violation\"],\"default_guess\":\"Treat any access unrelated to supplied inputs or declared outputs as a sandbox violation.\"},{\"subject\":\"A03 clock prohibition\",\"kind\":\"incomplete closed set\",\"text\":\"The runner “replaces every clock ... entry point”, but the declared exact list omits other clock-bearing APIs such as time.clock_gettime, time.thread_time, os.times, resource usage times and filesystem timestamps.\",\"question\":\"Are unlisted clock or time-observation APIs allowed, trapped, or grounds for a sandbox violation when used?\",\"options\":[\"Only the written list is trapped; other APIs are allowed\",\"All APIs capable of revealing time are trapped\",\"The isolation boundary hides or fixes every time source\"],\"default_guess\":\"Trap every standard-library API that can reveal wall, monotonic, CPU or filesystem time.\"},{\"subject\":\"Deterministic function execution and admission\",\"kind\":\"unverifiable invariant\",\"text\":\"A03 requires that “the same implementation on the same input yields the same output digest twice”, but permits observable nondeterministic state such as process identifiers, object identities, runtime-file metadata and potentially directory ordering.\",\"question\":\"What rule detects or prevents outputs that vary despite passing all listed sandbox traps?\",\"options\":[\"Expand isolation and traps until all observable inputs are deterministic\",\"Run each trial repeatedly and refuse differing outputs\",\"Do not guarantee deterministic outputs; cache the first admission verdict\"],\"default_guess\":\"Run each admission case at least twice and refuse differing output digests, in addition to hiding known nondeterministic sources.\"},{\"subject\":\"A03 scratch limit\",\"kind\":\"undefined accounting\",\"text\":\"The sandbox has “one private exchange directory bounded by sandbox_scratch_bytes_max”, without saying which files and bytes count or when the bound is measured.\",\"question\":\"Do staged inputs, runner protocol files, temporary user files, declared outputs, deleted files and filesystem metadata count toward the scratch limit, and how is an exceedance detected?\",\"options\":[\"Count current regular-file contents only\",\"Count all bytes ever written during the execution\",\"Exclude kernel-staged inputs and protocol files but count all user-created and output bytes\"],\"default_guess\":\"Exclude immutable staged inputs and runner metadata; count the peak allocated bytes of user-created and output files.\"},{\"subject\":\"A03 output limit and invalid return values\",\"kind\":\"undefined precedence\",\"text\":\"The output count is “the sum of the canonical JSON bytes of every value output and the bytes of every file output”, while resource exhaustion is checked before contract violation, but invalid return objects may not be canonicalizable or may contain unknown ports or non-bytes file values.\",\"question\":\"Which returned objects count toward output_bytes, and what outcome applies when their size cannot be canonically computed?\",\"options\":[\"Validate the return shape and types first, then apply the size bound\",\"Measure every serializable returned entry before checking the contract\",\"Classify an unmeasurable return immediately as contract_violation\"],\"default_guess\":\"Classify an unmeasurable or wrongly typed return as contract_violation; otherwise measure all returned declared outputs before schema validation.\"},{\"subject\":\"A03 stdout and stderr\",\"kind\":\"missing limit behavior\",\"text\":\"“Nothing the code prints or raises is interpreted by the kernel” and stdout is never retained, but no destination, draining rule or byte limit is defined for stdout or stderr.\",\"question\":\"Are stdout and stderr discarded continuously, bounded as output or scratch, or allowed to block the process and cause a timeout?\",\"options\":[\"Redirect both to a continuously drained null sink\",\"Count both toward output_bytes\",\"Capture them in a separate bounded diagnostic stream\"],\"default_guess\":\"Redirect stdout and stderr to a continuously drained null sink.\"},{\"subject\":\"A03 resource outcome classification\",\"kind\":\"ambiguous outcome\",\"text\":\"A03 distinguishes “a limit hit” as resource_exhausted from a process that “exited abnormally” as crashed, without defining how an external kill, allocation failure, fork failure or scratch-write error proves which condition occurred.\",\"question\":\"What observable evidence makes an abnormal termination resource_exhausted rather than crashed when several limits or signals could explain it?\",\"options\":[\"Classify by the supervising kernel's recorded limit event\",\"Classify specified signals and errno values as resource_exhausted\",\"Use crashed whenever the exact limiting resource cannot be proven\"],\"default_guess\":\"Use resource_exhausted only when the supervisor can attribute the failure to a specific enforced limit; otherwise use crashed.\"},{\"subject\":\"A04 authored expected outputs\",\"kind\":\"missing refusal condition\",\"text\":\"A trial case may have “expected_outputs ... absent when only the absence of failure is required”, and A04 says expected outputs “when present, fit the output ports”, but does not say whether a present map must contain every output port exactly once.\",\"question\":\"May an authored case assert only a subset of outputs, or must expected_outputs be either wholly absent or exactly match all contract outputs?\",\"options\":[\"Require every output port when expected_outputs is present\",\"Allow any non-empty subset and compare only those outputs\",\"Allow an empty expected_outputs map distinct from absence\"],\"default_guess\":\"Require expected_outputs, when present, to contain exactly every output port.\"},{\"subject\":\"A02 contract validation order\",\"kind\":\"undefined tie order\",\"text\":\"A02 gives an order of validation conditions but no total order for choosing among multiple invalid ports; A16 falls back to the smallest identifier, while input and output ports may legally share the same name.\",\"question\":\"When several ports fail the same condition, including equal names in opposite directions, which port is reported first?\",\"options\":[\"Order ports by direction then name as A01 hashes them\",\"Order by name then direction\",\"Report the first port in the submitted request\"],\"default_guess\":\"Order by direction and then name, both by Unicode code point.\"},{\"subject\":\"A08 manifest record shape\",\"kind\":\"incomplete refusal rules\",\"text\":\"A08 handles an absent or invalid-JSON record and one that “lacks service or capabilities”, but does not define outcomes for a non-array capabilities value, non-object entries, missing or non-string capability names, missing idempotency_key, malformed instance collections or malformed required_headers containers.\",\"question\":\"What complete manifest shape is required, and where do each of these malformed structures fall in the ordered manifest-mismatch checks?\",\"options\":[\"Define and validate a complete manifest JSON schema before the listed semantic checks\",\"Treat every unlisted structural defect as invalid JSON\",\"Map each malformed field to the nearest listed check\"],\"default_guess\":\"Validate a closed manifest schema first, then perform A08's semantic checks in their written order.\"},{\"subject\":\"Manifest revision reading\",\"kind\":\"undefined mechanism\",\"text\":\"The kernel reads `<manifest_location>/<service_id>.json` “at the configured manifest_revision”, yet no rule explains how the revision selects file contents, and A08 also claims a record changes only after restart with a new configured revision.\",\"question\":\"How is manifest_revision applied, and what happens if files at manifest_location change while the configured revision and running process do not?\",\"options\":[\"manifest_location is an immutable snapshot already corresponding to the revision\",\"The kernel reads files through a version-control operation at the named revision\",\"The kernel detects any live file change and treats the binding as stale\"],\"default_guess\":\"Require manifest_location to resolve to an immutable snapshot whose content is verified against manifest_revision at startup.\"},{\"subject\":\"A09 api_base_url validity and URL joining\",\"kind\":\"missing refusal conditions\",\"text\":\"A08 accepts any absolute http or https URL with a host, while A09 joins it by removing a trailing slash and appending the operation path; user information, a query, a fragment or unusual path components in api_base_url are not addressed.\",\"question\":\"Which path, query, fragment, user-information, percent-encoding and port forms are legal in api_base_url, and exactly how are they joined to the declared path?\",\"options\":[\"Require an origin-only URL with no path, query, fragment or user information\",\"Allow a fixed base path but forbid query, fragment and user information\",\"Apply standard URL-reference resolution\"],\"default_guess\":\"Allow an optional normalized base path, but forbid user information, query and fragment.\"},{\"subject\":\"A09 loopback exception\",\"kind\":\"vague security condition\",\"text\":\"Plain HTTP is allowed when the api_base_url “host is a loopback address”, without defining whether this means an IP literal, localhost, a DNS name resolving only to loopback, or the address selected after DNS resolution.\",\"question\":\"What exact host representations qualify for the loopback exception, and how are DNS changes or multiple resolved addresses handled?\",\"options\":[\"Only canonical loopback IP literals qualify\",\"localhost and loopback IP literals qualify\",\"Any hostname whose every resolved address is loopback qualifies\"],\"default_guess\":\"Only IPv4 or IPv6 loopback IP literals qualify.\"},{\"subject\":\"A09 multipart field names\",\"kind\":\"undefined encoding\",\"text\":\"Multipart Content-Disposition is written as `name=\\\"<port>\\\"` and `filename=\\\"<port>\\\"`, but port names are not restricted here to characters safe inside quoted header parameters and no escaping algorithm is given.\",\"question\":\"Which port names are valid for multipart bindings, and how are quotes, backslashes, non-ASCII characters or control characters encoded or refused?\",\"options\":[\"Restrict multipart port names to a safe ASCII token grammar\",\"Escape quoted-string characters using HTTP quoted-string rules\",\"Use RFC 5987 extended parameters for non-ASCII names\"],\"default_guess\":\"Restrict multipart port names to a conservative ASCII token grammar at binding proposal.\"},{\"subject\":\"Effect approval request coverage\",\"kind\":\"contradiction\",\"text\":\"State 0 says approval covers “the fully built request ... headers and body” and “any difference at send ... asks again”, while A10 excludes the multipart boundary from Content-Type and describes multipart bodies only by part metadata and content digests; content-length also appears by name only.\",\"question\":\"Do changes in multipart boundary and resulting wire body or Content-Length invalidate an approval?\",\"options\":[\"Yes; approval covers the exact wire bytes\",\"No; approval covers the canonical semantic multipart description in A10\",\"Boundary may vary but Content-Length must remain equal\"],\"default_guess\":\"Treat A10's canonical multipart description as the approved request and explicitly exempt boundary and derived Content-Length differences.\"},{\"subject\":\"A09 JSON response size\",\"kind\":\"contradiction\",\"text\":\"A09's outcome table says a 2xx “body exceeds ... stored_value_bytes_max” is contract_violation, while M21 and A15 apply stored_value_bytes_max to each produced StoredValue; a JSON response can contain several individually valid outputs whose combined body exceeds that ceiling.\",\"question\":\"Is stored_value_bytes_max enforced on the whole JSON response body, on each output member separately, or both?\",\"options\":[\"Whole JSON body only\",\"Each output StoredValue only\",\"Both the whole body and each output\"],\"default_guess\":\"Apply service_response_bytes_max to the whole body and stored_value_bytes_max separately to each output value.\"},{\"subject\":\"A09 incomplete response body\",\"kind\":\"ambiguous transport outcome\",\"text\":\"The table treats “no valid final response received (timeout, reset, EOF...)” as unreachable or unknown, but also classifies 2xx responses with invalid or oversized bodies as contract_violation/applied.\",\"question\":\"If a valid 2xx status and headers arrive but the body times out, resets or ends before its declared framing completes, is that an unknown transport outcome or an applied contract violation?\",\"options\":[\"Treat it as no valid final response: unreachable for read and unknown for effects\",\"Treat it as a 2xx contract violation and applied for effects\",\"Distinguish clean premature EOF from timeout or reset\"],\"default_guess\":\"Treat an incomplete framed body as no valid final response: service_unreachable for reads and outcome_unknown for effects.\"},{\"subject\":\"HTTP header character and wire rules\",\"kind\":\"undefined lexical rules\",\"text\":\"Required headers and credential values reject a “control character” and otherwise are sent “verbatim”, but control character is undefined and no wire encoding is specified for permitted non-ASCII Unicode values.\",\"question\":\"Which characters are permitted in header values, how are they encoded on the wire, and do C1 controls, DEL, tabs, leading spaces or non-ASCII text cause refusal?\",\"options\":[\"Require visible ASCII plus permitted internal spaces\",\"Use an HTTP Latin-1 byte mapping\",\"Encode Unicode as UTF-8 header bytes\"],\"default_guess\":\"Require visible ASCII, allowing internal space and horizontal tab only if explicitly chosen, and refuse all non-ASCII and control characters.\"},{\"subject\":\"Standing grants for function nodes\",\"kind\":\"missing refusal condition\",\"text\":\"A10 allows a grant for “a node of the flow's active version whose effect class is not destructive”, but function nodes have no effect class.\",\"question\":\"Is a grant request naming a function node refused, accepted but unused, or interpreted as a read-class node?\",\"options\":[\"Refuse grants for every non-operation node\",\"Accept an unused grant for a function node\",\"Treat function nodes as read for grant purposes\"],\"default_guess\":\"Refuse a grant unless the named node is an operation node.\"},{\"subject\":\"Draft-write activation authority\",\"kind\":\"missing pin\",\"text\":\"M26 records “the flow activation under which the run started” and distinguishes repeated activations by store position, but M19 and A12 pin only flow_version_id, not the particular FlowActivation record.\",\"question\":\"How does a run durably identify which activation authorized its draft-write sends when the same flow version has been activated more than once?\",\"options\":[\"Store the FlowActivation position in the Run\",\"Derive the last activation preceding the Run in store order\",\"Use whichever activation is current when the send occurs\"],\"default_guess\":\"Pin and store the active FlowActivation's store position when the run is created.\"},{\"subject\":\"A13 and A14 retryable NodeExecutions\",\"kind\":\"contradiction\",\"text\":\"A13 says a mapped pass runs elements with “no concluded record” and that “a concluded element is never executed again”, while A14 resumes service_unreachable elements even though each unreachable attempt already wrote a NodeExecution.\",\"question\":\"Which NodeExecution statuses leave an element retryable, and does “concluded” mean a concluded attempt or a final element conclusion?\",\"options\":[\"service_unreachable records conclude attempts but not elements and are retryable only by resume\",\"Any non-final status may be retried during normal advancement\",\"Retries replace the prior NodeExecution rather than adding one\"],\"default_guess\":\"Define service_unreachable as a concluded attempt but a waiting, non-final element; retry it only through resume and append a new NodeExecution.\"},{\"subject\":\"Mapped aggregate failure trace\",\"kind\":\"undefined record content\",\"text\":\"When a mapped output list is too large, A13 writes a node-level NodeExecution whose inputs are “the inputs the elements received”, but M23 permits one reference per input port while different elements received different mapped-port values.\",\"question\":\"What exact input references does the aggregate no-map_index NodeExecution contain for the mapped port and for shared ports?\",\"options\":[\"Reference the original many input list and each shared input\",\"Reference every element's input list in a new aggregate structure\",\"Leave aggregate inputs empty and derive them from element records\"],\"default_guess\":\"Reference the original many input value plus each shared input supplied to the mapped node.\"},{\"subject\":\"Oversized failed output files in the spool\",\"kind\":\"contradiction\",\"text\":\"A13 says failed-attempt files “stay in the run's spool, counted toward spool_run_bytes_max, until that spool is removed”, while A15 says “only the files of that attempt are discarded” and its required test says an oversized function file “leaves nothing in the spool”.\",\"question\":\"Are bytes from an oversized or otherwise failed output physically removed immediately, retained unnamed until spool cleanup, or retained only for some failure classes?\",\"options\":[\"Remove all files of the failed attempt immediately\",\"Retain them unnamed and counted until spool cleanup\",\"Retain valid-size files but immediately remove the file that exceeded a ceiling\"],\"default_guess\":\"Remove every file of the failed attempt immediately and do not count it after the failure transaction.\"},{\"subject\":\"A15 spool-file limit testability\",\"kind\":\"unverifiable invariant\",\"text\":\"The required test asks a function to write a file one byte over spool_file_bytes_max, but release v1 caps a function's output_bytes at 67108864 while spool_file_bytes_max is 134217728, so output_bytes fails first.\",\"question\":\"How can the function-side spool_file_bytes_max behavior be observed independently of the lower mandatory output_bytes ceiling?\",\"options\":[\"Remove the function-specific test and test the spool ceiling through operation outputs\",\"Lower spool_file_bytes_max below output_bytes\",\"Permit an old contract with a larger output_bytes bound as the fixture\"],\"default_guess\":\"Test spool_file_bytes_max using an operation file response and retain a separate function output_bytes test.\"},{\"subject\":\"A07 redacted failure-detail length\",\"kind\":\"undefined representation\",\"text\":\"For a non-open execution, failure_detail is returned to an agent “only as its length and that class”, without defining the length unit.\",\"question\":\"Is the disclosed length measured in Unicode characters, UTF-8 bytes before truncation, UTF-8 bytes after truncation, or the original unbounded diagnostic length?\",\"options\":[\"UTF-8 bytes of the stored truncated detail\",\"Unicode scalar count of the stored detail\",\"Original diagnostic byte length before truncation\"],\"default_guess\":\"Return the UTF-8 byte length of the stored, already truncated failure_detail.\"},{\"subject\":\"A18 data-directory privacy check\",\"kind\":\"vague refusal condition\",\"text\":\"“The directory and everything in it are private to the kernel's user; the kernel refuses to start otherwise”, without defining ownership, acceptable mode bits, ACLs, hard links or parent-directory requirements.\",\"question\":\"What exact filesystem ownership and permission conditions must every directory and file satisfy at startup?\",\"options\":[\"Require kernel-user ownership and no group/other permission bits\",\"Also reject ACL access and files with multiple hard links\",\"Check only the top-level data directory\"],\"default_guess\":\"Require kernel-user ownership and no group/other permission bits for the root and every contained object, reject symlinks and unexpected hard links.\"},{\"subject\":\"A20 pinned runtime and dependency versions\",\"kind\":\"missing release facts\",\"text\":\"A20 says a release “pins the exact versions” of dependencies and the sandbox runtime, but release v1 specifies only “CPython 3.12” and gives no exact patch version, bubblewrap version or dependency lock.\",\"question\":\"Which exact CPython, bubblewrap and kernel dependency versions define release v1?\",\"options\":[\"Add an explicit version table to the accepted text\",\"Define the checked-in lock/build manifest as the normative source\",\"Allow any compatible CPython 3.12 and host bubblewrap\"],\"default_guess\":\"Make a checked-in release lock/build manifest normative and pin exact patch and package versions there.\"}]}"
+}
