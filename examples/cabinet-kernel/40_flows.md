@@ -895,7 +895,9 @@ EffectAttempt M26 and the concluding NodeExecution M23 written by
    or `pending` — from its records, oldest first, rewriting a lagging status
    or waiting point and reaching again, through
    `capability:effects.reach_operation_element`, an operation element whose
-   wait no longer holds (A14 rule 5); then, as the kernel actor, advances every
+   wait no longer holds and whose records do not already conclude it — an
+   attempt the owner resolved concludes from its records and is not reached
+   again (A11 rule 3) (A14 rule 5); then, as the kernel actor, advances every
    run left `running`, oldest first: a function element without a concluded
    record is executed again; a `read` element without one is sent again; an
    operation element of another class with neither a concluded record nor an
