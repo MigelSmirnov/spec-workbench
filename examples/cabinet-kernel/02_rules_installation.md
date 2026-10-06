@@ -180,6 +180,10 @@ Reuses cabinet-flow decision 23, narrowed by K-16.
    kernel's text: a body that echoes the value verbatim, 2xx or not, is
    withheld and never used as an output (A09 rule 7); one that carries it in
    another encoding is not recognised, and is protected only by its class.
+   State 0's "they never enter … an answer" is the kernel's promise about
+   what it puts anywhere itself; what a service returns of its own, the
+   kernel recognises only verbatim (owner, 2026-10-06, raised by State 2
+   round 88).
 3. A function never receives a credential: its environment holds only the hash
    seed (A03) and its
    inputs are values that crossed a proven edge.

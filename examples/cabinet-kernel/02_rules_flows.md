@@ -215,8 +215,9 @@ per-agent ceilings.
    expected output the highest class of the case's inputs. No function, edge or flow construct lowers a class.
    A binding output is not carried from the operation's inputs: it takes the
    class the binding declares, which the owner accepted with the binding (A08),
-   whatever its inputs' classes — at proof time, at run time, and for the empty
-   lists of a mapped operation over an empty list alike.
+   whatever its inputs' classes, at proof time and at run time. A mapped
+   operation over an empty list executes nothing, so its empty output lists
+   take their class by A13 rule 6, not from the binding.
 4. An agent never receives a `personal_data` value: wherever the surface would
    return one to an agent — run inputs and outputs, trial cases and executions,
    approval previews, trace records — it returns only the value's digest and class

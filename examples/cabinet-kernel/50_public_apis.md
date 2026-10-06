@@ -1159,7 +1159,7 @@ used; a bounded `failure_detail` otherwise.
 
 ### Observable effect
 
-A fresh environment was created and, on return, confirmed removed.
+A fresh environment was created and, on every result but `crashed` with `cleanup_failed`, confirmed removed.
 
 ### Enforces
 
