@@ -9,7 +9,7 @@ import design_questions
 from questions_workbench import documents, provider, service
 
 
-QUOTED_GAP = {"kind": "consequential_gap", "quotes": ["# State 0 — Demo"], "divergence": "a or b; the owner notices"}
+QUOTED_GAP = {"kind": "consequential_gap", "quotes": ["## Model M01 — Thing"], "divergence": "a or b; the owner notices"}
 UNQUOTED_GAP = {"kind": "consequential_gap", "divergence": "a or b; the owner notices"}
 
 
@@ -331,6 +331,44 @@ def test_answered_later_needs_its_quote_in_the_later_states(tmp_path):
     summary, _ = _repeated_with_files(case, {"kind": "answered_later", "quotes": ["## Model M01 — Thing"]})
     judgement = summary["topics"][0]["judgement"]
     assert judgement["blocking"] is True and "later states' texts" in judgement["failure"]
+
+
+def test_a_gap_quoting_only_a_later_state_is_deferred_there(tmp_path):
+    case = _case(tmp_path)
+    summary, _ = _repeated_with_files(case, {**UNQUOTED_GAP, "quotes": ["# State 2 — Demo rules"]})
+    judgement = summary["topics"][0]["judgement"]
+    assert judgement["verified"] is True and judgement["blocking"] is False
+    assert judgement["quoted_elsewhere"] is True and judgement["deferred_to"]
+
+
+def test_a_gap_quoting_only_an_earlier_state_does_not_block_this_one(tmp_path):
+    case = _case(tmp_path)
+    summary, _ = _repeated(case, {**UNQUOTED_GAP, "quotes": ["# State 0 — Demo"]})
+    judgement = summary["topics"][0]["judgement"]
+    assert judgement["blocking"] is False and judgement["quoted_elsewhere"] is True
+
+
+def test_a_contradiction_between_earlier_states_still_blocks(tmp_path):
+    case = _case(tmp_path)
+    (case / "02_rules.md").write_text("# State 2 — Demo rules\n\nA rule of its own here.\n", encoding="utf-8")
+    provider = FakeProvider([[_point("M01")], [_point("M01")], []],
+                            {"kind": "contradiction", "quotes": ["# State 0 — Demo", "## Model M01 — Thing"]})
+    summary = service.ask_round(case, 2, provider)
+    assert summary["topics"][0]["judgement"]["blocking"] is True
+
+
+def test_a_gap_quoting_this_state_and_a_later_one_still_blocks(tmp_path):
+    case = _case(tmp_path)
+    summary, _ = _repeated_with_files(case, {**UNQUOTED_GAP, "quotes": ["# State 2 — Demo rules", "## Model M01 — Thing"]})
+    judgement = summary["topics"][0]["judgement"]
+    assert judgement["verified"] is True and judgement["blocking"] is True and "deferred_to" not in judgement
+
+
+def test_a_gap_quoting_a_later_state_without_its_texts_is_unverified(tmp_path):
+    case = _case(tmp_path)
+    summary, _ = _repeated(case, {**UNQUOTED_GAP, "quotes": ["# State 2 — Demo rules"]})
+    judgement = summary["topics"][0]["judgement"]
+    assert judgement["blocking"] is True and "not found verbatim" in judgement["failure"]
 
 
 def test_a_judge_without_files_cannot_answer_from_later_states(tmp_path):
