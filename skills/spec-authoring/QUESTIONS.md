@@ -118,6 +118,28 @@ like a gap. Closing what blocks is the work below; a non-blocking topic is
 recorded in the round and, for `later_state`, must reach that state's texts as
 a carried question.
 
+### A state of rules closes decision by decision
+
+A review of a whole state of rules finds about fifty topics a round: on
+Cabinet Kernel State 2 (21 decisions), rounds 80–82 of 2026-10-06 each blocked
+on two new topics, never repeated, half of them misreadings, each about a
+decision nobody had changed. Two clear rounds in a row over all of it are luck,
+and a one-line edit to one decision reopened all 21.
+
+So a state whose documents hold accepted decisions closes in units: one per
+decision (`## Accepted decision Axx` to the next level-2 heading), one per other
+level-2 section and per document preamble, and `context` — whether the earlier
+states' texts and this state agree. A round asks only about the units that are
+not closed: the reviewers still read every text, but each point names its
+unit, and a point about a closed unit is set aside (kept in the review, not
+grouped). A blocking topic keeps open only the units its points name; one that
+names none keeps every reviewed unit open. A unit is closed when the two latest
+rounds that reviewed it were clear for it on its current text; the state is
+closed when every unit is. Editing one decision reopens that decision; editing
+an earlier state reopens `context`. Rounds kept before units existed close no
+unit, so the first two rounds under this rule review everything. Decided by the
+owner 2026-10-06.
+
 ## Closing a question
 
 Ask first who uses what the question is about.
