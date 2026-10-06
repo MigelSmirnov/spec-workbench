@@ -1,0 +1,293 @@
+{
+ "open_points": [
+  {
+   "subject": "A03 sandbox filesystem versus K-02 purity",
+   "kind": "contradiction",
+   "text": "K-02 says a function has \"no filesystem beyond its input\", while A03 permits opening paths inside \"the exchange directory and the read-only runtime\" and gives the exchange directory a scratch-space ceiling.",
+   "question": "May function code directly read or write the exchange directory and read runtime files, or must filesystem access be limited to kernel-mediated input and output only?",
+   "options": [
+    "Allow direct access to the exchange directory and read-only runtime",
+    "Allow only designated input/output paths",
+    "Trap every filesystem operation made directly by function code"
+   ],
+   "default_guess": "Allow direct access only to designated paths in the exchange directory and deny unrelated runtime or scratch-file access."
+  },
+  {
+   "subject": "A03 seeded pseudorandomness versus K-02",
+   "kind": "contradiction",
+   "text": "K-02 says a function has \"no randomness\", while A03 says \"random.Random(seed) with an explicit seed stays usable\".",
+   "question": "Is deterministic pseudorandom generation from an explicit seed permitted inside a function?",
+   "options": [
+    "Permit explicitly seeded random.Random instances",
+    "Prohibit every randomness API, including seeded generators"
+   ],
+   "default_guess": "Permit explicitly seeded random.Random instances because A03 names the exception explicitly."
+  },
+  {
+   "subject": "A03 output classification",
+   "kind": "undefined precedence",
+   "text": "A03 counts \"the canonical JSON bytes of every value output\" before deciding `contract_violation`, but a returned value may be non-JSON, non-finite, under an extra key, or otherwise impossible to canonicalize.",
+   "question": "How is `output_bytes` evaluated, and which outcome wins, when the returned object is structurally invalid or cannot be encoded as canonical JSON?",
+   "options": [
+    "Classify it immediately as contract_violation",
+    "Count only canonicalizable declared outputs and then classify the structural fault",
+    "Treat inability to measure an output as crashed",
+    "Treat it as resource_exhausted"
+   ],
+   "default_guess": "Classify an uncanonicalizable or wrongly typed return as contract_violation; apply output_bytes precedence only to outputs that can be canonically encoded."
+  },
+  {
+   "subject": "M06/A04 trial-case port sets",
+   "kind": "missing validation rule",
+   "text": "A04 requires that trial inputs \"fit the contract version's input ports\" and expected outputs \"fit the output ports\", but does not say whether the supplied maps must contain exactly all ports or whether missing and extra port names are allowed.",
+   "question": "What exact input and expected-output port sets must an authored trial case supply?",
+   "options": [
+    "Inputs must be exact; present expected_outputs must also be exact",
+    "Inputs must be exact; expected_outputs may name a subset",
+    "Both maps may name subsets",
+    "Extra names are ignored"
+   ],
+   "default_guess": "Require exactly every input port and, when expected_outputs is present, exactly every output port; refuse missing or extra names."
+  },
+  {
+   "subject": "M01/M03/A02 port direction",
+   "kind": "missing invariant",
+   "text": "Contract versions have separate `inputs` and `outputs` lists, while each Port also has `direction`; A02 validates names, classes, carriage, schemas, outputs and bounds but never requires a port's direction to agree with the list containing it.",
+   "question": "Must every port in `inputs` declare `direction: input` and every port in `outputs` declare `direction: output`, and where is a mismatch refused?",
+   "options": [
+    "Require agreement and refuse the contract or binding before issuance",
+    "Ignore the direction field and derive it from containment",
+    "Permit disagreement and use the direction field"
+   ],
+   "default_guess": "Require agreement and refuse the request during contract or binding validation."
+  },
+  {
+   "subject": "A01/A05 ordering of edges and constants",
+   "kind": "non-total order",
+   "text": "A01 sorts edges \"in the edge order of A05\" and constants by (`to_node`, `to_port`), while A05 orders edges only by (`to_node`, `to_port`, `from_node`, `from_port`). Distinct edges can tie on that tuple by having different guards, and distinct constants can tie by targeting the same port.",
+   "question": "What total order is used for tied edges and constants so identity hashing and first-failure selection do not depend on request order or sort stability?",
+   "options": [
+    "Add guard facts and value facts as tie-breakers",
+    "Refuse duplicate endpoint edges and duplicate constant destinations at composition",
+    "Preserve submitted order for ties"
+   ],
+   "default_guess": "Use all meaning facts, including guard and constant-value facts, as canonical tie-breakers while retaining the explicit proof ordering for reporting."
+  },
+  {
+   "subject": "A05 endpoint ordering and node identifiers",
+   "kind": "identifier ambiguity",
+   "text": "A05 says \"A flow input or flow output endpoint has the empty string as its node\", but no rule refuses an empty `node_id`.",
+   "question": "May a flow node have the empty-string identifier, and if so how is it distinguished and ordered against flow endpoints?",
+   "options": [
+    "Refuse an empty node_id",
+    "Allow it but use a separate endpoint-kind tie-breaker",
+    "Treat it as equal to the flow endpoint sentinel"
+   ],
+   "default_guess": "Refuse an empty node_id at composition."
+  },
+  {
+   "subject": "A13 mapped-list failure trace",
+   "kind": "contradiction",
+   "text": "K-09 says \"Every node execution writes one immutable trace record\", but A13 says that when a mapped value list exceeds `stored_value_bytes_max`, \"No record of the node states that failure\" and the failure is derived by every reader.",
+   "question": "Must the mapped node's aggregate `value_too_large` failure be represented by an immutable trace record, or is an unrecorded derived failure an intended exception to K-09?",
+   "options": [
+    "Write an immutable aggregate failure record",
+    "Keep only element records and derive the aggregate failure",
+    "Store the derived failure on the Run rather than as a NodeExecution"
+   ],
+   "default_guess": "Write an immutable aggregate failure fact so the trace explicitly explains why the node and run failed."
+  },
+  {
+   "subject": "A13 derived failures across releases",
+   "kind": "cross-release contradiction",
+   "text": "A13 derives a mapped-list failure from the elements and the current `stored_value_bytes_max`, while A20 allows a new release to change ceilings and says \"recorded executions are never reinterpreted\". No release or applied ceiling is recorded for this derived failure.",
+   "question": "Which ceiling must a later reader use when reconstructing a historical mapped-list result after the release ceiling changes?",
+   "options": [
+    "The ceiling in force when the run executed",
+    "The reader's current release ceiling",
+    "The contract's release ceiling",
+    "Persist the result or applied ceiling so no later derivation is needed"
+   ],
+   "default_guess": "Use and persist the ceiling in force when the run executed, or persist the resulting aggregate failure directly."
+  },
+  {
+   "subject": "A08 manifest validation",
+   "kind": "incomplete refusal conditions",
+   "text": "A08 rule 5 handles an absent or invalid-JSON record and selected named faults, but does not define the required JSON shapes and types of `capabilities`, capability entries, `exposed_as`, `idempotency_key`, instances or `required_headers`, or the outcome for other malformed forms.",
+   "question": "What complete manifest schema is validated, and which ordered mismatch reason applies to every malformed field or container shape?",
+   "options": [
+    "Define and validate a closed manifest schema before the listed semantic checks",
+    "Treat every unlisted malformed shape as invalid JSON",
+    "Accept unrecognized shapes until a later named check needs them"
+   ],
+   "default_guess": "Validate a closed manifest schema first and report a single ordered manifest-shape mismatch before semantic checks."
+  },
+  {
+   "subject": "M28/A08 manifest revision access",
+   "kind": "undefined source semantics",
+   "text": "The kernel reads `<manifest_location>/<service_id>.json` \"at the configured `manifest_revision`\", but the texts do not say how a filesystem location is read at a repository revision or verified to represent that revision.",
+   "question": "How does the kernel obtain the manifest bytes for `manifest_revision`?",
+   "options": [
+    "Read through a version-control command or library at that exact revision",
+    "Require manifest_location to be a pre-materialized immutable snapshot and verify metadata",
+    "Read the current filesystem contents and treat the revision as descriptive only",
+    "Require the repository checkout HEAD to equal the configured revision"
+   ],
+   "default_guess": "Read the file from the repository at the exact configured revision without changing the working tree."
+  },
+  {
+   "subject": "A08/A09 api_base_url",
+   "kind": "incomplete URL rules",
+   "text": "A08 accepts any absolute `http` or `https` URL with a host, and A09 forms the target by removing a trailing slash and appending the operation path. The texts do not address a base URL containing user information, a query, a fragment, percent escapes, or a non-root path.",
+   "question": "Which components are permitted in `api_base_url`, and what exact URL results when it already contains a path, query or fragment?",
+   "options": [
+    "Require scheme, authority and optional base path only; refuse userinfo, query and fragment",
+    "Require only scheme and authority with no path",
+    "Apply standard URL resolution rules",
+    "Concatenate the strings literally after removing one trailing slash"
+   ],
+   "default_guess": "Permit an optional base path but refuse userinfo, query and fragment, then append the declared absolute path to that base path without normalization."
+  },
+  {
+   "subject": "A09 plain-HTTP loopback exception",
+   "kind": "vague refusal condition",
+   "text": "Plain HTTP is allowed when the `api_base_url` \"host is a loopback address\", without saying whether this is based on a literal IP, DNS resolution, all resolved addresses, or names such as `localhost`.",
+   "question": "Exactly how is the loopback exception determined?",
+   "options": [
+    "Only literal IPv4 or IPv6 loopback addresses qualify",
+    "Resolve the hostname and require every result to be loopback",
+    "Resolve the hostname and allow it if any result is loopback",
+    "Also recognize a fixed set of loopback hostnames"
+   ],
+   "default_guess": "Allow only literal loopback IP addresses, avoiding a DNS-dependent authorization decision."
+  },
+  {
+   "subject": "A09 multipart field names",
+   "kind": "missing encoding rule",
+   "text": "Multipart parts use `name=\"<port>\"` and `filename=\"<port>\"`, but port names have no stated character restriction or escaping rule for quotes, backslashes, controls or non-ASCII text.",
+   "question": "Which port names are legal in multipart bindings, and how are legal non-token characters encoded in Content-Disposition parameters?",
+   "options": [
+    "Restrict multipart port names to a safe ASCII field-name grammar",
+    "Escape quoted-string characters according to an explicit HTTP rule",
+    "Use RFC 5987-style extended parameters",
+    "Refuse only at the pre-send input-placement check"
+   ],
+   "default_guess": "Refuse multipart bindings whose port names are not safe ASCII field names."
+  },
+  {
+   "subject": "A09 query arrays containing null",
+   "kind": "ambiguous request mapping",
+   "text": "Rule 2 permits query arrays of \"string, integer, number or boolean\" values, but immediately says \"a `null` element of a list is omitted\".",
+   "question": "Can a GET or DELETE binding declare and receive an array that includes null elements?",
+   "options": [
+    "Allow null elements and omit them from the query",
+    "Refuse schemas that allow null array elements",
+    "Allow the schema but treat a runtime null element as a pre-send refusal"
+   ],
+   "default_guess": "Allow null elements and omit them, matching the explicit runtime instruction."
+  },
+  {
+   "subject": "A09 HTTP status mapping",
+   "kind": "uncovered outcome",
+   "text": "The outcome table covers `1xx`, `2xx`, `3xx`, `4xx` and `5xx`, but gives no result for a syntactically valid final three-digit status outside those classes, such as `600`.",
+   "question": "How is an unrecognized or out-of-range final HTTP status classified for read and non-read operations?",
+   "options": [
+    "Treat it as a malformed response",
+    "Treat it like 5xx",
+    "Treat it as operation_failed or operation_refused",
+    "Refuse it according to a closed valid-status range before applying the table"
+   ],
+   "default_guess": "Treat any final status outside 200–599 as a malformed response: service_unreachable for reads and outcome_unknown for non-read operations after sending."
+  },
+  {
+   "subject": "A09 TLS verification",
+   "kind": "undefined security policy",
+   "text": "A09 states only that \"TLS is verified for `https`\" and does not identify the trust store, hostname rules, certificate-time source, protocol floor or whether host configuration may alter them.",
+   "question": "What exact TLS verification policy and trust roots must every implementation use?",
+   "options": [
+    "Use the host system trust store and the pinned client's default secure policy",
+    "Ship release-pinned trust roots and TLS settings",
+    "Make trust roots installation configuration",
+    "Specify only certificate-chain and hostname verification and leave other TLS policy to the runtime"
+   ],
+   "default_guess": "Use the host system trust store with certificate-chain and hostname verification enabled and no caller-controlled overrides."
+  },
+  {
+   "subject": "A07 personal-data many-file values",
+   "kind": "undefined redaction shape",
+   "text": "A07 says a personal-data file is returned to an agent as \"its digest and class\", while A13 represents a non-empty `many` file value only as an ordered list of SpooledFiles and defines no aggregate file-list digest.",
+   "question": "What does an agent receive for a personal-data `many` file input or output?",
+   "options": [
+    "An ordered list of each file's content digest and the list class",
+    "One aggregate digest of the ordered list and its class",
+    "Only the class with no digest",
+    "A count plus an aggregate digest and class"
+   ],
+   "default_guess": "Return the ordered list of per-file content digests, each carrying the list's class, with no size, media type or spool facts."
+  },
+  {
+   "subject": "A07 redacted failure_detail",
+   "kind": "undefined representation",
+   "text": "A07 says a protected `failure_detail` is returned to an agent \"only as its length and that class\" but does not define whether length means UTF-8 bytes, Unicode code points or the pre-truncation text.",
+   "question": "What exact length is disclosed for a non-open failure detail?",
+   "options": [
+    "UTF-8 byte length of the stored, truncated detail",
+    "Unicode code-point length of the stored detail",
+    "UTF-8 byte length before truncation",
+    "Original service-body length"
+   ],
+   "default_guess": "Return the UTF-8 byte length of the stored, already bounded failure_detail."
+  },
+  {
+   "subject": "A16 configuration re-read recovery",
+   "kind": "state-transition gap",
+   "text": "The kernel re-reads when the file digest differs from \"the last read\"; a failed re-read refuses every request \"until a re-read passes\". It does not say whether the digest of invalid but readable bytes becomes the last-read digest.",
+   "question": "After a readable changed configuration fails validation and remains byte-for-byte unchanged, is it re-read on every request or considered unchanged and therefore never retried?",
+   "options": [
+    "Retain the last successful digest and retry the invalid file on every request",
+    "Remember the invalid digest but force revalidation while no active token list exists",
+    "Remember the invalid digest and wait for another byte change"
+   ],
+   "default_guess": "Retain only the last successfully validated digest and retry validation on every request while configuration is invalid."
+  },
+  {
+   "subject": "Kernel startup checks across A03, A09, A16, A17 and A18",
+   "kind": "missing precedence",
+   "text": "The texts require startup checks for configuration and tokens, credential-header conflicts, sandbox availability and probing, data-directory locking and permissions, symlinks and recovery, but define no single order among those checks.",
+   "question": "In what global order do startup validation, lock acquisition, sandbox probing, store opening, recovery and surface opening occur, and which failure is reported when several checks fail?",
+   "options": [
+    "Define one fixed global startup-check sequence",
+    "Run independent checks and report all failures",
+    "Allow implementation-defined ordering while still keeping the surface closed"
+   ],
+   "default_guess": "Validate the protected configuration first, acquire and validate the data directory next, verify the sandbox next, then open the store and complete recovery before opening the surface."
+  },
+  {
+   "subject": "A18 data-directory privacy",
+   "kind": "vague refusal condition",
+   "text": "A18 says the data directory \"and everything in it are private to the kernel's user\" but does not give the ownership, mode-bit, ACL, hard-link or parent-directory conditions that make a path private.",
+   "question": "What exact filesystem metadata causes startup or a later store call to refuse the data directory and its contents?",
+   "options": [
+    "Require kernel-user ownership and no group/other permission bits",
+    "Require fixed modes such as 0700 for directories and 0600 for files",
+    "Also reject ACL access, unexpected hard links and unsafe parent directories",
+    "Apply only no-symlink checks after startup"
+   ],
+   "default_guess": "Require kernel-user ownership and no group/other permission bits on every managed directory and file, plus the stated no-symlink rule."
+  },
+  {
+   "subject": "A20 pinned dependencies",
+   "kind": "unverifiable invariant",
+   "text": "A20 requires that \"A release pins the exact versions of the kernel's Python dependencies and of the sandbox runtime\", but State 0–2 supplies no dependency list or exact versions other than CPython 3.12.",
+   "question": "Which dependencies and exact versions, including bubblewrap and the HTTP, MCP, schema and canonical-JSON implementations, constitute release v1?",
+   "options": [
+    "List every direct and transitive dependency with an exact version in the accepted design",
+    "Define only direct dependencies here and freeze transitive versions in a lock file",
+    "Treat the generated lock file as the release decision even though the texts do not constrain its choices"
+   ],
+   "default_guess": "Choose a minimal dependency set and pin the complete resolved dependency graph and bubblewrap version in a release lock manifest."
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A03 sandbox filesystem versus K-02 purity\",\"kind\":\"contradiction\",\"text\":\"K-02 says a function has \\\"no filesystem beyond its input\\\", while A03 permits opening paths inside \\\"the exchange directory and the read-only runtime\\\" and gives the exchange directory a scratch-space ceiling.\",\"question\":\"May function code directly read or write the exchange directory and read runtime files, or must filesystem access be limited to kernel-mediated input and output only?\",\"options\":[\"Allow direct access to the exchange directory and read-only runtime\",\"Allow only designated input/output paths\",\"Trap every filesystem operation made directly by function code\"],\"default_guess\":\"Allow direct access only to designated paths in the exchange directory and deny unrelated runtime or scratch-file access.\"},{\"subject\":\"A03 seeded pseudorandomness versus K-02\",\"kind\":\"contradiction\",\"text\":\"K-02 says a function has \\\"no randomness\\\", while A03 says \\\"random.Random(seed) with an explicit seed stays usable\\\".\",\"question\":\"Is deterministic pseudorandom generation from an explicit seed permitted inside a function?\",\"options\":[\"Permit explicitly seeded random.Random instances\",\"Prohibit every randomness API, including seeded generators\"],\"default_guess\":\"Permit explicitly seeded random.Random instances because A03 names the exception explicitly.\"},{\"subject\":\"A03 output classification\",\"kind\":\"undefined precedence\",\"text\":\"A03 counts \\\"the canonical JSON bytes of every value output\\\" before deciding `contract_violation`, but a returned value may be non-JSON, non-finite, under an extra key, or otherwise impossible to canonicalize.\",\"question\":\"How is `output_bytes` evaluated, and which outcome wins, when the returned object is structurally invalid or cannot be encoded as canonical JSON?\",\"options\":[\"Classify it immediately as contract_violation\",\"Count only canonicalizable declared outputs and then classify the structural fault\",\"Treat inability to measure an output as crashed\",\"Treat it as resource_exhausted\"],\"default_guess\":\"Classify an uncanonicalizable or wrongly typed return as contract_violation; apply output_bytes precedence only to outputs that can be canonically encoded.\"},{\"subject\":\"M06/A04 trial-case port sets\",\"kind\":\"missing validation rule\",\"text\":\"A04 requires that trial inputs \\\"fit the contract version's input ports\\\" and expected outputs \\\"fit the output ports\\\", but does not say whether the supplied maps must contain exactly all ports or whether missing and extra port names are allowed.\",\"question\":\"What exact input and expected-output port sets must an authored trial case supply?\",\"options\":[\"Inputs must be exact; present expected_outputs must also be exact\",\"Inputs must be exact; expected_outputs may name a subset\",\"Both maps may name subsets\",\"Extra names are ignored\"],\"default_guess\":\"Require exactly every input port and, when expected_outputs is present, exactly every output port; refuse missing or extra names.\"},{\"subject\":\"M01/M03/A02 port direction\",\"kind\":\"missing invariant\",\"text\":\"Contract versions have separate `inputs` and `outputs` lists, while each Port also has `direction`; A02 validates names, classes, carriage, schemas, outputs and bounds but never requires a port's direction to agree with the list containing it.\",\"question\":\"Must every port in `inputs` declare `direction: input` and every port in `outputs` declare `direction: output`, and where is a mismatch refused?\",\"options\":[\"Require agreement and refuse the contract or binding before issuance\",\"Ignore the direction field and derive it from containment\",\"Permit disagreement and use the direction field\"],\"default_guess\":\"Require agreement and refuse the request during contract or binding validation.\"},{\"subject\":\"A01/A05 ordering of edges and constants\",\"kind\":\"non-total order\",\"text\":\"A01 sorts edges \\\"in the edge order of A05\\\" and constants by (`to_node`, `to_port`), while A05 orders edges only by (`to_node`, `to_port`, `from_node`, `from_port`). Distinct edges can tie on that tuple by having different guards, and distinct constants can tie by targeting the same port.\",\"question\":\"What total order is used for tied edges and constants so identity hashing and first-failure selection do not depend on request order or sort stability?\",\"options\":[\"Add guard facts and value facts as tie-breakers\",\"Refuse duplicate endpoint edges and duplicate constant destinations at composition\",\"Preserve submitted order for ties\"],\"default_guess\":\"Use all meaning facts, including guard and constant-value facts, as canonical tie-breakers while retaining the explicit proof ordering for reporting.\"},{\"subject\":\"A05 endpoint ordering and node identifiers\",\"kind\":\"identifier ambiguity\",\"text\":\"A05 says \\\"A flow input or flow output endpoint has the empty string as its node\\\", but no rule refuses an empty `node_id`.\",\"question\":\"May a flow node have the empty-string identifier, and if so how is it distinguished and ordered against flow endpoints?\",\"options\":[\"Refuse an empty node_id\",\"Allow it but use a separate endpoint-kind tie-breaker\",\"Treat it as equal to the flow endpoint sentinel\"],\"default_guess\":\"Refuse an empty node_id at composition.\"},{\"subject\":\"A13 mapped-list failure trace\",\"kind\":\"contradiction\",\"text\":\"K-09 says \\\"Every node execution writes one immutable trace record\\\", but A13 says that when a mapped value list exceeds `stored_value_bytes_max`, \\\"No record of the node states that failure\\\" and the failure is derived by every reader.\",\"question\":\"Must the mapped node's aggregate `value_too_large` failure be represented by an immutable trace record, or is an unrecorded derived failure an intended exception to K-09?\",\"options\":[\"Write an immutable aggregate failure record\",\"Keep only element records and derive the aggregate failure\",\"Store the derived failure on the Run rather than as a NodeExecution\"],\"default_guess\":\"Write an immutable aggregate failure fact so the trace explicitly explains why the node and run failed.\"},{\"subject\":\"A13 derived failures across releases\",\"kind\":\"cross-release contradiction\",\"text\":\"A13 derives a mapped-list failure from the elements and the current `stored_value_bytes_max`, while A20 allows a new release to change ceilings and says \\\"recorded executions are never reinterpreted\\\". No release or applied ceiling is recorded for this derived failure.\",\"question\":\"Which ceiling must a later reader use when reconstructing a historical mapped-list result after the release ceiling changes?\",\"options\":[\"The ceiling in force when the run executed\",\"The reader's current release ceiling\",\"The contract's release ceiling\",\"Persist the result or applied ceiling so no later derivation is needed\"],\"default_guess\":\"Use and persist the ceiling in force when the run executed, or persist the resulting aggregate failure directly.\"},{\"subject\":\"A08 manifest validation\",\"kind\":\"incomplete refusal conditions\",\"text\":\"A08 rule 5 handles an absent or invalid-JSON record and selected named faults, but does not define the required JSON shapes and types of `capabilities`, capability entries, `exposed_as`, `idempotency_key`, instances or `required_headers`, or the outcome for other malformed forms.\",\"question\":\"What complete manifest schema is validated, and which ordered mismatch reason applies to every malformed field or container shape?\",\"options\":[\"Define and validate a closed manifest schema before the listed semantic checks\",\"Treat every unlisted malformed shape as invalid JSON\",\"Accept unrecognized shapes until a later named check needs them\"],\"default_guess\":\"Validate a closed manifest schema first and report a single ordered manifest-shape mismatch before semantic checks.\"},{\"subject\":\"M28/A08 manifest revision access\",\"kind\":\"undefined source semantics\",\"text\":\"The kernel reads `<manifest_location>/<service_id>.json` \\\"at the configured `manifest_revision`\\\", but the texts do not say how a filesystem location is read at a repository revision or verified to represent that revision.\",\"question\":\"How does the kernel obtain the manifest bytes for `manifest_revision`?\",\"options\":[\"Read through a version-control command or library at that exact revision\",\"Require manifest_location to be a pre-materialized immutable snapshot and verify metadata\",\"Read the current filesystem contents and treat the revision as descriptive only\",\"Require the repository checkout HEAD to equal the configured revision\"],\"default_guess\":\"Read the file from the repository at the exact configured revision without changing the working tree.\"},{\"subject\":\"A08/A09 api_base_url\",\"kind\":\"incomplete URL rules\",\"text\":\"A08 accepts any absolute `http` or `https` URL with a host, and A09 forms the target by removing a trailing slash and appending the operation path. The texts do not address a base URL containing user information, a query, a fragment, percent escapes, or a non-root path.\",\"question\":\"Which components are permitted in `api_base_url`, and what exact URL results when it already contains a path, query or fragment?\",\"options\":[\"Require scheme, authority and optional base path only; refuse userinfo, query and fragment\",\"Require only scheme and authority with no path\",\"Apply standard URL resolution rules\",\"Concatenate the strings literally after removing one trailing slash\"],\"default_guess\":\"Permit an optional base path but refuse userinfo, query and fragment, then append the declared absolute path to that base path without normalization.\"},{\"subject\":\"A09 plain-HTTP loopback exception\",\"kind\":\"vague refusal condition\",\"text\":\"Plain HTTP is allowed when the `api_base_url` \\\"host is a loopback address\\\", without saying whether this is based on a literal IP, DNS resolution, all resolved addresses, or names such as `localhost`.\",\"question\":\"Exactly how is the loopback exception determined?\",\"options\":[\"Only literal IPv4 or IPv6 loopback addresses qualify\",\"Resolve the hostname and require every result to be loopback\",\"Resolve the hostname and allow it if any result is loopback\",\"Also recognize a fixed set of loopback hostnames\"],\"default_guess\":\"Allow only literal loopback IP addresses, avoiding a DNS-dependent authorization decision.\"},{\"subject\":\"A09 multipart field names\",\"kind\":\"missing encoding rule\",\"text\":\"Multipart parts use `name=\\\"<port>\\\"` and `filename=\\\"<port>\\\"`, but port names have no stated character restriction or escaping rule for quotes, backslashes, controls or non-ASCII text.\",\"question\":\"Which port names are legal in multipart bindings, and how are legal non-token characters encoded in Content-Disposition parameters?\",\"options\":[\"Restrict multipart port names to a safe ASCII field-name grammar\",\"Escape quoted-string characters according to an explicit HTTP rule\",\"Use RFC 5987-style extended parameters\",\"Refuse only at the pre-send input-placement check\"],\"default_guess\":\"Refuse multipart bindings whose port names are not safe ASCII field names.\"},{\"subject\":\"A09 query arrays containing null\",\"kind\":\"ambiguous request mapping\",\"text\":\"Rule 2 permits query arrays of \\\"string, integer, number or boolean\\\" values, but immediately says \\\"a `null` element of a list is omitted\\\".\",\"question\":\"Can a GET or DELETE binding declare and receive an array that includes null elements?\",\"options\":[\"Allow null elements and omit them from the query\",\"Refuse schemas that allow null array elements\",\"Allow the schema but treat a runtime null element as a pre-send refusal\"],\"default_guess\":\"Allow null elements and omit them, matching the explicit runtime instruction.\"},{\"subject\":\"A09 HTTP status mapping\",\"kind\":\"uncovered outcome\",\"text\":\"The outcome table covers `1xx`, `2xx`, `3xx`, `4xx` and `5xx`, but gives no result for a syntactically valid final three-digit status outside those classes, such as `600`.\",\"question\":\"How is an unrecognized or out-of-range final HTTP status classified for read and non-read operations?\",\"options\":[\"Treat it as a malformed response\",\"Treat it like 5xx\",\"Treat it as operation_failed or operation_refused\",\"Refuse it according to a closed valid-status range before applying the table\"],\"default_guess\":\"Treat any final status outside 200–599 as a malformed response: service_unreachable for reads and outcome_unknown for non-read operations after sending.\"},{\"subject\":\"A09 TLS verification\",\"kind\":\"undefined security policy\",\"text\":\"A09 states only that \\\"TLS is verified for `https`\\\" and does not identify the trust store, hostname rules, certificate-time source, protocol floor or whether host configuration may alter them.\",\"question\":\"What exact TLS verification policy and trust roots must every implementation use?\",\"options\":[\"Use the host system trust store and the pinned client's default secure policy\",\"Ship release-pinned trust roots and TLS settings\",\"Make trust roots installation configuration\",\"Specify only certificate-chain and hostname verification and leave other TLS policy to the runtime\"],\"default_guess\":\"Use the host system trust store with certificate-chain and hostname verification enabled and no caller-controlled overrides.\"},{\"subject\":\"A07 personal-data many-file values\",\"kind\":\"undefined redaction shape\",\"text\":\"A07 says a personal-data file is returned to an agent as \\\"its digest and class\\\", while A13 represents a non-empty `many` file value only as an ordered list of SpooledFiles and defines no aggregate file-list digest.\",\"question\":\"What does an agent receive for a personal-data `many` file input or output?\",\"options\":[\"An ordered list of each file's content digest and the list class\",\"One aggregate digest of the ordered list and its class\",\"Only the class with no digest\",\"A count plus an aggregate digest and class\"],\"default_guess\":\"Return the ordered list of per-file content digests, each carrying the list's class, with no size, media type or spool facts.\"},{\"subject\":\"A07 redacted failure_detail\",\"kind\":\"undefined representation\",\"text\":\"A07 says a protected `failure_detail` is returned to an agent \\\"only as its length and that class\\\" but does not define whether length means UTF-8 bytes, Unicode code points or the pre-truncation text.\",\"question\":\"What exact length is disclosed for a non-open failure detail?\",\"options\":[\"UTF-8 byte length of the stored, truncated detail\",\"Unicode code-point length of the stored detail\",\"UTF-8 byte length before truncation\",\"Original service-body length\"],\"default_guess\":\"Return the UTF-8 byte length of the stored, already bounded failure_detail.\"},{\"subject\":\"A16 configuration re-read recovery\",\"kind\":\"state-transition gap\",\"text\":\"The kernel re-reads when the file digest differs from \\\"the last read\\\"; a failed re-read refuses every request \\\"until a re-read passes\\\". It does not say whether the digest of invalid but readable bytes becomes the last-read digest.\",\"question\":\"After a readable changed configuration fails validation and remains byte-for-byte unchanged, is it re-read on every request or considered unchanged and therefore never retried?\",\"options\":[\"Retain the last successful digest and retry the invalid file on every request\",\"Remember the invalid digest but force revalidation while no active token list exists\",\"Remember the invalid digest and wait for another byte change\"],\"default_guess\":\"Retain only the last successfully validated digest and retry validation on every request while configuration is invalid.\"},{\"subject\":\"Kernel startup checks across A03, A09, A16, A17 and A18\",\"kind\":\"missing precedence\",\"text\":\"The texts require startup checks for configuration and tokens, credential-header conflicts, sandbox availability and probing, data-directory locking and permissions, symlinks and recovery, but define no single order among those checks.\",\"question\":\"In what global order do startup validation, lock acquisition, sandbox probing, store opening, recovery and surface opening occur, and which failure is reported when several checks fail?\",\"options\":[\"Define one fixed global startup-check sequence\",\"Run independent checks and report all failures\",\"Allow implementation-defined ordering while still keeping the surface closed\"],\"default_guess\":\"Validate the protected configuration first, acquire and validate the data directory next, verify the sandbox next, then open the store and complete recovery before opening the surface.\"},{\"subject\":\"A18 data-directory privacy\",\"kind\":\"vague refusal condition\",\"text\":\"A18 says the data directory \\\"and everything in it are private to the kernel's user\\\" but does not give the ownership, mode-bit, ACL, hard-link or parent-directory conditions that make a path private.\",\"question\":\"What exact filesystem metadata causes startup or a later store call to refuse the data directory and its contents?\",\"options\":[\"Require kernel-user ownership and no group/other permission bits\",\"Require fixed modes such as 0700 for directories and 0600 for files\",\"Also reject ACL access, unexpected hard links and unsafe parent directories\",\"Apply only no-symlink checks after startup\"],\"default_guess\":\"Require kernel-user ownership and no group/other permission bits on every managed directory and file, plus the stated no-symlink rule.\"},{\"subject\":\"A20 pinned dependencies\",\"kind\":\"unverifiable invariant\",\"text\":\"A20 requires that \\\"A release pins the exact versions of the kernel's Python dependencies and of the sandbox runtime\\\", but State 0–2 supplies no dependency list or exact versions other than CPython 3.12.\",\"question\":\"Which dependencies and exact versions, including bubblewrap and the HTTP, MCP, schema and canonical-JSON implementations, constitute release v1?\",\"options\":[\"List every direct and transitive dependency with an exact version in the accepted design\",\"Define only direct dependencies here and freeze transitive versions in a lock file\",\"Treat the generated lock file as the release decision even though the texts do not constrain its choices\"],\"default_guess\":\"Choose a minimal dependency set and pin the complete resolved dependency graph and bubblewrap version in a release lock manifest.\"}]}"
+}

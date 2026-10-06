@@ -1,0 +1,294 @@
+{
+ "open_points": [
+  {
+   "subject": "M23 NodeExecution identity",
+   "kind": "contradictory identity",
+   "text": "M23 declares `Identity: value`, but says \"an attempt's record is issued once\"; A15 requires exactly one immutable record per conclusion, and A11 addresses it by `(run_id, node_id, map_index, attempt_number)`.",
+   "question": "Is a NodeExecution a content-substitutable value or an entity uniquely identified by its execution coordinates, and what happens if a record with those coordinates already exists?",
+   "options": [
+    "Treat the execution coordinates as a unique entity identity",
+    "Treat all fields as value identity and deduplicate equal records",
+    "Add a separately minted NodeExecution identifier"
+   ],
+   "default_guess": "Treat `(run_id, node_id, map_index, attempt_number)` as a unique entity identity and refuse a conflicting second record."
+  },
+  {
+   "subject": "A01/A05 ordering of edges and constants",
+   "kind": "non-total order",
+   "text": "A01 sorts \"edges in the edge order of A05, constants by (`to_node`, `to_port`)\" while A05 orders edges only by (`to_node`, `to_port`, `from_node`, `from_port`). Multiple guarded edges with those same endpoints, and multiple constants for the same target, can differ in facts not included in those keys.",
+   "question": "What total tie-break order is used for hashing and for selecting the first failure when these keys are equal?",
+   "options": [
+    "Extend the keys with every remaining canonical fact, including guard and value",
+    "Preserve submitted list order for tied items",
+    "Refuse tied endpoints during composition"
+   ],
+   "default_guess": "Extend each sorting key with the canonical JSON of all remaining meaning facts."
+  },
+  {
+   "subject": "K-02 and A03 filesystem access",
+   "kind": "contradiction",
+   "text": "K-02 says a function has \"no filesystem beyond its input\", while A03 supplies a writable private exchange directory and traps only \"opening any path outside the exchange directory and the read-only runtime\".",
+   "question": "May agent code itself read and write arbitrary paths inside the exchange directory or read arbitrary runtime files?",
+   "options": [
+    "Only the trusted runner may access the exchange directory; user code gets values and bytes only",
+    "User code may use the exchange directory as bounded scratch space and read the runtime",
+    "User code may read inputs there but may not create or modify files"
+   ],
+   "default_guess": "Permit only the trusted runner to use exchange files and deny direct filesystem access by user code."
+  },
+  {
+   "subject": "A03 deterministic execution",
+   "kind": "unverifiable invariant",
+   "text": "A03 requires that \"The same implementation on the same input yields the same output digest twice\", but its closed traps do not cover process identifiers, object identities, filesystem metadata or ordering, resource observations, and other standard-library or interpreter state that code can turn into output.",
+   "question": "What complete rule makes function output deterministic, or is deterministic admission meant only to describe the verdict algorithm rather than repeated executions?",
+   "options": [
+    "Expand the isolation and traps to eliminate every observable nondeterministic source",
+    "Define determinism only for the admission algorithm and allow executions to differ",
+    "Run each case repeatedly and refuse differing outputs"
+   ],
+   "default_guess": "Define and enforce a closed deterministic runtime interface, refusing access to process identity, filesystem observations, resource observations, and similar state."
+  },
+  {
+   "subject": "A03 output-byte accounting",
+   "kind": "undefined precedence",
+   "text": "The output limit is \"the sum of the canonical JSON bytes of every `value` output and the bytes of every `file` output\", but `resource_exhausted` is checked before `contract_violation`; a returned non-JSON value, non-finite number, cyclic object, or non-`bytes` file has no such byte count.",
+   "question": "How is `output_bytes` evaluated for an output that cannot be canonically encoded or is not of the declared file type, and which outcome wins?",
+   "options": [
+    "Classify an unencodable or wrong-typed output immediately as `contract_violation`",
+    "Measure the runner's raw output representation before decoding and apply the resource limit first",
+    "Assign a defined encoded error representation for accounting"
+   ],
+   "default_guess": "Apply the byte limit to bytes emitted through the runner protocol, then classify a within-limit unencodable or wrong-typed result as `contract_violation`."
+  },
+  {
+   "subject": "A04 authored trial-case shape",
+   "kind": "missing refusal conditions",
+   "text": "A04 says a case is added when \"its input values fit the contract version's input ports\" and expected outputs \"fit the output ports\", but does not say whether the supplied port sets must be exact or whether expected outputs may be partial.",
+   "question": "Must authored inputs contain every input port and no extra ports, and when `expected_outputs` is present must it contain every output port and no extras?",
+   "options": [
+    "Require exact input and expected-output port sets",
+    "Require exact inputs but allow partial expected outputs",
+    "Allow missing and extra entries if all supplied values validate"
+   ],
+   "default_guess": "Require exact input ports and, when expected outputs are present, exact output ports."
+  },
+  {
+   "subject": "A05/A13 guard comparison",
+   "kind": "undefined equality",
+   "text": "A13 enables an edge when a guard value \"equals its guard value\", and A05 compares guard values for difference, but no JSON equality rule is stated.",
+   "question": "What equality is used for guard values, especially for numbers such as `1` and `1.0`, objects with different member order, and booleans versus integers in Python?",
+   "options": [
+    "Equality of RFC 8785 canonical JSON bytes",
+    "JSON structural equality with a separately specified numeric rule",
+    "Host-language equality"
+   ],
+   "default_guess": "Use equality of RFC 8785 canonical JSON bytes."
+  },
+  {
+   "subject": "A13/A14 retry of service-unreachable elements",
+   "kind": "contradictory execution rule",
+   "text": "A13 says \"a concluded element is never executed again\", while `service_unreachable` writes a NodeExecution and A14 requires resume to send that element again as a new attempt.",
+   "question": "Which concluded statuses permit a later attempt, and how is that exception represented in readiness?",
+   "options": [
+    "Only `service_unreachable` permits a later attempt on resume",
+    "Waiting statuses are not considered concluded despite having NodeExecution records",
+    "Any non-final attempt status may be retried"
+   ],
+   "default_guess": "Treat `service_unreachable` as a recorded attempt that remains retryable only through resume; all other recorded conclusions are non-retryable except resolved `not_applied`."
+  },
+  {
+   "subject": "M26/A10 meaning of `not_applied`",
+   "kind": "contradiction",
+   "text": "M26 says \"Sending again after `not_applied` is a new attempt under a fresh approval\", while A10 says a 4xx attempt is also `not_applied` but \"is never sent again\" and limits resend to an unknown attempt the owner resolved `not_applied`.",
+   "question": "Does the resend rule apply to every `not_applied` EffectAttempt or only to one produced by owner resolution of an unknown outcome?",
+   "options": [
+    "Only owner-resolved unknown attempts may be resent",
+    "Both 4xx and owner-resolved attempts may be resent with fresh approval",
+    "Use a distinct status for resolved-not-applied versus 4xx-not-applied"
+   ],
+   "default_guess": "Permit resend only after owner resolution of an unknown attempt and distinguish that provenance explicitly."
+  },
+  {
+   "subject": "M26 unknown-outcome resolution time",
+   "kind": "missing trace fact",
+   "text": "M26 has `recorded_at`, `concluded_at`, and `resolved_by`, but no `resolved_at`; A11 says the owner changes an `unknown` attempt to `applied` or `not_applied` and that the EffectAttempt is the only record of the resolution.",
+   "question": "Where is the time of the owner's resolution recorded without losing the time at which the original send became unknown?",
+   "options": [
+    "Add `resolved_at`",
+    "Overwrite `concluded_at` on resolution",
+    "Treat `concluded_at` as the resolution time and omit the original conclusion time"
+   ],
+   "default_guess": "Add a separate `resolved_at` timestamp."
+  },
+  {
+   "subject": "A14 startup recovery actor",
+   "kind": "unrepresentable actor",
+   "text": "A14 advances recovered runs \"as the kernel actor\", but NodeExecution and EffectAttempt have no actor field and no recovery record hangs from the run; M27 says request-caused work is inferred from `started_by` or resumptions.",
+   "question": "How can inspection distinguish startup recovery from advancement caused by the human or agent who originally started the run?",
+   "options": [
+    "Record a recovery event or resumption naming the kernel",
+    "Add an actor/cause field to each recovered execution and attempt",
+    "Do not claim startup recovery is represented as a kernel actor"
+   ],
+   "default_guess": "Record a durable recovery event naming the kernel and associate recovery-created attempts with it."
+  },
+  {
+   "subject": "K-10/A14 spool removal",
+   "kind": "contradictory observable result",
+   "text": "State 0 says release means \"the run's spooled files are removed\" and K-10 says the spool \"is emptied when the run ends\", while A14 says the ending or release record stands even when removal fails and leftover files remain until a later start.",
+   "question": "Does a release or terminal transition succeed when physical deletion fails, and does \"removed/emptied\" mean physically deleted or merely no longer servable?",
+   "options": [
+    "Commit logical removal and succeed while cleanup remains best-effort",
+    "Fail the action unless physical deletion completes",
+    "Commit the terminal state but report a distinct cleanup-pending result"
+   ],
+   "default_guess": "Commit logical removal, make files immediately unservable, and record cleanup as pending until physical deletion succeeds."
+  },
+  {
+   "subject": "A08 manifest structural validation",
+   "kind": "incomplete mismatch rules",
+   "text": "A08 enumerates absent or invalid JSON, missing `service` or `capabilities`, duplicate capability names, and selected field faults, but is silent about wrong JSON types, duplicate object member names, malformed capability objects, malformed instance collections, and malformed `required_headers` containers.",
+   "question": "What complete manifest shape is accepted, how are duplicate JSON member names handled, and where do these structural failures fall in the manifest-mismatch order?",
+   "options": [
+    "Validate the whole manifest against a closed schema before A08's semantic checks",
+    "Treat every unlisted malformed shape as invalid JSON",
+    "Handle each field lazily and map failures to the nearest listed check"
+   ],
+   "default_guess": "Validate against a closed manifest schema with duplicate member names refused, then apply A08's ordered semantic checks."
+  },
+  {
+   "subject": "M01/A02/A05/A08 port schemas",
+   "kind": "missing validation coverage",
+   "text": "M01 says every port schema is \"written in the subset of JSON Schema the kernel supports\"; A02 enforces that for contract ports, but A05's composition refusals and A08's binding checks do not clearly require supported schemas for flow ports, binding ports, or a constant's declared schema.",
+   "question": "Which operation refuses an unsupported schema on each non-contract port or constant, and at what position in that operation's failure order?",
+   "options": [
+    "Refuse unsupported schemas during binding proposal and flow composition before records are kept",
+    "Keep them and make flow proof fail",
+    "Allow them until runtime validation is attempted"
+   ],
+   "default_guess": "Refuse them during binding proposal or flow composition before keeping the record, with a stated port-name order."
+  },
+  {
+   "subject": "M28/A08 manifest revision access",
+   "kind": "undefined source behavior",
+   "text": "The manifest is read from `<manifest_location>/<service_id>.json` \"at the configured `manifest_revision`\", described as a repository revision, but the text does not define how that revision selects bytes or how an invalid revision or non-repository location is classified.",
+   "question": "How are files read from the configured revision, and are an invalid revision, repository error, or path absent at that revision all the same `record absent` mismatch?",
+   "options": [
+    "Read with a specified repository-object operation and classify each failure",
+    "Require `manifest_location` already to expose exactly the configured immutable snapshot",
+    "Ignore the revision while running and read the working tree"
+   ],
+   "default_guess": "Read the file directly from the named immutable repository revision without changing a working tree, and classify an invalid revision separately from an absent service record."
+  },
+  {
+   "subject": "A08/A09 base URL",
+   "kind": "incomplete URL constraints",
+   "text": "A08 accepts any absolute `http` or `https` URL with a host, while A09 constructs the target by taking it \"without a trailing `/`\" and appending the operation path and derives `host` from its authority.",
+   "question": "May `api_base_url` contain a path, query, fragment, user information, repeated trailing slashes, an internationalized host, or an explicit default port, and exactly how are those forms joined and represented in `Host` and approval digests?",
+   "options": [
+    "Restrict base URLs to scheme plus host and optional port with no path/query/fragment/userinfo",
+    "Allow a base path but forbid query, fragment, and userinfo with a defined join",
+    "Allow all absolute forms and define component-wise joining"
+   ],
+   "default_guess": "Allow scheme, host, optional port, and an optional normalized base path; forbid userinfo, query, and fragment."
+  },
+  {
+   "subject": "A09/A10 HTTP text encoding",
+   "kind": "undefined wire encoding",
+   "text": "Required-header values and credential values may contain non-ASCII UTF-8, and multipart disposition uses `name=\"<port>\"` and `filename=\"<port>\"`, while port names have no HTTP-safe restriction or escaping rule.",
+   "question": "Which characters are permitted in header values and multipart names, and how are quotes, backslashes, CR/LF, non-ASCII text, and other unsafe characters encoded or refused?",
+   "options": [
+    "Restrict all such values and names to an explicitly safe ASCII grammar",
+    "Define RFC-compatible escaping and extended parameter encoding",
+    "Send UTF-8 bytes verbatim wherever controls are absent"
+   ],
+   "default_guess": "Restrict multipart field names and header values to explicit safe grammars and refuse values that cannot be represented without ambiguity."
+  },
+  {
+   "subject": "A09/A10 multipart framing",
+   "kind": "undefined request construction",
+   "text": "A10 excludes the multipart boundary as \"the kernel's framing\", but neither A09 nor A10 defines how the boundary is chosen, how collisions with part content are prevented, or the exact delimiter and line-ending bytes.",
+   "question": "What deterministic or collision-safe multipart encoding is used on the wire?",
+   "options": [
+    "Use a deterministic content-derived boundary and reject or alter it on collision",
+    "Use a cryptographically random boundary and scan content for collision",
+    "Delegate framing to the pinned HTTP library"
+   ],
+   "default_guess": "Use a deterministic content-derived boundary with an explicit collision-avoidance rule and fixed CRLF framing."
+  },
+  {
+   "subject": "A09/A10 HTTP protocol",
+   "kind": "undefined transport semantics",
+   "text": "A10 requires an exact `host` header, exact header set and `content-length`, but the text does not state whether requests use HTTP/1.1, HTTP/2, or negotiated protocol behavior.",
+   "question": "Which HTTP protocol version is used, and may protocol negotiation transform the header set covered by an approval?",
+   "options": [
+    "Require HTTP/1.1 only",
+    "Permit HTTP/2 with a defined mapping from the approved description",
+    "Permit library negotiation and treat semantically equivalent transformations as unchanged"
+   ],
+   "default_guess": "Require HTTP/1.1 so the stated wire-header rules are directly enforceable."
+  },
+  {
+   "subject": "A09 incomplete response precedence",
+   "kind": "ambiguous transport outcome",
+   "text": "The table first classifies \"no valid final response received (timeout, reset, EOF...)\" but later classifies by 3xx, 4xx, 5xx, and 2xx status; it does not define whether receiving final status and headers but timing out or resetting during the body counts as a valid final response.",
+   "question": "When a final status and headers arrive but the body is incomplete, does the transport-failure row win or does the received status determine the outcome?",
+   "options": [
+    "Any incomplete body is no valid final response, so the transport-failure row wins",
+    "The final status determines the outcome once headers are complete",
+    "Status determines non-2xx outcomes, while incomplete 2xx bodies use the transport-failure row"
+   ],
+   "default_guess": "Treat any incomplete response message as no valid final response, so the earlier transport-failure row wins."
+  },
+  {
+   "subject": "A16/A17/A20 external-input sizes",
+   "kind": "missing ceilings",
+   "text": "A20 says every global ceiling is fixed and over-ceiling data is refused, but no maximum is given for the configuration file, manifest files, secret-file contents, base URLs, required-header collections, or required-header values.",
+   "question": "What bounds apply to these host- and manifest-supplied inputs, and what refusal or startup failure occurs when each is exceeded?",
+   "options": [
+    "Add release ceilings for every external file and field",
+    "Apply existing request/text/response ceilings to them",
+    "Leave them unbounded because the host and manifest are trusted"
+   ],
+   "default_guess": "Add explicit release ceilings for configuration, manifest, credential, URL, and header sizes and check them before parsing or request construction."
+  },
+  {
+   "subject": "A18 data-directory privacy",
+   "kind": "vague refusal condition",
+   "text": "A18 says \"The directory and everything in it are private to the kernel's user; the kernel refuses to start otherwise\" without defining ownership, acceptable mode bits, ACLs, hard links, parent-directory requirements, or whether the data directory itself may be a symbolic link.",
+   "question": "What exact filesystem checks constitute `private`, both at startup and for files created later?",
+   "options": [
+    "Require kernel-user ownership, no group/other permissions, no symlinks, and controlled link counts",
+    "Require only that group and others cannot read",
+    "Rely on opening files with restrictive creation modes and do not audit existing permissions"
+   ],
+   "default_guess": "Require kernel-user ownership, no group/other permission bits, no symlinks for the directory or descendants, and restrictive modes on every created object."
+  },
+  {
+   "subject": "A20 release dependency pinning",
+   "kind": "missing release facts",
+   "text": "A20 requires \"the exact versions of the kernel's Python dependencies and of the sandbox runtime\" but gives only `CPython 3.12`, not a patch version, dependency list, Bubblewrap version, SQLite version, TLS/HTTP implementation, or their exact versions.",
+   "question": "What exact dependency and runtime versions define release v1?",
+   "options": [
+    "List and pin every direct and transitive runtime dependency in the design",
+    "Define a lockfile and system-package manifest as the authoritative release facts",
+    "Use whatever compatible versions are installed on the host"
+   ],
+   "default_guess": "Make a checked-in lockfile plus system-runtime manifest authoritative and pin CPython, Bubblewrap, SQLite, TLS, HTTP, and every Python dependency exactly."
+  },
+  {
+   "subject": "Startup checks across A03, A14, A16, A17 and A18",
+   "kind": "missing precedence",
+   "text": "The texts independently require sandbox probing, configuration and token validation, config/data-directory permission checks, the exclusive lock, store opening, in-flight recovery, and run advancement before the surface opens, but give no single startup order or first-failure rule.",
+   "question": "In what exact order do startup checks and recovery run, and which error is reported when several conditions fail?",
+   "options": [
+    "Define one global ordered startup sequence",
+    "Run independent read-only checks together and report all failures",
+    "Let modules initialize in implementation-defined order"
+   ],
+   "default_guess": "Use a single explicit sequence: secure configuration, secure and locked data directory, store integrity/open, pinned runtime and sandbox probe, recovery, then surface opening."
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"M23 NodeExecution identity\",\"kind\":\"contradictory identity\",\"text\":\"M23 declares `Identity: value`, but says \\\"an attempt's record is issued once\\\"; A15 requires exactly one immutable record per conclusion, and A11 addresses it by `(run_id, node_id, map_index, attempt_number)`.\",\"question\":\"Is a NodeExecution a content-substitutable value or an entity uniquely identified by its execution coordinates, and what happens if a record with those coordinates already exists?\",\"options\":[\"Treat the execution coordinates as a unique entity identity\",\"Treat all fields as value identity and deduplicate equal records\",\"Add a separately minted NodeExecution identifier\"],\"default_guess\":\"Treat `(run_id, node_id, map_index, attempt_number)` as a unique entity identity and refuse a conflicting second record.\"},{\"subject\":\"A01/A05 ordering of edges and constants\",\"kind\":\"non-total order\",\"text\":\"A01 sorts \\\"edges in the edge order of A05, constants by (`to_node`, `to_port`)\\\" while A05 orders edges only by (`to_node`, `to_port`, `from_node`, `from_port`). Multiple guarded edges with those same endpoints, and multiple constants for the same target, can differ in facts not included in those keys.\",\"question\":\"What total tie-break order is used for hashing and for selecting the first failure when these keys are equal?\",\"options\":[\"Extend the keys with every remaining canonical fact, including guard and value\",\"Preserve submitted list order for tied items\",\"Refuse tied endpoints during composition\"],\"default_guess\":\"Extend each sorting key with the canonical JSON of all remaining meaning facts.\"},{\"subject\":\"K-02 and A03 filesystem access\",\"kind\":\"contradiction\",\"text\":\"K-02 says a function has \\\"no filesystem beyond its input\\\", while A03 supplies a writable private exchange directory and traps only \\\"opening any path outside the exchange directory and the read-only runtime\\\".\",\"question\":\"May agent code itself read and write arbitrary paths inside the exchange directory or read arbitrary runtime files?\",\"options\":[\"Only the trusted runner may access the exchange directory; user code gets values and bytes only\",\"User code may use the exchange directory as bounded scratch space and read the runtime\",\"User code may read inputs there but may not create or modify files\"],\"default_guess\":\"Permit only the trusted runner to use exchange files and deny direct filesystem access by user code.\"},{\"subject\":\"A03 deterministic execution\",\"kind\":\"unverifiable invariant\",\"text\":\"A03 requires that \\\"The same implementation on the same input yields the same output digest twice\\\", but its closed traps do not cover process identifiers, object identities, filesystem metadata or ordering, resource observations, and other standard-library or interpreter state that code can turn into output.\",\"question\":\"What complete rule makes function output deterministic, or is deterministic admission meant only to describe the verdict algorithm rather than repeated executions?\",\"options\":[\"Expand the isolation and traps to eliminate every observable nondeterministic source\",\"Define determinism only for the admission algorithm and allow executions to differ\",\"Run each case repeatedly and refuse differing outputs\"],\"default_guess\":\"Define and enforce a closed deterministic runtime interface, refusing access to process identity, filesystem observations, resource observations, and similar state.\"},{\"subject\":\"A03 output-byte accounting\",\"kind\":\"undefined precedence\",\"text\":\"The output limit is \\\"the sum of the canonical JSON bytes of every `value` output and the bytes of every `file` output\\\", but `resource_exhausted` is checked before `contract_violation`; a returned non-JSON value, non-finite number, cyclic object, or non-`bytes` file has no such byte count.\",\"question\":\"How is `output_bytes` evaluated for an output that cannot be canonically encoded or is not of the declared file type, and which outcome wins?\",\"options\":[\"Classify an unencodable or wrong-typed output immediately as `contract_violation`\",\"Measure the runner's raw output representation before decoding and apply the resource limit first\",\"Assign a defined encoded error representation for accounting\"],\"default_guess\":\"Apply the byte limit to bytes emitted through the runner protocol, then classify a within-limit unencodable or wrong-typed result as `contract_violation`.\"},{\"subject\":\"A04 authored trial-case shape\",\"kind\":\"missing refusal conditions\",\"text\":\"A04 says a case is added when \\\"its input values fit the contract version's input ports\\\" and expected outputs \\\"fit the output ports\\\", but does not say whether the supplied port sets must be exact or whether expected outputs may be partial.\",\"question\":\"Must authored inputs contain every input port and no extra ports, and when `expected_outputs` is present must it contain every output port and no extras?\",\"options\":[\"Require exact input and expected-output port sets\",\"Require exact inputs but allow partial expected outputs\",\"Allow missing and extra entries if all supplied values validate\"],\"default_guess\":\"Require exact input ports and, when expected outputs are present, exact output ports.\"},{\"subject\":\"A05/A13 guard comparison\",\"kind\":\"undefined equality\",\"text\":\"A13 enables an edge when a guard value \\\"equals its guard value\\\", and A05 compares guard values for difference, but no JSON equality rule is stated.\",\"question\":\"What equality is used for guard values, especially for numbers such as `1` and `1.0`, objects with different member order, and booleans versus integers in Python?\",\"options\":[\"Equality of RFC 8785 canonical JSON bytes\",\"JSON structural equality with a separately specified numeric rule\",\"Host-language equality\"],\"default_guess\":\"Use equality of RFC 8785 canonical JSON bytes.\"},{\"subject\":\"A13/A14 retry of service-unreachable elements\",\"kind\":\"contradictory execution rule\",\"text\":\"A13 says \\\"a concluded element is never executed again\\\", while `service_unreachable` writes a NodeExecution and A14 requires resume to send that element again as a new attempt.\",\"question\":\"Which concluded statuses permit a later attempt, and how is that exception represented in readiness?\",\"options\":[\"Only `service_unreachable` permits a later attempt on resume\",\"Waiting statuses are not considered concluded despite having NodeExecution records\",\"Any non-final attempt status may be retried\"],\"default_guess\":\"Treat `service_unreachable` as a recorded attempt that remains retryable only through resume; all other recorded conclusions are non-retryable except resolved `not_applied`.\"},{\"subject\":\"M26/A10 meaning of `not_applied`\",\"kind\":\"contradiction\",\"text\":\"M26 says \\\"Sending again after `not_applied` is a new attempt under a fresh approval\\\", while A10 says a 4xx attempt is also `not_applied` but \\\"is never sent again\\\" and limits resend to an unknown attempt the owner resolved `not_applied`.\",\"question\":\"Does the resend rule apply to every `not_applied` EffectAttempt or only to one produced by owner resolution of an unknown outcome?\",\"options\":[\"Only owner-resolved unknown attempts may be resent\",\"Both 4xx and owner-resolved attempts may be resent with fresh approval\",\"Use a distinct status for resolved-not-applied versus 4xx-not-applied\"],\"default_guess\":\"Permit resend only after owner resolution of an unknown attempt and distinguish that provenance explicitly.\"},{\"subject\":\"M26 unknown-outcome resolution time\",\"kind\":\"missing trace fact\",\"text\":\"M26 has `recorded_at`, `concluded_at`, and `resolved_by`, but no `resolved_at`; A11 says the owner changes an `unknown` attempt to `applied` or `not_applied` and that the EffectAttempt is the only record of the resolution.\",\"question\":\"Where is the time of the owner's resolution recorded without losing the time at which the original send became unknown?\",\"options\":[\"Add `resolved_at`\",\"Overwrite `concluded_at` on resolution\",\"Treat `concluded_at` as the resolution time and omit the original conclusion time\"],\"default_guess\":\"Add a separate `resolved_at` timestamp.\"},{\"subject\":\"A14 startup recovery actor\",\"kind\":\"unrepresentable actor\",\"text\":\"A14 advances recovered runs \\\"as the kernel actor\\\", but NodeExecution and EffectAttempt have no actor field and no recovery record hangs from the run; M27 says request-caused work is inferred from `started_by` or resumptions.\",\"question\":\"How can inspection distinguish startup recovery from advancement caused by the human or agent who originally started the run?\",\"options\":[\"Record a recovery event or resumption naming the kernel\",\"Add an actor/cause field to each recovered execution and attempt\",\"Do not claim startup recovery is represented as a kernel actor\"],\"default_guess\":\"Record a durable recovery event naming the kernel and associate recovery-created attempts with it.\"},{\"subject\":\"K-10/A14 spool removal\",\"kind\":\"contradictory observable result\",\"text\":\"State 0 says release means \\\"the run's spooled files are removed\\\" and K-10 says the spool \\\"is emptied when the run ends\\\", while A14 says the ending or release record stands even when removal fails and leftover files remain until a later start.\",\"question\":\"Does a release or terminal transition succeed when physical deletion fails, and does \\\"removed/emptied\\\" mean physically deleted or merely no longer servable?\",\"options\":[\"Commit logical removal and succeed while cleanup remains best-effort\",\"Fail the action unless physical deletion completes\",\"Commit the terminal state but report a distinct cleanup-pending result\"],\"default_guess\":\"Commit logical removal, make files immediately unservable, and record cleanup as pending until physical deletion succeeds.\"},{\"subject\":\"A08 manifest structural validation\",\"kind\":\"incomplete mismatch rules\",\"text\":\"A08 enumerates absent or invalid JSON, missing `service` or `capabilities`, duplicate capability names, and selected field faults, but is silent about wrong JSON types, duplicate object member names, malformed capability objects, malformed instance collections, and malformed `required_headers` containers.\",\"question\":\"What complete manifest shape is accepted, how are duplicate JSON member names handled, and where do these structural failures fall in the manifest-mismatch order?\",\"options\":[\"Validate the whole manifest against a closed schema before A08's semantic checks\",\"Treat every unlisted malformed shape as invalid JSON\",\"Handle each field lazily and map failures to the nearest listed check\"],\"default_guess\":\"Validate against a closed manifest schema with duplicate member names refused, then apply A08's ordered semantic checks.\"},{\"subject\":\"M01/A02/A05/A08 port schemas\",\"kind\":\"missing validation coverage\",\"text\":\"M01 says every port schema is \\\"written in the subset of JSON Schema the kernel supports\\\"; A02 enforces that for contract ports, but A05's composition refusals and A08's binding checks do not clearly require supported schemas for flow ports, binding ports, or a constant's declared schema.\",\"question\":\"Which operation refuses an unsupported schema on each non-contract port or constant, and at what position in that operation's failure order?\",\"options\":[\"Refuse unsupported schemas during binding proposal and flow composition before records are kept\",\"Keep them and make flow proof fail\",\"Allow them until runtime validation is attempted\"],\"default_guess\":\"Refuse them during binding proposal or flow composition before keeping the record, with a stated port-name order.\"},{\"subject\":\"M28/A08 manifest revision access\",\"kind\":\"undefined source behavior\",\"text\":\"The manifest is read from `<manifest_location>/<service_id>.json` \\\"at the configured `manifest_revision`\\\", described as a repository revision, but the text does not define how that revision selects bytes or how an invalid revision or non-repository location is classified.\",\"question\":\"How are files read from the configured revision, and are an invalid revision, repository error, or path absent at that revision all the same `record absent` mismatch?\",\"options\":[\"Read with a specified repository-object operation and classify each failure\",\"Require `manifest_location` already to expose exactly the configured immutable snapshot\",\"Ignore the revision while running and read the working tree\"],\"default_guess\":\"Read the file directly from the named immutable repository revision without changing a working tree, and classify an invalid revision separately from an absent service record.\"},{\"subject\":\"A08/A09 base URL\",\"kind\":\"incomplete URL constraints\",\"text\":\"A08 accepts any absolute `http` or `https` URL with a host, while A09 constructs the target by taking it \\\"without a trailing `/`\\\" and appending the operation path and derives `host` from its authority.\",\"question\":\"May `api_base_url` contain a path, query, fragment, user information, repeated trailing slashes, an internationalized host, or an explicit default port, and exactly how are those forms joined and represented in `Host` and approval digests?\",\"options\":[\"Restrict base URLs to scheme plus host and optional port with no path/query/fragment/userinfo\",\"Allow a base path but forbid query, fragment, and userinfo with a defined join\",\"Allow all absolute forms and define component-wise joining\"],\"default_guess\":\"Allow scheme, host, optional port, and an optional normalized base path; forbid userinfo, query, and fragment.\"},{\"subject\":\"A09/A10 HTTP text encoding\",\"kind\":\"undefined wire encoding\",\"text\":\"Required-header values and credential values may contain non-ASCII UTF-8, and multipart disposition uses `name=\\\"<port>\\\"` and `filename=\\\"<port>\\\"`, while port names have no HTTP-safe restriction or escaping rule.\",\"question\":\"Which characters are permitted in header values and multipart names, and how are quotes, backslashes, CR/LF, non-ASCII text, and other unsafe characters encoded or refused?\",\"options\":[\"Restrict all such values and names to an explicitly safe ASCII grammar\",\"Define RFC-compatible escaping and extended parameter encoding\",\"Send UTF-8 bytes verbatim wherever controls are absent\"],\"default_guess\":\"Restrict multipart field names and header values to explicit safe grammars and refuse values that cannot be represented without ambiguity.\"},{\"subject\":\"A09/A10 multipart framing\",\"kind\":\"undefined request construction\",\"text\":\"A10 excludes the multipart boundary as \\\"the kernel's framing\\\", but neither A09 nor A10 defines how the boundary is chosen, how collisions with part content are prevented, or the exact delimiter and line-ending bytes.\",\"question\":\"What deterministic or collision-safe multipart encoding is used on the wire?\",\"options\":[\"Use a deterministic content-derived boundary and reject or alter it on collision\",\"Use a cryptographically random boundary and scan content for collision\",\"Delegate framing to the pinned HTTP library\"],\"default_guess\":\"Use a deterministic content-derived boundary with an explicit collision-avoidance rule and fixed CRLF framing.\"},{\"subject\":\"A09/A10 HTTP protocol\",\"kind\":\"undefined transport semantics\",\"text\":\"A10 requires an exact `host` header, exact header set and `content-length`, but the text does not state whether requests use HTTP/1.1, HTTP/2, or negotiated protocol behavior.\",\"question\":\"Which HTTP protocol version is used, and may protocol negotiation transform the header set covered by an approval?\",\"options\":[\"Require HTTP/1.1 only\",\"Permit HTTP/2 with a defined mapping from the approved description\",\"Permit library negotiation and treat semantically equivalent transformations as unchanged\"],\"default_guess\":\"Require HTTP/1.1 so the stated wire-header rules are directly enforceable.\"},{\"subject\":\"A09 incomplete response precedence\",\"kind\":\"ambiguous transport outcome\",\"text\":\"The table first classifies \\\"no valid final response received (timeout, reset, EOF...)\\\" but later classifies by 3xx, 4xx, 5xx, and 2xx status; it does not define whether receiving final status and headers but timing out or resetting during the body counts as a valid final response.\",\"question\":\"When a final status and headers arrive but the body is incomplete, does the transport-failure row win or does the received status determine the outcome?\",\"options\":[\"Any incomplete body is no valid final response, so the transport-failure row wins\",\"The final status determines the outcome once headers are complete\",\"Status determines non-2xx outcomes, while incomplete 2xx bodies use the transport-failure row\"],\"default_guess\":\"Treat any incomplete response message as no valid final response, so the earlier transport-failure row wins.\"},{\"subject\":\"A16/A17/A20 external-input sizes\",\"kind\":\"missing ceilings\",\"text\":\"A20 says every global ceiling is fixed and over-ceiling data is refused, but no maximum is given for the configuration file, manifest files, secret-file contents, base URLs, required-header collections, or required-header values.\",\"question\":\"What bounds apply to these host- and manifest-supplied inputs, and what refusal or startup failure occurs when each is exceeded?\",\"options\":[\"Add release ceilings for every external file and field\",\"Apply existing request/text/response ceilings to them\",\"Leave them unbounded because the host and manifest are trusted\"],\"default_guess\":\"Add explicit release ceilings for configuration, manifest, credential, URL, and header sizes and check them before parsing or request construction.\"},{\"subject\":\"A18 data-directory privacy\",\"kind\":\"vague refusal condition\",\"text\":\"A18 says \\\"The directory and everything in it are private to the kernel's user; the kernel refuses to start otherwise\\\" without defining ownership, acceptable mode bits, ACLs, hard links, parent-directory requirements, or whether the data directory itself may be a symbolic link.\",\"question\":\"What exact filesystem checks constitute `private`, both at startup and for files created later?\",\"options\":[\"Require kernel-user ownership, no group/other permissions, no symlinks, and controlled link counts\",\"Require only that group and others cannot read\",\"Rely on opening files with restrictive creation modes and do not audit existing permissions\"],\"default_guess\":\"Require kernel-user ownership, no group/other permission bits, no symlinks for the directory or descendants, and restrictive modes on every created object.\"},{\"subject\":\"A20 release dependency pinning\",\"kind\":\"missing release facts\",\"text\":\"A20 requires \\\"the exact versions of the kernel's Python dependencies and of the sandbox runtime\\\" but gives only `CPython 3.12`, not a patch version, dependency list, Bubblewrap version, SQLite version, TLS/HTTP implementation, or their exact versions.\",\"question\":\"What exact dependency and runtime versions define release v1?\",\"options\":[\"List and pin every direct and transitive runtime dependency in the design\",\"Define a lockfile and system-package manifest as the authoritative release facts\",\"Use whatever compatible versions are installed on the host\"],\"default_guess\":\"Make a checked-in lockfile plus system-runtime manifest authoritative and pin CPython, Bubblewrap, SQLite, TLS, HTTP, and every Python dependency exactly.\"},{\"subject\":\"Startup checks across A03, A14, A16, A17 and A18\",\"kind\":\"missing precedence\",\"text\":\"The texts independently require sandbox probing, configuration and token validation, config/data-directory permission checks, the exclusive lock, store opening, in-flight recovery, and run advancement before the surface opens, but give no single startup order or first-failure rule.\",\"question\":\"In what exact order do startup checks and recovery run, and which error is reported when several conditions fail?\",\"options\":[\"Define one global ordered startup sequence\",\"Run independent read-only checks together and report all failures\",\"Let modules initialize in implementation-defined order\"],\"default_guess\":\"Use a single explicit sequence: secure configuration, secure and locked data directory, store integrity/open, pinned runtime and sandbox probe, recovery, then surface opening.\"}]}"
+}

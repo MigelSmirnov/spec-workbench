@@ -1,0 +1,402 @@
+{
+ "open_points": [
+  {
+   "subject": "Run M19 / draft-write authority M26",
+   "kind": "missing pin",
+   "text": "M19 pins only `flow_version_id`, while M26 requires a draft-write attempt to name “the flow activation under which the run started” by that activation’s store-order position.",
+   "question": "How does a run identify the exact FlowActivation under which it started when the same flow version can be activated more than once?",
+   "options": [
+    "Store the FlowActivation identity on the run",
+    "Derive an activation from store history",
+    "Treat the flow version itself as the authority"
+   ],
+   "default_guess": "Store the exact FlowActivation identity on the run at start."
+  },
+  {
+   "subject": "EffectAttempt not_applied lifecycle",
+   "kind": "contradiction",
+   "text": "M26 says “Sending again after `not_applied` is a new attempt under a fresh approval,” but A10 rule 1 says a 4xx attempt is also `not_applied`, concludes `operation_refused`, and “is never sent again.”",
+   "question": "Does the resend rule apply only to an `unknown` attempt resolved by the owner as `not_applied`, or also to a direct 4xx `not_applied` outcome?",
+   "options": [
+    "Only owner-resolved unknown outcomes may be resent",
+    "Every not_applied attempt may be resent",
+    "Use another status for direct 4xx outcomes"
+   ],
+   "default_guess": "Allow resend only after an unknown outcome is resolved `not_applied`, as A10 specifically states."
+  },
+  {
+   "subject": "Sandbox filesystem access",
+   "kind": "contradiction",
+   "text": "K-02 says a function has “no filesystem beyond its input,” while A03 permits opening paths inside “the exchange directory and the read-only runtime” and provides writable scratch space.",
+   "question": "May agent code itself read the runtime and use the exchange directory as a filesystem, or are those paths accessible only to the sandbox runner?",
+   "options": [
+    "Agent code may access both permitted areas",
+    "Only the runner may access the exchange directory",
+    "Agent code may read the runtime but may not use writable filesystem storage"
+   ],
+   "default_guess": "Permit agent code to read the runtime and use only its private bounded exchange directory."
+  },
+  {
+   "subject": "Sandbox clock prohibition",
+   "kind": "contradiction",
+   "text": "A03 says the runner replaces “every clock” entry point and K-02 says functions have no clock, but the closed release-v1 list omits standard-library clock readers such as `time.clock_gettime`, `time.clock_gettime_ns`, `time.thread_time`, `time.thread_time_ns` and `os.times`.",
+   "question": "Does the general no-clock rule require trapping omitted clock APIs, or does the written closed list define what release v1 actually permits?",
+   "options": [
+    "Trap every clock API, including omitted ones",
+    "Implement only the closed list and permit omitted APIs",
+    "Refuse the release until its closed list is complete"
+   ],
+   "default_guess": "Treat the no-clock invariant as controlling and refuse release v1 until the closed trap list covers the omitted APIs."
+  },
+  {
+   "subject": "Sandbox randomness",
+   "kind": "missing case",
+   "text": "A03 permits `random.Random(seed)` and forbids construction without a seed or with `None`, but says nothing about subsequently calling an instance’s `seed()` or `seed(None)`, which can obtain entropy.",
+   "question": "What happens when an explicitly seeded `random.Random` instance is later reseeded without an explicit non-null seed?",
+   "options": [
+    "Record a sandbox violation",
+    "Permit reseeding",
+    "Make such reseeding deterministic"
+   ],
+   "default_guess": "Trap `Random.seed()` and `Random.seed(None)` as sandbox violations."
+  },
+  {
+   "subject": "Deterministic function execution",
+   "kind": "unverifiable invariant",
+   "text": "K-05 calls admission deterministic and A03 requires that the same implementation and input yield the same output digest, but the rules neither constrain all observable Python/runtime nondeterminism nor specify a check for differing repeated results.",
+   "question": "What must the kernel do if identical code and inputs produce different outputs across executions?",
+   "options": [
+    "Detect and classify nondeterminism",
+    "Accept each observation independently",
+    "Strengthen the runtime so divergence is impossible"
+   ],
+   "default_guess": "Treat differing repeated observations as a sandbox violation and refuse admission."
+  },
+  {
+   "subject": "Function process_count bound",
+   "kind": "vague limit",
+   "text": "A03 says `process_count` is enforced with `setrlimit`, but does not say whether the initial interpreter/runner counts toward the bound or exactly which processes are counted.",
+   "question": "What does a contract bound such as `process_count: 1` permit?",
+   "options": [
+    "Only the initial sandbox process",
+    "The initial process plus one child",
+    "Only child processes are counted"
+   ],
+   "default_guess": "Count every process in the sandbox, including the initial interpreter."
+  },
+  {
+   "subject": "FlowVersion identity and proof edge order",
+   "kind": "order ambiguity",
+   "text": "A01 sorts edges using A05’s tuple (`to_node`, `to_port`, `from_node`, `from_port`), but that tuple does not distinguish edges with the same endpoints and different guards.",
+   "question": "How are same-endpoint edges with different guard ports or values ordered for identity hashing and first-failure reporting?",
+   "options": [
+    "Extend the order with guard port and canonical guard value",
+    "Preserve submitted order as a tie-breaker",
+    "Refuse all repeated endpoint tuples during composition"
+   ],
+   "default_guess": "Extend the order with the guard endpoint and canonical guard value."
+  },
+  {
+   "subject": "FlowConstant identity and proof order",
+   "kind": "order ambiguity",
+   "text": "Constants are ordered only by (`to_node`, `to_port`), although composition can retain multiple constants for the same destination until fan-in checking and those constants can contain different schemas or values.",
+   "question": "Which same-destination constant is examined first and how is their order canonicalized for `flow_version_id`?",
+   "options": [
+    "Extend the order with schema, class and value identity",
+    "Preserve request order",
+    "Refuse duplicate destinations during composition"
+   ],
+   "default_guess": "Extend the canonical order with the constant’s schema, class and value identity."
+  },
+  {
+   "subject": "Flow endpoint ordering",
+   "kind": "order ambiguity",
+   "text": "A05 assigns a flow endpoint the empty string for node ordering but does not forbid a flow node whose `node_id` is the empty string or define a tie-breaker between endpoint kinds.",
+   "question": "Are empty node identifiers forbidden, or how are a flow endpoint and a node with the same ordering key distinguished?",
+   "options": [
+    "Forbid empty node_id values",
+    "Order by endpoint kind before the string",
+    "Allow the tie and preserve input order"
+   ],
+   "default_guess": "Forbid an empty `node_id`."
+  },
+  {
+   "subject": "Mapped-element ordering",
+   "kind": "order ambiguity",
+   "text": "A14 orders elements by (`node_id`, `map_index`) and says an absent index precedes index 0, but never states how two numeric map indices are compared.",
+   "question": "Are map indices ordered numerically, lexically after conversion to text, or by record order?",
+   "options": [
+    "Numeric ascending order",
+    "Lexical string order",
+    "Store order"
+   ],
+   "default_guess": "Use numeric ascending order, with an absent index first."
+  },
+  {
+   "subject": "Flow port validation",
+   "kind": "missing refusal conditions",
+   "text": "A05 rule 7 lists composition refusals for repeated names, file carriage and disclosure-class placement, but does not say whether other M01 facts are validated, including supported schemas, legal cardinality and absence of `media_type` on value ports.",
+   "question": "Which invalid flow-port declarations make composition malformed, and in what order are those checks made?",
+   "options": [
+    "Apply all applicable M01/A02 port checks at composition",
+    "Keep the version and report them during proof",
+    "Rely solely on the surface request schema"
+   ],
+   "default_guess": "Apply all applicable port checks during composition before keeping the version."
+  },
+  {
+   "subject": "FlowConstant declared schema",
+   "kind": "missing refusal condition",
+   "text": "Composition validates that a constant’s value fits its declared schema, but does not require that declared schema to be in the kernel’s supported JSON Schema subset.",
+   "question": "Is a constant using an unsupported schema refused during composition, kept to fail proof, or accepted for validation by another schema implementation?",
+   "options": [
+    "Refuse it during composition",
+    "Keep it and fail proof",
+    "Allow any JSON Schema for constants"
+   ],
+   "default_guess": "Refuse it during composition using the same supported subset as ports."
+  },
+  {
+   "subject": "OperationBinding schemas",
+   "kind": "vague validation",
+   "text": "A08 says binding ports must not “break a rule A02 sets for contract ports,” then names only uniqueness and media-type examples while binding disclosure rules deliberately differ from contract ports.",
+   "question": "Does a binding proposal have to use the same supported JSON Schema subset and all other applicable port constraints as a contract?",
+   "options": [
+    "Apply every compatible A02/M01 port constraint",
+    "Apply only the constraints explicitly repeated in A08",
+    "Defer unsupported schemas until invocation"
+   ],
+   "default_guess": "Apply every compatible A02/M01 port constraint, excluding only contract-specific disclosure and output-count rules."
+  },
+  {
+   "subject": "Mapped value inputs and NodeExecution references",
+   "kind": "missing representation",
+   "text": "M23 requires inputs to reference StoredValues by `value_id`, while mapping passes one element of a `many` JSON array and A13 defines only the list’s StoredValue, not a StoredValue or reference for each input element.",
+   "question": "What value reference does each mapped element’s NodeExecution record for the element taken from the input array?",
+   "options": [
+    "Create a StoredValue for each element",
+    "Reference the parent array plus map_index",
+    "Embed derived element facts without a StoredValue"
+   ],
+   "default_guess": "Reference the parent array’s StoredValue together with the numeric map index."
+  },
+  {
+   "subject": "Empty mapped file outputs",
+   "kind": "missing representation",
+   "text": "A13 says an empty mapped execution writes one NodeExecution with every output an empty list and its class, while M23 represents file outputs only as SpooledFile facts and an empty file list has no SpooledFile carrying that class.",
+   "question": "How is an empty `many` file output and its disclosure class represented in the NodeExecution?",
+   "options": [
+    "Use a distinct typed empty-file-list reference",
+    "Store an empty list plus class directly in the port reference",
+    "Use a StoredValue despite file carriage"
+   ],
+   "default_guess": "Use an explicit empty file-list reference containing the port, empty items and disclosure class."
+  },
+  {
+   "subject": "Execution disclosure class",
+   "kind": "missing base case",
+   "text": "A07 defines an execution’s class as the highest class among its inputs and, for operations, outputs, but gives no result when an operation has neither inputs nor outputs.",
+   "question": "What disclosure class does an inputless and outputless operation execution have?",
+   "options": [
+    "open",
+    "The binding’s highest declared class, with open if none",
+    "No class, making its failure detail unavailable"
+   ],
+   "default_guess": "Use `open` for an empty set."
+  },
+  {
+   "subject": "Redacted failure_detail length",
+   "kind": "vague output",
+   "text": "A07 says an agent receives only a failure detail’s “length and that class” when its class is above `open`, without defining the length measure.",
+   "question": "Is the disclosed length counted in UTF-8 bytes, Unicode code points, or another unit?",
+   "options": [
+    "UTF-8 bytes",
+    "Unicode code points",
+    "Characters after truncation as defined by the client language"
+   ],
+   "default_guess": "Report UTF-8 byte length, matching the detail ceiling."
+  },
+  {
+   "subject": "EffectAttempt resolution time",
+   "kind": "missing lifecycle fact",
+   "text": "M26 has `recorded_at`, `concluded_at` and `resolved_by`, but no `resolved_at`; A11 changes an `unknown` attempt to `applied` or `not_applied` later without saying whether `concluded_at` is preserved or replaced.",
+   "question": "What timestamp records the owner’s resolution, and does resolving an unknown attempt change `concluded_at`?",
+   "options": [
+    "Add a separate resolution timestamp",
+    "Replace concluded_at with the resolution time",
+    "Keep only the time the attempt first became unknown"
+   ],
+   "default_guess": "Preserve `concluded_at` and record a separate resolution timestamp."
+  },
+  {
+   "subject": "StandingGrant target",
+   "kind": "missing refusal condition",
+   "text": "A10 permits a grant for “a node of the flow’s active version whose effect class is not `destructive`,” but a function node has no effect class and the rule never explicitly requires an operation node.",
+   "question": "What happens when the owner asks to grant a function node?",
+   "options": [
+    "Refuse because only operation nodes are grantable",
+    "Accept an inert grant",
+    "Treat a function as read"
+   ],
+   "default_guess": "Refuse the request because standing grants apply only to operation nodes."
+  },
+  {
+   "subject": "Manifest revision access",
+   "kind": "missing mechanism",
+   "text": "M28 and A08 require records to be read from `manifest_location` “at the configured `manifest_revision`,” but do not define how a revision is resolved or what happens when it is unavailable.",
+   "question": "How does the kernel read an exact repository revision, and is an absent or invalid revision a start failure or a per-binding manifest mismatch?",
+   "options": [
+    "Read repository blobs directly at the revision and refuse startup if it is invalid",
+    "Require the host to present a checkout already fixed at that revision",
+    "Treat revision failures as per-operation absent records"
+   ],
+   "default_guess": "Read immutable repository content at the configured revision and refuse startup if the revision cannot be resolved."
+  },
+  {
+   "subject": "api_base_url validity and joining",
+   "kind": "vague URL semantics",
+   "text": "A08 requires only an absolute HTTP(S) URL with a host, while A09 forms the target by removing a trailing slash and appending the operation path; user information, query, fragment, multiple trailing slashes and a non-root base path are not addressed.",
+   "question": "Which base-URL components are allowed, and exactly how are base paths and trailing slashes joined to the declared operation path?",
+   "options": [
+    "Allow only scheme, host, optional port and an optional normalized base path with no query, fragment or userinfo",
+    "Allow every absolute URL and use standard URL resolution",
+    "Concatenate text exactly after removing one trailing slash"
+   ],
+   "default_guess": "Reject userinfo, query and fragment, preserve a valid base path, remove all trailing slashes, then append the declared absolute path."
+  },
+  {
+   "subject": "HTTP loopback exception",
+   "kind": "vague refusal condition",
+   "text": "A09 allows plain HTTP when the `api_base_url` host “is a loopback address” but does not say whether this means only an IP literal, a hostname such as `localhost`, or any name that resolves to loopback.",
+   "question": "Which hosts qualify for the loopback HTTP exception?",
+   "options": [
+    "Only IPv4 or IPv6 loopback literals",
+    "Loopback literals and `localhost`",
+    "Any hostname whose current DNS answer is loopback"
+   ],
+   "default_guess": "Allow only syntactically parsed IPv4/IPv6 loopback literals."
+  },
+  {
+   "subject": "Path placeholder cardinality",
+   "kind": "missing proposal check",
+   "text": "A09 requires a path placeholder’s input schema type to be string or integer but does not require that port’s cardinality be `one`; a `many` port delivers a list that cannot be placed as one path segment.",
+   "question": "May a `many` input port be used for a path placeholder?",
+   "options": [
+    "Refuse the binding proposal",
+    "Accept it and fail every incompatible invocation at pre-send",
+    "Encode the whole list into one segment"
+   ],
+   "default_guess": "Refuse the binding proposal unless every placeholder port has cardinality `one`."
+  },
+  {
+   "subject": "Multipart Content-Disposition",
+   "kind": "missing encoding rule",
+   "text": "A09 inserts arbitrary port names into `name=\"<port>\"` and `filename=\"<port>\"` but defines no allowed character set or escaping for quotes, backslashes, controls or non-ASCII text.",
+   "question": "Which port names are legal in multipart bindings, and how are names and filenames encoded or escaped?",
+   "options": [
+    "Restrict multipart port names to a safe ASCII token grammar",
+    "Define quoted-string escaping and UTF-8 handling",
+    "Use RFC 5987-style extended parameters"
+   ],
+   "default_guess": "Reject multipart bindings whose port names are not safe ASCII field names."
+  },
+  {
+   "subject": "Outbound HTTP protocol",
+   "kind": "missing transport choice",
+   "text": "A09 and A10 prescribe an exact header set, a `Host` header, status lines and `Content-Length`, but do not say whether requests use HTTP/1.1, HTTP/2 or another negotiated protocol.",
+   "question": "Which HTTP protocol versions may the invoker use, especially where HTTP/2 would replace Host with pseudo-headers and add protocol-controlled fields?",
+   "options": [
+    "HTTP/1.1 only",
+    "HTTP/1.1 or HTTP/2 with equivalent semantic fields",
+    "Use the client library’s negotiated default"
+   ],
+   "default_guess": "Use HTTP/1.1 only so the specified wire request and first-byte rules are observable as written."
+  },
+  {
+   "subject": "External configuration and manifest sizes",
+   "kind": "unbounded input",
+   "text": "A20 bounds surface requests, values, files and service responses, but no ceiling is given for the installation file, manifest files, manifest header values, URLs or credential files; A10 may persist those manifest-derived fields in approval previews.",
+   "question": "What size limits apply to these host- and manifest-controlled inputs, and what refusal or start failure occurs when one exceeds them?",
+   "options": [
+    "Add release ceilings for each external file and manifest-derived string",
+    "Apply existing request/text ceilings to them",
+    "Leave them unbounded"
+   ],
+   "default_guess": "Apply explicit release ceilings and fail startup for oversized installation data, manifest mismatch for oversized manifest data, and `credential_unresolved` for an oversized credential."
+  },
+  {
+   "subject": "Token configuration reread",
+   "kind": "state ambiguity",
+   "text": "A16 compares the file with “the last read” and rereads when bytes differ, but after an invalid changed configuration it says every request is refused “until a re-read passes” without saying whether the invalid file’s digest becomes the last-read digest.",
+   "question": "If a changed configuration is invalid and remains byte-for-byte unchanged, is it reparsed on every request or skipped because its digest is unchanged?",
+   "options": [
+    "Retry parsing on every request until valid",
+    "Remember the failed digest and refuse without reparsing until bytes change",
+    "Keep the prior valid digest as the comparison baseline"
+   ],
+   "default_guess": "Retry the invalid configuration on every request until a reread passes."
+  },
+  {
+   "subject": "Malformed MCP request check precedence",
+   "kind": "order contradiction",
+   "text": "A16 requires token checking before operation-schema validation, but a malformed message may not be parseable enough to locate or decode its token.",
+   "question": "What refusal is returned when the request bytes are within the size ceiling but cannot be parsed sufficiently to extract a token?",
+   "options": [
+    "Use the uniform token refusal",
+    "Use a malformed-request/schema refusal",
+    "Close the connection without an operation response"
+   ],
+   "default_guess": "Return the uniform token refusal unless a valid token can be extracted without accepting the malformed operation payload."
+  },
+  {
+   "subject": "Data-directory privacy check",
+   "kind": "vague start condition",
+   "text": "A18 says the data directory and “everything in it” must be private to the kernel’s user, but unlike A17 it gives no exact ownership, file-type or permission-mode test.",
+   "question": "Exactly which owners, file types and permission bits are accepted for the directory, database, value area, fixtures and spool contents?",
+   "options": [
+    "Require kernel-user ownership and no group/other permissions everywhere",
+    "Require only that effective access is exclusive",
+    "Apply strict checks only to files containing payload bytes"
+   ],
+   "default_guess": "Require kernel-user ownership, regular files or real directories as appropriate, and no group or other permission bits for every entry."
+  },
+  {
+   "subject": "Concurrent surface request order",
+   "kind": "vague ordering",
+   "text": "A18 says requests are handled one at a time “in the order they arrive,” but gives no observable definition of arrival when multiple MCP requests are received concurrently.",
+   "question": "What event fixes request order for concurrent arrivals?",
+   "options": [
+    "Completion of full message receipt",
+    "First byte receipt",
+    "A monotonically assigned accept/dispatch sequence"
+   ],
+   "default_guess": "Assign a monotonic sequence when a complete request message is accepted and process that sequence."
+  },
+  {
+   "subject": "Kernel timestamps within one action",
+   "kind": "missing timing rule",
+   "text": "A19 requires every timestamp to come from the clock module but does not say whether one action or store transaction samples the clock once or separately for each timestamp field.",
+   "question": "Must related timestamps written by one atomic action be equal, and what order applies if the wall clock moves backward between reads?",
+   "options": [
+    "Sample once per store change",
+    "Sample separately for every field",
+    "Sample once per surface request"
+   ],
+   "default_guess": "Sample once per store change and use that value for all timestamps written by it."
+  },
+  {
+   "subject": "Sandbox cleanup failure response",
+   "kind": "missing action outcome",
+   "text": "A03 says a cleanup failure is recorded and “the kernel process stops,” while A14 explicitly says an `internal_error` answer is sent before stopping for store failures; A03 does not say whether the initiating request receives a response.",
+   "question": "After recording `cleanup_failed`, does the kernel return the failed execution/run state, return `internal_error`, or terminate before replying?",
+   "options": [
+    "Return the recorded failure, then stop",
+    "Return internal_error, then stop",
+    "Stop immediately without a response"
+   ],
+   "default_guess": "Return `internal_error` after the failure record commits, then stop."
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"Run M19 / draft-write authority M26\",\"kind\":\"missing pin\",\"text\":\"M19 pins only `flow_version_id`, while M26 requires a draft-write attempt to name “the flow activation under which the run started” by that activation’s store-order position.\",\"question\":\"How does a run identify the exact FlowActivation under which it started when the same flow version can be activated more than once?\",\"options\":[\"Store the FlowActivation identity on the run\",\"Derive an activation from store history\",\"Treat the flow version itself as the authority\"],\"default_guess\":\"Store the exact FlowActivation identity on the run at start.\"},{\"subject\":\"EffectAttempt not_applied lifecycle\",\"kind\":\"contradiction\",\"text\":\"M26 says “Sending again after `not_applied` is a new attempt under a fresh approval,” but A10 rule 1 says a 4xx attempt is also `not_applied`, concludes `operation_refused`, and “is never sent again.”\",\"question\":\"Does the resend rule apply only to an `unknown` attempt resolved by the owner as `not_applied`, or also to a direct 4xx `not_applied` outcome?\",\"options\":[\"Only owner-resolved unknown outcomes may be resent\",\"Every not_applied attempt may be resent\",\"Use another status for direct 4xx outcomes\"],\"default_guess\":\"Allow resend only after an unknown outcome is resolved `not_applied`, as A10 specifically states.\"},{\"subject\":\"Sandbox filesystem access\",\"kind\":\"contradiction\",\"text\":\"K-02 says a function has “no filesystem beyond its input,” while A03 permits opening paths inside “the exchange directory and the read-only runtime” and provides writable scratch space.\",\"question\":\"May agent code itself read the runtime and use the exchange directory as a filesystem, or are those paths accessible only to the sandbox runner?\",\"options\":[\"Agent code may access both permitted areas\",\"Only the runner may access the exchange directory\",\"Agent code may read the runtime but may not use writable filesystem storage\"],\"default_guess\":\"Permit agent code to read the runtime and use only its private bounded exchange directory.\"},{\"subject\":\"Sandbox clock prohibition\",\"kind\":\"contradiction\",\"text\":\"A03 says the runner replaces “every clock” entry point and K-02 says functions have no clock, but the closed release-v1 list omits standard-library clock readers such as `time.clock_gettime`, `time.clock_gettime_ns`, `time.thread_time`, `time.thread_time_ns` and `os.times`.\",\"question\":\"Does the general no-clock rule require trapping omitted clock APIs, or does the written closed list define what release v1 actually permits?\",\"options\":[\"Trap every clock API, including omitted ones\",\"Implement only the closed list and permit omitted APIs\",\"Refuse the release until its closed list is complete\"],\"default_guess\":\"Treat the no-clock invariant as controlling and refuse release v1 until the closed trap list covers the omitted APIs.\"},{\"subject\":\"Sandbox randomness\",\"kind\":\"missing case\",\"text\":\"A03 permits `random.Random(seed)` and forbids construction without a seed or with `None`, but says nothing about subsequently calling an instance’s `seed()` or `seed(None)`, which can obtain entropy.\",\"question\":\"What happens when an explicitly seeded `random.Random` instance is later reseeded without an explicit non-null seed?\",\"options\":[\"Record a sandbox violation\",\"Permit reseeding\",\"Make such reseeding deterministic\"],\"default_guess\":\"Trap `Random.seed()` and `Random.seed(None)` as sandbox violations.\"},{\"subject\":\"Deterministic function execution\",\"kind\":\"unverifiable invariant\",\"text\":\"K-05 calls admission deterministic and A03 requires that the same implementation and input yield the same output digest, but the rules neither constrain all observable Python/runtime nondeterminism nor specify a check for differing repeated results.\",\"question\":\"What must the kernel do if identical code and inputs produce different outputs across executions?\",\"options\":[\"Detect and classify nondeterminism\",\"Accept each observation independently\",\"Strengthen the runtime so divergence is impossible\"],\"default_guess\":\"Treat differing repeated observations as a sandbox violation and refuse admission.\"},{\"subject\":\"Function process_count bound\",\"kind\":\"vague limit\",\"text\":\"A03 says `process_count` is enforced with `setrlimit`, but does not say whether the initial interpreter/runner counts toward the bound or exactly which processes are counted.\",\"question\":\"What does a contract bound such as `process_count: 1` permit?\",\"options\":[\"Only the initial sandbox process\",\"The initial process plus one child\",\"Only child processes are counted\"],\"default_guess\":\"Count every process in the sandbox, including the initial interpreter.\"},{\"subject\":\"FlowVersion identity and proof edge order\",\"kind\":\"order ambiguity\",\"text\":\"A01 sorts edges using A05’s tuple (`to_node`, `to_port`, `from_node`, `from_port`), but that tuple does not distinguish edges with the same endpoints and different guards.\",\"question\":\"How are same-endpoint edges with different guard ports or values ordered for identity hashing and first-failure reporting?\",\"options\":[\"Extend the order with guard port and canonical guard value\",\"Preserve submitted order as a tie-breaker\",\"Refuse all repeated endpoint tuples during composition\"],\"default_guess\":\"Extend the order with the guard endpoint and canonical guard value.\"},{\"subject\":\"FlowConstant identity and proof order\",\"kind\":\"order ambiguity\",\"text\":\"Constants are ordered only by (`to_node`, `to_port`), although composition can retain multiple constants for the same destination until fan-in checking and those constants can contain different schemas or values.\",\"question\":\"Which same-destination constant is examined first and how is their order canonicalized for `flow_version_id`?\",\"options\":[\"Extend the order with schema, class and value identity\",\"Preserve request order\",\"Refuse duplicate destinations during composition\"],\"default_guess\":\"Extend the canonical order with the constant’s schema, class and value identity.\"},{\"subject\":\"Flow endpoint ordering\",\"kind\":\"order ambiguity\",\"text\":\"A05 assigns a flow endpoint the empty string for node ordering but does not forbid a flow node whose `node_id` is the empty string or define a tie-breaker between endpoint kinds.\",\"question\":\"Are empty node identifiers forbidden, or how are a flow endpoint and a node with the same ordering key distinguished?\",\"options\":[\"Forbid empty node_id values\",\"Order by endpoint kind before the string\",\"Allow the tie and preserve input order\"],\"default_guess\":\"Forbid an empty `node_id`.\"},{\"subject\":\"Mapped-element ordering\",\"kind\":\"order ambiguity\",\"text\":\"A14 orders elements by (`node_id`, `map_index`) and says an absent index precedes index 0, but never states how two numeric map indices are compared.\",\"question\":\"Are map indices ordered numerically, lexically after conversion to text, or by record order?\",\"options\":[\"Numeric ascending order\",\"Lexical string order\",\"Store order\"],\"default_guess\":\"Use numeric ascending order, with an absent index first.\"},{\"subject\":\"Flow port validation\",\"kind\":\"missing refusal conditions\",\"text\":\"A05 rule 7 lists composition refusals for repeated names, file carriage and disclosure-class placement, but does not say whether other M01 facts are validated, including supported schemas, legal cardinality and absence of `media_type` on value ports.\",\"question\":\"Which invalid flow-port declarations make composition malformed, and in what order are those checks made?\",\"options\":[\"Apply all applicable M01/A02 port checks at composition\",\"Keep the version and report them during proof\",\"Rely solely on the surface request schema\"],\"default_guess\":\"Apply all applicable port checks during composition before keeping the version.\"},{\"subject\":\"FlowConstant declared schema\",\"kind\":\"missing refusal condition\",\"text\":\"Composition validates that a constant’s value fits its declared schema, but does not require that declared schema to be in the kernel’s supported JSON Schema subset.\",\"question\":\"Is a constant using an unsupported schema refused during composition, kept to fail proof, or accepted for validation by another schema implementation?\",\"options\":[\"Refuse it during composition\",\"Keep it and fail proof\",\"Allow any JSON Schema for constants\"],\"default_guess\":\"Refuse it during composition using the same supported subset as ports.\"},{\"subject\":\"OperationBinding schemas\",\"kind\":\"vague validation\",\"text\":\"A08 says binding ports must not “break a rule A02 sets for contract ports,” then names only uniqueness and media-type examples while binding disclosure rules deliberately differ from contract ports.\",\"question\":\"Does a binding proposal have to use the same supported JSON Schema subset and all other applicable port constraints as a contract?\",\"options\":[\"Apply every compatible A02/M01 port constraint\",\"Apply only the constraints explicitly repeated in A08\",\"Defer unsupported schemas until invocation\"],\"default_guess\":\"Apply every compatible A02/M01 port constraint, excluding only contract-specific disclosure and output-count rules.\"},{\"subject\":\"Mapped value inputs and NodeExecution references\",\"kind\":\"missing representation\",\"text\":\"M23 requires inputs to reference StoredValues by `value_id`, while mapping passes one element of a `many` JSON array and A13 defines only the list’s StoredValue, not a StoredValue or reference for each input element.\",\"question\":\"What value reference does each mapped element’s NodeExecution record for the element taken from the input array?\",\"options\":[\"Create a StoredValue for each element\",\"Reference the parent array plus map_index\",\"Embed derived element facts without a StoredValue\"],\"default_guess\":\"Reference the parent array’s StoredValue together with the numeric map index.\"},{\"subject\":\"Empty mapped file outputs\",\"kind\":\"missing representation\",\"text\":\"A13 says an empty mapped execution writes one NodeExecution with every output an empty list and its class, while M23 represents file outputs only as SpooledFile facts and an empty file list has no SpooledFile carrying that class.\",\"question\":\"How is an empty `many` file output and its disclosure class represented in the NodeExecution?\",\"options\":[\"Use a distinct typed empty-file-list reference\",\"Store an empty list plus class directly in the port reference\",\"Use a StoredValue despite file carriage\"],\"default_guess\":\"Use an explicit empty file-list reference containing the port, empty items and disclosure class.\"},{\"subject\":\"Execution disclosure class\",\"kind\":\"missing base case\",\"text\":\"A07 defines an execution’s class as the highest class among its inputs and, for operations, outputs, but gives no result when an operation has neither inputs nor outputs.\",\"question\":\"What disclosure class does an inputless and outputless operation execution have?\",\"options\":[\"open\",\"The binding’s highest declared class, with open if none\",\"No class, making its failure detail unavailable\"],\"default_guess\":\"Use `open` for an empty set.\"},{\"subject\":\"Redacted failure_detail length\",\"kind\":\"vague output\",\"text\":\"A07 says an agent receives only a failure detail’s “length and that class” when its class is above `open`, without defining the length measure.\",\"question\":\"Is the disclosed length counted in UTF-8 bytes, Unicode code points, or another unit?\",\"options\":[\"UTF-8 bytes\",\"Unicode code points\",\"Characters after truncation as defined by the client language\"],\"default_guess\":\"Report UTF-8 byte length, matching the detail ceiling.\"},{\"subject\":\"EffectAttempt resolution time\",\"kind\":\"missing lifecycle fact\",\"text\":\"M26 has `recorded_at`, `concluded_at` and `resolved_by`, but no `resolved_at`; A11 changes an `unknown` attempt to `applied` or `not_applied` later without saying whether `concluded_at` is preserved or replaced.\",\"question\":\"What timestamp records the owner’s resolution, and does resolving an unknown attempt change `concluded_at`?\",\"options\":[\"Add a separate resolution timestamp\",\"Replace concluded_at with the resolution time\",\"Keep only the time the attempt first became unknown\"],\"default_guess\":\"Preserve `concluded_at` and record a separate resolution timestamp.\"},{\"subject\":\"StandingGrant target\",\"kind\":\"missing refusal condition\",\"text\":\"A10 permits a grant for “a node of the flow’s active version whose effect class is not `destructive`,” but a function node has no effect class and the rule never explicitly requires an operation node.\",\"question\":\"What happens when the owner asks to grant a function node?\",\"options\":[\"Refuse because only operation nodes are grantable\",\"Accept an inert grant\",\"Treat a function as read\"],\"default_guess\":\"Refuse the request because standing grants apply only to operation nodes.\"},{\"subject\":\"Manifest revision access\",\"kind\":\"missing mechanism\",\"text\":\"M28 and A08 require records to be read from `manifest_location` “at the configured `manifest_revision`,” but do not define how a revision is resolved or what happens when it is unavailable.\",\"question\":\"How does the kernel read an exact repository revision, and is an absent or invalid revision a start failure or a per-binding manifest mismatch?\",\"options\":[\"Read repository blobs directly at the revision and refuse startup if it is invalid\",\"Require the host to present a checkout already fixed at that revision\",\"Treat revision failures as per-operation absent records\"],\"default_guess\":\"Read immutable repository content at the configured revision and refuse startup if the revision cannot be resolved.\"},{\"subject\":\"api_base_url validity and joining\",\"kind\":\"vague URL semantics\",\"text\":\"A08 requires only an absolute HTTP(S) URL with a host, while A09 forms the target by removing a trailing slash and appending the operation path; user information, query, fragment, multiple trailing slashes and a non-root base path are not addressed.\",\"question\":\"Which base-URL components are allowed, and exactly how are base paths and trailing slashes joined to the declared operation path?\",\"options\":[\"Allow only scheme, host, optional port and an optional normalized base path with no query, fragment or userinfo\",\"Allow every absolute URL and use standard URL resolution\",\"Concatenate text exactly after removing one trailing slash\"],\"default_guess\":\"Reject userinfo, query and fragment, preserve a valid base path, remove all trailing slashes, then append the declared absolute path.\"},{\"subject\":\"HTTP loopback exception\",\"kind\":\"vague refusal condition\",\"text\":\"A09 allows plain HTTP when the `api_base_url` host “is a loopback address” but does not say whether this means only an IP literal, a hostname such as `localhost`, or any name that resolves to loopback.\",\"question\":\"Which hosts qualify for the loopback HTTP exception?\",\"options\":[\"Only IPv4 or IPv6 loopback literals\",\"Loopback literals and `localhost`\",\"Any hostname whose current DNS answer is loopback\"],\"default_guess\":\"Allow only syntactically parsed IPv4/IPv6 loopback literals.\"},{\"subject\":\"Path placeholder cardinality\",\"kind\":\"missing proposal check\",\"text\":\"A09 requires a path placeholder’s input schema type to be string or integer but does not require that port’s cardinality be `one`; a `many` port delivers a list that cannot be placed as one path segment.\",\"question\":\"May a `many` input port be used for a path placeholder?\",\"options\":[\"Refuse the binding proposal\",\"Accept it and fail every incompatible invocation at pre-send\",\"Encode the whole list into one segment\"],\"default_guess\":\"Refuse the binding proposal unless every placeholder port has cardinality `one`.\"},{\"subject\":\"Multipart Content-Disposition\",\"kind\":\"missing encoding rule\",\"text\":\"A09 inserts arbitrary port names into `name=\\\"<port>\\\"` and `filename=\\\"<port>\\\"` but defines no allowed character set or escaping for quotes, backslashes, controls or non-ASCII text.\",\"question\":\"Which port names are legal in multipart bindings, and how are names and filenames encoded or escaped?\",\"options\":[\"Restrict multipart port names to a safe ASCII token grammar\",\"Define quoted-string escaping and UTF-8 handling\",\"Use RFC 5987-style extended parameters\"],\"default_guess\":\"Reject multipart bindings whose port names are not safe ASCII field names.\"},{\"subject\":\"Outbound HTTP protocol\",\"kind\":\"missing transport choice\",\"text\":\"A09 and A10 prescribe an exact header set, a `Host` header, status lines and `Content-Length`, but do not say whether requests use HTTP/1.1, HTTP/2 or another negotiated protocol.\",\"question\":\"Which HTTP protocol versions may the invoker use, especially where HTTP/2 would replace Host with pseudo-headers and add protocol-controlled fields?\",\"options\":[\"HTTP/1.1 only\",\"HTTP/1.1 or HTTP/2 with equivalent semantic fields\",\"Use the client library’s negotiated default\"],\"default_guess\":\"Use HTTP/1.1 only so the specified wire request and first-byte rules are observable as written.\"},{\"subject\":\"External configuration and manifest sizes\",\"kind\":\"unbounded input\",\"text\":\"A20 bounds surface requests, values, files and service responses, but no ceiling is given for the installation file, manifest files, manifest header values, URLs or credential files; A10 may persist those manifest-derived fields in approval previews.\",\"question\":\"What size limits apply to these host- and manifest-controlled inputs, and what refusal or start failure occurs when one exceeds them?\",\"options\":[\"Add release ceilings for each external file and manifest-derived string\",\"Apply existing request/text ceilings to them\",\"Leave them unbounded\"],\"default_guess\":\"Apply explicit release ceilings and fail startup for oversized installation data, manifest mismatch for oversized manifest data, and `credential_unresolved` for an oversized credential.\"},{\"subject\":\"Token configuration reread\",\"kind\":\"state ambiguity\",\"text\":\"A16 compares the file with “the last read” and rereads when bytes differ, but after an invalid changed configuration it says every request is refused “until a re-read passes” without saying whether the invalid file’s digest becomes the last-read digest.\",\"question\":\"If a changed configuration is invalid and remains byte-for-byte unchanged, is it reparsed on every request or skipped because its digest is unchanged?\",\"options\":[\"Retry parsing on every request until valid\",\"Remember the failed digest and refuse without reparsing until bytes change\",\"Keep the prior valid digest as the comparison baseline\"],\"default_guess\":\"Retry the invalid configuration on every request until a reread passes.\"},{\"subject\":\"Malformed MCP request check precedence\",\"kind\":\"order contradiction\",\"text\":\"A16 requires token checking before operation-schema validation, but a malformed message may not be parseable enough to locate or decode its token.\",\"question\":\"What refusal is returned when the request bytes are within the size ceiling but cannot be parsed sufficiently to extract a token?\",\"options\":[\"Use the uniform token refusal\",\"Use a malformed-request/schema refusal\",\"Close the connection without an operation response\"],\"default_guess\":\"Return the uniform token refusal unless a valid token can be extracted without accepting the malformed operation payload.\"},{\"subject\":\"Data-directory privacy check\",\"kind\":\"vague start condition\",\"text\":\"A18 says the data directory and “everything in it” must be private to the kernel’s user, but unlike A17 it gives no exact ownership, file-type or permission-mode test.\",\"question\":\"Exactly which owners, file types and permission bits are accepted for the directory, database, value area, fixtures and spool contents?\",\"options\":[\"Require kernel-user ownership and no group/other permissions everywhere\",\"Require only that effective access is exclusive\",\"Apply strict checks only to files containing payload bytes\"],\"default_guess\":\"Require kernel-user ownership, regular files or real directories as appropriate, and no group or other permission bits for every entry.\"},{\"subject\":\"Concurrent surface request order\",\"kind\":\"vague ordering\",\"text\":\"A18 says requests are handled one at a time “in the order they arrive,” but gives no observable definition of arrival when multiple MCP requests are received concurrently.\",\"question\":\"What event fixes request order for concurrent arrivals?\",\"options\":[\"Completion of full message receipt\",\"First byte receipt\",\"A monotonically assigned accept/dispatch sequence\"],\"default_guess\":\"Assign a monotonic sequence when a complete request message is accepted and process that sequence.\"},{\"subject\":\"Kernel timestamps within one action\",\"kind\":\"missing timing rule\",\"text\":\"A19 requires every timestamp to come from the clock module but does not say whether one action or store transaction samples the clock once or separately for each timestamp field.\",\"question\":\"Must related timestamps written by one atomic action be equal, and what order applies if the wall clock moves backward between reads?\",\"options\":[\"Sample once per store change\",\"Sample separately for every field\",\"Sample once per surface request\"],\"default_guess\":\"Sample once per store change and use that value for all timestamps written by it.\"},{\"subject\":\"Sandbox cleanup failure response\",\"kind\":\"missing action outcome\",\"text\":\"A03 says a cleanup failure is recorded and “the kernel process stops,” while A14 explicitly says an `internal_error` answer is sent before stopping for store failures; A03 does not say whether the initiating request receives a response.\",\"question\":\"After recording `cleanup_failed`, does the kernel return the failed execution/run state, return `internal_error`, or terminate before replying?\",\"options\":[\"Return the recorded failure, then stop\",\"Return internal_error, then stop\",\"Stop immediately without a response\"],\"default_guess\":\"Return `internal_error` after the failure record commits, then stop.\"}]}"
+}
