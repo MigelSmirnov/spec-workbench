@@ -126,7 +126,8 @@ def _precedents(case: Path, state: int) -> list[dict[str, Any]]:
             seen.add(topic["topic"])
             found.append({"id": f"P{len(found) + 1}", "round": source.get("round", summary["round"]),
                           "topic": topic["topic"], "kind": source["kind"],
-                          "quotes": list(source.get("quotes") or []), "why": source.get("why", "")})
+                          "quotes": list(source.get("quotes") or []), "why": source.get("why", ""),
+                          **({"deferred_to": source["deferred_to"]} if source.get("deferred_to") else {})})
     return found
 
 
@@ -210,6 +211,7 @@ def ask_round(case: Path, state: int, provider: Provider, runs: int = DEFAULT_RU
         (directory / f"review-{run}.json").write_text(json.dumps(review, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
     digests = {name: hashlib.sha256(body.encode("utf-8")).hexdigest() for _, name, body in texts}
     blocking = [t for t in repeated if t["judgement"]["blocking"]]
+    deferred = [t for t in repeated if t["judgement"].get("deferred_to")]
     previous = sorted(rounds_dir(case, state).glob("round-*/summary.json"))
     previous = [p for p in previous if p.parent != directory]
     before = json.loads(previous[-1].read_text(encoding="utf-8")) if previous else None
@@ -226,6 +228,7 @@ def ask_round(case: Path, state: int, provider: Provider, runs: int = DEFAULT_RU
         "judge": judged,
         "repeated_topics": len(repeated),
         "blocking_topics": len(blocking),
+        "deferred_topics": len(deferred),
         "clear": clear,
         "closed": bool(clear and before and _clear(before) and before.get("documents") == digests),
         "topics": topics,

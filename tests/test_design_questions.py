@@ -9,15 +9,19 @@ import design_questions
 from questions_workbench import documents, provider, service
 
 
+QUOTED_GAP = {"kind": "consequential_gap", "quotes": ["# State 0 — Demo"], "divergence": "a or b; the owner notices"}
+UNQUOTED_GAP = {"kind": "consequential_gap", "divergence": "a or b; the owner notices"}
+
+
 class FakeProvider:
     """Answers reviews from a script, groups points by their subject, and judges
-    every topic with `verdict` (by default a consequential gap)."""
+    every topic with `verdict` (by default a consequential gap quoting a passage)."""
 
     name = "fake"
 
     def __init__(self, reviews: list[list[dict]], verdict: dict | None = None):
         self.reviews = list(reviews)
-        self.verdict = verdict or {"kind": "consequential_gap", "divergence": "a or b; the owner notices"}
+        self.verdict = verdict or QUOTED_GAP
         self.judged: list[str] = []
 
     def complete(self, instruction: str, text: str):
@@ -195,6 +199,41 @@ def test_contradiction_and_consequential_gap_block_even_when_verified(tmp_path):
     summary, _ = _repeated(case, {"kind": "contradiction", "quotes": ["# State 0 — Demo", "## Model M01 — Thing"]})
     assert summary["topics"][0]["judgement"]["verified"] is True
     assert summary["blocking_topics"] == 1
+    summary, _ = _repeated(case, QUOTED_GAP)
+    assert summary["topics"][0]["judgement"]["verified"] is True
+    assert summary["blocking_topics"] == 1 and summary["deferred_topics"] == 0
+
+
+def test_a_consequential_gap_that_quotes_no_passage_is_deferred_not_blocking(tmp_path):
+    case = _case(tmp_path)
+    summary, _ = _repeated(case, UNQUOTED_GAP)
+    judgement = summary["topics"][0]["judgement"]
+    assert judgement["verified"] is True and judgement["blocking"] is False
+    assert judgement["deferred_to"] == "State 6 contracts or State 7 notes"
+    assert summary["clear"] is True and summary["deferred_topics"] == 1 and summary["blocking_topics"] == 0
+
+
+def test_a_consequential_gap_whose_quote_is_not_in_the_texts_blocks_unverified(tmp_path):
+    case = _case(tmp_path)
+    summary, _ = _repeated(case, {**QUOTED_GAP, "quotes": ["a passage nobody wrote anywhere"]})
+    judgement = summary["topics"][0]["judgement"]
+    assert judgement["blocking"] is True and "not found verbatim" in judgement["failure"]
+    assert "deferred_to" not in judgement
+
+
+def test_an_unquoted_gap_after_state_5_still_blocks(tmp_path):
+    from questions_workbench import judge
+    kept = judge.check(UNQUOTED_GAP, 6, "texts", None)
+    assert kept["blocking"] is True and "deferred_to" not in kept
+
+
+def test_a_deferred_gap_followed_as_precedent_stays_deferred(tmp_path):
+    case = _case(tmp_path)
+    _repeated(case, UNQUOTED_GAP)
+    summary, _ = _repeated(case, {"kind": "judged_before", "precedent": "P1"})
+    judgement = summary["topics"][0]["judgement"]
+    assert judgement["blocking"] is False and judgement["deferred_to"] == "State 6 contracts or State 7 notes"
+    assert summary["deferred_topics"] == 1
 
 
 def test_no_repeated_topic_asks_no_judge(tmp_path):
@@ -352,7 +391,7 @@ def test_judged_before_needs_an_offered_precedent(tmp_path):
 
 def test_a_blocking_judgement_is_no_precedent(tmp_path):
     case = _case(tmp_path)
-    _repeated(case, {"kind": "consequential_gap", "divergence": "a or b; the owner notices"})
+    _repeated(case, QUOTED_GAP)
     _, provider = _repeated(case, {"kind": "judged_before", "precedent": "P1"})
     assert "=== PRIOR JUDGEMENTS" not in provider.judged[0]
 
@@ -370,7 +409,7 @@ def test_precedents_come_from_the_latest_judged_rounds_only(tmp_path):
     case = _case(tmp_path)
     _repeated(case, {"kind": "answered", "quotes": ["## Model M01 — Thing"]})
     for _ in range(service.PRECEDENT_ROUNDS):
-        _repeated(case, {"kind": "consequential_gap", "divergence": "a or b; the owner notices"})
+        _repeated(case, QUOTED_GAP)
     assert service._precedents(case, 1) == []
 
 

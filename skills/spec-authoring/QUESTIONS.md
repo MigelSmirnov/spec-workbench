@@ -51,13 +51,31 @@ repeated topic into one kind, and only two kinds keep a state open:
 | kind | means | evidence the tool checks | blocks |
 |---|---|---|---|
 | `contradiction` | two passages say different things | two quotes, verbatim in the texts | yes |
-| `consequential_gap` | two careful implementers build different behaviour that the owner, an agent, a caller or a service notices | the two behaviours and who notices | yes |
+| `consequential_gap` | two careful implementers build different behaviour that the owner, an agent, a caller or a service notices | the two behaviours and who notices; any quote verbatim in the texts | yes, when it quotes a passage; deferred otherwise (below) |
 | `answered` | the texts already answer it | the answering quote, verbatim in the texts | no |
 | `answered_later` | only with `--provider codex`: a later state's text already decides it | the deciding quote, verbatim in the later states' texts | no |
 | `later_state` | it belongs to a later state | a state number after this one | no |
 | `judged_before` | the same question a recent round already judged non-blocking, on passages that have not changed | the prior judgement's id; its quotes still verbatim in the texts | no |
 | `indifferent` | no one acts differently on any answer | the reason | no |
 | `preexisting` | only with `--since`: about a passage the change did not touch | the quote, verbatim in both versions | no |
+
+### A gap no passage speaks to
+
+On Cabinet Kernel States 2 and 5 (2026-10-05) the last three waves each raised
+one new topic, never asked before, always a `consequential_gap` with no quote
+and no contradiction: sandbox standard streams, the MCP listener binding, the
+manifest size, what `process_count` counts. Each was a real question, but an
+implementation detail no design passage spoke to, and a state needs two clean
+waves in a row, which a fresh such topic every wave makes unlikely.
+
+So a `consequential_gap` that quotes no passage does not block a state up to
+State 5. The round keeps it with `deferred_to` ("State 6 contracts or State 7
+notes") and counts it in `deferred_topics`; it must be answered there before
+the case is assembled. A gap that quotes a passage still blocks, and its quotes
+must be found verbatim — a gap anchored in a text is a defect of that text. A
+deferred judgement followed as `judged_before` stays deferred. The judge is told
+to quote every passage that bears on the gap, so a gap is deferred only when the
+texts are silent. Decided by the owner 2026-10-05.
 
 ### Topics a later state already decides
 
