@@ -107,13 +107,36 @@ page_size <= page_size_max
 ### Required tests
 
 1. Each owner-only action attempted with an authoring agent token is refused.
+   [witness: verification:kernel_a16_owner_only_actions_refuse_agents]
 2. An unknown token asking for an existing and for a missing run gets the same
    refusal.
+   [witness: verification:kernel_a16_unknown_token_uniform_refusal]
 3. Removing an agent token from the configuration refuses that agent's next
    request without a restart.
+   [witness: verification:kernel_a16_revoked_token_refused_without_restart]
 4. A request with an unknown field is refused before any record is read.
+   [witness: verification:kernel_a16_schema_checked_before_record_read]
 5. A purpose containing template or SQL syntax is stored and returned verbatim.
+   [witness: verification:kernel_a16_agent_text_stored_verbatim]
 6. No response on an internal error contains a path or a stack trace.
+7. An author action (author a contract or an implementation, add a trial case)
+   is refused with the token of an agent without the author right and with the
+   owner token.
+   [witness: verification:kernel_a16_author_actions_need_author_right]
+8. The installation refuses to start, and a configuration re-read refuses every
+   request, when two tokens are equal or two agent tokens share a name; a token
+   is compared in constant time with the owner token and with each agent token.
+   [witness: verification:kernel_a16_token_match_unique_constant_time]
+9. A request one byte over `surface_request_bytes_max` that carries an unknown
+   token gets the size refusal, not the token refusal; a string field one byte
+   over its bound is refused before any record is read.
+   [witness: verification:kernel_a16_request_size_and_field_bounds]
+10. A list request with a page size of `page_size_max` + 1 or of 0 is refused;
+    one without a size returns at most `page_size_default` items.
+    [witness: verification:kernel_a16_page_size_bounded]
+11. Authoring an implementation whose code would write a marker file when
+    imported or evaluated writes no marker.
+    [witness: verification:kernel_a16_agent_code_not_run_in_kernel]
 
 ### Consequence
 
@@ -172,10 +195,21 @@ config_file_mode -> owner_only_readable
 
 ### Required tests
 
-1. A canary credential appears in no record, trace, preview, log or response after
-   a run that used it.
+1. A canary credential appears in no store record, trace, preview, failure
+   detail, log line, process argument or response after a run that used it.
+   [witness: verification:kernel_a17_canary_credential_never_written]
 2. A configuration file readable by others stops the start.
+   [witness: verification:kernel_a17_config_file_owner_only]
 3. No request field can make an operation node reach another instance.
+   [witness: verification:kernel_a17_instance_fixed_by_installation]
+4. A service answer whose body echoes the canary credential verbatim, with a
+   2xx status, is withheld and never used as an output.
+   [witness: verification:kernel_a17_echoed_credential_body_withheld]
+5. With service A given a canary credential and service B none: the kernel
+   starts while A's secret file is missing; a request to B fails its pre-send
+   check `credential_unresolved`; after A's secret file is written, the next
+   request to A carries its value without a restart.
+   [witness: verification:kernel_a17_credential_resolved_per_request]
 
 ### Consequence
 
@@ -229,9 +263,20 @@ symlink_inside(data_directory) -> refused
 ### Required tests
 
 1. A second kernel on the same data directory refuses to start.
+   [witness: verification:kernel_a18_single_process_lock]
 2. A crash during a value write leaves either no file or the complete file.
+   [witness: verification:kernel_a18_value_write_atomic_publish]
 3. A failed store call leaves no partial record.
-4. A symbolic link in the value area stops the start.
+   [witness: verification:kernel_a18_failed_store_call_writes_nothing]
+4. A symbolic link in the value area stops the start; one placed there after
+   the start makes the store call that meets it fail with nothing written.
+   [witness: verification:kernel_a18_symlink_in_data_dir_refused]
+5. A value write whose bytes do not match their digest or size publishes no
+   file; writing equal bytes again leaves the published file unchanged.
+   [witness: verification:kernel_a18_published_file_digest_never_overwritten]
+6. No module other than the store module opens the database or opens, names or
+   passes a transaction.
+   [witness: verification:kernel_a18_store_module_sole_transaction_owner]
 
 ### Consequence
 
@@ -266,8 +311,17 @@ stored(monotonic_reading) -> never
 
 1. With an injected fixed clock, the same test sequence writes the same
    timestamps.
+   [witness: verification:kernel_a19_timestamps_from_injected_clock]
 2. A service answer with a timestamp far in the future changes no kernel record's
    time or order.
+   [witness: verification:kernel_a19_service_timestamp_not_kernel_time]
+3. No operation schema has a field for the current time; a request adding one
+   is refused as an unknown field.
+   [witness: verification:kernel_a19_request_cannot_supply_time]
+4. With the clock module's monotonic source fixed to a sentinel value, a run
+   with a sandbox execution and an HTTP request leaves the sentinel in no
+   stored record.
+   [witness: verification:kernel_a19_monotonic_reading_never_stored]
 
 ### Consequence
 
@@ -336,7 +390,16 @@ dependencies pinned_by_release
 ### Required tests
 
 1. Changing an environment variable does not change any ceiling.
+   [witness: verification:kernel_a20_ceiling_not_overridable_by_env]
 2. A request one byte over `surface_request_bytes_max` is refused.
+   [witness: verification:kernel_a20_over_ceiling_refused_not_truncated]
+3. Every ceiling the kernel reads is the release constant
+   `RELEASE_CEILING_<NAME>` with the value of the release table, and no module
+   defines a second default.
+   [witness: verification:kernel_a20_ceilings_equal_release_constants]
+4. The release pins an exact version of every Python dependency and of the
+   sandbox runtime, and the sandbox interpreter is CPython 3.12.
+   [witness: verification:kernel_a20_dependencies_pinned_by_release]
 
 ### Consequence
 
@@ -365,7 +428,9 @@ state2_security_gate_pass
 ### Required tests
 
 1. `design_lint --state 2` accepts exactly one complete review record.
+   [witness: verification:kernel_a21_security_review_gate_complete]
 2. Every reference resolves to an indexed State 2 decision.
+   [witness: verification:kernel_a21_security_references_resolve]
 
 ### Consequence
 

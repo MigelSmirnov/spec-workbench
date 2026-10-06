@@ -106,16 +106,31 @@ proof(version) recomputed_on_demand   (not persisted)
 
 1. A flow with a cycle and an edge between different schemas fails in phase 3 at
    that edge, not at the cycle.
+   [witness: verification:kernel_a05_first_failure_by_phase_order]
 2. Two failing edges report the one first in edge order, every time.
+   [witness: verification:kernel_a05_first_failure_in_edge_order]
 3. Two unguarded edges into one `many` input are refused in phase 6.
+   [witness: verification:kernel_a05_fan_in_one_delivering_edge_per_port]
 4. Two edges guarded on the same port with values `new` and `duplicate` into one
    input are proven.
+   [witness: verification:kernel_a05_exclusive_guards_share_input_port]
 5. A version refused because its binding is `proposed` is proven after the owner
    accepts the binding, with the same `flow_version_id`.
+   [witness: verification:kernel_a05_proof_recomputed_on_demand]
 6. A function node whose output reaches nothing is refused in phase 9.
 7. A constant whose value does not fit the schema declared with it is refused
    at composition and records nothing; one whose declared schema differs from
    its port's stored schema is kept and fails in phase 2.
+8. An edge into node `Z` and an edge into node `a`, each between different
+   schemas, fail in phase 3 at the edge into `Z`; with a third such edge into a
+   flow output added, the proof fails at that edge instead.
+   [witness: verification:kernel_a05_codepoint_identifier_order]
+9. A proven version with no operation node has `highest_effect_class` `read`;
+   one with a `read` and a `draft-write` operation node has `draft-write`.
+   [witness: verification:kernel_a05_highest_effect_class_max_or_read]
+10. Two edges guarded on the same port with the same value into one input are
+    refused in phase 6.
+    [witness: verification:kernel_a05_same_guard_value_edges_refused]
 
 ### Consequence
 
@@ -160,10 +175,20 @@ new_flow_version -/> inherits(activation | grant | approval)
 
 1. A proven read-only flow asked for by an agent is active at once and records the
    kernel as actor.
-2. Adding one `draft-write` node produces a version an agent cannot activate and
-   the owner can.
+   [witness: verification:kernel_a06_read_only_flow_activated_by_kernel]
+2. Adding one `draft-write` node produces a version an agent cannot activate —
+   the refusal keeps nothing for the owner — and the owner can.
+   [witness: verification:kernel_a06_effectful_flow_owner_only_activation]
 3. Activating the active version again records nothing.
 4. A run started before a new activation finishes on its pinned version.
+5. Activating a version whose proof failed because its binding was `proposed`
+   is refused with that proof failure; after the owner accepts the binding, the
+   owner activating the same version succeeds with no new version.
+   [witness: verification:kernel_a06_activation_proves_version_again]
+6. A new version of an owner-activated flow with a `draft-write` node, differing
+   only in one constant, is not active, and no approval or standing grant of the
+   earlier version applies to it.
+   [witness: verification:kernel_a06_new_version_inherits_nothing]
 
 ### Consequence
 
@@ -218,12 +243,19 @@ lowers_class(any construct) -> never
 
 1. A function that receives a `personal_data` value and returns an integer yields
    an output of class `personal_data`.
+   [witness: verification:kernel_a07_function_output_takes_max_input_class]
 2. A path from a personal-data read through two functions into an input accepting
    `business_confidential` is refused by the proof.
+   [witness: verification:kernel_a07_proof_refuses_class_above_accepted]
 3. An agent reading that run receives digests and classes for the personal-data
    values and content for the rest; the owner receives all content.
+   [witness: verification:kernel_a07_agent_gets_personal_data_as_digest]
 4. An agent reading the approval preview of such a node receives no personal-data
    value.
+   [witness: verification:kernel_a07_preview_hides_personal_data_from_agent]
+5. A function node with no inputs yields an output of class `open`, at proof
+   time and at run time.
+   [witness: verification:kernel_a07_inputless_function_output_open]
 
 ### Consequence
 

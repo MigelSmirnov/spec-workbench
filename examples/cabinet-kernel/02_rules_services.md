@@ -99,14 +99,27 @@ digest_mismatch -> operation_failed(binding_stale) AND nothing_sent
 ### Required tests
 
 1. A proposal for an operation exposed only over `mcp` is refused naming rule 3.
+   [witness: verification:kernel_a08_invocable_only_single_http_route]
 2. A proposal for a `draft-write` operation whose key field `material_id` is not
    an input port is refused.
+   [witness: verification:kernel_a08_non_read_key_field_must_be_input_port]
 3. Editing another capability's `note` in the same service record leaves the
    binding invocable.
+   [witness: verification:kernel_a08_digest_covers_only_own_capability_entry]
 4. After a restart with a revision that changes the operation's entry, the node
    concludes `binding_stale` and no request reaches the service.
+   [witness: verification:kernel_a08_changed_digest_stale_nothing_sent]
 5. A proposal that states its own effect class is refused; the manifest's class is
    the binding's.
+6. A record present only under another file name in `manifest_location`, or
+   only at a revision other than the configured one, is not read: the proposal
+   is refused naming the absent record. A record whose `service` field differs
+   from `service_id` is refused naming that check, and a `service_id` holding an
+   uppercase letter or a `/` is refused before any path is built.
+   [witness: verification:kernel_a08_record_read_only_at_pinned_path]
+7. A proposal for an operation whose `exposed_as.http_api` names two routes, or
+   one route with text before the method, is refused naming rule 3.
+   [witness: verification:kernel_a08_several_http_routes_not_invocable]
 
 ### Consequence
 
@@ -251,20 +264,31 @@ credential_bytes IN body -> failure_detail = withheld_note AND outputs = none
 
 1. A `POST` whose connection drops after the request was written concludes
    `outcome_unknown` and no second request is sent.
+   [witness: verification:kernel_a09_possibly_sent_outcome_unknown_no_retry]
 2. A `read` answered 503 rests the run `pending` with `service_unreachable`.
+   [witness: verification:kernel_a09_read_5xx_service_unreachable]
 3. A `draft-write` answered 409 concludes `operation_refused` with the attempt
    `not_applied`.
+   [witness: verification:kernel_a09_non_read_4xx_not_applied]
 4. A 2xx body missing an output port's member concludes `contract_violation`, and
    for a non-read operation the attempt is `applied`.
+   [witness: verification:kernel_a09_non_read_2xx_applied_even_if_invalid]
 5. A redirect to another host is not followed and a production `http` target on a
    non-loopback host is refused before sending.
+   [witness: verification:kernel_a09_no_redirect_plain_http_restricted]
 6. A proxy variable in the environment does not change where the request goes.
 7. A 401 whose body echoes the credential value keeps `failure_detail` exactly
    `error body withheld: it contained the credential`, and the credential
    appears in no record.
+   [witness: verification:kernel_a09_credential_echo_error_body_withheld]
 8. A 2xx JSON body that echoes the credential value in a member an output port
    takes concludes `contract_violation` with that same `failure_detail`, and
    no StoredValue holds the credential.
+   [witness: verification:kernel_a09_credential_echo_2xx_no_output_stored]
+9. A `read` whose connection is refused before the first byte of the request is
+   written, and a `read` whose connection drops after the request was written,
+   each conclude `service_unreachable`, and no second request is sent.
+   [witness: verification:kernel_a09_read_unsent_or_unanswered_unreachable]
 
 ### Consequence
 
@@ -383,20 +407,40 @@ decider(approval | grant | revoke) = owner
 
 1. A run reaching a `state-transition` node sends nothing until the owner
    approves, and sends once after.
+   [witness: verification:kernel_a10_gated_send_waits_for_approval]
 2. A mapped node over three photos asks three approvals.
+   [witness: verification:kernel_a10_approval_scoped_per_element]
 3. A refused approval ends the run `refused` with no request sent.
 4. With a grant, the node is sent without asking and the attempt names the grant;
    a `destructive` node cannot be granted.
+   [witness: verification:kernel_a10_grant_authorizes_never_destructive]
 5. After revocation, the next run of that version asks again.
+   [witness: verification:kernel_a10_revoked_grant_no_longer_authorizes]
 6. An agent's approval, grant or revocation is refused.
+   [witness: verification:kernel_a10_only_owner_decides_grants_revokes]
 7. After a restart that changed a required header's value of the instance, an
    approval given before it on the same inputs does not cover the send: nothing
    is sent and the element asks again. A restart that only rotated the
    credential's value sends under the approval.
+   [witness: verification:kernel_a10_approval_bound_to_request_digest]
 8. An instance at `http://127.0.0.1:8000` whose required headers name
    `Host: portal.example` sends one request to `127.0.0.1:8000` with that one
    `host` header, and the request description shows it; a binding to an
    instance whose required headers name `Accept-Encoding` is refused.
+9. After an approved send whose attempt the owner resolves `not_applied`, neither
+   the used approval nor an active grant for the node covers the resend: the
+   element waits with reason `owner_approval`, nothing is sent until a fresh
+   approval is decided, and the resend records that fresh approval.
+   [witness: verification:kernel_a10_used_approval_and_grant_do_not_cover_resend]
+10. An approval left undecided while the clock advances by days stays
+    `requested`: nothing approves, refuses or ends it, the element keeps waiting
+    and the run does not end. Once the run is cancelled, deciding that approval
+    is refused and its status stays `requested`.
+    [witness: verification:kernel_a10_no_decision_changes_nothing]
+11. A grant for a node of one flow version does not cover the same node in a
+    run of another version: that run asks for approval. A grant request for a
+    node of a version that is not active is refused.
+    [witness: verification:kernel_a10_grant_bound_to_flow_version]
 
 ### Consequence
 
@@ -489,12 +533,30 @@ restart AND in_flight -> unknown
 
 1. Killing the kernel between the in-flight record and the answer leaves an
    `unknown` attempt after restart and sends nothing.
+   [witness: verification:kernel_a11_restart_turns_in_flight_unknown]
 2. Resolving `applied` for a binding without outputs continues the run; the trace
    holds one NodeExecution of attempt 1, `outcome_unknown`, and its EffectAttempt
    `applied` with the owner as `resolved_by`.
+   [witness: verification:kernel_a11_applied_no_outputs_succeeds_one_execution]
 3. Resolving `not_applied` under a standing grant asks the owner for approval; the
    resend is attempt 2 with its own EffectAttempt.
+   [witness: verification:kernel_a11_not_applied_fresh_approval_next_attempt]
 4. A service error text containing "created" changes nothing.
+5. Resolving `applied` for a binding with output ports counts the element failed
+   with reason `applied_outputs_unknown`; the attempt's one NodeExecution keeps
+   `outcome_unknown` and the resolution writes none.
+   [witness: verification:kernel_a11_applied_with_outputs_fails_element]
+6. While an element's attempt is `unknown`, the element waits with reason
+   `outcome_unknown`, no node depending on it runs, and no request is sent again
+   for it until the owner resolves the attempt.
+   [witness: verification:kernel_a11_unknown_blocks_dependants]
+7. A `state-transition` element that waits for approval, is sent, ends
+   `unknown`, is resolved `not_applied`, waits again and is resent with success
+   has exactly two NodeExecutions, numbered 1 and 2; each EffectAttempt carries
+   the number of the NodeExecution that concluded its send, and each approval
+   the number of the attempt it was requested for; waiting and resolving take
+   no number.
+   [witness: verification:kernel_a11_attempt_number_is_execution_ordinal]
 
 ### Consequence
 

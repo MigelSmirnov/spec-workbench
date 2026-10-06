@@ -42,9 +42,17 @@ later_record -/> alters(pins(run))
 
 1. A run whose flow has no active version, or whose input misses a port, or whose
    function node has no current activation, is refused and no run exists.
-2. A run started before a new activation executes the earlier implementation to
-   the end, including after a long wait for approval.
+   [witness: verification:kernel_a12_start_refused_without_run]
+2. A run started before a new activation, a new flow activation or a new
+   binding executes, to the end, the flow version and implementations it pinned
+   at start, including after a long wait for approval.
+   [witness: verification:kernel_a12_pins_survive_later_records]
 3. Two runs on equal inputs have distinct identities and traces.
+4. A start whose request supplies a port the flow does not declare, or a value
+   that misfits its port's schema, or a `many` value that is not a JSON array of
+   fitting elements, or a value above `stored_value_bytes_max`, is refused and no
+   run exists.
+   [witness: verification:kernel_a12_start_inputs_exact_and_valid]
 
 ### Consequence
 
@@ -177,14 +185,34 @@ run.succeeded <-> for_all node: conclusion IN {succeeded, skipped_by_guard}
 ### Required tests
 
 1. Two ready nodes `b` and `a` execute `a` first, every time.
+   [witness: verification:kernel_a13_next_node_min_node_id]
 2. A duplicate-check guard that disables the save branch yields `skipped_by_guard`
    on the save node and on the flow output behind it, and a `succeeded` run.
+   [witness: verification:kernel_a13_guard_skip_transitive_run_succeeds]
 3. One failing element of three fails the mapped node, keeps three records, and
    concludes its dependants `upstream_failed`.
+   [witness: verification:kernel_a13_failed_input_gives_upstream_failed]
 4. With two independent branches, a failure in one lets the other finish; the run
    ends `failed` with the other branch's output marked produced.
+   [witness: verification:kernel_a13_any_failure_ends_run_failed]
 5. Starting a run whose first operation node needs approval returns the run
    `awaiting_approval` after executing every function it could.
+6. Between two requests a resting run gains no NodeExecution and no status
+   change; the next approval, resolution or resume advances it inside that
+   request, which returns only when no node can execute.
+   [witness: verification:kernel_a13_advance_only_inside_request]
+7. In one run of a flow with two independent function nodes, the second node's
+   NodeExecution starts no earlier than the first one's ended.
+   [witness: verification:kernel_a13_one_node_executes_at_a_time]
+8. A node with one input from a failed node and another whose only edge is
+   disabled by its guard concludes `upstream_failed`, not `skipped_by_guard`.
+   [witness: verification:kernel_a13_upstream_failed_wins_over_skip]
+9. An element recorded `outcome_unknown` keeps its dependants waiting while its
+   EffectAttempt is `unknown`; resolved `applied` for a binding without output
+   ports, its dependants execute; resolved `applied` for a binding with output
+   ports, they conclude `upstream_failed`; its NodeExecution keeps
+   `outcome_unknown` throughout.
+   [witness: verification:kernel_a13_resolved_unknown_conclusion]
 
 ### Consequence
 
@@ -259,12 +287,35 @@ startup: in_flight -> unknown; running runs advanced by kernel before surface op
 1. With a service down, a run rests `pending`, its independent read branch
    finishes, and a resume after the service returns completes it without new
    inputs.
+   [witness: verification:kernel_a14_resume_resends_unreachable]
 2. A resume of a run waiting only for approval is refused.
+   [witness: verification:kernel_a14_resume_without_unreachable_refused]
 3. Restarting the kernel during a function execution executes it again with the
    same output digest; during an effect it yields `unknown` and no second request.
+   [witness: verification:kernel_a14_restart_in_flight_becomes_unknown]
 4. A cancelled run executes nothing further, keeps its trace and has no spool.
+   [witness: verification:kernel_a14_cancel_empties_spool_keeps_trace]
 5. A `failed` run keeps its spooled files until released; releasing twice is
    refused.
+   [witness: verification:kernel_a14_failed_spool_kept_until_release]
+6. Runs resting on `owner_approval`, on `service_unreachable` and on
+   `outcome_unknown` are unchanged — status, waiting points and records — after
+   the clock is moved past any interval: nothing is retried, failed or approved.
+   [witness: verification:kernel_a14_elapsed_wait_changes_nothing]
+7. A resume of a run with one element waiting on `service_unreachable`, one on
+   approval and one on `outcome_unknown` sends only the first again; the other
+   two waiting points stay as they were.
+   [witness: verification:kernel_a14_resume_leaves_other_waits_untouched]
+8. A cancel by an agent, or of a run that has ended, does not cancel the run: it
+   keeps its status, its trace and its spool.
+   [witness: verification:kernel_a14_cancel_owner_only_unended_only]
+9. A run that spooled a file and ends `succeeded`, and one that spooled a file
+   and ends `refused`, keep no spooled file.
+   [witness: verification:kernel_a14_spool_emptied_on_succeeded_refused]
+10. After a restart, the first request the surface answers finds no
+    EffectAttempt `in_flight` and every run that derivation left `running`
+    already advanced by the kernel.
+    [witness: verification:kernel_a14_recovery_completes_before_surface]
 
 ### Consequence
 
@@ -340,13 +391,26 @@ file_outlives_run -> captured_as_fixture
 ### Required tests
 
 1. No operation alters a written NodeExecution.
+   [witness: verification:kernel_a15_node_execution_immutable]
 2. A function that raises after printing a secret-shaped string leaves a bounded
    `failure_detail` without it.
+   [witness: verification:kernel_a15_failure_detail_bounded_no_secret]
 3. A function writing a file one byte over `spool_file_bytes_max` concludes
    `resource_exhausted` and leaves nothing in the spool.
+   [witness: verification:kernel_a15_spool_file_ceiling]
+4. A function whose second spooled file brings its run's spool one byte over
+   `spool_run_bytes_max` concludes `resource_exhausted`; only that attempt's
+   files are discarded and the file spooled earlier stays.
+   [witness: verification:kernel_a15_spool_run_ceiling]
 5. Capturing a failed execution whose input was a spooled photo creates a case
    whose fixture has the photo's digest; after release the run's spool is empty
    and the fixture remains.
+   [witness: verification:kernel_a15_file_outlives_run_only_as_fixture]
+6. A run with a three-element mapped node, a skipped node and an
+   `upstream_failed` node holds exactly one NodeExecution per element, none of
+   the mapped node's own, and one per skipped and per `upstream_failed` node; an
+   owner's resolution of an unknown outcome adds none.
+   [witness: verification:kernel_a15_one_record_per_conclusion]
 
 ### Consequence
 

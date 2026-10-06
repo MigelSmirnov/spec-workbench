@@ -60,12 +60,29 @@ purpose(slot | flow) fixed_at_creation
 
 1. The same implementation code submitted by two agents at different times is one
    implementation with the first submitter recorded.
+   [witness: verification:kernel_a01_equal_submission_returns_existing]
 2. A request carrying its own `contract_version_id` is refused.
+   [witness: verification:kernel_a01_caller_supplied_identity_refused]
 3. Re-issuing an older, equal contract version returns it and leaves the slot's
    current contract version unchanged.
+   [witness: verification:kernel_a01_equal_contract_not_made_current]
 4. Two contract versions differing only in one resource bound have different
    identities.
+   [witness: verification:kernel_a01_identity_covers_resource_bounds]
 5. A request naming an existing slot with a different purpose is refused.
+   [witness: verification:kernel_a01_slot_purpose_fixed_at_creation]
+6. The same contract version submitted with its ports in another order has the
+   same `contract_version_id`, and that identity equals the SHA-256 of the
+   RFC 8785 canonical JSON of its facts.
+   [witness: verification:kernel_a01_identity_is_sha256_of_jcs_sorted]
+7. A request naming an existing flow with a different purpose is refused; one
+   with the same purpose, or none, is accepted.
+   [witness: verification:kernel_a01_flow_purpose_fixed_at_creation]
+8. Submitting admitted implementations i1, then i2, of one contract version and
+   then rolling back to i1 records three Activation records in store order, the
+   third a new record, not the first again; rolling back to i1 once more records
+   nothing.
+   [witness: verification:kernel_a01_activation_identity_is_store_position]
 
 ### Consequence
 
@@ -106,9 +123,18 @@ issued(contract) -> outputs != empty AND unique_port_names AND classes_on_inputs
 
 1. Every bound exactly at its ceiling is accepted; one unit over is refused with
    the field named.
+   [witness: verification:kernel_a02_bound_at_ceiling_ok_over_refused]
 2. A contract without `memory_bytes` is refused.
+   [witness: verification:kernel_a02_absent_bound_refused]
 3. A contract whose output port declares a disclosure class is refused.
+   [witness: verification:kernel_a02_output_disclosure_class_refused]
 4. A `file` port without a media type, and a `value` port with one, are refused.
+5. A contract with any bound set to 0 is refused.
+   [witness: verification:kernel_a02_zero_bound_refused]
+6. A contract with no output port is refused.
+   [witness: verification:kernel_a02_no_output_port_refused]
+7. A contract with two input ports of the same name is refused.
+   [witness: verification:kernel_a02_port_names_unique_per_direction]
 
 ### Consequence
 
@@ -219,9 +245,12 @@ cleanup_unconfirmed -> output_discarded AND kernel_process_stops
 1. Code that calls `time.time()`, `os.urandom`, opens a socket or reads `/etc`
    concludes `sandbox_violation`, also when it swallows the error and returns a
    conforming output.
+   [witness: verification:kernel_a03_trap_hit_is_sandbox_violation]
 2. A busy loop ends `timeout`; an allocation loop and a fork loop end
    `resource_exhausted`; no process survives.
+   [witness: verification:kernel_a03_deadline_and_limits_classified]
 3. An output one byte over `output_bytes` is `resource_exhausted`, not truncated.
+   [witness: verification:kernel_a03_output_over_bound_not_truncated]
 4. A module without `run`, and one with a syntax error, are `crashed`; neither
    raises inside the kernel process. Submitting code never compiles, imports
    or parses it — the kernel process never interprets agent text (A16 rule 5)
@@ -229,10 +258,28 @@ cleanup_unconfirmed -> output_discarded AND kernel_process_stops
    other, its trial executions are `crashed` and admission refuses it (A04
    rule 3). State 0's "invalid … code refused" is the refusal of the request
    itself: code over its bound or a request off its schema (A16 rule 4).
+   [witness: verification:kernel_a03_unloadable_module_is_crashed]
 5. A returned dict with an extra key is `contract_violation`.
+   [witness: verification:kernel_a03_extra_output_key_contract_violation]
 6. The same implementation on the same input yields the same output digest twice.
 7. With `bubblewrap` absent the kernel does not start and names the missing
    sandbox.
+   [witness: verification:kernel_a03_kernel_refuses_start_without_sandbox]
+8. Code that calls `time.time()`, swallows the error and then busy-loops ends
+   `timeout`, not `sandbox_violation`; code that hits a trap and returns a dict
+   with an extra key ends `sandbox_violation`, not `contract_violation`.
+   [witness: verification:kernel_a03_outcome_precedence_order]
+9. An implementation whose `run` returns `dict(os.environ)` on a `value` output
+   port succeeds with exactly `{"PYTHONHASHSEED": "0"}`.
+   [witness: verification:kernel_a03_env_holds_only_hash_seed]
+10. Inspected from outside it, each execution's environment has no network
+    interface, mounts no host directory except the read-only runtime and its
+    exchange directory, and has an exchange directory no other execution used.
+    [witness: verification:kernel_a03_fresh_env_no_network_no_host_mounts]
+11. When removal of the exchange directory cannot be confirmed, the execution is
+    recorded `crashed` with detail `cleanup_failed`, its output is discarded and
+    the kernel process stops.
+    [witness: verification:kernel_a03_unconfirmed_cleanup_stops_kernel]
 
 ### Consequence
 
@@ -320,15 +367,24 @@ verdict -> set_only_by_kernel
 
 1. An implementation for a contract version with no cases is refused as
    `empty_corpus` and nothing is activated.
+   [witness: verification:kernel_a04_empty_corpus_refused]
 2. With cases c1, c2, c3 added in that order and c2, c3 failing, the reason names
    c2; the verdict still records three executions.
-3. Submitting an admitted implementation activates it; submitting it again changes
-   nothing.
+   [witness: verification:kernel_a04_refusal_names_first_failing_case]
+3. Submitting an admitted implementation activates it, the Activation recorded by
+   the kernel; submitting it again changes nothing.
+   [witness: verification:kernel_a04_admitted_submission_activates_once]
 4. After a failed run is captured, submitting the earlier implementation again runs
    admission over the grown corpus; it is activated only when it passes.
+   [witness: verification:kernel_a04_resubmission_readmits_grown_corpus]
 5. A rollback to an implementation with no verdict over the current corpus is
    refused.
+   [witness: verification:kernel_a04_rollback_requires_current_verdict]
 6. No operation lets the owner or an agent set a verdict.
+   [witness: verification:kernel_a04_verdict_set_only_by_kernel]
+7. Adding a case equal to c1 after c3 returns c1, keeps it first in the corpus,
+   and leaves the corpus digest unchanged.
+   [witness: verification:kernel_a04_corpus_order_is_first_added]
 
 ### Consequence
 
