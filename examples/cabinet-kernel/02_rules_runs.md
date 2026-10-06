@@ -141,7 +141,9 @@ worker.
    derivation the node counts as failed when the run ends (rule 7), so a list
    that feeds only a flow output ends the run `failed`. Only a list that is
    delivered — to a node or a flow output — is measured; an output no edge
-   takes fails nothing. Mapping over a delivered list gives each element the
+   takes fails nothing. Every delivered list of a mapped node is measured
+   before any of them is delivered or written: when one exceeds the ceiling,
+   none is delivered, and the node fails as above. Mapping over a delivered list gives each element the
    list's class; a file list is the
    elements' SpooledFiles in element order, each keeping its own record, and
    the reference naming it carries the list's class. A non-empty list has no
@@ -155,7 +157,9 @@ worker.
 7. An element's conclusion is its NodeExecution's status, except that an
    `outcome_unknown` record the owner resolved concludes as A11 rule 3 says —
    succeeded, or failed with `applied_outputs_unknown` — and one not yet resolved
-   waits. Readiness, rule 5 and this rule use that conclusion. When nothing can
+   waits. Readiness, rule 5 and this rule use that conclusion. A waiting element
+   can still execute, so M19's "no node can run any more" holds only when
+   nothing waits: when nothing can
    execute and nothing waits, the run ends: `succeeded` when every node concluded
    succeeded or `skipped_by_guard`; otherwise `failed`.
    Run outputs (M19) hold only produced values. A run that rests returns the

@@ -1,0 +1,271 @@
+{
+ "open_points": [
+  {
+   "subject": "canonical value decoding",
+   "kind": "missing operation",
+   "text": "`store.read_value_bytes` returns \"for a `value` StoredValue its canonical JSON bytes\", while `sandbox.execute_function` and `service_invoker.prepare_request` take JSON values, and `surface` \"resolves\" StoredValues for answers; `canonical_values` exposes no decoding capability.",
+   "question": "Which module converts persisted canonical JSON bytes back into a JSON value, and through which public operation?",
+   "options": [
+    "Add a public canonical JSON decoding operation owned by `canonical_values`",
+    "Make `store.read_value_bytes` return decoded values for value carriage",
+    "Let each consuming module parse the bytes independently"
+   ],
+   "default_guess": "Add a `canonical_values` decoding operation and require all consumers to use it."
+  },
+  {
+   "subject": "canonical_bytes duplicate-member rejection",
+   "kind": "input contradiction",
+   "text": "`canonical_values.canonical_bytes` takes \"One JSON value\" but refuses \"a duplicate key\"; after JSON has been parsed into a value, duplicate object members are no longer observable.",
+   "question": "Does `canonical_bytes` receive raw JSON text with duplicate-preserving parsing, or must duplicate members be rejected before it is called?",
+   "options": [
+    "Accept raw JSON text and parse it while rejecting duplicates",
+    "Require `surface` and other parsers to reject duplicates before passing a value",
+    "Represent objects as member sequences until canonicalization"
+   ],
+   "default_guess": "Reject duplicate members at every JSON parsing boundary, then pass a parsed value to `canonical_bytes`."
+  },
+  {
+   "subject": "file content digests",
+   "kind": "digest ambiguity",
+   "text": "State 1 says \"Every content-derived identity and digest in this kernel is the lowercase hex SHA-256 of the canonical JSON of the model's meaning facts\", while files have `content_digest`/`value_digest` over arbitrary bytes and `store.put_value_bytes` requires an expected digest and size.",
+   "question": "Exactly which bytes are hashed for a file fixture, sandbox file output and spooled file, and which public capability computes that digest?",
+   "options": [
+    "SHA-256 of the raw file bytes",
+    "SHA-256 of JCS encoding of a base64 string",
+    "SHA-256 of canonical JSON containing file metadata and encoded content"
+   ],
+   "default_guess": "Use lowercase SHA-256 of the raw file bytes and add one shared raw-byte digest capability."
+  },
+  {
+   "subject": "guard comparison",
+   "kind": "equality undefined",
+   "text": "A guarded edge delivers \"when that port's value equals its guard value\".",
+   "question": "What equality relation is used between a produced JSON value and the declared guard value?",
+   "options": [
+    "Equality of RFC 8785 canonical bytes",
+    "JSON structural equality with numbers compared mathematically",
+    "Host-language equality"
+   ],
+   "default_guess": "Compare RFC 8785 canonical bytes."
+  },
+  {
+   "subject": "constant validation through canonical_values",
+   "kind": "interface gap",
+   "text": "A constant must be validated against \"the schema declared with it\" even when its target port is missing, but `canonical_values.fit_port_value` accepts only \"One Port M01\" and a candidate.",
+   "question": "How can `flows.compose_flow_version` validate a constant against its own declared schema without a target Port and without implementing schema validation itself?",
+   "options": [
+    "Permit a temporary synthetic Port with precisely defined fields",
+    "Change the capability to accept a declared schema, carriage and cardinality directly",
+    "Add a separate validate-against-schema capability"
+   ],
+   "default_guess": "Add a separate canonical-values capability that validates a value against an explicitly supplied stored schema."
+  },
+  {
+   "subject": "trial value output above stored_value_bytes_max",
+   "kind": "missing outcome",
+   "text": "`sandbox.execute_function` applies the contract's `output_bytes`, while `functions.try_implementation` and admission store successful value outputs as StoredValues; no rule says what happens when such a trial output is within `output_bytes` but above `stored_value_bytes_max`.",
+   "question": "What TrialExecution outcome and stored evidence result from a trial value output larger than `stored_value_bytes_max`?",
+   "options": [
+    "`contract_violation` with `value_too_large` and no stored output",
+    "`resource_exhausted` and no stored output",
+    "Keep only its digest without bytes",
+    "Store it despite the release ceiling"
+   ],
+   "default_guess": "Record `contract_violation` with `value_too_large` and store no output bytes."
+  },
+  {
+   "subject": "resources_used",
+   "kind": "output undefined",
+   "text": "`sandbox.execute_function` returns \"resources used\", and TrialExecution and NodeExecution carry `resources_used`, but no text defines its members or measurement semantics.",
+   "question": "Which resource measurements are returned, in what units, and are they required for every sandbox outcome?",
+   "options": [
+    "A closed record of wall time, peak memory, output bytes and process count",
+    "Only measurements reliably available for the particular outcome",
+    "An empty marker whose presence merely proves the sandbox ran"
+   ],
+   "default_guess": "Use a closed record containing measured wall time, peak memory, output bytes and peak process count for every execution that started."
+  },
+  {
+   "subject": "failure_detail from sandbox and transport failures",
+   "kind": "output underspecified",
+   "text": "The operations return \"a bounded `failure_detail` otherwise\", but only exception type/message, HTTP response bodies, credential withholding and a few detail codes are specified.",
+   "question": "For timeout, resource exhaustion, sandbox traps, connection failures, TLS failures, resets and malformed responses, is `failure_detail` absent, fixed text, or implementation-generated diagnostic text?",
+   "options": [
+    "Absent except in the cases whose text is explicitly defined",
+    "A closed deterministic detail for every outcome",
+    "Bounded implementation-generated diagnostic text"
+   ],
+   "default_guess": "Return no free-form detail except where the texts explicitly define its source or exact code."
+  },
+  {
+   "subject": "platform manifest structure",
+   "kind": "external schema missing",
+   "text": "Bindings read fields such as `service`, `capabilities`, `instances`, `exposed_as.http_api`, `required_headers` and `api_base_url`, but the complete JSON structure and malformed-type handling are not defined.",
+   "question": "What is the exact manifest JSON schema, including collection shapes, field types, required fields, duplicate JSON members and the order of validation failures for malformed nested values?",
+   "options": [
+    "Define a closed manifest schema and reject every deviation",
+    "Accept additional fields but strictly validate every consumed field",
+    "Rely on an external platform-manifest schema not included in these texts"
+   ],
+   "default_guess": "Define and enforce a closed schema for every consumed manifest structure while allowing explicitly ignored extra fields only if stated."
+  },
+  {
+   "subject": "manifest revision access",
+   "kind": "snapshot semantics missing",
+   "text": "The kernel reads `<manifest_location>/<service_id>.json` \"at the configured `manifest_revision`\", and also asserts that a record changes for a running kernel only after restart with a new configured revision.",
+   "question": "How is a file read at a revision, and how is the manifest snapshot kept immutable if the path changes, a branch/tag moves, or files are edited during the process lifetime?",
+   "options": [
+    "Read blobs directly from an immutable VCS commit object",
+    "Materialize and hold a verified snapshot at start",
+    "Read ordinary files on every operation and trust the revision label"
+   ],
+   "default_guess": "Resolve the configured revision to an immutable commit at start and read manifest blobs from that commit for the process lifetime."
+  },
+  {
+   "subject": "installation JSON duplicate members",
+   "kind": "parse policy missing",
+   "text": "`installation.load_installation` requires \"one JSON object with exactly the installation's fields\" but does not state how duplicate object member names are handled.",
+   "question": "Is a configuration containing the same field twice rejected, or does one occurrence win?",
+   "options": [
+    "Reject every duplicate member",
+    "First occurrence wins",
+    "Last occurrence wins"
+   ],
+   "default_guess": "Reject every duplicate member."
+  },
+  {
+   "subject": "api_base_url grammar and path joining",
+   "kind": "URL semantics incomplete",
+   "text": "An instance address need only be \"an absolute `http` or `https` URL with a host\", and the request URL is the base URL \"without a trailing `/` followed by the declared path\".",
+   "question": "Are userinfo, query, fragment, Unicode hosts and an existing base path permitted, and does removing a trailing slash remove one slash or all trailing slashes?",
+   "options": [
+    "Require scheme plus authority only, with no userinfo, query, fragment or base path",
+    "Allow a base path but forbid userinfo, query and fragment and define exact joining",
+    "Permit every absolute URL and use a standard URL resolver"
+   ],
+   "default_guess": "Require an ASCII/IDNA-normalized scheme and authority with no userinfo, query, fragment or base path, then append the declared path exactly."
+  },
+  {
+   "subject": "path placeholder values",
+   "kind": "placement gap",
+   "text": "A placeholder input may be any non-null string or integer and is percent-encoded \"so that it stays one segment\"; empty strings and the unreserved strings `.` and `..` remain empty or dot segments.",
+   "question": "What happens when a placeholder value is empty, `.` or `..`, or would otherwise be normalized by an HTTP client or server?",
+   "options": [
+    "Reject it as `input_not_placeable`",
+    "Percent-encode dot characters and encode an empty value by a defined nonempty representation",
+    "Allow it and require the client not to normalize the resulting path"
+   ],
+   "default_guess": "Reject empty, `.` and `..` placeholder values as `input_not_placeable`."
+  },
+  {
+   "subject": "multipart Content-Disposition names",
+   "kind": "serialization undefined",
+   "text": "Multipart parts use `Content-Disposition: form-data; name=\"<port>\"` and file parts add `filename=\"<port>\"`, while port names have no syntax restriction or escaping rule.",
+   "question": "How are quotes, backslashes, control characters and non-ASCII characters in port names serialized safely into multipart headers?",
+   "options": [
+    "Restrict port names to an ASCII token-like grammar",
+    "Define quoted-string escaping and RFC 5987 handling",
+    "Reject only names that cannot be represented at request preparation"
+   ],
+   "default_guess": "Restrict every port name used in multipart headers to a conservative ASCII identifier grammar."
+  },
+  {
+   "subject": "file port media_type",
+   "kind": "validation missing",
+   "text": "A file port must declare exactly one media type, but no accepted media-type grammar is given even though the value is emitted verbatim as an HTTP `Content-Type` header and parsed for response comparison.",
+   "question": "Which media-type syntax is valid, are parameters permitted, and when is an invalid value refused?",
+   "options": [
+    "Require exactly a valid type/subtype with no parameters",
+    "Allow a valid media type with parameters and canonicalize it",
+    "Treat media type as arbitrary bounded text"
+   ],
+   "default_guess": "Require a syntactically valid ASCII type/subtype with no parameters when the port is authored or proposed."
+  },
+  {
+   "subject": "HTTP header value encoding",
+   "kind": "wire encoding undefined",
+   "text": "Required header values are sent \"verbatim\", and credential values need only be UTF-8, nonempty and free of control characters.",
+   "question": "How are non-ASCII required-header and credential values encoded on the HTTP wire, and are values not representable by the chosen HTTP protocol rejected?",
+   "options": [
+    "Require all header values to be ASCII",
+    "Encode UTF-8 bytes directly",
+    "Use an HTTP-library-specific legacy encoding"
+   ],
+   "default_guess": "Require header values to be valid ASCII HTTP field values and reject other values as invalid or unresolved."
+  },
+  {
+   "subject": "outbound HTTP protocol",
+   "kind": "transport choice open",
+   "text": "The client must send exactly the listed headers, including one `host` header and `content-length`, and add no other header, but no HTTP version or ALPN policy is fixed.",
+   "question": "Must requests use HTTP/1.1, or may HTTP/2/HTTP/3 be negotiated despite their pseudo-headers and different wire semantics?",
+   "options": [
+    "HTTP/1.1 only",
+    "HTTP/1.1 and HTTP/2 with a protocol-neutral approval description",
+    "Any protocol selected by the HTTP library"
+   ],
+   "default_guess": "Use HTTP/1.1 only and disable protocol upgrades."
+  },
+  {
+   "subject": "TLS verification roots",
+   "kind": "trust source missing",
+   "text": "\"TLS is verified for `https`\" without naming the trust store, hostname rules, client-certificate policy or whether system proxy/TLS configuration may affect it.",
+   "question": "Which CA roots and hostname-verification rules define a verified HTTPS connection?",
+   "options": [
+    "The release-pinned CA bundle",
+    "The host operating system trust store",
+    "A path in installation configuration"
+   ],
+   "default_guess": "Use the host operating system trust store with standard hostname verification and no client certificate."
+  },
+  {
+   "subject": "service response header ceiling",
+   "kind": "byte accounting undefined",
+   "text": "\"The status line and headers are read up to `service_response_bytes_max` bytes together\".",
+   "question": "Exactly which wire bytes count toward this ceiling: line terminators, the terminating empty line, HTTP/2 decoded fields, folded/normalized fields, and interim `1xx` responses?",
+   "options": [
+    "Raw HTTP/1.1 bytes including delimiters and every interim response",
+    "Decoded header names and values after protocol parsing",
+    "Only the final response's raw status line and header block"
+   ],
+   "default_guess": "For HTTP/1.1, count every raw status/header byte including CRLF delimiters and interim responses."
+  },
+  {
+   "subject": "secret/path/stack exclusion versus untrusted failure bodies",
+   "kind": "contradiction",
+   "text": "A16 says \"No response carries a token, a service credential, a host path or a stack trace\", while A09 returns a bounded portion of an unused service response body as `failure_detail` and only scans it for the service credential's exact bytes.",
+   "question": "Does the no-path/no-stack/no-token rule apply to untrusted service bodies and sandbox exception messages, and if so how are those values recognized or suppressed?",
+   "options": [
+    "The prohibition applies only to kernel-generated diagnostics",
+    "Suppress all untrusted free-form failure text from responses",
+    "Define explicit redaction for tokens, paths and stack traces"
+   ],
+   "default_guess": "Interpret the prohibition as applying to kernel-generated diagnostics and exact configured secrets; treat service text as classified untrusted data subject to the existing credential check."
+  },
+  {
+   "subject": "symlinks in stale run spools",
+   "kind": "contradictory recovery",
+   "text": "A18 says \"a link found at start stops the start\", but also says a spool directory that cannot be removed \"does not stop the start\" and remains until a later start removes it.",
+   "question": "What happens when an ended run's removable spool contains a symbolic link: must start stop, or must recovery ignore that spool and open the surface?",
+   "options": [
+    "Any symlink stops start, including in a removable stale spool",
+    "Remove or quarantine stale ended-run spools before the symlink scan",
+    "Ignore symlinks only inside spools that records say are no longer servable"
+   ],
+   "default_guess": "Any symlink stops start; the non-fatal removal rule applies only to ordinary I/O removal failures after the symlink check."
+  },
+  {
+   "subject": "get_repair_view continuation token",
+   "kind": "bounded cursor contradiction",
+   "text": "Its continuation token \"also carries the implementation set of its first page\", while continuation tokens are request strings bounded by `bounded_text_bytes_max` and a slot may accumulate implementations without limit.",
+   "question": "How can the token preserve an arbitrarily large implementation snapshot within the fixed request-field bound, and what happens when it cannot?",
+   "options": [
+    "Encode the entire set and refuse once it exceeds the bound",
+    "Store server-side pagination snapshot state and put only its id in the token",
+    "Encode a slot and store-order cutoff from which the implementation set is deterministically reconstructed"
+   ],
+   "default_guess": "Encode the slot and a first-page store-order cutoff, then reconstruct the eligible implementation set from immutable records."
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"canonical value decoding\",\"kind\":\"missing operation\",\"text\":\"`store.read_value_bytes` returns \\\"for a `value` StoredValue its canonical JSON bytes\\\", while `sandbox.execute_function` and `service_invoker.prepare_request` take JSON values, and `surface` \\\"resolves\\\" StoredValues for answers; `canonical_values` exposes no decoding capability.\",\"question\":\"Which module converts persisted canonical JSON bytes back into a JSON value, and through which public operation?\",\"options\":[\"Add a public canonical JSON decoding operation owned by `canonical_values`\",\"Make `store.read_value_bytes` return decoded values for value carriage\",\"Let each consuming module parse the bytes independently\"],\"default_guess\":\"Add a `canonical_values` decoding operation and require all consumers to use it.\"},{\"subject\":\"canonical_bytes duplicate-member rejection\",\"kind\":\"input contradiction\",\"text\":\"`canonical_values.canonical_bytes` takes \\\"One JSON value\\\" but refuses \\\"a duplicate key\\\"; after JSON has been parsed into a value, duplicate object members are no longer observable.\",\"question\":\"Does `canonical_bytes` receive raw JSON text with duplicate-preserving parsing, or must duplicate members be rejected before it is called?\",\"options\":[\"Accept raw JSON text and parse it while rejecting duplicates\",\"Require `surface` and other parsers to reject duplicates before passing a value\",\"Represent objects as member sequences until canonicalization\"],\"default_guess\":\"Reject duplicate members at every JSON parsing boundary, then pass a parsed value to `canonical_bytes`.\"},{\"subject\":\"file content digests\",\"kind\":\"digest ambiguity\",\"text\":\"State 1 says \\\"Every content-derived identity and digest in this kernel is the lowercase hex SHA-256 of the canonical JSON of the model's meaning facts\\\", while files have `content_digest`/`value_digest` over arbitrary bytes and `store.put_value_bytes` requires an expected digest and size.\",\"question\":\"Exactly which bytes are hashed for a file fixture, sandbox file output and spooled file, and which public capability computes that digest?\",\"options\":[\"SHA-256 of the raw file bytes\",\"SHA-256 of JCS encoding of a base64 string\",\"SHA-256 of canonical JSON containing file metadata and encoded content\"],\"default_guess\":\"Use lowercase SHA-256 of the raw file bytes and add one shared raw-byte digest capability.\"},{\"subject\":\"guard comparison\",\"kind\":\"equality undefined\",\"text\":\"A guarded edge delivers \\\"when that port's value equals its guard value\\\".\",\"question\":\"What equality relation is used between a produced JSON value and the declared guard value?\",\"options\":[\"Equality of RFC 8785 canonical bytes\",\"JSON structural equality with numbers compared mathematically\",\"Host-language equality\"],\"default_guess\":\"Compare RFC 8785 canonical bytes.\"},{\"subject\":\"constant validation through canonical_values\",\"kind\":\"interface gap\",\"text\":\"A constant must be validated against \\\"the schema declared with it\\\" even when its target port is missing, but `canonical_values.fit_port_value` accepts only \\\"One Port M01\\\" and a candidate.\",\"question\":\"How can `flows.compose_flow_version` validate a constant against its own declared schema without a target Port and without implementing schema validation itself?\",\"options\":[\"Permit a temporary synthetic Port with precisely defined fields\",\"Change the capability to accept a declared schema, carriage and cardinality directly\",\"Add a separate validate-against-schema capability\"],\"default_guess\":\"Add a separate canonical-values capability that validates a value against an explicitly supplied stored schema.\"},{\"subject\":\"trial value output above stored_value_bytes_max\",\"kind\":\"missing outcome\",\"text\":\"`sandbox.execute_function` applies the contract's `output_bytes`, while `functions.try_implementation` and admission store successful value outputs as StoredValues; no rule says what happens when such a trial output is within `output_bytes` but above `stored_value_bytes_max`.\",\"question\":\"What TrialExecution outcome and stored evidence result from a trial value output larger than `stored_value_bytes_max`?\",\"options\":[\"`contract_violation` with `value_too_large` and no stored output\",\"`resource_exhausted` and no stored output\",\"Keep only its digest without bytes\",\"Store it despite the release ceiling\"],\"default_guess\":\"Record `contract_violation` with `value_too_large` and store no output bytes.\"},{\"subject\":\"resources_used\",\"kind\":\"output undefined\",\"text\":\"`sandbox.execute_function` returns \\\"resources used\\\", and TrialExecution and NodeExecution carry `resources_used`, but no text defines its members or measurement semantics.\",\"question\":\"Which resource measurements are returned, in what units, and are they required for every sandbox outcome?\",\"options\":[\"A closed record of wall time, peak memory, output bytes and process count\",\"Only measurements reliably available for the particular outcome\",\"An empty marker whose presence merely proves the sandbox ran\"],\"default_guess\":\"Use a closed record containing measured wall time, peak memory, output bytes and peak process count for every execution that started.\"},{\"subject\":\"failure_detail from sandbox and transport failures\",\"kind\":\"output underspecified\",\"text\":\"The operations return \\\"a bounded `failure_detail` otherwise\\\", but only exception type/message, HTTP response bodies, credential withholding and a few detail codes are specified.\",\"question\":\"For timeout, resource exhaustion, sandbox traps, connection failures, TLS failures, resets and malformed responses, is `failure_detail` absent, fixed text, or implementation-generated diagnostic text?\",\"options\":[\"Absent except in the cases whose text is explicitly defined\",\"A closed deterministic detail for every outcome\",\"Bounded implementation-generated diagnostic text\"],\"default_guess\":\"Return no free-form detail except where the texts explicitly define its source or exact code.\"},{\"subject\":\"platform manifest structure\",\"kind\":\"external schema missing\",\"text\":\"Bindings read fields such as `service`, `capabilities`, `instances`, `exposed_as.http_api`, `required_headers` and `api_base_url`, but the complete JSON structure and malformed-type handling are not defined.\",\"question\":\"What is the exact manifest JSON schema, including collection shapes, field types, required fields, duplicate JSON members and the order of validation failures for malformed nested values?\",\"options\":[\"Define a closed manifest schema and reject every deviation\",\"Accept additional fields but strictly validate every consumed field\",\"Rely on an external platform-manifest schema not included in these texts\"],\"default_guess\":\"Define and enforce a closed schema for every consumed manifest structure while allowing explicitly ignored extra fields only if stated.\"},{\"subject\":\"manifest revision access\",\"kind\":\"snapshot semantics missing\",\"text\":\"The kernel reads `<manifest_location>/<service_id>.json` \\\"at the configured `manifest_revision`\\\", and also asserts that a record changes for a running kernel only after restart with a new configured revision.\",\"question\":\"How is a file read at a revision, and how is the manifest snapshot kept immutable if the path changes, a branch/tag moves, or files are edited during the process lifetime?\",\"options\":[\"Read blobs directly from an immutable VCS commit object\",\"Materialize and hold a verified snapshot at start\",\"Read ordinary files on every operation and trust the revision label\"],\"default_guess\":\"Resolve the configured revision to an immutable commit at start and read manifest blobs from that commit for the process lifetime.\"},{\"subject\":\"installation JSON duplicate members\",\"kind\":\"parse policy missing\",\"text\":\"`installation.load_installation` requires \\\"one JSON object with exactly the installation's fields\\\" but does not state how duplicate object member names are handled.\",\"question\":\"Is a configuration containing the same field twice rejected, or does one occurrence win?\",\"options\":[\"Reject every duplicate member\",\"First occurrence wins\",\"Last occurrence wins\"],\"default_guess\":\"Reject every duplicate member.\"},{\"subject\":\"api_base_url grammar and path joining\",\"kind\":\"URL semantics incomplete\",\"text\":\"An instance address need only be \\\"an absolute `http` or `https` URL with a host\\\", and the request URL is the base URL \\\"without a trailing `/` followed by the declared path\\\".\",\"question\":\"Are userinfo, query, fragment, Unicode hosts and an existing base path permitted, and does removing a trailing slash remove one slash or all trailing slashes?\",\"options\":[\"Require scheme plus authority only, with no userinfo, query, fragment or base path\",\"Allow a base path but forbid userinfo, query and fragment and define exact joining\",\"Permit every absolute URL and use a standard URL resolver\"],\"default_guess\":\"Require an ASCII/IDNA-normalized scheme and authority with no userinfo, query, fragment or base path, then append the declared path exactly.\"},{\"subject\":\"path placeholder values\",\"kind\":\"placement gap\",\"text\":\"A placeholder input may be any non-null string or integer and is percent-encoded \\\"so that it stays one segment\\\"; empty strings and the unreserved strings `.` and `..` remain empty or dot segments.\",\"question\":\"What happens when a placeholder value is empty, `.` or `..`, or would otherwise be normalized by an HTTP client or server?\",\"options\":[\"Reject it as `input_not_placeable`\",\"Percent-encode dot characters and encode an empty value by a defined nonempty representation\",\"Allow it and require the client not to normalize the resulting path\"],\"default_guess\":\"Reject empty, `.` and `..` placeholder values as `input_not_placeable`.\"},{\"subject\":\"multipart Content-Disposition names\",\"kind\":\"serialization undefined\",\"text\":\"Multipart parts use `Content-Disposition: form-data; name=\\\"<port>\\\"` and file parts add `filename=\\\"<port>\\\"`, while port names have no syntax restriction or escaping rule.\",\"question\":\"How are quotes, backslashes, control characters and non-ASCII characters in port names serialized safely into multipart headers?\",\"options\":[\"Restrict port names to an ASCII token-like grammar\",\"Define quoted-string escaping and RFC 5987 handling\",\"Reject only names that cannot be represented at request preparation\"],\"default_guess\":\"Restrict every port name used in multipart headers to a conservative ASCII identifier grammar.\"},{\"subject\":\"file port media_type\",\"kind\":\"validation missing\",\"text\":\"A file port must declare exactly one media type, but no accepted media-type grammar is given even though the value is emitted verbatim as an HTTP `Content-Type` header and parsed for response comparison.\",\"question\":\"Which media-type syntax is valid, are parameters permitted, and when is an invalid value refused?\",\"options\":[\"Require exactly a valid type/subtype with no parameters\",\"Allow a valid media type with parameters and canonicalize it\",\"Treat media type as arbitrary bounded text\"],\"default_guess\":\"Require a syntactically valid ASCII type/subtype with no parameters when the port is authored or proposed.\"},{\"subject\":\"HTTP header value encoding\",\"kind\":\"wire encoding undefined\",\"text\":\"Required header values are sent \\\"verbatim\\\", and credential values need only be UTF-8, nonempty and free of control characters.\",\"question\":\"How are non-ASCII required-header and credential values encoded on the HTTP wire, and are values not representable by the chosen HTTP protocol rejected?\",\"options\":[\"Require all header values to be ASCII\",\"Encode UTF-8 bytes directly\",\"Use an HTTP-library-specific legacy encoding\"],\"default_guess\":\"Require header values to be valid ASCII HTTP field values and reject other values as invalid or unresolved.\"},{\"subject\":\"outbound HTTP protocol\",\"kind\":\"transport choice open\",\"text\":\"The client must send exactly the listed headers, including one `host` header and `content-length`, and add no other header, but no HTTP version or ALPN policy is fixed.\",\"question\":\"Must requests use HTTP/1.1, or may HTTP/2/HTTP/3 be negotiated despite their pseudo-headers and different wire semantics?\",\"options\":[\"HTTP/1.1 only\",\"HTTP/1.1 and HTTP/2 with a protocol-neutral approval description\",\"Any protocol selected by the HTTP library\"],\"default_guess\":\"Use HTTP/1.1 only and disable protocol upgrades.\"},{\"subject\":\"TLS verification roots\",\"kind\":\"trust source missing\",\"text\":\"\\\"TLS is verified for `https`\\\" without naming the trust store, hostname rules, client-certificate policy or whether system proxy/TLS configuration may affect it.\",\"question\":\"Which CA roots and hostname-verification rules define a verified HTTPS connection?\",\"options\":[\"The release-pinned CA bundle\",\"The host operating system trust store\",\"A path in installation configuration\"],\"default_guess\":\"Use the host operating system trust store with standard hostname verification and no client certificate.\"},{\"subject\":\"service response header ceiling\",\"kind\":\"byte accounting undefined\",\"text\":\"\\\"The status line and headers are read up to `service_response_bytes_max` bytes together\\\".\",\"question\":\"Exactly which wire bytes count toward this ceiling: line terminators, the terminating empty line, HTTP/2 decoded fields, folded/normalized fields, and interim `1xx` responses?\",\"options\":[\"Raw HTTP/1.1 bytes including delimiters and every interim response\",\"Decoded header names and values after protocol parsing\",\"Only the final response's raw status line and header block\"],\"default_guess\":\"For HTTP/1.1, count every raw status/header byte including CRLF delimiters and interim responses.\"},{\"subject\":\"secret/path/stack exclusion versus untrusted failure bodies\",\"kind\":\"contradiction\",\"text\":\"A16 says \\\"No response carries a token, a service credential, a host path or a stack trace\\\", while A09 returns a bounded portion of an unused service response body as `failure_detail` and only scans it for the service credential's exact bytes.\",\"question\":\"Does the no-path/no-stack/no-token rule apply to untrusted service bodies and sandbox exception messages, and if so how are those values recognized or suppressed?\",\"options\":[\"The prohibition applies only to kernel-generated diagnostics\",\"Suppress all untrusted free-form failure text from responses\",\"Define explicit redaction for tokens, paths and stack traces\"],\"default_guess\":\"Interpret the prohibition as applying to kernel-generated diagnostics and exact configured secrets; treat service text as classified untrusted data subject to the existing credential check.\"},{\"subject\":\"symlinks in stale run spools\",\"kind\":\"contradictory recovery\",\"text\":\"A18 says \\\"a link found at start stops the start\\\", but also says a spool directory that cannot be removed \\\"does not stop the start\\\" and remains until a later start removes it.\",\"question\":\"What happens when an ended run's removable spool contains a symbolic link: must start stop, or must recovery ignore that spool and open the surface?\",\"options\":[\"Any symlink stops start, including in a removable stale spool\",\"Remove or quarantine stale ended-run spools before the symlink scan\",\"Ignore symlinks only inside spools that records say are no longer servable\"],\"default_guess\":\"Any symlink stops start; the non-fatal removal rule applies only to ordinary I/O removal failures after the symlink check.\"},{\"subject\":\"get_repair_view continuation token\",\"kind\":\"bounded cursor contradiction\",\"text\":\"Its continuation token \\\"also carries the implementation set of its first page\\\", while continuation tokens are request strings bounded by `bounded_text_bytes_max` and a slot may accumulate implementations without limit.\",\"question\":\"How can the token preserve an arbitrarily large implementation snapshot within the fixed request-field bound, and what happens when it cannot?\",\"options\":[\"Encode the entire set and refuse once it exceeds the bound\",\"Store server-side pagination snapshot state and put only its id in the token\",\"Encode a slot and store-order cutoff from which the implementation set is deterministically reconstructed\"],\"default_guess\":\"Encode the slot and a first-page store-order cutoff, then reconstruct the eligible implementation set from immutable records.\"}]}"
+}

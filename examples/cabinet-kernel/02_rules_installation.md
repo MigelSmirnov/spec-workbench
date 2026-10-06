@@ -162,13 +162,17 @@ Reuses cabinet-flow decision 23, narrowed by K-16.
    no environment variable. The file
    must be a regular file, not a symbolic link, owned by the kernel's user, with
    no permission for group or others; the kernel refuses to start otherwise.
+   Here and in rule 2 the path is opened component by component without
+   following a symbolic link at any of them, and the checks and the read use
+   that one opened file, so the file checked is the file read.
 2. A credential is resolved only when a request to its service is built: its
    secret file is read then, without following a symbolic link, and must be a
    regular file owned by the kernel's user with no permission for group or
    others; its content decoded as UTF-8, without one trailing newline, is the
    value. A service the installation gives no credential, or whose secret file
-   is missing, unreadable, not such a file, not UTF-8, or holds an empty value
-   or a control character, fails
+   is missing, unreadable, not such a file, larger than
+   `bounded_text_bytes_max` (A20; read no further), not UTF-8, or holds an
+   empty value or a control character, fails
    that request's pre-send check `credential_unresolved` and stops nothing
    else. A resolved value is added as that header. The kernel never puts it
    into the store, a record, a trace, a preview, a failure detail, a log line,

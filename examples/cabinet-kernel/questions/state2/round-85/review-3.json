@@ -1,0 +1,346 @@
+{
+ "open_points": [
+  {
+   "subject": "Disclosure propagation through operation nodes",
+   "kind": "contradiction",
+   "text": "A07 is titled “a disclosure class only rises” and its invariant says `lowers_class(any construct) -> never`, but rules 2–3 assign an operation output only the class declared by its binding, even when the operation received a higher-class input.",
+   "question": "May an operation node emit a value whose declared output class is lower than one or more of its actual input classes, or must its output be raised to at least the highest input class?",
+   "options": [
+    "Binding outputs always keep their declared class, so an operation may lower provenance",
+    "Raise each operation output to the maximum of its declared class and actual input classes",
+    "Refuse bindings or flows that could let an operation lower a class"
+   ],
+   "default_guess": "Treat a service output as a newly classified source and use the binding’s declared output class, because rules 2–3 state that explicitly.",
+   "unit": "A07"
+  },
+  {
+   "subject": "Disclosure class of executions with no named inputs or outputs",
+   "kind": "missing default",
+   "text": "A07 rule 5 defines an execution’s class as “the highest class among the values and files its NodeExecution or TrialExecution names as inputs … and for an operation also among its outputs”, but gives no result when that set is empty.",
+   "question": "What class does a skipped, upstream-failed, inputless, or otherwise payload-free execution have?",
+   "options": [
+    "`open`",
+    "The highest class declared by the node’s ports",
+    "No execution class until at least one value or file is named"
+   ],
+   "default_guess": "Use `open` for an empty set.",
+   "unit": "A07"
+  },
+  {
+   "subject": "Redacted failure-detail length",
+   "kind": "undefined measurement",
+   "text": "A07 rule 5 says a protected `failure_detail` is returned to an agent “only as its length and that class” without defining whether length means Unicode characters, UTF-8 bytes, or the retained bounded byte length.",
+   "question": "What exact length is disclosed for a protected failure detail?",
+   "options": [
+    "UTF-8 byte length of the retained detail",
+    "Unicode scalar-value count",
+    "Length before truncation",
+    "Length after truncation"
+   ],
+   "default_guess": "Return the UTF-8 byte length after truncation, matching the release’s byte ceilings.",
+   "unit": "A07"
+  },
+  {
+   "subject": "Clock prohibition in the sandbox",
+   "kind": "incomplete closed list",
+   "text": "A03 rule 4 says it replaces “every clock … entry point” and that the list is closed, but the listed CPython 3.12 functions omit clock-bearing APIs such as `time.clock_gettime`, `time.clock_gettime_ns` and runtime/file metadata sources.",
+   "question": "Are unlisted standard-library or runtime sources of time allowed, trapped, or unavailable from the sandbox?",
+   "options": [
+    "Only the written list is trapped and all other time sources are allowed",
+    "Every observable clock source is prohibited and the list must be expanded",
+    "Only current wall time is prohibited; durations and metadata times are allowed"
+   ],
+   "default_guess": "Prohibit and trap every API that can reveal current or elapsed host time, including the omitted `time` functions.",
+   "unit": "A03"
+  },
+  {
+   "subject": "Determinism of function executions",
+   "kind": "unverifiable invariant",
+   "text": "A03 required test 6 says the same implementation and input yield the same output digest twice, while the sandbox rules still expose possible nondeterministic observations such as allocation addresses, process/runtime facts, filesystem metadata and unlisted standard-library facilities.",
+   "question": "Is deterministic output a required invariant, and if so which remaining observable sources must be removed or trapped?",
+   "options": [
+    "Determinism is guaranteed and every nondeterministic source must be enumerated and blocked",
+    "Only the named clock/random APIs are blocked; other nondeterminism is accepted",
+    "Admission must execute repeated trials and refuse inconsistent output"
+   ],
+   "default_guess": "Treat determinism as required and block remaining observable nondeterministic host/runtime facts.",
+   "unit": "A03"
+  },
+  {
+   "subject": "Fork and subprocess behavior",
+   "kind": "contradiction",
+   "text": "A03 rule 4 says the audit hook raises “on … subprocess”, but required test 2 says “a fork loop” reaches the process limit and ends `resource_exhausted`.",
+   "question": "Does `os.fork` count as a trapped subprocess action or is it allowed until `process_count` is exhausted?",
+   "options": [
+    "Trap every process-creation API as `sandbox_violation`",
+    "Allow `fork` and classify exhaustion as `resource_exhausted`, while trapping higher-level subprocess execution",
+    "Allow all process creation within the process bound"
+   ],
+   "default_guess": "Allow `fork` within the namespace until the process limit and interpret “subprocess” as APIs that execute another program.",
+   "unit": "A03"
+  },
+  {
+   "subject": "Detection of resource-limit hits",
+   "kind": "undefined classification",
+   "text": "A03 rule 5 classifies “a limit hit (memory, process count, scratch, `output_bytes`)” as `resource_exhausted`, but does not define how a hit is distinguished from a caught allocation/fork error, a Python exception, an abnormal exit, or a timeout.",
+   "question": "What observable evidence makes each limit count as hit, especially when user code catches the resulting error or the OS reports only an abnormal exit?",
+   "options": [
+    "Any supervisor or runner indication attributable to the configured limit counts as a hit even if caught",
+    "Only an external hard-limit termination counts as a hit",
+    "Caught errors are ordinary code behavior; only uncaught failures are classified"
+   ],
+   "default_guess": "Have the runner or supervisor persist a limit-hit flag and classify `resource_exhausted` whenever that flag was set, subject to timeout precedence.",
+   "unit": "A03"
+  },
+  {
+   "subject": "Printed output and standard streams",
+   "kind": "silent behavior",
+   "text": "A03 rule 6 says printed text is not interpreted and stdout is never retained, but does not say whether stdout and stderr are drained, discarded, closed, or bounded, so print-heavy code may either succeed, fail, or block until timeout.",
+   "question": "What happens when function code writes large amounts to stdout or stderr?",
+   "options": [
+    "Both streams are continuously discarded",
+    "Both streams count against `output_bytes`",
+    "Writes fail because the streams are closed",
+    "They are captured up to a separate bound"
+   ],
+   "default_guess": "Continuously drain and discard both streams so printing cannot block or affect the outcome.",
+   "unit": "A03"
+  },
+  {
+   "subject": "Runner-to-parent diagnostic and trap channel",
+   "kind": "missing bound",
+   "text": "A03 rule 4 requires every trap hit to be written to the parent channel, and rule 6 permits exception type and message, but no bound or overflow behavior is given for that channel.",
+   "question": "How much diagnostic/trap data may cross from the sandbox, and what outcome results if code generates more?",
+   "options": [
+    "Transmit only a fixed trap flag and a failure detail capped at `failure_detail_bytes_max`",
+    "Count the channel against `output_bytes`",
+    "Give the channel its own release ceiling and classify overflow as `resource_exhausted`"
+   ],
+   "default_guess": "Use a fixed-size trap flag plus a failure-detail payload capped at `failure_detail_bytes_max`.",
+   "unit": "A03"
+  },
+  {
+   "subject": "Meaning of no network interface",
+   "kind": "vague isolation condition",
+   "text": "A03 rule 1 and required test 10 require “no network interface”, although a new Linux network namespace may contain a loopback device that is down or otherwise unusable.",
+   "question": "Does the requirement prohibit the existence of every interface, or only any usable/configured network path?",
+   "options": [
+    "No interface object may exist, including loopback",
+    "A loopback device may exist but must be down and unusable",
+    "Loopback communication is allowed; only external networking is prohibited"
+   ],
+   "default_guess": "Allow the namespace’s loopback device to exist only if it is down and unusable.",
+   "unit": "A03"
+  },
+  {
+   "subject": "Invalid token-configuration rereads",
+   "kind": "missing state transition",
+   "text": "A16 rule 2 says the file is re-read when its hash differs and that every request is refused “until a re-read passes”, but does not say whether a failed reread replaces the remembered hash or how an unchanged invalid file is retried.",
+   "question": "After a failed token-list reread, must every subsequent request retry parsing the same bytes, or only a later byte change?",
+   "options": [
+    "Retry the reread on every request until one passes",
+    "Remember the failed hash and retry only after the bytes change",
+    "Stop the kernel after the first failed reread"
+   ],
+   "default_guess": "Keep an invalid-configuration state and retry on every request without retaining the old token list.",
+   "unit": "A16"
+  },
+  {
+   "subject": "Atomic snapshot of a changing configuration file",
+   "kind": "race left open",
+   "text": "A16 rule 2 says the kernel reads and hashes the configuration bytes and, when they differ, “re-reads it”; it does not say which snapshot is authoritative if the file changes between those reads.",
+   "question": "Must hashing, parsing and replacement of the token list use one identical byte snapshot, and what happens if the file changes during the request?",
+   "options": [
+    "Open and read one snapshot, then hash and parse those same bytes",
+    "Read twice and accept the second read regardless of the first hash",
+    "Detect a change between reads and refuse the request"
+   ],
+   "default_guess": "Read one complete snapshot and use exactly those bytes for both comparison and parsing.",
+   "unit": "A16"
+  },
+  {
+   "subject": "Refusal precedence while token configuration is invalid",
+   "kind": "contradiction",
+   "text": "A16 rule 1 checks request size before token/configuration, while rule 2 says that when rereading fails “every request is refused … with the same one refusal as an unknown token”.",
+   "question": "Does an oversized request during an invalid configuration receive the size refusal or the uniform token refusal?",
+   "options": [
+    "Size refusal wins because rule 1 is the global precedence",
+    "Uniform token refusal wins for every request while configuration is invalid"
+   ],
+   "default_guess": "Apply the stated global order: size refusal first, then the uniform token refusal.",
+   "unit": "A16"
+  },
+  {
+   "subject": "Selection of a manifest instance by name",
+   "kind": "missing refusal condition",
+   "text": "A17 rule 4 says the instance is the one the installation selects, while A08 reads “the instance the installation selects”, but no rule handles a manifest containing two instances with the selected name.",
+   "question": "How is a selected instance resolved when its name is absent more than once or duplicated in the manifest?",
+   "options": [
+    "Require exactly one matching instance and refuse otherwise",
+    "Use the first matching instance in manifest order",
+    "Treat duplicate instance names as a malformed manifest record"
+   ],
+   "default_guess": "Require exactly one matching instance and refuse duplicates as a manifest mismatch.",
+   "unit": "A17"
+  },
+  {
+   "subject": "Credential newline and control-character validation",
+   "kind": "undefined byte rules",
+   "text": "A17 rule 2 says credential content is decoded as UTF-8 “without one trailing newline” and refuses “a control character”, without defining CRLF, multiple trailing newlines, or the exact control-character set.",
+   "question": "Which trailing bytes are removed and which Unicode code points make a credential invalid?",
+   "options": [
+    "Remove exactly one LF and reject ASCII C0 controls plus DEL, including any remaining CR/LF",
+    "Remove one LF or one CRLF and reject Unicode general category `Cc`",
+    "Trim all trailing line endings and reject only characters invalid in an HTTP header value"
+   ],
+   "default_guess": "Remove exactly one terminal LF, then reject U+0000–U+001F and U+007F, so a preceding CR is also rejected.",
+   "unit": "A17"
+  },
+  {
+   "subject": "Symlinks in credential path resolution",
+   "kind": "ambiguous security boundary",
+   "text": "A17 rules 1–2 require an absolute secret-file path and say it is read “without following a symbolic link”, but do not say whether only the final path entry or every directory component must be symlink-free.",
+   "question": "May any parent component of a configuration or secret-file path be a symbolic link?",
+   "options": [
+    "No path component may be a symbolic link",
+    "Only the final file entry must not be a symbolic link",
+    "Parent symlinks are allowed only if ownership and permissions are revalidated after opening"
+   ],
+   "default_guess": "Reject symbolic links in every path component and validate the opened file by descriptor.",
+   "unit": "A17"
+  },
+  {
+   "subject": "Secrets placed in manifest required headers",
+   "kind": "unclassified secret source",
+   "text": "A17 protects only the installation credential, while A09 and A10 send and expose manifest `required_headers` values verbatim in approval descriptions. Nothing says those values cannot themselves be credentials or secrets.",
+   "question": "Are manifest required-header values required to be non-secret, or must they receive the same storage, preview, logging and response protections as the installation credential?",
+   "options": [
+    "Required-header values are public configuration and secrets there are invalid",
+    "Treat every required-header value as secret",
+    "Allow the manifest to mark individual required headers as secret"
+   ],
+   "default_guess": "Treat required-header values as non-secret configuration and reject installations that attempt to use them for secrets.",
+   "unit": "A17"
+  },
+  {
+   "subject": "Exact sandbox interpreter version",
+   "kind": "missing release fact",
+   "text": "A20 says a release pins “exact versions” but identifies release v1 only as “CPython 3.12”, which does not select a patch version or build.",
+   "question": "Which exact CPython version and build constitute release v1?",
+   "options": [
+    "A specific CPython 3.12.x patch release and build digest",
+    "Any CPython 3.12 patch release",
+    "The host’s installed `python3.12` after a compatibility probe"
+   ],
+   "default_guess": "Pin one CPython 3.12.x patch release and its runtime artifact digest.",
+   "unit": "A20"
+  },
+  {
+   "subject": "Pinned dependency closure",
+   "kind": "missing specification",
+   "text": "A20 rule 3 requires exact versions of every Python dependency, but the texts provide neither the dependency set nor their versions.",
+   "question": "Which direct and transitive Python packages are permitted and at what exact versions?",
+   "options": [
+    "A fully enumerated lock of every direct and transitive package",
+    "Only direct dependencies are fixed; transitive versions may vary",
+    "Use only the Python standard library, with no third-party Python packages"
+   ],
+   "default_guess": "Use the standard library where possible and pin a complete transitive lock for every unavoidable package.",
+   "unit": "A20"
+  },
+  {
+   "subject": "Bubblewrap version and host dependency scope",
+   "kind": "dependency contradiction",
+   "text": "A03 requires the host’s `bubblewrap` and only probes that it works, while A20 says one release fixes “every dependency” and pins the sandbox runtime; no bubblewrap version or artifact is named.",
+   "question": "Is bubblewrap part of the pinned release, merely a host prerequisite accepted by a probe, or subject to a supported version range?",
+   "options": [
+    "Pin an exact bubblewrap version or artifact digest",
+    "Accept any bubblewrap version that passes the probe",
+    "Define and check a minimum/maximum supported version range"
+   ],
+   "default_guess": "Pin and verify an exact bubblewrap version or packaged artifact.",
+   "unit": "A20"
+  },
+  {
+   "subject": "Required categories for the security gate",
+   "kind": "undefined completeness criterion",
+   "text": "A21 defines completeness as `every_required_category_has_one_outcome`, but nowhere defines the authoritative set of required categories or whether the displayed list itself is that set.",
+   "question": "What category catalogue must `design_lint --state 2` compare against to decide that the review is complete?",
+   "options": [
+    "The nine categories printed in A21 are the complete fixed catalogue",
+    "A separate versioned security-category catalogue must be named",
+    "The linter discovers categories from actors and boundaries"
+   ],
+   "default_guess": "Treat the nine categories listed in A21 as the fixed State 2 catalogue.",
+   "unit": "A21"
+  },
+  {
+   "subject": "Disclosure class of an empty mapped operation output",
+   "kind": "contradiction",
+   "text": "A13 rule 6 says an empty mapped output list takes “the highest class among the node’s inputs”, while A07 rules 2–3 say an operation output takes the class its binding declares.",
+   "question": "For an operation node mapped over an empty list, does each empty output list use the binding output’s declared class or the highest input class?",
+   "options": [
+    "Use the binding output’s declared class",
+    "Use the highest class among the mapped node’s inputs",
+    "Use the maximum of the declared output class and input classes"
+   ],
+   "default_guess": "Use the binding output’s declared class for operation outputs and the highest input class for function outputs.",
+   "unit": "A13"
+  },
+  {
+   "subject": "Oversized mapped output among several outputs",
+   "kind": "missing atomicity and order",
+   "text": "A13 rule 6 measures only mapped lists that are delivered and says an oversized list fails the node, but does not say whether other output lists may already be delivered or which output is checked first.",
+   "question": "When a mapped node has several used outputs and one derived list exceeds `stored_value_bytes_max`, are all used outputs checked atomically before any delivery, or can smaller outputs already reach other branches?",
+   "options": [
+    "Check every used output first and deliver none if any is oversized",
+    "Check outputs in port-name order and retain deliveries made before the failure",
+    "Each output succeeds or fails independently"
+   ],
+   "default_guess": "Check all used output lists before delivery and deliver none if any one makes the mapped node fail.",
+   "unit": "A13"
+  },
+  {
+   "subject": "Ordering non-executable propagation against ready-node execution",
+   "kind": "missing precedence",
+   "text": "A13 chooses the smallest ready node to execute, while rules 4–5 and A15 create `skipped_by_guard` and `upstream_failed` records, but no rule says whether those derived conclusions are propagated before or after executing an independent ready node.",
+   "question": "At each advancement step, must the kernel first derive all newly skipped/upstream-failed nodes to a fixed point, or execute the next ready node first?",
+   "options": [
+    "Propagate all non-executable conclusions to a fixed point before selecting a ready node",
+    "Execute the smallest ready node first, then derive skips and upstream failures",
+    "Compare ready and non-executable nodes together by `node_id`"
+   ],
+   "default_guess": "Derive non-executable conclusions to a fixed point first, writing them in the stated order, then select the smallest ready node.",
+   "unit": "A13"
+  },
+  {
+   "subject": "Function access to the read-only runtime filesystem",
+   "kind": "cross-state contradiction",
+   "text": "K-02 says a function has “no filesystem beyond its input”, while A03 permits opening paths inside “the read-only runtime” and mounts that runtime into every sandbox.",
+   "question": "May agent code read arbitrary files in the runtime, or may it access runtime files only through Python import machinery?",
+   "options": [
+    "Arbitrary reads anywhere in the read-only runtime are allowed",
+    "Only imports may read runtime files; direct user opens are trapped",
+    "No runtime filesystem is visible beyond the interpreter and inputs"
+   ],
+   "default_guess": "Follow A03 literally and allow reads from the fixed read-only runtime, while denying every other host path.",
+   "unit": "context"
+  },
+  {
+   "subject": "Encoded or transformed service credentials in answers",
+   "kind": "cross-state contradiction",
+   "text": "State 0 says secrets “never enter … an answer”, but A16 and A17 protect only the credential value the kernel holds verbatim and say a service echo “in another encoding is not recognised, and is protected only by its class”.",
+   "question": "Does the no-secret-answer guarantee cover encoded or transformed forms of a credential, or only its exact UTF-8 bytes?",
+   "options": [
+    "Only the exact credential bytes are detected and prohibited",
+    "Known reversible encodings must also be detected and withheld",
+    "No transformed-secret guarantee is made, so State 0 must explicitly narrow its promise"
+   ],
+   "default_guess": "Apply the implementable A17 rule and guarantee withholding only for the exact credential bytes.",
+   "unit": "context"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"Disclosure propagation through operation nodes\",\"kind\":\"contradiction\",\"text\":\"A07 is titled “a disclosure class only rises” and its invariant says `lowers_class(any construct) -> never`, but rules 2–3 assign an operation output only the class declared by its binding, even when the operation received a higher-class input.\",\"question\":\"May an operation node emit a value whose declared output class is lower than one or more of its actual input classes, or must its output be raised to at least the highest input class?\",\"options\":[\"Binding outputs always keep their declared class, so an operation may lower provenance\",\"Raise each operation output to the maximum of its declared class and actual input classes\",\"Refuse bindings or flows that could let an operation lower a class\"],\"default_guess\":\"Treat a service output as a newly classified source and use the binding’s declared output class, because rules 2–3 state that explicitly.\",\"unit\":\"A07\"},{\"subject\":\"Disclosure class of executions with no named inputs or outputs\",\"kind\":\"missing default\",\"text\":\"A07 rule 5 defines an execution’s class as “the highest class among the values and files its NodeExecution or TrialExecution names as inputs … and for an operation also among its outputs”, but gives no result when that set is empty.\",\"question\":\"What class does a skipped, upstream-failed, inputless, or otherwise payload-free execution have?\",\"options\":[\"`open`\",\"The highest class declared by the node’s ports\",\"No execution class until at least one value or file is named\"],\"default_guess\":\"Use `open` for an empty set.\",\"unit\":\"A07\"},{\"subject\":\"Redacted failure-detail length\",\"kind\":\"undefined measurement\",\"text\":\"A07 rule 5 says a protected `failure_detail` is returned to an agent “only as its length and that class” without defining whether length means Unicode characters, UTF-8 bytes, or the retained bounded byte length.\",\"question\":\"What exact length is disclosed for a protected failure detail?\",\"options\":[\"UTF-8 byte length of the retained detail\",\"Unicode scalar-value count\",\"Length before truncation\",\"Length after truncation\"],\"default_guess\":\"Return the UTF-8 byte length after truncation, matching the release’s byte ceilings.\",\"unit\":\"A07\"},{\"subject\":\"Clock prohibition in the sandbox\",\"kind\":\"incomplete closed list\",\"text\":\"A03 rule 4 says it replaces “every clock … entry point” and that the list is closed, but the listed CPython 3.12 functions omit clock-bearing APIs such as `time.clock_gettime`, `time.clock_gettime_ns` and runtime/file metadata sources.\",\"question\":\"Are unlisted standard-library or runtime sources of time allowed, trapped, or unavailable from the sandbox?\",\"options\":[\"Only the written list is trapped and all other time sources are allowed\",\"Every observable clock source is prohibited and the list must be expanded\",\"Only current wall time is prohibited; durations and metadata times are allowed\"],\"default_guess\":\"Prohibit and trap every API that can reveal current or elapsed host time, including the omitted `time` functions.\",\"unit\":\"A03\"},{\"subject\":\"Determinism of function executions\",\"kind\":\"unverifiable invariant\",\"text\":\"A03 required test 6 says the same implementation and input yield the same output digest twice, while the sandbox rules still expose possible nondeterministic observations such as allocation addresses, process/runtime facts, filesystem metadata and unlisted standard-library facilities.\",\"question\":\"Is deterministic output a required invariant, and if so which remaining observable sources must be removed or trapped?\",\"options\":[\"Determinism is guaranteed and every nondeterministic source must be enumerated and blocked\",\"Only the named clock/random APIs are blocked; other nondeterminism is accepted\",\"Admission must execute repeated trials and refuse inconsistent output\"],\"default_guess\":\"Treat determinism as required and block remaining observable nondeterministic host/runtime facts.\",\"unit\":\"A03\"},{\"subject\":\"Fork and subprocess behavior\",\"kind\":\"contradiction\",\"text\":\"A03 rule 4 says the audit hook raises “on … subprocess”, but required test 2 says “a fork loop” reaches the process limit and ends `resource_exhausted`.\",\"question\":\"Does `os.fork` count as a trapped subprocess action or is it allowed until `process_count` is exhausted?\",\"options\":[\"Trap every process-creation API as `sandbox_violation`\",\"Allow `fork` and classify exhaustion as `resource_exhausted`, while trapping higher-level subprocess execution\",\"Allow all process creation within the process bound\"],\"default_guess\":\"Allow `fork` within the namespace until the process limit and interpret “subprocess” as APIs that execute another program.\",\"unit\":\"A03\"},{\"subject\":\"Detection of resource-limit hits\",\"kind\":\"undefined classification\",\"text\":\"A03 rule 5 classifies “a limit hit (memory, process count, scratch, `output_bytes`)” as `resource_exhausted`, but does not define how a hit is distinguished from a caught allocation/fork error, a Python exception, an abnormal exit, or a timeout.\",\"question\":\"What observable evidence makes each limit count as hit, especially when user code catches the resulting error or the OS reports only an abnormal exit?\",\"options\":[\"Any supervisor or runner indication attributable to the configured limit counts as a hit even if caught\",\"Only an external hard-limit termination counts as a hit\",\"Caught errors are ordinary code behavior; only uncaught failures are classified\"],\"default_guess\":\"Have the runner or supervisor persist a limit-hit flag and classify `resource_exhausted` whenever that flag was set, subject to timeout precedence.\",\"unit\":\"A03\"},{\"subject\":\"Printed output and standard streams\",\"kind\":\"silent behavior\",\"text\":\"A03 rule 6 says printed text is not interpreted and stdout is never retained, but does not say whether stdout and stderr are drained, discarded, closed, or bounded, so print-heavy code may either succeed, fail, or block until timeout.\",\"question\":\"What happens when function code writes large amounts to stdout or stderr?\",\"options\":[\"Both streams are continuously discarded\",\"Both streams count against `output_bytes`\",\"Writes fail because the streams are closed\",\"They are captured up to a separate bound\"],\"default_guess\":\"Continuously drain and discard both streams so printing cannot block or affect the outcome.\",\"unit\":\"A03\"},{\"subject\":\"Runner-to-parent diagnostic and trap channel\",\"kind\":\"missing bound\",\"text\":\"A03 rule 4 requires every trap hit to be written to the parent channel, and rule 6 permits exception type and message, but no bound or overflow behavior is given for that channel.\",\"question\":\"How much diagnostic/trap data may cross from the sandbox, and what outcome results if code generates more?\",\"options\":[\"Transmit only a fixed trap flag and a failure detail capped at `failure_detail_bytes_max`\",\"Count the channel against `output_bytes`\",\"Give the channel its own release ceiling and classify overflow as `resource_exhausted`\"],\"default_guess\":\"Use a fixed-size trap flag plus a failure-detail payload capped at `failure_detail_bytes_max`.\",\"unit\":\"A03\"},{\"subject\":\"Meaning of no network interface\",\"kind\":\"vague isolation condition\",\"text\":\"A03 rule 1 and required test 10 require “no network interface”, although a new Linux network namespace may contain a loopback device that is down or otherwise unusable.\",\"question\":\"Does the requirement prohibit the existence of every interface, or only any usable/configured network path?\",\"options\":[\"No interface object may exist, including loopback\",\"A loopback device may exist but must be down and unusable\",\"Loopback communication is allowed; only external networking is prohibited\"],\"default_guess\":\"Allow the namespace’s loopback device to exist only if it is down and unusable.\",\"unit\":\"A03\"},{\"subject\":\"Invalid token-configuration rereads\",\"kind\":\"missing state transition\",\"text\":\"A16 rule 2 says the file is re-read when its hash differs and that every request is refused “until a re-read passes”, but does not say whether a failed reread replaces the remembered hash or how an unchanged invalid file is retried.\",\"question\":\"After a failed token-list reread, must every subsequent request retry parsing the same bytes, or only a later byte change?\",\"options\":[\"Retry the reread on every request until one passes\",\"Remember the failed hash and retry only after the bytes change\",\"Stop the kernel after the first failed reread\"],\"default_guess\":\"Keep an invalid-configuration state and retry on every request without retaining the old token list.\",\"unit\":\"A16\"},{\"subject\":\"Atomic snapshot of a changing configuration file\",\"kind\":\"race left open\",\"text\":\"A16 rule 2 says the kernel reads and hashes the configuration bytes and, when they differ, “re-reads it”; it does not say which snapshot is authoritative if the file changes between those reads.\",\"question\":\"Must hashing, parsing and replacement of the token list use one identical byte snapshot, and what happens if the file changes during the request?\",\"options\":[\"Open and read one snapshot, then hash and parse those same bytes\",\"Read twice and accept the second read regardless of the first hash\",\"Detect a change between reads and refuse the request\"],\"default_guess\":\"Read one complete snapshot and use exactly those bytes for both comparison and parsing.\",\"unit\":\"A16\"},{\"subject\":\"Refusal precedence while token configuration is invalid\",\"kind\":\"contradiction\",\"text\":\"A16 rule 1 checks request size before token/configuration, while rule 2 says that when rereading fails “every request is refused … with the same one refusal as an unknown token”.\",\"question\":\"Does an oversized request during an invalid configuration receive the size refusal or the uniform token refusal?\",\"options\":[\"Size refusal wins because rule 1 is the global precedence\",\"Uniform token refusal wins for every request while configuration is invalid\"],\"default_guess\":\"Apply the stated global order: size refusal first, then the uniform token refusal.\",\"unit\":\"A16\"},{\"subject\":\"Selection of a manifest instance by name\",\"kind\":\"missing refusal condition\",\"text\":\"A17 rule 4 says the instance is the one the installation selects, while A08 reads “the instance the installation selects”, but no rule handles a manifest containing two instances with the selected name.\",\"question\":\"How is a selected instance resolved when its name is absent more than once or duplicated in the manifest?\",\"options\":[\"Require exactly one matching instance and refuse otherwise\",\"Use the first matching instance in manifest order\",\"Treat duplicate instance names as a malformed manifest record\"],\"default_guess\":\"Require exactly one matching instance and refuse duplicates as a manifest mismatch.\",\"unit\":\"A17\"},{\"subject\":\"Credential newline and control-character validation\",\"kind\":\"undefined byte rules\",\"text\":\"A17 rule 2 says credential content is decoded as UTF-8 “without one trailing newline” and refuses “a control character”, without defining CRLF, multiple trailing newlines, or the exact control-character set.\",\"question\":\"Which trailing bytes are removed and which Unicode code points make a credential invalid?\",\"options\":[\"Remove exactly one LF and reject ASCII C0 controls plus DEL, including any remaining CR/LF\",\"Remove one LF or one CRLF and reject Unicode general category `Cc`\",\"Trim all trailing line endings and reject only characters invalid in an HTTP header value\"],\"default_guess\":\"Remove exactly one terminal LF, then reject U+0000–U+001F and U+007F, so a preceding CR is also rejected.\",\"unit\":\"A17\"},{\"subject\":\"Symlinks in credential path resolution\",\"kind\":\"ambiguous security boundary\",\"text\":\"A17 rules 1–2 require an absolute secret-file path and say it is read “without following a symbolic link”, but do not say whether only the final path entry or every directory component must be symlink-free.\",\"question\":\"May any parent component of a configuration or secret-file path be a symbolic link?\",\"options\":[\"No path component may be a symbolic link\",\"Only the final file entry must not be a symbolic link\",\"Parent symlinks are allowed only if ownership and permissions are revalidated after opening\"],\"default_guess\":\"Reject symbolic links in every path component and validate the opened file by descriptor.\",\"unit\":\"A17\"},{\"subject\":\"Secrets placed in manifest required headers\",\"kind\":\"unclassified secret source\",\"text\":\"A17 protects only the installation credential, while A09 and A10 send and expose manifest `required_headers` values verbatim in approval descriptions. Nothing says those values cannot themselves be credentials or secrets.\",\"question\":\"Are manifest required-header values required to be non-secret, or must they receive the same storage, preview, logging and response protections as the installation credential?\",\"options\":[\"Required-header values are public configuration and secrets there are invalid\",\"Treat every required-header value as secret\",\"Allow the manifest to mark individual required headers as secret\"],\"default_guess\":\"Treat required-header values as non-secret configuration and reject installations that attempt to use them for secrets.\",\"unit\":\"A17\"},{\"subject\":\"Exact sandbox interpreter version\",\"kind\":\"missing release fact\",\"text\":\"A20 says a release pins “exact versions” but identifies release v1 only as “CPython 3.12”, which does not select a patch version or build.\",\"question\":\"Which exact CPython version and build constitute release v1?\",\"options\":[\"A specific CPython 3.12.x patch release and build digest\",\"Any CPython 3.12 patch release\",\"The host’s installed `python3.12` after a compatibility probe\"],\"default_guess\":\"Pin one CPython 3.12.x patch release and its runtime artifact digest.\",\"unit\":\"A20\"},{\"subject\":\"Pinned dependency closure\",\"kind\":\"missing specification\",\"text\":\"A20 rule 3 requires exact versions of every Python dependency, but the texts provide neither the dependency set nor their versions.\",\"question\":\"Which direct and transitive Python packages are permitted and at what exact versions?\",\"options\":[\"A fully enumerated lock of every direct and transitive package\",\"Only direct dependencies are fixed; transitive versions may vary\",\"Use only the Python standard library, with no third-party Python packages\"],\"default_guess\":\"Use the standard library where possible and pin a complete transitive lock for every unavoidable package.\",\"unit\":\"A20\"},{\"subject\":\"Bubblewrap version and host dependency scope\",\"kind\":\"dependency contradiction\",\"text\":\"A03 requires the host’s `bubblewrap` and only probes that it works, while A20 says one release fixes “every dependency” and pins the sandbox runtime; no bubblewrap version or artifact is named.\",\"question\":\"Is bubblewrap part of the pinned release, merely a host prerequisite accepted by a probe, or subject to a supported version range?\",\"options\":[\"Pin an exact bubblewrap version or artifact digest\",\"Accept any bubblewrap version that passes the probe\",\"Define and check a minimum/maximum supported version range\"],\"default_guess\":\"Pin and verify an exact bubblewrap version or packaged artifact.\",\"unit\":\"A20\"},{\"subject\":\"Required categories for the security gate\",\"kind\":\"undefined completeness criterion\",\"text\":\"A21 defines completeness as `every_required_category_has_one_outcome`, but nowhere defines the authoritative set of required categories or whether the displayed list itself is that set.\",\"question\":\"What category catalogue must `design_lint --state 2` compare against to decide that the review is complete?\",\"options\":[\"The nine categories printed in A21 are the complete fixed catalogue\",\"A separate versioned security-category catalogue must be named\",\"The linter discovers categories from actors and boundaries\"],\"default_guess\":\"Treat the nine categories listed in A21 as the fixed State 2 catalogue.\",\"unit\":\"A21\"},{\"subject\":\"Disclosure class of an empty mapped operation output\",\"kind\":\"contradiction\",\"text\":\"A13 rule 6 says an empty mapped output list takes “the highest class among the node’s inputs”, while A07 rules 2–3 say an operation output takes the class its binding declares.\",\"question\":\"For an operation node mapped over an empty list, does each empty output list use the binding output’s declared class or the highest input class?\",\"options\":[\"Use the binding output’s declared class\",\"Use the highest class among the mapped node’s inputs\",\"Use the maximum of the declared output class and input classes\"],\"default_guess\":\"Use the binding output’s declared class for operation outputs and the highest input class for function outputs.\",\"unit\":\"A13\"},{\"subject\":\"Oversized mapped output among several outputs\",\"kind\":\"missing atomicity and order\",\"text\":\"A13 rule 6 measures only mapped lists that are delivered and says an oversized list fails the node, but does not say whether other output lists may already be delivered or which output is checked first.\",\"question\":\"When a mapped node has several used outputs and one derived list exceeds `stored_value_bytes_max`, are all used outputs checked atomically before any delivery, or can smaller outputs already reach other branches?\",\"options\":[\"Check every used output first and deliver none if any is oversized\",\"Check outputs in port-name order and retain deliveries made before the failure\",\"Each output succeeds or fails independently\"],\"default_guess\":\"Check all used output lists before delivery and deliver none if any one makes the mapped node fail.\",\"unit\":\"A13\"},{\"subject\":\"Ordering non-executable propagation against ready-node execution\",\"kind\":\"missing precedence\",\"text\":\"A13 chooses the smallest ready node to execute, while rules 4–5 and A15 create `skipped_by_guard` and `upstream_failed` records, but no rule says whether those derived conclusions are propagated before or after executing an independent ready node.\",\"question\":\"At each advancement step, must the kernel first derive all newly skipped/upstream-failed nodes to a fixed point, or execute the next ready node first?\",\"options\":[\"Propagate all non-executable conclusions to a fixed point before selecting a ready node\",\"Execute the smallest ready node first, then derive skips and upstream failures\",\"Compare ready and non-executable nodes together by `node_id`\"],\"default_guess\":\"Derive non-executable conclusions to a fixed point first, writing them in the stated order, then select the smallest ready node.\",\"unit\":\"A13\"},{\"subject\":\"Function access to the read-only runtime filesystem\",\"kind\":\"cross-state contradiction\",\"text\":\"K-02 says a function has “no filesystem beyond its input”, while A03 permits opening paths inside “the read-only runtime” and mounts that runtime into every sandbox.\",\"question\":\"May agent code read arbitrary files in the runtime, or may it access runtime files only through Python import machinery?\",\"options\":[\"Arbitrary reads anywhere in the read-only runtime are allowed\",\"Only imports may read runtime files; direct user opens are trapped\",\"No runtime filesystem is visible beyond the interpreter and inputs\"],\"default_guess\":\"Follow A03 literally and allow reads from the fixed read-only runtime, while denying every other host path.\",\"unit\":\"context\"},{\"subject\":\"Encoded or transformed service credentials in answers\",\"kind\":\"cross-state contradiction\",\"text\":\"State 0 says secrets “never enter … an answer”, but A16 and A17 protect only the credential value the kernel holds verbatim and say a service echo “in another encoding is not recognised, and is protected only by its class”.\",\"question\":\"Does the no-secret-answer guarantee cover encoded or transformed forms of a credential, or only its exact UTF-8 bytes?\",\"options\":[\"Only the exact credential bytes are detected and prohibited\",\"Known reversible encodings must also be detected and withheld\",\"No transformed-secret guarantee is made, so State 0 must explicitly narrow its promise\"],\"default_guess\":\"Apply the implementable A17 rule and guarantee withholding only for the exact credential bytes.\",\"unit\":\"context\"}]}",
+ "set_aside": []
+}

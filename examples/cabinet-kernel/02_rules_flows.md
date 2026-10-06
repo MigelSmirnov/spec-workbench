@@ -213,6 +213,10 @@ per-agent ceilings.
    class its execution actually received, a binding output the class the binding
    declares, a trial case's input its contract input port's class and its
    expected output the highest class of the case's inputs. No function, edge or flow construct lowers a class.
+   A binding output is not carried from the operation's inputs: it takes the
+   class the binding declares, which the owner accepted with the binding (A08),
+   whatever its inputs' classes — at proof time, at run time, and for the empty
+   lists of a mapped operation over an empty list alike.
 4. An agent never receives a `personal_data` value: wherever the surface would
    return one to an agent — run inputs and outputs, trial cases and executions,
    approval previews, trace records — it returns only the value's digest and class
@@ -236,7 +240,8 @@ per-agent ceilings.
 class(function_output) = max(class(received_inputs)) OR open
 proof_edge_valid -> reach_class(source) <= accepts(target_input)
 value_to_agent AND class = personal_data -> (digest, class) only
-lowers_class(any construct) -> never
+lowers_class(function | edge | flow construct) -> never
+class(binding_output) = declared_class(binding)
 ```
 
 ### Required tests
