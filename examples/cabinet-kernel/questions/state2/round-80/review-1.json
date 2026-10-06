@@ -1,0 +1,210 @@
+{
+ "open_points": [
+  {
+   "subject": "M23 NodeExecution identity",
+   "kind": "identity contradiction",
+   "text": "“Identity: value” and “an attempt's record is issued once”; unlike the other issued observations, NodeExecution has no minted identifier and A01 does not define a content-derived identity for it.",
+   "question": "Is a NodeExecution a value identified by `(run_id, node_id, map_index, attempt_number)`, an entity with that composite identity, or an entity with a separately minted identifier?",
+   "options": [
+    "Value with the attempt tuple as identity",
+    "Entity with the attempt tuple as identity",
+    "Entity with a minted identifier"
+   ],
+   "default_guess": "Treat the attempt tuple as its identity and correct the value/entity classification explicitly."
+  },
+  {
+   "subject": "A03 sandbox filesystem access",
+   "kind": "contradiction",
+   "text": "K-02 says a function has “no filesystem beyond its input”, while A03 gives it “one private exchange directory” and permits opening paths in “the exchange directory and the read-only runtime”.",
+   "question": "Which paths and operations may agent code itself perform: no filesystem access, read-only access to input files, arbitrary access within the exchange directory, or access to the runtime as well?",
+   "options": [
+    "No direct filesystem access by agent code",
+    "Input-only reads plus designated output writes",
+    "Arbitrary exchange-directory access and read-only runtime access"
+   ],
+   "default_guess": "Permit only runner-designated input reads and output writes, with runtime files inaccessible to agent code."
+  },
+  {
+   "subject": "A03 clock, randomness and deterministic execution",
+   "kind": "unenforced invariant",
+   "text": "The runner replaces “every clock and randomness entry point”, but the closed list omits CPython sources such as `time.clock_gettime`, `time.thread_time`, `os.times`, process identifiers and filesystem metadata; modules can also potentially be reloaded. The required test says “The same implementation on the same input yields the same output digest twice.”",
+   "question": "Must all observable nondeterminism be blocked or fixed, and if so what complete mechanism or complete set of observable sources enforces that requirement?",
+   "options": [
+    "Guarantee full deterministic execution",
+    "Guarantee only the specifically listed clock and randomness traps",
+    "Remove the same-input/same-output guarantee"
+   ],
+   "default_guess": "Require full determinism and enforce it below Python-level monkey-patching."
+  },
+  {
+   "subject": "A03 audit-hook prohibitions",
+   "kind": "vague refusal condition",
+   "text": "The runner “installs an audit hook that raises on socket, subprocess, `ctypes` and on opening any path outside” the allowed directories, but no audit-event names or operation boundaries for “socket”, “subprocess” and “ctypes” are stated.",
+   "question": "Exactly which Python audit events and arguments constitute a recorded trap hit?",
+   "options": [
+    "Enumerate the exact CPython audit event names and argument predicates",
+    "Treat importing any related module as a violation",
+    "Treat only actual network, process and native-code operations as violations"
+   ],
+   "default_guess": "Enumerate and pin the exact audit events and predicates for the release."
+  },
+  {
+   "subject": "A03 resource-limit outcome",
+   "kind": "vague classification",
+   "text": "The outcome is `resource_exhausted` when “a limit hit (memory, process count, scratch, `output_bytes`)”, but the rules do not define how a hit is detected when the OS reports a generic exception or signal, or when user code catches an allocation, fork or write failure and returns normally.",
+   "question": "What observable events count as each resource limit being hit, and does a caught limit failure still force `resource_exhausted`?",
+   "options": [
+    "Any recorded enforcement denial forces `resource_exhausted` even if caught",
+    "Only process termination or an uncaught limit error counts",
+    "Classify ambiguous signals and exceptions as `crashed`"
+   ],
+   "default_guess": "Record enforcement denials outside user control and make any such denial `resource_exhausted` even if caught."
+  },
+  {
+   "subject": "A03 output counting and invalid Python values",
+   "kind": "precedence gap",
+   "text": "The output count is “the sum of the canonical JSON bytes of every `value` output”, while `resource_exhausted` is checked before `contract_violation`; a returned value such as a set, bytes on a value port, or a non-finite float has no canonical JSON bytes to count.",
+   "question": "How is an output that cannot be canonically encoded classified, and can output-size precedence apply to it?",
+   "options": [
+    "Classify it immediately as `contract_violation`",
+    "Treat canonicalization failure as `crashed`",
+    "Measure an intermediate encoding before contract validation"
+   ],
+   "default_guess": "Classify a non-canonicalizable returned value as `contract_violation`; apply the output-byte limit only to canonicalizable values and file bytes."
+  },
+  {
+   "subject": "A04 authored TrialCase port coverage",
+   "kind": "validation gap",
+   "text": "A case is added when “its input values fit the contract version's input ports” and expected outputs “fit the output ports”; the rules mention per-port presence but never say whether extra inputs are refused or whether present `expected_outputs` must contain every output port.",
+   "question": "Must authored trial inputs name exactly every input port and no others, and when expected outputs are present must they name exactly every output port and no others?",
+   "options": [
+    "Both mappings must be exact",
+    "Inputs exact; expected outputs may be partial",
+    "Both mappings may be partial"
+   ],
+   "default_guess": "Require exact inputs and, when expected outputs are present, exact outputs."
+  },
+  {
+   "subject": "A07 redacted failure-detail length",
+   "kind": "undefined representation",
+   "text": "A `failure_detail` above class `open` is returned to an agent “only as its length and that class”.",
+   "question": "Is the disclosed length measured in UTF-8 bytes, Unicode scalar values, or another unit, and is it the original or already truncated detail's length?",
+   "options": [
+    "UTF-8 bytes of the stored truncated detail",
+    "Unicode scalar values of the stored detail",
+    "Length of the original untruncated detail"
+   ],
+   "default_guess": "Return the UTF-8 byte length of the stored, bounded detail."
+  },
+  {
+   "subject": "A16 token-list configuration reload",
+   "kind": "state transition gap",
+   "text": "The kernel re-reads when the configuration bytes differ from “the last read”; if a re-read fails, every request is refused “until a re-read passes”, but the text does not say whether the failed bytes become the last-read digest or what triggers another attempt when the file is restored to bytes equal to the last valid version.",
+   "question": "After any failed configuration read or validation, is the file re-read on every request, and which digest is retained for change detection?",
+   "options": [
+    "Re-read on every request while invalid and retain the last valid digest",
+    "Store the failed digest and retry only after another byte change",
+    "Discard all digest state after failure"
+   ],
+   "default_guess": "Retain the last valid digest and retry the complete token-list read on every request until it passes."
+  },
+  {
+   "subject": "A18 data-directory protection",
+   "kind": "vague start condition",
+   "text": "“The directory and everything in it are private to the kernel's user; the kernel refuses to start otherwise.”",
+   "question": "What exact ownership, file-type and permission checks define “private”, and do they apply recursively to the data-directory path, subdirectories, database side files and the data directory itself if it is a symbolic link?",
+   "options": [
+    "Owner must be the kernel user and all group/other permission bits must be clear recursively",
+    "Only the top-level directory must be owner-only",
+    "Use platform access checks rather than ownership and mode bits"
+   ],
+   "default_guess": "Require the directory and every existing descendant to be owned by the kernel user, prohibit symlinks, and clear all group/other permission bits."
+  },
+  {
+   "subject": "M28 and A08 manifest revision access",
+   "kind": "missing mechanism",
+   "text": "The manifest is read from `<manifest_location>/<service_id>.json` “at the configured `manifest_revision`”, and “a record changes for a running kernel only after a restart with a new configured revision”, but no rule defines how a revision selects bytes or how working-tree changes are excluded.",
+   "question": "What is `manifest_revision`, how are file bytes read at that revision, and what happens when the location is not a supported repository or the revision cannot be resolved?",
+   "options": [
+    "Read a Git object at an exact commit without consulting the working tree",
+    "Require the host to materialize an immutable revision directory",
+    "Treat the revision as informational and read current filesystem bytes"
+   ],
+   "default_guess": "Resolve an exact Git commit and read the blob from that commit, refusing start when the location or revision cannot be resolved."
+  },
+  {
+   "subject": "A09 base URL construction",
+   "kind": "URL ambiguity",
+   "text": "A valid `api_base_url` is only required to be an absolute HTTP(S) URL with a host, while the request URL is “the `api_base_url` without a trailing `/` followed by the declared path” and nothing else is normalized.",
+   "question": "May the base URL contain a path, query, fragment, user information, multiple trailing slashes or a non-default port, and exactly how are those forms joined and represented in the `Host` header and approval digest?",
+   "options": [
+    "Restrict the base URL to scheme, host and optional port only",
+    "Allow a path prefix but prohibit query, fragment and user information",
+    "Allow every absolute URL and define exact string concatenation"
+   ],
+   "default_guess": "Allow a normalized path prefix and optional port, but prohibit user information, query and fragment."
+  },
+  {
+   "subject": "A09 path placeholders and file ports",
+   "kind": "rule mismatch",
+   "text": "Proposal validation requires every path placeholder to name an input whose schema type is `string` or `integer`, but it does not require `value` carriage; at send time the placeholder must take “a non-null string or integer”, while a file input carries bytes.",
+   "question": "Must every path-placeholder input be a `value` port, or may a file port with a string/integer schema pass proposal and then fail every send?",
+   "options": [
+    "Require `value` carriage at proposal time",
+    "Permit file ports and define a conversion to a path segment",
+    "Permit proposal but fail the send as an unplaceable input"
+   ],
+   "default_guess": "Require every path-placeholder input to have `value` carriage at proposal time."
+  },
+  {
+   "subject": "A08, A09 and A17 externally supplied size limits",
+   "kind": "unbounded input",
+   "text": "The release defines bounds for requests, responses, stored values and files, but no bound is given for a manifest file, capability entry, base URL, required-header name or value, operation path, or credential secret-file value; these values are parsed or assembled into an outbound request.",
+   "question": "What size ceilings apply to manifest material, required headers, URLs and resolved credential values, and how is an excess classified?",
+   "options": [
+    "Add explicit release ceilings and refuse the manifest or pre-send check",
+    "Reuse `bounded_text_bytes_max` for each textual field",
+    "Leave installation and manifest material unbounded"
+   ],
+   "default_guess": "Apply explicit release ceilings, with invalid manifest material causing manifest mismatch and oversized credential material causing `credential_unresolved`."
+  },
+  {
+   "subject": "A10 approval request exactness",
+   "kind": "contradiction",
+   "text": "State 0 says approval covers “the fully built request as the owner was shown it — method, URL, headers and body” and “Any difference at send … asks again”; A10 excludes the multipart boundary and its resulting `content-length` from the description, and shows the credential header and `content-length` by name only.",
+   "question": "Does approval cover the literal wire request, or a normalized semantic request description with the stated credential and multipart-framing exceptions?",
+   "options": [
+    "Literal wire bytes except the credential value",
+    "The normalized A10 request description",
+    "Literal method, URL and headers but semantic multipart parts"
+   ],
+   "default_guess": "Make the normalized A10 request description authoritative and revise the State 0 wording to name all exceptions."
+  },
+  {
+   "subject": "A13 current element conclusion after retries",
+   "kind": "missing precedence",
+   "text": "An element may have several immutable NodeExecutions after `service_unreachable` or a resolution of `not_applied`, but the rules say only that “An element's conclusion is its NodeExecution's status” and do not say which record controls readiness, mapped-node aggregation and final run status.",
+   "question": "Which NodeExecution determines an element's current conclusion when earlier attempts remain in the trace?",
+   "options": [
+    "The highest `attempt_number`",
+    "The first non-waiting attempt",
+    "A fold over all attempts with an explicit precedence table"
+   ],
+   "default_guess": "Use the highest `attempt_number`, with its linked EffectAttempt resolution overriding `outcome_unknown` as A11 specifies."
+  },
+  {
+   "subject": "A10 StandingGrant target eligibility",
+   "kind": "refusal gap",
+   "text": "A grant is given for “a node of the flow's active version whose effect class is not `destructive`”, but a function node has no effect class and the rules never explicitly say whether such a grant request is refused or how it is ordered against the active-version and node checks.",
+   "question": "Can a standing grant target only an operation node, and what is the exact check order for missing node, wrong version, function node, destructive node and already-active grant?",
+   "options": [
+    "Only operation nodes are eligible, with an explicit ordered refusal sequence",
+    "Treat function nodes as `read` and permit an unused grant",
+    "Reject function nodes through the request schema"
+   ],
+   "default_guess": "Allow only operation nodes and check: referenced records and node exist, version is active, node is an operation, class is not destructive, then return an existing active grant or create one."
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"M23 NodeExecution identity\",\"kind\":\"identity contradiction\",\"text\":\"“Identity: value” and “an attempt's record is issued once”; unlike the other issued observations, NodeExecution has no minted identifier and A01 does not define a content-derived identity for it.\",\"question\":\"Is a NodeExecution a value identified by `(run_id, node_id, map_index, attempt_number)`, an entity with that composite identity, or an entity with a separately minted identifier?\",\"options\":[\"Value with the attempt tuple as identity\",\"Entity with the attempt tuple as identity\",\"Entity with a minted identifier\"],\"default_guess\":\"Treat the attempt tuple as its identity and correct the value/entity classification explicitly.\"},{\"subject\":\"A03 sandbox filesystem access\",\"kind\":\"contradiction\",\"text\":\"K-02 says a function has “no filesystem beyond its input”, while A03 gives it “one private exchange directory” and permits opening paths in “the exchange directory and the read-only runtime”.\",\"question\":\"Which paths and operations may agent code itself perform: no filesystem access, read-only access to input files, arbitrary access within the exchange directory, or access to the runtime as well?\",\"options\":[\"No direct filesystem access by agent code\",\"Input-only reads plus designated output writes\",\"Arbitrary exchange-directory access and read-only runtime access\"],\"default_guess\":\"Permit only runner-designated input reads and output writes, with runtime files inaccessible to agent code.\"},{\"subject\":\"A03 clock, randomness and deterministic execution\",\"kind\":\"unenforced invariant\",\"text\":\"The runner replaces “every clock and randomness entry point”, but the closed list omits CPython sources such as `time.clock_gettime`, `time.thread_time`, `os.times`, process identifiers and filesystem metadata; modules can also potentially be reloaded. The required test says “The same implementation on the same input yields the same output digest twice.”\",\"question\":\"Must all observable nondeterminism be blocked or fixed, and if so what complete mechanism or complete set of observable sources enforces that requirement?\",\"options\":[\"Guarantee full deterministic execution\",\"Guarantee only the specifically listed clock and randomness traps\",\"Remove the same-input/same-output guarantee\"],\"default_guess\":\"Require full determinism and enforce it below Python-level monkey-patching.\"},{\"subject\":\"A03 audit-hook prohibitions\",\"kind\":\"vague refusal condition\",\"text\":\"The runner “installs an audit hook that raises on socket, subprocess, `ctypes` and on opening any path outside” the allowed directories, but no audit-event names or operation boundaries for “socket”, “subprocess” and “ctypes” are stated.\",\"question\":\"Exactly which Python audit events and arguments constitute a recorded trap hit?\",\"options\":[\"Enumerate the exact CPython audit event names and argument predicates\",\"Treat importing any related module as a violation\",\"Treat only actual network, process and native-code operations as violations\"],\"default_guess\":\"Enumerate and pin the exact audit events and predicates for the release.\"},{\"subject\":\"A03 resource-limit outcome\",\"kind\":\"vague classification\",\"text\":\"The outcome is `resource_exhausted` when “a limit hit (memory, process count, scratch, `output_bytes`)”, but the rules do not define how a hit is detected when the OS reports a generic exception or signal, or when user code catches an allocation, fork or write failure and returns normally.\",\"question\":\"What observable events count as each resource limit being hit, and does a caught limit failure still force `resource_exhausted`?\",\"options\":[\"Any recorded enforcement denial forces `resource_exhausted` even if caught\",\"Only process termination or an uncaught limit error counts\",\"Classify ambiguous signals and exceptions as `crashed`\"],\"default_guess\":\"Record enforcement denials outside user control and make any such denial `resource_exhausted` even if caught.\"},{\"subject\":\"A03 output counting and invalid Python values\",\"kind\":\"precedence gap\",\"text\":\"The output count is “the sum of the canonical JSON bytes of every `value` output”, while `resource_exhausted` is checked before `contract_violation`; a returned value such as a set, bytes on a value port, or a non-finite float has no canonical JSON bytes to count.\",\"question\":\"How is an output that cannot be canonically encoded classified, and can output-size precedence apply to it?\",\"options\":[\"Classify it immediately as `contract_violation`\",\"Treat canonicalization failure as `crashed`\",\"Measure an intermediate encoding before contract validation\"],\"default_guess\":\"Classify a non-canonicalizable returned value as `contract_violation`; apply the output-byte limit only to canonicalizable values and file bytes.\"},{\"subject\":\"A04 authored TrialCase port coverage\",\"kind\":\"validation gap\",\"text\":\"A case is added when “its input values fit the contract version's input ports” and expected outputs “fit the output ports”; the rules mention per-port presence but never say whether extra inputs are refused or whether present `expected_outputs` must contain every output port.\",\"question\":\"Must authored trial inputs name exactly every input port and no others, and when expected outputs are present must they name exactly every output port and no others?\",\"options\":[\"Both mappings must be exact\",\"Inputs exact; expected outputs may be partial\",\"Both mappings may be partial\"],\"default_guess\":\"Require exact inputs and, when expected outputs are present, exact outputs.\"},{\"subject\":\"A07 redacted failure-detail length\",\"kind\":\"undefined representation\",\"text\":\"A `failure_detail` above class `open` is returned to an agent “only as its length and that class”.\",\"question\":\"Is the disclosed length measured in UTF-8 bytes, Unicode scalar values, or another unit, and is it the original or already truncated detail's length?\",\"options\":[\"UTF-8 bytes of the stored truncated detail\",\"Unicode scalar values of the stored detail\",\"Length of the original untruncated detail\"],\"default_guess\":\"Return the UTF-8 byte length of the stored, bounded detail.\"},{\"subject\":\"A16 token-list configuration reload\",\"kind\":\"state transition gap\",\"text\":\"The kernel re-reads when the configuration bytes differ from “the last read”; if a re-read fails, every request is refused “until a re-read passes”, but the text does not say whether the failed bytes become the last-read digest or what triggers another attempt when the file is restored to bytes equal to the last valid version.\",\"question\":\"After any failed configuration read or validation, is the file re-read on every request, and which digest is retained for change detection?\",\"options\":[\"Re-read on every request while invalid and retain the last valid digest\",\"Store the failed digest and retry only after another byte change\",\"Discard all digest state after failure\"],\"default_guess\":\"Retain the last valid digest and retry the complete token-list read on every request until it passes.\"},{\"subject\":\"A18 data-directory protection\",\"kind\":\"vague start condition\",\"text\":\"“The directory and everything in it are private to the kernel's user; the kernel refuses to start otherwise.”\",\"question\":\"What exact ownership, file-type and permission checks define “private”, and do they apply recursively to the data-directory path, subdirectories, database side files and the data directory itself if it is a symbolic link?\",\"options\":[\"Owner must be the kernel user and all group/other permission bits must be clear recursively\",\"Only the top-level directory must be owner-only\",\"Use platform access checks rather than ownership and mode bits\"],\"default_guess\":\"Require the directory and every existing descendant to be owned by the kernel user, prohibit symlinks, and clear all group/other permission bits.\"},{\"subject\":\"M28 and A08 manifest revision access\",\"kind\":\"missing mechanism\",\"text\":\"The manifest is read from `<manifest_location>/<service_id>.json` “at the configured `manifest_revision`”, and “a record changes for a running kernel only after a restart with a new configured revision”, but no rule defines how a revision selects bytes or how working-tree changes are excluded.\",\"question\":\"What is `manifest_revision`, how are file bytes read at that revision, and what happens when the location is not a supported repository or the revision cannot be resolved?\",\"options\":[\"Read a Git object at an exact commit without consulting the working tree\",\"Require the host to materialize an immutable revision directory\",\"Treat the revision as informational and read current filesystem bytes\"],\"default_guess\":\"Resolve an exact Git commit and read the blob from that commit, refusing start when the location or revision cannot be resolved.\"},{\"subject\":\"A09 base URL construction\",\"kind\":\"URL ambiguity\",\"text\":\"A valid `api_base_url` is only required to be an absolute HTTP(S) URL with a host, while the request URL is “the `api_base_url` without a trailing `/` followed by the declared path” and nothing else is normalized.\",\"question\":\"May the base URL contain a path, query, fragment, user information, multiple trailing slashes or a non-default port, and exactly how are those forms joined and represented in the `Host` header and approval digest?\",\"options\":[\"Restrict the base URL to scheme, host and optional port only\",\"Allow a path prefix but prohibit query, fragment and user information\",\"Allow every absolute URL and define exact string concatenation\"],\"default_guess\":\"Allow a normalized path prefix and optional port, but prohibit user information, query and fragment.\"},{\"subject\":\"A09 path placeholders and file ports\",\"kind\":\"rule mismatch\",\"text\":\"Proposal validation requires every path placeholder to name an input whose schema type is `string` or `integer`, but it does not require `value` carriage; at send time the placeholder must take “a non-null string or integer”, while a file input carries bytes.\",\"question\":\"Must every path-placeholder input be a `value` port, or may a file port with a string/integer schema pass proposal and then fail every send?\",\"options\":[\"Require `value` carriage at proposal time\",\"Permit file ports and define a conversion to a path segment\",\"Permit proposal but fail the send as an unplaceable input\"],\"default_guess\":\"Require every path-placeholder input to have `value` carriage at proposal time.\"},{\"subject\":\"A08, A09 and A17 externally supplied size limits\",\"kind\":\"unbounded input\",\"text\":\"The release defines bounds for requests, responses, stored values and files, but no bound is given for a manifest file, capability entry, base URL, required-header name or value, operation path, or credential secret-file value; these values are parsed or assembled into an outbound request.\",\"question\":\"What size ceilings apply to manifest material, required headers, URLs and resolved credential values, and how is an excess classified?\",\"options\":[\"Add explicit release ceilings and refuse the manifest or pre-send check\",\"Reuse `bounded_text_bytes_max` for each textual field\",\"Leave installation and manifest material unbounded\"],\"default_guess\":\"Apply explicit release ceilings, with invalid manifest material causing manifest mismatch and oversized credential material causing `credential_unresolved`.\"},{\"subject\":\"A10 approval request exactness\",\"kind\":\"contradiction\",\"text\":\"State 0 says approval covers “the fully built request as the owner was shown it — method, URL, headers and body” and “Any difference at send … asks again”; A10 excludes the multipart boundary and its resulting `content-length` from the description, and shows the credential header and `content-length` by name only.\",\"question\":\"Does approval cover the literal wire request, or a normalized semantic request description with the stated credential and multipart-framing exceptions?\",\"options\":[\"Literal wire bytes except the credential value\",\"The normalized A10 request description\",\"Literal method, URL and headers but semantic multipart parts\"],\"default_guess\":\"Make the normalized A10 request description authoritative and revise the State 0 wording to name all exceptions.\"},{\"subject\":\"A13 current element conclusion after retries\",\"kind\":\"missing precedence\",\"text\":\"An element may have several immutable NodeExecutions after `service_unreachable` or a resolution of `not_applied`, but the rules say only that “An element's conclusion is its NodeExecution's status” and do not say which record controls readiness, mapped-node aggregation and final run status.\",\"question\":\"Which NodeExecution determines an element's current conclusion when earlier attempts remain in the trace?\",\"options\":[\"The highest `attempt_number`\",\"The first non-waiting attempt\",\"A fold over all attempts with an explicit precedence table\"],\"default_guess\":\"Use the highest `attempt_number`, with its linked EffectAttempt resolution overriding `outcome_unknown` as A11 specifies.\"},{\"subject\":\"A10 StandingGrant target eligibility\",\"kind\":\"refusal gap\",\"text\":\"A grant is given for “a node of the flow's active version whose effect class is not `destructive`”, but a function node has no effect class and the rules never explicitly say whether such a grant request is refused or how it is ordered against the active-version and node checks.\",\"question\":\"Can a standing grant target only an operation node, and what is the exact check order for missing node, wrong version, function node, destructive node and already-active grant?\",\"options\":[\"Only operation nodes are eligible, with an explicit ordered refusal sequence\",\"Treat function nodes as `read` and permit an unused grant\",\"Reject function nodes through the request schema\"],\"default_guess\":\"Allow only operation nodes and check: referenced records and node exist, version is active, node is an operation, class is not destructive, then return an existing active grant or create one.\"}]}"
+}

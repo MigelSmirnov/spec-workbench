@@ -350,6 +350,11 @@ against the obligations of its notes, not only against gates of form.
     standing grant: where the owner's active grant covers the node, the send
     goes under the grant without asking (A10 rule 1; owner, 2026-10-03, raised
     by State 2 round 30).
+    For a `multipart/form-data` body, the boundary between its parts and the
+    `content-length` it changes are the kernel's framing, not a difference:
+    the parts themselves — name, filename, media type and content — are what
+    the owner was shown and what must not differ (A10 rule 7; owner,
+    2026-10-06, raised by State 2 round 80).
 
 ## Open questions
 

@@ -1,0 +1,114 @@
+{
+ "open_points": [
+  {
+   "subject": "authored trial-case file inputs",
+   "kind": "missing input",
+   "text": "`functions.add_trial_case` takes “input values by port, optional expected outputs”, while file fixtures must be published through `store.put_value_bytes`, which takes “Bytes and their expected digest and size”.",
+   "question": "What exactly does an authored trial-case request supply for a `file` or `many` file input or expected output: bytes, bytes plus caller-supplied facts, or references to existing stored bytes, and which module computes the digest and size?",
+   "options": [
+    "Supply file bytes and let `functions` compute their facts",
+    "Supply file bytes together with digest, size and media type",
+    "Supply references to existing StoredValues"
+   ],
+   "default_guess": "Supply file bytes; `functions` computes digest and size and takes media type from the port."
+  },
+  {
+   "subject": "file content digests",
+   "kind": "contradictory digest rule",
+   "text": "State 1 says “Every content-derived identity and digest in this kernel is the lowercase hex SHA-256 of the canonical JSON of the model's meaning facts”, while A10 describes multipart file content using “the SHA-256 of its content”, and `store.spool_file` returns “The file's digest and size”.",
+   "question": "What byte sequence is hashed for a file's `content_digest` or fixture `value_digest`?",
+   "options": [
+    "The raw file bytes",
+    "Canonical JSON containing a representation such as base64 of the bytes",
+    "Canonical JSON of the file's digest, size and media-type facts"
+   ],
+   "default_guess": "Lowercase hexadecimal SHA-256 of the raw file bytes."
+  },
+  {
+   "subject": "canonical storage of generated value outputs",
+   "kind": "caller/output mismatch",
+   "text": "`canonical_values.canonical_bytes` lists only `sandbox`, `service_invoker` and `surface` as callers, but `functions`, `runs` and `effects` must pass generated value bytes to `store.put_value_bytes`; meanwhile `sandbox.execute_function` and `service_invoker.send_prepared_request` return only “outputs by port” or “output values by port”.",
+   "question": "Who converts successful sandbox and service value outputs into the canonical bytes, digest and size required for persistence?",
+   "options": [
+    "The producer returns canonical bytes and facts with every logical output",
+    "`functions`, `runs` and `effects` may call `canonical_values.canonical_bytes` despite not being listed as callers",
+    "`store.put_value_bytes` accepts logical JSON values and canonicalizes them"
+   ],
+   "default_guess": "Allow `functions`, `runs` and `effects` to call `canonical_values.canonical_bytes` and compute the persistence facts before calling the store."
+  },
+  {
+   "subject": "duplicate JSON member detection",
+   "kind": "input representation gap",
+   "text": "`canonical_values.canonical_bytes` takes “One JSON value” but must refuse “a duplicate key”, and `surface` “turns every JSON text a request carries … into its canonical form” before modules see it.",
+   "question": "At which boundary, and using what representation, are duplicate object member names detected before an ordinary JSON parser can collapse them?",
+   "options": [
+    "The MCP request parser rejects duplicate members while parsing raw JSON",
+    "Value-bearing fields remain raw JSON text until `canonical_bytes` parses them",
+    "The transport guarantees duplicate-free parsed values"
+   ],
+   "default_guess": "Use a duplicate-detecting parser on the raw request representation before producing a JSON value."
+  },
+  {
+   "subject": "trial execution results returned by try",
+   "kind": "contradictory output",
+   "text": "M07 says a successful TrialExecution's `outputs` contain StoredValues for value ports and digest, size and media type for file ports; “How answers carry values” says records have their values resolved by `surface`; but `functions.try_implementation` says it returns “outcome, output digests, pass or `output_mismatch`”.",
+   "question": "Does `try_implementation` return successful value-output contents, StoredValue references, or only output digests, and does it return full file facts or only file digests?",
+   "options": [
+    "Return the complete TrialExecution with value contents resolved and file facts",
+    "Return only digests for every output",
+    "Return StoredValue references for values and full facts for files"
+   ],
+   "default_guess": "Return the complete TrialExecution, resolving value contents under the disclosure rules and returning digest, size and media type for files."
+  },
+  {
+   "subject": "spool ceiling refusal",
+   "kind": "effect contradiction",
+   "text": "The conventions say “A refusal is decided before the operation's first store change, so it writes nothing”, but `store.spool_file` says a ceiling refusal keeps “nothing … of any file that attempt spooled before”.",
+   "question": "Is a spool-ceiling result an effect-free refusal, or is it allowed to delete files successfully spooled by earlier calls for the same attempt?",
+   "options": [
+    "It is a refusal with the exceptional cleanup effect stated by `spool_file`",
+    "It is a non-refusal outcome result that performs the cleanup",
+    "It is effect-free and earlier files remain until normal spool removal"
+   ],
+   "default_guess": "Treat the ceiling result as a non-refusal outcome that atomically removes all files of that attempt."
+  },
+  {
+   "subject": "stale attempt-number failure from store",
+   "kind": "error propagation contradiction",
+   "text": "`store.record_change` returns `refused` “when an outcome's attempt is no longer the element's next ordinal”; between modules a refusal is otherwise returned unchanged, while the conventions require a refusal to occur before the operation's first store change. Calls such as `start_run` can already have created a run, executed code or sent a read request before their progress change.",
+   "question": "How must callers classify and recover from the store's stale-ordinal result after earlier changes or execution have occurred?",
+   "options": [
+    "Map it to `internal_error`, stop the process and recover from records",
+    "Propagate `refused` even though earlier changes remain",
+    "Make stale ordinal an impossible store invariant reported only as `internal_error`"
+   ],
+   "default_guess": "Treat it as `internal_error`, stop the process after answering, and recover on restart."
+  },
+  {
+   "subject": "agent view of a personal-data approval preview",
+   "kind": "ambiguous output",
+   "text": "The preview contains “operation, target service, the built request and the input values”, while the agent rule says a preview with any personal-data input carries “no built request, only the approval's `request_digest`”.",
+   "question": "When any input is personal data, does “only the request digest” replace just the built-request field, or the entire preview; specifically, are operation, target, effect class and masked input digests/classes still returned?",
+   "options": [
+    "Replace only the built request and retain the other metadata plus masked inputs",
+    "Return only `request_digest` for the entire preview",
+    "Retain operation metadata but omit all input entries"
+   ],
+   "default_guess": "Replace only the built request; retain operation metadata and each input as permitted by the normal masking rule."
+  },
+  {
+   "subject": "classified failure-detail length",
+   "kind": "undefined output unit",
+   "text": "An agent receives a classified `failure_detail` “only as its length and that class”, but the unit of `length` is not stated.",
+   "question": "Is the disclosed length measured in UTF-8 bytes, Unicode code points, or another unit?",
+   "options": [
+    "UTF-8 bytes",
+    "Unicode code points",
+    "Characters in the host language's string representation"
+   ],
+   "default_guess": "UTF-8 bytes, matching the byte-based truncation ceiling."
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"authored trial-case file inputs\",\"kind\":\"missing input\",\"text\":\"`functions.add_trial_case` takes “input values by port, optional expected outputs”, while file fixtures must be published through `store.put_value_bytes`, which takes “Bytes and their expected digest and size”.\",\"question\":\"What exactly does an authored trial-case request supply for a `file` or `many` file input or expected output: bytes, bytes plus caller-supplied facts, or references to existing stored bytes, and which module computes the digest and size?\",\"options\":[\"Supply file bytes and let `functions` compute their facts\",\"Supply file bytes together with digest, size and media type\",\"Supply references to existing StoredValues\"],\"default_guess\":\"Supply file bytes; `functions` computes digest and size and takes media type from the port.\"},{\"subject\":\"file content digests\",\"kind\":\"contradictory digest rule\",\"text\":\"State 1 says “Every content-derived identity and digest in this kernel is the lowercase hex SHA-256 of the canonical JSON of the model's meaning facts”, while A10 describes multipart file content using “the SHA-256 of its content”, and `store.spool_file` returns “The file's digest and size”.\",\"question\":\"What byte sequence is hashed for a file's `content_digest` or fixture `value_digest`?\",\"options\":[\"The raw file bytes\",\"Canonical JSON containing a representation such as base64 of the bytes\",\"Canonical JSON of the file's digest, size and media-type facts\"],\"default_guess\":\"Lowercase hexadecimal SHA-256 of the raw file bytes.\"},{\"subject\":\"canonical storage of generated value outputs\",\"kind\":\"caller/output mismatch\",\"text\":\"`canonical_values.canonical_bytes` lists only `sandbox`, `service_invoker` and `surface` as callers, but `functions`, `runs` and `effects` must pass generated value bytes to `store.put_value_bytes`; meanwhile `sandbox.execute_function` and `service_invoker.send_prepared_request` return only “outputs by port” or “output values by port”.\",\"question\":\"Who converts successful sandbox and service value outputs into the canonical bytes, digest and size required for persistence?\",\"options\":[\"The producer returns canonical bytes and facts with every logical output\",\"`functions`, `runs` and `effects` may call `canonical_values.canonical_bytes` despite not being listed as callers\",\"`store.put_value_bytes` accepts logical JSON values and canonicalizes them\"],\"default_guess\":\"Allow `functions`, `runs` and `effects` to call `canonical_values.canonical_bytes` and compute the persistence facts before calling the store.\"},{\"subject\":\"duplicate JSON member detection\",\"kind\":\"input representation gap\",\"text\":\"`canonical_values.canonical_bytes` takes “One JSON value” but must refuse “a duplicate key”, and `surface` “turns every JSON text a request carries … into its canonical form” before modules see it.\",\"question\":\"At which boundary, and using what representation, are duplicate object member names detected before an ordinary JSON parser can collapse them?\",\"options\":[\"The MCP request parser rejects duplicate members while parsing raw JSON\",\"Value-bearing fields remain raw JSON text until `canonical_bytes` parses them\",\"The transport guarantees duplicate-free parsed values\"],\"default_guess\":\"Use a duplicate-detecting parser on the raw request representation before producing a JSON value.\"},{\"subject\":\"trial execution results returned by try\",\"kind\":\"contradictory output\",\"text\":\"M07 says a successful TrialExecution's `outputs` contain StoredValues for value ports and digest, size and media type for file ports; “How answers carry values” says records have their values resolved by `surface`; but `functions.try_implementation` says it returns “outcome, output digests, pass or `output_mismatch`”.\",\"question\":\"Does `try_implementation` return successful value-output contents, StoredValue references, or only output digests, and does it return full file facts or only file digests?\",\"options\":[\"Return the complete TrialExecution with value contents resolved and file facts\",\"Return only digests for every output\",\"Return StoredValue references for values and full facts for files\"],\"default_guess\":\"Return the complete TrialExecution, resolving value contents under the disclosure rules and returning digest, size and media type for files.\"},{\"subject\":\"spool ceiling refusal\",\"kind\":\"effect contradiction\",\"text\":\"The conventions say “A refusal is decided before the operation's first store change, so it writes nothing”, but `store.spool_file` says a ceiling refusal keeps “nothing … of any file that attempt spooled before”.\",\"question\":\"Is a spool-ceiling result an effect-free refusal, or is it allowed to delete files successfully spooled by earlier calls for the same attempt?\",\"options\":[\"It is a refusal with the exceptional cleanup effect stated by `spool_file`\",\"It is a non-refusal outcome result that performs the cleanup\",\"It is effect-free and earlier files remain until normal spool removal\"],\"default_guess\":\"Treat the ceiling result as a non-refusal outcome that atomically removes all files of that attempt.\"},{\"subject\":\"stale attempt-number failure from store\",\"kind\":\"error propagation contradiction\",\"text\":\"`store.record_change` returns `refused` “when an outcome's attempt is no longer the element's next ordinal”; between modules a refusal is otherwise returned unchanged, while the conventions require a refusal to occur before the operation's first store change. Calls such as `start_run` can already have created a run, executed code or sent a read request before their progress change.\",\"question\":\"How must callers classify and recover from the store's stale-ordinal result after earlier changes or execution have occurred?\",\"options\":[\"Map it to `internal_error`, stop the process and recover from records\",\"Propagate `refused` even though earlier changes remain\",\"Make stale ordinal an impossible store invariant reported only as `internal_error`\"],\"default_guess\":\"Treat it as `internal_error`, stop the process after answering, and recover on restart.\"},{\"subject\":\"agent view of a personal-data approval preview\",\"kind\":\"ambiguous output\",\"text\":\"The preview contains “operation, target service, the built request and the input values”, while the agent rule says a preview with any personal-data input carries “no built request, only the approval's `request_digest`”.\",\"question\":\"When any input is personal data, does “only the request digest” replace just the built-request field, or the entire preview; specifically, are operation, target, effect class and masked input digests/classes still returned?\",\"options\":[\"Replace only the built request and retain the other metadata plus masked inputs\",\"Return only `request_digest` for the entire preview\",\"Retain operation metadata but omit all input entries\"],\"default_guess\":\"Replace only the built request; retain operation metadata and each input as permitted by the normal masking rule.\"},{\"subject\":\"classified failure-detail length\",\"kind\":\"undefined output unit\",\"text\":\"An agent receives a classified `failure_detail` “only as its length and that class”, but the unit of `length` is not stated.\",\"question\":\"Is the disclosed length measured in UTF-8 bytes, Unicode code points, or another unit?\",\"options\":[\"UTF-8 bytes\",\"Unicode code points\",\"Characters in the host language's string representation\"],\"default_guess\":\"UTF-8 bytes, matching the byte-based truncation ceiling.\"}]}"
+}

@@ -1,0 +1,462 @@
+{
+ "open_points": [
+  {
+   "subject": "FlowVersion identity",
+   "kind": "underdetermined ordering",
+   "text": "“Lists whose order carries no meaning are sorted before hashing — … edges in the edge order of A05, constants by (`to_node`, `to_port`) — so the same content in another order has the same identity.” The listed keys do not break ties between constants targeting the same port or edges with the same endpoints but different guards.",
+   "question": "How are tied edges and constants ordered before hashing so that permutation cannot change `flow_version_id`?",
+   "options": [
+    "Add a total tie-break order using every meaning fact",
+    "Reject duplicate sort keys before identity is computed",
+    "Treat the tied collection as a multiset with a separately defined canonicalization"
+   ],
+   "default_guess": "Use canonical JSON of the complete edge or constant as the final tie-break key."
+  },
+  {
+   "subject": "Flow endpoint ordering",
+   "kind": "identifier collision",
+   "text": "“A flow input or flow output endpoint has the empty string as its node, so it orders before every node.” Composition refuses repeated node ids but does not refuse an empty `node_id`.",
+   "question": "May a real node have `node_id` equal to the empty string, and if so how is it distinguished and ordered against a flow endpoint?",
+   "options": [
+    "Forbid empty node ids",
+    "Use a tagged endpoint kind in ordering and identity",
+    "Allow the collision and define a secondary order"
+   ],
+   "default_guess": "Forbid an empty `node_id` at composition."
+  },
+  {
+   "subject": "Guard evaluation",
+   "kind": "undefined equality",
+   "text": "“A guarded edge delivers only when its guard port's value equals its guard value.”",
+   "question": "What equality relation is used for JSON guard values, including `1` versus `1.0`, object member order, arrays and booleans versus numbers?",
+   "options": [
+    "Equality of canonical JSON bytes",
+    "JSON structural equality with numeric equivalence",
+    "Host-language equality"
+   ],
+   "default_guess": "Compare canonical JSON bytes."
+  },
+  {
+   "subject": "TrialCase inputs",
+   "kind": "incomplete validation rule",
+   "text": "“Either way it is added only when its input values fit the contract version's input ports.”",
+   "question": "Must trial inputs contain exactly every input port and no unknown port, or may ports be omitted or extra values supplied?",
+   "options": [
+    "Require the exact input-port set",
+    "Allow omitted optional-schema inputs",
+    "Allow extra inputs and ignore them"
+   ],
+   "default_guess": "Require exactly one value for every declared input port and no extras."
+  },
+  {
+   "subject": "TrialCase expected outputs",
+   "kind": "incomplete validation rule",
+   "text": "“its expected outputs, when present, fit the output ports” and “every output's digest equals the expected one.”",
+   "question": "When `expected_outputs` is present, must it name every output port exactly, or may it assert only a subset?",
+   "options": [
+    "Require the exact output-port set",
+    "Permit a subset and compare only named outputs",
+    "Permit omissions but require no extra ports"
+   ],
+   "default_guess": "Require exactly every output port and no extras."
+  },
+  {
+   "subject": "Sandbox filesystem access",
+   "kind": "contradiction",
+   "text": "K-02 says a function has “no filesystem beyond its input,” while A03 gives it “one private exchange directory” and traps only “opening any path outside the exchange directory and the read-only runtime.”",
+   "question": "May agent code read or write arbitrary files inside the exchange directory and read arbitrary files in the runtime, or are those paths accessible only to the runner for declared inputs and outputs?",
+   "options": [
+    "Runner-only filesystem access",
+    "Agent code may use bounded scratch and read the runtime",
+    "Agent code may access only specifically opened input/output handles"
+   ],
+   "default_guess": "Allow agent code only the declared input/output exchange paths, not arbitrary directory or runtime reads."
+  },
+  {
+   "subject": "Sandbox clock and determinism",
+   "kind": "unenforceable invariant",
+   "text": "K-02 requires “no clock, no randomness,” and A03 says admission is repeatable, but the closed trap list omits other varying observations such as process identifiers and other standard-library clock/system calls, and the standard library permits module reloads that can replace patched functions.",
+   "question": "Which complete mechanism prevents every nondeterministic observation, and what happens when code uses an unlisted or reloaded entry point?",
+   "options": [
+    "Add syscall-level filtering or virtualization",
+    "Declare a complete forbidden API set and prevent reload/bypass",
+    "Permit unlisted nondeterminism and weaken the purity guarantee"
+   ],
+   "default_guess": "Enforce clock, entropy and varying process facts below Python and classify attempts as `sandbox_violation`."
+  },
+  {
+   "subject": "Sandbox diagnostic streams",
+   "kind": "unbounded behavior",
+   "text": "“Nothing the code prints or raises is interpreted by the kernel” and “never stdout,” while K-05 requires bounded output; no rule says where stdout or stderr go or how much may be written.",
+   "question": "Are stdout and stderr discarded, bounded, or counted against a resource limit, and what outcome results when that limit is exceeded?",
+   "options": [
+    "Redirect both to a bounded sink and classify excess as `resource_exhausted`",
+    "Redirect both to `/dev/null`",
+    "Capture a bounded prefix"
+   ],
+   "default_guess": "Redirect stdout and stderr to a bounded sink and count excess as `resource_exhausted`."
+  },
+  {
+   "subject": "Resource-limit detection",
+   "kind": "unverifiable precedence",
+   "text": "“a limit hit (memory, process count, scratch, `output_bytes`) — `resource_exhausted`” must win even if code catches the underlying error.",
+   "question": "How does the parent determine that memory, process or scratch limits were hit when Python catches `MemoryError`, `OSError` or a quota error and returns a conforming result?",
+   "options": [
+    "Use externally observable counters or supervisor events",
+    "Treat a caught limit error as ordinary execution",
+    "Instrument the runtime to report every limit denial"
+   ],
+   "default_guess": "Require an out-of-process supervisor signal or counter that records each denied resource operation."
+  },
+  {
+   "subject": "Implementation output classification",
+   "kind": "missing failure case",
+   "text": "A03 orders “the returned dict does not have exactly the output ports, or a value fails its port's schema … — `contract_violation`,” but output size is computed from canonical JSON before that check.",
+   "question": "How is an output that cannot be canonicalized as JSON, is cyclic, or raises during serialization classified and measured?",
+   "options": [
+    "`contract_violation`",
+    "`crashed`",
+    "`resource_exhausted` when traversal crosses a bound, otherwise `contract_violation`"
+   ],
+   "default_guess": "Classify non-JSON output as `contract_violation`, with bounded traversal producing `resource_exhausted` if its limit is crossed first."
+  },
+  {
+   "subject": "Admission across kernel releases",
+   "kind": "stale evidence",
+   "text": "“an AdmissionVerdict … for that implementation and the current corpus digest already exists, in which case that verdict is used,” while “a release pins the exact versions … of the sandbox runtime” and a new release may change them. Neither the verdict nor implementation identity includes the release.",
+   "question": "May an admission verdict produced by an older runtime be reused after an upgrade, even though the same code can behave differently under the new runtime?",
+   "options": [
+    "Reuse verdicts across releases",
+    "Include a sandbox-release identity in admission evidence",
+    "Re-run admission after every release change"
+   ],
+   "default_guess": "Include the sandbox release identity in the verdict key and re-run admission when it changes."
+  },
+  {
+   "subject": "Disclosure classification at flow ingress",
+   "kind": "unverifiable invariant",
+   "text": "“on a flow input the exact class the kernel gives every value arriving there, since a caller declares none” and “the class its flow input port declares, assigned by the kernel.” The composing agent chooses that port declaration.",
+   "question": "Who is authoritative for the truth of a flow input's disclosure class, and what prevents an owner-supplied personal value from being declared `open` and later exposed to agents?",
+   "options": [
+    "Trust the composing agent's declaration",
+    "Require owner acceptance of flow-input classes",
+    "Classify inputs through a trusted source or owner declaration at run time"
+   ],
+   "default_guess": "Require an owner-authoritative classification for externally supplied flow inputs."
+  },
+  {
+   "subject": "Flow constants disclosure",
+   "kind": "unverifiable invariant",
+   "text": "“a constant's value takes the class the composing agent declares with it” and “No function, edge or flow construct lowers a class.”",
+   "question": "What verifies that an agent did not declare a personal or confidential constant as `open`?",
+   "options": [
+    "Trust the composing agent",
+    "Require owner acceptance for non-open constants and their classifications",
+    "Disallow sensitive constants"
+   ],
+   "default_guess": "Treat the declaration as trusted input only if the specification explicitly makes the agent authoritative; otherwise require owner acceptance."
+  },
+  {
+   "subject": "Secrets boundary",
+   "kind": "contradiction",
+   "text": "State 0 says secrets “never enter a function, a flow, a trace or an answer,” while A17 says a credential “in another encoding is not recognised, and is protected only by its class.”",
+   "question": "Is the no-secret invariant limited to the exact credential bytes known to the kernel, or must encoded and transformed credentials also be prevented from entering values and responses?",
+   "options": [
+    "Limit the invariant to verbatim configured credential bytes",
+    "Detect specified encodings and transformations",
+    "Keep the absolute invariant and require a different trust boundary"
+   ],
+   "default_guess": "Narrow the enforceable invariant explicitly to verbatim configured credential bytes."
+  },
+  {
+   "subject": "Host paths in responses",
+   "kind": "unenforceable invariant",
+   "text": "“No response carries … a host path,” while service bodies, function outputs and stored values may contain arbitrary strings and are returned as data.",
+   "question": "Does the prohibition cover only kernel-generated diagnostics and metadata, or must arbitrary payload values that happen to contain host paths also be withheld?",
+   "options": [
+    "Limit it to kernel-generated text and metadata",
+    "Scan and withhold all payloads containing known host paths",
+    "Forbid path-like strings in values"
+   ],
+   "default_guess": "Limit the rule to kernel-generated diagnostics and metadata."
+  },
+  {
+   "subject": "Data-directory privacy",
+   "kind": "vague refusal condition",
+   "text": "“The directory and everything in it are private to the kernel's user; the kernel refuses to start otherwise.”",
+   "question": "What exact ownership, mode-bit and ACL conditions count as private for directories and files?",
+   "options": [
+    "Owner must be the kernel user and group/other permissions must be zero",
+    "Require exact modes such as 0700 directories and 0600 files",
+    "Also inspect ACLs and parent directories"
+   ],
+   "default_guess": "Require ownership by the kernel user, no group/other permissions, and no granting ACL entries."
+  },
+  {
+   "subject": "Secret-file symlinks",
+   "kind": "ambiguous security check",
+   "text": "“its secret file is read then, without following a symbolic link” for an absolute configured path.",
+   "question": "Must every component of the secret path be opened without following symlinks, or only the final file?",
+   "options": [
+    "Reject symlinks in every path component",
+    "Reject only a symlink final component",
+    "Trust parent-directory resolution"
+   ],
+   "default_guess": "Reject symlinks in every traversed component."
+  },
+  {
+   "subject": "Kernel startup",
+   "kind": "missing precedence",
+   "text": "A03, A16, A17 and A18 each define start-time refusals, while A14 performs recovery that may execute functions or send service requests before the surface opens; no global startup order is given.",
+   "question": "In what exact order are configuration validation, directory locking and validation, database opening and cleanup, sandbox probing, manifest checks, effect recovery and run advancement performed, and may recovery cause effects if another start check would fail?",
+   "options": [
+    "Complete every non-mutating start check before cleanup and recovery",
+    "Take the lock, validate everything, then clean and recover",
+    "Recover as soon as the store opens"
+   ],
+   "default_guess": "Take the lock, complete all start validations and the sandbox probe, then clean temporary data and perform recovery."
+  },
+  {
+   "subject": "Store order",
+   "kind": "undefined total order",
+   "text": "“records have one order” and activations are identified by “their position in the store's one order of records,” but one transaction can write several different records.",
+   "question": "How are positions assigned among multiple records written by the same store call, and are updates to mutable entities new positions or changes at their original positions?",
+   "options": [
+    "One global sequence allocated per inserted record with a specified insertion order",
+    "One position per transaction plus a record-type tie-break",
+    "Separate per-type sequences"
+   ],
+   "default_guess": "Use one durable global sequence per newly inserted record and specify the insertion order inside every multi-record call; updates retain the original position."
+  },
+  {
+   "subject": "Surface request serialization",
+   "kind": "undefined ordering",
+   "text": "“Surface requests are handled one at a time in the order they arrive.”",
+   "question": "What event defines arrival when MCP requests are received concurrently or partially—first byte, complete decoded message, transport dispatch, or enqueue order?",
+   "options": [
+    "Order when a complete request is enqueued",
+    "Order by first received byte",
+    "Let the MCP runtime choose"
+   ],
+   "default_guess": "Order by a monotonically assigned sequence when a complete request is accepted into the kernel queue."
+  },
+  {
+   "subject": "Manifest revision",
+   "kind": "undefined source semantics",
+   "text": "The kernel reads `<manifest_location>/<service_id>.json` “at the configured `manifest_revision`,” and says a record changes “only after a restart with a new configured revision.”",
+   "question": "How is a file read at a revision, and what prevents edits to a working file at the same configured revision from changing the result between sends?",
+   "options": [
+    "Read immutable repository objects by revision",
+    "Materialize and pin a snapshot at startup",
+    "Read the live filesystem and allow same-revision changes"
+   ],
+   "default_guess": "Resolve the configured revision to an immutable snapshot at startup and read only that snapshot."
+  },
+  {
+   "subject": "Unrelated manifest capabilities",
+   "kind": "contradiction",
+   "text": "K-03 says an edit to another operation “stops nothing,” but A08 can reject the whole record when “two entries of `capabilities` share the name,” and rule 6 stops a send when the record fails a record-level check.",
+   "question": "Can an invalid or duplicate unrelated capability stale an otherwise unchanged pinned operation, or are only faults affecting the selected capability relevant?",
+   "options": [
+    "Only the selected capability and required record envelope can stale it",
+    "Any invalid capability makes the whole service record stale",
+    "Duplicate names matter only when they equal the selected operation name"
+   ],
+   "default_guess": "Apply capability-specific checks only to the selected operation; reject duplicate names only when selection is ambiguous."
+  },
+  {
+   "subject": "Manifest JSON shape",
+   "kind": "incomplete refusal conditions",
+   "text": "A08 names checks for an absent or invalid record, missing fields and selected capability facts, but does not define the required JSON types and shapes of `capabilities`, instances, `required_headers`, `exposed_as` and `idempotency_key`.",
+   "question": "What exact manifest shapes and field types are accepted, and which mismatch is reported first for wrong types or unknown forms?",
+   "options": [
+    "Define a complete manifest schema and ordered validation",
+    "Accept any shape usable by the selected operation",
+    "Delegate parsing rules to an existing platform-manifest specification"
+   ],
+   "default_guess": "Define and reference one complete manifest schema with a deterministic validation order."
+  },
+  {
+   "subject": "Read-operation idempotency metadata",
+   "kind": "missing type rule",
+   "text": "For a read operation the binding copies `idempotency_key` “text split on `+` and trimmed … whatever those parts are,” while rule 5 validates broken syntax only “for an operation other than `read`.”",
+   "question": "What happens when a read operation's `idempotency_key` is neither `null` nor text, or contains empty and duplicate parts?",
+   "options": [
+    "Refuse non-text but preserve arbitrary text parts",
+    "Refuse every malformed read key too",
+    "Ignore the field entirely for reads"
+   ],
+   "default_guess": "Require `null` or text for reads, but do not apply the non-read field-name checks."
+  },
+  {
+   "subject": "Service base URL",
+   "kind": "incomplete URL validation",
+   "text": "An `api_base_url` is accepted when it is “an absolute `http` or `https` URL with a host,” then the request URL is made by removing a trailing `/` and appending the declared path.",
+   "question": "Are user information, a query, a fragment, an existing path, percent-encoded separators, IPv6 zone identifiers or multiple trailing slashes allowed in the base URL, and how are they joined?",
+   "options": [
+    "Allow only scheme, host and optional port",
+    "Allow a base path but forbid userinfo, query and fragment",
+    "Permit every absolute URL and define component-aware joining"
+   ],
+   "default_guess": "Allow scheme, host, optional port and an optional normalized base path; forbid userinfo, query and fragment."
+  },
+  {
+   "subject": "Plain-HTTP loopback exception",
+   "kind": "undefined address test",
+   "text": "Plain HTTP is allowed when the `api_base_url` “host is a loopback address.”",
+   "question": "Does this mean only a literal IPv4/IPv6 loopback address, or also a hostname such as `localhost` or a DNS name that resolves to loopback, and when is it evaluated?",
+   "options": [
+    "Only literal loopback IP addresses",
+    "Literal loopback and `localhost`",
+    "Any host resolving exclusively to loopback at connection time"
+   ],
+   "default_guess": "Allow only literal loopback IPv4 or IPv6 addresses."
+  },
+  {
+   "subject": "Port names in multipart requests",
+   "kind": "injection gap",
+   "text": "A multipart part is emitted as `Content-Disposition: form-data; name=\"<port>\"`, with `filename=\"<port>\"` for files, but port names have no stated HTTP-safe grammar or escaping rule.",
+   "question": "Which port names are valid here, and how are quotes, backslashes, control characters and non-ASCII characters encoded?",
+   "options": [
+    "Restrict port names to a safe ASCII field-name grammar",
+    "Define quoted-string escaping and extended parameter encoding",
+    "Refuse multipart bindings whose names need escaping"
+   ],
+   "default_guess": "Restrict multipart-used port names to a conservative ASCII identifier grammar."
+  },
+  {
+   "subject": "Path placeholders and cardinality",
+   "kind": "contradictory validation",
+   "text": "A binding is accepted when every path placeholder's port schema type is `string` or `integer`, but at run time a `many` port carries a list and a path value “must be a non-null string or integer.”",
+   "question": "Must a path-placeholder input also have cardinality `one`?",
+   "options": [
+    "Require cardinality `one` at proposal time",
+    "Allow `many` and fail every list at send time",
+    "Select one list element by a defined rule"
+   ],
+   "default_guess": "Require cardinality `one` at proposal time."
+  },
+  {
+   "subject": "GET/DELETE request shape and cardinality",
+   "kind": "incomplete mapping rule",
+   "text": "GET and DELETE accept a port whose schema type is a scalar “or an `array` of those,” while a `many` port independently wraps its element schema in a list.",
+   "question": "How are a cardinality-`many` port whose element schema is itself an array, and a cardinality-`one` port with an array schema, represented as repeated query parameters?",
+   "options": [
+    "Forbid nested-list request shapes",
+    "Flatten one specified level",
+    "Encode inner arrays as canonical JSON strings"
+   ],
+   "default_guess": "Forbid any request shape that would produce nested lists in query parameters."
+  },
+  {
+   "subject": "Multipart wire representation",
+   "kind": "underspecified protocol",
+   "text": "A multipart request lists its parts and headers, but does not define boundary generation, CRLF framing, disposition escaping or the exact bytes used on the wire.",
+   "question": "Which canonical multipart serialization is used, especially when services or approval comparisons depend on exact bytes?",
+   "options": [
+    "Define one canonical serialization",
+    "Permit any RFC-compliant serialization because framing is excluded from approval identity",
+    "Use a pinned HTTP library's serialization as normative"
+   ],
+   "default_guess": "Define one canonical serializer, while continuing to exclude its boundary from approval identity."
+  },
+  {
+   "subject": "HTTP content encoding",
+   "kind": "uncovered response case",
+   "text": "“The kernel asks for no content encoding (`Accept-Encoding: identity`)” and counts bytes “after transfer decoding,” but gives no rule for a service that nevertheless returns `Content-Encoding: gzip` or another encoding.",
+   "question": "Is an encoded response rejected, decoded, or treated as raw body bytes?",
+   "options": [
+    "Reject any non-identity content encoding",
+    "Decode supported encodings before limits and validation",
+    "Treat encoded bytes as the body"
+   ],
+   "default_guess": "Reject any non-identity `Content-Encoding` as a malformed or contract-violating response."
+  },
+  {
+   "subject": "File-body credential scanning",
+   "kind": "contradiction",
+   "text": "K-10 says “the kernel does not inspect file content,” while A09 says “Every body as read, whatever its status … is searched … for the bytes of the credential value,” including a successful file response.",
+   "question": "Are file response bodies an exception to the no-inspection rule, or must credential scanning skip files?",
+   "options": [
+    "Explicitly make verbatim credential scanning the sole file-inspection exception",
+    "Do not scan successful file bodies",
+    "Remove the no-inspection claim"
+   ],
+   "default_guess": "Make credential-byte scanning an explicit, sole exception for file bodies."
+  },
+  {
+   "subject": "Approval request identity for multipart",
+   "kind": "contradiction",
+   "text": "State 0 says approval covers the “fully built request” and “Any difference at send … asks again,” while A10 excludes the multipart boundary and the `content-length` it changes from `request_digest`.",
+   "question": "Do framing-only differences void an approval, or are boundary and derived content length explicit exceptions to State 0's any-difference rule?",
+   "options": [
+    "Framing differences do not void approval",
+    "Every wire-byte difference voids approval",
+    "Use a deterministic boundary so no difference arises"
+   ],
+   "default_guess": "Treat boundary and its derived content length as explicit exceptions and amend the absolute State 0 wording."
+  },
+  {
+   "subject": "Guard skip versus upstream failure",
+   "kind": "temporal precedence gap",
+   "text": "“An input port that can no longer receive a value … makes its node `skipped_by_guard`,” but “when both rule 4 and this rule apply, [upstream failure] wins,” and NodeExecutions are immutable.",
+   "question": "If a guard disables one input before another upstream input later fails, must the kernel delay the skip record, or can it record `skipped_by_guard` and thereby prevent the later precedence rule from taking effect?",
+   "options": [
+    "Delay conclusion until all other incoming sources conclude",
+    "Record skip immediately and never revise it",
+    "Record upstream failure later and supersede the skip without editing it"
+   ],
+   "default_guess": "Delay the node's conclusion until it is known whether any other input is failed or `upstream_failed`."
+  },
+  {
+   "subject": "Mapped-list size failure",
+   "kind": "release-dependent derived state",
+   "text": "A mapped list over `stored_value_bytes_max` fails without any record stating that failure and is “derived … the same way by every reader,” while A20 allows a new release to change ceilings.",
+   "question": "Which release's `stored_value_bytes_max` governs a pending or historical mapped list after an upgrade, and how is the result kept stable without recording it?",
+   "options": [
+    "Use the release under which the run started and persist that release identity",
+    "Use the current release and permit reinterpretation",
+    "Record the aggregate size failure explicitly"
+   ],
+   "default_guess": "Persist the applicable release identity with the run or record the aggregate failure explicitly."
+  },
+  {
+   "subject": "Spool-file ceiling verification",
+   "kind": "unverifiable rule",
+   "text": "`spool_file_bytes_max` is 134217728, while a function's maximum `output_bytes` is 67108864 and a service response is capped at 134217728; nevertheless the required test asks for “A function writing a file one byte over `spool_file_bytes_max`.”",
+   "question": "How can the spool-file ceiling and its precedence be exercised independently when every producer hits an equal or lower earlier ceiling first?",
+   "options": [
+    "Lower the spool-file ceiling",
+    "Raise an earlier producer ceiling",
+    "Test only that the earlier limit wins and remove the claimed independent witness"
+   ],
+   "default_guess": "Change the limits or test fixture so one producer can cross the spool-file ceiling without first crossing another ceiling."
+  },
+  {
+   "subject": "Recovery under changed installation facts",
+   "kind": "unfixed pinned state",
+   "text": "A run “pins what it executes,” but after restart recovery rebuilds service requests from the newly configured manifest revision, selected instance, required headers and credential header name.",
+   "question": "Which installation facts are intentionally allowed to change for an existing run, and which must remain pinned to the run's start?",
+   "options": [
+    "Only flow and function identities are pinned; all installation facts are current",
+    "Pin manifest revision and instance identity but resolve credentials currently",
+    "Pin the complete non-secret request configuration"
+   ],
+   "default_guess": "Pin the manifest revision and selected instance identity, while resolving only the credential value at send time."
+  },
+  {
+   "subject": "MCP request interruption",
+   "kind": "uncovered lifecycle case",
+   "text": "“A run advances only inside a request” and each request executes until the run rests or ends, but no rule covers the MCP caller disconnecting or cancelling while that work is in progress.",
+   "question": "Does kernel work continue to completion, stop at the next safe store boundary, or abort as a crash-like condition when the initiating MCP request disappears?",
+   "options": [
+    "Continue independently until the normal resting point",
+    "Stop after the current node and persist `running` for recovery",
+    "Abort the process and rely on startup recovery"
+   ],
+   "default_guess": "Continue the accepted request to its normal resting point and persist its result even if the client disconnects."
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"FlowVersion identity\",\"kind\":\"underdetermined ordering\",\"text\":\"“Lists whose order carries no meaning are sorted before hashing — … edges in the edge order of A05, constants by (`to_node`, `to_port`) — so the same content in another order has the same identity.” The listed keys do not break ties between constants targeting the same port or edges with the same endpoints but different guards.\",\"question\":\"How are tied edges and constants ordered before hashing so that permutation cannot change `flow_version_id`?\",\"options\":[\"Add a total tie-break order using every meaning fact\",\"Reject duplicate sort keys before identity is computed\",\"Treat the tied collection as a multiset with a separately defined canonicalization\"],\"default_guess\":\"Use canonical JSON of the complete edge or constant as the final tie-break key.\"},{\"subject\":\"Flow endpoint ordering\",\"kind\":\"identifier collision\",\"text\":\"“A flow input or flow output endpoint has the empty string as its node, so it orders before every node.” Composition refuses repeated node ids but does not refuse an empty `node_id`.\",\"question\":\"May a real node have `node_id` equal to the empty string, and if so how is it distinguished and ordered against a flow endpoint?\",\"options\":[\"Forbid empty node ids\",\"Use a tagged endpoint kind in ordering and identity\",\"Allow the collision and define a secondary order\"],\"default_guess\":\"Forbid an empty `node_id` at composition.\"},{\"subject\":\"Guard evaluation\",\"kind\":\"undefined equality\",\"text\":\"“A guarded edge delivers only when its guard port's value equals its guard value.”\",\"question\":\"What equality relation is used for JSON guard values, including `1` versus `1.0`, object member order, arrays and booleans versus numbers?\",\"options\":[\"Equality of canonical JSON bytes\",\"JSON structural equality with numeric equivalence\",\"Host-language equality\"],\"default_guess\":\"Compare canonical JSON bytes.\"},{\"subject\":\"TrialCase inputs\",\"kind\":\"incomplete validation rule\",\"text\":\"“Either way it is added only when its input values fit the contract version's input ports.”\",\"question\":\"Must trial inputs contain exactly every input port and no unknown port, or may ports be omitted or extra values supplied?\",\"options\":[\"Require the exact input-port set\",\"Allow omitted optional-schema inputs\",\"Allow extra inputs and ignore them\"],\"default_guess\":\"Require exactly one value for every declared input port and no extras.\"},{\"subject\":\"TrialCase expected outputs\",\"kind\":\"incomplete validation rule\",\"text\":\"“its expected outputs, when present, fit the output ports” and “every output's digest equals the expected one.”\",\"question\":\"When `expected_outputs` is present, must it name every output port exactly, or may it assert only a subset?\",\"options\":[\"Require the exact output-port set\",\"Permit a subset and compare only named outputs\",\"Permit omissions but require no extra ports\"],\"default_guess\":\"Require exactly every output port and no extras.\"},{\"subject\":\"Sandbox filesystem access\",\"kind\":\"contradiction\",\"text\":\"K-02 says a function has “no filesystem beyond its input,” while A03 gives it “one private exchange directory” and traps only “opening any path outside the exchange directory and the read-only runtime.”\",\"question\":\"May agent code read or write arbitrary files inside the exchange directory and read arbitrary files in the runtime, or are those paths accessible only to the runner for declared inputs and outputs?\",\"options\":[\"Runner-only filesystem access\",\"Agent code may use bounded scratch and read the runtime\",\"Agent code may access only specifically opened input/output handles\"],\"default_guess\":\"Allow agent code only the declared input/output exchange paths, not arbitrary directory or runtime reads.\"},{\"subject\":\"Sandbox clock and determinism\",\"kind\":\"unenforceable invariant\",\"text\":\"K-02 requires “no clock, no randomness,” and A03 says admission is repeatable, but the closed trap list omits other varying observations such as process identifiers and other standard-library clock/system calls, and the standard library permits module reloads that can replace patched functions.\",\"question\":\"Which complete mechanism prevents every nondeterministic observation, and what happens when code uses an unlisted or reloaded entry point?\",\"options\":[\"Add syscall-level filtering or virtualization\",\"Declare a complete forbidden API set and prevent reload/bypass\",\"Permit unlisted nondeterminism and weaken the purity guarantee\"],\"default_guess\":\"Enforce clock, entropy and varying process facts below Python and classify attempts as `sandbox_violation`.\"},{\"subject\":\"Sandbox diagnostic streams\",\"kind\":\"unbounded behavior\",\"text\":\"“Nothing the code prints or raises is interpreted by the kernel” and “never stdout,” while K-05 requires bounded output; no rule says where stdout or stderr go or how much may be written.\",\"question\":\"Are stdout and stderr discarded, bounded, or counted against a resource limit, and what outcome results when that limit is exceeded?\",\"options\":[\"Redirect both to a bounded sink and classify excess as `resource_exhausted`\",\"Redirect both to `/dev/null`\",\"Capture a bounded prefix\"],\"default_guess\":\"Redirect stdout and stderr to a bounded sink and count excess as `resource_exhausted`.\"},{\"subject\":\"Resource-limit detection\",\"kind\":\"unverifiable precedence\",\"text\":\"“a limit hit (memory, process count, scratch, `output_bytes`) — `resource_exhausted`” must win even if code catches the underlying error.\",\"question\":\"How does the parent determine that memory, process or scratch limits were hit when Python catches `MemoryError`, `OSError` or a quota error and returns a conforming result?\",\"options\":[\"Use externally observable counters or supervisor events\",\"Treat a caught limit error as ordinary execution\",\"Instrument the runtime to report every limit denial\"],\"default_guess\":\"Require an out-of-process supervisor signal or counter that records each denied resource operation.\"},{\"subject\":\"Implementation output classification\",\"kind\":\"missing failure case\",\"text\":\"A03 orders “the returned dict does not have exactly the output ports, or a value fails its port's schema … — `contract_violation`,” but output size is computed from canonical JSON before that check.\",\"question\":\"How is an output that cannot be canonicalized as JSON, is cyclic, or raises during serialization classified and measured?\",\"options\":[\"`contract_violation`\",\"`crashed`\",\"`resource_exhausted` when traversal crosses a bound, otherwise `contract_violation`\"],\"default_guess\":\"Classify non-JSON output as `contract_violation`, with bounded traversal producing `resource_exhausted` if its limit is crossed first.\"},{\"subject\":\"Admission across kernel releases\",\"kind\":\"stale evidence\",\"text\":\"“an AdmissionVerdict … for that implementation and the current corpus digest already exists, in which case that verdict is used,” while “a release pins the exact versions … of the sandbox runtime” and a new release may change them. Neither the verdict nor implementation identity includes the release.\",\"question\":\"May an admission verdict produced by an older runtime be reused after an upgrade, even though the same code can behave differently under the new runtime?\",\"options\":[\"Reuse verdicts across releases\",\"Include a sandbox-release identity in admission evidence\",\"Re-run admission after every release change\"],\"default_guess\":\"Include the sandbox release identity in the verdict key and re-run admission when it changes.\"},{\"subject\":\"Disclosure classification at flow ingress\",\"kind\":\"unverifiable invariant\",\"text\":\"“on a flow input the exact class the kernel gives every value arriving there, since a caller declares none” and “the class its flow input port declares, assigned by the kernel.” The composing agent chooses that port declaration.\",\"question\":\"Who is authoritative for the truth of a flow input's disclosure class, and what prevents an owner-supplied personal value from being declared `open` and later exposed to agents?\",\"options\":[\"Trust the composing agent's declaration\",\"Require owner acceptance of flow-input classes\",\"Classify inputs through a trusted source or owner declaration at run time\"],\"default_guess\":\"Require an owner-authoritative classification for externally supplied flow inputs.\"},{\"subject\":\"Flow constants disclosure\",\"kind\":\"unverifiable invariant\",\"text\":\"“a constant's value takes the class the composing agent declares with it” and “No function, edge or flow construct lowers a class.”\",\"question\":\"What verifies that an agent did not declare a personal or confidential constant as `open`?\",\"options\":[\"Trust the composing agent\",\"Require owner acceptance for non-open constants and their classifications\",\"Disallow sensitive constants\"],\"default_guess\":\"Treat the declaration as trusted input only if the specification explicitly makes the agent authoritative; otherwise require owner acceptance.\"},{\"subject\":\"Secrets boundary\",\"kind\":\"contradiction\",\"text\":\"State 0 says secrets “never enter a function, a flow, a trace or an answer,” while A17 says a credential “in another encoding is not recognised, and is protected only by its class.”\",\"question\":\"Is the no-secret invariant limited to the exact credential bytes known to the kernel, or must encoded and transformed credentials also be prevented from entering values and responses?\",\"options\":[\"Limit the invariant to verbatim configured credential bytes\",\"Detect specified encodings and transformations\",\"Keep the absolute invariant and require a different trust boundary\"],\"default_guess\":\"Narrow the enforceable invariant explicitly to verbatim configured credential bytes.\"},{\"subject\":\"Host paths in responses\",\"kind\":\"unenforceable invariant\",\"text\":\"“No response carries … a host path,” while service bodies, function outputs and stored values may contain arbitrary strings and are returned as data.\",\"question\":\"Does the prohibition cover only kernel-generated diagnostics and metadata, or must arbitrary payload values that happen to contain host paths also be withheld?\",\"options\":[\"Limit it to kernel-generated text and metadata\",\"Scan and withhold all payloads containing known host paths\",\"Forbid path-like strings in values\"],\"default_guess\":\"Limit the rule to kernel-generated diagnostics and metadata.\"},{\"subject\":\"Data-directory privacy\",\"kind\":\"vague refusal condition\",\"text\":\"“The directory and everything in it are private to the kernel's user; the kernel refuses to start otherwise.”\",\"question\":\"What exact ownership, mode-bit and ACL conditions count as private for directories and files?\",\"options\":[\"Owner must be the kernel user and group/other permissions must be zero\",\"Require exact modes such as 0700 directories and 0600 files\",\"Also inspect ACLs and parent directories\"],\"default_guess\":\"Require ownership by the kernel user, no group/other permissions, and no granting ACL entries.\"},{\"subject\":\"Secret-file symlinks\",\"kind\":\"ambiguous security check\",\"text\":\"“its secret file is read then, without following a symbolic link” for an absolute configured path.\",\"question\":\"Must every component of the secret path be opened without following symlinks, or only the final file?\",\"options\":[\"Reject symlinks in every path component\",\"Reject only a symlink final component\",\"Trust parent-directory resolution\"],\"default_guess\":\"Reject symlinks in every traversed component.\"},{\"subject\":\"Kernel startup\",\"kind\":\"missing precedence\",\"text\":\"A03, A16, A17 and A18 each define start-time refusals, while A14 performs recovery that may execute functions or send service requests before the surface opens; no global startup order is given.\",\"question\":\"In what exact order are configuration validation, directory locking and validation, database opening and cleanup, sandbox probing, manifest checks, effect recovery and run advancement performed, and may recovery cause effects if another start check would fail?\",\"options\":[\"Complete every non-mutating start check before cleanup and recovery\",\"Take the lock, validate everything, then clean and recover\",\"Recover as soon as the store opens\"],\"default_guess\":\"Take the lock, complete all start validations and the sandbox probe, then clean temporary data and perform recovery.\"},{\"subject\":\"Store order\",\"kind\":\"undefined total order\",\"text\":\"“records have one order” and activations are identified by “their position in the store's one order of records,” but one transaction can write several different records.\",\"question\":\"How are positions assigned among multiple records written by the same store call, and are updates to mutable entities new positions or changes at their original positions?\",\"options\":[\"One global sequence allocated per inserted record with a specified insertion order\",\"One position per transaction plus a record-type tie-break\",\"Separate per-type sequences\"],\"default_guess\":\"Use one durable global sequence per newly inserted record and specify the insertion order inside every multi-record call; updates retain the original position.\"},{\"subject\":\"Surface request serialization\",\"kind\":\"undefined ordering\",\"text\":\"“Surface requests are handled one at a time in the order they arrive.”\",\"question\":\"What event defines arrival when MCP requests are received concurrently or partially—first byte, complete decoded message, transport dispatch, or enqueue order?\",\"options\":[\"Order when a complete request is enqueued\",\"Order by first received byte\",\"Let the MCP runtime choose\"],\"default_guess\":\"Order by a monotonically assigned sequence when a complete request is accepted into the kernel queue.\"},{\"subject\":\"Manifest revision\",\"kind\":\"undefined source semantics\",\"text\":\"The kernel reads `<manifest_location>/<service_id>.json` “at the configured `manifest_revision`,” and says a record changes “only after a restart with a new configured revision.”\",\"question\":\"How is a file read at a revision, and what prevents edits to a working file at the same configured revision from changing the result between sends?\",\"options\":[\"Read immutable repository objects by revision\",\"Materialize and pin a snapshot at startup\",\"Read the live filesystem and allow same-revision changes\"],\"default_guess\":\"Resolve the configured revision to an immutable snapshot at startup and read only that snapshot.\"},{\"subject\":\"Unrelated manifest capabilities\",\"kind\":\"contradiction\",\"text\":\"K-03 says an edit to another operation “stops nothing,” but A08 can reject the whole record when “two entries of `capabilities` share the name,” and rule 6 stops a send when the record fails a record-level check.\",\"question\":\"Can an invalid or duplicate unrelated capability stale an otherwise unchanged pinned operation, or are only faults affecting the selected capability relevant?\",\"options\":[\"Only the selected capability and required record envelope can stale it\",\"Any invalid capability makes the whole service record stale\",\"Duplicate names matter only when they equal the selected operation name\"],\"default_guess\":\"Apply capability-specific checks only to the selected operation; reject duplicate names only when selection is ambiguous.\"},{\"subject\":\"Manifest JSON shape\",\"kind\":\"incomplete refusal conditions\",\"text\":\"A08 names checks for an absent or invalid record, missing fields and selected capability facts, but does not define the required JSON types and shapes of `capabilities`, instances, `required_headers`, `exposed_as` and `idempotency_key`.\",\"question\":\"What exact manifest shapes and field types are accepted, and which mismatch is reported first for wrong types or unknown forms?\",\"options\":[\"Define a complete manifest schema and ordered validation\",\"Accept any shape usable by the selected operation\",\"Delegate parsing rules to an existing platform-manifest specification\"],\"default_guess\":\"Define and reference one complete manifest schema with a deterministic validation order.\"},{\"subject\":\"Read-operation idempotency metadata\",\"kind\":\"missing type rule\",\"text\":\"For a read operation the binding copies `idempotency_key` “text split on `+` and trimmed … whatever those parts are,” while rule 5 validates broken syntax only “for an operation other than `read`.”\",\"question\":\"What happens when a read operation's `idempotency_key` is neither `null` nor text, or contains empty and duplicate parts?\",\"options\":[\"Refuse non-text but preserve arbitrary text parts\",\"Refuse every malformed read key too\",\"Ignore the field entirely for reads\"],\"default_guess\":\"Require `null` or text for reads, but do not apply the non-read field-name checks.\"},{\"subject\":\"Service base URL\",\"kind\":\"incomplete URL validation\",\"text\":\"An `api_base_url` is accepted when it is “an absolute `http` or `https` URL with a host,” then the request URL is made by removing a trailing `/` and appending the declared path.\",\"question\":\"Are user information, a query, a fragment, an existing path, percent-encoded separators, IPv6 zone identifiers or multiple trailing slashes allowed in the base URL, and how are they joined?\",\"options\":[\"Allow only scheme, host and optional port\",\"Allow a base path but forbid userinfo, query and fragment\",\"Permit every absolute URL and define component-aware joining\"],\"default_guess\":\"Allow scheme, host, optional port and an optional normalized base path; forbid userinfo, query and fragment.\"},{\"subject\":\"Plain-HTTP loopback exception\",\"kind\":\"undefined address test\",\"text\":\"Plain HTTP is allowed when the `api_base_url` “host is a loopback address.”\",\"question\":\"Does this mean only a literal IPv4/IPv6 loopback address, or also a hostname such as `localhost` or a DNS name that resolves to loopback, and when is it evaluated?\",\"options\":[\"Only literal loopback IP addresses\",\"Literal loopback and `localhost`\",\"Any host resolving exclusively to loopback at connection time\"],\"default_guess\":\"Allow only literal loopback IPv4 or IPv6 addresses.\"},{\"subject\":\"Port names in multipart requests\",\"kind\":\"injection gap\",\"text\":\"A multipart part is emitted as `Content-Disposition: form-data; name=\\\"<port>\\\"`, with `filename=\\\"<port>\\\"` for files, but port names have no stated HTTP-safe grammar or escaping rule.\",\"question\":\"Which port names are valid here, and how are quotes, backslashes, control characters and non-ASCII characters encoded?\",\"options\":[\"Restrict port names to a safe ASCII field-name grammar\",\"Define quoted-string escaping and extended parameter encoding\",\"Refuse multipart bindings whose names need escaping\"],\"default_guess\":\"Restrict multipart-used port names to a conservative ASCII identifier grammar.\"},{\"subject\":\"Path placeholders and cardinality\",\"kind\":\"contradictory validation\",\"text\":\"A binding is accepted when every path placeholder's port schema type is `string` or `integer`, but at run time a `many` port carries a list and a path value “must be a non-null string or integer.”\",\"question\":\"Must a path-placeholder input also have cardinality `one`?\",\"options\":[\"Require cardinality `one` at proposal time\",\"Allow `many` and fail every list at send time\",\"Select one list element by a defined rule\"],\"default_guess\":\"Require cardinality `one` at proposal time.\"},{\"subject\":\"GET/DELETE request shape and cardinality\",\"kind\":\"incomplete mapping rule\",\"text\":\"GET and DELETE accept a port whose schema type is a scalar “or an `array` of those,” while a `many` port independently wraps its element schema in a list.\",\"question\":\"How are a cardinality-`many` port whose element schema is itself an array, and a cardinality-`one` port with an array schema, represented as repeated query parameters?\",\"options\":[\"Forbid nested-list request shapes\",\"Flatten one specified level\",\"Encode inner arrays as canonical JSON strings\"],\"default_guess\":\"Forbid any request shape that would produce nested lists in query parameters.\"},{\"subject\":\"Multipart wire representation\",\"kind\":\"underspecified protocol\",\"text\":\"A multipart request lists its parts and headers, but does not define boundary generation, CRLF framing, disposition escaping or the exact bytes used on the wire.\",\"question\":\"Which canonical multipart serialization is used, especially when services or approval comparisons depend on exact bytes?\",\"options\":[\"Define one canonical serialization\",\"Permit any RFC-compliant serialization because framing is excluded from approval identity\",\"Use a pinned HTTP library's serialization as normative\"],\"default_guess\":\"Define one canonical serializer, while continuing to exclude its boundary from approval identity.\"},{\"subject\":\"HTTP content encoding\",\"kind\":\"uncovered response case\",\"text\":\"“The kernel asks for no content encoding (`Accept-Encoding: identity`)” and counts bytes “after transfer decoding,” but gives no rule for a service that nevertheless returns `Content-Encoding: gzip` or another encoding.\",\"question\":\"Is an encoded response rejected, decoded, or treated as raw body bytes?\",\"options\":[\"Reject any non-identity content encoding\",\"Decode supported encodings before limits and validation\",\"Treat encoded bytes as the body\"],\"default_guess\":\"Reject any non-identity `Content-Encoding` as a malformed or contract-violating response.\"},{\"subject\":\"File-body credential scanning\",\"kind\":\"contradiction\",\"text\":\"K-10 says “the kernel does not inspect file content,” while A09 says “Every body as read, whatever its status … is searched … for the bytes of the credential value,” including a successful file response.\",\"question\":\"Are file response bodies an exception to the no-inspection rule, or must credential scanning skip files?\",\"options\":[\"Explicitly make verbatim credential scanning the sole file-inspection exception\",\"Do not scan successful file bodies\",\"Remove the no-inspection claim\"],\"default_guess\":\"Make credential-byte scanning an explicit, sole exception for file bodies.\"},{\"subject\":\"Approval request identity for multipart\",\"kind\":\"contradiction\",\"text\":\"State 0 says approval covers the “fully built request” and “Any difference at send … asks again,” while A10 excludes the multipart boundary and the `content-length` it changes from `request_digest`.\",\"question\":\"Do framing-only differences void an approval, or are boundary and derived content length explicit exceptions to State 0's any-difference rule?\",\"options\":[\"Framing differences do not void approval\",\"Every wire-byte difference voids approval\",\"Use a deterministic boundary so no difference arises\"],\"default_guess\":\"Treat boundary and its derived content length as explicit exceptions and amend the absolute State 0 wording.\"},{\"subject\":\"Guard skip versus upstream failure\",\"kind\":\"temporal precedence gap\",\"text\":\"“An input port that can no longer receive a value … makes its node `skipped_by_guard`,” but “when both rule 4 and this rule apply, [upstream failure] wins,” and NodeExecutions are immutable.\",\"question\":\"If a guard disables one input before another upstream input later fails, must the kernel delay the skip record, or can it record `skipped_by_guard` and thereby prevent the later precedence rule from taking effect?\",\"options\":[\"Delay conclusion until all other incoming sources conclude\",\"Record skip immediately and never revise it\",\"Record upstream failure later and supersede the skip without editing it\"],\"default_guess\":\"Delay the node's conclusion until it is known whether any other input is failed or `upstream_failed`.\"},{\"subject\":\"Mapped-list size failure\",\"kind\":\"release-dependent derived state\",\"text\":\"A mapped list over `stored_value_bytes_max` fails without any record stating that failure and is “derived … the same way by every reader,” while A20 allows a new release to change ceilings.\",\"question\":\"Which release's `stored_value_bytes_max` governs a pending or historical mapped list after an upgrade, and how is the result kept stable without recording it?\",\"options\":[\"Use the release under which the run started and persist that release identity\",\"Use the current release and permit reinterpretation\",\"Record the aggregate size failure explicitly\"],\"default_guess\":\"Persist the applicable release identity with the run or record the aggregate failure explicitly.\"},{\"subject\":\"Spool-file ceiling verification\",\"kind\":\"unverifiable rule\",\"text\":\"`spool_file_bytes_max` is 134217728, while a function's maximum `output_bytes` is 67108864 and a service response is capped at 134217728; nevertheless the required test asks for “A function writing a file one byte over `spool_file_bytes_max`.”\",\"question\":\"How can the spool-file ceiling and its precedence be exercised independently when every producer hits an equal or lower earlier ceiling first?\",\"options\":[\"Lower the spool-file ceiling\",\"Raise an earlier producer ceiling\",\"Test only that the earlier limit wins and remove the claimed independent witness\"],\"default_guess\":\"Change the limits or test fixture so one producer can cross the spool-file ceiling without first crossing another ceiling.\"},{\"subject\":\"Recovery under changed installation facts\",\"kind\":\"unfixed pinned state\",\"text\":\"A run “pins what it executes,” but after restart recovery rebuilds service requests from the newly configured manifest revision, selected instance, required headers and credential header name.\",\"question\":\"Which installation facts are intentionally allowed to change for an existing run, and which must remain pinned to the run's start?\",\"options\":[\"Only flow and function identities are pinned; all installation facts are current\",\"Pin manifest revision and instance identity but resolve credentials currently\",\"Pin the complete non-secret request configuration\"],\"default_guess\":\"Pin the manifest revision and selected instance identity, while resolving only the credential value at send time.\"},{\"subject\":\"MCP request interruption\",\"kind\":\"uncovered lifecycle case\",\"text\":\"“A run advances only inside a request” and each request executes until the run rests or ends, but no rule covers the MCP caller disconnecting or cancelling while that work is in progress.\",\"question\":\"Does kernel work continue to completion, stop at the next safe store boundary, or abort as a crash-like condition when the initiating MCP request disappears?\",\"options\":[\"Continue independently until the normal resting point\",\"Stop after the current node and persist `running` for recovery\",\"Abort the process and rely on startup recovery\"],\"default_guess\":\"Continue the accepted request to its normal resting point and persist its result even if the client disconnects.\"}]}"
+}
