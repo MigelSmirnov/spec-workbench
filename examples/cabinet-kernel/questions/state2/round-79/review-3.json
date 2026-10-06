@@ -1,0 +1,294 @@
+{
+ "open_points": [
+  {
+   "subject": "A01/A05 flow-version identity and proof order",
+   "kind": "non-total order",
+   "text": "“Lists whose order carries no meaning are sorted before hashing — ... edges in the edge order of A05, constants by (`to_node`, `to_port`)” and “edges, by (`to_node`, `to_port`, `from_node`, `from_port`)”",
+   "question": "How are edges with the same endpoints but different guards, and constants with the same target but different values, ordered for hashing and first-failure selection when the stated sort keys tie?",
+   "options": [
+    "Add a canonical tie-breaker using all meaning facts",
+    "Refuse tied edges or constants during composition",
+    "Preserve request order for tied items"
+   ],
+   "default_guess": "Use canonical JSON of the complete edge or constant as the final tie-breaker."
+  },
+  {
+   "subject": "M17 ProofResult and A05 failure reporting",
+   "kind": "model contradiction",
+   "text": "M17 permits “the first failing edge or node,” while A05 checks constants, target ports, cycles and reach failures and requires “its phase, its node or edge and its reason.”",
+   "question": "What locator does ProofResult contain when the first failure is a constant, a flow input/output port, a fan-in target, or a cycle rather than one unambiguous edge or node?",
+   "options": [
+    "Expand the failure locator to cover constants, ports and graph failures",
+    "Map every failure to a designated node or edge",
+    "Return only phase and reason when no node or edge applies"
+   ],
+   "default_guess": "Use a tagged locator that can identify a node, edge, constant, port or graph-level failure."
+  },
+  {
+   "subject": "M06/A04 expected trial outputs",
+   "kind": "missing refusal rule",
+   "text": "“`expected_outputs`: StoredValues by output port ... absent when only the absence of failure is required” and “its expected outputs, when present, fit the output ports”",
+   "question": "When expected outputs are present, must they contain exactly every output port, or may they be partial; and are unknown or duplicate output names refused?",
+   "options": [
+    "Require exactly one expected value for every output port",
+    "Allow a subset and compare only named outputs",
+    "Allow omitted ports but refuse unknown or duplicate names"
+   ],
+   "default_guess": "Require exactly the contract’s output ports when `expected_outputs` is present."
+  },
+  {
+   "subject": "K-02 and A03 sandbox filesystem access",
+   "kind": "contradiction",
+   "text": "K-02 says a function has “no filesystem beyond its input,” but A03 permits access to “the exchange directory and the read-only runtime.”",
+   "question": "May agent code itself read runtime files and create, enumerate or read arbitrary scratch files in the exchange directory, or are those paths accessible only to the runner for imports and input/output transfer?",
+   "options": [
+    "Agent code may access both permitted trees",
+    "Agent code may read only its declared file inputs and write only declared outputs",
+    "Imports may read the runtime, but explicit user-code file access is trapped"
+   ],
+   "default_guess": "Permit interpreter imports but trap explicit user-code filesystem access except through declared file-port objects."
+  },
+  {
+   "subject": "K-02/K-05 and A03 Python determinism",
+   "kind": "unenforceable invariant",
+   "text": "Functions are declared pure with “no clock, no randomness,” admission is a “deterministic verdict,” and a required test says “The same implementation on the same input yields the same output digest twice,” but A03 traps only a closed list of APIs.",
+   "question": "What happens when code uses an untrapped nondeterministic source available in Python, such as process identity, object identity, filesystem metadata or another standard-library clock/randomness path?",
+   "options": [
+    "Such access must be trapped and classified `sandbox_violation`",
+    "The listed traps are exhaustive and differing outputs are allowed",
+    "Run every case repeatedly and refuse nondeterministic implementations"
+   ],
+   "default_guess": "Treat every observable nondeterministic source as forbidden and `sandbox_violation`; the closed trap list must be extended accordingly."
+  },
+  {
+   "subject": "A03 subprocess trapping and process-limit test",
+   "kind": "contradiction",
+   "text": "The audit hook “raises on ... subprocess,” while the required tests say “a fork loop” ends `resource_exhausted`.",
+   "question": "Which process-creation operations are trapped immediately as `sandbox_violation`, and which are allowed until `process_count` is exhausted?",
+   "options": [
+    "Trap every process-creation attempt",
+    "Allow direct fork/process creation subject to the process limit but trap higher-level subprocess execution",
+    "Classify a process-limit hit ahead of the recorded subprocess trap"
+   ],
+   "default_guess": "Allow process creation only to test and enforce the declared process bound, then classify the limit hit as `resource_exhausted`."
+  },
+  {
+   "subject": "A03 wall-time bound",
+   "kind": "undefined accounting",
+   "text": "“ResourceBounds M04 are enforced ... with ... the parent's own wall deadline”",
+   "question": "At what exact event does `wall_time_ms` start and end: sandbox creation, interpreter launch, module loading, entry into `run`, return from `run`, output validation, or cleanup?",
+   "options": [
+    "Measure from process launch through process exit",
+    "Measure only the call to `run`",
+    "Measure the entire environment lifecycle including setup and cleanup"
+   ],
+   "default_guess": "Measure from launching the sandboxed interpreter until it exits, excluding parent-side setup and cleanup."
+  },
+  {
+   "subject": "A03 scratch-space bound",
+   "kind": "undefined accounting",
+   "text": "The sandbox has “one private exchange directory bounded by `sandbox_scratch_bytes_max`,” and a limit hit is `resource_exhausted`.",
+   "question": "Which bytes count toward the scratch bound—copied inputs, output files, protocol files, failed partial files and filesystem allocation overhead—and what outcome is recorded if the inputs already exceed it before `run` starts?",
+   "options": [
+    "Count all file contents in the exchange directory",
+    "Count only bytes created by agent code and outputs",
+    "Count filesystem blocks including metadata and sparse allocation"
+   ],
+   "default_guess": "Count the logical byte lengths of all input, temporary and output files in the exchange directory; oversized initial inputs produce `resource_exhausted`."
+  },
+  {
+   "subject": "A03 process-count bound",
+   "kind": "undefined accounting",
+   "text": "“`process_count`” is enforced with `setrlimit` and a process-limit hit is `resource_exhausted`.",
+   "question": "Does `process_count` include the sandbox runner itself, only its children, or every process charged to the namespace/user, and are threads included?",
+   "options": [
+    "Count the runner and all descendants, excluding threads",
+    "Count only child processes created by the implementation",
+    "Use the host `RLIMIT_NPROC` count exactly, including whatever the OS charges"
+   ],
+   "default_guess": "Count the runner and all descendant processes, with threads excluded."
+  },
+  {
+   "subject": "A04/A20 admission across kernel releases",
+   "kind": "missing invalidation rule",
+   "text": "A04 reuses an existing verdict for the same implementation and corpus, while A20 says a new release may change the interpreter, dependencies, traps and ceilings; neither the implementation nor verdict identity includes the release.",
+   "question": "After upgrading the kernel release, may an old AdmissionVerdict still activate and serve an implementation without rerunning the corpus under the new sandbox runtime?",
+   "options": [
+    "Reuse all existing verdicts across releases",
+    "Include a sandbox-release identity in admission evidence and rerun after a change",
+    "Forbid opening an existing store with a different sandbox release"
+   ],
+   "default_guess": "Bind admission evidence to the sandbox release and rerun admission before activation under a changed runtime."
+  },
+  {
+   "subject": "A08/A09 `api_base_url`",
+   "kind": "incomplete URL rule",
+   "text": "A08 accepts “an absolute `http` or `https` URL with a host,” and A09 constructs the URL as “the `api_base_url` without a trailing `/` followed by the declared path.”",
+   "question": "Are user information, an existing path, query, fragment, percent-encoded authority components, IPv6 zone identifiers and non-default ports permitted in `api_base_url`, and how is the declared path joined when any are present?",
+   "options": [
+    "Require a scheme and authority only, with no userinfo, path, query or fragment",
+    "Permit a base path but forbid userinfo, query and fragment and join by URL rules",
+    "Permit every absolute URL and use literal string concatenation"
+   ],
+   "default_guess": "Require scheme plus authority only, allowing an explicit port but no userinfo, path, query or fragment."
+  },
+  {
+   "subject": "A09 plain-HTTP loopback exception",
+   "kind": "vague security check",
+   "text": "Plain HTTP is allowed when the “`api_base_url` host is a loopback address.”",
+   "question": "Does this mean only a literal loopback IP, a hostname such as `localhost`, or any hostname whose DNS result is loopback; and when multiple or changing DNS answers exist, which address controls the decision?",
+   "options": [
+    "Allow only literal IPv4 or IPv6 loopback addresses",
+    "Resolve once and require every result to be loopback",
+    "Allow recognized loopback hostnames as well as literal addresses"
+   ],
+   "default_guess": "Allow only literal loopback IP addresses after strict IP parsing."
+  },
+  {
+   "subject": "A09 path placeholders",
+   "kind": "uncovered input case",
+   "text": "A path placeholder accepts “a non-null string or integer” and values are encoded “so that they stay one segment.”",
+   "question": "What happens when a string placeholder value is empty, producing an empty segment and potentially `//` after substitution?",
+   "options": [
+    "Refuse the send during input placement",
+    "Send the empty segment exactly",
+    "Percent-encode an explicit representation of the empty string"
+   ],
+   "default_guess": "Refuse an empty path-placeholder value during the pre-send input-placement check."
+  },
+  {
+   "subject": "A09/A10 HTTP wire protocol",
+   "kind": "unspecified transport",
+   "text": "A10 requires exactly listed wire headers, including `host` and `content-length`, and says “the HTTP client adds no other header,” but no HTTP protocol version is selected.",
+   "question": "Must invocations use HTTP/1.1, HTTP/2 or either, and how are `host`, framing and the exact approved request represented under protocols that use pseudo-headers or different framing?",
+   "options": [
+    "Require HTTP/1.1 only",
+    "Allow HTTP/1.1 or HTTP/2 with one protocol-independent request description",
+    "Select a protocol per instance and include it in the approval digest"
+   ],
+   "default_guess": "Require HTTP/1.1 so the specified headers and content length have one wire meaning."
+  },
+  {
+   "subject": "A08/A09 header values",
+   "kind": "undefined encoding",
+   "text": "Required header values are sent “verbatim,” but validation rejects only empty, surrounding-whitespace and control-character values.",
+   "question": "What character repertoire and byte encoding are allowed for non-ASCII required-header and credential-header values, and is client normalization or rejection a pre-send failure?",
+   "options": [
+    "Require visible ASCII only",
+    "Encode values as UTF-8 bytes",
+    "Permit the HTTP library's supported header encoding and classify rejection as a pre-send failure"
+   ],
+   "default_guess": "Require visible ASCII for manifest header values and credential values."
+  },
+  {
+   "subject": "A09 multipart construction",
+   "kind": "undefined framing",
+   "text": "Multipart parts and their order are fixed, but “the boundary ... [is] the kernel's framing” and is excluded from the approval description.",
+   "question": "How is a multipart boundary chosen, how are collisions with part content prevented, and must retries of equal parts reuse the same boundary?",
+   "options": [
+    "Generate a fresh boundary and verify it does not occur in any part",
+    "Derive a deterministic boundary from the part description",
+    "Use any library-generated boundary without collision checking"
+   ],
+   "default_guess": "Derive or generate a boundary, scan all parts for collisions and choose another on collision; reuse is not required."
+  },
+  {
+   "subject": "A09 transport timeout",
+   "kind": "undefined deadline",
+   "text": "A response is used only when it “arrived within `transport_timeout_ms`.”",
+   "question": "Is this one total deadline from before DNS resolution through the complete body, a deadline beginning with the first connection attempt, or an inactivity timeout reset by progress?",
+   "options": [
+    "One total deadline covering DNS, connect, TLS, headers and body",
+    "An inactivity timeout reset on each received byte",
+    "Separate connect and response deadlines using the same ceiling"
+   ],
+   "default_guess": "Use one monotonic total deadline covering DNS resolution through receipt of the complete permitted body."
+  },
+  {
+   "subject": "A09 address fallback and retry prohibition",
+   "kind": "retry ambiguity",
+   "text": "“Nothing is retried inside one attempt,” while name resolution may return several addresses and HTTP clients commonly try more than one connection.",
+   "question": "May the transport try another resolved address after a connection failure, or does that count as a forbidden retry?",
+   "options": [
+    "Try exactly one resolved address",
+    "Try each resolved address until the first request byte is written",
+    "Permit client address fallback but no second HTTP request after any byte is written"
+   ],
+   "default_guess": "Permit address fallback only before any request byte is written and treat it as the same `not_sent` attempt."
+  },
+  {
+   "subject": "M19/M26 draft-write authority",
+   "kind": "missing durable fact",
+   "text": "M26 records “the flow activation under which the run started,” but M19 pins only `flow_version_id` and function implementations and contains no FlowActivation reference.",
+   "question": "How is the exact FlowActivation identity recovered after the same version has been activated multiple times or later activations have replaced it?",
+   "options": [
+    "Store the FlowActivation position on the Run",
+    "Derive the latest activation preceding the Run in store order",
+    "Record the activation only when the first draft-write attempt is created"
+   ],
+   "default_guess": "Pin the exact FlowActivation store position on the Run at creation."
+  },
+  {
+   "subject": "A10/M25 grant target",
+   "kind": "missing refusal condition",
+   "text": "A grant is for “a node of the flow's active version whose effect class is not `destructive`,” but function nodes have no effect class.",
+   "question": "Is a grant request naming a function node refused, and if so at which check, or may a meaningless active grant be created for it?",
+   "options": [
+    "Refuse every non-operation node",
+    "Allow grants for function nodes but never use them",
+    "Treat function nodes as `read` for granting"
+   ],
+   "default_guess": "Refuse a grant unless the named node is an operation node."
+  },
+  {
+   "subject": "A07 failure-detail redaction",
+   "kind": "undefined disclosure output",
+   "text": "A protected `failure_detail` is returned to an agent “only as its length and that class.”",
+   "question": "Is the reported length measured in Unicode characters, UTF-8 bytes before truncation, UTF-8 bytes after truncation, or the original untruncated body/message length?",
+   "options": [
+    "UTF-8 byte length of the stored, truncated detail",
+    "Unicode scalar count of the stored detail",
+    "Original pre-truncation UTF-8 byte length"
+   ],
+   "default_guess": "Return the UTF-8 byte length of the stored, already bounded detail."
+  },
+  {
+   "subject": "A13/A15/A20 mapped-list overflow",
+   "kind": "cross-release contradiction",
+   "text": "A13 says no record states a mapped-list size failure and it is “derived from the elements' records and `stored_value_bytes_max`, the same way by every reader,” while A20 permits a new release to change ceilings and says recorded executions are never reinterpreted.",
+   "question": "Which ceiling is used to derive the result of an existing run after an upgrade, and how can its final status remain stable when the original ceiling is not recorded?",
+   "options": [
+    "Use the current release ceiling, allowing old derivations to change",
+    "Pin the applicable ceiling or release on the run",
+    "Write an immutable aggregate failure record when the limit is exceeded"
+   ],
+   "default_guess": "Write an immutable aggregate outcome or otherwise persist the ceiling used with the run."
+  },
+  {
+   "subject": "K-15/M27/A13/A14 trace actor attribution",
+   "kind": "audit contradiction",
+   "text": "K-15 requires “the owner's actions, each agent's and the kernel's own [to be] distinguishable in every record,” but NodeExecution and EffectAttempt have no actor or triggering-request reference and may be produced by start, approval, resolution, resume or startup recovery.",
+   "question": "How can a reader distinguish which actor-triggered advancement produced a particular NodeExecution or EffectAttempt, especially after several resumptions and decisions on one run?",
+   "options": [
+    "Add a triggering action/actor reference to each such record",
+    "Derive the actor from immediately preceding store records",
+    "Declare these records always kernel-authored and separately record every advancement request"
+   ],
+   "default_guess": "Record an immutable advancement/action identifier with its actor and reference it from generated execution and attempt records."
+  },
+  {
+   "subject": "A18 data-directory validation",
+   "kind": "vague startup refusal",
+   "text": "“The directory and everything in it are private to the kernel's user; the kernel refuses to start otherwise.”",
+   "question": "What exact ownership, permission-bit and ACL conditions make the directory, its subdirectories and files ‘private,’ and are unexpected hard links or files grounds for refusal?",
+   "options": [
+    "Require kernel-user ownership and no group/other permission on every entry",
+    "Check only the top-level directory mode",
+    "Use successful exclusive access as the definition of private"
+   ],
+   "default_guess": "Require every directory and file to be owned by the kernel user with no group/other permissions, and refuse linked entries that defeat that isolation."
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A01/A05 flow-version identity and proof order\",\"kind\":\"non-total order\",\"text\":\"“Lists whose order carries no meaning are sorted before hashing — ... edges in the edge order of A05, constants by (`to_node`, `to_port`)” and “edges, by (`to_node`, `to_port`, `from_node`, `from_port`)”\",\"question\":\"How are edges with the same endpoints but different guards, and constants with the same target but different values, ordered for hashing and first-failure selection when the stated sort keys tie?\",\"options\":[\"Add a canonical tie-breaker using all meaning facts\",\"Refuse tied edges or constants during composition\",\"Preserve request order for tied items\"],\"default_guess\":\"Use canonical JSON of the complete edge or constant as the final tie-breaker.\"},{\"subject\":\"M17 ProofResult and A05 failure reporting\",\"kind\":\"model contradiction\",\"text\":\"M17 permits “the first failing edge or node,” while A05 checks constants, target ports, cycles and reach failures and requires “its phase, its node or edge and its reason.”\",\"question\":\"What locator does ProofResult contain when the first failure is a constant, a flow input/output port, a fan-in target, or a cycle rather than one unambiguous edge or node?\",\"options\":[\"Expand the failure locator to cover constants, ports and graph failures\",\"Map every failure to a designated node or edge\",\"Return only phase and reason when no node or edge applies\"],\"default_guess\":\"Use a tagged locator that can identify a node, edge, constant, port or graph-level failure.\"},{\"subject\":\"M06/A04 expected trial outputs\",\"kind\":\"missing refusal rule\",\"text\":\"“`expected_outputs`: StoredValues by output port ... absent when only the absence of failure is required” and “its expected outputs, when present, fit the output ports”\",\"question\":\"When expected outputs are present, must they contain exactly every output port, or may they be partial; and are unknown or duplicate output names refused?\",\"options\":[\"Require exactly one expected value for every output port\",\"Allow a subset and compare only named outputs\",\"Allow omitted ports but refuse unknown or duplicate names\"],\"default_guess\":\"Require exactly the contract’s output ports when `expected_outputs` is present.\"},{\"subject\":\"K-02 and A03 sandbox filesystem access\",\"kind\":\"contradiction\",\"text\":\"K-02 says a function has “no filesystem beyond its input,” but A03 permits access to “the exchange directory and the read-only runtime.”\",\"question\":\"May agent code itself read runtime files and create, enumerate or read arbitrary scratch files in the exchange directory, or are those paths accessible only to the runner for imports and input/output transfer?\",\"options\":[\"Agent code may access both permitted trees\",\"Agent code may read only its declared file inputs and write only declared outputs\",\"Imports may read the runtime, but explicit user-code file access is trapped\"],\"default_guess\":\"Permit interpreter imports but trap explicit user-code filesystem access except through declared file-port objects.\"},{\"subject\":\"K-02/K-05 and A03 Python determinism\",\"kind\":\"unenforceable invariant\",\"text\":\"Functions are declared pure with “no clock, no randomness,” admission is a “deterministic verdict,” and a required test says “The same implementation on the same input yields the same output digest twice,” but A03 traps only a closed list of APIs.\",\"question\":\"What happens when code uses an untrapped nondeterministic source available in Python, such as process identity, object identity, filesystem metadata or another standard-library clock/randomness path?\",\"options\":[\"Such access must be trapped and classified `sandbox_violation`\",\"The listed traps are exhaustive and differing outputs are allowed\",\"Run every case repeatedly and refuse nondeterministic implementations\"],\"default_guess\":\"Treat every observable nondeterministic source as forbidden and `sandbox_violation`; the closed trap list must be extended accordingly.\"},{\"subject\":\"A03 subprocess trapping and process-limit test\",\"kind\":\"contradiction\",\"text\":\"The audit hook “raises on ... subprocess,” while the required tests say “a fork loop” ends `resource_exhausted`.\",\"question\":\"Which process-creation operations are trapped immediately as `sandbox_violation`, and which are allowed until `process_count` is exhausted?\",\"options\":[\"Trap every process-creation attempt\",\"Allow direct fork/process creation subject to the process limit but trap higher-level subprocess execution\",\"Classify a process-limit hit ahead of the recorded subprocess trap\"],\"default_guess\":\"Allow process creation only to test and enforce the declared process bound, then classify the limit hit as `resource_exhausted`.\"},{\"subject\":\"A03 wall-time bound\",\"kind\":\"undefined accounting\",\"text\":\"“ResourceBounds M04 are enforced ... with ... the parent's own wall deadline”\",\"question\":\"At what exact event does `wall_time_ms` start and end: sandbox creation, interpreter launch, module loading, entry into `run`, return from `run`, output validation, or cleanup?\",\"options\":[\"Measure from process launch through process exit\",\"Measure only the call to `run`\",\"Measure the entire environment lifecycle including setup and cleanup\"],\"default_guess\":\"Measure from launching the sandboxed interpreter until it exits, excluding parent-side setup and cleanup.\"},{\"subject\":\"A03 scratch-space bound\",\"kind\":\"undefined accounting\",\"text\":\"The sandbox has “one private exchange directory bounded by `sandbox_scratch_bytes_max`,” and a limit hit is `resource_exhausted`.\",\"question\":\"Which bytes count toward the scratch bound—copied inputs, output files, protocol files, failed partial files and filesystem allocation overhead—and what outcome is recorded if the inputs already exceed it before `run` starts?\",\"options\":[\"Count all file contents in the exchange directory\",\"Count only bytes created by agent code and outputs\",\"Count filesystem blocks including metadata and sparse allocation\"],\"default_guess\":\"Count the logical byte lengths of all input, temporary and output files in the exchange directory; oversized initial inputs produce `resource_exhausted`.\"},{\"subject\":\"A03 process-count bound\",\"kind\":\"undefined accounting\",\"text\":\"“`process_count`” is enforced with `setrlimit` and a process-limit hit is `resource_exhausted`.\",\"question\":\"Does `process_count` include the sandbox runner itself, only its children, or every process charged to the namespace/user, and are threads included?\",\"options\":[\"Count the runner and all descendants, excluding threads\",\"Count only child processes created by the implementation\",\"Use the host `RLIMIT_NPROC` count exactly, including whatever the OS charges\"],\"default_guess\":\"Count the runner and all descendant processes, with threads excluded.\"},{\"subject\":\"A04/A20 admission across kernel releases\",\"kind\":\"missing invalidation rule\",\"text\":\"A04 reuses an existing verdict for the same implementation and corpus, while A20 says a new release may change the interpreter, dependencies, traps and ceilings; neither the implementation nor verdict identity includes the release.\",\"question\":\"After upgrading the kernel release, may an old AdmissionVerdict still activate and serve an implementation without rerunning the corpus under the new sandbox runtime?\",\"options\":[\"Reuse all existing verdicts across releases\",\"Include a sandbox-release identity in admission evidence and rerun after a change\",\"Forbid opening an existing store with a different sandbox release\"],\"default_guess\":\"Bind admission evidence to the sandbox release and rerun admission before activation under a changed runtime.\"},{\"subject\":\"A08/A09 `api_base_url`\",\"kind\":\"incomplete URL rule\",\"text\":\"A08 accepts “an absolute `http` or `https` URL with a host,” and A09 constructs the URL as “the `api_base_url` without a trailing `/` followed by the declared path.”\",\"question\":\"Are user information, an existing path, query, fragment, percent-encoded authority components, IPv6 zone identifiers and non-default ports permitted in `api_base_url`, and how is the declared path joined when any are present?\",\"options\":[\"Require a scheme and authority only, with no userinfo, path, query or fragment\",\"Permit a base path but forbid userinfo, query and fragment and join by URL rules\",\"Permit every absolute URL and use literal string concatenation\"],\"default_guess\":\"Require scheme plus authority only, allowing an explicit port but no userinfo, path, query or fragment.\"},{\"subject\":\"A09 plain-HTTP loopback exception\",\"kind\":\"vague security check\",\"text\":\"Plain HTTP is allowed when the “`api_base_url` host is a loopback address.”\",\"question\":\"Does this mean only a literal loopback IP, a hostname such as `localhost`, or any hostname whose DNS result is loopback; and when multiple or changing DNS answers exist, which address controls the decision?\",\"options\":[\"Allow only literal IPv4 or IPv6 loopback addresses\",\"Resolve once and require every result to be loopback\",\"Allow recognized loopback hostnames as well as literal addresses\"],\"default_guess\":\"Allow only literal loopback IP addresses after strict IP parsing.\"},{\"subject\":\"A09 path placeholders\",\"kind\":\"uncovered input case\",\"text\":\"A path placeholder accepts “a non-null string or integer” and values are encoded “so that they stay one segment.”\",\"question\":\"What happens when a string placeholder value is empty, producing an empty segment and potentially `//` after substitution?\",\"options\":[\"Refuse the send during input placement\",\"Send the empty segment exactly\",\"Percent-encode an explicit representation of the empty string\"],\"default_guess\":\"Refuse an empty path-placeholder value during the pre-send input-placement check.\"},{\"subject\":\"A09/A10 HTTP wire protocol\",\"kind\":\"unspecified transport\",\"text\":\"A10 requires exactly listed wire headers, including `host` and `content-length`, and says “the HTTP client adds no other header,” but no HTTP protocol version is selected.\",\"question\":\"Must invocations use HTTP/1.1, HTTP/2 or either, and how are `host`, framing and the exact approved request represented under protocols that use pseudo-headers or different framing?\",\"options\":[\"Require HTTP/1.1 only\",\"Allow HTTP/1.1 or HTTP/2 with one protocol-independent request description\",\"Select a protocol per instance and include it in the approval digest\"],\"default_guess\":\"Require HTTP/1.1 so the specified headers and content length have one wire meaning.\"},{\"subject\":\"A08/A09 header values\",\"kind\":\"undefined encoding\",\"text\":\"Required header values are sent “verbatim,” but validation rejects only empty, surrounding-whitespace and control-character values.\",\"question\":\"What character repertoire and byte encoding are allowed for non-ASCII required-header and credential-header values, and is client normalization or rejection a pre-send failure?\",\"options\":[\"Require visible ASCII only\",\"Encode values as UTF-8 bytes\",\"Permit the HTTP library's supported header encoding and classify rejection as a pre-send failure\"],\"default_guess\":\"Require visible ASCII for manifest header values and credential values.\"},{\"subject\":\"A09 multipart construction\",\"kind\":\"undefined framing\",\"text\":\"Multipart parts and their order are fixed, but “the boundary ... [is] the kernel's framing” and is excluded from the approval description.\",\"question\":\"How is a multipart boundary chosen, how are collisions with part content prevented, and must retries of equal parts reuse the same boundary?\",\"options\":[\"Generate a fresh boundary and verify it does not occur in any part\",\"Derive a deterministic boundary from the part description\",\"Use any library-generated boundary without collision checking\"],\"default_guess\":\"Derive or generate a boundary, scan all parts for collisions and choose another on collision; reuse is not required.\"},{\"subject\":\"A09 transport timeout\",\"kind\":\"undefined deadline\",\"text\":\"A response is used only when it “arrived within `transport_timeout_ms`.”\",\"question\":\"Is this one total deadline from before DNS resolution through the complete body, a deadline beginning with the first connection attempt, or an inactivity timeout reset by progress?\",\"options\":[\"One total deadline covering DNS, connect, TLS, headers and body\",\"An inactivity timeout reset on each received byte\",\"Separate connect and response deadlines using the same ceiling\"],\"default_guess\":\"Use one monotonic total deadline covering DNS resolution through receipt of the complete permitted body.\"},{\"subject\":\"A09 address fallback and retry prohibition\",\"kind\":\"retry ambiguity\",\"text\":\"“Nothing is retried inside one attempt,” while name resolution may return several addresses and HTTP clients commonly try more than one connection.\",\"question\":\"May the transport try another resolved address after a connection failure, or does that count as a forbidden retry?\",\"options\":[\"Try exactly one resolved address\",\"Try each resolved address until the first request byte is written\",\"Permit client address fallback but no second HTTP request after any byte is written\"],\"default_guess\":\"Permit address fallback only before any request byte is written and treat it as the same `not_sent` attempt.\"},{\"subject\":\"M19/M26 draft-write authority\",\"kind\":\"missing durable fact\",\"text\":\"M26 records “the flow activation under which the run started,” but M19 pins only `flow_version_id` and function implementations and contains no FlowActivation reference.\",\"question\":\"How is the exact FlowActivation identity recovered after the same version has been activated multiple times or later activations have replaced it?\",\"options\":[\"Store the FlowActivation position on the Run\",\"Derive the latest activation preceding the Run in store order\",\"Record the activation only when the first draft-write attempt is created\"],\"default_guess\":\"Pin the exact FlowActivation store position on the Run at creation.\"},{\"subject\":\"A10/M25 grant target\",\"kind\":\"missing refusal condition\",\"text\":\"A grant is for “a node of the flow's active version whose effect class is not `destructive`,” but function nodes have no effect class.\",\"question\":\"Is a grant request naming a function node refused, and if so at which check, or may a meaningless active grant be created for it?\",\"options\":[\"Refuse every non-operation node\",\"Allow grants for function nodes but never use them\",\"Treat function nodes as `read` for granting\"],\"default_guess\":\"Refuse a grant unless the named node is an operation node.\"},{\"subject\":\"A07 failure-detail redaction\",\"kind\":\"undefined disclosure output\",\"text\":\"A protected `failure_detail` is returned to an agent “only as its length and that class.”\",\"question\":\"Is the reported length measured in Unicode characters, UTF-8 bytes before truncation, UTF-8 bytes after truncation, or the original untruncated body/message length?\",\"options\":[\"UTF-8 byte length of the stored, truncated detail\",\"Unicode scalar count of the stored detail\",\"Original pre-truncation UTF-8 byte length\"],\"default_guess\":\"Return the UTF-8 byte length of the stored, already bounded detail.\"},{\"subject\":\"A13/A15/A20 mapped-list overflow\",\"kind\":\"cross-release contradiction\",\"text\":\"A13 says no record states a mapped-list size failure and it is “derived from the elements' records and `stored_value_bytes_max`, the same way by every reader,” while A20 permits a new release to change ceilings and says recorded executions are never reinterpreted.\",\"question\":\"Which ceiling is used to derive the result of an existing run after an upgrade, and how can its final status remain stable when the original ceiling is not recorded?\",\"options\":[\"Use the current release ceiling, allowing old derivations to change\",\"Pin the applicable ceiling or release on the run\",\"Write an immutable aggregate failure record when the limit is exceeded\"],\"default_guess\":\"Write an immutable aggregate outcome or otherwise persist the ceiling used with the run.\"},{\"subject\":\"K-15/M27/A13/A14 trace actor attribution\",\"kind\":\"audit contradiction\",\"text\":\"K-15 requires “the owner's actions, each agent's and the kernel's own [to be] distinguishable in every record,” but NodeExecution and EffectAttempt have no actor or triggering-request reference and may be produced by start, approval, resolution, resume or startup recovery.\",\"question\":\"How can a reader distinguish which actor-triggered advancement produced a particular NodeExecution or EffectAttempt, especially after several resumptions and decisions on one run?\",\"options\":[\"Add a triggering action/actor reference to each such record\",\"Derive the actor from immediately preceding store records\",\"Declare these records always kernel-authored and separately record every advancement request\"],\"default_guess\":\"Record an immutable advancement/action identifier with its actor and reference it from generated execution and attempt records.\"},{\"subject\":\"A18 data-directory validation\",\"kind\":\"vague startup refusal\",\"text\":\"“The directory and everything in it are private to the kernel's user; the kernel refuses to start otherwise.”\",\"question\":\"What exact ownership, permission-bit and ACL conditions make the directory, its subdirectories and files ‘private,’ and are unexpected hard links or files grounds for refusal?\",\"options\":[\"Require kernel-user ownership and no group/other permission on every entry\",\"Check only the top-level directory mode\",\"Use successful exclusive access as the definition of private\"],\"default_guess\":\"Require every directory and file to be owned by the kernel user with no group/other permissions, and refuse linked entries that defeat that isolation.\"}]}"
+}
