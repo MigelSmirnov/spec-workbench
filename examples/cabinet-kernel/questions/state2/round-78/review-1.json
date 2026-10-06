@@ -1,0 +1,328 @@
+{
+ "open_points": [
+  {
+   "subject": "A01 content-derived identities",
+   "kind": "contradictory scope",
+   "text": "A request that supplies one of these identities is refused.",
+   "question": "Does this refusal apply only when a caller supplies the identity of the record being created, or also when an identity is supplied as a reference to an existing record?",
+   "options": [
+    "Refuse only a supplied identity for the record being created; allow identities used as references",
+    "Refuse these identities in every request, which would make submission, try, rollback and other reference-based actions impossible"
+   ],
+   "default_guess": "Refuse only caller-supplied identities for newly created content records and allow them when naming existing records."
+  },
+  {
+   "subject": "A01 and A05 flow ordering",
+   "kind": "missing tiebreaker",
+   "text": "edges in the edge order of A05, constants by (`to_node`, `to_port`)",
+   "question": "How are edges or constants ordered when the stated sort keys are equal but their remaining content differs?",
+   "options": [
+    "Use the canonical JSON of the complete edge or constant as a final tiebreaker",
+    "Refuse equal-key edges and constants before identity is computed",
+    "Preserve request order for ties"
+   ],
+   "default_guess": "Use complete canonical JSON as the final tiebreaker so identity and first-failure order remain independent of request order."
+  },
+  {
+   "subject": "A05 endpoint ordering",
+   "kind": "identifier collision",
+   "text": "A flow input or flow output endpoint has the empty string as its node, so it orders before every node.",
+   "question": "Must `node_id` be non-empty, or how does an actual node whose id is the empty string order against a flow endpoint?",
+   "options": [
+    "Require every `node_id` to be non-empty",
+    "Use a tagged endpoint kind before comparing node-id text",
+    "Allow the tie and define a further endpoint-kind tiebreaker"
+   ],
+   "default_guess": "Require a non-empty `node_id`."
+  },
+  {
+   "subject": "M06 and A04 trial-case shape",
+   "kind": "missing validation rule",
+   "text": "its input values fit the contract version's input ports, its expected outputs, when present, fit the output ports",
+   "question": "Must trial inputs contain exactly every input port and no additional names, and when expected outputs are present must they contain exactly every output port or may they be partial?",
+   "options": [
+    "Require exact input and expected-output port sets",
+    "Require exact inputs but permit partial expected outputs",
+    "Permit missing or additional names and ignore those not compared"
+   ],
+   "default_guess": "Require exact input ports and, when expected outputs are present, exact output ports."
+  },
+  {
+   "subject": "File-port schemas",
+   "kind": "undefined validation",
+   "text": "every port carries a value schema / a file output is not `bytes` — `contract_violation`",
+   "question": "What does it mean for file bytes or a file fixture to fit a file port's JSON `value_schema`, and is that schema validated at run and trial time or used only for edge equality?",
+   "options": [
+    "File schemas are connection-only labels; runtime validation checks bytes and media type only",
+    "Define a metadata value that file schemas validate",
+    "Restrict file ports to one fixed schema and validate only carriage, size and media type"
+   ],
+   "default_guess": "Treat a file port's schema as a connection-only schema and validate file carriage, media type and size at runtime."
+  },
+  {
+   "subject": "Guard comparison",
+   "kind": "undefined equality",
+   "text": "delivers only when its guard port's value equals its guard value",
+   "question": "What equality relation is used for JSON guard values, especially numbers such as `1` and `1.0` and booleans such as `true` versus `1`?",
+   "options": [
+    "Compare canonical JSON bytes",
+    "Use JSON type-sensitive structural equality",
+    "Use the host language's equality"
+   ],
+   "default_guess": "Use type-sensitive equality of canonical JSON values, not Python equality."
+  },
+  {
+   "subject": "K-02 and A03 filesystem access",
+   "kind": "contradiction",
+   "text": "no filesystem beyond its input / one private exchange directory / opening any path outside the exchange directory and the read-only runtime",
+   "question": "May agent code itself read and write arbitrary files inside the exchange directory and read arbitrary runtime files, or are those paths available only to the runner for loading inputs, code and outputs?",
+   "options": [
+    "Deny user-initiated filesystem access and reserve narrowly named exchange files for the runner",
+    "Allow arbitrary access inside the exchange directory and read access to the runtime",
+    "Allow only reads of inputs and writes of declared outputs"
+   ],
+   "default_guess": "Allow only runner-mediated input and output files, denying arbitrary user-code filesystem access."
+  },
+  {
+   "subject": "K-02 and A03 seeded pseudorandomness",
+   "kind": "contradiction",
+   "text": "no randomness / `random.Random(seed)` with an explicit seed stays usable",
+   "question": "Does the ban cover all random APIs, or only nondeterministic entropy sources?",
+   "options": [
+    "Permit explicitly seeded deterministic pseudorandom generators",
+    "Trap every random API, seeded or not"
+   ],
+   "default_guess": "Permit explicitly seeded deterministic pseudorandom generators because A03 states that exception specifically."
+  },
+  {
+   "subject": "A03 clock isolation",
+   "kind": "incomplete closed list",
+   "text": "replaces every clock and randomness entry point / The replaced entry points are exactly: `time.time`, ...",
+   "question": "Are unlisted clock sources such as `time.clock_gettime`, `time.thread_time`, `os.times`, `resource.getrusage`, or direct `_datetime` access allowed, or must they also be blocked?",
+   "options": [
+    "The exact list is authoritative and unlisted sources are allowed",
+    "The no-clock invariant is authoritative and every equivalent source must be blocked",
+    "Reject imports of modules exposing unlisted clocks"
+   ],
+   "default_guess": "Treat the no-clock invariant as authoritative and block equivalent clock sources as well."
+  },
+  {
+   "subject": "A03 resource-limit outcomes",
+   "kind": "unverifiable invariant",
+   "text": "a limit hit (memory, process count, scratch, `output_bytes`) — `resource_exhausted`",
+   "question": "How can the kernel determine that memory, process or scratch limits were hit when user code catches the resulting `MemoryError`, `OSError` or allocation failure and returns a conforming result?",
+   "options": [
+    "Only externally observable limit termination or runner-reported events count as a hit",
+    "Instrument every limited operation so a hit is irreversibly reported to the parent",
+    "A caught limit failure still permits success"
+   ],
+   "default_guess": "Classify only an externally observable or irreversibly runner-reported limit hit as `resource_exhausted`; otherwise a conforming return succeeds."
+  },
+  {
+   "subject": "A03 output-size precedence",
+   "kind": "missing precedence mechanism",
+   "text": "The output count is the sum of the canonical JSON bytes of every `value` output / outcomes are ... `resource_exhausted` ... before ... `contract_violation`",
+   "question": "How is output size determined before contract validation when the returned object has extra keys, non-JSON objects, cycles, invalid numbers or another form that cannot be canonically serialized?",
+   "options": [
+    "Validate JSON representability first and classify such results `contract_violation`",
+    "Count a bounded runner serialization before validating the contract",
+    "Treat serialization failure as `crashed`"
+   ],
+   "default_guess": "Reject non-representable output as `contract_violation`; apply `output_bytes` only to outputs that can be canonically encoded."
+  },
+  {
+   "subject": "A03 deterministic execution",
+   "kind": "unverifiable invariant",
+   "text": "The same implementation on the same input yields the same output digest twice.",
+   "question": "Is deterministic output a required sandbox guarantee, despite accessible process/thread scheduling, object addresses, host/runtime observations and other untrapped nondeterminism, or is only the admission algorithm and ordering required to be deterministic?",
+   "options": [
+    "Require deterministic output and close or virtualize every remaining nondeterministic source",
+    "Require only deterministic orchestration and verdict calculation from the observed executions",
+    "Detect nondeterminism by repeated trials and refuse it"
+   ],
+   "default_guess": "Define determinism as deterministic orchestration and verdict calculation, unless the sandbox is extended to make the stronger output guarantee enforceable."
+  },
+  {
+   "subject": "A04 admission across kernel releases",
+   "kind": "upgrade contradiction",
+   "text": "an AdmissionVerdict M08 for that implementation and the current corpus digest already exists, in which case that verdict is used / A release pins the exact versions of ... the sandbox runtime",
+   "question": "After the sandbox interpreter, trapped APIs or dependencies change in a new release, may an old verdict still be reused and an old implementation rolled back without re-admission?",
+   "options": [
+    "Reuse verdicts solely by implementation and corpus as A04 currently says",
+    "Include a sandbox-runtime or release fingerprint in admission validity",
+    "Invalidate every admission verdict on any release change"
+   ],
+   "default_guess": "Include the sandbox-runtime fingerprint in admission validity and re-run admission when it changes."
+  },
+  {
+   "subject": "A13 mapped-list failure across releases",
+   "kind": "derived-state contradiction",
+   "text": "No record of the node states that failure: like the list, it is derived from the elements' records and `stored_value_bytes_max`, the same way by every reader of the trace / A new release may change ceilings ... recorded executions are never reinterpreted.",
+   "question": "How can a mapped-list oversize failure remain immutable when a later release changes `stored_value_bytes_max` and no record stores the ceiling or the derived failure?",
+   "options": [
+    "Persist the derived failure and the ceiling used",
+    "Persist the release or ceiling with the run and always derive using it",
+    "Reinterpret old traces using the current ceiling"
+   ],
+   "default_guess": "Persist the ceiling used by the run and derive the result against that pinned value."
+  },
+  {
+   "subject": "A20 changed ceilings",
+   "kind": "undefined upgrade scope",
+   "text": "A new release may change ceilings. They bind contract versions issued after it; a contract version issued earlier keeps its bounds",
+   "question": "Which release owns ceilings that are not contract fields, including request, stored-value, fixture, spool, response, text and paging ceilings, when old records and runs are used after an upgrade?",
+   "options": [
+    "All operations use the currently running release's non-contract ceilings",
+    "Every record or run pins the release ceilings under which it was created",
+    "Existing artifacts are grandfathered, while new requests and newly produced data use current ceilings"
+   ],
+   "default_guess": "Grandfather existing artifacts and pin run-sensitive ceilings at run start, while applying current ceilings to new requests and newly created records."
+  },
+  {
+   "subject": "A20 bubblewrap dependency",
+   "kind": "unpinned dependency",
+   "text": "one release fixes every ceiling and every dependency / the kernel checks ... that `bubblewrap` is present and that one probe execution succeeds",
+   "question": "Is any probe-passing bubblewrap version accepted, or must its version and required behavior be pinned by the release?",
+   "options": [
+    "Pin an exact bubblewrap version",
+    "Require a minimum version plus feature probes",
+    "Accept any version that passes the single probe"
+   ],
+   "default_guess": "Require a pinned or explicitly bounded version plus probes for every isolation feature relied upon."
+  },
+  {
+   "subject": "K-14 and agent-supplied personal data",
+   "kind": "authority contradiction",
+   "text": "the owner alone reads them / The owner or any agent may start a run / a flow constant's value takes the class the composing agent declares with it / A trial case is authored only by an agent",
+   "question": "May an agent submit raw values into a `personal_data` flow input, constant or authored trial case, even though the owner is stated to be the only reader of personal data?",
+   "options": [
+    "Refuse raw personal-data values supplied by agents",
+    "Allow agents to submit personal data but never return it",
+    "Allow only owner-submitted run inputs; personal-data constants and authored cases are unavailable"
+   ],
+   "default_guess": "Refuse raw personal-data values from agents; allow owner-submitted run inputs and captured cases that agents can inspect only by digest."
+  },
+  {
+   "subject": "A07 operation outputs and class lowering",
+   "kind": "contradiction",
+   "text": "for an operation node, the class its binding declares for that output / No function, edge or flow construct lowers a class / `lowers_class(any construct) -> never`",
+   "question": "Can an operation that receives `personal_data` return an output declared `open`, thereby lowering the class, or must the output be raised to at least the highest actual or reachable input class?",
+   "options": [
+    "The owner-accepted binding is an explicit declassification boundary",
+    "An operation output is `max(binding declaration, input classes)`",
+    "Such a binding or flow is refused by the proof"
+   ],
+   "default_guess": "Do not permit implicit declassification; raise an operation output to at least the highest input class unless a separate explicit declassification rule is added."
+  },
+  {
+   "subject": "M28 and A08 manifest revision",
+   "kind": "undefined source operation",
+   "text": "`manifest_location`, `manifest_revision`: where the platform manifest is read and the repository revision it is read at / `<manifest_location>/<service_id>.json` at the configured `manifest_revision`",
+   "question": "What operation reads a file at a revision: must `manifest_location` be a Git repository, a checked-out immutable directory, or another versioned store, and what happens when the revision cannot be resolved?",
+   "options": [
+    "Require a Git repository and read the blob at the exact commit",
+    "Require `manifest_location` already to expose an immutable snapshot and treat revision as metadata",
+    "Define a manifest-provider interface with explicit revision lookup and failure"
+   ],
+   "default_guess": "Define a manifest-provider operation that resolves an exact immutable revision and reports an unreadable or unresolved revision as manifest mismatch."
+  },
+  {
+   "subject": "A08 and A09 base URL",
+   "kind": "missing URL constraints",
+   "text": "an absolute `http` or `https` URL with a host / The URL is the `api_base_url` without a trailing `/` followed by the declared path.",
+   "question": "Are user information, query, fragment and an existing base path allowed in `api_base_url`, and does removing a trailing slash remove one slash or all trailing slashes?",
+   "options": [
+    "Permit only scheme, host, optional port and an optional normalized base path; forbid userinfo, query and fragment",
+    "Allow every absolute URL and concatenate textually",
+    "Require an origin-only base URL with no path, userinfo, query or fragment"
+   ],
+   "default_guess": "Forbid userinfo, query and fragment, allow an explicit base path, and remove all trailing path slashes before appending the declared path."
+  },
+  {
+   "subject": "A09 and A10 HTTP wire request",
+   "kind": "missing transport choice",
+   "text": "every header sent on the wire / the HTTP client adds no other header",
+   "question": "Which HTTP protocol version and framing are required, given that HTTP/2 uses pseudo-headers and may not send the specified `Host` and header representation?",
+   "options": [
+    "Require HTTP/1.1 with explicit `Content-Length` and no automatic headers",
+    "Permit HTTP/2 and define semantic equivalence for pseudo-headers",
+    "Permit client negotiation and calculate approvals from protocol-independent request semantics"
+   ],
+   "default_guess": "Require HTTP/1.1 and disable protocol negotiation and automatic headers."
+  },
+  {
+   "subject": "A09 header values",
+   "kind": "undefined wire encoding",
+   "text": "required_headers with their manifest values verbatim / its content decoded as UTF-8 ... is the value. A resolved value is added as that header.",
+   "question": "How are non-ASCII required-header and credential values encoded on the HTTP wire, and are they accepted at all?",
+   "options": [
+    "Require visible ASCII header values",
+    "Encode values as UTF-8 bytes",
+    "Use ISO-8859-1 HTTP header encoding"
+   ],
+   "default_guess": "Require visible ASCII values, with the already stated whitespace and control-character restrictions."
+  },
+  {
+   "subject": "A09 multipart names",
+   "kind": "injection gap",
+   "text": "`Content-Disposition: form-data; name=\"<port>\"`, with `filename=\"<port>\"` added for a file part",
+   "question": "How are quotes, backslashes, controls, non-ASCII characters or line breaks in port names escaped or refused when inserted into multipart headers?",
+   "options": [
+    "Restrict multipart port names to a safe ASCII token",
+    "Apply a specified quoted-string escaping and filename encoding",
+    "Permit names verbatim"
+   ],
+   "default_guess": "Refuse a multipart binding unless every involved port name is a safe ASCII token."
+  },
+  {
+   "subject": "A09 connection selection",
+   "kind": "undefined attempt boundary",
+   "text": "one HTTP request per attempt / nothing is retried inside one attempt",
+   "question": "When a hostname resolves to several addresses, may the client try more than one address, and is that connection fallback a retry within the attempt?",
+   "options": [
+    "Try exactly one deterministically selected address",
+    "Permit address fallback before any request byte is written",
+    "Permit the HTTP client's normal address-selection behavior"
+   ],
+   "default_guess": "Permit deterministic address fallback only before any request byte is written and within one total transport deadline."
+  },
+  {
+   "subject": "A09 response content encoding",
+   "kind": "undefined decoding",
+   "text": "The kernel asks for no content encoding (`Accept-Encoding: identity`); the size counted is the response body's bytes after transfer decoding.",
+   "question": "If a service nevertheless returns a `Content-Encoding`, does the kernel reject it, retain the encoded bytes, or decode it before size, credential-echo and output validation checks?",
+   "options": [
+    "Reject any non-identity content encoding",
+    "Treat encoded bytes as the body and do no content decoding",
+    "Decode supported encodings before every body check"
+   ],
+   "default_guess": "Reject any non-identity content encoding."
+  },
+  {
+   "subject": "A16 MCP request boundary",
+   "kind": "undefined surface framing",
+   "text": "its size, counted as the bytes of the request message as received / Every request over `mcp` carries one token.",
+   "question": "Which MCP transport and message envelope are used, which bytes count toward the request limit, and where in that envelope is the token carried?",
+   "options": [
+    "Specify one MCP transport and count its decoded request-message bytes, with the token in a defined envelope field",
+    "Count raw transport framing and headers as well",
+    "Leave transport adapters to define their own counting and token placement"
+   ],
+   "default_guess": "Specify one MCP transport and one authenticated request envelope, and count the exact decoded envelope bytes before schema processing."
+  },
+  {
+   "subject": "A18 data-directory permissions",
+   "kind": "vague refusal condition",
+   "text": "The directory and everything in it are private to the kernel's user; the kernel refuses to start otherwise.",
+   "question": "What exact ownership and permission modes satisfy `private`, including directories, the database, WAL files, lock files, value files and spool files?",
+   "options": [
+    "Require ownership by the kernel uid and no group/other permission bits",
+    "Require exact modes such as directories `0700` and files `0600`",
+    "Accept ACL-based privacy as well as mode-bit privacy"
+   ],
+   "default_guess": "Require kernel-user ownership and no group or other permission bits, allowing stricter owner permissions."
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A01 content-derived identities\",\"kind\":\"contradictory scope\",\"text\":\"A request that supplies one of these identities is refused.\",\"question\":\"Does this refusal apply only when a caller supplies the identity of the record being created, or also when an identity is supplied as a reference to an existing record?\",\"options\":[\"Refuse only a supplied identity for the record being created; allow identities used as references\",\"Refuse these identities in every request, which would make submission, try, rollback and other reference-based actions impossible\"],\"default_guess\":\"Refuse only caller-supplied identities for newly created content records and allow them when naming existing records.\"},{\"subject\":\"A01 and A05 flow ordering\",\"kind\":\"missing tiebreaker\",\"text\":\"edges in the edge order of A05, constants by (`to_node`, `to_port`)\",\"question\":\"How are edges or constants ordered when the stated sort keys are equal but their remaining content differs?\",\"options\":[\"Use the canonical JSON of the complete edge or constant as a final tiebreaker\",\"Refuse equal-key edges and constants before identity is computed\",\"Preserve request order for ties\"],\"default_guess\":\"Use complete canonical JSON as the final tiebreaker so identity and first-failure order remain independent of request order.\"},{\"subject\":\"A05 endpoint ordering\",\"kind\":\"identifier collision\",\"text\":\"A flow input or flow output endpoint has the empty string as its node, so it orders before every node.\",\"question\":\"Must `node_id` be non-empty, or how does an actual node whose id is the empty string order against a flow endpoint?\",\"options\":[\"Require every `node_id` to be non-empty\",\"Use a tagged endpoint kind before comparing node-id text\",\"Allow the tie and define a further endpoint-kind tiebreaker\"],\"default_guess\":\"Require a non-empty `node_id`.\"},{\"subject\":\"M06 and A04 trial-case shape\",\"kind\":\"missing validation rule\",\"text\":\"its input values fit the contract version's input ports, its expected outputs, when present, fit the output ports\",\"question\":\"Must trial inputs contain exactly every input port and no additional names, and when expected outputs are present must they contain exactly every output port or may they be partial?\",\"options\":[\"Require exact input and expected-output port sets\",\"Require exact inputs but permit partial expected outputs\",\"Permit missing or additional names and ignore those not compared\"],\"default_guess\":\"Require exact input ports and, when expected outputs are present, exact output ports.\"},{\"subject\":\"File-port schemas\",\"kind\":\"undefined validation\",\"text\":\"every port carries a value schema / a file output is not `bytes` — `contract_violation`\",\"question\":\"What does it mean for file bytes or a file fixture to fit a file port's JSON `value_schema`, and is that schema validated at run and trial time or used only for edge equality?\",\"options\":[\"File schemas are connection-only labels; runtime validation checks bytes and media type only\",\"Define a metadata value that file schemas validate\",\"Restrict file ports to one fixed schema and validate only carriage, size and media type\"],\"default_guess\":\"Treat a file port's schema as a connection-only schema and validate file carriage, media type and size at runtime.\"},{\"subject\":\"Guard comparison\",\"kind\":\"undefined equality\",\"text\":\"delivers only when its guard port's value equals its guard value\",\"question\":\"What equality relation is used for JSON guard values, especially numbers such as `1` and `1.0` and booleans such as `true` versus `1`?\",\"options\":[\"Compare canonical JSON bytes\",\"Use JSON type-sensitive structural equality\",\"Use the host language's equality\"],\"default_guess\":\"Use type-sensitive equality of canonical JSON values, not Python equality.\"},{\"subject\":\"K-02 and A03 filesystem access\",\"kind\":\"contradiction\",\"text\":\"no filesystem beyond its input / one private exchange directory / opening any path outside the exchange directory and the read-only runtime\",\"question\":\"May agent code itself read and write arbitrary files inside the exchange directory and read arbitrary runtime files, or are those paths available only to the runner for loading inputs, code and outputs?\",\"options\":[\"Deny user-initiated filesystem access and reserve narrowly named exchange files for the runner\",\"Allow arbitrary access inside the exchange directory and read access to the runtime\",\"Allow only reads of inputs and writes of declared outputs\"],\"default_guess\":\"Allow only runner-mediated input and output files, denying arbitrary user-code filesystem access.\"},{\"subject\":\"K-02 and A03 seeded pseudorandomness\",\"kind\":\"contradiction\",\"text\":\"no randomness / `random.Random(seed)` with an explicit seed stays usable\",\"question\":\"Does the ban cover all random APIs, or only nondeterministic entropy sources?\",\"options\":[\"Permit explicitly seeded deterministic pseudorandom generators\",\"Trap every random API, seeded or not\"],\"default_guess\":\"Permit explicitly seeded deterministic pseudorandom generators because A03 states that exception specifically.\"},{\"subject\":\"A03 clock isolation\",\"kind\":\"incomplete closed list\",\"text\":\"replaces every clock and randomness entry point / The replaced entry points are exactly: `time.time`, ...\",\"question\":\"Are unlisted clock sources such as `time.clock_gettime`, `time.thread_time`, `os.times`, `resource.getrusage`, or direct `_datetime` access allowed, or must they also be blocked?\",\"options\":[\"The exact list is authoritative and unlisted sources are allowed\",\"The no-clock invariant is authoritative and every equivalent source must be blocked\",\"Reject imports of modules exposing unlisted clocks\"],\"default_guess\":\"Treat the no-clock invariant as authoritative and block equivalent clock sources as well.\"},{\"subject\":\"A03 resource-limit outcomes\",\"kind\":\"unverifiable invariant\",\"text\":\"a limit hit (memory, process count, scratch, `output_bytes`) — `resource_exhausted`\",\"question\":\"How can the kernel determine that memory, process or scratch limits were hit when user code catches the resulting `MemoryError`, `OSError` or allocation failure and returns a conforming result?\",\"options\":[\"Only externally observable limit termination or runner-reported events count as a hit\",\"Instrument every limited operation so a hit is irreversibly reported to the parent\",\"A caught limit failure still permits success\"],\"default_guess\":\"Classify only an externally observable or irreversibly runner-reported limit hit as `resource_exhausted`; otherwise a conforming return succeeds.\"},{\"subject\":\"A03 output-size precedence\",\"kind\":\"missing precedence mechanism\",\"text\":\"The output count is the sum of the canonical JSON bytes of every `value` output / outcomes are ... `resource_exhausted` ... before ... `contract_violation`\",\"question\":\"How is output size determined before contract validation when the returned object has extra keys, non-JSON objects, cycles, invalid numbers or another form that cannot be canonically serialized?\",\"options\":[\"Validate JSON representability first and classify such results `contract_violation`\",\"Count a bounded runner serialization before validating the contract\",\"Treat serialization failure as `crashed`\"],\"default_guess\":\"Reject non-representable output as `contract_violation`; apply `output_bytes` only to outputs that can be canonically encoded.\"},{\"subject\":\"A03 deterministic execution\",\"kind\":\"unverifiable invariant\",\"text\":\"The same implementation on the same input yields the same output digest twice.\",\"question\":\"Is deterministic output a required sandbox guarantee, despite accessible process/thread scheduling, object addresses, host/runtime observations and other untrapped nondeterminism, or is only the admission algorithm and ordering required to be deterministic?\",\"options\":[\"Require deterministic output and close or virtualize every remaining nondeterministic source\",\"Require only deterministic orchestration and verdict calculation from the observed executions\",\"Detect nondeterminism by repeated trials and refuse it\"],\"default_guess\":\"Define determinism as deterministic orchestration and verdict calculation, unless the sandbox is extended to make the stronger output guarantee enforceable.\"},{\"subject\":\"A04 admission across kernel releases\",\"kind\":\"upgrade contradiction\",\"text\":\"an AdmissionVerdict M08 for that implementation and the current corpus digest already exists, in which case that verdict is used / A release pins the exact versions of ... the sandbox runtime\",\"question\":\"After the sandbox interpreter, trapped APIs or dependencies change in a new release, may an old verdict still be reused and an old implementation rolled back without re-admission?\",\"options\":[\"Reuse verdicts solely by implementation and corpus as A04 currently says\",\"Include a sandbox-runtime or release fingerprint in admission validity\",\"Invalidate every admission verdict on any release change\"],\"default_guess\":\"Include the sandbox-runtime fingerprint in admission validity and re-run admission when it changes.\"},{\"subject\":\"A13 mapped-list failure across releases\",\"kind\":\"derived-state contradiction\",\"text\":\"No record of the node states that failure: like the list, it is derived from the elements' records and `stored_value_bytes_max`, the same way by every reader of the trace / A new release may change ceilings ... recorded executions are never reinterpreted.\",\"question\":\"How can a mapped-list oversize failure remain immutable when a later release changes `stored_value_bytes_max` and no record stores the ceiling or the derived failure?\",\"options\":[\"Persist the derived failure and the ceiling used\",\"Persist the release or ceiling with the run and always derive using it\",\"Reinterpret old traces using the current ceiling\"],\"default_guess\":\"Persist the ceiling used by the run and derive the result against that pinned value.\"},{\"subject\":\"A20 changed ceilings\",\"kind\":\"undefined upgrade scope\",\"text\":\"A new release may change ceilings. They bind contract versions issued after it; a contract version issued earlier keeps its bounds\",\"question\":\"Which release owns ceilings that are not contract fields, including request, stored-value, fixture, spool, response, text and paging ceilings, when old records and runs are used after an upgrade?\",\"options\":[\"All operations use the currently running release's non-contract ceilings\",\"Every record or run pins the release ceilings under which it was created\",\"Existing artifacts are grandfathered, while new requests and newly produced data use current ceilings\"],\"default_guess\":\"Grandfather existing artifacts and pin run-sensitive ceilings at run start, while applying current ceilings to new requests and newly created records.\"},{\"subject\":\"A20 bubblewrap dependency\",\"kind\":\"unpinned dependency\",\"text\":\"one release fixes every ceiling and every dependency / the kernel checks ... that `bubblewrap` is present and that one probe execution succeeds\",\"question\":\"Is any probe-passing bubblewrap version accepted, or must its version and required behavior be pinned by the release?\",\"options\":[\"Pin an exact bubblewrap version\",\"Require a minimum version plus feature probes\",\"Accept any version that passes the single probe\"],\"default_guess\":\"Require a pinned or explicitly bounded version plus probes for every isolation feature relied upon.\"},{\"subject\":\"K-14 and agent-supplied personal data\",\"kind\":\"authority contradiction\",\"text\":\"the owner alone reads them / The owner or any agent may start a run / a flow constant's value takes the class the composing agent declares with it / A trial case is authored only by an agent\",\"question\":\"May an agent submit raw values into a `personal_data` flow input, constant or authored trial case, even though the owner is stated to be the only reader of personal data?\",\"options\":[\"Refuse raw personal-data values supplied by agents\",\"Allow agents to submit personal data but never return it\",\"Allow only owner-submitted run inputs; personal-data constants and authored cases are unavailable\"],\"default_guess\":\"Refuse raw personal-data values from agents; allow owner-submitted run inputs and captured cases that agents can inspect only by digest.\"},{\"subject\":\"A07 operation outputs and class lowering\",\"kind\":\"contradiction\",\"text\":\"for an operation node, the class its binding declares for that output / No function, edge or flow construct lowers a class / `lowers_class(any construct) -> never`\",\"question\":\"Can an operation that receives `personal_data` return an output declared `open`, thereby lowering the class, or must the output be raised to at least the highest actual or reachable input class?\",\"options\":[\"The owner-accepted binding is an explicit declassification boundary\",\"An operation output is `max(binding declaration, input classes)`\",\"Such a binding or flow is refused by the proof\"],\"default_guess\":\"Do not permit implicit declassification; raise an operation output to at least the highest input class unless a separate explicit declassification rule is added.\"},{\"subject\":\"M28 and A08 manifest revision\",\"kind\":\"undefined source operation\",\"text\":\"`manifest_location`, `manifest_revision`: where the platform manifest is read and the repository revision it is read at / `<manifest_location>/<service_id>.json` at the configured `manifest_revision`\",\"question\":\"What operation reads a file at a revision: must `manifest_location` be a Git repository, a checked-out immutable directory, or another versioned store, and what happens when the revision cannot be resolved?\",\"options\":[\"Require a Git repository and read the blob at the exact commit\",\"Require `manifest_location` already to expose an immutable snapshot and treat revision as metadata\",\"Define a manifest-provider interface with explicit revision lookup and failure\"],\"default_guess\":\"Define a manifest-provider operation that resolves an exact immutable revision and reports an unreadable or unresolved revision as manifest mismatch.\"},{\"subject\":\"A08 and A09 base URL\",\"kind\":\"missing URL constraints\",\"text\":\"an absolute `http` or `https` URL with a host / The URL is the `api_base_url` without a trailing `/` followed by the declared path.\",\"question\":\"Are user information, query, fragment and an existing base path allowed in `api_base_url`, and does removing a trailing slash remove one slash or all trailing slashes?\",\"options\":[\"Permit only scheme, host, optional port and an optional normalized base path; forbid userinfo, query and fragment\",\"Allow every absolute URL and concatenate textually\",\"Require an origin-only base URL with no path, userinfo, query or fragment\"],\"default_guess\":\"Forbid userinfo, query and fragment, allow an explicit base path, and remove all trailing path slashes before appending the declared path.\"},{\"subject\":\"A09 and A10 HTTP wire request\",\"kind\":\"missing transport choice\",\"text\":\"every header sent on the wire / the HTTP client adds no other header\",\"question\":\"Which HTTP protocol version and framing are required, given that HTTP/2 uses pseudo-headers and may not send the specified `Host` and header representation?\",\"options\":[\"Require HTTP/1.1 with explicit `Content-Length` and no automatic headers\",\"Permit HTTP/2 and define semantic equivalence for pseudo-headers\",\"Permit client negotiation and calculate approvals from protocol-independent request semantics\"],\"default_guess\":\"Require HTTP/1.1 and disable protocol negotiation and automatic headers.\"},{\"subject\":\"A09 header values\",\"kind\":\"undefined wire encoding\",\"text\":\"required_headers with their manifest values verbatim / its content decoded as UTF-8 ... is the value. A resolved value is added as that header.\",\"question\":\"How are non-ASCII required-header and credential values encoded on the HTTP wire, and are they accepted at all?\",\"options\":[\"Require visible ASCII header values\",\"Encode values as UTF-8 bytes\",\"Use ISO-8859-1 HTTP header encoding\"],\"default_guess\":\"Require visible ASCII values, with the already stated whitespace and control-character restrictions.\"},{\"subject\":\"A09 multipart names\",\"kind\":\"injection gap\",\"text\":\"`Content-Disposition: form-data; name=\\\"<port>\\\"`, with `filename=\\\"<port>\\\"` added for a file part\",\"question\":\"How are quotes, backslashes, controls, non-ASCII characters or line breaks in port names escaped or refused when inserted into multipart headers?\",\"options\":[\"Restrict multipart port names to a safe ASCII token\",\"Apply a specified quoted-string escaping and filename encoding\",\"Permit names verbatim\"],\"default_guess\":\"Refuse a multipart binding unless every involved port name is a safe ASCII token.\"},{\"subject\":\"A09 connection selection\",\"kind\":\"undefined attempt boundary\",\"text\":\"one HTTP request per attempt / nothing is retried inside one attempt\",\"question\":\"When a hostname resolves to several addresses, may the client try more than one address, and is that connection fallback a retry within the attempt?\",\"options\":[\"Try exactly one deterministically selected address\",\"Permit address fallback before any request byte is written\",\"Permit the HTTP client's normal address-selection behavior\"],\"default_guess\":\"Permit deterministic address fallback only before any request byte is written and within one total transport deadline.\"},{\"subject\":\"A09 response content encoding\",\"kind\":\"undefined decoding\",\"text\":\"The kernel asks for no content encoding (`Accept-Encoding: identity`); the size counted is the response body's bytes after transfer decoding.\",\"question\":\"If a service nevertheless returns a `Content-Encoding`, does the kernel reject it, retain the encoded bytes, or decode it before size, credential-echo and output validation checks?\",\"options\":[\"Reject any non-identity content encoding\",\"Treat encoded bytes as the body and do no content decoding\",\"Decode supported encodings before every body check\"],\"default_guess\":\"Reject any non-identity content encoding.\"},{\"subject\":\"A16 MCP request boundary\",\"kind\":\"undefined surface framing\",\"text\":\"its size, counted as the bytes of the request message as received / Every request over `mcp` carries one token.\",\"question\":\"Which MCP transport and message envelope are used, which bytes count toward the request limit, and where in that envelope is the token carried?\",\"options\":[\"Specify one MCP transport and count its decoded request-message bytes, with the token in a defined envelope field\",\"Count raw transport framing and headers as well\",\"Leave transport adapters to define their own counting and token placement\"],\"default_guess\":\"Specify one MCP transport and one authenticated request envelope, and count the exact decoded envelope bytes before schema processing.\"},{\"subject\":\"A18 data-directory permissions\",\"kind\":\"vague refusal condition\",\"text\":\"The directory and everything in it are private to the kernel's user; the kernel refuses to start otherwise.\",\"question\":\"What exact ownership and permission modes satisfy `private`, including directories, the database, WAL files, lock files, value files and spool files?\",\"options\":[\"Require ownership by the kernel uid and no group/other permission bits\",\"Require exact modes such as directories `0700` and files `0600`\",\"Accept ACL-based privacy as well as mode-bit privacy\"],\"default_guess\":\"Require kernel-user ownership and no group or other permission bits, allowing stricter owner permissions.\"}]}"
+}

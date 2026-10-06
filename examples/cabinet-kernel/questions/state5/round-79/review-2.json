@@ -1,0 +1,126 @@
+{
+ "open_points": [
+  {
+   "subject": "bindings.read_binding callers",
+   "kind": "caller contradiction",
+   "text": "State 3 says “`runs` reads ... an operation node's ports through `bindings.read_binding`”; State 5 lists its callers as “`module:flows`, `module:effects`, `module:surface`.”",
+   "question": "May `runs` call `bindings.read_binding` to obtain operation-port definitions needed for readiness and input validation?",
+   "options": [
+    "Add `runs` as a caller",
+    "Require `effects` to supply the ports to `runs`",
+    "Put the required port facts in the flow version or another run-visible result"
+   ],
+   "default_guess": "Add `runs` as a caller, matching State 3."
+  },
+  {
+   "subject": "installation initialization",
+   "kind": "missing effect",
+   "text": "`installation.load_installation` outputs “The loaded installation M28,” has “Observable effect: None,” while `current_token_list`, `manifest_source`, `selected_instance_name` and `resolve_service_credential` take no installation or configuration-path input.",
+   "question": "How do later installation operations know which loaded installation and configuration file to use?",
+   "options": [
+    "`load_installation` installs hidden module state",
+    "Every later operation receives the loaded Installation",
+    "`surface` constructs and passes an installation handle that State 5 has not named"
+   ],
+   "default_guess": "Treat `load_installation` as initializing one hidden installation state for the process."
+  },
+  {
+   "subject": "store initialization and handle",
+   "kind": "missing effect",
+   "text": "`store.open_store` returns “An open store holding the exclusive lock,” but every later store operation takes no store handle and State 5 does not say that `open_store` installs module state.",
+   "question": "How is the opened store selected by later store operations, and who owns the returned handle and lock lifetime?",
+   "options": [
+    "`open_store` initializes a process-wide hidden store",
+    "Pass the returned store handle to every store operation",
+    "Bind the store handle into module instances outside these operations"
+   ],
+   "default_guess": "Use one process-wide hidden store initialized by `open_store`, with the lock held until process exit."
+  },
+  {
+   "subject": "bindings.check_installed_instances manifest validation",
+   "kind": "ambiguous check",
+   "text": "It says an unreadable manifest record “or one failing a check of the record itself (A08 rule 5)” fails the start, but A08 rule 5 contains operation-specific checks and this operation receives no operation name or proposed ports.",
+   "question": "Which A08 checks are performed at start, on which capability entries, and in what order when several entries fail?",
+   "options": [
+    "Check only service-level structure and duplicate capability names",
+    "Validate every capability entry in capability-list order",
+    "Validate only the selected instance and its required headers, not capability operations"
+   ],
+   "default_guess": "Check service-level structure, duplicate capability names, and the selected instance/header facts only."
+  },
+  {
+   "subject": "manifest revision access",
+   "kind": "undefined input semantics",
+   "text": "`installation.manifest_source` returns “the manifest location and revision fixed at start,” and bindings must read `<manifest_location>/<service_id>.json` “at the configured `manifest_revision`,” but no text defines how a revision selects file bytes.",
+   "question": "What operation resolves a manifest location plus revision into the exact service-record bytes, and what failures does it return?",
+   "options": [
+    "The location is a version-controlled repository and bindings read the file at the named revision",
+    "The location already denotes an immutable checkout and revision is only asserted metadata",
+    "An external manifest provider resolves location, revision and path"
+   ],
+   "default_guess": "Treat the location as a repository and read the path from the exact configured revision without changing the working tree."
+  },
+  {
+   "subject": "canonical_values.content_identity input kind",
+   "kind": "ambiguous input",
+   "text": "Its input is “One content record's meaning facts ... or one value,” while its enforcement applies record-specific sorting to ports, nodes, edges and constants and preserves order for list values.",
+   "question": "How does the operation distinguish an ordinary JSON value containing similarly named lists from a particular content-record kind whose lists must be sorted?",
+   "options": [
+    "Add an explicit identity-kind discriminator",
+    "Expose separate identity operations per model kind",
+    "Infer the kind from object shape"
+   ],
+   "default_guess": "Require an explicit model or identity-kind discriminator; never infer it from shape."
+  },
+  {
+   "subject": "canonical_values.canonical_bytes duplicate-key refusal",
+   "kind": "input representation gap",
+   "text": "The input is “One JSON value,” but the operation must refuse “a duplicate key”; after JSON text has been decoded into an ordinary object, duplicate keys may already have been lost.",
+   "question": "What representation reaches `canonical_bytes` when duplicate-member detection is required?",
+   "options": [
+    "Pass raw JSON text or a duplicate-preserving parse tree",
+    "Require `surface` to detect duplicates before constructing the JSON value",
+    "Allow `canonical_bytes` to receive only decoded values and remove duplicate-key detection from it"
+   ],
+   "default_guess": "Have `surface` parse with duplicate detection and call `canonical_bytes` only after that check."
+  },
+  {
+   "subject": "clock.monotonic_deadline output",
+   "kind": "vague output contract",
+   "text": "The output is “A monotonic deadline and a way to ask whether it passed.”",
+   "question": "What exact capability does the caller receive for checking and waiting on the deadline, and which component performs the monotonic reads after creation?",
+   "options": [
+    "An opaque deadline object with an expiry predicate owned by `clock`",
+    "A numeric monotonic deadline that callers compare using another clock operation",
+    "A cancellation or timeout callback supplied by `clock`"
+   ],
+   "default_guess": "Return an opaque deadline object whose expiry and remaining-time operations stay inside `clock`."
+  },
+  {
+   "subject": "store.record_change referential checks",
+   "kind": "vague enforcement",
+   "text": "`store` checks “attempt numbers, unique and existing identities, links” but “trusts its caller for every rule of the caller's decision.”",
+   "question": "For each named change, exactly which referenced identities and links must `store` verify, and which malformed payloads are `internal_error` rather than accepted on caller trust?",
+   "options": [
+    "Specify a referential-integrity table for every named change",
+    "Store validates only record-key uniqueness and attempt ordinals",
+    "Store validates every foreign-key-like reference implied by the models"
+   ],
+   "default_guess": "Validate every structural reference required to keep stored records readable, with a per-change table; leave business eligibility to the caller."
+  },
+  {
+   "subject": "store.spool_file rollback on ceiling refusal",
+   "kind": "incomplete error effect",
+   "text": "On a ceiling refusal it keeps “nothing ... of any file that attempt spooled before,” while the operation is called once per file and its Errors section does not say what happens if removing those earlier files fails.",
+   "question": "Is removal of all earlier files from the attempt atomic with the refusal, and what result is returned if that cleanup cannot be completed?",
+   "options": [
+    "Make attempt-file rollback atomic and return `internal_error` if it cannot complete",
+    "Return `refused` even if earlier files remain unnamed",
+    "Do not remove earlier files until the caller explicitly aborts the attempt"
+   ],
+   "default_guess": "Treat failure to remove all files of the refused attempt as `internal_error`; return `refused` only after cleanup is complete."
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"bindings.read_binding callers\",\"kind\":\"caller contradiction\",\"text\":\"State 3 says “`runs` reads ... an operation node's ports through `bindings.read_binding`”; State 5 lists its callers as “`module:flows`, `module:effects`, `module:surface`.”\",\"question\":\"May `runs` call `bindings.read_binding` to obtain operation-port definitions needed for readiness and input validation?\",\"options\":[\"Add `runs` as a caller\",\"Require `effects` to supply the ports to `runs`\",\"Put the required port facts in the flow version or another run-visible result\"],\"default_guess\":\"Add `runs` as a caller, matching State 3.\"},{\"subject\":\"installation initialization\",\"kind\":\"missing effect\",\"text\":\"`installation.load_installation` outputs “The loaded installation M28,” has “Observable effect: None,” while `current_token_list`, `manifest_source`, `selected_instance_name` and `resolve_service_credential` take no installation or configuration-path input.\",\"question\":\"How do later installation operations know which loaded installation and configuration file to use?\",\"options\":[\"`load_installation` installs hidden module state\",\"Every later operation receives the loaded Installation\",\"`surface` constructs and passes an installation handle that State 5 has not named\"],\"default_guess\":\"Treat `load_installation` as initializing one hidden installation state for the process.\"},{\"subject\":\"store initialization and handle\",\"kind\":\"missing effect\",\"text\":\"`store.open_store` returns “An open store holding the exclusive lock,” but every later store operation takes no store handle and State 5 does not say that `open_store` installs module state.\",\"question\":\"How is the opened store selected by later store operations, and who owns the returned handle and lock lifetime?\",\"options\":[\"`open_store` initializes a process-wide hidden store\",\"Pass the returned store handle to every store operation\",\"Bind the store handle into module instances outside these operations\"],\"default_guess\":\"Use one process-wide hidden store initialized by `open_store`, with the lock held until process exit.\"},{\"subject\":\"bindings.check_installed_instances manifest validation\",\"kind\":\"ambiguous check\",\"text\":\"It says an unreadable manifest record “or one failing a check of the record itself (A08 rule 5)” fails the start, but A08 rule 5 contains operation-specific checks and this operation receives no operation name or proposed ports.\",\"question\":\"Which A08 checks are performed at start, on which capability entries, and in what order when several entries fail?\",\"options\":[\"Check only service-level structure and duplicate capability names\",\"Validate every capability entry in capability-list order\",\"Validate only the selected instance and its required headers, not capability operations\"],\"default_guess\":\"Check service-level structure, duplicate capability names, and the selected instance/header facts only.\"},{\"subject\":\"manifest revision access\",\"kind\":\"undefined input semantics\",\"text\":\"`installation.manifest_source` returns “the manifest location and revision fixed at start,” and bindings must read `<manifest_location>/<service_id>.json` “at the configured `manifest_revision`,” but no text defines how a revision selects file bytes.\",\"question\":\"What operation resolves a manifest location plus revision into the exact service-record bytes, and what failures does it return?\",\"options\":[\"The location is a version-controlled repository and bindings read the file at the named revision\",\"The location already denotes an immutable checkout and revision is only asserted metadata\",\"An external manifest provider resolves location, revision and path\"],\"default_guess\":\"Treat the location as a repository and read the path from the exact configured revision without changing the working tree.\"},{\"subject\":\"canonical_values.content_identity input kind\",\"kind\":\"ambiguous input\",\"text\":\"Its input is “One content record's meaning facts ... or one value,” while its enforcement applies record-specific sorting to ports, nodes, edges and constants and preserves order for list values.\",\"question\":\"How does the operation distinguish an ordinary JSON value containing similarly named lists from a particular content-record kind whose lists must be sorted?\",\"options\":[\"Add an explicit identity-kind discriminator\",\"Expose separate identity operations per model kind\",\"Infer the kind from object shape\"],\"default_guess\":\"Require an explicit model or identity-kind discriminator; never infer it from shape.\"},{\"subject\":\"canonical_values.canonical_bytes duplicate-key refusal\",\"kind\":\"input representation gap\",\"text\":\"The input is “One JSON value,” but the operation must refuse “a duplicate key”; after JSON text has been decoded into an ordinary object, duplicate keys may already have been lost.\",\"question\":\"What representation reaches `canonical_bytes` when duplicate-member detection is required?\",\"options\":[\"Pass raw JSON text or a duplicate-preserving parse tree\",\"Require `surface` to detect duplicates before constructing the JSON value\",\"Allow `canonical_bytes` to receive only decoded values and remove duplicate-key detection from it\"],\"default_guess\":\"Have `surface` parse with duplicate detection and call `canonical_bytes` only after that check.\"},{\"subject\":\"clock.monotonic_deadline output\",\"kind\":\"vague output contract\",\"text\":\"The output is “A monotonic deadline and a way to ask whether it passed.”\",\"question\":\"What exact capability does the caller receive for checking and waiting on the deadline, and which component performs the monotonic reads after creation?\",\"options\":[\"An opaque deadline object with an expiry predicate owned by `clock`\",\"A numeric monotonic deadline that callers compare using another clock operation\",\"A cancellation or timeout callback supplied by `clock`\"],\"default_guess\":\"Return an opaque deadline object whose expiry and remaining-time operations stay inside `clock`.\"},{\"subject\":\"store.record_change referential checks\",\"kind\":\"vague enforcement\",\"text\":\"`store` checks “attempt numbers, unique and existing identities, links” but “trusts its caller for every rule of the caller's decision.”\",\"question\":\"For each named change, exactly which referenced identities and links must `store` verify, and which malformed payloads are `internal_error` rather than accepted on caller trust?\",\"options\":[\"Specify a referential-integrity table for every named change\",\"Store validates only record-key uniqueness and attempt ordinals\",\"Store validates every foreign-key-like reference implied by the models\"],\"default_guess\":\"Validate every structural reference required to keep stored records readable, with a per-change table; leave business eligibility to the caller.\"},{\"subject\":\"store.spool_file rollback on ceiling refusal\",\"kind\":\"incomplete error effect\",\"text\":\"On a ceiling refusal it keeps “nothing ... of any file that attempt spooled before,” while the operation is called once per file and its Errors section does not say what happens if removing those earlier files fails.\",\"question\":\"Is removal of all earlier files from the attempt atomic with the refusal, and what result is returned if that cleanup cannot be completed?\",\"options\":[\"Make attempt-file rollback atomic and return `internal_error` if it cannot complete\",\"Return `refused` even if earlier files remain unnamed\",\"Do not remove earlier files until the caller explicitly aborts the attempt\"],\"default_guess\":\"Treat failure to remove all files of the refused attempt as `internal_error`; return `refused` only after cleanup is complete.\"}]}"
+}
