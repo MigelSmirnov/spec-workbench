@@ -73,7 +73,14 @@ State 5. The round keeps it with `deferred_to` ("State 6 contracts or State 7
 notes") and counts it in `deferred_topics`; it must be answered there before
 the case is assembled. A gap that quotes a passage still blocks, and its quotes
 must be found verbatim — a gap anchored in a text is a defect of that text. A
-deferred judgement followed as `judged_before` stays deferred. The judge is told
+deferred judgement followed as `judged_before` stays deferred. A gap blocks a
+state only when it quotes that state's own documents. A gap whose every quote
+lies elsewhere — in earlier states, closed by their own rounds, or in the later
+texts the judge searched (notes, contracts) — is a gap of those texts: it does
+not block, and the round keeps it with `quoted_elsewhere` and `deferred_to`
+"the states whose texts it quotes". A contradiction blocks wherever its
+passages are (owner, 2026-10-06: Cabinet Kernel State 5 round 89 blocked on
+five gaps quoting States 0–2 and the notes, none quoting State 5). The judge is told
 to quote every passage that bears on the gap, so a gap is deferred only when the
 texts are silent. Decided by the owner 2026-10-05.
 
