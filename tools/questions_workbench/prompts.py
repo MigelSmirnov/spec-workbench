@@ -18,6 +18,22 @@ Do not propose designs as settled. Report only genuine gaps, not style.
 Output strict JSON, nothing else:
 {{"open_points":[{{"subject":"<model, decision, action or section>","kind":"<short kind>","text":"<the exact phrase that is silent, vague or contradictory>","question":"<the question the texts must answer>","options":["<option you see>"],"default_guess":"<what you would do if forced>"}}]}}"""
 
+UNIT_SCOPE = """
+
+Units under review. State {state} closes unit by unit: the units listed below are
+not closed yet, and every other part of State {state} is closed. Report points only
+about these units — a gap in one of them, or a contradiction between one of them
+and any other text. Every point carries one more member, "unit": the key of the
+unit it is about, exactly as listed. A point about anything else is not asked for
+and is set aside.
+
+{listing}"""
+
+
+def unit_scope(state: int, scope: list[tuple[str, str]]) -> str:
+    return UNIT_SCOPE.format(state=state, listing="\n".join(f"- {key}: {title}" for key, title in scope))
+
+
 GROUP = """You receive the open points of several independent reviews of the same
 design texts. Group the points that ask about the same missing decision, even
 when worded differently. A point belongs to exactly one group; a point unlike any
