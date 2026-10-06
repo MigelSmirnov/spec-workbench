@@ -31,6 +31,7 @@ def _human_round(summary: dict) -> str:
         f"State {summary['state']} {summary['round']}: reviews={summary['reviews']} "
         f"points={summary['points']} topics={len(summary['topics'])} "
         f"repeated={summary['repeated_topics']} blocking={summary.get('blocking_topics', '-')} "
+        f"deferred={summary.get('deferred_topics', 0)} "
         f"clear={str(summary.get('clear', not summary['repeated_topics'])).lower()} "
         f"closed={str(summary['closed']).lower()}"
     ]
@@ -38,7 +39,7 @@ def _human_round(summary: dict) -> str:
         verdict = ""
         if "judgement" in topic:
             j = topic["judgement"]
-            verdict = f" <{j['kind']}{'' if j['verified'] else ', UNVERIFIED: ' + j.get('failure', '')}{', BLOCKING' if j['blocking'] else ''}>"
+            verdict = f" <{j['kind']}{'' if j['verified'] else ', UNVERIFIED: ' + j.get('failure', '')}{', BLOCKING' if j['blocking'] else ''}{', DEFERRED to ' + j['deferred_to'] if j.get('deferred_to') else ''}>"
         lines.append(f"  [{len(topic['runs'])}/{summary['reviews']}] {topic['topic']}{verdict}")
     return "\n".join(lines)
 

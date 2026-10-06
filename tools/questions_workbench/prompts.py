@@ -44,7 +44,10 @@ from those that need not. Judge each topic by exactly one kind:
 - "consequential_gap": the texts leave a choice open, and two careful
   implementers would build different behaviour that the owner, an agent, a
   caller or an external service would notice. Name the two behaviours and who
-  notices in "divergence".
+  notices in "divergence". Quote, verbatim, every passage of the texts that
+  leaves the choice open or bears on it. A gap with no passage at all — the
+  texts never speak to the matter — is recorded for State 6 contracts or
+  State 7 notes instead of blocking, so quote whenever a passage exists.
 - "answered": the texts already answer the question. Quote the passage that
   answers it, verbatim.
 - "later_state": the question belongs to a later state (orders of checks,

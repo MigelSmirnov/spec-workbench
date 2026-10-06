@@ -8,12 +8,21 @@ appear verbatim in the texts (for `answered_later`, in the later states'
 texts the judge searched), a later state must come after this one, a
 precedent must be a prior non-blocking judgement whose quotes still stand. A
 judgement whose evidence fails counts as blocking.
+
+A consequential gap that quotes no passage is about something the texts up to
+this state do not speak to at all — sandbox streams, a listener binding, a
+size limit. Such a gap is an implementation detail: it does not hold a design
+state open, it is recorded as deferred and must be answered in the contracts
+(State 6) or the notes (State 7). A gap that quotes a passage still blocks, and
+its quotes are checked like any other.
 """
 from __future__ import annotations
 
 from typing import Any
 
 BLOCKING = {"contradiction", "consequential_gap"}
+DEFERRED_TO = "State 6 contracts or State 7 notes"
+LAST_DEFERRING_STATE = 5
 KINDS = BLOCKING | {"answered", "answered_later", "later_state", "indifferent", "preexisting", "judged_before"}
 
 
@@ -50,6 +59,8 @@ def check(judgement: dict[str, Any] | None, state: int, texts: str, old_texts: s
     elif kind == "consequential_gap":
         if not kept["divergence"].strip():
             failure = "a consequential gap needs the two behaviours and who notices"
+        elif quotes and not all(_found(q, corpus) for q in quotes):
+            failure = "the quoted passage of a consequential gap is not found verbatim in the texts"
     elif kind == "answered":
         if not quotes or not all(_found(q, corpus) for q in quotes):
             failure = "the answering quote is not found verbatim in the texts"
@@ -64,6 +75,8 @@ def check(judgement: dict[str, Any] | None, state: int, texts: str, old_texts: s
             failure = "judged_before must name one of the prior judgements offered"
         else:
             kept["precedent"] = precedent
+            if precedent.get("deferred_to"):
+                kept["deferred_to"] = precedent["deferred_to"]
             where = _norm(later_texts) if precedent["kind"] == "answered_later" and later_texts else corpus
             if precedent["kind"] == "answered_later" and later_texts is None:
                 failure = "the precedent quotes later states the judge was not given"
@@ -82,7 +95,11 @@ def check(judgement: dict[str, Any] | None, state: int, texts: str, old_texts: s
         elif not quotes or not all(_found(q, corpus) and _found(q, _norm(old_texts)) for q in quotes):
             failure = "the quoted passage is not found verbatim in both versions"
     kept["verified"] = failure is None
-    kept["blocking"] = kind in BLOCKING or failure is not None
+    deferred = (failure is None and kind == "consequential_gap" and not quotes
+                and state <= LAST_DEFERRING_STATE)
+    if deferred:
+        kept["deferred_to"] = DEFERRED_TO
+    kept["blocking"] = (kind in BLOCKING and not deferred) or failure is not None
     if failure:
         kept["failure"] = failure
     return kept
