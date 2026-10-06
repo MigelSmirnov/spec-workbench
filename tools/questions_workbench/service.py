@@ -168,7 +168,8 @@ def _judge(provider: Provider, state: int, text: str, texts: list[tuple[int, str
     for topic in repeated:
         topic["judgement"] = judge.check(judgements.get(topic["id"]), state, body, old_body,
                                          "\n\n".join(later.values()) if later else None,
-                                         {p["id"]: p for p in precedents or []})
+                                         {p["id"]: p for p in precedents or []},
+                                         "\n\n".join(b for s, _, b in texts if s == state))
     result = {"provider": provider.name, "raw": answer}
     if later:
         result["later_documents"] = {name: hashlib.sha256(body.encode("utf-8")).hexdigest()

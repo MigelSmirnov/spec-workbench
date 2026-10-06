@@ -14,7 +14,11 @@ this state do not speak to at all — sandbox streams, a listener binding, a
 size limit. Such a gap is an implementation detail: it does not hold a design
 state open, it is recorded as deferred and must be answered in the contracts
 (State 6) or the notes (State 7). A gap that quotes a passage still blocks, and
-its quotes are checked like any other.
+its quotes are checked like any other. A gap that quotes none of this state's
+own documents — only earlier states, closed by their own rounds, or the later
+texts the judge searched (a note, a contract) — is a gap of those texts, not of
+this state: it does not block, and is kept with the states it belongs to. A
+contradiction blocks wherever its passages are.
 """
 from __future__ import annotations
 
@@ -36,8 +40,11 @@ def _found(quote: str, corpus: str) -> bool:
 
 
 def check(judgement: dict[str, Any] | None, state: int, texts: str, old_texts: str | None,
-          later_texts: str | None = None, precedents: dict[str, dict[str, Any]] | None = None) -> dict[str, Any]:
-    """The judgement as kept in the round, with `verified` and `blocking`."""
+          later_texts: str | None = None, precedents: dict[str, dict[str, Any]] | None = None,
+          own_texts: str | None = None) -> dict[str, Any]:
+    """The judgement as kept in the round, with `verified` and `blocking`.
+    `own_texts` are the asked state's own documents; without them every text
+    counts as the state's own."""
     if not isinstance(judgement, dict):
         return {"kind": None, "verified": False, "blocking": True, "failure": "the judge gave no judgement"}
     kind = judgement.get("kind")
@@ -59,8 +66,16 @@ def check(judgement: dict[str, Any] | None, state: int, texts: str, old_texts: s
     elif kind == "consequential_gap":
         if not kept["divergence"].strip():
             failure = "a consequential gap needs the two behaviours and who notices"
-        elif quotes and not all(_found(q, corpus) for q in quotes):
-            failure = "the quoted passage of a consequential gap is not found verbatim in the texts"
+        elif quotes:
+            later_corpus = _norm(later_texts) if later_texts is not None else ""
+            here = [_found(q, corpus) for q in quotes]
+            later = [_found(q, later_corpus) for q in quotes]
+            if not all(h or l for h, l in zip(here, later)):
+                failure = "the quoted passage of a consequential gap is not found verbatim in the texts"
+            else:
+                own = _norm(own_texts) if own_texts is not None else corpus
+                if not any(_found(q, own) for q in quotes):
+                    kept["quoted_elsewhere"] = True
     elif kind == "answered":
         if not quotes or not all(_found(q, corpus) for q in quotes):
             failure = "the answering quote is not found verbatim in the texts"
@@ -95,10 +110,11 @@ def check(judgement: dict[str, Any] | None, state: int, texts: str, old_texts: s
         elif not quotes or not all(_found(q, corpus) and _found(q, _norm(old_texts)) for q in quotes):
             failure = "the quoted passage is not found verbatim in both versions"
     kept["verified"] = failure is None
-    deferred = (failure is None and kind == "consequential_gap" and not quotes
+    deferred = (failure is None and kind == "consequential_gap"
+                and (not quotes or kept.get("quoted_elsewhere"))
                 and state <= LAST_DEFERRING_STATE)
     if deferred:
-        kept["deferred_to"] = DEFERRED_TO
+        kept["deferred_to"] = DEFERRED_TO if not quotes else "the states whose texts it quotes"
     kept["blocking"] = (kind in BLOCKING and not deferred) or failure is not None
     if failure:
         kept["failure"] = failure
