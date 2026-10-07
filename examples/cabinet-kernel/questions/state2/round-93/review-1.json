@@ -1,0 +1,190 @@
+{
+ "open_points": [
+  {
+   "subject": "A18 startup and data-directory creation",
+   "kind": "missing lifecycle",
+   "text": "“At start it takes an exclusive lock in the data directory” and “The data directory holds one SQLite database …” do not say whether an absent or empty data directory, database, value area, or spool is created or refused.",
+   "question": "Which store artifacts must already exist, and which may the kernel create on first start?",
+   "options": [
+    "Require a fully initialized layout and refuse anything missing",
+    "Create the directory and all store artifacts when absent",
+    "Require the data directory but create missing internal artifacts"
+   ],
+   "default_guess": "Require the data directory to exist with valid ownership and permissions, then create missing internal store artifacts.",
+   "unit": "?"
+  },
+  {
+   "subject": "A18 startup check precedence",
+   "kind": "unspecified order",
+   "text": "A18 requires locking, privacy checks, symlink checks and cleanup at start, while A03, A16 and A17 require other startup checks, but no text orders them.",
+   "question": "In what order are the lock, store-layout checks, cleanup, configuration checks, sandbox probe and recovery performed, and which failure is reported when several fail?",
+   "options": [
+    "Lock first, validate store and configuration, clean up, then recover",
+    "Validate configuration and store before taking the lock",
+    "Define one global ordered startup-check sequence"
+   ],
+   "default_guess": "Open and validate the data directory safely, take the lock, validate all startup dependencies, perform cleanup, then recover runs before opening the surface.",
+   "unit": "?"
+  },
+  {
+   "subject": "A18 exclusive lock",
+   "kind": "vague guarantee",
+   "text": "“takes an exclusive lock in the data directory; a second process on the same directory refuses to start” does not define the lock object, acquisition failure behavior, or when the lock is released.",
+   "question": "What constitutes the exclusive lock, how are permission or I/O failures classified, and does process death automatically release it without stale-lock recovery?",
+   "options": [
+    "Use a kernel advisory lock on a fixed lock file held for process lifetime",
+    "Use an atomically created lock file with explicit stale-lock handling",
+    "Use a SQLite locking mode as the process lock"
+   ],
+   "default_guess": "Use a fixed regular lock file opened without following links and an OS advisory exclusive lock held until process exit.",
+   "unit": "?"
+  },
+  {
+   "subject": "A18 private store layout",
+   "kind": "vague refusal condition",
+   "text": "“The directory and everything in it are private to the kernel's user; the kernel refuses to start otherwise.”",
+   "question": "What exact ownership, permission and file-type conditions define “private” for the directory, nested directories, database files, lock file, value files and spool files?",
+   "options": [
+    "Require ownership by the kernel user and no group/other permission bits on every artifact",
+    "Require only that group and others cannot read or write",
+    "Require strict modes for files and directories separately"
+   ],
+   "default_guess": "Require every artifact to be owned by the kernel user, with no group or other permission bits, and require expected files and directories to have their expected types.",
+   "unit": "?"
+  },
+  {
+   "subject": "A18 filesystem traversal",
+   "kind": "unclear scope",
+   "text": "“Every file of the directory is opened without following symbolic links; a link found at start stops the start” does not say whether the start scan is recursive, whether symlinked directories count, or how non-regular unexpected objects are handled.",
+   "question": "Which paths are inspected recursively at start, and are symlinked directories, sockets, devices, FIFOs, hard links or unexpected regular files refused?",
+   "options": [
+    "Recursively reject every symbolic link and every unexpected file type",
+    "Inspect only known store paths and ignore unknown entries",
+    "Reject links anywhere but allow unknown regular files and directories"
+   ],
+   "default_guess": "Recursively reject symbolic links and unexpected non-regular objects throughout the data directory, while leaving unknown private regular files untouched.",
+   "unit": "?"
+  },
+  {
+   "subject": "A18 store record order",
+   "kind": "undefined invariant",
+   "text": "“records have one order,” “identified by their position in the store's one order of records,” and “one writer” do not define how positions are assigned when one transaction creates or changes several records.",
+   "question": "What is the total store order, how are multiple records written by one store call ordered, and does updating a mutable record change its position?",
+   "options": [
+    "Assign a monotonic sequence only when each record is first created, with an explicit order for records created together",
+    "Order by SQLite row identifiers separately per table",
+    "Give every creation and state transition a new global event position"
+   ],
+   "default_guess": "Assign every newly created record a global monotonic position in an explicitly specified order within each store call; later mutation of that record does not change its position.",
+   "unit": "?"
+  },
+  {
+   "subject": "A18 request serialization",
+   "kind": "ambiguous ordering",
+   "text": "“Surface requests are handled one at a time in the order they arrive” does not define arrival when concurrent MCP requests are received or whether a request is considered arrived before or after message validation and configuration re-read.",
+   "question": "What event fixes concurrent requests' order, and at what point is a request admitted to the single processing queue?",
+   "options": [
+    "Order by completion of receipt of the full MCP message",
+    "Order by transport acceptance before reading the full message",
+    "Allow the surface adapter to choose any total order for simultaneous arrivals"
+   ],
+   "default_guess": "Assign a monotonic queue position when the complete request message has been received, before any request check.",
+   "unit": "?"
+  },
+  {
+   "subject": "A18 failed store call",
+   "kind": "unclear atomicity",
+   "text": "“A call that fails writes and changes no record” does not define what happens when SQLite reports an error during or after commit and the caller cannot know whether the transaction committed.",
+   "question": "How must the store classify and recover an ambiguous commit so that a call reported as failed never leaves changed records?",
+   "options": [
+    "Treat a possibly committed call as successful after reopening and verifying its operation result",
+    "Stop the kernel and recover before returning any response",
+    "Rely on SQLite errors to distinguish committed from rolled back"
+   ],
+   "default_guess": "Stop and recover the store before responding; return success only if the intended committed result is verified, otherwise return failure only after rollback is verified.",
+   "unit": "?"
+  },
+  {
+   "subject": "A18 database and file atomicity",
+   "kind": "missing crash ordering",
+   "text": "A change uses “one transaction” while value and spool bytes are published outside SQLite, and the only stated failed-call residue is “a published file no record names.” The exact ordering between file publication and record commit is not stated.",
+   "question": "What sequence and recovery rule guarantees that a committed record never names an absent or incomplete file across every crash point?",
+   "options": [
+    "Publish and verify the file before committing its naming record, allowing an orphan on failure",
+    "Commit a pending record before publishing, then finalize it in another transaction",
+    "Journal file operations inside the store and repair either direction on startup"
+   ],
+   "default_guess": "Publish and verify the file first, then commit the record that names it; a crash before commit may leave only an unreferenced file removed at startup.",
+   "unit": "?"
+  },
+  {
+   "subject": "A18 crash durability",
+   "kind": "undefined failure model",
+   "text": "Files are “flushed” before rename and the tests say a crash leaves either no file or the complete file, but “flushed” and “crash” are not defined.",
+   "question": "Does the guarantee cover only kernel-process termination or also host/power loss, and which file and directory synchronization steps are required before a store call succeeds?",
+   "options": [
+    "Guarantee only process-crash atomicity",
+    "Guarantee host-crash durability with file and parent-directory synchronization",
+    "Guarantee SQLite durability but only process-crash atomicity for content files"
+   ],
+   "default_guess": "Cover host crashes: synchronize the temporary file before rename, synchronize the containing directory after rename, and use SQLite durability settings consistent with the same guarantee.",
+   "unit": "?"
+  },
+  {
+   "subject": "A18 existing content-addressed file",
+   "kind": "missing conflict rule",
+   "text": "“Equal bytes are stored once” and “a completed file a record names is never overwritten” do not say what happens when the digest-named target already exists but its bytes, size, ownership or permissions are wrong.",
+   "question": "Must an existing target be revalidated, and is a mismatch a failed call, a fatal store-corruption condition, or something the kernel repairs?",
+   "options": [
+    "Validate it and stop the kernel on any mismatch",
+    "Validate it and fail only the current call",
+    "Trust any existing digest-named file without reading it",
+    "Replace an invalid unreferenced target but never a referenced one"
+   ],
+   "default_guess": "Validate size, digest, type, ownership and permissions; stop the kernel for a mismatching referenced target and replace only an invalid unreferenced target safely.",
+   "unit": "?"
+  },
+  {
+   "subject": "A18 later symlink failure",
+   "kind": "contradictory write guarantee",
+   "text": "Rule 2 says a link found later makes “that store call fail with nothing written,” while rule 3 says a failed call may leave “a published file no record names.”",
+   "question": "When a store call publishes a file and later encounters a symlink, may the published unreferenced file remain, or must the call remove it before reporting failure?",
+   "options": [
+    "The orphan-file exception applies, so no record is written but a published file may remain",
+    "The symlink rule is stricter and requires removal of every file published by that call",
+    "Detect all relevant symlinks before any file publication"
+   ],
+   "default_guess": "Detect all relevant path components before publication; if a race reveals a link later, write no record and permit only an unreachable published file for startup cleanup.",
+   "unit": "?"
+  },
+  {
+   "subject": "A18 startup cleanup failures",
+   "kind": "unspecified failure behavior",
+   "text": "Rule 4 explicitly says failure to remove an obsolete spool directory does not stop start, but gives no result for failure to remove temporary files or unreferenced value bytes.",
+   "question": "Does inability to remove a temporary file or unreferenced value file stop startup, leave the artifact unserved, or get ignored like an obsolete spool directory?",
+   "options": [
+    "Stop startup for temporary and value cleanup failures",
+    "Continue startup and never serve the leftovers",
+    "Apply the same continue-and-retry-later rule to every cleanup failure"
+   ],
+   "default_guess": "Continue only when the leftover can be proven unreferenced and can never be served; otherwise refuse startup.",
+   "unit": "?"
+  },
+  {
+   "subject": "A18 store integrity at startup and read",
+   "kind": "missing corruption behavior",
+   "text": "The text verifies files when publishing and removes unreferenced files at start, but says nothing about a corrupt SQLite database or a record naming a missing, altered or unreadable value, fixture or spool file.",
+   "question": "What integrity checks run at startup or first access, and does detected corruption stop the kernel, fail one request, or permit partial operation?",
+   "options": [
+    "Verify the whole store at startup and refuse to start on corruption",
+    "Verify each artifact on access and fail only the affected call",
+    "Check database integrity at startup and content files lazily"
+   ],
+   "default_guess": "Check SQLite integrity and all durable referenced value and fixture files at startup; check temporary run-spool files on recovery or access, and refuse startup when required durable data is corrupt or missing.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A18 startup and data-directory creation\",\"kind\":\"missing lifecycle\",\"text\":\"“At start it takes an exclusive lock in the data directory” and “The data directory holds one SQLite database …” do not say whether an absent or empty data directory, database, value area, or spool is created or refused.\",\"question\":\"Which store artifacts must already exist, and which may the kernel create on first start?\",\"options\":[\"Require a fully initialized layout and refuse anything missing\",\"Create the directory and all store artifacts when absent\",\"Require the data directory but create missing internal artifacts\"],\"default_guess\":\"Require the data directory to exist with valid ownership and permissions, then create missing internal store artifacts.\"},{\"subject\":\"A18 startup check precedence\",\"kind\":\"unspecified order\",\"text\":\"A18 requires locking, privacy checks, symlink checks and cleanup at start, while A03, A16 and A17 require other startup checks, but no text orders them.\",\"question\":\"In what order are the lock, store-layout checks, cleanup, configuration checks, sandbox probe and recovery performed, and which failure is reported when several fail?\",\"options\":[\"Lock first, validate store and configuration, clean up, then recover\",\"Validate configuration and store before taking the lock\",\"Define one global ordered startup-check sequence\"],\"default_guess\":\"Open and validate the data directory safely, take the lock, validate all startup dependencies, perform cleanup, then recover runs before opening the surface.\"},{\"subject\":\"A18 exclusive lock\",\"kind\":\"vague guarantee\",\"text\":\"“takes an exclusive lock in the data directory; a second process on the same directory refuses to start” does not define the lock object, acquisition failure behavior, or when the lock is released.\",\"question\":\"What constitutes the exclusive lock, how are permission or I/O failures classified, and does process death automatically release it without stale-lock recovery?\",\"options\":[\"Use a kernel advisory lock on a fixed lock file held for process lifetime\",\"Use an atomically created lock file with explicit stale-lock handling\",\"Use a SQLite locking mode as the process lock\"],\"default_guess\":\"Use a fixed regular lock file opened without following links and an OS advisory exclusive lock held until process exit.\"},{\"subject\":\"A18 private store layout\",\"kind\":\"vague refusal condition\",\"text\":\"“The directory and everything in it are private to the kernel's user; the kernel refuses to start otherwise.”\",\"question\":\"What exact ownership, permission and file-type conditions define “private” for the directory, nested directories, database files, lock file, value files and spool files?\",\"options\":[\"Require ownership by the kernel user and no group/other permission bits on every artifact\",\"Require only that group and others cannot read or write\",\"Require strict modes for files and directories separately\"],\"default_guess\":\"Require every artifact to be owned by the kernel user, with no group or other permission bits, and require expected files and directories to have their expected types.\"},{\"subject\":\"A18 filesystem traversal\",\"kind\":\"unclear scope\",\"text\":\"“Every file of the directory is opened without following symbolic links; a link found at start stops the start” does not say whether the start scan is recursive, whether symlinked directories count, or how non-regular unexpected objects are handled.\",\"question\":\"Which paths are inspected recursively at start, and are symlinked directories, sockets, devices, FIFOs, hard links or unexpected regular files refused?\",\"options\":[\"Recursively reject every symbolic link and every unexpected file type\",\"Inspect only known store paths and ignore unknown entries\",\"Reject links anywhere but allow unknown regular files and directories\"],\"default_guess\":\"Recursively reject symbolic links and unexpected non-regular objects throughout the data directory, while leaving unknown private regular files untouched.\"},{\"subject\":\"A18 store record order\",\"kind\":\"undefined invariant\",\"text\":\"“records have one order,” “identified by their position in the store's one order of records,” and “one writer” do not define how positions are assigned when one transaction creates or changes several records.\",\"question\":\"What is the total store order, how are multiple records written by one store call ordered, and does updating a mutable record change its position?\",\"options\":[\"Assign a monotonic sequence only when each record is first created, with an explicit order for records created together\",\"Order by SQLite row identifiers separately per table\",\"Give every creation and state transition a new global event position\"],\"default_guess\":\"Assign every newly created record a global monotonic position in an explicitly specified order within each store call; later mutation of that record does not change its position.\"},{\"subject\":\"A18 request serialization\",\"kind\":\"ambiguous ordering\",\"text\":\"“Surface requests are handled one at a time in the order they arrive” does not define arrival when concurrent MCP requests are received or whether a request is considered arrived before or after message validation and configuration re-read.\",\"question\":\"What event fixes concurrent requests' order, and at what point is a request admitted to the single processing queue?\",\"options\":[\"Order by completion of receipt of the full MCP message\",\"Order by transport acceptance before reading the full message\",\"Allow the surface adapter to choose any total order for simultaneous arrivals\"],\"default_guess\":\"Assign a monotonic queue position when the complete request message has been received, before any request check.\"},{\"subject\":\"A18 failed store call\",\"kind\":\"unclear atomicity\",\"text\":\"“A call that fails writes and changes no record” does not define what happens when SQLite reports an error during or after commit and the caller cannot know whether the transaction committed.\",\"question\":\"How must the store classify and recover an ambiguous commit so that a call reported as failed never leaves changed records?\",\"options\":[\"Treat a possibly committed call as successful after reopening and verifying its operation result\",\"Stop the kernel and recover before returning any response\",\"Rely on SQLite errors to distinguish committed from rolled back\"],\"default_guess\":\"Stop and recover the store before responding; return success only if the intended committed result is verified, otherwise return failure only after rollback is verified.\"},{\"subject\":\"A18 database and file atomicity\",\"kind\":\"missing crash ordering\",\"text\":\"A change uses “one transaction” while value and spool bytes are published outside SQLite, and the only stated failed-call residue is “a published file no record names.” The exact ordering between file publication and record commit is not stated.\",\"question\":\"What sequence and recovery rule guarantees that a committed record never names an absent or incomplete file across every crash point?\",\"options\":[\"Publish and verify the file before committing its naming record, allowing an orphan on failure\",\"Commit a pending record before publishing, then finalize it in another transaction\",\"Journal file operations inside the store and repair either direction on startup\"],\"default_guess\":\"Publish and verify the file first, then commit the record that names it; a crash before commit may leave only an unreferenced file removed at startup.\"},{\"subject\":\"A18 crash durability\",\"kind\":\"undefined failure model\",\"text\":\"Files are “flushed” before rename and the tests say a crash leaves either no file or the complete file, but “flushed” and “crash” are not defined.\",\"question\":\"Does the guarantee cover only kernel-process termination or also host/power loss, and which file and directory synchronization steps are required before a store call succeeds?\",\"options\":[\"Guarantee only process-crash atomicity\",\"Guarantee host-crash durability with file and parent-directory synchronization\",\"Guarantee SQLite durability but only process-crash atomicity for content files\"],\"default_guess\":\"Cover host crashes: synchronize the temporary file before rename, synchronize the containing directory after rename, and use SQLite durability settings consistent with the same guarantee.\"},{\"subject\":\"A18 existing content-addressed file\",\"kind\":\"missing conflict rule\",\"text\":\"“Equal bytes are stored once” and “a completed file a record names is never overwritten” do not say what happens when the digest-named target already exists but its bytes, size, ownership or permissions are wrong.\",\"question\":\"Must an existing target be revalidated, and is a mismatch a failed call, a fatal store-corruption condition, or something the kernel repairs?\",\"options\":[\"Validate it and stop the kernel on any mismatch\",\"Validate it and fail only the current call\",\"Trust any existing digest-named file without reading it\",\"Replace an invalid unreferenced target but never a referenced one\"],\"default_guess\":\"Validate size, digest, type, ownership and permissions; stop the kernel for a mismatching referenced target and replace only an invalid unreferenced target safely.\"},{\"subject\":\"A18 later symlink failure\",\"kind\":\"contradictory write guarantee\",\"text\":\"Rule 2 says a link found later makes “that store call fail with nothing written,” while rule 3 says a failed call may leave “a published file no record names.”\",\"question\":\"When a store call publishes a file and later encounters a symlink, may the published unreferenced file remain, or must the call remove it before reporting failure?\",\"options\":[\"The orphan-file exception applies, so no record is written but a published file may remain\",\"The symlink rule is stricter and requires removal of every file published by that call\",\"Detect all relevant symlinks before any file publication\"],\"default_guess\":\"Detect all relevant path components before publication; if a race reveals a link later, write no record and permit only an unreachable published file for startup cleanup.\"},{\"subject\":\"A18 startup cleanup failures\",\"kind\":\"unspecified failure behavior\",\"text\":\"Rule 4 explicitly says failure to remove an obsolete spool directory does not stop start, but gives no result for failure to remove temporary files or unreferenced value bytes.\",\"question\":\"Does inability to remove a temporary file or unreferenced value file stop startup, leave the artifact unserved, or get ignored like an obsolete spool directory?\",\"options\":[\"Stop startup for temporary and value cleanup failures\",\"Continue startup and never serve the leftovers\",\"Apply the same continue-and-retry-later rule to every cleanup failure\"],\"default_guess\":\"Continue only when the leftover can be proven unreferenced and can never be served; otherwise refuse startup.\"},{\"subject\":\"A18 store integrity at startup and read\",\"kind\":\"missing corruption behavior\",\"text\":\"The text verifies files when publishing and removes unreferenced files at start, but says nothing about a corrupt SQLite database or a record naming a missing, altered or unreadable value, fixture or spool file.\",\"question\":\"What integrity checks run at startup or first access, and does detected corruption stop the kernel, fail one request, or permit partial operation?\",\"options\":[\"Verify the whole store at startup and refuse to start on corruption\",\"Verify each artifact on access and fail only the affected call\",\"Check database integrity at startup and content files lazily\"],\"default_guess\":\"Check SQLite integrity and all durable referenced value and fixture files at startup; check temporary run-spool files on recovery or access, and refuse startup when required durable data is corrupt or missing.\"}]}",
+ "set_aside": []
+}

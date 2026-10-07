@@ -1,0 +1,241 @@
+{
+ "open_points": [
+  {
+   "subject": "global store order and record positions",
+   "kind": "undefined ordering",
+   "text": "“Activation M09 and FlowActivation M18 records are identified by their position in the store's one order of records” and “one place where the kernel's truth lives and one writer of it, so no record ever has two orders” do not define which records receive positions, whether a record keeps its original position when mutated, or the order of several records created in one transaction.",
+   "question": "What exactly is the global store order, when is a position allocated, and how are multiple records written by one transaction ordered?",
+   "options": [
+    "Every record receives an immutable monotonically increasing position at creation, with an explicit order for records created together",
+    "Only selected immutable records receive positions",
+    "A mutable record receives a new order position on each transition"
+   ],
+   "default_guess": "Give every record an immutable monotonically increasing creation position and prescribe insertion order within each compound transaction.",
+   "unit": "?"
+  },
+  {
+   "subject": "surface request serialization",
+   "kind": "undefined precedence",
+   "text": "“Surface requests are handled one at a time in the order they arrive” does not define arrival order when requests are received concurrently or in overlapping transport frames.",
+   "question": "What event establishes the total order of concurrently arriving requests?",
+   "options": [
+    "Order when the complete request message is accepted by the MCP server",
+    "Order when request processing first acquires the store queue",
+    "Order supplied by the transport connection, with an explicit tie-break across connections"
+   ],
+   "default_guess": "Assign a monotonically increasing sequence when a complete request is accepted and process by that sequence.",
+   "unit": "?"
+  },
+  {
+   "subject": "database connections",
+   "kind": "contradictory scope",
+   "text": "The decision is described as narrowed to “no concurrent connections”, but the normative rule says only “Only the store module opens the database” and does not limit that module to one connection.",
+   "question": "May the store module open multiple SQLite connections, including concurrent read connections, or exactly one connection for the process?",
+   "options": [
+    "Exactly one SQLite connection exists at a time",
+    "Several connections are allowed but only one may write",
+    "Connections may be opened per store call so long as requests remain serialized"
+   ],
+   "default_guess": "Use exactly one SQLite connection owned by the store module.",
+   "unit": "?"
+  },
+  {
+   "subject": "exclusive data-directory lock",
+   "kind": "incomplete invariant",
+   "text": "“At start it takes an exclusive lock in the data directory; a second process on the same directory refuses to start” does not say what object is locked, how aliases of the same directory are recognized, or how long the lock is held.",
+   "question": "What lock is acquired, is it held for the process lifetime, and must two paths resolving to the same directory contend on the same lock?",
+   "options": [
+    "Lock a fixed file in the directory for the full process lifetime, with locking tied to the underlying file/inode",
+    "Lock the directory itself for the full process lifetime",
+    "Use a PID or marker file and define stale-lock recovery"
+   ],
+   "default_guess": "Hold an OS advisory lock on a fixed regular lock file in the directory for the entire process lifetime, so aliases of the same inode contend.",
+   "unit": "?"
+  },
+  {
+   "subject": "data-directory creation and fixed layout",
+   "kind": "missing lifecycle",
+   "text": "“The data directory holds one SQLite database with every kernel record, a content-addressed area of value bytes and file fixtures named by digest, and the run spool, one subdirectory per run” gives no fixed names and does not say whether an absent directory, database, or area is created or refused.",
+   "question": "What are the exact paths, and which missing store objects are created on first start versus treated as store damage?",
+   "options": [
+    "Create a fully specified layout on first start and thereafter refuse missing required objects",
+    "Create any missing directory or database on every start",
+    "Require an installer to create the complete layout before the kernel starts"
+   ],
+   "default_guess": "Specify fixed names, create the entire layout only for a demonstrably new empty data directory, and refuse missing pieces of an existing store.",
+   "unit": "?"
+  },
+  {
+   "subject": "unexpected data-directory entries",
+   "kind": "missing refusal conditions",
+   "text": "“The data directory holds one SQLite database … and the run spool” and “nothing else is [removed]” do not say what happens when unknown files, directories, sockets, devices, hard links, or additional databases are present.",
+   "question": "Which unexpected entry types or names are allowed, ignored, removed, or startup-fatal?",
+   "options": [
+    "Refuse every entry not belonging to the specified layout or recognized cleanup set",
+    "Ignore unknown regular files but refuse special files and links",
+    "Leave every non-symlink unknown entry untouched and continue"
+   ],
+   "default_guess": "Refuse special files, links, and entries in reserved areas; leave explicitly permitted operational files only.",
+   "unit": "?"
+  },
+  {
+   "subject": "private ownership and permissions",
+   "kind": "vague invariant",
+   "text": "“The directory and everything in it are private to the kernel's user; the kernel refuses to start otherwise” does not define private, unlike A17's explicit ownership and permission checks.",
+   "question": "What ownership, file types, and permission bits must the root directory, subdirectories, database files, SQLite sidecars, blobs, fixtures, spool files, lock file, and temporary files have?",
+   "options": [
+    "Every object must be owned by the kernel user; directories may have only owner permissions and files no group/other permissions",
+    "Only the root directory must be owner-only, with contained modes irrelevant",
+    "Require owner-only access but permit specified group access"
+   ],
+   "default_guess": "Require kernel-user ownership throughout, mode 0700 or stricter for directories and 0600 or stricter for regular files, and create new objects with those modes atomically.",
+   "unit": "?"
+  },
+  {
+   "subject": "privacy after startup",
+   "kind": "unenforced invariant",
+   "text": "“The directory and everything in it are private to the kernel's user; the kernel refuses to start otherwise” specifies a startup refusal but not what happens if permissions or ownership change while the process runs or how newly created files are guaranteed private.",
+   "question": "Are privacy properties checked on every open/create, and what happens when a later store call encounters an object that is no longer private?",
+   "options": [
+    "Check securely on every open and create; fail the store call without records",
+    "Check only at startup",
+    "Stop the kernel immediately when a later violation is found"
+   ],
+   "default_guess": "Create every object with owner-only permissions and verify ownership, type, and permissions on every secure open; fail the affected store call.",
+   "unit": "?"
+  },
+  {
+   "subject": "symbolic-link scope and response",
+   "kind": "contradictory rule",
+   "text": "The formal invariant says “symlink_inside(data_directory) -> refused”, while rule 2 says “a link found at start stops the start, and one found later makes that store call fail with nothing written.” It also says “Every file” without covering the data-directory path itself or directory components explicitly.",
+   "question": "Which path components and object types are checked for links, and does a link introduced after start refuse only one call or stop/refuse the kernel globally?",
+   "options": [
+    "Reject links in the data-directory path and every descendant component; a later encounter fails only the current call",
+    "Reject descendant links only; a later encounter stops the kernel",
+    "Check only final file components and fail the current call"
+   ],
+   "default_guess": "Reject symlinks in the root path and every component below it; at startup refuse start, and later fail the current store call without records.",
+   "unit": "?"
+  },
+  {
+   "subject": "hard links and file substitution",
+   "kind": "security gap",
+   "text": "“Every file of the directory is opened without following symbolic links” prevents symbolic links but says nothing about hard links or replacement of a checked regular file by another same-user process.",
+   "question": "Are hard-linked files or files with multiple link counts accepted, and how are check/use races prevented for store objects?",
+   "options": [
+    "Require regular files with link count one and operate through already-open descriptors",
+    "Permit hard links because the directory is owner-private",
+    "Permit hard links only for explicitly deduplicated blobs"
+   ],
+   "default_guess": "Require regular files with a single link and perform validation and I/O through the same securely opened descriptor.",
+   "unit": "?"
+  },
+  {
+   "subject": "store-call transaction boundary across database and filesystem",
+   "kind": "atomicity gap",
+   "text": "“Every change is one call to the store module and one transaction inside it” and “A call that fails writes and changes no record; the only trace it can leave is a published file no record names” do not define the commit boundary for a call that publishes files, writes records, and removes files. A14 separately says an end or release record stands even when subsequent removal fails.",
+   "question": "Which filesystem actions belong to the atomic store call, when is the database committed, and when does a cleanup failure make the call fail versus leave the committed record standing?",
+   "options": [
+    "Publish required files, commit their records, return success, and treat post-commit deletion as non-failing cleanup",
+    "Include publication and deletion in one logical call with explicitly compensating behavior",
+    "Split record transitions and filesystem cleanup into separately defined store calls"
+   ],
+   "default_guess": "Publish and verify required files before the database commit; commit records only after publication; treat deletion after an end/release commit as best-effort cleanup that cannot fail the completed action.",
+   "unit": "?"
+  },
+  {
+   "subject": "crash and durability guarantee",
+   "kind": "undefined failure model",
+   "text": "“A crash during a value write leaves either no file or the complete file” and “written to a temporary file, flushed … and then renamed into place” do not say whether crash includes host or power loss, whether directories are fsynced, or what SQLite durability settings preserve agreement between committed records and files.",
+   "question": "What crash model must the store survive, and what file, directory, and SQLite synchronization is required before a change is acknowledged?",
+   "options": [
+    "Survive process and host/power crashes using file fsync, atomic rename, directory fsync, and durable SQLite commit ordering",
+    "Guarantee only process-crash atomicity",
+    "Rely on operating-system and SQLite defaults"
+   ],
+   "default_guess": "Guarantee process and power-loss recovery using file and parent-directory fsync before a durable SQLite commit that names the file.",
+   "unit": "?"
+  },
+  {
+   "subject": "scope of byte deduplication",
+   "kind": "ambiguous rule",
+   "text": "Rule 4 discusses “Value bytes and spooled files” and then says “Equal bytes are stored once,” while rule 2 requires a run spool with one subdirectory per run and M22 distinguishes files from different attempts.",
+   "question": "Does store-once deduplication apply only to content-addressed values and trial fixtures, or also to spooled files across positions and runs?",
+   "options": [
+    "Deduplicate only durable content-addressed value and fixture bytes; spool bytes remain per run and position",
+    "Deduplicate all bytes globally, including spool files",
+    "Deduplicate spool bytes only within one run"
+   ],
+   "default_guess": "Deduplicate value and fixture bytes in the content-addressed area, but keep each spooled file at its own run/attempt position.",
+   "unit": "?"
+  },
+  {
+   "subject": "existing digest path with unequal content",
+   "kind": "missing collision handling",
+   "text": "“Equal bytes are stored once” and “a completed file a record names is never overwritten” do not say what happens when a digest-named file already exists but its bytes or size differ from the bytes being stored.",
+   "question": "Must the existing file be revalidated, and is a digest collision or corrupted existing blob a refusal, an internal error, or grounds to replace the file?",
+   "options": [
+    "Verify the existing file; on mismatch fail closed as store corruption and never overwrite it",
+    "Trust an existing digest path without rereading it",
+    "Replace an unreferenced mismatch but stop on a referenced mismatch"
+   ],
+   "default_guess": "Verify size and digest of the existing regular file and fail closed as store corruption without overwriting it on any mismatch.",
+   "unit": "?"
+  },
+  {
+   "subject": "reading named content after publication",
+   "kind": "missing integrity rule",
+   "text": "The text requires digest and size checking before rename but does not say whether a value, fixture, or spooled file is checked again when read, or what happens if named bytes are missing or changed later.",
+   "question": "How does the kernel handle a missing, truncated, or digest-mismatching file that a durable record names?",
+   "options": [
+    "Verify on every read and return an internal store-corruption failure without using the bytes",
+    "Verify only during startup",
+    "Assume published files never change and use whatever is present"
+   ],
+   "default_guess": "Verify type, size, and digest on every open before serving or executing with the bytes; fail closed and stop after reporting internal error if they disagree.",
+   "unit": "?"
+  },
+  {
+   "subject": "SQLite database initialization and compatibility",
+   "kind": "missing startup behavior",
+   "text": "“The data directory holds one SQLite database with every kernel record” does not specify behavior for an empty database, a corrupt database, an unknown schema version, or a store written by another kernel release.",
+   "question": "When may the schema be initialized or migrated, and what startup result applies to corruption and unsupported schema versions?",
+   "options": [
+    "Initialize only a new empty store, accept explicitly supported schema versions, and otherwise refuse start without mutation",
+    "Automatically migrate every older schema at startup",
+    "Recreate an unreadable or incompatible database"
+   ],
+   "default_guess": "Initialize only a new store and refuse startup without mutation for corruption or an unsupported schema version; migrations require an explicit accepted release rule.",
+   "unit": "?"
+  },
+  {
+   "subject": "startup operation order",
+   "kind": "undefined precedence",
+   "text": "A18 says the kernel locks, validates privacy and links, cleans temporary and unreferenced files, and removes obsolete spool directories “on start”; A14 also performs effect recovery and run advancement before opening the surface, but no total order among these steps is given.",
+   "question": "In what exact order are locking, layout validation, privacy and link checks, database opening, orphan cleanup, EffectAttempt recovery, run derivation, run advancement, and surface opening performed, and which failure is reported first?",
+   "options": [
+    "Define one fixed startup phase order with validation before mutation and cleanup before recovery",
+    "Perform recovery before cleanup",
+    "Permit implementation-defined order provided the surface opens last"
+   ],
+   "default_guess": "Lock first; securely validate layout and permissions; open and validate the database; clean provably unreferenced artifacts; recover attempts and runs in store order; then open the surface.",
+   "unit": "?"
+  },
+  {
+   "subject": "unreferenced-file reachability",
+   "kind": "undefined garbage collection",
+   "text": "“value bytes no record names … are removed” does not define whether ‘names’ means direct references only, all references reachable through records, records of ended runs, or records whose payload is no longer externally readable.",
+   "question": "What exact database references keep a content-addressed byte file live during startup cleanup?",
+   "options": [
+    "Any durable record containing the blob identity keeps it live, regardless of run state",
+    "Only currently readable values and active trial fixtures keep it live",
+    "Only direct references from a fixed enumerated set of tables keep it live"
+   ],
+   "default_guess": "Define an exhaustive set of durable foreign references; a blob is live if any retained record directly or transitively names its content identity.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"global store order and record positions\",\"kind\":\"undefined ordering\",\"text\":\"“Activation M09 and FlowActivation M18 records are identified by their position in the store's one order of records” and “one place where the kernel's truth lives and one writer of it, so no record ever has two orders” do not define which records receive positions, whether a record keeps its original position when mutated, or the order of several records created in one transaction.\",\"question\":\"What exactly is the global store order, when is a position allocated, and how are multiple records written by one transaction ordered?\",\"options\":[\"Every record receives an immutable monotonically increasing position at creation, with an explicit order for records created together\",\"Only selected immutable records receive positions\",\"A mutable record receives a new order position on each transition\"],\"default_guess\":\"Give every record an immutable monotonically increasing creation position and prescribe insertion order within each compound transaction.\"},{\"subject\":\"surface request serialization\",\"kind\":\"undefined precedence\",\"text\":\"“Surface requests are handled one at a time in the order they arrive” does not define arrival order when requests are received concurrently or in overlapping transport frames.\",\"question\":\"What event establishes the total order of concurrently arriving requests?\",\"options\":[\"Order when the complete request message is accepted by the MCP server\",\"Order when request processing first acquires the store queue\",\"Order supplied by the transport connection, with an explicit tie-break across connections\"],\"default_guess\":\"Assign a monotonically increasing sequence when a complete request is accepted and process by that sequence.\"},{\"subject\":\"database connections\",\"kind\":\"contradictory scope\",\"text\":\"The decision is described as narrowed to “no concurrent connections”, but the normative rule says only “Only the store module opens the database” and does not limit that module to one connection.\",\"question\":\"May the store module open multiple SQLite connections, including concurrent read connections, or exactly one connection for the process?\",\"options\":[\"Exactly one SQLite connection exists at a time\",\"Several connections are allowed but only one may write\",\"Connections may be opened per store call so long as requests remain serialized\"],\"default_guess\":\"Use exactly one SQLite connection owned by the store module.\"},{\"subject\":\"exclusive data-directory lock\",\"kind\":\"incomplete invariant\",\"text\":\"“At start it takes an exclusive lock in the data directory; a second process on the same directory refuses to start” does not say what object is locked, how aliases of the same directory are recognized, or how long the lock is held.\",\"question\":\"What lock is acquired, is it held for the process lifetime, and must two paths resolving to the same directory contend on the same lock?\",\"options\":[\"Lock a fixed file in the directory for the full process lifetime, with locking tied to the underlying file/inode\",\"Lock the directory itself for the full process lifetime\",\"Use a PID or marker file and define stale-lock recovery\"],\"default_guess\":\"Hold an OS advisory lock on a fixed regular lock file in the directory for the entire process lifetime, so aliases of the same inode contend.\"},{\"subject\":\"data-directory creation and fixed layout\",\"kind\":\"missing lifecycle\",\"text\":\"“The data directory holds one SQLite database with every kernel record, a content-addressed area of value bytes and file fixtures named by digest, and the run spool, one subdirectory per run” gives no fixed names and does not say whether an absent directory, database, or area is created or refused.\",\"question\":\"What are the exact paths, and which missing store objects are created on first start versus treated as store damage?\",\"options\":[\"Create a fully specified layout on first start and thereafter refuse missing required objects\",\"Create any missing directory or database on every start\",\"Require an installer to create the complete layout before the kernel starts\"],\"default_guess\":\"Specify fixed names, create the entire layout only for a demonstrably new empty data directory, and refuse missing pieces of an existing store.\"},{\"subject\":\"unexpected data-directory entries\",\"kind\":\"missing refusal conditions\",\"text\":\"“The data directory holds one SQLite database … and the run spool” and “nothing else is [removed]” do not say what happens when unknown files, directories, sockets, devices, hard links, or additional databases are present.\",\"question\":\"Which unexpected entry types or names are allowed, ignored, removed, or startup-fatal?\",\"options\":[\"Refuse every entry not belonging to the specified layout or recognized cleanup set\",\"Ignore unknown regular files but refuse special files and links\",\"Leave every non-symlink unknown entry untouched and continue\"],\"default_guess\":\"Refuse special files, links, and entries in reserved areas; leave explicitly permitted operational files only.\"},{\"subject\":\"private ownership and permissions\",\"kind\":\"vague invariant\",\"text\":\"“The directory and everything in it are private to the kernel's user; the kernel refuses to start otherwise” does not define private, unlike A17's explicit ownership and permission checks.\",\"question\":\"What ownership, file types, and permission bits must the root directory, subdirectories, database files, SQLite sidecars, blobs, fixtures, spool files, lock file, and temporary files have?\",\"options\":[\"Every object must be owned by the kernel user; directories may have only owner permissions and files no group/other permissions\",\"Only the root directory must be owner-only, with contained modes irrelevant\",\"Require owner-only access but permit specified group access\"],\"default_guess\":\"Require kernel-user ownership throughout, mode 0700 or stricter for directories and 0600 or stricter for regular files, and create new objects with those modes atomically.\"},{\"subject\":\"privacy after startup\",\"kind\":\"unenforced invariant\",\"text\":\"“The directory and everything in it are private to the kernel's user; the kernel refuses to start otherwise” specifies a startup refusal but not what happens if permissions or ownership change while the process runs or how newly created files are guaranteed private.\",\"question\":\"Are privacy properties checked on every open/create, and what happens when a later store call encounters an object that is no longer private?\",\"options\":[\"Check securely on every open and create; fail the store call without records\",\"Check only at startup\",\"Stop the kernel immediately when a later violation is found\"],\"default_guess\":\"Create every object with owner-only permissions and verify ownership, type, and permissions on every secure open; fail the affected store call.\"},{\"subject\":\"symbolic-link scope and response\",\"kind\":\"contradictory rule\",\"text\":\"The formal invariant says “symlink_inside(data_directory) -> refused”, while rule 2 says “a link found at start stops the start, and one found later makes that store call fail with nothing written.” It also says “Every file” without covering the data-directory path itself or directory components explicitly.\",\"question\":\"Which path components and object types are checked for links, and does a link introduced after start refuse only one call or stop/refuse the kernel globally?\",\"options\":[\"Reject links in the data-directory path and every descendant component; a later encounter fails only the current call\",\"Reject descendant links only; a later encounter stops the kernel\",\"Check only final file components and fail the current call\"],\"default_guess\":\"Reject symlinks in the root path and every component below it; at startup refuse start, and later fail the current store call without records.\"},{\"subject\":\"hard links and file substitution\",\"kind\":\"security gap\",\"text\":\"“Every file of the directory is opened without following symbolic links” prevents symbolic links but says nothing about hard links or replacement of a checked regular file by another same-user process.\",\"question\":\"Are hard-linked files or files with multiple link counts accepted, and how are check/use races prevented for store objects?\",\"options\":[\"Require regular files with link count one and operate through already-open descriptors\",\"Permit hard links because the directory is owner-private\",\"Permit hard links only for explicitly deduplicated blobs\"],\"default_guess\":\"Require regular files with a single link and perform validation and I/O through the same securely opened descriptor.\"},{\"subject\":\"store-call transaction boundary across database and filesystem\",\"kind\":\"atomicity gap\",\"text\":\"“Every change is one call to the store module and one transaction inside it” and “A call that fails writes and changes no record; the only trace it can leave is a published file no record names” do not define the commit boundary for a call that publishes files, writes records, and removes files. A14 separately says an end or release record stands even when subsequent removal fails.\",\"question\":\"Which filesystem actions belong to the atomic store call, when is the database committed, and when does a cleanup failure make the call fail versus leave the committed record standing?\",\"options\":[\"Publish required files, commit their records, return success, and treat post-commit deletion as non-failing cleanup\",\"Include publication and deletion in one logical call with explicitly compensating behavior\",\"Split record transitions and filesystem cleanup into separately defined store calls\"],\"default_guess\":\"Publish and verify required files before the database commit; commit records only after publication; treat deletion after an end/release commit as best-effort cleanup that cannot fail the completed action.\"},{\"subject\":\"crash and durability guarantee\",\"kind\":\"undefined failure model\",\"text\":\"“A crash during a value write leaves either no file or the complete file” and “written to a temporary file, flushed … and then renamed into place” do not say whether crash includes host or power loss, whether directories are fsynced, or what SQLite durability settings preserve agreement between committed records and files.\",\"question\":\"What crash model must the store survive, and what file, directory, and SQLite synchronization is required before a change is acknowledged?\",\"options\":[\"Survive process and host/power crashes using file fsync, atomic rename, directory fsync, and durable SQLite commit ordering\",\"Guarantee only process-crash atomicity\",\"Rely on operating-system and SQLite defaults\"],\"default_guess\":\"Guarantee process and power-loss recovery using file and parent-directory fsync before a durable SQLite commit that names the file.\"},{\"subject\":\"scope of byte deduplication\",\"kind\":\"ambiguous rule\",\"text\":\"Rule 4 discusses “Value bytes and spooled files” and then says “Equal bytes are stored once,” while rule 2 requires a run spool with one subdirectory per run and M22 distinguishes files from different attempts.\",\"question\":\"Does store-once deduplication apply only to content-addressed values and trial fixtures, or also to spooled files across positions and runs?\",\"options\":[\"Deduplicate only durable content-addressed value and fixture bytes; spool bytes remain per run and position\",\"Deduplicate all bytes globally, including spool files\",\"Deduplicate spool bytes only within one run\"],\"default_guess\":\"Deduplicate value and fixture bytes in the content-addressed area, but keep each spooled file at its own run/attempt position.\"},{\"subject\":\"existing digest path with unequal content\",\"kind\":\"missing collision handling\",\"text\":\"“Equal bytes are stored once” and “a completed file a record names is never overwritten” do not say what happens when a digest-named file already exists but its bytes or size differ from the bytes being stored.\",\"question\":\"Must the existing file be revalidated, and is a digest collision or corrupted existing blob a refusal, an internal error, or grounds to replace the file?\",\"options\":[\"Verify the existing file; on mismatch fail closed as store corruption and never overwrite it\",\"Trust an existing digest path without rereading it\",\"Replace an unreferenced mismatch but stop on a referenced mismatch\"],\"default_guess\":\"Verify size and digest of the existing regular file and fail closed as store corruption without overwriting it on any mismatch.\"},{\"subject\":\"reading named content after publication\",\"kind\":\"missing integrity rule\",\"text\":\"The text requires digest and size checking before rename but does not say whether a value, fixture, or spooled file is checked again when read, or what happens if named bytes are missing or changed later.\",\"question\":\"How does the kernel handle a missing, truncated, or digest-mismatching file that a durable record names?\",\"options\":[\"Verify on every read and return an internal store-corruption failure without using the bytes\",\"Verify only during startup\",\"Assume published files never change and use whatever is present\"],\"default_guess\":\"Verify type, size, and digest on every open before serving or executing with the bytes; fail closed and stop after reporting internal error if they disagree.\"},{\"subject\":\"SQLite database initialization and compatibility\",\"kind\":\"missing startup behavior\",\"text\":\"“The data directory holds one SQLite database with every kernel record” does not specify behavior for an empty database, a corrupt database, an unknown schema version, or a store written by another kernel release.\",\"question\":\"When may the schema be initialized or migrated, and what startup result applies to corruption and unsupported schema versions?\",\"options\":[\"Initialize only a new empty store, accept explicitly supported schema versions, and otherwise refuse start without mutation\",\"Automatically migrate every older schema at startup\",\"Recreate an unreadable or incompatible database\"],\"default_guess\":\"Initialize only a new store and refuse startup without mutation for corruption or an unsupported schema version; migrations require an explicit accepted release rule.\"},{\"subject\":\"startup operation order\",\"kind\":\"undefined precedence\",\"text\":\"A18 says the kernel locks, validates privacy and links, cleans temporary and unreferenced files, and removes obsolete spool directories “on start”; A14 also performs effect recovery and run advancement before opening the surface, but no total order among these steps is given.\",\"question\":\"In what exact order are locking, layout validation, privacy and link checks, database opening, orphan cleanup, EffectAttempt recovery, run derivation, run advancement, and surface opening performed, and which failure is reported first?\",\"options\":[\"Define one fixed startup phase order with validation before mutation and cleanup before recovery\",\"Perform recovery before cleanup\",\"Permit implementation-defined order provided the surface opens last\"],\"default_guess\":\"Lock first; securely validate layout and permissions; open and validate the database; clean provably unreferenced artifacts; recover attempts and runs in store order; then open the surface.\"},{\"subject\":\"unreferenced-file reachability\",\"kind\":\"undefined garbage collection\",\"text\":\"“value bytes no record names … are removed” does not define whether ‘names’ means direct references only, all references reachable through records, records of ended runs, or records whose payload is no longer externally readable.\",\"question\":\"What exact database references keep a content-addressed byte file live during startup cleanup?\",\"options\":[\"Any durable record containing the blob identity keeps it live, regardless of run state\",\"Only currently readable values and active trial fixtures keep it live\",\"Only direct references from a fixed enumerated set of tables keep it live\"],\"default_guess\":\"Define an exhaustive set of durable foreign references; a blob is live if any retained record directly or transitively names its content identity.\"}]}",
+ "set_aside": []
+}
