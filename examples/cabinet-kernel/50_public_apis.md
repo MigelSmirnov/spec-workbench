@@ -740,8 +740,8 @@ failure, nothing published.
 ### State impact
 
 Adds content-addressed bytes; writes no record. Bytes whose record never
-follows — a later failure of the caller's attempt — stay unnamed; nothing
-removes them and equal bytes reuse them (A13 rule 3).
+follows — a later failure of the caller's attempt — stay unnamed; equal bytes
+reuse them, and the next start removes them (A13 rule 3, A18 rule 4).
 
 ## `public_op:store.read_records`
 

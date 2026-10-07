@@ -99,7 +99,8 @@ worker.
    `map_index`, attempt number, port and list index, which only a retry of
    the same attempt number writes again, after a restart left that attempt
    without a record. Value bytes it published stay in the content-addressed area
-   unnamed, to be reused by equal bytes; nothing reads either.
+   unnamed, reused by equal bytes until the next start removes them (A18 rule
+   4); nothing reads either.
 4. A guarded edge delivers only when its guard port's value equals its guard
    value. An input port that can no longer receive a value because every edge into
    it is disabled, or comes from a skipped node, makes its node `skipped_by_guard`

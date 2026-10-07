@@ -58,8 +58,10 @@ or redeployment.
   submits it. Who sent it stays in that service's intake record and reaches a flow
   only as data; the kernel records the owner or agent who submitted it.
 - **Secrets** — service credentials and tokens live in the installation's
-  protected configuration; they never enter a function, a flow, a trace or an
-  answer.
+  protected configuration; the kernel never puts one into a function, a flow,
+  a trace or an answer. A service's own answer that echoes one verbatim is
+  withheld; one that carries it in another encoding cannot be recognised and
+  is protected by that answer's class (owner, 2026-10-07).
 - **Network surface** — one inbound channel, `mcp`, behind the host's reverse
   proxy. Outbound, the kernel calls microservices over their HTTP APIs.
   Brute-force protection is the proxy's, not the kernel's.

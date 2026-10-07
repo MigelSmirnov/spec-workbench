@@ -180,10 +180,9 @@ Reuses cabinet-flow decision 23, narrowed by K-16.
    kernel's text: a body that echoes the value verbatim, 2xx or not, is
    withheld and never used as an output (A09 rule 7); one that carries it in
    another encoding is not recognised, and is protected only by its class.
-   State 0's "they never enter … an answer" is the kernel's promise about
-   what it puts anywhere itself; what a service returns of its own, the
-   kernel recognises only verbatim (owner, 2026-10-06, raised by State 2
-   round 88).
+   This is State 0's promise as the owner scoped it: what the kernel puts
+   anywhere itself, and a service's own answer recognised only verbatim
+   (owner, 2026-10-06 and 2026-10-07).
 3. A function never receives a credential: its environment holds only the hash
    seed (A03) and its
    inputs are values that crossed a proven edge.
@@ -245,14 +244,16 @@ concurrent connections.
    transaction (K-17). A call that fails writes and changes no record; the only
    trace it can leave is a published file no record names, which nothing reads:
    a spooled file is replaced at its position, value bytes are reused by equal
-   bytes (rule 4). Surface requests are
+   bytes until the next start removes them (rule 4). Surface requests are
    handled one at a time in the order they arrive: one request, including the run
    advancement it causes (A13), ends before the next begins, so an approval, a
    cancellation and a resume of one run never race.
 4. Value bytes and spooled files are written to a temporary file, flushed, checked
    against their digest and size, and then renamed into place; a completed file a record names is
    never overwritten — a spooled file no record names, left by a change that
-   failed, is replaced at its position. Equal bytes are stored once. On start, temporary files and
+   failed, is replaced at its position. Equal bytes are stored once. On start, temporary files,
+   value bytes no record names (left by a failed call, so only trial fixtures
+   and named values outlive a run, K-10; owner, 2026-10-07) and
    the spool directories of runs that ended and do not keep their spool (A14) are
    removed; nothing else is. A spool directory that cannot be removed does not
    stop the start: it stays, never served, until a later start removes it.

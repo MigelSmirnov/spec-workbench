@@ -1,0 +1,90 @@
+{
+ "open_points": [
+  {
+   "subject": "effects.operation_element_conclusion",
+   "kind": "incomplete output",
+   "text": "“Its conclusion: succeeded with outputs; failed with its status ... waiting with its reason ... or not reached” omits `refused_by_owner`, `skipped_by_guard` and `upstream_failed`, although NodeExecution M23 permits those statuses and State 3 says `runs` obtains an operation element's conclusion through this operation.",
+   "question": "What conclusion does this operation return for every permitted NodeExecution status, especially `refused_by_owner`, `skipped_by_guard` and `upstream_failed`, and how must `runs` act on each?",
+   "options": [
+    "Return a distinct conclusion variant for every non-success status",
+    "Return the raw NodeExecution status and let `runs` classify it",
+    "Treat runs-owned skip and upstream records separately, but add an explicit `refused` conclusion"
+   ],
+   "default_guess": "Return the raw status plus derived outcome, with `refused_by_owner` causing run `refused`, skips remaining successful conclusions, and `upstream_failed` remaining failed."
+  },
+  {
+   "subject": "NodeExecution machine-readable detail",
+   "kind": "model/API mismatch",
+   "text": "State 5 says “Details of an element that concluded `operation_failed` ... are a closed set too, because the owner acts on each differently”, but M23 gives NodeExecution only `failure_detail`: “bounded, without secrets, when not succeeded”; unlike M07, it has no `detail_code` field.",
+   "question": "Where are `binding_stale`, `credential_unresolved`, `value_too_large`, `cleanup_failed`, `applied_outputs_unknown` and the other closed detail codes represented so callers can distinguish them from human failure text?",
+   "options": [
+    "Add a separate machine-readable detail-code field to NodeExecution and derived conclusions",
+    "Require `failure_detail` to contain exactly the closed code when one applies",
+    "Carry codes only in operation results and do not persist them in NodeExecution"
+   ],
+   "default_guess": "Add a separate optional machine-readable detail-code field and keep `failure_detail` as bounded diagnostic text."
+  },
+  {
+   "subject": "installation service identifiers at startup",
+   "kind": "missing validation",
+   "text": "`installation.load_installation` says “Checks in this order, the first failing one named” and lists its complete start checks, but does not validate service identifiers; `bindings.check_installed_instances` then iterates configured `service_id` values and may read manifest records, while A08 requires an invalid `service_id` to be refused before a path is built.",
+   "question": "Which startup operation validates configured service identifiers against `SERVICE_ID_PATTERN`, in what order, and what happens before any manifest path is constructed for an invalid identifier?",
+   "options": [
+    "`installation.load_installation` rejects invalid selected-instance and credential service identifiers",
+    "`bindings.check_installed_instances` validates each identifier before reading a manifest path",
+    "Configured identifiers are not constrained, with a separately specified safe path mapping"
+   ],
+   "default_guess": "Reject invalid configured service identifiers in `installation.load_installation` before duplicate-service and manifest checks."
+  },
+  {
+   "subject": "store.spool_file ceiling refusal",
+   "kind": "contradictory refusal effect",
+   "text": "The convention says “A refusal is decided before the operation's first store change, so it writes nothing”, while `store.spool_file` says a ceiling refusal keeps “nothing ... of any file that attempt spooled before”.",
+   "question": "Is deleting files published by earlier `spool_file` calls part of a permitted refusal, or must ceiling overflow be returned as a non-refusal result or handled by a separate cleanup operation?",
+   "options": [
+    "Make spool-ceiling overflow a result that atomically removes the attempt's files",
+    "Declare an explicit exception allowing this refusal to remove earlier attempt files",
+    "Leave earlier files unnamed until normal run-spool removal"
+   ],
+   "default_guess": "Treat ceiling overflow as a result, not a refusal, and have `store.spool_file` remove all files of that attempt as specified."
+  },
+  {
+   "subject": "content-addressed file retention",
+   "kind": "contradictory persistence",
+   "text": "K-10 says “The only files the kernel keeps beyond a run are the file fixtures of trial cases”, but `store.put_value_bytes` says “Bytes whose record never follows ... stay unnamed; nothing removes them”, and capture may publish fixture bytes before the TrialCase record change fails.",
+   "question": "Must unreferenced file bytes be removed, or are unnamed content-addressed blobs an explicit exception to the rule that only trial-case fixtures survive a run?",
+   "options": [
+    "Remove unreferenced file bytes when the caller's record change fails",
+    "Garbage-collect unreferenced content-addressed files at startup",
+    "Explicitly permit permanent unnamed blobs as an exception to K-10"
+   ],
+   "default_guess": "Remove newly published file bytes when the associated record change fails, unless equal bytes were already referenced."
+  },
+  {
+   "subject": "runs.resume_run observable effect",
+   "kind": "contradictory effect",
+   "text": "`runs.resume_run` says “Elements waiting on an unreachable service are sent again”, while A14 and its own dependency on `effects.reach_operation_element` allow a resumed element to fail a pre-send check or wait for approval after a grant was revoked, with no request sent.",
+   "question": "Does resume promise an HTTP send for every `service_unreachable` element, or only that each element is reached again through pre-send and authority checks?",
+   "options": [
+    "Promise only that every unreachable element is reached again",
+    "Skip elements that cannot currently send and leave their original wait",
+    "Make resume fail as a whole if any selected element cannot send"
+   ],
+   "default_guess": "Promise only that each unreachable element is reached again in order; its new conclusion may be sent, failed before send, or awaiting approval."
+  },
+  {
+   "subject": "store.remove_run_spool failure contract",
+   "kind": "ambiguous error propagation",
+   "text": "`store.remove_run_spool` lists “`internal_error` on an I/O failure”, but the conventions say “its caller does not fail the request on it”, and `runs.recover_running_runs` says such a failure stays “unreported”.",
+   "question": "What exact result does `remove_run_spool` return on removal failure, and how must each caller acknowledge, suppress or report that result while still returning success?",
+   "options": [
+    "Return a non-error `removal_deferred` result that callers ignore operationally",
+    "Return `internal_error`, which callers must explicitly catch and suppress",
+    "Return `Done` regardless and report the failure only to the host log"
+   ],
+   "default_guess": "Return a non-fatal `removal_deferred` result so callers can complete successfully and startup can retry later."
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"effects.operation_element_conclusion\",\"kind\":\"incomplete output\",\"text\":\"“Its conclusion: succeeded with outputs; failed with its status ... waiting with its reason ... or not reached” omits `refused_by_owner`, `skipped_by_guard` and `upstream_failed`, although NodeExecution M23 permits those statuses and State 3 says `runs` obtains an operation element's conclusion through this operation.\",\"question\":\"What conclusion does this operation return for every permitted NodeExecution status, especially `refused_by_owner`, `skipped_by_guard` and `upstream_failed`, and how must `runs` act on each?\",\"options\":[\"Return a distinct conclusion variant for every non-success status\",\"Return the raw NodeExecution status and let `runs` classify it\",\"Treat runs-owned skip and upstream records separately, but add an explicit `refused` conclusion\"],\"default_guess\":\"Return the raw status plus derived outcome, with `refused_by_owner` causing run `refused`, skips remaining successful conclusions, and `upstream_failed` remaining failed.\"},{\"subject\":\"NodeExecution machine-readable detail\",\"kind\":\"model/API mismatch\",\"text\":\"State 5 says “Details of an element that concluded `operation_failed` ... are a closed set too, because the owner acts on each differently”, but M23 gives NodeExecution only `failure_detail`: “bounded, without secrets, when not succeeded”; unlike M07, it has no `detail_code` field.\",\"question\":\"Where are `binding_stale`, `credential_unresolved`, `value_too_large`, `cleanup_failed`, `applied_outputs_unknown` and the other closed detail codes represented so callers can distinguish them from human failure text?\",\"options\":[\"Add a separate machine-readable detail-code field to NodeExecution and derived conclusions\",\"Require `failure_detail` to contain exactly the closed code when one applies\",\"Carry codes only in operation results and do not persist them in NodeExecution\"],\"default_guess\":\"Add a separate optional machine-readable detail-code field and keep `failure_detail` as bounded diagnostic text.\"},{\"subject\":\"installation service identifiers at startup\",\"kind\":\"missing validation\",\"text\":\"`installation.load_installation` says “Checks in this order, the first failing one named” and lists its complete start checks, but does not validate service identifiers; `bindings.check_installed_instances` then iterates configured `service_id` values and may read manifest records, while A08 requires an invalid `service_id` to be refused before a path is built.\",\"question\":\"Which startup operation validates configured service identifiers against `SERVICE_ID_PATTERN`, in what order, and what happens before any manifest path is constructed for an invalid identifier?\",\"options\":[\"`installation.load_installation` rejects invalid selected-instance and credential service identifiers\",\"`bindings.check_installed_instances` validates each identifier before reading a manifest path\",\"Configured identifiers are not constrained, with a separately specified safe path mapping\"],\"default_guess\":\"Reject invalid configured service identifiers in `installation.load_installation` before duplicate-service and manifest checks.\"},{\"subject\":\"store.spool_file ceiling refusal\",\"kind\":\"contradictory refusal effect\",\"text\":\"The convention says “A refusal is decided before the operation's first store change, so it writes nothing”, while `store.spool_file` says a ceiling refusal keeps “nothing ... of any file that attempt spooled before”.\",\"question\":\"Is deleting files published by earlier `spool_file` calls part of a permitted refusal, or must ceiling overflow be returned as a non-refusal result or handled by a separate cleanup operation?\",\"options\":[\"Make spool-ceiling overflow a result that atomically removes the attempt's files\",\"Declare an explicit exception allowing this refusal to remove earlier attempt files\",\"Leave earlier files unnamed until normal run-spool removal\"],\"default_guess\":\"Treat ceiling overflow as a result, not a refusal, and have `store.spool_file` remove all files of that attempt as specified.\"},{\"subject\":\"content-addressed file retention\",\"kind\":\"contradictory persistence\",\"text\":\"K-10 says “The only files the kernel keeps beyond a run are the file fixtures of trial cases”, but `store.put_value_bytes` says “Bytes whose record never follows ... stay unnamed; nothing removes them”, and capture may publish fixture bytes before the TrialCase record change fails.\",\"question\":\"Must unreferenced file bytes be removed, or are unnamed content-addressed blobs an explicit exception to the rule that only trial-case fixtures survive a run?\",\"options\":[\"Remove unreferenced file bytes when the caller's record change fails\",\"Garbage-collect unreferenced content-addressed files at startup\",\"Explicitly permit permanent unnamed blobs as an exception to K-10\"],\"default_guess\":\"Remove newly published file bytes when the associated record change fails, unless equal bytes were already referenced.\"},{\"subject\":\"runs.resume_run observable effect\",\"kind\":\"contradictory effect\",\"text\":\"`runs.resume_run` says “Elements waiting on an unreachable service are sent again”, while A14 and its own dependency on `effects.reach_operation_element` allow a resumed element to fail a pre-send check or wait for approval after a grant was revoked, with no request sent.\",\"question\":\"Does resume promise an HTTP send for every `service_unreachable` element, or only that each element is reached again through pre-send and authority checks?\",\"options\":[\"Promise only that every unreachable element is reached again\",\"Skip elements that cannot currently send and leave their original wait\",\"Make resume fail as a whole if any selected element cannot send\"],\"default_guess\":\"Promise only that each unreachable element is reached again in order; its new conclusion may be sent, failed before send, or awaiting approval.\"},{\"subject\":\"store.remove_run_spool failure contract\",\"kind\":\"ambiguous error propagation\",\"text\":\"`store.remove_run_spool` lists “`internal_error` on an I/O failure”, but the conventions say “its caller does not fail the request on it”, and `runs.recover_running_runs` says such a failure stays “unreported”.\",\"question\":\"What exact result does `remove_run_spool` return on removal failure, and how must each caller acknowledge, suppress or report that result while still returning success?\",\"options\":[\"Return a non-error `removal_deferred` result that callers ignore operationally\",\"Return `internal_error`, which callers must explicitly catch and suppress\",\"Return `Done` regardless and report the failure only to the host log\"],\"default_guess\":\"Return a non-fatal `removal_deferred` result so callers can complete successfully and startup can retry later.\"}]}"
+}

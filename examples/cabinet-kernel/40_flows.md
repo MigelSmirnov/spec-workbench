@@ -881,7 +881,8 @@ EffectAttempt M26 and the concluding NodeExecution M23 written by
    `capability:installation.manifest_source` — and the manifest, never the
    store.
 4. `capability:store.open_store`: the exclusive lock, private directory, no
-   symbolic link, removal of temporary files (A18 rules 1, 2, 4).
+   symbolic link, removal of temporary files and of value bytes no record
+   names (A18 rules 1, 2, 4).
 5. `capability:sandbox.probe_sandbox`: `bubblewrap` is present and one probe
    execution succeeds (A03 rule 8).
 6. `capability:effects.recover_in_flight_attempts`: every `in_flight` attempt
@@ -896,8 +897,9 @@ EffectAttempt M26 and the concluding NodeExecution M23 written by
    or waiting point and reaching again, through
    `capability:effects.reach_operation_element`, an operation element whose
    wait no longer holds and whose records do not already conclude it — an
-   attempt the owner resolved concludes from its records and is not reached
-   again (A11 rule 3) (A14 rule 5); then, as the kernel actor, advances every
+   attempt the owner resolved `applied` concludes from its records and is not
+   reached again, one resolved `not_applied` is reached again for its fresh
+   approval (A11 rule 3) (A14 rule 5); then, as the kernel actor, advances every
    run left `running`, oldest first: a function element without a concluded
    record is executed again; a `read` element without one is sent again; an
    operation element of another class with neither a concluded record nor an

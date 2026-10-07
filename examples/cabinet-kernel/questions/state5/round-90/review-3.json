@@ -1,0 +1,157 @@
+{
+ "open_points": [
+  {
+   "subject": "sandbox filesystem access",
+   "kind": "contradiction",
+   "text": "K-02 says a function has \"no filesystem beyond its input\", while A03 allows opening any path inside \"one private exchange directory\" and `sandbox.execute_function` exposes that environment to the implementation.",
+   "question": "May agent code read and write arbitrary files inside the exchange directory, or is that directory accessible only to the runner for loading code and transferring inputs and outputs?",
+   "options": [
+    "Permit bounded scratch-file access inside the exchange directory",
+    "Reject every user-code file operation, including inside the exchange directory",
+    "Expose only specifically named input and output files"
+   ],
+   "default_guess": "Reject user-code file operations; reserve the exchange directory for the runner."
+  },
+  {
+   "subject": "sandbox deterministic pseudorandomness",
+   "kind": "contradiction",
+   "text": "K-02 says a function has \"no randomness\", while A03 says \"random.Random(seed) with an explicit seed stays usable\".",
+   "question": "Is explicitly seeded pseudorandom generation part of the allowed function API, or must every randomness API be trapped?",
+   "options": [
+    "Allow explicitly seeded `random.Random` instances",
+    "Trap all pseudorandom APIs, seeded or not"
+   ],
+   "default_guess": "Allow explicitly seeded `random.Random` as the more specific sandbox rule states."
+  },
+  {
+   "subject": "authored trial-case port maps",
+   "kind": "missing validation rule",
+   "text": "`functions.add_trial_case` takes \"input values by port, optional expected outputs\" and enforces that they fit ports, but no text says whether either map must contain exactly the contract's ports or what happens to extra, missing, or partial expected-output entries.",
+   "question": "What key coverage is required for authored trial inputs and for expected outputs when expected outputs are present?",
+   "options": [
+    "Inputs and present expected outputs must each contain exactly all corresponding contract ports",
+    "Inputs must be exact, but expected outputs may be a subset",
+    "Missing ports are refused but extra entries are ignored",
+    "Only supplied entries are validated"
+   ],
+   "default_guess": "Require exact input-port coverage and, when expected outputs are present, exact output-port coverage; refuse extras and omissions."
+  },
+  {
+   "subject": "bindings.check_installed_instances manifest validation",
+   "kind": "ambiguous check scope",
+   "text": "The operation says an unreadable record or one \"failing a check of the record itself (A08 rule 5)\" stops start, but A08 rule 5 mixes service-record checks, operation-specific checks, proposal-port checks and instance checks, while this operation is given no operation or proposal ports.",
+   "question": "Exactly which A08 checks are performed for each manifest during startup, and are individual capability entries validated when no binding proposal identifies one?",
+   "options": [
+    "Check only the service envelope, capability-name uniqueness and selected-instance headers needed for credential collision checks",
+    "Validate every capability's intrinsic effect, route and idempotency syntax, but not proposal-port-dependent checks",
+    "Run the complete A08 proposal validation against every capability using some inferred ports"
+   ],
+   "default_guess": "Check the service envelope, duplicate capability names and the selected instance facts needed for credential-header collision; leave operation-specific validation to proposal and send checks."
+  },
+  {
+   "subject": "manifest_location and manifest_revision access",
+   "kind": "missing operation semantics",
+   "text": "The manifest is read from `<manifest_location>/<service_id>.json` \"at the configured `manifest_revision`\", but no operation defines how a filesystem location is read at a repository revision or what constitutes an absent or unreadable revision.",
+   "question": "How does `bindings` obtain a manifest file at `manifest_revision`, and how are a missing repository, missing revision, dirty working tree or non-repository location classified?",
+   "options": [
+    "Read Git objects directly at the named revision",
+    "Require `manifest_location` to already be checked out at that revision and verify it",
+    "Treat `manifest_revision` as metadata and read current filesystem files",
+    "Use a pre-materialized immutable snapshot directory selected by the installation"
+   ],
+   "default_guess": "Read the file directly from the repository object at the configured Git revision without changing the working tree."
+  },
+  {
+   "subject": "MCP entrance wire contract",
+   "kind": "missing external protocol",
+   "text": "The surface is described only as a fixed set of operations \"over `mcp`\" listening at `mcp_listen_address`; the MCP transport, protocol version, endpoint, session behavior, token carrier and mapping of refusal pairs to MCP results or errors are not fixed.",
+   "question": "What exact MCP wire protocol does `surface.serve_kernel` expose, and where is the required owner or agent token carried?",
+   "options": [
+    "Streamable HTTP MCP at a fixed path with an Authorization bearer token",
+    "Streamable HTTP MCP with the token inside each tool input",
+    "Legacy HTTP/SSE MCP",
+    "Another explicitly versioned MCP transport"
+   ],
+   "default_guess": "Use version-pinned Streamable HTTP MCP at `/mcp`, with the token in the Authorization bearer header and refusal pairs returned as typed tool results."
+  },
+  {
+   "subject": "store filesystem privacy and symlinks",
+   "kind": "vague start check",
+   "text": "`store.open_store` requires a \"private directory\" and \"no symbolic link anywhere\", but the exact required owner and permission bits, whether existing children are checked recursively, and whether the data-directory path's ancestor components are included are not stated.",
+   "question": "What exact ownership, mode and symlink checks must `open_store` perform on the data directory, its path components and existing contents?",
+   "options": [
+    "Require the root and all managed descendants to be owned by the kernel user with no group/other permissions, and reject symlinks in every path component",
+    "Check only the data-directory entry and the files opened by the store",
+    "Require only that group/other users cannot write"
+   ],
+   "default_guess": "Require kernel-user ownership and no group/other permission bits on the data directory and all managed contents, opening every path component without following symlinks."
+  },
+  {
+   "subject": "opening an existing store",
+   "kind": "missing lifecycle/error behavior",
+   "text": "`store.open_store` says the database schema and areas are created \"when absent\", but says nothing about an existing database with an older or newer schema, a partially initialized layout, unknown files, or database corruption.",
+   "question": "What must startup do with incompatible, incomplete or corrupt existing store state, and are schema migrations part of this kernel?",
+   "options": [
+    "Refuse startup without modifying the store",
+    "Automatically migrate recognized older schemas transactionally",
+    "Recreate missing structures while preserving recognized records",
+    "Treat every such condition as `internal_error` and stop"
+   ],
+   "default_guess": "Validate a release-specific store format and refuse startup without modification when it is incompatible or corrupt; perform no implicit migration."
+  },
+  {
+   "subject": "HTTP TLS verification",
+   "kind": "vague security behavior",
+   "text": "A09 states only that \"TLS is verified for `https`\"; it does not identify trust anchors, hostname-verification rules, minimum TLS version, or whether host proxy/custom-CA settings may affect verification.",
+   "question": "What exact TLS trust and verification policy must `service_invoker` use?",
+   "options": [
+    "Use the host system trust store with standard hostname verification and ignore proxy variables",
+    "Use a CA bundle pinned by the kernel release",
+    "Allow installation-configured trust anchors",
+    "Use the HTTP library's unrestricted defaults"
+   ],
+   "default_guess": "Use the host system trust store with standard hostname verification, a release-fixed minimum TLS version, and no environment-based proxy or CA overrides."
+  },
+  {
+   "subject": "HTTP header value encoding",
+   "kind": "missing wire encoding",
+   "text": "Required-header values are sent \"verbatim\", and credential values may be any non-empty UTF-8 text without control characters, but the byte encoding or allowable character repertoire for HTTP field values is not fixed.",
+   "question": "How are non-ASCII required-header or credential values encoded on the wire, and should values unsupported by that encoding be refused at startup or request preparation?",
+   "options": [
+    "Restrict all configured header values to visible ASCII",
+    "Encode header values as UTF-8 bytes",
+    "Permit ISO-8859-1 field values",
+    "Use the selected HTTP library's encoding behavior"
+   ],
+   "default_guess": "Restrict required-header and credential values to visible ASCII and refuse other values."
+  },
+  {
+   "subject": "multipart port names",
+   "kind": "missing request-construction rule",
+   "text": "Multipart parts use `Content-Disposition: form-data; name=\"<port>\"` and file parts add `filename=\"<port>\"`, while port names have no character restriction or escaping rule for quoted MIME parameters.",
+   "question": "How are quotes, backslashes, non-ASCII characters and control characters in binding port names represented in multipart `name` and `filename` parameters?",
+   "options": [
+    "Reject multipart bindings whose port names are not a fixed safe ASCII token",
+    "Escape quoted-string characters according to MIME rules",
+    "Use RFC 5987 extended parameters for non-ASCII names",
+    "Insert port names verbatim"
+   ],
+   "default_guess": "Reject multipart bindings unless every part name is a conservative visible-ASCII token requiring no quoting escapes."
+  },
+  {
+   "subject": "unreferenced content-addressed bytes",
+   "kind": "contradiction",
+   "text": "K-10 says \"The only files the kernel keeps beyond a run are the file fixtures of trial cases\", while `store.put_value_bytes` says bytes whose record never follows \"stay unnamed; nothing removes them\"; a captured file copied before a later failed case-record transaction can therefore remain without being a trial-case fixture.",
+   "question": "Must unreferenced content-addressed bytes be retained forever, garbage-collected, or removed when the caller's later record change fails?",
+   "options": [
+    "Retain unnamed bytes forever as State 5 states",
+    "Remove bytes when the creating operation fails and no record references them",
+    "Garbage-collect unreferenced bytes at startup",
+    "Treat published bytes as fixtures even without a TrialCase record"
+   ],
+   "default_guess": "Retain them as inaccessible garbage, following the explicit State 5 store behavior."
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"sandbox filesystem access\",\"kind\":\"contradiction\",\"text\":\"K-02 says a function has \\\"no filesystem beyond its input\\\", while A03 allows opening any path inside \\\"one private exchange directory\\\" and `sandbox.execute_function` exposes that environment to the implementation.\",\"question\":\"May agent code read and write arbitrary files inside the exchange directory, or is that directory accessible only to the runner for loading code and transferring inputs and outputs?\",\"options\":[\"Permit bounded scratch-file access inside the exchange directory\",\"Reject every user-code file operation, including inside the exchange directory\",\"Expose only specifically named input and output files\"],\"default_guess\":\"Reject user-code file operations; reserve the exchange directory for the runner.\"},{\"subject\":\"sandbox deterministic pseudorandomness\",\"kind\":\"contradiction\",\"text\":\"K-02 says a function has \\\"no randomness\\\", while A03 says \\\"random.Random(seed) with an explicit seed stays usable\\\".\",\"question\":\"Is explicitly seeded pseudorandom generation part of the allowed function API, or must every randomness API be trapped?\",\"options\":[\"Allow explicitly seeded `random.Random` instances\",\"Trap all pseudorandom APIs, seeded or not\"],\"default_guess\":\"Allow explicitly seeded `random.Random` as the more specific sandbox rule states.\"},{\"subject\":\"authored trial-case port maps\",\"kind\":\"missing validation rule\",\"text\":\"`functions.add_trial_case` takes \\\"input values by port, optional expected outputs\\\" and enforces that they fit ports, but no text says whether either map must contain exactly the contract's ports or what happens to extra, missing, or partial expected-output entries.\",\"question\":\"What key coverage is required for authored trial inputs and for expected outputs when expected outputs are present?\",\"options\":[\"Inputs and present expected outputs must each contain exactly all corresponding contract ports\",\"Inputs must be exact, but expected outputs may be a subset\",\"Missing ports are refused but extra entries are ignored\",\"Only supplied entries are validated\"],\"default_guess\":\"Require exact input-port coverage and, when expected outputs are present, exact output-port coverage; refuse extras and omissions.\"},{\"subject\":\"bindings.check_installed_instances manifest validation\",\"kind\":\"ambiguous check scope\",\"text\":\"The operation says an unreadable record or one \\\"failing a check of the record itself (A08 rule 5)\\\" stops start, but A08 rule 5 mixes service-record checks, operation-specific checks, proposal-port checks and instance checks, while this operation is given no operation or proposal ports.\",\"question\":\"Exactly which A08 checks are performed for each manifest during startup, and are individual capability entries validated when no binding proposal identifies one?\",\"options\":[\"Check only the service envelope, capability-name uniqueness and selected-instance headers needed for credential collision checks\",\"Validate every capability's intrinsic effect, route and idempotency syntax, but not proposal-port-dependent checks\",\"Run the complete A08 proposal validation against every capability using some inferred ports\"],\"default_guess\":\"Check the service envelope, duplicate capability names and the selected instance facts needed for credential-header collision; leave operation-specific validation to proposal and send checks.\"},{\"subject\":\"manifest_location and manifest_revision access\",\"kind\":\"missing operation semantics\",\"text\":\"The manifest is read from `<manifest_location>/<service_id>.json` \\\"at the configured `manifest_revision`\\\", but no operation defines how a filesystem location is read at a repository revision or what constitutes an absent or unreadable revision.\",\"question\":\"How does `bindings` obtain a manifest file at `manifest_revision`, and how are a missing repository, missing revision, dirty working tree or non-repository location classified?\",\"options\":[\"Read Git objects directly at the named revision\",\"Require `manifest_location` to already be checked out at that revision and verify it\",\"Treat `manifest_revision` as metadata and read current filesystem files\",\"Use a pre-materialized immutable snapshot directory selected by the installation\"],\"default_guess\":\"Read the file directly from the repository object at the configured Git revision without changing the working tree.\"},{\"subject\":\"MCP entrance wire contract\",\"kind\":\"missing external protocol\",\"text\":\"The surface is described only as a fixed set of operations \\\"over `mcp`\\\" listening at `mcp_listen_address`; the MCP transport, protocol version, endpoint, session behavior, token carrier and mapping of refusal pairs to MCP results or errors are not fixed.\",\"question\":\"What exact MCP wire protocol does `surface.serve_kernel` expose, and where is the required owner or agent token carried?\",\"options\":[\"Streamable HTTP MCP at a fixed path with an Authorization bearer token\",\"Streamable HTTP MCP with the token inside each tool input\",\"Legacy HTTP/SSE MCP\",\"Another explicitly versioned MCP transport\"],\"default_guess\":\"Use version-pinned Streamable HTTP MCP at `/mcp`, with the token in the Authorization bearer header and refusal pairs returned as typed tool results.\"},{\"subject\":\"store filesystem privacy and symlinks\",\"kind\":\"vague start check\",\"text\":\"`store.open_store` requires a \\\"private directory\\\" and \\\"no symbolic link anywhere\\\", but the exact required owner and permission bits, whether existing children are checked recursively, and whether the data-directory path's ancestor components are included are not stated.\",\"question\":\"What exact ownership, mode and symlink checks must `open_store` perform on the data directory, its path components and existing contents?\",\"options\":[\"Require the root and all managed descendants to be owned by the kernel user with no group/other permissions, and reject symlinks in every path component\",\"Check only the data-directory entry and the files opened by the store\",\"Require only that group/other users cannot write\"],\"default_guess\":\"Require kernel-user ownership and no group/other permission bits on the data directory and all managed contents, opening every path component without following symlinks.\"},{\"subject\":\"opening an existing store\",\"kind\":\"missing lifecycle/error behavior\",\"text\":\"`store.open_store` says the database schema and areas are created \\\"when absent\\\", but says nothing about an existing database with an older or newer schema, a partially initialized layout, unknown files, or database corruption.\",\"question\":\"What must startup do with incompatible, incomplete or corrupt existing store state, and are schema migrations part of this kernel?\",\"options\":[\"Refuse startup without modifying the store\",\"Automatically migrate recognized older schemas transactionally\",\"Recreate missing structures while preserving recognized records\",\"Treat every such condition as `internal_error` and stop\"],\"default_guess\":\"Validate a release-specific store format and refuse startup without modification when it is incompatible or corrupt; perform no implicit migration.\"},{\"subject\":\"HTTP TLS verification\",\"kind\":\"vague security behavior\",\"text\":\"A09 states only that \\\"TLS is verified for `https`\\\"; it does not identify trust anchors, hostname-verification rules, minimum TLS version, or whether host proxy/custom-CA settings may affect verification.\",\"question\":\"What exact TLS trust and verification policy must `service_invoker` use?\",\"options\":[\"Use the host system trust store with standard hostname verification and ignore proxy variables\",\"Use a CA bundle pinned by the kernel release\",\"Allow installation-configured trust anchors\",\"Use the HTTP library's unrestricted defaults\"],\"default_guess\":\"Use the host system trust store with standard hostname verification, a release-fixed minimum TLS version, and no environment-based proxy or CA overrides.\"},{\"subject\":\"HTTP header value encoding\",\"kind\":\"missing wire encoding\",\"text\":\"Required-header values are sent \\\"verbatim\\\", and credential values may be any non-empty UTF-8 text without control characters, but the byte encoding or allowable character repertoire for HTTP field values is not fixed.\",\"question\":\"How are non-ASCII required-header or credential values encoded on the wire, and should values unsupported by that encoding be refused at startup or request preparation?\",\"options\":[\"Restrict all configured header values to visible ASCII\",\"Encode header values as UTF-8 bytes\",\"Permit ISO-8859-1 field values\",\"Use the selected HTTP library's encoding behavior\"],\"default_guess\":\"Restrict required-header and credential values to visible ASCII and refuse other values.\"},{\"subject\":\"multipart port names\",\"kind\":\"missing request-construction rule\",\"text\":\"Multipart parts use `Content-Disposition: form-data; name=\\\"<port>\\\"` and file parts add `filename=\\\"<port>\\\"`, while port names have no character restriction or escaping rule for quoted MIME parameters.\",\"question\":\"How are quotes, backslashes, non-ASCII characters and control characters in binding port names represented in multipart `name` and `filename` parameters?\",\"options\":[\"Reject multipart bindings whose port names are not a fixed safe ASCII token\",\"Escape quoted-string characters according to MIME rules\",\"Use RFC 5987 extended parameters for non-ASCII names\",\"Insert port names verbatim\"],\"default_guess\":\"Reject multipart bindings unless every part name is a conservative visible-ASCII token requiring no quoting escapes.\"},{\"subject\":\"unreferenced content-addressed bytes\",\"kind\":\"contradiction\",\"text\":\"K-10 says \\\"The only files the kernel keeps beyond a run are the file fixtures of trial cases\\\", while `store.put_value_bytes` says bytes whose record never follows \\\"stay unnamed; nothing removes them\\\"; a captured file copied before a later failed case-record transaction can therefore remain without being a trial-case fixture.\",\"question\":\"Must unreferenced content-addressed bytes be retained forever, garbage-collected, or removed when the caller's later record change fails?\",\"options\":[\"Retain unnamed bytes forever as State 5 states\",\"Remove bytes when the creating operation fails and no record references them\",\"Garbage-collect unreferenced bytes at startup\",\"Treat published bytes as fixtures even without a TrialCase record\"],\"default_guess\":\"Retain them as inaccessible garbage, following the explicit State 5 store behavior.\"}]}"
+}
