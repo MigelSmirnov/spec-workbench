@@ -402,8 +402,9 @@ and ResourceBounds M04 cross into `module:sandbox` and an outcome with outputs
 comes back; per operation element `module:runs` passes to `module:effects` the
 run id, the pinned version, that the run has not ended, and the element's
 inputs; ManifestOperation M10 crosses from `module:bindings` to
-`module:service_invoker`; the response's outputs come back as StoredValues of
-the binding's declared class; NodeExecution M23 records and WaitingPoint M20
+`module:service_invoker`; the response's value outputs come back as
+StoredValues and its file outputs as SpooledFiles M22, each of the binding's
+declared class; NodeExecution M23 records and WaitingPoint M20
 records are the trace and the rest state.
 
 ### Steps
