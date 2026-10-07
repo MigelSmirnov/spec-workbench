@@ -639,7 +639,7 @@ An open store holding the exclusive lock.
 ### Observable effect
 
 The store's own temporary files — those it writes before a rename (A18 rule 4)
-— are removed, and nothing else is; the database schema, the
+— and the value bytes no record names are removed, and nothing else is; the database schema, the
 content-addressed area and the spool area are created inside the data
 directory when absent. A failed check creates and removes nothing.
 

@@ -1,0 +1,215 @@
+{
+ "open_points": [
+  {
+   "subject": "credential header value encoding",
+   "kind": "unsupported allowed value",
+   "text": "“its content decoded as UTF-8, without one trailing newline, is the value” and “A resolved value is added as that header” allow non-ASCII Unicode, but no wire encoding or refusal rule is given for such a header value",
+   "question": "How is a valid UTF-8 credential containing non-ASCII characters represented in an HTTP header, or must it be refused before sending?",
+   "options": [
+    "Require an ASCII credential value",
+    "Define a specific header-value byte encoding",
+    "Permit UTF-8 header bytes"
+   ],
+   "default_guess": "Require printable ASCII and report credential_unresolved otherwise",
+   "unit": "A17"
+  },
+  {
+   "subject": "credential-header collision start check",
+   "kind": "missing validation scope",
+   "text": "“an installation whose credential header has ... the name of a required header, or of a header the kernel sets itself ... refuses to start” does not say which manifest records and selected instances startup must successfully read to perform that check",
+   "question": "Which services and manifest instance records are examined at startup, and does an absent, malformed or unreadable record stop startup or defer the issue until proposal or send?",
+   "options": [
+    "Validate every configured credential against every selected instance and fail startup if any needed manifest record cannot be read",
+    "Validate only records that are readable and defer missing records to proposal or send",
+    "Check only collisions with kernel-set headers at startup and required-header collisions at send"
+   ],
+   "default_guess": "Validate every configured credential against its selected instance at startup and refuse startup if that instance record cannot be read",
+   "unit": "A17"
+  },
+  {
+   "subject": "selected instance configuration",
+   "kind": "undefined invalid reference",
+   "text": "“the selected manifest instance name of each service it selects one for” and “The instance of every service is the one the installation selects” do not say what happens when the configured instance name is absent from the manifest",
+   "question": "Does an unknown selected instance name refuse kernel startup, count as no selected instance during proposal and send, or count as an instance with a missing address?",
+   "options": [
+    "Refuse startup",
+    "Treat it as no selected instance",
+    "Treat it as instance_address_missing"
+   ],
+   "default_guess": "Refuse startup because the installation names an instance that does not exist",
+   "unit": "A17"
+  },
+  {
+   "subject": "A17 startup validation precedence",
+   "kind": "unspecified check order",
+   "text": "A17 says the kernel “refuses to start” for an invalid configuration path, file type, symlink, ownership, permissions, credential header name and other installation faults, but gives no order when several fail",
+   "question": "In what fixed order are A17's startup checks performed, and which failure is reported when more than one condition fails?",
+   "options": [
+    "Use the textual order of A17 rule 1",
+    "Define a separate complete startup-check order",
+    "Report all startup failures together"
+   ],
+   "default_guess": "Use the textual order of A17 rule 1 and report the first failure",
+   "unit": "A17"
+  },
+  {
+   "subject": "data-directory creation",
+   "kind": "missing lifecycle rule",
+   "text": "“At start it takes an exclusive lock in the data directory” and “The directory and everything in it are private ...; the kernel refuses to start otherwise” do not state whether an absent data directory is created or refused",
+   "question": "What happens when the configured data directory does not exist?",
+   "options": [
+    "Create it with private permissions",
+    "Refuse startup",
+    "Require an explicit initialization operation"
+   ],
+   "default_guess": "Create it with mode 0700 before taking the lock",
+   "unit": "A18"
+  },
+  {
+   "subject": "exclusive data-directory lock",
+   "kind": "undefined crash behavior",
+   "text": "“At start it takes an exclusive lock in the data directory; a second process on the same directory refuses to start” does not define whether the lock is an OS-held advisory lock or a persistent marker, nor how a lock left by a crashed process is treated",
+   "question": "What exact lock establishes exclusivity, and may the next kernel start immediately after the prior process crashes?",
+   "options": [
+    "Use an OS advisory lock released automatically on process death",
+    "Use an atomic lock file and remove stale locks after verifying the process",
+    "Treat any existing lock marker as a startup refusal"
+   ],
+   "default_guess": "Use an OS advisory exclusive lock held for the process lifetime",
+   "unit": "A18"
+  },
+  {
+   "subject": "private data-directory invariant",
+   "kind": "vague refusal condition",
+   "text": "“The directory and everything in it are private to the kernel's user; the kernel refuses to start otherwise” does not define the required owner, permission bits, allowed file types or treatment of hard links",
+   "question": "Exactly which ownership, mode, file-type and link-count conditions must every existing data-directory entry satisfy?",
+   "options": [
+    "Require current-user ownership and no group or other permission bits",
+    "Require only that group and others cannot read or write",
+    "Also reject hard-linked files and every unexpected non-regular file"
+   ],
+   "default_guess": "Require current-user ownership, no group or other permission bits, expected regular-file or directory types only, and reject hard links to managed files",
+   "unit": "A18"
+  },
+  {
+   "subject": "filesystem and SQLite crash durability",
+   "kind": "missing atomicity protocol",
+   "text": "“written to a temporary file, flushed, checked ... and then renamed into place” and “one transaction” do not state directory fsync ordering or SQLite durability settings needed to prevent a committed record from naming a file lost after a crash",
+   "question": "What durability sequence makes publication of a file and commitment of its naming database record crash-consistent?",
+   "options": [
+    "Fsync the file and containing directory before committing a fully durable SQLite transaction",
+    "Rely on rename and SQLite defaults",
+    "Permit startup repair to remove records whose files are absent"
+   ],
+   "default_guess": "Fsync the temporary file, rename it, fsync the containing directory, then commit SQLite with full durability",
+   "unit": "A18"
+  },
+  {
+   "subject": "store-call transaction boundaries during run advancement",
+   "kind": "unspecified atomic grouping",
+   "text": "“Every change is one call to the store module and one transaction inside it” does not say which run facts outside A11's explicitly grouped effect outcome must be written together: a NodeExecution, produced StoredValues, waiting points, run status, outputs and end state",
+   "question": "What is the complete atomic store-call boundary for each function conclusion, read-operation conclusion, skip, upstream failure, mapped-list delivery, wait transition and run-end transition?",
+   "options": [
+    "Write each element conclusion and all facts caused directly by it in one transaction, with run summary changes in a later derivable transaction",
+    "Write the entire advancement request in one transaction",
+    "Specify a separate transaction for every record"
+   ],
+   "default_guess": "Atomically write each element's conclusion with all values and files it names, then write derivable run status, waiting points and finalization in separate store calls",
+   "unit": "A18"
+  },
+  {
+   "subject": "surface request serialization order",
+   "kind": "undefined ordering point",
+   "text": "“Surface requests are handled one at a time in the order they arrive” does not define the arrival or enqueue point when MCP requests are received concurrently or in different transport frames",
+   "question": "At what event is a request assigned its immutable position in the single processing order?",
+   "options": [
+    "When the complete MCP message has been parsed from the transport",
+    "When its first transport byte arrives",
+    "When schema validation completes"
+   ],
+   "default_guess": "Assign order when the complete request message is received and placed in the kernel's single FIFO queue",
+   "unit": "A18"
+  },
+  {
+   "subject": "ready-node eligibility",
+   "kind": "self-contradictory scheduler definition",
+   "text": "“a node is ready when every input port holds its value” does not exclude a node that already concluded or is waiting, while “a concluded element is never executed again” and resting requires waiting elements not to be repeatedly selected",
+   "question": "Which nodes are eligible for next-node selection after inputs are present, especially concluded nodes, ordinary waiting nodes and mapped nodes with a mixture of concluded, waiting and runnable elements?",
+   "options": [
+    "Exclude concluded and waiting ordinary nodes; a mapped node is eligible only if it has at least one unconcluded non-waiting element",
+    "Select every input-complete node and make selection of a concluded or waiting node a no-op",
+    "Treat waiting nodes as ready only in the request authorized to move that particular wait"
+   ],
+   "default_guess": "Exclude concluded nodes and waits not moved by the current request; select a mapped node only when at least one element can run in the current pass",
+   "unit": "A13"
+  },
+  {
+   "subject": "waiting element executability",
+   "kind": "contradictory statement",
+   "text": "“A waiting element can still execute, so M19's ‘no node can run any more’ holds only when nothing waits” conflicts with rules 1, 5 and 8, under which approval, unknown-outcome and unreachable-service waits do not execute until the corresponding approve, resolve or resume action",
+   "question": "Does this sentence mean that a waiting element is currently executable, potentially executable only in a later authorized request, or not executable while it waits?",
+   "options": [
+    "It is not executable until the matching request moves its wait",
+    "It remains scheduler-ready but performs no work",
+    "Only service_unreachable waits are executable during resume"
+   ],
+   "default_guess": "Interpret it as potentially executable later; while waiting it is not runnable in the current advancement",
+   "unit": "A13"
+  },
+  {
+   "subject": "ordering of propagation versus runnable execution",
+   "kind": "unspecified precedence",
+   "text": "A13 defines the smallest ready node as next and separately says nodes whose inputs can no longer arrive conclude `skipped_by_guard` or `upstream_failed`, but does not say whether all newly implied non-execution records are written before another ready node executes",
+   "question": "When one advancement step makes some nodes non-executable while other nodes are ready, are skip and upstream-failure conclusions propagated to a fixed point first, or interleaved with ready-node execution; and what determines their relative store order?",
+   "options": [
+    "Propagate all implied conclusions to a fixed point before selecting another runnable node",
+    "Execute the smallest ready node first and propagate only when no runnable node remains",
+    "Treat runnable and implied-conclusion nodes as one ordered set by node_id and map_index"
+   ],
+   "default_guess": "Propagate immediately after each conclusion, writing all newly non-executable records in A15 order before selecting the next runnable node",
+   "unit": "A13"
+  },
+  {
+   "subject": "multi-port validation failure",
+   "kind": "unspecified first failure",
+   "text": "“A value is validated against the source port when it is produced and against the target port before it enters a node; a violation concludes the producing node, or the receiving node, `contract_violation`” gives no order when several output or input ports violate in the same execution",
+   "question": "Which port's violation is the reported failure when more than one produced output or received input is invalid?",
+   "options": [
+    "Check ports by Unicode code-point name order",
+    "Check outputs in returned-object order and inputs in delivery order",
+    "Report a combined bounded failure without selecting one port"
+   ],
+   "default_guess": "Check ports by Unicode code-point name order and report the first violation",
+   "unit": "A13"
+  },
+  {
+   "subject": "mapped file-list disclosure class",
+   "kind": "unrepresentable invariant",
+   "text": "A13 says “a file list is the elements' SpooledFiles in element order ... and the reference naming it carries the list's class” and that “An empty list is named, with its class, by the one NodeExecution”, but M23 permits file inputs and outputs only as SpooledFile facts, and an empty list contains no such fact on which to carry the list-level class",
+   "question": "Where is the disclosure class of a mapped `many` file value represented, especially for an empty list and for a non-empty list whose aggregate class is higher than some individual files' classes?",
+   "options": [
+    "Add an explicit file-list reference carrying class and ordered SpooledFile identities",
+    "Store the aggregate class separately on the NodeExecution port entry",
+    "Derive it from node inputs every time, including through later receiving records"
+   ],
+   "default_guess": "Represent each `many` file port reference as an ordered file-list value with its own disclosure class, including an explicit empty list",
+   "unit": "A13"
+  },
+  {
+   "subject": "startup recovery as run advancement",
+   "kind": "cross-state contradiction",
+   "text": "State 0 K-17 says “a run advances one node at a time, inside the request that moves it”, while A13 rule 1 says “Nothing advances a run between requests, except the start-up recovery of A14 rule 5” and A14 can execute functions, resend reads and advance operation elements before the surface opens",
+   "question": "Is startup recovery an accepted exception to K-17's request-only advancement, or must recovery only reconstruct state and leave executable work for a later request?",
+   "options": [
+    "Make startup recovery an explicit exception in the earlier invariant",
+    "Recovery may derive records but may not execute nodes or send reads",
+    "Treat startup as an internal kernel request that satisfies K-17"
+   ],
+   "default_guess": "Treat startup recovery as an explicit kernel-actor request and state that exception in K-17",
+   "unit": "context"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"credential header value encoding\",\"kind\":\"unsupported allowed value\",\"text\":\"“its content decoded as UTF-8, without one trailing newline, is the value” and “A resolved value is added as that header” allow non-ASCII Unicode, but no wire encoding or refusal rule is given for such a header value\",\"question\":\"How is a valid UTF-8 credential containing non-ASCII characters represented in an HTTP header, or must it be refused before sending?\",\"options\":[\"Require an ASCII credential value\",\"Define a specific header-value byte encoding\",\"Permit UTF-8 header bytes\"],\"default_guess\":\"Require printable ASCII and report credential_unresolved otherwise\",\"unit\":\"A17\"},{\"subject\":\"credential-header collision start check\",\"kind\":\"missing validation scope\",\"text\":\"“an installation whose credential header has ... the name of a required header, or of a header the kernel sets itself ... refuses to start” does not say which manifest records and selected instances startup must successfully read to perform that check\",\"question\":\"Which services and manifest instance records are examined at startup, and does an absent, malformed or unreadable record stop startup or defer the issue until proposal or send?\",\"options\":[\"Validate every configured credential against every selected instance and fail startup if any needed manifest record cannot be read\",\"Validate only records that are readable and defer missing records to proposal or send\",\"Check only collisions with kernel-set headers at startup and required-header collisions at send\"],\"default_guess\":\"Validate every configured credential against its selected instance at startup and refuse startup if that instance record cannot be read\",\"unit\":\"A17\"},{\"subject\":\"selected instance configuration\",\"kind\":\"undefined invalid reference\",\"text\":\"“the selected manifest instance name of each service it selects one for” and “The instance of every service is the one the installation selects” do not say what happens when the configured instance name is absent from the manifest\",\"question\":\"Does an unknown selected instance name refuse kernel startup, count as no selected instance during proposal and send, or count as an instance with a missing address?\",\"options\":[\"Refuse startup\",\"Treat it as no selected instance\",\"Treat it as instance_address_missing\"],\"default_guess\":\"Refuse startup because the installation names an instance that does not exist\",\"unit\":\"A17\"},{\"subject\":\"A17 startup validation precedence\",\"kind\":\"unspecified check order\",\"text\":\"A17 says the kernel “refuses to start” for an invalid configuration path, file type, symlink, ownership, permissions, credential header name and other installation faults, but gives no order when several fail\",\"question\":\"In what fixed order are A17's startup checks performed, and which failure is reported when more than one condition fails?\",\"options\":[\"Use the textual order of A17 rule 1\",\"Define a separate complete startup-check order\",\"Report all startup failures together\"],\"default_guess\":\"Use the textual order of A17 rule 1 and report the first failure\",\"unit\":\"A17\"},{\"subject\":\"data-directory creation\",\"kind\":\"missing lifecycle rule\",\"text\":\"“At start it takes an exclusive lock in the data directory” and “The directory and everything in it are private ...; the kernel refuses to start otherwise” do not state whether an absent data directory is created or refused\",\"question\":\"What happens when the configured data directory does not exist?\",\"options\":[\"Create it with private permissions\",\"Refuse startup\",\"Require an explicit initialization operation\"],\"default_guess\":\"Create it with mode 0700 before taking the lock\",\"unit\":\"A18\"},{\"subject\":\"exclusive data-directory lock\",\"kind\":\"undefined crash behavior\",\"text\":\"“At start it takes an exclusive lock in the data directory; a second process on the same directory refuses to start” does not define whether the lock is an OS-held advisory lock or a persistent marker, nor how a lock left by a crashed process is treated\",\"question\":\"What exact lock establishes exclusivity, and may the next kernel start immediately after the prior process crashes?\",\"options\":[\"Use an OS advisory lock released automatically on process death\",\"Use an atomic lock file and remove stale locks after verifying the process\",\"Treat any existing lock marker as a startup refusal\"],\"default_guess\":\"Use an OS advisory exclusive lock held for the process lifetime\",\"unit\":\"A18\"},{\"subject\":\"private data-directory invariant\",\"kind\":\"vague refusal condition\",\"text\":\"“The directory and everything in it are private to the kernel's user; the kernel refuses to start otherwise” does not define the required owner, permission bits, allowed file types or treatment of hard links\",\"question\":\"Exactly which ownership, mode, file-type and link-count conditions must every existing data-directory entry satisfy?\",\"options\":[\"Require current-user ownership and no group or other permission bits\",\"Require only that group and others cannot read or write\",\"Also reject hard-linked files and every unexpected non-regular file\"],\"default_guess\":\"Require current-user ownership, no group or other permission bits, expected regular-file or directory types only, and reject hard links to managed files\",\"unit\":\"A18\"},{\"subject\":\"filesystem and SQLite crash durability\",\"kind\":\"missing atomicity protocol\",\"text\":\"“written to a temporary file, flushed, checked ... and then renamed into place” and “one transaction” do not state directory fsync ordering or SQLite durability settings needed to prevent a committed record from naming a file lost after a crash\",\"question\":\"What durability sequence makes publication of a file and commitment of its naming database record crash-consistent?\",\"options\":[\"Fsync the file and containing directory before committing a fully durable SQLite transaction\",\"Rely on rename and SQLite defaults\",\"Permit startup repair to remove records whose files are absent\"],\"default_guess\":\"Fsync the temporary file, rename it, fsync the containing directory, then commit SQLite with full durability\",\"unit\":\"A18\"},{\"subject\":\"store-call transaction boundaries during run advancement\",\"kind\":\"unspecified atomic grouping\",\"text\":\"“Every change is one call to the store module and one transaction inside it” does not say which run facts outside A11's explicitly grouped effect outcome must be written together: a NodeExecution, produced StoredValues, waiting points, run status, outputs and end state\",\"question\":\"What is the complete atomic store-call boundary for each function conclusion, read-operation conclusion, skip, upstream failure, mapped-list delivery, wait transition and run-end transition?\",\"options\":[\"Write each element conclusion and all facts caused directly by it in one transaction, with run summary changes in a later derivable transaction\",\"Write the entire advancement request in one transaction\",\"Specify a separate transaction for every record\"],\"default_guess\":\"Atomically write each element's conclusion with all values and files it names, then write derivable run status, waiting points and finalization in separate store calls\",\"unit\":\"A18\"},{\"subject\":\"surface request serialization order\",\"kind\":\"undefined ordering point\",\"text\":\"“Surface requests are handled one at a time in the order they arrive” does not define the arrival or enqueue point when MCP requests are received concurrently or in different transport frames\",\"question\":\"At what event is a request assigned its immutable position in the single processing order?\",\"options\":[\"When the complete MCP message has been parsed from the transport\",\"When its first transport byte arrives\",\"When schema validation completes\"],\"default_guess\":\"Assign order when the complete request message is received and placed in the kernel's single FIFO queue\",\"unit\":\"A18\"},{\"subject\":\"ready-node eligibility\",\"kind\":\"self-contradictory scheduler definition\",\"text\":\"“a node is ready when every input port holds its value” does not exclude a node that already concluded or is waiting, while “a concluded element is never executed again” and resting requires waiting elements not to be repeatedly selected\",\"question\":\"Which nodes are eligible for next-node selection after inputs are present, especially concluded nodes, ordinary waiting nodes and mapped nodes with a mixture of concluded, waiting and runnable elements?\",\"options\":[\"Exclude concluded and waiting ordinary nodes; a mapped node is eligible only if it has at least one unconcluded non-waiting element\",\"Select every input-complete node and make selection of a concluded or waiting node a no-op\",\"Treat waiting nodes as ready only in the request authorized to move that particular wait\"],\"default_guess\":\"Exclude concluded nodes and waits not moved by the current request; select a mapped node only when at least one element can run in the current pass\",\"unit\":\"A13\"},{\"subject\":\"waiting element executability\",\"kind\":\"contradictory statement\",\"text\":\"“A waiting element can still execute, so M19's ‘no node can run any more’ holds only when nothing waits” conflicts with rules 1, 5 and 8, under which approval, unknown-outcome and unreachable-service waits do not execute until the corresponding approve, resolve or resume action\",\"question\":\"Does this sentence mean that a waiting element is currently executable, potentially executable only in a later authorized request, or not executable while it waits?\",\"options\":[\"It is not executable until the matching request moves its wait\",\"It remains scheduler-ready but performs no work\",\"Only service_unreachable waits are executable during resume\"],\"default_guess\":\"Interpret it as potentially executable later; while waiting it is not runnable in the current advancement\",\"unit\":\"A13\"},{\"subject\":\"ordering of propagation versus runnable execution\",\"kind\":\"unspecified precedence\",\"text\":\"A13 defines the smallest ready node as next and separately says nodes whose inputs can no longer arrive conclude `skipped_by_guard` or `upstream_failed`, but does not say whether all newly implied non-execution records are written before another ready node executes\",\"question\":\"When one advancement step makes some nodes non-executable while other nodes are ready, are skip and upstream-failure conclusions propagated to a fixed point first, or interleaved with ready-node execution; and what determines their relative store order?\",\"options\":[\"Propagate all implied conclusions to a fixed point before selecting another runnable node\",\"Execute the smallest ready node first and propagate only when no runnable node remains\",\"Treat runnable and implied-conclusion nodes as one ordered set by node_id and map_index\"],\"default_guess\":\"Propagate immediately after each conclusion, writing all newly non-executable records in A15 order before selecting the next runnable node\",\"unit\":\"A13\"},{\"subject\":\"multi-port validation failure\",\"kind\":\"unspecified first failure\",\"text\":\"“A value is validated against the source port when it is produced and against the target port before it enters a node; a violation concludes the producing node, or the receiving node, `contract_violation`” gives no order when several output or input ports violate in the same execution\",\"question\":\"Which port's violation is the reported failure when more than one produced output or received input is invalid?\",\"options\":[\"Check ports by Unicode code-point name order\",\"Check outputs in returned-object order and inputs in delivery order\",\"Report a combined bounded failure without selecting one port\"],\"default_guess\":\"Check ports by Unicode code-point name order and report the first violation\",\"unit\":\"A13\"},{\"subject\":\"mapped file-list disclosure class\",\"kind\":\"unrepresentable invariant\",\"text\":\"A13 says “a file list is the elements' SpooledFiles in element order ... and the reference naming it carries the list's class” and that “An empty list is named, with its class, by the one NodeExecution”, but M23 permits file inputs and outputs only as SpooledFile facts, and an empty list contains no such fact on which to carry the list-level class\",\"question\":\"Where is the disclosure class of a mapped `many` file value represented, especially for an empty list and for a non-empty list whose aggregate class is higher than some individual files' classes?\",\"options\":[\"Add an explicit file-list reference carrying class and ordered SpooledFile identities\",\"Store the aggregate class separately on the NodeExecution port entry\",\"Derive it from node inputs every time, including through later receiving records\"],\"default_guess\":\"Represent each `many` file port reference as an ordered file-list value with its own disclosure class, including an explicit empty list\",\"unit\":\"A13\"},{\"subject\":\"startup recovery as run advancement\",\"kind\":\"cross-state contradiction\",\"text\":\"State 0 K-17 says “a run advances one node at a time, inside the request that moves it”, while A13 rule 1 says “Nothing advances a run between requests, except the start-up recovery of A14 rule 5” and A14 can execute functions, resend reads and advance operation elements before the surface opens\",\"question\":\"Is startup recovery an accepted exception to K-17's request-only advancement, or must recovery only reconstruct state and leave executable work for a later request?\",\"options\":[\"Make startup recovery an explicit exception in the earlier invariant\",\"Recovery may derive records but may not execute nodes or send reads\",\"Treat startup as an internal kernel request that satisfies K-17\"],\"default_guess\":\"Treat startup recovery as an explicit kernel-actor request and state that exception in K-17\",\"unit\":\"context\"}]}",
+ "set_aside": []
+}

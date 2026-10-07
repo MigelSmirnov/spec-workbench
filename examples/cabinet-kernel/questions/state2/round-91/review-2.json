@@ -1,0 +1,163 @@
+{
+ "open_points": [
+  {
+   "subject": "configuration re-read protection",
+   "kind": "contradictory checks",
+   "text": "A17 rule 1 requires the configuration path to be opened component by component without following symbolic links and the checked file to be the file read, while A16 rule 2 says, \"Exactly four checks apply to a re-read\" and lists no ownership, mode, regular-file or symbolic-link check.",
+   "question": "When the configuration is re-read before a request, must A17's file and path security checks run again, and what happens if they fail?",
+   "options": [
+    "Apply all A17 path, ownership, type and permission checks on every re-read",
+    "Apply only A16's four checks after startup",
+    "Keep using the originally opened configuration file rather than reopening its path"
+   ],
+   "default_guess": "Apply all A17 file and path security checks on every re-read and refuse every request with the uniform token refusal if they fail.",
+   "unit": "A17"
+  },
+  {
+   "subject": "credential text decoding",
+   "kind": "vague normalization",
+   "text": "A credential file's \"content decoded as UTF-8, without one trailing newline, is the value\" and a value holding \"a control character\" is refused.",
+   "question": "What exactly counts as the one trailing newline, and which Unicode characters count as control characters?",
+   "options": [
+    "Remove exactly one LF byte and reject ASCII C0 controls plus DEL",
+    "Remove one LF or one CRLF sequence and reject ASCII HTTP control characters",
+    "Apply Unicode line-ending and Unicode control-category rules"
+   ],
+   "default_guess": "Remove one terminal LF, including the LF of CRLF, then reject all remaining ASCII C0 controls and DEL.",
+   "unit": "A17"
+  },
+  {
+   "subject": "credential HTTP header value",
+   "kind": "missing wire rule",
+   "text": "The secret content may be any non-empty UTF-8 value without a control character, and \"A resolved value is added as that header\"; A09 says it is sent with no encoding rule for non-ASCII header values.",
+   "question": "How is a non-ASCII UTF-8 credential value represented on the HTTP wire, or must such a value be refused before sending?",
+   "options": [
+    "Require the credential value to be ASCII",
+    "Send its UTF-8 bytes verbatim as the field value",
+    "Allow only the HTTP field-value byte repertoire and define its encoding"
+   ],
+   "default_guess": "Require an ASCII field value and return `credential_unresolved` for any value that cannot be represented safely as an HTTP header value.",
+   "unit": "A17"
+  },
+  {
+   "subject": "selected service instance name",
+   "kind": "missing invalid-reference rule",
+   "text": "The installation stores \"the selected manifest instance name of each service it selects one for\", but no rule says what happens when the configured name is absent from that service's manifest.",
+   "question": "Does an unknown configured instance name stop kernel startup, count as no selected instance, or count as a selected instance whose address is missing?",
+   "options": [
+    "Refuse kernel startup",
+    "Treat the service as having no selected instance",
+    "Treat it as an instance with a missing address and fail only proposals and sends"
+   ],
+   "default_guess": "Refuse kernel startup because the installation purports to select a manifest instance that does not exist.",
+   "unit": "A17"
+  },
+  {
+   "subject": "installation startup check precedence",
+   "kind": "missing check order",
+   "text": "A03, A16, A17, A18 and A20 each state conditions that make the kernel refuse to start, but no text gives their order when several conditions fail.",
+   "question": "Which startup failure is reported first when, for example, the configuration permissions, token list, credential header, data directory and sandbox probe are all invalid?",
+   "options": [
+    "Define one global ordered startup-check sequence",
+    "Report all startup failures together",
+    "Allow implementation-defined ordering"
+   ],
+   "default_guess": "Use one fixed sequence: securely open and validate configuration, validate installation references and header conflicts, validate and lock the data directory/store, then validate the sandbox and release dependencies.",
+   "unit": "context"
+  },
+  {
+   "subject": "data-directory privacy",
+   "kind": "unverifiable invariant",
+   "text": "A18 says, \"The directory and everything in it are private to the kernel's user; the kernel refuses to start otherwise,\" without defining ownership, required permission bits, ACL treatment or whether parent directories are checked.",
+   "question": "What exact filesystem facts make the data directory and its contents private enough to start?",
+   "options": [
+    "Require kernel-user ownership and no group/other permission on every contained object",
+    "Require only the data directory to be owner-only and trust permissions below it",
+    "Also reject granting access through ACLs and check every path component"
+   ],
+   "default_guess": "Require the data directory and every contained object to be owned by the kernel user with no group or other permission, and reject symlinks; do not inspect ACLs unless explicitly supported.",
+   "unit": "A18"
+  },
+  {
+   "subject": "first creation of the store",
+   "kind": "missing initialization behavior",
+   "text": "A18 says the process \"takes an exclusive lock in the data directory\" and that the directory \"holds one SQLite database\" and several areas, but never says whether a missing directory, database or area is created or refused.",
+   "question": "What does startup do for a new installation whose data directory or expected store objects do not yet exist?",
+   "options": [
+    "Create the directory and complete empty store with private permissions",
+    "Require the directory to exist but create the database and subdirectories",
+    "Require an externally initialized complete store and refuse anything missing"
+   ],
+   "default_guess": "Require the configured data directory to exist securely, then create the database and required subdirectories atomically with owner-only permissions.",
+   "unit": "A18"
+  },
+  {
+   "subject": "serialization of surface requests",
+   "kind": "undefined ordering point",
+   "text": "A18 says, \"Surface requests are handled one at a time in the order they arrive,\" but does not define when concurrent MCP requests are considered to have arrived.",
+   "question": "What event establishes the total order between requests received concurrently or through different connections?",
+   "options": [
+    "Order when a complete request message is accepted by the MCP server",
+    "Order when request processing first acquires the store/executor queue",
+    "Use transport or connection order with a stated tie-breaker"
+   ],
+   "default_guess": "Assign a monotonically increasing queue position when the complete request has passed framing and entered the single process's request queue.",
+   "unit": "A18"
+  },
+  {
+   "subject": "store order within one transaction",
+   "kind": "missing total-order rule",
+   "text": "Activation identities and many deterministic listings use \"the store's one order of records\", while one store call may write several records in one transaction, such as an EffectAttempt conclusion, NodeExecution, values and an approval status change.",
+   "question": "How are multiple new records written by the same store call ordered, and do updates to existing records receive a new position?",
+   "options": [
+    "Give every inserted record a sequence in a decision-defined order; updates keep their original position",
+    "Give the whole transaction one position shared by all its records",
+    "Let table insertion order define positions independently"
+   ],
+   "default_guess": "Give each newly inserted record its own global sequence in an explicitly fixed order inside the store call, while mutations retain the entity's original position.",
+   "unit": "A18"
+  },
+  {
+   "subject": "mapped-element retry eligibility",
+   "kind": "contradictory execution rule",
+   "text": "A13 rule 2 says a mapped node runs elements that have \"no concluded record\" and that \"a concluded element is never executed again\"; A14 requires an element with a `service_unreachable` NodeExecution to be sent again on resume, and A11 requires an `outcome_unknown` element resolved `not_applied` to be sent as a new attempt.",
+   "question": "Does a prior waiting-status NodeExecution prevent another attempt, or does \"concluded\" here mean only a terminal element conclusion rather than any concluded attempt record?",
+   "options": [
+    "Only a terminal element conclusion prevents another attempt",
+    "Any NodeExecution prevents another attempt, contradicting resume and resend",
+    "List explicit retryable statuses that permit another attempt"
+   ],
+   "default_guess": "Interpret it as terminal element conclusion: `service_unreachable` and resolved-`not_applied` attempts have records but remain eligible for a later attempt.",
+   "unit": "A13"
+  },
+  {
+   "subject": "ordering non-executed conclusions against ready execution",
+   "kind": "missing scheduling precedence",
+   "text": "A13 chooses the smallest ready `node_id` to execute, while rules 4 and 5 cause nodes to conclude `skipped_by_guard` or `upstream_failed` without executing; A15 orders records only for nodes that \"become non-executable together\" and does not say when that closure is processed relative to ready nodes.",
+   "question": "After an execution changes reachability, must all newly skipped or upstream-failed nodes be recorded before another ready node executes, after ready execution is exhausted, or interleaved by one common node order?",
+   "options": [
+    "Compute and record the full non-executable closure before selecting the next ready node",
+    "Choose the smallest node among both ready and newly non-executable nodes",
+    "Execute all ready nodes before recording non-executable conclusions"
+   ],
+   "default_guess": "After each node or element conclusion, compute the non-executable closure and record it in the A15 order before selecting the next ready node.",
+   "unit": "A13"
+  },
+  {
+   "subject": "mapped node pass after a wait",
+   "kind": "undefined pass semantics",
+   "text": "A mapped node, once selected, processes every element that \"does not wait\" before another node is selected, but the text does not define the next pass after one waiting element is approved, resumed or resolved while other elements already have records.",
+   "question": "On a later request, does the mapped node scan all elements again in list order, operate only on the specifically unblocked element, or resume from the position where the earlier pass ended?",
+   "options": [
+    "Rescan all elements in list order, skipping terminal and still-waiting elements",
+    "Process only elements directly moved by the request, then rescan for newly executable elements",
+    "Resume from a persisted cursor"
+   ],
+   "default_guess": "Rescan from index 0 on every pass, skipping terminal and still-waiting elements, so no extra cursor state is required.",
+   "unit": "A13"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"configuration re-read protection\",\"kind\":\"contradictory checks\",\"text\":\"A17 rule 1 requires the configuration path to be opened component by component without following symbolic links and the checked file to be the file read, while A16 rule 2 says, \\\"Exactly four checks apply to a re-read\\\" and lists no ownership, mode, regular-file or symbolic-link check.\",\"question\":\"When the configuration is re-read before a request, must A17's file and path security checks run again, and what happens if they fail?\",\"options\":[\"Apply all A17 path, ownership, type and permission checks on every re-read\",\"Apply only A16's four checks after startup\",\"Keep using the originally opened configuration file rather than reopening its path\"],\"default_guess\":\"Apply all A17 file and path security checks on every re-read and refuse every request with the uniform token refusal if they fail.\",\"unit\":\"A17\"},{\"subject\":\"credential text decoding\",\"kind\":\"vague normalization\",\"text\":\"A credential file's \\\"content decoded as UTF-8, without one trailing newline, is the value\\\" and a value holding \\\"a control character\\\" is refused.\",\"question\":\"What exactly counts as the one trailing newline, and which Unicode characters count as control characters?\",\"options\":[\"Remove exactly one LF byte and reject ASCII C0 controls plus DEL\",\"Remove one LF or one CRLF sequence and reject ASCII HTTP control characters\",\"Apply Unicode line-ending and Unicode control-category rules\"],\"default_guess\":\"Remove one terminal LF, including the LF of CRLF, then reject all remaining ASCII C0 controls and DEL.\",\"unit\":\"A17\"},{\"subject\":\"credential HTTP header value\",\"kind\":\"missing wire rule\",\"text\":\"The secret content may be any non-empty UTF-8 value without a control character, and \\\"A resolved value is added as that header\\\"; A09 says it is sent with no encoding rule for non-ASCII header values.\",\"question\":\"How is a non-ASCII UTF-8 credential value represented on the HTTP wire, or must such a value be refused before sending?\",\"options\":[\"Require the credential value to be ASCII\",\"Send its UTF-8 bytes verbatim as the field value\",\"Allow only the HTTP field-value byte repertoire and define its encoding\"],\"default_guess\":\"Require an ASCII field value and return `credential_unresolved` for any value that cannot be represented safely as an HTTP header value.\",\"unit\":\"A17\"},{\"subject\":\"selected service instance name\",\"kind\":\"missing invalid-reference rule\",\"text\":\"The installation stores \\\"the selected manifest instance name of each service it selects one for\\\", but no rule says what happens when the configured name is absent from that service's manifest.\",\"question\":\"Does an unknown configured instance name stop kernel startup, count as no selected instance, or count as a selected instance whose address is missing?\",\"options\":[\"Refuse kernel startup\",\"Treat the service as having no selected instance\",\"Treat it as an instance with a missing address and fail only proposals and sends\"],\"default_guess\":\"Refuse kernel startup because the installation purports to select a manifest instance that does not exist.\",\"unit\":\"A17\"},{\"subject\":\"installation startup check precedence\",\"kind\":\"missing check order\",\"text\":\"A03, A16, A17, A18 and A20 each state conditions that make the kernel refuse to start, but no text gives their order when several conditions fail.\",\"question\":\"Which startup failure is reported first when, for example, the configuration permissions, token list, credential header, data directory and sandbox probe are all invalid?\",\"options\":[\"Define one global ordered startup-check sequence\",\"Report all startup failures together\",\"Allow implementation-defined ordering\"],\"default_guess\":\"Use one fixed sequence: securely open and validate configuration, validate installation references and header conflicts, validate and lock the data directory/store, then validate the sandbox and release dependencies.\",\"unit\":\"context\"},{\"subject\":\"data-directory privacy\",\"kind\":\"unverifiable invariant\",\"text\":\"A18 says, \\\"The directory and everything in it are private to the kernel's user; the kernel refuses to start otherwise,\\\" without defining ownership, required permission bits, ACL treatment or whether parent directories are checked.\",\"question\":\"What exact filesystem facts make the data directory and its contents private enough to start?\",\"options\":[\"Require kernel-user ownership and no group/other permission on every contained object\",\"Require only the data directory to be owner-only and trust permissions below it\",\"Also reject granting access through ACLs and check every path component\"],\"default_guess\":\"Require the data directory and every contained object to be owned by the kernel user with no group or other permission, and reject symlinks; do not inspect ACLs unless explicitly supported.\",\"unit\":\"A18\"},{\"subject\":\"first creation of the store\",\"kind\":\"missing initialization behavior\",\"text\":\"A18 says the process \\\"takes an exclusive lock in the data directory\\\" and that the directory \\\"holds one SQLite database\\\" and several areas, but never says whether a missing directory, database or area is created or refused.\",\"question\":\"What does startup do for a new installation whose data directory or expected store objects do not yet exist?\",\"options\":[\"Create the directory and complete empty store with private permissions\",\"Require the directory to exist but create the database and subdirectories\",\"Require an externally initialized complete store and refuse anything missing\"],\"default_guess\":\"Require the configured data directory to exist securely, then create the database and required subdirectories atomically with owner-only permissions.\",\"unit\":\"A18\"},{\"subject\":\"serialization of surface requests\",\"kind\":\"undefined ordering point\",\"text\":\"A18 says, \\\"Surface requests are handled one at a time in the order they arrive,\\\" but does not define when concurrent MCP requests are considered to have arrived.\",\"question\":\"What event establishes the total order between requests received concurrently or through different connections?\",\"options\":[\"Order when a complete request message is accepted by the MCP server\",\"Order when request processing first acquires the store/executor queue\",\"Use transport or connection order with a stated tie-breaker\"],\"default_guess\":\"Assign a monotonically increasing queue position when the complete request has passed framing and entered the single process's request queue.\",\"unit\":\"A18\"},{\"subject\":\"store order within one transaction\",\"kind\":\"missing total-order rule\",\"text\":\"Activation identities and many deterministic listings use \\\"the store's one order of records\\\", while one store call may write several records in one transaction, such as an EffectAttempt conclusion, NodeExecution, values and an approval status change.\",\"question\":\"How are multiple new records written by the same store call ordered, and do updates to existing records receive a new position?\",\"options\":[\"Give every inserted record a sequence in a decision-defined order; updates keep their original position\",\"Give the whole transaction one position shared by all its records\",\"Let table insertion order define positions independently\"],\"default_guess\":\"Give each newly inserted record its own global sequence in an explicitly fixed order inside the store call, while mutations retain the entity's original position.\",\"unit\":\"A18\"},{\"subject\":\"mapped-element retry eligibility\",\"kind\":\"contradictory execution rule\",\"text\":\"A13 rule 2 says a mapped node runs elements that have \\\"no concluded record\\\" and that \\\"a concluded element is never executed again\\\"; A14 requires an element with a `service_unreachable` NodeExecution to be sent again on resume, and A11 requires an `outcome_unknown` element resolved `not_applied` to be sent as a new attempt.\",\"question\":\"Does a prior waiting-status NodeExecution prevent another attempt, or does \\\"concluded\\\" here mean only a terminal element conclusion rather than any concluded attempt record?\",\"options\":[\"Only a terminal element conclusion prevents another attempt\",\"Any NodeExecution prevents another attempt, contradicting resume and resend\",\"List explicit retryable statuses that permit another attempt\"],\"default_guess\":\"Interpret it as terminal element conclusion: `service_unreachable` and resolved-`not_applied` attempts have records but remain eligible for a later attempt.\",\"unit\":\"A13\"},{\"subject\":\"ordering non-executed conclusions against ready execution\",\"kind\":\"missing scheduling precedence\",\"text\":\"A13 chooses the smallest ready `node_id` to execute, while rules 4 and 5 cause nodes to conclude `skipped_by_guard` or `upstream_failed` without executing; A15 orders records only for nodes that \\\"become non-executable together\\\" and does not say when that closure is processed relative to ready nodes.\",\"question\":\"After an execution changes reachability, must all newly skipped or upstream-failed nodes be recorded before another ready node executes, after ready execution is exhausted, or interleaved by one common node order?\",\"options\":[\"Compute and record the full non-executable closure before selecting the next ready node\",\"Choose the smallest node among both ready and newly non-executable nodes\",\"Execute all ready nodes before recording non-executable conclusions\"],\"default_guess\":\"After each node or element conclusion, compute the non-executable closure and record it in the A15 order before selecting the next ready node.\",\"unit\":\"A13\"},{\"subject\":\"mapped node pass after a wait\",\"kind\":\"undefined pass semantics\",\"text\":\"A mapped node, once selected, processes every element that \\\"does not wait\\\" before another node is selected, but the text does not define the next pass after one waiting element is approved, resumed or resolved while other elements already have records.\",\"question\":\"On a later request, does the mapped node scan all elements again in list order, operate only on the specifically unblocked element, or resume from the position where the earlier pass ended?\",\"options\":[\"Rescan all elements in list order, skipping terminal and still-waiting elements\",\"Process only elements directly moved by the request, then rescan for newly executable elements\",\"Resume from a persisted cursor\"],\"default_guess\":\"Rescan from index 0 on every pass, skipping terminal and still-waiting elements, so no extra cursor state is required.\",\"unit\":\"A13\"}]}",
+ "set_aside": []
+}

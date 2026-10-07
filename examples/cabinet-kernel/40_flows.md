@@ -30,7 +30,9 @@ Every record is written through `module:store`, one call and one transaction
 capability of it beyond that: reading records, value bytes, the spool, paging,
 the start. A step that says "writes" means one such store call by the module
 named; a store call that fails changes no record (A18 rules 3-4) and the request
-is answered as an internal error by `module:surface` (A16 rule 7). Every
+is answered as an internal error by `module:surface` (A16 rule 7) — except the
+removal of a run's spool after the record that ends or releases the run, which
+fails nothing and is finished by the next start (A18 rule 4). Every
 timestamp a step records comes from `module:clock`; a flow
 references the clock where a step stamps a time it names or sets a deadline.
 `module:installation` is referenced wherever its facts are read: the token list
