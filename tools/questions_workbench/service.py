@@ -301,7 +301,7 @@ def ask_round(case: Path, state: int, provider: Provider, runs: int = DEFAULT_RU
     digests = {name: hashlib.sha256(body.encode("utf-8")).hexdigest() for _, name, body in texts}
     blocking = [t for t in repeated if t["judgement"]["blocking"]]
     deferred = [t for t in repeated if t["judgement"].get("deferred_to")]
-    previous = sorted(rounds_dir(case, state).glob("round-*/summary.json"))
+    previous = sorted(rounds_dir(case, state).glob("round-*/summary.json"), key=_round_number)
     previous = [p for p in previous if p.parent != directory]
     before = json.loads(previous[-1].read_text(encoding="utf-8")) if previous else None
     clear = not blocking
@@ -342,7 +342,7 @@ def ask_round(case: Path, state: int, provider: Provider, runs: int = DEFAULT_RU
 
 def status(case: Path, state: int) -> dict[str, Any]:
     """The latest round of a state, and whether it closed the state."""
-    rounds = sorted(rounds_dir(case, state).glob("round-*/summary.json"))
+    rounds = sorted(rounds_dir(case, state).glob("round-*/summary.json"), key=_round_number)
     if not rounds:
         return {"state": state, "round": None, "closed": False, "reason": "no question round yet"}
     summary = json.loads(rounds[-1].read_text(encoding="utf-8"))
