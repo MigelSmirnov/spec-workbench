@@ -101,7 +101,7 @@ the witnesses the next section lists for it.
 | `host` | host conditions for the next start: `remove_bubblewrap()`, `set_env(name, value)` |
 | `sandbox_executions()` | per sandbox execution, observed from outside it: `network_interfaces`, `mounts` (host paths), `exchange_directory`, `processes_left` after completion |
 | `sandbox_runtime_paths()` | the host paths the release mounts read-only as the sandbox runtime |
-| `faults` | injected faults: `unconfirmed_cleanup(nth=1)` (the nth sandbox execution from now cannot confirm its cleanup), `fail_store_change(change_name)`, `crash_during_value_write()`, `place_symlink(relative_path, target)` |
+| `faults` | injected faults: `unconfirmed_cleanup(nth=1)` (the nth sandbox execution from now cannot confirm its cleanup), `fail_store_change(change_name)` (the next change of that name fails), `crash_during_value_write()`, `place_symlink(relative_path, target)`, `alter_value_write(kind, nth=1)` (the nth value write is changed after its temporary file is flushed and before the store checks it: `content` changes one byte, `size` appends one) |
 | `manifest` | the platform manifest the installation reads: `write_record(service_id, record, *, revision=None, file_name=None)` writes a record shaped as State 6 ManifestServiceRecord without `record_digest` in the platform's raw form (instance class as `class`, instances keyed by name; extra members of a capability, such as `note`, and an `exposed_as` without `http_api` written as given) at `revision` (default: the configured one) under `file_name` (default `<service_id>.json`); `write_record_text(...)` writes raw text; `new_revision()` makes a later revision starting as a copy of the configured one |
 | `stub_service()` | an HTTP service on loopback: `base_url`, `authority`; `on(method, path, status=200, json=None, body=None, headers=None, action=None)` sets the answer of a route, `action` one of `drop_after_request` (close after reading the request, no status line), `refuse_connection`, `redirect` (with `Location` in `headers`), `kill_kernel` (SIGKILL the kernel once the request arrived, before answering), `hold`; `set_down(flag)`; `requests` (method, target, headers as on the wire, body, peer) |
 | `store_dump()` | every byte the store holds (database and value area), for "appears in no record" |
@@ -112,6 +112,10 @@ the witnesses the next section lists for it.
 | `token_comparisons()` | per request, each comparison of the presented token with the owner token and each agent token and the comparison primitive used, or a timing observer showing no dependence on the matching prefix — not yet specified; the test skips at that point |
 | `host_output()` | all text the kernel wrote to standard error or its log |
 | `process_arguments()` | the argv of the kernel and of every process it started |
+| `start_second_kernel()` | start another kernel process on the same data directory; returns StartOutcome |
+| `data_directory` | the kernel's data directory (`pathlib.Path`), for read-only inspection |
+| `value_file(value_digest)` | the path, relative to `data_directory`, where the store publishes the bytes of that digest (A18 rule 2's content-addressed area) |
+| `kernel_sources()` | the generated kernel's module sources, `{module path: text}` |
 | `host_scratch_directory()` | a host directory (`pathlib.Path`) outside the data directory that the kernel process could write and the test can read |
 
 ## Places the surface cannot reach yet
@@ -200,4 +204,10 @@ is not written around.
 | `kernel_a17_instance_fixed_by_installation` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, `mcp_request` (fields naming an instance), `restart()` |
 | `kernel_a17_echoed_credential_body_withheld` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, `store_dump()`, `surface_answers()` |
 | `kernel_a17_credential_resolved_per_request` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential` (a missing secret file), `installation.write_secret`, `restart()` |
+| `kernel_a18_single_process_lock` | `start_second_kernel()`, `restart()` |
+| `kernel_a18_value_write_atomic_publish` | `faults.crash_during_value_write()`, `KernelStopped`, `data_directory`, `value_file()`, `restart()` |
+| `kernel_a18_failed_store_call_writes_nothing` | `faults.fail_store_change()` |
+| `kernel_a18_symlink_in_data_dir_refused` | `faults.place_symlink()`, `data_directory`, `value_file()`, `restart()` |
+| `kernel_a18_published_file_digest_never_overwritten` | `faults.alter_value_write()`, `data_directory`, `value_file()` |
+| `kernel_a18_store_module_sole_transaction_owner` | `kernel_sources()`: a static fact of the generated code |
 | `kernel_a16_agent_code_not_run_in_kernel` | `host_scratch_directory()`: where a marker would appear if the kernel process imported or evaluated agent code |
