@@ -497,3 +497,14 @@ def test_an_unverified_follow_of_a_deferred_precedent_is_not_deferred(tmp_path):
     summary, _ = _repeated(case, {"kind": "judged_before", "precedent": "P1"})
     judgement = summary["topics"][0]["judgement"]
     assert judgement["blocking"] is True and "deferred_to" not in judgement and summary["deferred_topics"] == 0
+
+
+def test_round_100_comes_after_round_99(tmp_path):
+    case = _case(tmp_path)
+    for number in (99, 100):
+        directory = case / "questions" / "state1" / f"round-{number}"
+        directory.mkdir(parents=True)
+        (directory / "summary.json").write_text(json.dumps({
+            "round": f"round-{number}", "documents": {}, "closed": False, "clear": True,
+            "repeated_topics": 0, "topics": []}), encoding="utf-8")
+    assert service.status(case, 1)["round"] == "round-100"
