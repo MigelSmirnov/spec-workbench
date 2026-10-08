@@ -78,6 +78,9 @@ change.
 | `read_run(run_id)` → ShownRun | `runs.read_run` (MCP `get_run`) | — |
 | `read_binding(binding_id)` → OperationBinding (M11) | `bindings.read_binding` (MCP `get_binding`) | — |
 | `resume_run(run_id)` → ShownRun | `runs.resume_run` | — |
+| `continue_after_resolution(attempt, resolution)` → ShownRun | `runs.continue_after_resolution` (MCP `resolve_unknown_outcome`) | — |
+| `cancel_run(run_id)` → ShownRun | `runs.cancel_run` | — |
+| `revoke_standing_approval(grant_id)` → StandingGrant (M25) | `effects.revoke_standing_approval` | — |
 
 ## Named capabilities
 
@@ -140,3 +143,12 @@ is not written around.
 | `kernel_a09_credential_echo_error_body_withheld` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, `stub.requests`, `store_dump()` |
 | `kernel_a09_credential_echo_2xx_no_output_stored` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, `stub.requests`, `store_dump()` |
 | `kernel_a09_read_unsent_or_unanswered_unreachable` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, stub actions `refuse_connection` and `drop_after_request`, `stub.requests` |
+| `kernel_a10_gated_send_waits_for_approval` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, `stub.requests` |
+| `kernel_a10_approval_scoped_per_element` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, `stub.requests` |
+| `kernel_a10_grant_authorizes_never_destructive` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, `stub.requests` |
+| `kernel_a10_revoked_grant_no_longer_authorizes` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, `stub.requests` |
+| `kernel_a10_only_owner_decides_grants_revokes` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential` |
+| `kernel_a10_approval_bound_to_request_digest` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, `stub.set_down`, `manifest.new_revision`, `installation.set_manifest_revision`, `installation.write_secret`, `restart()` |
+| `kernel_a10_used_approval_and_grant_do_not_cover_resend` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, stub action `drop_after_request`, `stub.requests` |
+| `kernel_a10_no_decision_changes_nothing` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, `clock.advance` (days pass) |
+| `kernel_a10_grant_bound_to_flow_version` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, `stub.requests` |
