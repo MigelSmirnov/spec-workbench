@@ -182,20 +182,69 @@ def _summaries(case: Path, state: int) -> list[dict[str, Any]]:
     return [json.loads(p.read_text(encoding="utf-8")) for p in paths]
 
 
-def _set_aside(review: dict[str, Any], scope: list[str]) -> None:
+def _unit_text_at(case: Path, texts: list[tuple[int, str, str]], state: int, key: str,
+                  digest: str, depth: int = 400) -> str | None:
+    """The text a unit had when its digest was `digest`, from the case's git
+    history of the documents it is cut from; None when no commit holds it."""
+    names = [name for _, name, _ in texts]
+    done = subprocess.run(["git", "-C", str(case), "log", f"-{depth}", "--format=%H", "--", *names],
+                          capture_output=True, text=True)
+    if done.returncode != 0:
+        return None
+    for commit in done.stdout.split():
+        old = _texts_at(case, names, commit)
+        found = units.units([(s, name, old[name]) for s, name, _ in texts], state) or {}
+        if found.get(key, {}).get("digest") == digest:
+            return found[key]["text"]
+    return None
+
+
+def _changed_units(case: Path, texts: list[tuple[int, str, str]], state: int, scope: list[str],
+                   current: dict[str, dict[str, str]], summaries: list[dict[str, Any]]) -> dict[str, tuple[str, list[str]]]:
+    """For each unit under review that was closed on another text: its diff since
+    then and the regions of its current text the change touches."""
+    changed = {}
+    for key in scope:
+        digest = units.closed_digest(summaries, key)
+        if digest is None or digest == current[key]["digest"]:
+            continue
+        old = _unit_text_at(case, texts, state, key, digest)
+        if old is not None:
+            changed[key] = units.change_regions(old, current[key]["text"])
+    return changed
+
+
+def _norm(text: str) -> str:
+    return " ".join(str(text).split())
+
+
+def _set_aside(review: dict[str, Any], scope: list[str], changed: dict[str, tuple[str, list[str]]] | None = None,
+               current: dict[str, dict[str, str]] | None = None) -> None:
     """Keep the points about a unit under review; a point naming another unit is
     set aside, recorded in the review but not grouped. A point naming no unit is
-    kept and, when it blocks, keeps every unit under review open."""
+    kept and, when it blocks, keeps every unit under review open. A point on a
+    unit reviewed for its change, quoting a passage of that unit away from the
+    change, is set aside too."""
+    changed, current = changed or {}, current or {}
     kept, aside = [], []
     for point in review["open_points"]:
         unit = point.get("unit") if isinstance(point, dict) else None
         if unit and unit not in scope:
             aside.append(point)
+        elif unit in changed and _away_from_change(point, current[unit]["text"], changed[unit][1]):
+            aside.append({**point, "set_aside_because": "an unchanged passage of a unit reviewed for its change"})
         else:
             if isinstance(point, dict) and not unit:
                 point["unit"] = units.UNKNOWN
             kept.append(point)
     review["open_points"], review["set_aside"] = kept, aside
+
+
+def _away_from_change(point: dict[str, Any], unit_text: str, regions: list[str]) -> bool:
+    quoted = _norm(point.get("text") or "")
+    if len(quoted) < 12 or quoted not in _norm(unit_text):
+        return False  # quotes another text, or nothing checkable: keep it
+    return not any(quoted in _norm(region) for region in regions)
 
 
 def _clear(summary: dict[str, Any]) -> bool:
@@ -221,19 +270,22 @@ def ask_round(case: Path, state: int, provider: Provider, runs: int = DEFAULT_RU
     current_units = units.units(texts, state)
     previous_summaries = _summaries(case, state)
     scope: list[str] | None = None
+    changed: dict[str, tuple[str, list[str]]] = {}
     instruction = prompts.ask_instruction(state, documents.question_scope(state))
     if current_units is not None:
         still_open = units.closed(previous_summaries, current_units)
         scope = [key for key in current_units if not still_open[key]]
         if not scope:
             raise QuestionRoundError(f"every unit of State {state} is closed on its current text; nothing to ask")
-        instruction += prompts.unit_scope(state, [(key, current_units[key]["title"]) for key in scope])
+        changed = _changed_units(case, texts, state, scope, current_units, previous_summaries)
+        instruction += prompts.unit_scope(state, [(key, current_units[key]["title"]) for key in scope],
+                                          {key: diff for key, (diff, _) in changed.items()})
     text = prompts.ask_input(texts)
     with ThreadPoolExecutor(max_workers=runs) as pool:
         reviews = list(pool.map(lambda _: _review(provider, instruction, text), range(runs)))
     if scope is not None:
         for review in reviews:
-            _set_aside(review, scope)
+            _set_aside(review, scope, changed, current_units)
     topics = _group(provider, reviews, keep_points=True)
     repeated = [t for t in topics if len(t["runs"]) >= REPEATED]
     old = _texts_at(case, [name for _, name, _ in texts], since) if since else None
@@ -258,6 +310,7 @@ def ask_round(case: Path, state: int, provider: Provider, runs: int = DEFAULT_RU
         unit_fields = {
             "units": {key: unit["digest"] for key, unit in current_units.items()},
             "scope": scope,
+            "changed_units": sorted(changed),
             "blocked_units": units.blocked(repeated, scope),
             "set_aside": [len(r["set_aside"]) for r in reviews],
         }

@@ -175,3 +175,67 @@ def test_the_human_round_names_units(tmp_path, capsys):
     summary, _ = _ask(case, [_point("first", "A01")], blocking={"first"})
     text = design_questions._human_round(summary)
     assert "units: reviewed=5 blocked=['A01']" in text and "(A01)" in text
+
+
+LONG_RULES = """# State 2 — Demo rules
+
+## Accepted decision A01 — first
+
+Rule one.
+
+## Accepted decision A02 — second
+
+1. The first rule of the second decision stays as it was.
+2. Filler line one.
+3. Filler line two.
+4. Filler line three.
+5. Filler line four.
+6. Filler line five.
+7. The last rule of the second decision is about the spool size.
+"""
+
+
+def _git(case, *args):
+    import subprocess
+    subprocess.run(["git", "-C", str(case), *args], check=True, capture_output=True)
+
+
+def _git_case(tmp_path):
+    case = _case(tmp_path)
+    (case / "02_rules.md").write_text(LONG_RULES, encoding="utf-8")
+    _git(case, "init", "-q")
+    _git(case, "-c", "user.email=t@t", "-c", "user.name=t", "add", ".")
+    _git(case, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "closed texts")
+    _close_all(case)
+    return case
+
+
+def test_a_closed_unit_edited_later_is_reviewed_for_its_change_only(tmp_path):
+    case = _git_case(tmp_path)
+    edited = LONG_RULES.replace("about the spool size.", "about the spool size, now bounded.")
+    (case / "02_rules.md").write_text(edited, encoding="utf-8")
+    summary, provider = _ask(case)
+    assert summary["scope"] == ["A02"] and summary["changed_units"] == ["A02"]
+    instruction = provider.instructions[0]
+    assert "has changed since" in instruction and "+7. The last rule of the second decision is about the spool size, now bounded." in instruction
+
+
+def test_a_point_on_an_unchanged_passage_of_a_changed_unit_is_set_aside(tmp_path):
+    case = _git_case(tmp_path)
+    edited = LONG_RULES.replace("about the spool size.", "about the spool size, now bounded.")
+    (case / "02_rules.md").write_text(edited, encoding="utf-8")
+    old_point = {**_point("old", "A02"), "text": "The first rule of the second decision stays as it was."}
+    new_point = {**_point("new", "A02"), "text": "is about the spool size, now bounded."}
+    summary, _ = _ask(case, [old_point, new_point], blocking={"old", "new"})
+    assert summary["set_aside"] == [1, 1, 0]
+    assert [t["topic"] for t in summary["topics"]] == ["new"] and summary["blocked_units"] == ["A02"]
+    review = json.loads((case / "questions" / "state2" / summary["round"] / "review-1.json").read_text())
+    assert review["set_aside"][0]["set_aside_because"].startswith("an unchanged passage")
+
+
+def test_without_the_closed_text_in_git_a_changed_unit_is_reviewed_whole(tmp_path):
+    case = _case(tmp_path)
+    _close_all(case)
+    (case / "02_rules.md").write_text(RULES.replace("Rule two.", "Rule two, sharper."), encoding="utf-8")
+    summary, provider = _ask(case)
+    assert summary["changed_units"] == [] and "has changed since" not in provider.instructions[0]
