@@ -110,6 +110,8 @@ the witnesses the next section lists for it.
 | `kill_on_sandbox_start(nth=1)` | SIGKILL the kernel when its nth sandbox execution counted from now starts; the call in progress raises `KernelStopped` |
 | `surface_answers()` | the raw bytes of every answer the MCP entrance sent so far |
 | `token_comparisons()` | per request, each comparison of the presented token with the owner token and each agent token and the comparison primitive used, or a timing observer showing no dependence on the matching prefix — not yet specified; the test skips at that point |
+| `host_output()` | all text the kernel wrote to standard error or its log |
+| `process_arguments()` | the argv of the kernel and of every process it started |
 | `host_scratch_directory()` | a host directory (`pathlib.Path`) outside the data directory that the kernel process could write and the test can read |
 
 ## Places the surface cannot reach yet
@@ -193,4 +195,9 @@ is not written around.
 | `kernel_a16_schema_checked_before_record_read` | `mcp_request` (an unknown field) |
 | `kernel_a16_token_match_unique_constant_time` | `mcp_request`, `installation`, `restart()`; constant-time comparison needs `token_comparisons()`, not yet specified: the test skips after its observable part |
 | `kernel_a16_request_size_and_field_bounds` | `mcp_request(raw=)` (a message over the request ceiling), `installation` |
+| `kernel_a17_canary_credential_never_written` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, `store_dump()`, `host_output()`, `process_arguments()`, `surface_answers()` |
+| `kernel_a17_config_file_owner_only` | `installation.set_config_mode`, `restart()` |
+| `kernel_a17_instance_fixed_by_installation` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, `mcp_request` (fields naming an instance), `restart()` |
+| `kernel_a17_echoed_credential_body_withheld` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, `store_dump()`, `surface_answers()` |
+| `kernel_a17_credential_resolved_per_request` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential` (a missing secret file), `installation.write_secret`, `restart()` |
 | `kernel_a16_agent_code_not_run_in_kernel` | `host_scratch_directory()`: where a marker would appear if the kernel process imported or evaluated agent code |
