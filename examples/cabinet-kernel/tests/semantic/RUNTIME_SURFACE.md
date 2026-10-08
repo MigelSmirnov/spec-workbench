@@ -210,4 +210,8 @@ is not written around.
 | `kernel_a18_symlink_in_data_dir_refused` | `faults.place_symlink()`, `data_directory`, `value_file()`, `restart()` |
 | `kernel_a18_published_file_digest_never_overwritten` | `faults.alter_value_write()`, `data_directory`, `value_file()` |
 | `kernel_a18_store_module_sole_transaction_owner` | `kernel_sources()`: a static fact of the generated code |
+| `kernel_a19_timestamps_from_injected_clock` | `clock.set` |
+| `kernel_a19_service_timestamp_not_kernel_time` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `clock.set`, `stub.requests` |
+| `kernel_a19_request_cannot_supply_time` | `mcp_request` (a time field) |
+| `kernel_a19_monotonic_reading_never_stored` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `clock.fix_monotonic`, `store_dump()` |
 | `kernel_a16_agent_code_not_run_in_kernel` | `host_scratch_directory()`: where a marker would appear if the kernel process imported or evaluated agent code |
