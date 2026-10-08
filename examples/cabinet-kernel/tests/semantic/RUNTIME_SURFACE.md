@@ -69,6 +69,8 @@ change.
 | `try_implementation(implementation_id, trial_case_ids=())` → tuple[ShownTrialExecution] | `functions.try_implementation` | — |
 | `activate_flow_version(flow_version_id)` → FlowActivation (M18) | `flows.activate_flow_version` | — |
 | `start_run(flow_id, inputs)` → ShownRun | `runs.start_run` | — |
+| `capture_failed_execution(execution, contract_version_id)` → ShownTrialCase | `runs.capture_failed_execution` | — |
+| `get_repair_view(slot_id, page_size=None, continuation_token=None)` → RepairView | MCP `get_repair_view` (State 5 catalogue: `functions.read_slot`, `read_contract_version`, `read_implementation`, `store.page_records`) | `page_size_default` when `page_size` is not given |
 
 ## Named capabilities
 
@@ -105,3 +107,4 @@ is not written around.
 | `kernel_a03_kernel_refuses_start_without_sandbox` | `host.remove_bubblewrap()`, `restart()`: a start on a host without `bubblewrap` |
 | `kernel_a03_fresh_env_no_network_no_host_mounts` | `sandbox_executions()`, `sandbox_runtime_paths()`: the environment inspected from outside |
 | `kernel_a03_unconfirmed_cleanup_stops_kernel` | `faults.unconfirmed_cleanup()`, `kernel_exited()`, `restart()`: a cleanup that cannot be confirmed, and the process stopping |
+| `kernel_a04_verdict_set_only_by_kernel` | `mcp_request`: requests carrying a verdict field, by the owner and by an author |
