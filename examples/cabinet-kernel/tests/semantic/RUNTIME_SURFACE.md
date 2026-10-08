@@ -83,6 +83,7 @@ change.
 | `revoke_standing_approval(grant_id)` → StandingGrant (M25) | `effects.revoke_standing_approval` | — |
 | `release_run(run_id)` → ShownRun | `runs.release_run` | — |
 | `read_spooled_file(file)` → SpooledFileContent | MCP `read_spooled_file` (State 5 catalogue: `store.read_records`, `runs.read_run`, `store.read_value_bytes`) | — |
+| `read_fixture_file(value_id)` → FixtureFileContent | MCP `read_fixture_file` (State 5 catalogue: `store.read_records`, `store.read_value_bytes`) | — |
 
 ## Named capabilities
 
@@ -177,3 +178,9 @@ is not written around.
 | `kernel_a14_cancel_owner_only_unended_only` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, `run_spool()` |
 | `kernel_a14_spool_emptied_on_succeeded_refused` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, `run_spool()` |
 | `kernel_a14_recovery_completes_before_surface` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, stub action `kill_kernel`, `KernelStopped`, `restart()` |
+| `kernel_a15_node_execution_immutable` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, `stub.set_down`, stub action `drop_after_request`, `restart()` |
+| `kernel_a15_failure_detail_bounded_no_secret` | `store_dump()` |
+| `kernel_a15_spool_file_ceiling` | `run_spool()` |
+| `kernel_a15_spool_run_ceiling` | `run_spool()` |
+| `kernel_a15_file_outlives_run_only_as_fixture` | `run_spool()` |
+| `kernel_a15_one_record_per_conclusion` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, stub action `drop_after_request`, `stub.requests` |
