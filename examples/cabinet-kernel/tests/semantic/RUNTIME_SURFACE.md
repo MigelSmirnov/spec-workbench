@@ -66,6 +66,9 @@ change.
 | `read_implementation(implementation_id)` → ShownImplementationRead | `functions.read_implementation` | — |
 | `active_flow_version(flow_id)` → FlowAnswer | `flows.active_flow_version` (MCP `get_flow`) | — |
 | `page_records(record_type, record_filter=None, page_size=None, continuation_token=None)` → RecordPageAnswer | `store.page_records` (MCP `list_records`) | `page_size_default` when `page_size` is not given (A16 rule 6) |
+| `try_implementation(implementation_id, trial_case_ids=())` → tuple[ShownTrialExecution] | `functions.try_implementation` | — |
+| `activate_flow_version(flow_version_id)` → FlowActivation (M18) | `flows.activate_flow_version` | — |
+| `start_run(flow_id, inputs)` → ShownRun | `runs.start_run` | — |
 
 ## Named capabilities
 
@@ -78,6 +81,12 @@ the witnesses the next section lists for it.
 | `installation` | the installation's configuration file: `owner_token`, `agent_token(name)`, `set_agent_tokens([AgentToken])`, `set_owner_token(token)`, `write_config_text(text)`, `set_config_mode(mode)`, `select_instance(service_id, instance_name)`, `set_credential(service_id, header_name, secret_value)` (writes an owner-only secret file and its reference; `None` references a missing file), `write_secret(service_id, value)`, `set_manifest_revision(revision)` |
 | `clock` | the kernel clock (`clock.kernel_now`) injected by the fixture: `set(epoch_us)`, `advance(ms=0, days=0)`; `fix_monotonic(ns)` fixes its monotonic source |
 | `mcp_request(operation, request, *, token=None, raw=None)` | one request over the MCP entrance: `request` the fields as sent, unknown ones included, `token` (default: the actor's), `raw` exact bytes; returns the answer or raises with `code` and `reason` |
+| `restart()` | stop the kernel process and start it again on the same data directory and configuration; returns StartOutcome (`started`, `exit_code`, `stderr`) |
+| `kernel_exited()` | the exit status of the kernel process when it ended on its own since its last start, `None` while it runs |
+| `host` | host conditions for the next start: `remove_bubblewrap()`, `set_env(name, value)` |
+| `sandbox_executions()` | per sandbox execution, observed from outside it: `network_interfaces`, `mounts` (host paths), `exchange_directory`, `processes_left` after completion |
+| `sandbox_runtime_paths()` | the host paths the release mounts read-only as the sandbox runtime |
+| `faults` | injected faults: `unconfirmed_cleanup(nth=1)` (the nth sandbox execution from now cannot confirm its cleanup), `fail_store_change(change_name)`, `crash_during_value_write()`, `place_symlink(relative_path, target)` |
 
 ## Places the surface cannot reach yet
 
@@ -92,3 +101,7 @@ is not written around.
 | `kernel_a01_caller_supplied_identity_refused` | `mcp_request`: a request carrying a field no call has (`contract_version_id`) |
 | `kernel_a01_equal_contract_not_made_current` | `clock` (the first issue time stays) |
 | `kernel_a01_activation_identity_is_store_position` | `clock` (an activation asked again keeps its time) |
+| `kernel_a03_deadline_and_limits_classified` | `sandbox_executions()`: no process survives an execution |
+| `kernel_a03_kernel_refuses_start_without_sandbox` | `host.remove_bubblewrap()`, `restart()`: a start on a host without `bubblewrap` |
+| `kernel_a03_fresh_env_no_network_no_host_mounts` | `sandbox_executions()`, `sandbox_runtime_paths()`: the environment inspected from outside |
+| `kernel_a03_unconfirmed_cleanup_stops_kernel` | `faults.unconfirmed_cleanup()`, `kernel_exited()`, `restart()`: a cleanup that cannot be confirmed, and the process stopping |
