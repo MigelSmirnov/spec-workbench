@@ -73,6 +73,8 @@ change.
 | `get_repair_view(slot_id, page_size=None, continuation_token=None)` → RepairView | MCP `get_repair_view` (State 5 catalogue: `functions.read_slot`, `read_contract_version`, `read_implementation`, `store.page_records`) | `page_size_default` when `page_size` is not given |
 | `propose_binding(service_id, operation_name, inputs, outputs)` → OperationBinding (M11) | `bindings.propose_binding` | — |
 | `accept_binding(binding_id)` → OperationBinding (M11) | `bindings.accept_binding` | — |
+| `continue_after_approval(approval_id, decision)` → ShownRun | `runs.continue_after_approval` (MCP `decide_effect_approval`) | — |
+| `grant_standing_approval(flow_id, node_id)` → StandingGrant (M25) | `effects.grant_standing_approval` | — |
 
 ## Named capabilities
 
@@ -114,3 +116,6 @@ is not written around.
 | `kernel_a04_verdict_set_only_by_kernel` | `mcp_request`: requests carrying a verdict field, by the owner and by an author |
 | `kernel_a05_proof_recomputed_on_demand` | `manifest.write_record`, `installation.select_instance`, `stub_service()`: an accepted binding needs a manifest record and a selected instance |
 | `kernel_a05_highest_effect_class_max_or_read` | `manifest.write_record`, `installation.select_instance`, `stub_service()` |
+| `kernel_a06_effectful_flow_owner_only_activation` | `manifest.write_record`, `installation.select_instance`, `stub_service()` |
+| `kernel_a06_activation_proves_version_again` | `manifest.write_record`, `installation.select_instance`, `stub_service()` |
+| `kernel_a06_new_version_inherits_nothing` | `manifest.write_record`, `installation.select_instance`, `stub_service()`; `stub.requests` (nothing sent without approval) |
