@@ -219,4 +219,6 @@ is not written around.
 | `kernel_a20_over_ceiling_refused_not_truncated` | `mcp_request(raw=)` |
 | `kernel_a20_ceilings_equal_release_constants` | `release`, `kernel_sources()`: static facts of the release |
 | `kernel_a20_dependencies_pinned_by_release` | `release`, `kernel_sources()`: static facts of the release |
+| `kernel_a21_security_review_gate_complete` | none the fixture can give: a design gate over the State 2 documents (`tools/design_lint.py --state 2`), not kernel behaviour; the test skips |
+| `kernel_a21_security_references_resolve` | none the fixture can give: the same design gate; the test skips |
 | `kernel_a16_agent_code_not_run_in_kernel` | `host_scratch_directory()`: where a marker would appear if the kernel process imported or evaluated agent code |
