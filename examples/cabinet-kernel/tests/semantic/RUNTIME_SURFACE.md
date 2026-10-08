@@ -159,3 +159,4 @@ is not written around.
 | `kernel_a11_applied_with_outputs_fails_element` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, stub action `drop_after_request` |
 | `kernel_a11_unknown_blocks_dependants` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, stub action `drop_after_request`, `clock.advance`, `restart()` |
 | `kernel_a11_attempt_number_is_execution_ordinal` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, stub action `drop_after_request` |
+| `kernel_a12_pins_survive_later_records` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, `clock.advance` (a long wait for approval) |
