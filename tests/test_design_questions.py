@@ -488,3 +488,12 @@ def test_the_cli_chooses_the_codex_provider():
     assert isinstance(design_questions._provider(args), provider.CodexCliProvider)
     args.provider = "openai"
     assert isinstance(design_questions._provider(args), provider.OpenAIProvider)
+
+
+def test_an_unverified_follow_of_a_deferred_precedent_is_not_deferred(tmp_path):
+    case = _case(tmp_path)
+    _repeated(case, {**UNQUOTED_GAP, "quotes": ["# State 0 — Demo"]})
+    (case / "00_product.md").write_text("# State 0 — Other\n\nA product.\n", encoding="utf-8")
+    summary, _ = _repeated(case, {"kind": "judged_before", "precedent": "P1"})
+    judgement = summary["topics"][0]["judgement"]
+    assert judgement["blocking"] is True and "deferred_to" not in judgement and summary["deferred_topics"] == 0

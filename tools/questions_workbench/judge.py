@@ -109,6 +109,8 @@ def check(judgement: dict[str, Any] | None, state: int, texts: str, old_texts: s
             failure = "preexisting is allowed only for a reopened state (--since)"
         elif not quotes or not all(_found(q, corpus) and _found(q, _norm(old_texts)) for q in quotes):
             failure = "the quoted passage is not found verbatim in both versions"
+    if failure is not None:
+        kept.pop("deferred_to", None)  # an unverified judgement defers nothing, even after a deferred precedent
     kept["verified"] = failure is None
     deferred = (failure is None and kind == "consequential_gap"
                 and (not quotes or kept.get("quoted_elsewhere"))

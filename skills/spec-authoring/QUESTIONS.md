@@ -147,6 +147,16 @@ an earlier state reopens `context`. Rounds kept before units existed close no
 unit, so the first two rounds under this rule review everything. Decided by the
 owner 2026-10-06.
 
+A unit that was closed and then edited is reviewed for its edit, not again
+whole: the round finds the text it closed on in the case's git history, gives
+the reviewers the diff, and asks only about the change and what it affects; a
+point quoting an unchanged passage of that unit, more than three lines from the
+change, is set aside. On 2026-10-07 a one-sentence edit reopened Cabinet Kernel
+A18, and three reviewers given the whole decision raised new storage-hardening
+topics every round — corrupt databases, hard links, link races — none about the
+edit. A unit never closed, or whose closed text git no longer holds, is
+reviewed whole (owner, 2026-10-08).
+
 ## Closing a question
 
 Ask first who uses what the question is about.

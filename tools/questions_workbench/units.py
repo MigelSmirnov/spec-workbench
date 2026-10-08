@@ -21,9 +21,18 @@ but each point names its unit, and a point about a closed unit is set aside.
 A unit is closed when the two latest rounds that reviewed it were clear for it
 on the same text, and the text has not changed since. The state is closed
 when every unit is.
+
+A unit that was closed and then edited is reviewed for the edit only: the
+reviewers get its diff since the text it closed on (found in the case's git
+history) and are asked about the change and what it affects; a point quoting
+an unchanged passage of that unit, away from the change, is set aside. On
+2026-10-07 a one-sentence edit reopened Cabinet Kernel A18, and three
+reviewers given the whole decision raised new storage-hardening topics every
+round, none about the edit.
 """
 from __future__ import annotations
 
+import difflib
 import hashlib
 import re
 from typing import Any
@@ -64,12 +73,39 @@ def units(texts: list[tuple[int, str, str]], state: int) -> dict[str, dict[str, 
         if doc_state != state:
             continue
         for key, title, block in split(name, body):
-            found[key] = {"title": title, "digest": _digest(block)}
+            found[key] = {"title": title, "digest": _digest(block), "document": name, "text": block}
     if not any(re.fullmatch(r"A\d+", key) for key in found):
         return None
     context = "".join(f"=== {name} ===\n{body}" for doc_state, name, body in texts if doc_state < state)
-    found[CONTEXT] = {"title": "agreement of the earlier states' texts with this state", "digest": _digest(context)}
+    found[CONTEXT] = {"title": "agreement of the earlier states' texts with this state", "digest": _digest(context),
+                      "document": "", "text": context}
     return found
+
+
+def closed_digest(summaries: list[dict[str, Any]], key: str) -> str | None:
+    """The digest the unit was last closed on: the latest two consecutive
+    reviews of it that were clear for it on the same text."""
+    reviewed = [s for s in summaries if key in (s.get("scope") or []) and key in (s.get("units") or {})]
+    for first, second in reversed(list(zip(reviewed, reviewed[1:]))):
+        if (_clear_for(first, key) and _clear_for(second, key)
+                and first["units"][key] == second["units"][key]):
+            return second["units"][key]
+    return None
+
+
+def change_regions(old: str, new: str, context: int = 3) -> tuple[str, list[str]]:
+    """The unified diff of a unit since it was closed, and the text of the
+    regions of the current unit the change touches (changed lines with
+    `context` lines around them)."""
+    old_lines, new_lines = old.splitlines(keepends=True), new.splitlines(keepends=True)
+    diff = "".join(difflib.unified_diff(old_lines, new_lines, "closed", "now", n=context))
+    regions = []
+    matcher = difflib.SequenceMatcher(a=old_lines, b=new_lines, autojunk=False)
+    for tag, _, _, j1, j2 in matcher.get_opcodes():
+        if tag != "equal":
+            lo, hi = max(0, j1 - context), min(len(new_lines), max(j2, j1 + 1) + context)
+            regions.append("".join(new_lines[lo:hi]))
+    return diff, regions
 
 
 def _clear_for(summary: dict[str, Any], key: str) -> bool:

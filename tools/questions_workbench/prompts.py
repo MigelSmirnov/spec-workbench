@@ -30,8 +30,20 @@ and is set aside.
 {listing}"""
 
 
-def unit_scope(state: int, scope: list[tuple[str, str]]) -> str:
-    return UNIT_SCOPE.format(state=state, listing="\n".join(f"- {key}: {title}" for key, title in scope))
+CHANGED_UNIT = """- {key}: {title}
+  This unit was closed and has changed since. Review only this change and what
+  it affects — a gap the change opens, or a contradiction it makes with any
+  text. Its unchanged passages were closed; a point about one of them, away
+  from the change, is set aside.
+```diff
+{diff}```"""
+
+
+def unit_scope(state: int, scope: list[tuple[str, str]], changed: dict[str, str] | None = None) -> str:
+    changed = changed or {}
+    listing = "\n".join(CHANGED_UNIT.format(key=key, title=title, diff=changed[key]) if key in changed
+                        else f"- {key}: {title}" for key, title in scope)
+    return UNIT_SCOPE.format(state=state, listing=listing)
 
 
 GROUP = """You receive the open points of several independent reviews of the same
