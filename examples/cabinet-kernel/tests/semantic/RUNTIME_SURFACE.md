@@ -160,3 +160,6 @@ is not written around.
 | `kernel_a11_unknown_blocks_dependants` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, stub action `drop_after_request`, `clock.advance`, `restart()` |
 | `kernel_a11_attempt_number_is_execution_ordinal` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, stub action `drop_after_request` |
 | `kernel_a12_pins_survive_later_records` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, `clock.advance` (a long wait for approval) |
+| `kernel_a13_next_node_min_node_id` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, `stub.requests` (order of sends) |
+| `kernel_a13_advance_only_inside_request` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, stub action `drop_after_request`, `stub.set_down`, `clock.advance` |
+| `kernel_a13_resolved_unknown_conclusion` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, stub action `drop_after_request`, `stub.requests`, `clock.advance` |
