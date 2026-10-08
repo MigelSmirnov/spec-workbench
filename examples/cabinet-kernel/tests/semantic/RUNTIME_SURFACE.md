@@ -76,6 +76,7 @@ change.
 | `continue_after_approval(approval_id, decision)` → ShownRun | `runs.continue_after_approval` (MCP `decide_effect_approval`) | — |
 | `grant_standing_approval(flow_id, node_id)` → StandingGrant (M25) | `effects.grant_standing_approval` | — |
 | `read_run(run_id)` → ShownRun | `runs.read_run` (MCP `get_run`) | — |
+| `read_binding(binding_id)` → OperationBinding (M11) | `bindings.read_binding` (MCP `get_binding`) | — |
 
 ## Named capabilities
 
@@ -123,3 +124,9 @@ is not written around.
 | `kernel_a07_proof_refuses_class_above_accepted` | `manifest.write_record`, `installation.select_instance`, `stub_service()` |
 | `kernel_a07_agent_gets_personal_data_as_digest` | `manifest.write_record`, `installation.select_instance`, `stub_service()` |
 | `kernel_a07_preview_hides_personal_data_from_agent` | `manifest.write_record`, `installation.select_instance`, `stub_service()` |
+| `kernel_a08_invocable_only_single_http_route` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential` |
+| `kernel_a08_non_read_key_field_must_be_input_port` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential` |
+| `kernel_a08_digest_covers_only_own_capability_entry` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, `manifest.new_revision`, `installation.set_manifest_revision`, `restart()` |
+| `kernel_a08_changed_digest_stale_nothing_sent` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, `manifest.new_revision`, `installation.set_manifest_revision`, `restart()`, `stub.requests` |
+| `kernel_a08_record_read_only_at_pinned_path` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `manifest.write_record(file_name=, revision=)`, `manifest.new_revision` |
+| `kernel_a08_several_http_routes_not_invocable` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential` |
