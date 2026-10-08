@@ -77,6 +77,7 @@ change.
 | `grant_standing_approval(flow_id, node_id)` → StandingGrant (M25) | `effects.grant_standing_approval` | — |
 | `read_run(run_id)` → ShownRun | `runs.read_run` (MCP `get_run`) | — |
 | `read_binding(binding_id)` → OperationBinding (M11) | `bindings.read_binding` (MCP `get_binding`) | — |
+| `resume_run(run_id)` → ShownRun | `runs.resume_run` | — |
 
 ## Named capabilities
 
@@ -97,6 +98,7 @@ the witnesses the next section lists for it.
 | `faults` | injected faults: `unconfirmed_cleanup(nth=1)` (the nth sandbox execution from now cannot confirm its cleanup), `fail_store_change(change_name)`, `crash_during_value_write()`, `place_symlink(relative_path, target)` |
 | `manifest` | the platform manifest the installation reads: `write_record(service_id, record, *, revision=None, file_name=None)` writes a record shaped as State 6 ManifestServiceRecord without `record_digest` in the platform's raw form (instance class as `class`, instances keyed by name; extra members of a capability, such as `note`, and an `exposed_as` without `http_api` written as given) at `revision` (default: the configured one) under `file_name` (default `<service_id>.json`); `write_record_text(...)` writes raw text; `new_revision()` makes a later revision starting as a copy of the configured one |
 | `stub_service()` | an HTTP service on loopback: `base_url`, `authority`; `on(method, path, status=200, json=None, body=None, headers=None, action=None)` sets the answer of a route, `action` one of `drop_after_request` (close after reading the request, no status line), `refuse_connection`, `redirect` (with `Location` in `headers`), `kill_kernel` (SIGKILL the kernel once the request arrived, before answering), `hold`; `set_down(flag)`; `requests` (method, target, headers as on the wire, body, peer) |
+| `store_dump()` | every byte the store holds (database and value area), for "appears in no record" |
 
 ## Places the surface cannot reach yet
 
@@ -130,3 +132,11 @@ is not written around.
 | `kernel_a08_changed_digest_stale_nothing_sent` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, `manifest.new_revision`, `installation.set_manifest_revision`, `restart()`, `stub.requests` |
 | `kernel_a08_record_read_only_at_pinned_path` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `manifest.write_record(file_name=, revision=)`, `manifest.new_revision` |
 | `kernel_a08_several_http_routes_not_invocable` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential` |
+| `kernel_a09_possibly_sent_outcome_unknown_no_retry` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, stub action `drop_after_request`, `stub.requests` |
+| `kernel_a09_read_5xx_service_unreachable` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, `stub.requests` |
+| `kernel_a09_non_read_4xx_not_applied` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, `stub.requests` |
+| `kernel_a09_non_read_2xx_applied_even_if_invalid` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, `stub.requests` |
+| `kernel_a09_no_redirect_plain_http_restricted` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, two stubs, stub action `redirect`, `stub.requests` |
+| `kernel_a09_credential_echo_error_body_withheld` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, `stub.requests`, `store_dump()` |
+| `kernel_a09_credential_echo_2xx_no_output_stored` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, `stub.requests`, `store_dump()` |
+| `kernel_a09_read_unsent_or_unanswered_unreachable` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, stub actions `refuse_connection` and `drop_after_request`, `stub.requests` |
