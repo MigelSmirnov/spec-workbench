@@ -116,6 +116,7 @@ the witnesses the next section lists for it.
 | `data_directory` | the kernel's data directory (`pathlib.Path`), for read-only inspection |
 | `value_file(value_digest)` | the path, relative to `data_directory`, where the store publishes the bytes of that digest (A18 rule 2's content-addressed area) |
 | `kernel_sources()` | the generated kernel's module sources, `{module path: text}` |
+| `release` | what the generated release declares: `ceilings` (`{name: value}`), `dependencies` (`{name: version}`), `sandbox_interpreter` |
 | `host_scratch_directory()` | a host directory (`pathlib.Path`) outside the data directory that the kernel process could write and the test can read |
 
 ## Places the surface cannot reach yet
@@ -214,4 +215,8 @@ is not written around.
 | `kernel_a19_service_timestamp_not_kernel_time` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `clock.set`, `stub.requests` |
 | `kernel_a19_request_cannot_supply_time` | `mcp_request` (a time field) |
 | `kernel_a19_monotonic_reading_never_stored` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `clock.fix_monotonic`, `store_dump()` |
+| `kernel_a20_ceiling_not_overridable_by_env` | `host.set_env`, `restart()` |
+| `kernel_a20_over_ceiling_refused_not_truncated` | `mcp_request(raw=)` |
+| `kernel_a20_ceilings_equal_release_constants` | `release`, `kernel_sources()`: static facts of the release |
+| `kernel_a20_dependencies_pinned_by_release` | `release`, `kernel_sources()`: static facts of the release |
 | `kernel_a16_agent_code_not_run_in_kernel` | `host_scratch_directory()`: where a marker would appear if the kernel process imported or evaluated agent code |
