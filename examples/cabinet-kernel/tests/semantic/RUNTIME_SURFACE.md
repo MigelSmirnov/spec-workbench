@@ -75,6 +75,7 @@ change.
 | `accept_binding(binding_id)` → OperationBinding (M11) | `bindings.accept_binding` | — |
 | `continue_after_approval(approval_id, decision)` → ShownRun | `runs.continue_after_approval` (MCP `decide_effect_approval`) | — |
 | `grant_standing_approval(flow_id, node_id)` → StandingGrant (M25) | `effects.grant_standing_approval` | — |
+| `read_run(run_id)` → ShownRun | `runs.read_run` (MCP `get_run`) | — |
 
 ## Named capabilities
 
@@ -119,3 +120,6 @@ is not written around.
 | `kernel_a06_effectful_flow_owner_only_activation` | `manifest.write_record`, `installation.select_instance`, `stub_service()` |
 | `kernel_a06_activation_proves_version_again` | `manifest.write_record`, `installation.select_instance`, `stub_service()` |
 | `kernel_a06_new_version_inherits_nothing` | `manifest.write_record`, `installation.select_instance`, `stub_service()`; `stub.requests` (nothing sent without approval) |
+| `kernel_a07_proof_refuses_class_above_accepted` | `manifest.write_record`, `installation.select_instance`, `stub_service()` |
+| `kernel_a07_agent_gets_personal_data_as_digest` | `manifest.write_record`, `installation.select_instance`, `stub_service()` |
+| `kernel_a07_preview_hides_personal_data_from_agent` | `manifest.write_record`, `installation.select_instance`, `stub_service()` |
