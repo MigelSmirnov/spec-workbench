@@ -81,6 +81,8 @@ change.
 | `continue_after_resolution(attempt, resolution)` → ShownRun | `runs.continue_after_resolution` (MCP `resolve_unknown_outcome`) | — |
 | `cancel_run(run_id)` → ShownRun | `runs.cancel_run` | — |
 | `revoke_standing_approval(grant_id)` → StandingGrant (M25) | `effects.revoke_standing_approval` | — |
+| `release_run(run_id)` → ShownRun | `runs.release_run` | — |
+| `read_spooled_file(file)` → SpooledFileContent | MCP `read_spooled_file` (State 5 catalogue: `store.read_records`, `runs.read_run`, `store.read_value_bytes`) | — |
 
 ## Named capabilities
 
@@ -103,6 +105,8 @@ the witnesses the next section lists for it.
 | `stub_service()` | an HTTP service on loopback: `base_url`, `authority`; `on(method, path, status=200, json=None, body=None, headers=None, action=None)` sets the answer of a route, `action` one of `drop_after_request` (close after reading the request, no status line), `refuse_connection`, `redirect` (with `Location` in `headers`), `kill_kernel` (SIGKILL the kernel once the request arrived, before answering), `hold`; `set_down(flag)`; `requests` (method, target, headers as on the wire, body, peer) |
 | `store_dump()` | every byte the store holds (database and value area), for "appears in no record" |
 | `KernelStopped` | the exception a call in progress raises when the fixture killed the kernel under it |
+| `run_spool(run_id)` | the files left in the run's spool directory below the data directory (an empty list when it is gone) |
+| `kill_on_sandbox_start(nth=1)` | SIGKILL the kernel when its nth sandbox execution counted from now starts; the call in progress raises `KernelStopped` |
 
 ## Places the surface cannot reach yet
 
@@ -163,3 +167,13 @@ is not written around.
 | `kernel_a13_next_node_min_node_id` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, `stub.requests` (order of sends) |
 | `kernel_a13_advance_only_inside_request` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, stub action `drop_after_request`, `stub.set_down`, `clock.advance` |
 | `kernel_a13_resolved_unknown_conclusion` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, stub action `drop_after_request`, `stub.requests`, `clock.advance` |
+| `kernel_a14_resume_resends_unreachable` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, `stub.set_down`, `stub.requests` |
+| `kernel_a14_resume_without_unreachable_refused` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, `stub.set_down`, `stub.requests` |
+| `kernel_a14_restart_in_flight_becomes_unknown` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, stub action `kill_kernel`, `kill_on_sandbox_start()`, `KernelStopped`, `restart()` |
+| `kernel_a14_cancel_empties_spool_keeps_trace` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, `run_spool()` |
+| `kernel_a14_failed_spool_kept_until_release` | `run_spool()`, `restart()` |
+| `kernel_a14_elapsed_wait_changes_nothing` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, `stub.set_down`, stub action `drop_after_request`, `clock.advance` |
+| `kernel_a14_resume_leaves_other_waits_untouched` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, `stub.set_down`, stub action `drop_after_request`, `stub.requests` |
+| `kernel_a14_cancel_owner_only_unended_only` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, `run_spool()` |
+| `kernel_a14_spool_emptied_on_succeeded_refused` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, `run_spool()` |
+| `kernel_a14_recovery_completes_before_surface` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, stub action `kill_kernel`, `KernelStopped`, `restart()` |
