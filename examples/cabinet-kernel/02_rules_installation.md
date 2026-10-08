@@ -252,8 +252,8 @@ concurrent connections.
    against their digest and size, and then renamed into place; a completed file a record names is
    never overwritten — a spooled file no record names, left by a change that
    failed, is replaced at its position. Equal bytes are stored once. On start, temporary files,
-   value bytes no record names (left by a failed call, so only trial fixtures
-   and named values outlive a run, K-10; owner, 2026-10-07) and
+   value bytes no record names (left by a failed call, K-10; owner,
+   2026-10-07) and
    the spool directories of runs that ended and do not keep their spool (A14) are
    removed; nothing else is. A spool directory that cannot be removed does not
    stop the start: it stays, never served, until a later start removes it.

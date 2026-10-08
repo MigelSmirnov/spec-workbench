@@ -1,0 +1,127 @@
+{
+ "open_points": [
+  {
+   "subject": "canonical_values.content_identity digest kind",
+   "kind": "ambiguous output",
+   "text": "“Compute the SHA-256 identity of a content record or value from its canonical form” does not distinguish a JSON value’s `value_digest`, a StoredValue’s `value_id`, an idempotency key, a request digest, or a model identity.",
+   "question": "Which digest kind is requested on each call, and exactly which meaning facts are hashed for that kind?",
+   "options": [
+    "Use a distinct operation or explicit digest-kind input for each identity",
+    "Pass a typed model whose type determines the identity recipe",
+    "Require callers to construct the complete hash preimage and make this operation only canonicalize and hash it"
+   ],
+   "default_guess": "Use typed inputs whose type selects a closed identity recipe, separating raw value digest from StoredValue identity."
+  },
+  {
+   "subject": "canonical_values.canonical_bytes duplicate-key refusal",
+   "kind": "input contradiction",
+   "text": "The operation takes “One JSON value” but must refuse “a duplicate key”; after JSON text has been parsed into a value, duplicate object keys may already have been discarded.",
+   "question": "Does `canonical_bytes` receive raw JSON text and parse it with duplicate-key detection, or does another operation detect duplicates before passing a parsed value?",
+   "options": [
+    "Accept raw JSON text and detect duplicates while parsing",
+    "Accept parsed values, with `surface` responsible for duplicate detection",
+    "Support separate raw-text and in-memory-value entry points"
+   ],
+   "default_guess": "Use separate raw-text parsing at ingress and canonicalize only duplicate-free parsed values internally."
+  },
+  {
+   "subject": "file content digests",
+   "kind": "contradictory digest rule",
+   "text": "State 1 says “Every content-derived identity and digest in this kernel is the lowercase hex SHA-256 of the canonical JSON of the model's meaning facts,” while file handling refers to “the SHA-256 of its content” and files are arbitrary bytes, not JSON.",
+   "question": "Are `content_digest` and file-fixture digests SHA-256 of the raw file bytes, or of some JSON representation of those bytes?",
+   "options": [
+    "SHA-256 of raw file bytes",
+    "SHA-256 of a canonical JSON encoding of the bytes",
+    "Different rules for SpooledFiles and trial fixtures"
+   ],
+   "default_guess": "Use SHA-256 of the raw file bytes for every file digest."
+  },
+  {
+   "subject": "computing file facts before checks",
+   "kind": "missing operation",
+   "text": "“A caller holding bytes computes the facts first,” but the public operations provide no operation that computes a file’s digest, size and media type facts; `content_identity` is specified for canonical JSON rather than arbitrary bytes.",
+   "question": "Which module computes file facts from bytes, by what operation, and under which digest rule?",
+   "options": [
+    "Add a canonical-values operation for raw file facts",
+    "Allow every byte-holding caller to compute SHA-256 and size itself",
+    "Have `store.put_value_bytes` or `store.spool_file` compute and return all facts before validation"
+   ],
+   "default_guess": "Give `canonical_values` one raw-file-facts operation used by all byte-holding callers."
+  },
+  {
+   "subject": "functions.add_trial_case file inputs",
+   "kind": "underspecified input",
+   "text": "Its inputs are only “input values by port, optional expected outputs,” while authored trial cases may contain file fixtures that must be persisted, and `fit_port_value` receives only file facts rather than bytes.",
+   "question": "How does an authored trial-case request provide file-fixture bytes, and what exactly does `functions.add_trial_case` receive for a `file` or `many` file port?",
+   "options": [
+    "Inline file bytes by port",
+    "References to previously uploaded temporary files",
+    "File facts plus a separate byte payload",
+    "StoredValue identities of existing fixtures"
+   ],
+   "default_guess": "Accept file bytes by port, with ordered byte arrays for `many`, and derive their facts before validation."
+  },
+  {
+   "subject": "functions.try_implementation result",
+   "kind": "contradictory output",
+   "text": "The operation returns “One TrialExecution per case: outcome, output digests, pass or `output_mismatch`,” but “Records reach a caller as they are … with values resolved by `module:surface`,” and M07 stores value outputs as StoredValue references plus file facts.",
+   "question": "Does a direct `try_implementation` response return complete TrialExecution records with resolved value outputs, only output digests, or a separate summary projection?",
+   "options": [
+    "Complete TrialExecution records with values resolved subject to disclosure masking",
+    "Only outcome and output digests",
+    "A defined trial-evidence summary distinct from TrialExecution"
+   ],
+   "default_guess": "Return complete TrialExecution records, resolving value outputs and applying disclosure masking."
+  },
+  {
+   "subject": "bindings.check_installed_instances manifest validation",
+   "kind": "ambiguous check scope",
+   "text": "It refuses when a manifest record is “failing a check of the record itself (A08 rule 5),” but A08 rule 5 mixes service-record checks, operation-specific checks, proposal-port checks and selected-instance checks; this start operation has no operation name or proposed ports.",
+   "question": "Which exact A08 checks run at startup, and are all capability entries validated or only data needed for the selected instance’s required-header collision check?",
+   "options": [
+    "Validate only the service record structure and selected instance facts needed by this operation",
+    "Validate every capability entry using the operation-independent A08 checks",
+    "Validate only parsing plus the selected instance’s required headers"
+   ],
+   "default_guess": "Validate the record structure and selected instance facts needed for the credential-header collision check, without applying proposal-port checks."
+  },
+  {
+   "subject": "bindings.check_installed_instances missing selected instance",
+   "kind": "vague condition",
+   "text": "“A service with no selected instance, or whose record lists no instance of the selected name, fails nothing here,” while the same operation also says an unreadable record or one failing a record check stops startup.",
+   "question": "When a credential-bearing service has a selected instance name absent from its manifest, must the operation still validate the rest of that manifest record, or return success immediately for that service?",
+   "options": [
+    "Validate the record, then ignore only the missing selected instance",
+    "Return success for that service without further manifest validation",
+    "Treat the absent instance as a startup refusal"
+   ],
+   "default_guess": "Validate the record’s required structure, but do not refuse merely because the selected instance is absent."
+  },
+  {
+   "subject": "functions.add_captured_trial_case missing records",
+   "kind": "error contradiction",
+   "text": "The operation says it enforces that “The executed implementation exists” but lists only “`refused` naming the first failing check,” while the global convention says “A missing record is `unknown_reference` naming it, whatever operation looked it up.”",
+   "question": "If the implementation, contract version, source NodeExecution, StoredValue or SpooledFile named to this operation is missing, is the result `unknown_reference`, `refused`, or `internal_error` because the caller was trusted?",
+   "options": [
+    "`unknown_reference` for every missing named record",
+    "`refused` for missing records discovered by this operation",
+    "`internal_error` for records that should have been guaranteed by `runs`, and `unknown_reference` only for request-named records"
+   ],
+   "default_guess": "Return `unknown_reference` for a request-named contract version and `internal_error` for a missing record that `runs` already validated and passed down."
+  },
+  {
+   "subject": "store.record_change actor argument",
+   "kind": "underspecified input",
+   "text": "“Every operation that writes a record receives the acting Actor … from its caller,” but one `record_change` can write records attributable to different actors, such as an agent-submitted implementation followed by kernel TrialExecutions, verdict and activation.",
+   "question": "Does each named store change receive one actor for every record, per-record actors, or no actor when the written models have no actor field?",
+   "options": [
+    "One request actor plus fixed rules that substitute `kernel` for automatic records",
+    "An actor supplied separately for each written record",
+    "No generic actor input; each change payload supplies only the model’s actual by-fields"
+   ],
+   "default_guess": "Have each named change accept the explicit by-fields required by its models, with automatic admission and activation fields fixed to `kernel`."
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"canonical_values.content_identity digest kind\",\"kind\":\"ambiguous output\",\"text\":\"“Compute the SHA-256 identity of a content record or value from its canonical form” does not distinguish a JSON value’s `value_digest`, a StoredValue’s `value_id`, an idempotency key, a request digest, or a model identity.\",\"question\":\"Which digest kind is requested on each call, and exactly which meaning facts are hashed for that kind?\",\"options\":[\"Use a distinct operation or explicit digest-kind input for each identity\",\"Pass a typed model whose type determines the identity recipe\",\"Require callers to construct the complete hash preimage and make this operation only canonicalize and hash it\"],\"default_guess\":\"Use typed inputs whose type selects a closed identity recipe, separating raw value digest from StoredValue identity.\"},{\"subject\":\"canonical_values.canonical_bytes duplicate-key refusal\",\"kind\":\"input contradiction\",\"text\":\"The operation takes “One JSON value” but must refuse “a duplicate key”; after JSON text has been parsed into a value, duplicate object keys may already have been discarded.\",\"question\":\"Does `canonical_bytes` receive raw JSON text and parse it with duplicate-key detection, or does another operation detect duplicates before passing a parsed value?\",\"options\":[\"Accept raw JSON text and detect duplicates while parsing\",\"Accept parsed values, with `surface` responsible for duplicate detection\",\"Support separate raw-text and in-memory-value entry points\"],\"default_guess\":\"Use separate raw-text parsing at ingress and canonicalize only duplicate-free parsed values internally.\"},{\"subject\":\"file content digests\",\"kind\":\"contradictory digest rule\",\"text\":\"State 1 says “Every content-derived identity and digest in this kernel is the lowercase hex SHA-256 of the canonical JSON of the model's meaning facts,” while file handling refers to “the SHA-256 of its content” and files are arbitrary bytes, not JSON.\",\"question\":\"Are `content_digest` and file-fixture digests SHA-256 of the raw file bytes, or of some JSON representation of those bytes?\",\"options\":[\"SHA-256 of raw file bytes\",\"SHA-256 of a canonical JSON encoding of the bytes\",\"Different rules for SpooledFiles and trial fixtures\"],\"default_guess\":\"Use SHA-256 of the raw file bytes for every file digest.\"},{\"subject\":\"computing file facts before checks\",\"kind\":\"missing operation\",\"text\":\"“A caller holding bytes computes the facts first,” but the public operations provide no operation that computes a file’s digest, size and media type facts; `content_identity` is specified for canonical JSON rather than arbitrary bytes.\",\"question\":\"Which module computes file facts from bytes, by what operation, and under which digest rule?\",\"options\":[\"Add a canonical-values operation for raw file facts\",\"Allow every byte-holding caller to compute SHA-256 and size itself\",\"Have `store.put_value_bytes` or `store.spool_file` compute and return all facts before validation\"],\"default_guess\":\"Give `canonical_values` one raw-file-facts operation used by all byte-holding callers.\"},{\"subject\":\"functions.add_trial_case file inputs\",\"kind\":\"underspecified input\",\"text\":\"Its inputs are only “input values by port, optional expected outputs,” while authored trial cases may contain file fixtures that must be persisted, and `fit_port_value` receives only file facts rather than bytes.\",\"question\":\"How does an authored trial-case request provide file-fixture bytes, and what exactly does `functions.add_trial_case` receive for a `file` or `many` file port?\",\"options\":[\"Inline file bytes by port\",\"References to previously uploaded temporary files\",\"File facts plus a separate byte payload\",\"StoredValue identities of existing fixtures\"],\"default_guess\":\"Accept file bytes by port, with ordered byte arrays for `many`, and derive their facts before validation.\"},{\"subject\":\"functions.try_implementation result\",\"kind\":\"contradictory output\",\"text\":\"The operation returns “One TrialExecution per case: outcome, output digests, pass or `output_mismatch`,” but “Records reach a caller as they are … with values resolved by `module:surface`,” and M07 stores value outputs as StoredValue references plus file facts.\",\"question\":\"Does a direct `try_implementation` response return complete TrialExecution records with resolved value outputs, only output digests, or a separate summary projection?\",\"options\":[\"Complete TrialExecution records with values resolved subject to disclosure masking\",\"Only outcome and output digests\",\"A defined trial-evidence summary distinct from TrialExecution\"],\"default_guess\":\"Return complete TrialExecution records, resolving value outputs and applying disclosure masking.\"},{\"subject\":\"bindings.check_installed_instances manifest validation\",\"kind\":\"ambiguous check scope\",\"text\":\"It refuses when a manifest record is “failing a check of the record itself (A08 rule 5),” but A08 rule 5 mixes service-record checks, operation-specific checks, proposal-port checks and selected-instance checks; this start operation has no operation name or proposed ports.\",\"question\":\"Which exact A08 checks run at startup, and are all capability entries validated or only data needed for the selected instance’s required-header collision check?\",\"options\":[\"Validate only the service record structure and selected instance facts needed by this operation\",\"Validate every capability entry using the operation-independent A08 checks\",\"Validate only parsing plus the selected instance’s required headers\"],\"default_guess\":\"Validate the record structure and selected instance facts needed for the credential-header collision check, without applying proposal-port checks.\"},{\"subject\":\"bindings.check_installed_instances missing selected instance\",\"kind\":\"vague condition\",\"text\":\"“A service with no selected instance, or whose record lists no instance of the selected name, fails nothing here,” while the same operation also says an unreadable record or one failing a record check stops startup.\",\"question\":\"When a credential-bearing service has a selected instance name absent from its manifest, must the operation still validate the rest of that manifest record, or return success immediately for that service?\",\"options\":[\"Validate the record, then ignore only the missing selected instance\",\"Return success for that service without further manifest validation\",\"Treat the absent instance as a startup refusal\"],\"default_guess\":\"Validate the record’s required structure, but do not refuse merely because the selected instance is absent.\"},{\"subject\":\"functions.add_captured_trial_case missing records\",\"kind\":\"error contradiction\",\"text\":\"The operation says it enforces that “The executed implementation exists” but lists only “`refused` naming the first failing check,” while the global convention says “A missing record is `unknown_reference` naming it, whatever operation looked it up.”\",\"question\":\"If the implementation, contract version, source NodeExecution, StoredValue or SpooledFile named to this operation is missing, is the result `unknown_reference`, `refused`, or `internal_error` because the caller was trusted?\",\"options\":[\"`unknown_reference` for every missing named record\",\"`refused` for missing records discovered by this operation\",\"`internal_error` for records that should have been guaranteed by `runs`, and `unknown_reference` only for request-named records\"],\"default_guess\":\"Return `unknown_reference` for a request-named contract version and `internal_error` for a missing record that `runs` already validated and passed down.\"},{\"subject\":\"store.record_change actor argument\",\"kind\":\"underspecified input\",\"text\":\"“Every operation that writes a record receives the acting Actor … from its caller,” but one `record_change` can write records attributable to different actors, such as an agent-submitted implementation followed by kernel TrialExecutions, verdict and activation.\",\"question\":\"Does each named store change receive one actor for every record, per-record actors, or no actor when the written models have no actor field?\",\"options\":[\"One request actor plus fixed rules that substitute `kernel` for automatic records\",\"An actor supplied separately for each written record\",\"No generic actor input; each change payload supplies only the model’s actual by-fields\"],\"default_guess\":\"Have each named change accept the explicit by-fields required by its models, with automatic admission and activation fields fixed to `kernel`.\"}]}"
+}
