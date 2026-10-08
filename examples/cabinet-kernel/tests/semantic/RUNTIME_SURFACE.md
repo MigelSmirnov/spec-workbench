@@ -108,6 +108,9 @@ the witnesses the next section lists for it.
 | `KernelStopped` | the exception a call in progress raises when the fixture killed the kernel under it |
 | `run_spool(run_id)` | the files left in the run's spool directory below the data directory (an empty list when it is gone) |
 | `kill_on_sandbox_start(nth=1)` | SIGKILL the kernel when its nth sandbox execution counted from now starts; the call in progress raises `KernelStopped` |
+| `surface_answers()` | the raw bytes of every answer the MCP entrance sent so far |
+| `token_comparisons()` | per request, each comparison of the presented token with the owner token and each agent token and the comparison primitive used, or a timing observer showing no dependence on the matching prefix — not yet specified; the test skips at that point |
+| `host_scratch_directory()` | a host directory (`pathlib.Path`) outside the data directory that the kernel process could write and the test can read |
 
 ## Places the surface cannot reach yet
 
@@ -184,3 +187,10 @@ is not written around.
 | `kernel_a15_spool_run_ceiling` | `run_spool()` |
 | `kernel_a15_file_outlives_run_only_as_fixture` | `run_spool()` |
 | `kernel_a15_one_record_per_conclusion` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, stub action `drop_after_request`, `stub.requests` |
+| `kernel_a16_owner_only_actions_refuse_agents` | `manifest.write_record`, `installation.select_instance`, `stub_service()` (a real binding to accept) |
+| `kernel_a16_unknown_token_uniform_refusal` | `mcp_request` (unknown and missing token), `surface_answers()` |
+| `kernel_a16_revoked_token_refused_without_restart` | `mcp_request`, `installation` (token list rewritten) |
+| `kernel_a16_schema_checked_before_record_read` | `mcp_request` (an unknown field) |
+| `kernel_a16_token_match_unique_constant_time` | `mcp_request`, `installation`, `restart()`; constant-time comparison needs `token_comparisons()`, not yet specified: the test skips after its observable part |
+| `kernel_a16_request_size_and_field_bounds` | `mcp_request(raw=)` (a message over the request ceiling), `installation` |
+| `kernel_a16_agent_code_not_run_in_kernel` | `host_scratch_directory()`: where a marker would appear if the kernel process imported or evaluated agent code |
