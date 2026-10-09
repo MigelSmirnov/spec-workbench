@@ -1,0 +1,162 @@
+{
+ "open_points": [
+  {
+   "subject": "canonical_values.canonical_bytes input",
+   "kind": "contradictory input",
+   "text": "“Inputs: One JSON value.” / “Errors: refused for a value JCS cannot represent: a non-finite number, a duplicate key.”",
+   "question": "Does canonical_bytes receive raw JSON text that still exposes duplicate object keys, or an already parsed value—and, in the latter case, which operation detects duplicate keys?",
+   "options": [
+    "Accept raw JSON text and parse it while rejecting duplicates",
+    "Accept parsed values and require surface to detect duplicates before parsing",
+    "Provide separate raw-text and in-memory-value canonicalization operations"
+   ],
+   "default_guess": "Provide separate raw-text ingestion and in-memory canonicalization operations, with duplicate detection during ingestion."
+  },
+  {
+   "subject": "decoding stored canonical values",
+   "kind": "missing operation",
+   "text": "“Modules below receive canonical bytes” / “store.read_value_bytes … for a value StoredValue its canonical JSON bytes” / “sandbox.execute_function … Inputs: … the input values” / “service_invoker.prepare_request … Inputs: … input values”",
+   "question": "Which module converts stored canonical JSON bytes back into JSON/Python values before sandbox execution and HTTP request construction, and what failure does invalid stored JSON produce?",
+   "options": [
+    "Add a canonical_values decoding operation",
+    "Have store.read_value_bytes also return a decoded value",
+    "Let functions, runs and effects/service_invoker decode independently"
+   ],
+   "default_guess": "Add one canonical_values decoding operation; malformed stored canonical bytes become internal_error."
+  },
+  {
+   "subject": "persistence of function and service value outputs",
+   "kind": "missing output handoff",
+   "text": "“canonical_values.canonical_bytes — Callers: module:sandbox, module:service_invoker, module:surface” / “sandbox.execute_function … on success the outputs by port” / “send_prepared_request … the output values by port” / “functions”, “runs” and “effects” write the resulting StoredValues through store.put_value_bytes",
+   "question": "How do functions, runs and effects obtain the canonical bytes needed by put_value_bytes for outputs created by the sandbox or service invoker?",
+   "options": [
+    "Sandbox and service_invoker return canonical bytes alongside each value",
+    "Add functions, runs and effects as callers of canonical_bytes",
+    "Let store accept values and canonicalize them"
+   ],
+   "default_guess": "Have sandbox and service_invoker return each validated value together with its canonical bytes and digest."
+  },
+  {
+   "subject": "flow content identity and proof ordering",
+   "kind": "non-total order",
+   "text": "“edges in the edge order of A05, constants by (`to_node`, `to_port`)” / “edges, by (`to_node`, `to_port`, `from_node`, `from_port`)”",
+   "question": "How are edges with identical endpoints but different guards, and constants with the same target but different contents, ordered for hashing and first-failure selection when the stated keys tie?",
+   "options": [
+    "Use the original request order as a tie-breaker",
+    "Use the remaining canonical edge or constant facts as a total tie-breaker",
+    "Refuse all duplicate endpoint or target keys before identity and proof"
+   ],
+   "default_guess": "Use all remaining canonical facts as a deterministic secondary ordering key."
+  },
+  {
+   "subject": "authored trial-case port coverage",
+   "kind": "ambiguous validation",
+   "text": "“its input values fit the contract version's input ports, its expected outputs, when present, fit the output ports” / “Inputs: A contract version, input values by port, optional expected outputs”",
+   "question": "Must trial inputs contain exactly every input port and no extras, and when expected_outputs is present must it contain exactly every output port or may it assert only a subset?",
+   "options": [
+    "Inputs and present expected outputs must each exactly match their respective port sets",
+    "Inputs must be exact but expected outputs may be a subset",
+    "Both inputs and expected outputs may be partial or contain extra names"
+   ],
+   "default_guess": "Require exact input and output port sets whenever the corresponding map is present; absence of expected_outputs remains the only no-comparison form."
+  },
+  {
+   "subject": "guard value equality",
+   "kind": "undefined comparison",
+   "text": "“enables the edge when that port's value equals it”",
+   "question": "What definition of JSON equality is used for a guard, especially for numbers and for language-level cases such as boolean true versus integer 1?",
+   "options": [
+    "Equality of canonical JSON bytes",
+    "JSON Schema equality semantics",
+    "The host language's native equality"
+   ],
+   "default_guess": "Compare canonical JSON bytes."
+  },
+  {
+   "subject": "HTTP base URL acceptance and joining",
+   "kind": "underspecified request construction",
+   "text": "“an absolute `http` or `https` URL with a host” / “The URL is the `api_base_url` without a trailing `/` followed by the declared path”",
+   "question": "May api_base_url contain user information, a path, query, fragment, or multiple trailing slashes, and exactly how are those components combined with the declared path?",
+   "options": [
+    "Restrict it to scheme, authority and an optional path with no query, fragment or user information, then apply a specified slash rule",
+    "Permit all absolute-URL components and define component-aware URL resolution",
+    "Concatenate text after removing one trailing slash"
+   ],
+   "default_guess": "Reject user information, query and fragment; allow a base path and define one deterministic slash-removal-and-concatenation rule."
+  },
+  {
+   "subject": "path-placeholder encoding",
+   "kind": "undefined encoding",
+   "text": "“Placeholder values are percent-encoded so that they stay one segment.” / “every `{name}` in the path takes the input port of that name, which must be a non-null string or integer, percent-encoded”",
+   "question": "What exact textual form is used for integer placeholders, and which characters, UTF-8 encoding and percent-escape casing are used for string placeholders?",
+   "options": [
+    "RFC 3986 UTF-8 encoding with only unreserved characters left literal and integers rendered as canonical JSON numbers",
+    "Use the HTTP library's path-segment encoder",
+    "Allow any encoding that preserves one segment"
+   ],
+   "default_guess": "Use UTF-8, preserve only RFC 3986 unreserved bytes, emit uppercase percent escapes, and render integers in canonical JSON form."
+  },
+  {
+   "subject": "multipart port metadata",
+   "kind": "unsafe or ambiguous encoding",
+   "text": "“Content-Disposition: form-data; name=\"<port>\", with filename=\"<port>\" added for a file part” / “Content-Type, the port's media type”",
+   "question": "Which port names and media-type strings are valid in multipart requests, and are quotes, backslashes, control characters, non-ASCII names or media-type parameters rejected or escaped?",
+   "options": [
+    "Restrict port names and media types to a closed safe grammar",
+    "Define RFC-compliant quoted-string and extended-parameter escaping",
+    "Insert the supplied text literally"
+   ],
+   "default_guess": "Validate media types as a parameter-free type/subtype and define deterministic quoted-string escaping while rejecting control characters."
+  },
+  {
+   "subject": "function-output validation and publication",
+   "kind": "missing execution order",
+   "text": "“On success it validates each output against the source port … a value above stored_value_bytes_max concludes contract_violation … files go to the run's spool”",
+   "question": "In what order are multiple function outputs validated, size-checked, stored and spooled, and are all outputs checked before any file is published?",
+   "options": [
+    "Validate and size-check every output in port-name order before publishing any output",
+    "Process each output completely in port-name order",
+    "Use the returned dictionary's iteration order"
+   ],
+   "default_guess": "Validate and size-check all outputs first in port-name order, then publish values and files in that same order."
+  },
+  {
+   "subject": "sandbox filesystem access",
+   "kind": "contradiction",
+   "text": "“no filesystem beyond its input” / “one private exchange directory bounded by sandbox_scratch_bytes_max” / the audit hook raises only on “opening any path outside the exchange directory and the read-only runtime”",
+   "question": "May agent code create, read and modify arbitrary scratch files inside the exchange directory, or is that directory accessible only to the runner for transferring declared inputs and outputs?",
+   "options": [
+    "Permit bounded scratch-file access inside the exchange directory",
+    "Permit only runner-managed declared input and output files",
+    "Expose no filesystem path to agent code"
+   ],
+   "default_guess": "Follow the more detailed sandbox rule and permit bounded scratch access inside the private exchange directory."
+  },
+  {
+   "subject": "sandbox.probe_sandbox",
+   "kind": "undefined probe",
+   "text": "“bubblewrap is present and one probe execution succeeds”",
+   "question": "What exact code, inputs, bounds and expected result constitute the probe whose failure prevents the kernel from starting?",
+   "options": [
+    "A fixed embedded program with fixed inputs, bounds and expected output",
+    "Any minimal Python process launched inside bubblewrap",
+    "A probe that also exercises every namespace, trap and resource limit"
+   ],
+   "default_guess": "Use a fixed embedded function with fixed bounds and an exact expected canonical output, while separately verifying the required namespace and mount setup."
+  },
+  {
+   "subject": "masked failure_detail length",
+   "kind": "undefined output meaning",
+   "text": "“a failure_detail … is returned to an agent only as its length and that class”",
+   "question": "Is the disclosed length measured in UTF-8 bytes, Unicode code points, or another unit?",
+   "options": [
+    "UTF-8 byte length",
+    "Unicode code-point count",
+    "Length in the stored representation's native units"
+   ],
+   "default_guess": "Return the UTF-8 byte length, matching failure_detail_bytes_max."
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"canonical_values.canonical_bytes input\",\"kind\":\"contradictory input\",\"text\":\"“Inputs: One JSON value.” / “Errors: refused for a value JCS cannot represent: a non-finite number, a duplicate key.”\",\"question\":\"Does canonical_bytes receive raw JSON text that still exposes duplicate object keys, or an already parsed value—and, in the latter case, which operation detects duplicate keys?\",\"options\":[\"Accept raw JSON text and parse it while rejecting duplicates\",\"Accept parsed values and require surface to detect duplicates before parsing\",\"Provide separate raw-text and in-memory-value canonicalization operations\"],\"default_guess\":\"Provide separate raw-text ingestion and in-memory canonicalization operations, with duplicate detection during ingestion.\"},{\"subject\":\"decoding stored canonical values\",\"kind\":\"missing operation\",\"text\":\"“Modules below receive canonical bytes” / “store.read_value_bytes … for a value StoredValue its canonical JSON bytes” / “sandbox.execute_function … Inputs: … the input values” / “service_invoker.prepare_request … Inputs: … input values”\",\"question\":\"Which module converts stored canonical JSON bytes back into JSON/Python values before sandbox execution and HTTP request construction, and what failure does invalid stored JSON produce?\",\"options\":[\"Add a canonical_values decoding operation\",\"Have store.read_value_bytes also return a decoded value\",\"Let functions, runs and effects/service_invoker decode independently\"],\"default_guess\":\"Add one canonical_values decoding operation; malformed stored canonical bytes become internal_error.\"},{\"subject\":\"persistence of function and service value outputs\",\"kind\":\"missing output handoff\",\"text\":\"“canonical_values.canonical_bytes — Callers: module:sandbox, module:service_invoker, module:surface” / “sandbox.execute_function … on success the outputs by port” / “send_prepared_request … the output values by port” / “functions”, “runs” and “effects” write the resulting StoredValues through store.put_value_bytes\",\"question\":\"How do functions, runs and effects obtain the canonical bytes needed by put_value_bytes for outputs created by the sandbox or service invoker?\",\"options\":[\"Sandbox and service_invoker return canonical bytes alongside each value\",\"Add functions, runs and effects as callers of canonical_bytes\",\"Let store accept values and canonicalize them\"],\"default_guess\":\"Have sandbox and service_invoker return each validated value together with its canonical bytes and digest.\"},{\"subject\":\"flow content identity and proof ordering\",\"kind\":\"non-total order\",\"text\":\"“edges in the edge order of A05, constants by (`to_node`, `to_port`)” / “edges, by (`to_node`, `to_port`, `from_node`, `from_port`)”\",\"question\":\"How are edges with identical endpoints but different guards, and constants with the same target but different contents, ordered for hashing and first-failure selection when the stated keys tie?\",\"options\":[\"Use the original request order as a tie-breaker\",\"Use the remaining canonical edge or constant facts as a total tie-breaker\",\"Refuse all duplicate endpoint or target keys before identity and proof\"],\"default_guess\":\"Use all remaining canonical facts as a deterministic secondary ordering key.\"},{\"subject\":\"authored trial-case port coverage\",\"kind\":\"ambiguous validation\",\"text\":\"“its input values fit the contract version's input ports, its expected outputs, when present, fit the output ports” / “Inputs: A contract version, input values by port, optional expected outputs”\",\"question\":\"Must trial inputs contain exactly every input port and no extras, and when expected_outputs is present must it contain exactly every output port or may it assert only a subset?\",\"options\":[\"Inputs and present expected outputs must each exactly match their respective port sets\",\"Inputs must be exact but expected outputs may be a subset\",\"Both inputs and expected outputs may be partial or contain extra names\"],\"default_guess\":\"Require exact input and output port sets whenever the corresponding map is present; absence of expected_outputs remains the only no-comparison form.\"},{\"subject\":\"guard value equality\",\"kind\":\"undefined comparison\",\"text\":\"“enables the edge when that port's value equals it”\",\"question\":\"What definition of JSON equality is used for a guard, especially for numbers and for language-level cases such as boolean true versus integer 1?\",\"options\":[\"Equality of canonical JSON bytes\",\"JSON Schema equality semantics\",\"The host language's native equality\"],\"default_guess\":\"Compare canonical JSON bytes.\"},{\"subject\":\"HTTP base URL acceptance and joining\",\"kind\":\"underspecified request construction\",\"text\":\"“an absolute `http` or `https` URL with a host” / “The URL is the `api_base_url` without a trailing `/` followed by the declared path”\",\"question\":\"May api_base_url contain user information, a path, query, fragment, or multiple trailing slashes, and exactly how are those components combined with the declared path?\",\"options\":[\"Restrict it to scheme, authority and an optional path with no query, fragment or user information, then apply a specified slash rule\",\"Permit all absolute-URL components and define component-aware URL resolution\",\"Concatenate text after removing one trailing slash\"],\"default_guess\":\"Reject user information, query and fragment; allow a base path and define one deterministic slash-removal-and-concatenation rule.\"},{\"subject\":\"path-placeholder encoding\",\"kind\":\"undefined encoding\",\"text\":\"“Placeholder values are percent-encoded so that they stay one segment.” / “every `{name}` in the path takes the input port of that name, which must be a non-null string or integer, percent-encoded”\",\"question\":\"What exact textual form is used for integer placeholders, and which characters, UTF-8 encoding and percent-escape casing are used for string placeholders?\",\"options\":[\"RFC 3986 UTF-8 encoding with only unreserved characters left literal and integers rendered as canonical JSON numbers\",\"Use the HTTP library's path-segment encoder\",\"Allow any encoding that preserves one segment\"],\"default_guess\":\"Use UTF-8, preserve only RFC 3986 unreserved bytes, emit uppercase percent escapes, and render integers in canonical JSON form.\"},{\"subject\":\"multipart port metadata\",\"kind\":\"unsafe or ambiguous encoding\",\"text\":\"“Content-Disposition: form-data; name=\\\"<port>\\\", with filename=\\\"<port>\\\" added for a file part” / “Content-Type, the port's media type”\",\"question\":\"Which port names and media-type strings are valid in multipart requests, and are quotes, backslashes, control characters, non-ASCII names or media-type parameters rejected or escaped?\",\"options\":[\"Restrict port names and media types to a closed safe grammar\",\"Define RFC-compliant quoted-string and extended-parameter escaping\",\"Insert the supplied text literally\"],\"default_guess\":\"Validate media types as a parameter-free type/subtype and define deterministic quoted-string escaping while rejecting control characters.\"},{\"subject\":\"function-output validation and publication\",\"kind\":\"missing execution order\",\"text\":\"“On success it validates each output against the source port … a value above stored_value_bytes_max concludes contract_violation … files go to the run's spool”\",\"question\":\"In what order are multiple function outputs validated, size-checked, stored and spooled, and are all outputs checked before any file is published?\",\"options\":[\"Validate and size-check every output in port-name order before publishing any output\",\"Process each output completely in port-name order\",\"Use the returned dictionary's iteration order\"],\"default_guess\":\"Validate and size-check all outputs first in port-name order, then publish values and files in that same order.\"},{\"subject\":\"sandbox filesystem access\",\"kind\":\"contradiction\",\"text\":\"“no filesystem beyond its input” / “one private exchange directory bounded by sandbox_scratch_bytes_max” / the audit hook raises only on “opening any path outside the exchange directory and the read-only runtime”\",\"question\":\"May agent code create, read and modify arbitrary scratch files inside the exchange directory, or is that directory accessible only to the runner for transferring declared inputs and outputs?\",\"options\":[\"Permit bounded scratch-file access inside the exchange directory\",\"Permit only runner-managed declared input and output files\",\"Expose no filesystem path to agent code\"],\"default_guess\":\"Follow the more detailed sandbox rule and permit bounded scratch access inside the private exchange directory.\"},{\"subject\":\"sandbox.probe_sandbox\",\"kind\":\"undefined probe\",\"text\":\"“bubblewrap is present and one probe execution succeeds”\",\"question\":\"What exact code, inputs, bounds and expected result constitute the probe whose failure prevents the kernel from starting?\",\"options\":[\"A fixed embedded program with fixed inputs, bounds and expected output\",\"Any minimal Python process launched inside bubblewrap\",\"A probe that also exercises every namespace, trap and resource limit\"],\"default_guess\":\"Use a fixed embedded function with fixed bounds and an exact expected canonical output, while separately verifying the required namespace and mount setup.\"},{\"subject\":\"masked failure_detail length\",\"kind\":\"undefined output meaning\",\"text\":\"“a failure_detail … is returned to an agent only as its length and that class”\",\"question\":\"Is the disclosed length measured in UTF-8 bytes, Unicode code points, or another unit?\",\"options\":[\"UTF-8 byte length\",\"Unicode code-point count\",\"Length in the stored representation's native units\"],\"default_guess\":\"Return the UTF-8 byte length, matching failure_detail_bytes_max.\"}]}"
+}
