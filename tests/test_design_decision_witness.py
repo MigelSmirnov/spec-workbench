@@ -98,6 +98,21 @@ def test_claimed_but_absent_witness_blocks(tmp_path):
     assert finding["code"] == "witness_unresolved" and "no_such_check" in finding["message"]
 
 
+def test_design_lint_gate_is_a_workbench_witness(tmp_path):
+    case, factory = _case(tmp_path, tag1="[witness: workbench:state2_rules_decisions]")
+    report = design_decision_witness.coverage(case, factory)
+    assert report["summary"]["witnessed"] == 1
+    assert report["summary"]["errors"] == 0
+
+
+def test_unknown_workbench_gate_blocks(tmp_path):
+    case, factory = _case(tmp_path, tag1="[witness: workbench:state9_everything]")
+    report = design_decision_witness.coverage(case, factory)
+    assert report["summary"]["handoff_ready"] is False
+    finding = report["findings"][0]
+    assert finding["code"] == "witness_unresolved" and "state9_everything" in finding["message"]
+
+
 def test_note_witness_requires_test_evidence_marker(tmp_path):
     case, factory = _case(
         tmp_path,
