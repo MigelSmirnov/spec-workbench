@@ -48,6 +48,11 @@ SCHEMA_VERSION = "spec_workbench_decision_witness.v1"
 FACTORY_ROOT_ENV = "SPEC_WORKBENCH_FACTORY_ROOT"
 FACTORY_TARGET_FILE = "90_factory_target.json"
 ASSEMBLED_SPEC_FILE = "global_spec.json"
+# Authoring-sequence phases that block on deterministic design_lint findings
+# (design_authoring_next): State 1 models, State 2 decisions and the State 2
+# security review. A decision whose invariant is one of these gates is
+# witnessed by the gate itself.
+LINT_GATES = ("state1_models", "state2_rules_decisions")
 WITNESS_RE = re.compile(r"\[witness:\s*(verification|note|workbench):([A-Za-z0-9_.\-]+)\]")
 NOTE_SCOPE_RE = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)?)\s*:")
 
@@ -149,12 +154,14 @@ def coverage(case: Path, factory: Path | None = None) -> dict[str, Any]:
         resolved_any = False
         for kind, name in tags:
             if kind == "workbench":
-                # a decision the workbench itself enforces on every assembly (State 2 lint, identity, flows …)
+                # a decision the workbench itself enforces: on every assembly (identity, flows …)
+                # or as a design_lint gate of the authoring sequence (State 1/2, security review)
                 try:
                     from assembly_workbench.model import CHECK_ORDER
                     workbench_checks = set(CHECK_ORDER)
                 except ImportError:  # pragma: no cover
                     workbench_checks = set()
+                workbench_checks.update(LINT_GATES)
                 if name in workbench_checks:
                     resolved_any = True
                 else:
@@ -162,7 +169,7 @@ def coverage(case: Path, factory: Path | None = None) -> dict[str, Any]:
                         "severity": "error", "code": "witness_unresolved",
                         "decision": item.get("key"), "witness": f"{kind}:{name}", "location": location,
                         "message": (f"{item.get('key')}: claims workbench check {name!r} that the assembly "
-                                    "does not run — a claimed witness that is absent is worse than no claim"),
+                                    "nor the authoring sequence runs — a claimed witness that is absent is worse than no claim"),
                     })
                 continue
             if kind == "verification":
