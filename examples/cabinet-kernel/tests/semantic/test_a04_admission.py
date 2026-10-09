@@ -19,7 +19,8 @@ Fixture surface used here:
   ShownAddedTrialCase; values are RequestJsonValue dicts;
 - ``submit_implementation(contract_version_id, code)`` -> ShownSubmission
   (implementation, AdmissionVerdict M08, Activation M09 or none);
-- ``roll_back_slot(slot_id, implementation_id)`` -> Activation;
+- ``roll_back_slot(slot_id, implementation_id, actor=...)`` -> Activation;
+  the owner unless ``actor=`` names an author;
 - ``compose_flow_version``, ``activate_flow_version``, ``start_run`` and
   ``capture_failed_execution(execution, contract_version_id)`` -> ShownTrialCase
   for a captured case;
@@ -32,11 +33,15 @@ One capability: ``mcp_request`` with ``installation.owner_token`` and
 shape (an unknown operation, an unknown field).
 """
 
+import hashlib
 import json
 
 import pytest
 
 TEXT = '{"type":"string"}'
+
+OWNER = {"kind": "owner", "agent_name": None}
+AUTHOR = {"kind": "agent", "agent_name": "author"}
 
 ECHO = """
 def run(inputs):
@@ -111,6 +116,17 @@ def _trial_executions(semantic_runtime, implementation_id):
         {"filter_kind": "equals", "field": "implementation_id", "value": implementation_id},
         page_size=200,
     ).records.trial_executions
+
+
+def _corpus_digest(trial_case_ids):
+    """The corpus digest of A04 rule 2: the content identity (State 6 decision
+    14, A01 rule 1) of the CorpusContent holding the ids in corpus order — the
+    lowercase hex SHA-256 of its RFC 8785 canonical JSON. Every key and id is
+    ASCII, so sorted keys and no whitespace give exactly the JCS bytes; the id
+    list keeps its order (corpus order carries meaning)."""
+    facts = {"subject_kind": "corpus", "trial_case_ids": list(trial_case_ids)}
+    text = json.dumps(facts, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
 def _submit(semantic_runtime, contract_version_id, code):
@@ -413,10 +429,12 @@ def test_verdict_set_only_by_kernel(semantic_runtime):
         )
     assert exc.value.code == "invalid_request"
 
-    # The owner's one activating operation does not waive it either (A04 rule 5).
-    with pytest.raises(Exception) as exc:
-        semantic_runtime.roll_back_slot(slot_id, implementation_id)
-    assert exc.value.code == "refused"
+    # The one activating operation the owner and an author may call does not
+    # waive it either, for either of them (A04 rule 5).
+    for actor in (OWNER, AUTHOR):
+        with pytest.raises(Exception) as exc:
+            semantic_runtime.roll_back_slot(slot_id, implementation_id, actor=actor)
+        assert exc.value.code == "refused"
 
     # Nothing changed: the one verdict is still the kernel's refusal.
     after = _history(semantic_runtime, slot_id, cv)
@@ -462,12 +480,17 @@ def test_corpus_order_is_first_added(semantic_runtime):
 
     corpus = semantic_runtime.get_repair_view(slot_id).corpus
     assert [case.trial_case_id for case in corpus] == [c1, c2, c3]
-    # A04 rule 2: the digest is the identity of the id list in corpus order.
+    # A04 rule 2: the digest is the identity of the id list in corpus order —
+    # [c1, c2, c3], not a sorted or set form of it.
     assert _history(semantic_runtime, slot_id, cv).corpus_digest == digest
+    assert digest == _corpus_digest([c1, c2, c3])
 
     # Control: a new case takes the next place and changes the digest, so the
     # unchanged digest above is the equal case, not a digest that never moves.
     c4 = semantic_runtime.add_trial_case(cv, inputs=[_json("x", "d")])
-    assert c4.trial_case.trial_case_id not in (c1, c2, c3)
+    c4_id = c4.trial_case.trial_case_id
+    assert c4_id not in (c1, c2, c3)
     assert c4.corpus_position == 3
-    assert _history(semantic_runtime, slot_id, cv).corpus_digest != digest
+    assert _history(semantic_runtime, slot_id, cv).corpus_digest == _corpus_digest(
+        [c1, c2, c3, c4_id]
+    )
