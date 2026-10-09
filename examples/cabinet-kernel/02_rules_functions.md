@@ -150,7 +150,7 @@ and no detection promises the runtime cannot keep.
 
 1. Every function execution, in trial and in a run alike, runs in a fresh
    isolated environment created by the sandbox: Linux `bubblewrap` with new user,
-   PID, IPC, UTS and network namespaces, no network interface but the namespace's own loopback, an environment
+   PID, IPC, UTS and network namespaces, no network interface but the namespace's own loopback — up, as bubblewrap leaves it in a new network namespace, and reaching nothing outside the execution, so K-02's "no network" holds — an environment
    holding only `PYTHONHASHSEED=0` (rule 2), a read-only runtime, and one private exchange directory bounded by
    `sandbox_scratch_bytes_max`. No host directory is mounted except the read-only
    runtime and that exchange directory. There is no in-process or fast path.
@@ -232,7 +232,7 @@ and no detection promises the runtime cannot keep.
 ```text
 function_executed -> inside(fresh_bubblewrap_environment)
 environment = {python_stdlib_runtime, code, inputs, exchange_dir}
-network(environment) = absent AND env_vars(environment) = {PYTHONHASHSEED=0}
+network(environment) = own_loopback_only AND env_vars(environment) = {PYTHONHASHSEED=0}
 
 trap_raised -> outcome = sandbox_violation   (even if output conforms)
 outcome = first_of(timeout, resource_exhausted, sandbox_violation, crashed,
