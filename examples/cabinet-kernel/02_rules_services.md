@@ -543,8 +543,10 @@ restart AND in_flight -> unknown
    [witness: verification:kernel_a11_not_applied_fresh_approval_next_attempt]
 4. A service error text containing "created" changes nothing.
 5. Resolving `applied` for a binding with output ports counts the element failed
-   with reason `applied_outputs_unknown`; the attempt's one NodeExecution keeps
-   `outcome_unknown` and the resolution writes none.
+   — reason `applied_outputs_unknown`, read from the `applied` attempt and the
+   binding's output ports (rule 3) and stored in no record — so its dependants do
+   not run; the attempt's one NodeExecution keeps `outcome_unknown` and the
+   resolution writes none.
    [witness: verification:kernel_a11_applied_with_outputs_fails_element]
 6. While an element's attempt is `unknown`, the element waits with reason
    `outcome_unknown`, no node depending on it runs, and no request is sent again

@@ -583,8 +583,8 @@ def test_spool_file_ceiling(semantic_runtime):
     """[witness: verification:kernel_a15_spool_file_ceiling]
 
     A15 Required test 3: a function writing a file one byte over
-    `spool_file_bytes_max` concludes `resource_exhausted` and leaves nothing in
-    the spool.
+    `spool_file_bytes_max` concludes `resource_exhausted` — under release v1
+    already by `output_bytes`, which is lower — and leaves nothing in the spool.
     """
     sized = _sized_file_function(semantic_runtime, "sized_file")
     check = _check_function(semantic_runtime)

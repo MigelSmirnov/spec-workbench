@@ -257,6 +257,7 @@ def test_restart_turns_in_flight_unknown(semantic_runtime):
 
     # From here on the service would answer any request it received.
     stub.on("POST", "/items", status=200, json={})
+    semantic_runtime.clock.advance(ms=5000)
     assert semantic_runtime.restart().started is True
 
     # A11 rule 4: on start the `in_flight` attempt becomes `unknown`, with its
@@ -278,6 +279,9 @@ def test_restart_turns_in_flight_unknown(semantic_runtime):
     assert tuple(execution.outputs) == ()
     # A11 rule 4: its start time is taken from the EffectAttempt.
     assert execution.started_at == attempt.recorded_at
+    # It ends when the start recovered it, five seconds later on the kernel
+    # clock (A19: every timestamp from clock.kernel_now at that moment).
+    assert execution.ended_at.epoch_us >= attempt.recorded_at.epoch_us + 5_000_000
     assert _v(_approvals(semantic_runtime, run.run_id)[0].status) == "used"
 
     # A11 rules 2 and 4: the element waits; the kernel does not ask the

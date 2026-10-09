@@ -1022,7 +1022,11 @@ def test_recovery_completes_before_surface(semantic_runtime):
     assert len(vault.requests) == 1
     vault.on("POST", "/records", json={})
 
+    t_recovery = 1_900_000_000_000_000
+    t_surface = t_recovery + 60_000_000
+    semantic_runtime.clock.set(t_recovery)
     assert semantic_runtime.restart().started is True
+    semantic_runtime.clock.set(t_surface)
 
     # The first request the surface answers: no attempt is `in_flight`.
     page = semantic_runtime.page_records("effect_attempt", None, page_size=200)
@@ -1040,5 +1044,11 @@ def test_recovery_completes_before_surface(semantic_runtime):
     trace = _trace(semantic_runtime, run.run_id)
     assert _steps(trace, "a_save") == [(1, "outcome_unknown")]
     assert _steps(trace, "b_upper") == [(1, "succeeded")]
+    # Everything recovery wrote carries the clock of the start, before the
+    # surface's: a recovery done lazily inside the first request would carry
+    # t_surface (A14 rule 5).
+    recovered = [e.ended_at.epoch_us for e in trace if e.node_id == "a_save"]
+    recovered += [t.epoch_us for e in trace if e.node_id == "b_upper" for t in (e.started_at, e.ended_at)]
+    assert recovered and all(t_recovery <= t < t_surface for t in recovered)
     # The kernel did not ask the service again (A11 rule 4).
     assert len(vault.requests) == 1

@@ -185,9 +185,9 @@ new_flow_version -/> inherits(activation | grant | approval)
    is refused with that proof failure; after the owner accepts the binding, the
    owner activating the same version succeeds with no new version.
    [witness: verification:kernel_a06_activation_proves_version_again]
-6. A new version of an owner-activated flow with a `draft-write` node, differing
-   only in one constant, is not active, and no approval or standing grant of the
-   earlier version applies to it.
+6. A new version of an owner-activated flow with a `state-transition` node,
+   differing only in one constant, is not active, and no approval or standing
+   grant of the earlier version applies to it.
    [witness: verification:kernel_a06_new_version_inherits_nothing]
 
 ### Consequence
@@ -253,8 +253,9 @@ class(binding_output) = declared_class(binding)
 2. A path from a personal-data read through two functions into an input accepting
    `business_confidential` is refused by the proof.
    [witness: verification:kernel_a07_proof_refuses_class_above_accepted]
-3. An agent reading that run receives digests and classes for the personal-data
-   values and content for the rest; the owner receives all content.
+3. An agent reading a run whose personal-data read reaches a flow output through
+   two functions receives digests and classes for the personal-data values and
+   content for the rest; the owner receives all content.
    [witness: verification:kernel_a07_agent_gets_personal_data_as_digest]
 4. An agent reading the approval preview of such a node receives no personal-data
    value.

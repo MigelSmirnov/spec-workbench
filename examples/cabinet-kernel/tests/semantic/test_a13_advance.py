@@ -736,15 +736,12 @@ def test_resolved_unknown_conclusion(semantic_runtime):
 
     A13 Required test 9: an element recorded `outcome_unknown` keeps its
     dependants waiting while its EffectAttempt is `unknown`; resolved
-    `applied` for a binding without output ports, its dependants execute;
-    resolved `applied` for a binding with output ports, they conclude
-    `upstream_failed`; its NodeExecution keeps `outcome_unknown` throughout.
+    `applied` for a binding without output ports — which has no dependants,
+    since an edge starts only at an output port — the element counts succeeded
+    and the run continues to its end; resolved `applied` for a binding with
+    output ports, its dependants conclude `upstream_failed`; its NodeExecution
+    keeps `outcome_unknown` throughout.
     """
-    pytest.skip(
-        "owner decision: which dependants can 'execute' after `applied` for a "
-        "binding without output ports, when an edge starts only at an output "
-        "port (M15, A05 phase 3)?"
-    )
     # Both operations are `draft-write`: sent under the flow activation without
     # approval (A10 rule 1); the stub drops the connection after reading the
     # request, so each attempt is `unknown` (A09 rule 5).

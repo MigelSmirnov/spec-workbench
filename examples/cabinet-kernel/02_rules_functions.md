@@ -150,7 +150,7 @@ and no detection promises the runtime cannot keep.
 
 1. Every function execution, in trial and in a run alike, runs in a fresh
    isolated environment created by the sandbox: Linux `bubblewrap` with new user,
-   PID, IPC, UTS and network namespaces, no network interface, an environment
+   PID, IPC, UTS and network namespaces, no network interface but the namespace's own loopback, an environment
    holding only `PYTHONHASHSEED=0` (rule 2), a read-only runtime, and one private exchange directory bounded by
    `sandbox_scratch_bytes_max`. No host directory is mounted except the read-only
    runtime and that exchange directory. There is no in-process or fast path.
@@ -273,7 +273,7 @@ cleanup_unconfirmed -> output_discarded AND kernel_process_stops
    port succeeds with exactly `{"PYTHONHASHSEED": "0"}`.
    [witness: verification:kernel_a03_env_holds_only_hash_seed]
 10. Inspected from outside it, each execution's environment has no network
-    interface, mounts no host directory except the read-only runtime and its
+    interface but its own loopback, mounts no host directory except the read-only runtime and its
     exchange directory, and has an exchange directory no other execution used.
     [witness: verification:kernel_a03_fresh_env_no_network_no_host_mounts]
 11. When removal of the exchange directory cannot be confirmed, the execution is

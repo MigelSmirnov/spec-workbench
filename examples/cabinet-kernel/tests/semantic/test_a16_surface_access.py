@@ -538,13 +538,12 @@ def test_author_actions_need_author_right(semantic_runtime):
     assert submission.implementation.contract_version_id == contract_version_id
 
 
-def test_token_match_unique_constant_time(semantic_runtime):
-    """[witness: verification:kernel_a16_token_match_unique_constant_time]
+def test_tokens_unique(semantic_runtime):
+    """[witness: verification:kernel_a16_tokens_unique]
 
     A16 Required test 8: the installation refuses to start, and a
     configuration re-read refuses every request, when two tokens are equal or
-    two agent tokens share a name; a token is compared in constant time with
-    the owner token and with each agent token.
+    two agent tokens share a name.
     """
     installation = semantic_runtime.installation
     owner_token = installation.owner_token
@@ -597,15 +596,6 @@ def test_token_match_unique_constant_time(semantic_runtime):
         outcome = semantic_runtime.restart()
         assert outcome.started is True, case
         _list_slots(semantic_runtime, owner_token)
-
-    # A16 rule 1: the comparison in constant time is not observable through
-    # calls or the capabilities of the catalogue.
-    pytest.skip(
-        "capability needed: semantic_runtime.token_comparisons() — per request, "
-        "each comparison of the presented token with the owner token and each "
-        "agent token, with the comparison primitive used (or a timing observer "
-        "showing no dependence on the length of the matching prefix)"
-    )
 
 
 def test_request_size_and_field_bounds(semantic_runtime):

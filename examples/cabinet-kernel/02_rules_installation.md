@@ -124,9 +124,8 @@ page_size <= page_size_max
    owner token.
    [witness: verification:kernel_a16_author_actions_need_author_right]
 8. The installation refuses to start, and a configuration re-read refuses every
-   request, when two tokens are equal or two agent tokens share a name; a token
-   is compared in constant time with the owner token and with each agent token.
-   [witness: verification:kernel_a16_token_match_unique_constant_time]
+   request, when two tokens are equal or two agent tokens share a name.
+   [witness: verification:kernel_a16_tokens_unique]
 9. A request one byte over `surface_request_bytes_max` that carries an unknown
    token gets the size refusal, not the token refusal; a string field one byte
    over its bound is refused before any record is read.
@@ -137,6 +136,8 @@ page_size <= page_size_max
 11. Authoring an implementation whose code would write a marker file when
     imported or evaluated writes no marker.
     [witness: verification:kernel_a16_agent_code_not_run_in_kernel]
+12. A token is compared in constant time with the owner token and with each
+    agent token.
 
 ### Consequence
 
@@ -274,15 +275,12 @@ symlink_inside(data_directory) -> refused
 1. A second kernel on the same data directory refuses to start.
    [witness: verification:kernel_a18_single_process_lock]
 2. A crash during a value write leaves either no file or the complete file.
-   [witness: verification:kernel_a18_value_write_atomic_publish]
 3. A failed store call leaves no partial record.
-   [witness: verification:kernel_a18_failed_store_call_writes_nothing]
 4. A symbolic link in the value area stops the start; one placed there after
    the start makes the store call that meets it fail with nothing written.
    [witness: verification:kernel_a18_symlink_in_data_dir_refused]
 5. A value write whose bytes do not match their digest or size publishes no
    file; writing equal bytes again leaves the published file unchanged.
-   [witness: verification:kernel_a18_published_file_digest_never_overwritten]
 6. No module other than the store module opens the database or opens, names or
    passes a transaction.
    [witness: verification:kernel_a18_store_module_sole_transaction_owner]
@@ -437,9 +435,9 @@ state2_security_gate_pass
 ### Required tests
 
 1. `design_lint --state 2` accepts exactly one complete review record.
-   [witness: verification:kernel_a21_security_review_gate_complete]
+   [witness: workbench:state2_rules_decisions]
 2. Every reference resolves to an indexed State 2 decision.
-   [witness: verification:kernel_a21_security_references_resolve]
+   [witness: workbench:state2_rules_decisions]
 
 ### Consequence
 

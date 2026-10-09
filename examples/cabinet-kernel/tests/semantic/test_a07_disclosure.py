@@ -366,7 +366,8 @@ def test_proof_refuses_class_above_accepted(semantic_runtime):
 def test_agent_gets_personal_data_as_digest(semantic_runtime):
     """[witness: verification:kernel_a07_agent_gets_personal_data_as_digest]
 
-    A07 Required test 3: an agent reading that run receives digests and classes
+    A07 Required test 3: an agent reading a run whose personal-data read
+    reaches a flow output through two functions receives digests and classes
     for the personal-data values and content for the rest; the owner receives
     all content.
     """

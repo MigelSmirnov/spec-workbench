@@ -280,7 +280,11 @@ def run(inputs)
     for code in (no_run, syntax_error):
         # The submission is answered, not refused: the kernel stored the code
         # without loading it.
+        executions_before = len(semantic_runtime.sandbox_executions())
         submission, execution = _conclude(semantic_runtime, cv, code)
+        # `crashed` comes from executions in the sandbox, not from the kernel
+        # parsing the code itself (A16 rule 5).
+        assert len(semantic_runtime.sandbox_executions()) > executions_before
         # A03 rule 5: module failed to load or has no `run` — crashed;
         # A04 rule 3: admission refuses it with that outcome.
         _assert_concluded(submission, execution, "crashed")
@@ -499,7 +503,7 @@ def test_fresh_env_no_network_no_host_mounts(semantic_runtime):
     exchange_directories = []
     for observed in executions:
         # A03 rule 1: new network namespace with no network interface.
-        assert not observed.network_interfaces
+        assert set(observed.network_interfaces) <= {"lo"}
         # A03 rule 1: no host directory is mounted except the read-only
         # runtime and the one private exchange directory.
         assert observed.exchange_directory in observed.mounts

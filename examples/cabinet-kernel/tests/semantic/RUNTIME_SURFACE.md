@@ -94,14 +94,14 @@ the witnesses the next section lists for it.
 | capability | meaning |
 |---|---|
 | `installation` | the installation's configuration file: `owner_token`, `agent_token(name)`, `set_agent_tokens([AgentToken])`, `set_owner_token(token)`, `write_config_text(text)`, `set_config_mode(mode)`, `select_instance(service_id, instance_name)`, `set_credential(service_id, header_name, secret_value)` (writes an owner-only secret file and its reference; `None` references a missing file), `write_secret(service_id, value)`, `set_manifest_revision(revision)` |
-| `clock` | the kernel clock (`clock.kernel_now`) injected by the fixture: `set(epoch_us)`, `advance(ms=0, days=0)`; `fix_monotonic(ns)` fixes its monotonic source |
+| `clock` | the kernel clock (`clock.kernel_now`) injected by the fixture: `set(epoch_us)`, `advance(ms=0, days=0)`; `fix_monotonic(ns)` fixes its monotonic source; a setting holds in the running kernel at once and carries over `restart()`, which returns only once the surface answers |
 | `mcp_request(operation, request, *, token=None, raw=None)` | one request over the MCP entrance: `request` the fields as sent, unknown ones included, `token` (default: the actor's), `raw` exact bytes; returns the answer or raises with `code` and `reason` |
 | `restart()` | stop the kernel process and start it again on the same data directory and configuration; returns StartOutcome (`started`, `exit_code`, `stderr`) |
 | `kernel_exited()` | the exit status of the kernel process when it ended on its own since its last start, `None` while it runs |
 | `host` | host conditions for the next start: `remove_bubblewrap()`, `set_env(name, value)` |
 | `sandbox_executions()` | per sandbox execution, observed from outside it: `network_interfaces`, `mounts` (host paths), `exchange_directory`, `processes_left` after completion |
 | `sandbox_runtime_paths()` | the host paths the release mounts read-only as the sandbox runtime |
-| `faults` | injected faults: `unconfirmed_cleanup(nth=1)` (the nth sandbox execution from now cannot confirm its cleanup), `fail_store_change(change_name)` (the next change of that name fails), `crash_during_value_write()`, `place_symlink(relative_path, target)`, `alter_value_write(kind, nth=1)` (the nth value write is changed after its temporary file is flushed and before the store checks it: `content` changes one byte, `size` appends one) |
+| `faults` | injected faults: `unconfirmed_cleanup(nth=1)` (the nth sandbox execution from now cannot confirm its cleanup), `place_symlink(relative_path, target)` |
 | `manifest` | the platform manifest the installation reads: `write_record(service_id, record, *, revision=None, file_name=None)` writes a record shaped as State 6 ManifestServiceRecord without `record_digest` in the platform's raw form (instance class as `class`, instances keyed by name; extra members of a capability, such as `note`, and an `exposed_as` without `http_api` written as given) at `revision` (default: the configured one) under `file_name` (default `<service_id>.json`); `write_record_text(...)` writes raw text; `new_revision()` makes a later revision starting as a copy of the configured one |
 | `stub_service()` | an HTTP service on loopback: `base_url`, `authority`; `on(method, path, status=200, json=None, body=None, headers=None, action=None)` sets the answer of a route, `action` one of `drop_after_request` (close after reading the request, no status line), `refuse_connection`, `redirect` (with `Location` in `headers`), `kill_kernel` (SIGKILL the kernel once the request arrived, before answering), `hold`; `set_down(flag)`; `requests` (method, target, headers as on the wire, body, peer) |
 | `store_dump()` | every byte the store holds (database and value area), for "appears in no record" |
@@ -109,7 +109,6 @@ the witnesses the next section lists for it.
 | `run_spool(run_id)` | the files left in the run's spool directory below the data directory (an empty list when it is gone) |
 | `kill_on_sandbox_start(nth=1)` | SIGKILL the kernel when its nth sandbox execution counted from now starts; the call in progress raises `KernelStopped` |
 | `surface_answers()` | the raw bytes of every answer the MCP entrance sent so far |
-| `token_comparisons()` | per request, each comparison of the presented token with the owner token and each agent token and the comparison primitive used, or a timing observer showing no dependence on the matching prefix — not yet specified; the test skips at that point |
 | `host_output()` | all text the kernel wrote to standard error or its log |
 | `process_arguments()` | the argv of the kernel and of every process it started |
 | `start_second_kernel()` | start another kernel process on the same data directory; returns StartOutcome |
@@ -136,6 +135,7 @@ is not written around.
 | `kernel_a03_kernel_refuses_start_without_sandbox` | `host.remove_bubblewrap()`, `restart()`: a start on a host without `bubblewrap` |
 | `kernel_a03_fresh_env_no_network_no_host_mounts` | `sandbox_executions()`, `sandbox_runtime_paths()`: the environment inspected from outside |
 | `kernel_a03_unconfirmed_cleanup_stops_kernel` | `faults.unconfirmed_cleanup()`, `kernel_exited()`, `restart()`: a cleanup that cannot be confirmed, and the process stopping |
+| `kernel_a03_unloadable_module_is_crashed` | `sandbox_executions()`: that the outcome comes from executions in the sandbox, not from the kernel reading the code |
 | `kernel_a04_verdict_set_only_by_kernel` | `mcp_request`: requests carrying a verdict field, by the owner and by an author |
 | `kernel_a05_proof_recomputed_on_demand` | `manifest.write_record`, `installation.select_instance`, `stub_service()`: an accepted binding needs a manifest record and a selected instance |
 | `kernel_a05_highest_effect_class_max_or_read` | `manifest.write_record`, `installation.select_instance`, `stub_service()` |
@@ -168,7 +168,7 @@ is not written around.
 | `kernel_a10_used_approval_and_grant_do_not_cover_resend` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, stub action `drop_after_request`, `stub.requests` |
 | `kernel_a10_no_decision_changes_nothing` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, `clock.advance` (days pass) |
 | `kernel_a10_grant_bound_to_flow_version` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, `stub.requests` |
-| `kernel_a11_restart_turns_in_flight_unknown` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, stub action `kill_kernel`, `KernelStopped`, `restart()` |
+| `kernel_a11_restart_turns_in_flight_unknown` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, stub action `kill_kernel`, `KernelStopped`, `restart()`, `clock.advance` |
 | `kernel_a11_applied_no_outputs_succeeds_one_execution` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, stub action `drop_after_request` |
 | `kernel_a11_not_applied_fresh_approval_next_attempt` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, stub action `drop_after_request` |
 | `kernel_a11_applied_with_outputs_fails_element` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, stub action `drop_after_request` |
@@ -187,7 +187,7 @@ is not written around.
 | `kernel_a14_resume_leaves_other_waits_untouched` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, `stub.set_down`, stub action `drop_after_request`, `stub.requests` |
 | `kernel_a14_cancel_owner_only_unended_only` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, `run_spool()` |
 | `kernel_a14_spool_emptied_on_succeeded_refused` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, `run_spool()` |
-| `kernel_a14_recovery_completes_before_surface` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, stub action `kill_kernel`, `KernelStopped`, `restart()` |
+| `kernel_a14_recovery_completes_before_surface` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, stub action `kill_kernel`, `KernelStopped`, `restart()`, `clock.set` |
 | `kernel_a15_node_execution_immutable` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, `stub.set_down`, stub action `drop_after_request`, `restart()` |
 | `kernel_a15_failure_detail_bounded_no_secret` | `store_dump()` |
 | `kernel_a15_spool_file_ceiling` | `run_spool()` |
@@ -198,7 +198,7 @@ is not written around.
 | `kernel_a16_unknown_token_uniform_refusal` | `mcp_request` (unknown and missing token), `surface_answers()` |
 | `kernel_a16_revoked_token_refused_without_restart` | `mcp_request`, `installation` (token list rewritten) |
 | `kernel_a16_schema_checked_before_record_read` | `mcp_request` (an unknown field) |
-| `kernel_a16_token_match_unique_constant_time` | `mcp_request`, `installation`, `restart()`; constant-time comparison needs `token_comparisons()`, not yet specified: the test skips after its observable part |
+| `kernel_a16_tokens_unique` | `mcp_request`, `installation`, `restart()` |
 | `kernel_a16_request_size_and_field_bounds` | `mcp_request(raw=)` (a message over the request ceiling), `installation` |
 | `kernel_a17_canary_credential_never_written` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, `store_dump()`, `host_output()`, `process_arguments()`, `surface_answers()` |
 | `kernel_a17_config_file_owner_only` | `installation.set_config_mode`, `restart()` |
@@ -206,10 +206,7 @@ is not written around.
 | `kernel_a17_echoed_credential_body_withheld` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, `store_dump()`, `surface_answers()` |
 | `kernel_a17_credential_resolved_per_request` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential` (a missing secret file), `installation.write_secret`, `restart()` |
 | `kernel_a18_single_process_lock` | `start_second_kernel()`, `restart()` |
-| `kernel_a18_value_write_atomic_publish` | `faults.crash_during_value_write()`, `KernelStopped`, `data_directory`, `value_file()`, `restart()` |
-| `kernel_a18_failed_store_call_writes_nothing` | `faults.fail_store_change()`, `restart()` (the process ends after an `internal_error` answer) |
 | `kernel_a18_symlink_in_data_dir_refused` | `faults.place_symlink()`, `data_directory`, `value_file()`, `restart()` |
-| `kernel_a18_published_file_digest_never_overwritten` | `faults.alter_value_write()`, `data_directory`, `value_file()`, `restart()` (the process ends after an `internal_error` answer) |
 | `kernel_a18_store_module_sole_transaction_owner` | `kernel_sources()`: a static fact of the generated code |
 | `kernel_a19_timestamps_from_injected_clock` | `clock.set` |
 | `kernel_a19_service_timestamp_not_kernel_time` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, `clock.set`, `stub.requests` |
@@ -219,6 +216,4 @@ is not written around.
 | `kernel_a20_over_ceiling_refused_not_truncated` | `mcp_request(raw=)` |
 | `kernel_a20_ceilings_equal_release_constants` | `release`, `kernel_sources()`: static facts of the release |
 | `kernel_a20_dependencies_pinned_by_release` | `release`, `kernel_sources()`: static facts of the release |
-| `kernel_a21_security_review_gate_complete` | none the fixture can give: a design gate over the State 2 documents (`tools/design_lint.py --state 2`), not kernel behaviour; the test skips |
-| `kernel_a21_security_references_resolve` | none the fixture can give: the same design gate; the test skips |
 | `kernel_a16_agent_code_not_run_in_kernel` | `host_scratch_directory()`: where a marker would appear if the kernel process imported or evaluated agent code |

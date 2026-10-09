@@ -214,9 +214,10 @@ run.succeeded <-> for_all node: conclusion IN {succeeded, skipped_by_guard}
    [witness: verification:kernel_a13_upstream_failed_wins_over_skip]
 9. An element recorded `outcome_unknown` keeps its dependants waiting while its
    EffectAttempt is `unknown`; resolved `applied` for a binding without output
-   ports, its dependants execute; resolved `applied` for a binding with output
-   ports, they conclude `upstream_failed`; its NodeExecution keeps
-   `outcome_unknown` throughout.
+   ports — which has no dependants, since an edge starts only at an output port
+   — the element counts succeeded and the run continues to its end; resolved
+   `applied` for a binding with output ports, its dependants conclude
+   `upstream_failed`; its NodeExecution keeps `outcome_unknown` throughout.
    [witness: verification:kernel_a13_resolved_unknown_conclusion]
 
 ### Consequence
@@ -401,7 +402,8 @@ file_outlives_run -> captured_as_fixture
    `failure_detail` without it.
    [witness: verification:kernel_a15_failure_detail_bounded_no_secret]
 3. A function writing a file one byte over `spool_file_bytes_max` concludes
-   `resource_exhausted` and leaves nothing in the spool.
+   `resource_exhausted` — under release v1 already by `output_bytes`, which is
+   lower — and leaves nothing in the spool.
    [witness: verification:kernel_a15_spool_file_ceiling]
 4. A function whose second spooled file brings its run's spool one byte over
    `spool_run_bytes_max` concludes `resource_exhausted`; only that attempt's

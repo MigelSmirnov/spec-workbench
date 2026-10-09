@@ -382,8 +382,8 @@ def test_new_version_inherits_nothing(semantic_runtime):
     """[witness: verification:kernel_a06_new_version_inherits_nothing]
 
     A06 Required test 6: a new version of an owner-activated flow with a
-    `draft-write` node, differing only in one constant, is not active, and no
-    approval or standing grant of the earlier version applies to it.
+    `state-transition` node, differing only in one constant, is not active,
+    and no approval or standing grant of the earlier version applies to it.
     """
     # Besides the `draft-write` node `save`, both versions hold a
     # `state-transition` node `publish`, the kind of node an approval or a

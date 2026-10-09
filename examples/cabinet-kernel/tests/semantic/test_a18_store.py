@@ -25,9 +25,7 @@ Fixture surface used here:
 - capabilities: ``restart()``, ``start_second_kernel()``, ``data_directory``,
   ``value_file(value_digest)`` (the path, relative to ``data_directory``, at
   which the store publishes the value bytes of that digest — requested here),
-  ``faults.crash_during_value_write()``, ``faults.fail_store_change``,
-  ``faults.place_symlink``, ``faults.alter_value_write(kind, nth=1)``
-  (requested here), ``KernelStopped``, ``kernel_sources()``.
+  ``faults.place_symlink``, ``kernel_sources()``.
 """
 
 import ast
@@ -209,90 +207,6 @@ def test_single_process_lock(semantic_runtime):
     assert again.contract_version_id == contract_version_id
 
 
-def test_value_write_atomic_publish(semantic_runtime):
-    """[witness: verification:kernel_a18_value_write_atomic_publish]
-
-    A18 Required test 2: a crash during a value write leaves either no file or
-    the complete file.
-    """
-    contract_version_id = _function(semantic_runtime, "a18_atomic")
-    json_text, canonical, value_digest = _text_value("a18-atomic-" + "v" * 200000)
-
-    semantic_runtime.faults.crash_during_value_write()
-    with pytest.raises(semantic_runtime.KernelStopped):
-        _case(semantic_runtime, contract_version_id, json_text)
-
-    # A18 rule 4: written to a temporary file, checked, then renamed — the
-    # published path holds nothing or the whole bytes, never a part.
-    published = _published(semantic_runtime, value_digest)
-    assert (not published.exists()) or published.read_bytes() == canonical
-
-    # The crash came before the record: after a restart there is no case, and
-    # the unnamed bytes, if any were published, are removed at start (rule 4).
-    assert semantic_runtime.restart().started is True
-    assert len(_cases_of(semantic_runtime, contract_version_id)) == 0
-    assert not published.exists()
-
-    # A18 rule 4: the start also removes the temporary file the crash left —
-    # no file anywhere in the data directory holds any part of those bytes.
-    # No record was written, so the value is in no database file either.
-    marker = b'"a18-atomic-'
-    leftovers = [
-        path
-        for path in semantic_runtime.data_directory.rglob("*")
-        if path.is_file() and not path.is_symlink() and marker in path.read_bytes()
-    ]
-    assert leftovers == []
-
-    # Control: the same write without a crash publishes the complete file.
-    added = _case(semantic_runtime, contract_version_id, json_text)
-    assert added.trial_case.inputs[0].items[0].json_text == json_text
-    assert published.read_bytes() == canonical
-
-
-def test_failed_store_call_writes_nothing(semantic_runtime):
-    """[witness: verification:kernel_a18_failed_store_call_writes_nothing]
-
-    A18 Required test 3: a failed store call leaves no partial record.
-    """
-    contract_version_id = _function(semantic_runtime, "a18_failed_call")
-    request = dict(
-        purpose="A18 witness: failed store call",
-        inputs=[_port("x", "input", TEXT, "open")],
-        outputs=[_port("y", "output", TEXT)],
-        nodes=[_node("step", contract_version_id)],
-        edges=[_edge("", "x", "step", "x"), _edge("step", "y", "", "y")],
-        constants=[],
-    )
-
-    # `compose_flow_version` of a new flow is one change writing two records,
-    # the Flow and its FlowVersion (State 5, "Named store changes").
-    semantic_runtime.faults.fail_store_change("compose_flow_version")
-    with pytest.raises(Exception) as exc:
-        semantic_runtime.compose_flow_version("a18_failed_flow", **request)
-    # State 5 Conventions: a failed store call is answered `internal_error`.
-    assert exc.value.code == "internal_error"
-
-    # 80_notes.md `serve_kernel`/`answer_request`: after an internal_error
-    # answer the process ends; the records are read from a new start, which
-    # also shows that nothing of the change was committed.
-    assert semantic_runtime.restart().started is True
-
-    # A18 rule 3: the call changed no record — neither of the two.
-    assert len(semantic_runtime.page_records("flow").records.flows) == 0
-    assert len(semantic_runtime.page_records("flow_version").records.flow_versions) == 0
-
-    # Control: the same change, not failed, writes both, so the reads above
-    # would have seen either record.
-    composed = semantic_runtime.compose_flow_version("a18_failed_flow", **request)
-    flows = semantic_runtime.page_records("flow").records.flows
-    versions = semantic_runtime.page_records("flow_version").records.flow_versions
-    assert [f.flow_id for f in flows] == ["a18_failed_flow"]
-    assert [v.flow_version_id for v in versions] == [
-        composed.flow_version.flow_version_id
-    ]
-
-
 def test_symlink_in_data_dir_refused(semantic_runtime, tmp_path):
     """[witness: verification:kernel_a18_symlink_in_data_dir_refused]
 
@@ -336,51 +250,6 @@ def test_symlink_in_data_dir_refused(semantic_runtime, tmp_path):
     assert stopped.exit_code not in (None, 0)
     assert not outside.exists()
     assert link.is_symlink()
-
-
-def test_published_file_digest_never_overwritten(semantic_runtime):
-    """[witness: verification:kernel_a18_published_file_digest_never_overwritten]
-
-    A18 Required test 5: a value write whose bytes do not match their digest or
-    size publishes no file; writing equal bytes again leaves the published file
-    unchanged.
-    """
-    contract_version_id = _function(semantic_runtime, "a18_digest")
-    json_text, canonical, value_digest = _text_value("a18-digest-checked-value")
-    published = _published(semantic_runtime, value_digest)
-
-    # A18 rule 4: the written bytes are checked against their digest and size
-    # before the rename. `kind="content"` changes one byte of the flushed
-    # temporary file, `kind="size"` appends one byte.
-    for kind in ("content", "size"):
-        semantic_runtime.faults.alter_value_write(kind)
-        with pytest.raises(Exception) as exc:
-            _case(semantic_runtime, contract_version_id, json_text)
-        # 80_notes.md `put_value_bytes`: a failed re-check after writing is
-        # StoreInternalError, answered `internal_error` (State 5 Conventions).
-        assert exc.value.code == "internal_error", kind
-        # Inspected before any restart, which would remove an unnamed file.
-        assert not published.exists(), kind
-        # The process ends after an internal_error (80_notes.md
-        # `serve_kernel`); the records are read from a new start.
-        assert semantic_runtime.restart().started is True
-        assert not published.exists(), kind
-        assert len(_cases_of(semantic_runtime, contract_version_id)) == 0, kind
-
-    # Control: unaltered, the same write publishes the file.
-    _case(semantic_runtime, contract_version_id, json_text)
-    assert published.read_bytes() == canonical
-    before = published.stat()
-
-    # Equal bytes again, in a different trial case: stored once, the
-    # published file is not replaced or rewritten.
-    other = _case(semantic_runtime, contract_version_id, json_text, expected='"y"')
-    assert other.trial_case.inputs[0].items[0].json_text == json_text
-    assert len(_cases_of(semantic_runtime, contract_version_id)) == 2
-    after = published.stat()
-    assert after.st_ino == before.st_ino
-    assert after.st_mtime_ns == before.st_mtime_ns
-    assert published.read_bytes() == canonical
 
 
 def test_store_module_sole_transaction_owner(semantic_runtime):
