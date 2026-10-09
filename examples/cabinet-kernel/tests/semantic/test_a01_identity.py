@@ -321,23 +321,31 @@ def test_identity_covers_resource_bounds(semantic_runtime):
     purpose = "A01 witness: bounds in identity"
     inputs = [_port("x", "input", NUMBER, "open")]
     outputs = [_port("y", "output", NUMBER)]
-    larger = dict(BOUNDS, memory_bytes=BOUNDS["memory_bytes"] * 2)
 
     first = semantic_runtime.issue_contract_version(
         slot_id, purpose, inputs, outputs, resource_bounds=dict(BOUNDS)
     )
-    second = semantic_runtime.issue_contract_version(
-        slot_id, purpose, inputs, outputs, resource_bounds=larger
-    )
-
-    # A01 rule 1 with State 1 M03: resource bounds are facts of the identity.
-    assert second != first
     assert semantic_runtime.read_contract_version(first).resource_bounds.memory_bytes == (
         BOUNDS["memory_bytes"]
     )
-    assert semantic_runtime.read_contract_version(second).resource_bounds.memory_bytes == (
-        larger["memory_bytes"]
-    )
+
+    # A01 rule 1 with State 1 M03: every resource bound is a fact of the
+    # identity, so each field is changed alone (doubled, still within the
+    # release ceilings of A20 rule 1) — an identity that leaves out any one
+    # bound makes that pair equal.
+    identities = [first]
+    for field in BOUNDS:
+        changed = dict(BOUNDS)
+        changed[field] = BOUNDS[field] * 2
+        other = semantic_runtime.issue_contract_version(
+            slot_id, purpose, inputs, outputs, resource_bounds=changed
+        )
+        assert other != first
+        assert getattr(
+            semantic_runtime.read_contract_version(other).resource_bounds, field
+        ) == changed[field]
+        identities.append(other)
+    assert len(set(identities)) == len(BOUNDS) + 1
 
     # Control: the same content with the same bounds has the same identity, so
     # the difference above comes from the bound, not from a time or a random
@@ -362,6 +370,13 @@ def test_slot_purpose_fixed_at_creation(semantic_runtime):
     with pytest.raises(Exception) as exc:
         _function(semantic_runtime, slot_id, "A01 witness: another purpose", TEXT)
     # A01 rule 5: a different purpose for an existing slot is refused.
+    assert exc.value.code == "refused"
+
+    # Equal content with a different purpose is refused as well: the purpose
+    # rule comes first among the operation's own checks (A01 rule 5), before
+    # an equal contract version is returned (A01 rule 4).
+    with pytest.raises(Exception) as exc:
+        _function(semantic_runtime, slot_id, "A01 witness: another purpose", NUMBER)
     assert exc.value.code == "refused"
 
     # Nothing was recorded: the slot keeps its purpose and its one version.
@@ -471,6 +486,13 @@ def test_flow_purpose_fixed_at_creation(semantic_runtime):
     with pytest.raises(Exception) as exc:
         compose("A01 witness: another purpose", ["a", "b"])
     # A01 rule 5: a different purpose for an existing flow is refused.
+    assert exc.value.code == "refused"
+
+    # Equal content with a different purpose is refused as well: the purpose
+    # rule comes first (A01 rule 5; State 5 compose_flow_version), before an
+    # equal flow version is returned (A01 rule 4).
+    with pytest.raises(Exception) as exc:
+        compose("A01 witness: another purpose", ["a"])
     assert exc.value.code == "refused"
 
     # Nothing was recorded: the flow keeps its purpose and its one version.
