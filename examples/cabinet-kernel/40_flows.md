@@ -614,8 +614,9 @@ call; the run's status and WaitingPoints M20 written by `module:runs`.
 
 ### Outcomes
 
-- The effect sent once, on the exact request the owner was shown or under the
-  owner's grant, with the declared idempotency key; its EffectAttempt `applied`,
+- The effect sent once, on the exact request the owner was shown, under the
+  owner's grant, or — for a `draft-write` node — under the version's
+  FlowActivation, with the declared idempotency key; its EffectAttempt `applied`,
   `not_applied`, `not_sent` or `unknown`, and the authority it used. Produced by
   `module:effects`.
 - The run resting `awaiting_approval` or `pending`, or ended `succeeded`,
