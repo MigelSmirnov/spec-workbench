@@ -693,6 +693,34 @@ def test_upstream_failed_wins_over_skip(semantic_runtime):
     # A13 rule 7: `z` is recorded `upstream_failed`, so its output is not a skip.
     assert _missing(run, "out") == "not_produced"
 
+    # The same with the ports exchanged — the failed input on `z.q`, the
+    # disabled edge into `z.p` — so the precedence does not come from which
+    # input of `z` is looked at first.
+    _compose_active(
+        semantic_runtime,
+        "a13_skip_and_fail",
+        inputs=[_port("x", "input", NUMBER, "open")],
+        outputs=[_port("out", "output", NUMBER)],
+        nodes=[
+            _function_node("a", fragile),
+            _function_node("g", screen),
+            _function_node("z", join),
+        ],
+        edges=[
+            _edge("", "x", "a", "x"),
+            _edge("", "x", "g", "x"),
+            _edge("a", "y", "z", "q"),
+            _edge("g", "item", "z", "p", guard=_guard("verdict", '"new"')),
+            _edge("z", "y", "", "out"),
+        ],
+    )
+    mirrored = semantic_runtime.start_run("a13_skip_and_fail", inputs=[_value("x", "0")])
+    mirrored_trace = _trace(semantic_runtime, mirrored.run_id)
+    assert _enum(_only_record(mirrored_trace, "a").status) == "crashed"
+    assert _enum(_only_record(mirrored_trace, "z").status) == "upstream_failed"
+    assert _enum(mirrored.status) == "failed"
+    assert _missing(mirrored, "out") == "not_produced"
+
     # Control: the same disabled edge with `a` succeeding skips `z`, so the
     # result above is the precedence, not a guard the kernel ignores.
     skipped = semantic_runtime.start_run("a13_fail_and_skip", inputs=[_value("x", "-1")])
