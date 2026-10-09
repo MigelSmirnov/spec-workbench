@@ -132,7 +132,8 @@ def run(inputs):
 
 # The secret-shaped string is assembled at run time, so the stored code does
 # not hold it; it is printed, and the exception raised after it is longer than
-# `failure_detail_bytes_max`.
+# `failure_detail_bytes_max` — or, on "brief", short enough that a cut to
+# `failure_detail_bytes_max` would keep whatever followed it.
 SECRET = "sk-live-" + "7f3a9c2e5b1d4086"
 LEAK_CODE = """
 def run(inputs):
@@ -140,6 +141,8 @@ def run(inputs):
     print(secret)
     if inputs["x"] == "boom":
         raise RuntimeError("detail-marker " + "x" * 10000)
+    if inputs["x"] == "brief":
+        raise RuntimeError("detail-marker")
     return {"y": inputs["x"]}
 """
 
@@ -410,6 +413,14 @@ def test_node_execution_immutable(semantic_runtime):
     ledger.on("POST", "/entries", json={})
 
     echo = _echo_function(semantic_runtime)
+    photo = _function(
+        semantic_runtime,
+        "photo",
+        [_port("x", "input", TEXT, "open")],
+        [_file_port("photo", "output")],
+        PHOTO_CODE,
+        [_json("x", "ok-photo")],
+    )
     put = _note_binding(semantic_runtime, "outbox", "put_draft")
     save = _note_binding(semantic_runtime, "vault", "save_record")
     post = _note_binding(semantic_runtime, "ledger", "post_entry")
@@ -423,6 +434,7 @@ def test_node_execution_immutable(semantic_runtime):
             _op_node("b_save", put),
             _op_node("c_drop", save),
             _op_node("d_post", post),
+            _fn_node("e_photo", photo),
         ],
         edges=[
             _edge("", "word", "a_fail", "x"),
@@ -430,11 +442,12 @@ def test_node_execution_immutable(semantic_runtime):
             _edge("", "word", "b_save", "note"),
             _edge("", "word", "c_drop", "note"),
             _edge("", "word", "d_post", "note"),
+            _edge("", "word", "e_photo", "x"),
         ],
     )
 
-    # `a_fail` crashes, `b_save` is unreachable, `c_drop` ends unknown and
-    # `d_post` waits for the owner's approval.
+    # `a_fail` crashes, `b_save` is unreachable, `c_drop` ends unknown,
+    # `d_post` waits for the owner's approval and `e_photo` spools a file.
     run = semantic_runtime.start_run("a15_immutable", inputs=[_json("word", "fail")])
     run_id = run.run_id
     assert _v(run.status) == "awaiting_approval"
@@ -445,7 +458,13 @@ def test_node_execution_immutable(semantic_runtime):
         ("a_fail", None, 1),
         ("b_save", None, 1),
         ("c_drop", None, 1),
+        ("e_photo", None, 1),
     }
+    # A record naming a spooled file, so that the release and the restart's
+    # spool removal below meet a record whose file they remove (State 5,
+    # `read_spooled_file`: the record outlives its bytes).
+    spooled = _only_file(written[("e_photo", None, 1)].outputs)
+    assert spooled.spooled_file is not None
 
     def assert_unaltered():
         """Every record written so far is still there, field for field; new
@@ -505,6 +524,7 @@ def test_node_execution_immutable(semantic_runtime):
         ("b_save", None, 2),
         ("c_drop", None, 1),
         ("d_post", None, 1),
+        ("e_photo", None, 1),
     }
 
 
@@ -543,6 +563,18 @@ def test_failure_detail_bounded_no_secret(semantic_runtime):
     # A03 rule 6: the detail is the exception, never stdout.
     assert "detail-marker" in detail.text
     assert SECRET not in detail.text
+
+    # Control: a short exception leaves room in the detail, so a detail that
+    # appends the printed output after the exception is not hidden by the cut.
+    brief = semantic_runtime.start_run("a15_leak", inputs=[_json("word", "brief")])
+    assert _v(brief.status) == "failed"
+    (brief_record,) = _trace(semantic_runtime, brief.run_id)
+    assert _v(brief_record.status) == "crashed"
+    brief_detail = brief_record.failure_detail
+    assert _v(brief_detail.detail_kind) == "text"
+    assert "detail-marker" in brief_detail.text
+    assert SECRET not in brief_detail.text
+
     # The printed string is in no record the store holds.
     assert SECRET.encode("utf-8") not in semantic_runtime.store_dump()
 
@@ -703,6 +735,24 @@ def test_spool_run_ceiling(semantic_runtime):
             )
         # No SpooledFile record names a discarded file.
         assert exc.value.code == "unknown_reference"
+
+    # Control: one byte less from the last filler brings the second file to
+    # exactly `spool_run_bytes_max`, which does not exceed it, so the same node
+    # succeeds with both files. The first run keeps its spool meanwhile: the
+    # ceiling counts one run's files, never another run's.
+    control = semantic_runtime.start_run(
+        "a15_spool_run",
+        inputs=[_json("n_full", filler_sizes[0]), _json("n_last", filler_sizes[-1] - 1)],
+    )
+    assert _v(control.status) == "succeeded"
+    control_trace = _trace(semantic_runtime, control.run_id)
+    assert _steps(control_trace, "b_two_files") == [(1, "succeeded")]
+    (control_record,) = [e for e in control_trace if e.node_id == "b_two_files"]
+    assert sorted(
+        (port.port, _only_file([port]).size_bytes)
+        for port in control_record.outputs
+        if port.port != "ok"
+    ) == [("first", 5), ("second", 6)]
 
 
 def test_file_outlives_run_only_as_fixture(semantic_runtime):
