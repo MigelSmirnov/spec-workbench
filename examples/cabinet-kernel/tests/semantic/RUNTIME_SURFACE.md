@@ -207,9 +207,9 @@ is not written around.
 | `kernel_a17_credential_resolved_per_request` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential` (a missing secret file), `installation.write_secret`, `restart()` |
 | `kernel_a18_single_process_lock` | `start_second_kernel()`, `restart()` |
 | `kernel_a18_value_write_atomic_publish` | `faults.crash_during_value_write()`, `KernelStopped`, `data_directory`, `value_file()`, `restart()` |
-| `kernel_a18_failed_store_call_writes_nothing` | `faults.fail_store_change()` |
+| `kernel_a18_failed_store_call_writes_nothing` | `faults.fail_store_change()`, `restart()` (the process ends after an `internal_error` answer) |
 | `kernel_a18_symlink_in_data_dir_refused` | `faults.place_symlink()`, `data_directory`, `value_file()`, `restart()` |
-| `kernel_a18_published_file_digest_never_overwritten` | `faults.alter_value_write()`, `data_directory`, `value_file()` |
+| `kernel_a18_published_file_digest_never_overwritten` | `faults.alter_value_write()`, `data_directory`, `value_file()`, `restart()` (the process ends after an `internal_error` answer) |
 | `kernel_a18_store_module_sole_transaction_owner` | `kernel_sources()`: a static fact of the generated code |
 | `kernel_a19_timestamps_from_injected_clock` | `clock.set` |
 | `kernel_a19_service_timestamp_not_kernel_time` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `clock.set`, `stub.requests` |
