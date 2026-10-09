@@ -24,6 +24,7 @@ from typing import Any
 
 from factory_admission_workbench import check as check_factory_admission
 from notes_workbench import propagation as notes_propagation
+import semantic_test_subject
 
 HANDOFF_SCHEMA = "spec_workbench_handoff.v1"
 SEMANTIC_EXPORT_SCHEMA = "spec_workbench_semantic_test_export.v1"
@@ -278,6 +279,9 @@ def semantic_export_plan(source: Path, case: str | None) -> tuple[Path, dict[str
         if relative in seen:
             raise SystemExit(f"duplicate semantic test path in export manifest: {relative}")
         seen.add(relative)
+        subject_errors = semantic_test_subject.subject_errors(item, case_root)
+        if subject_errors:
+            raise SystemExit(subject_errors[0])
     return manifest_path, manifest
 
 
@@ -309,7 +313,7 @@ def export_semantic_tests(plan: tuple[Path, dict[str, Any]] | None, project_root
         if target_sha != source_sha:
             raise SystemExit(f"semantic test copy verification failed: {target_test}")
         copied.append({
-            "flow_id": item["flow_id"],
+            **semantic_test_subject.subject(item),
             "source_path": str(source_test.relative_to(case_root)),
             "target_path": str(target_test.relative_to(project_root)),
             "sha256": source_sha,

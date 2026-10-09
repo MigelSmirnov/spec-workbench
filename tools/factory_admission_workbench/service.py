@@ -20,6 +20,7 @@ from factory_slice_workbench import probe as probe_factory_slices
 from interface_workbench import implementation_obligation_findings
 from interface_workbench.service import _annotation_mentions
 from spec_language_workbench import SpecLanguageError, verify_payload as verify_language_payload
+import semantic_test_subject
 
 from factory_admission_workbench.model import (
     CHECK_BLOCK,
@@ -877,6 +878,7 @@ def _semantic_check(case_root: Path | None) -> AdmissionCheck:
             if not path.is_relative_to(case_root.resolve()) or not path.is_file():
                 errors.append(f"missing or escaping semantic test: {relative}")
                 continue
+            errors.extend(semantic_test_subject.subject_errors(item, case_root))
             files.append({"path": relative, "sha256": _sha256_file(path)})
     return AdmissionCheck(
         "FA006",
