@@ -35,6 +35,7 @@ import pytest
 TEXT = '{"type":"string"}'
 
 CANARY = "a17-canary-credential-6f1d3c9e8b2a4d70"
+CANARY_ROTATED = "a17-canary-credential-rotated-0b7e5a2c"
 CREDENTIAL_HEADER = "X-Api-Key"
 WITHHELD = "error body withheld: it contained the credential"
 
@@ -251,6 +252,12 @@ def test_canary_credential_never_written(semantic_runtime):
     assert len(stub.requests) == 2
     for request in stub.requests:
         assert _header_values(request, CREDENTIAL_HEADER) == [CANARY]
+    # Control: the observers did see this run — the store and the answers hold
+    # its run_id, the kernel's argv is recorded — so an empty capture cannot
+    # pass the absences below.
+    assert _contains(semantic_runtime.store_dump(), run.run_id)
+    assert _contains(semantic_runtime.surface_answers(), run.run_id)
+    assert len(semantic_runtime.process_arguments()) > 0
 
     # A17 rule 2: never in the store, a record, a trace, a preview, a failure
     # detail, a log line, a process argument or a response.
@@ -281,6 +288,14 @@ def test_config_file_owner_only(semantic_runtime):
     readable_by_group = semantic_runtime.restart()
     assert readable_by_group.started is False
     assert readable_by_group.exit_code not in (None, 0)
+
+    # A17 rule 1 forbids any permission for group or others, not only reading:
+    # a check of the read bits alone would start with these.
+    for mode in (0o620, 0o601):
+        semantic_runtime.installation.set_config_mode(mode)
+        other_permission = semantic_runtime.restart()
+        assert other_permission.started is False, oct(mode)
+        assert other_permission.exit_code not in (None, 0), oct(mode)
 
     # Control: the same file, made owner-only again, starts on the same data
     # directory, so the refusals above came from the mode alone.
@@ -444,6 +459,8 @@ def test_echoed_credential_body_withheld(semantic_runtime):
 
     # The request did carry the canary, and the canary was written nowhere.
     assert _header_values(stub.requests[-1], CREDENTIAL_HEADER) == [CANARY]
+    assert _contains(semantic_runtime.store_dump(), run.run_id)
+    assert _contains(semantic_runtime.surface_answers(), run.run_id)
     assert not _contains(semantic_runtime.store_dump(), CANARY)
     assert not _contains(semantic_runtime.surface_answers(), CANARY)
 
@@ -508,3 +525,11 @@ def test_credential_resolved_per_request(semantic_runtime):
     assert len(stub_a.requests) == 1
     assert _header_values(stub_a.requests[0], CREDENTIAL_HEADER) == [CANARY]
     assert len(stub_b.requests) == 0
+
+    # Resolved per request, not once: a value first resolved is not kept —
+    # the secret file rewritten, the next request carries the new value.
+    semantic_runtime.installation.write_secret("service_a", CANARY_ROTATED)
+    rotated = semantic_runtime.start_run("a17_service_a", [_json_input("note_id", '"n1"')])
+    assert _value(rotated.status) == "succeeded"
+    assert len(stub_a.requests) == 2
+    assert _header_values(stub_a.requests[1], CREDENTIAL_HEADER) == [CANARY_ROTATED]
