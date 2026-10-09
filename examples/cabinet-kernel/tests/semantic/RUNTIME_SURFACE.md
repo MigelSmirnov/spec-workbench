@@ -29,14 +29,95 @@ change.
   explicitly.
 - **What the fixture fills in.** Only what the tested decision does not depend
   on, and each such default is named below.
+- **Installation.** The fixture installs the kernel with the owner, agent
+  `author` (with the author right) and agent `helper` (without it), no
+  service selected, no credential and an empty manifest. `actor=` takes an
+  Actor M27 dict (`{"kind": "owner", "agent_name": None}`, `{"kind":
+  "agent", "agent_name": "author"}`). When omitted, the actor is the owner for
+  every operation the owner may call (State 5 catalogue), otherwise agent
+  `author`.
+- **Refusal reason.** A refusal carries `exc.reason` beside `exc.code`
+  (RefusalAnswer). A test reads the reason only where a decision makes it
+  name something (A02 rule 2: the field).
+- **Kernel start.** The kernel starts at the first call or capability that
+  needs it. A capability that configures the installation or the manifest
+  shapes that start when used before it, and takes effect at
+  `restart()` when used after — except the token list, which the kernel
+  re-reads before each request (A16 rule 2).
+- **Values in requests** are JSON text (`json_text`) and files base64 text,
+  as the State 6 request models (`RequestJsonValue`, `RequestFile`,
+  `RequestFileList`, `RequestConstant`); answers are the MCP surface's answer
+  models (`handle_*` in `60_contracts.json`), masked for an agent under A07
+  rules 4–5. Lists read through `page_records` come newest first (A16 rule
+  6).
 
 ## Calls
 
 | call | operation | defaults the fixture supplies |
 |---|---|---|
-| `issue_contract_version(slot_id, purpose, inputs, outputs)` → `contract_version_id` | `functions.issue_contract_version` | resource bounds within the installation's ceilings (A02 rule 2 refuses omitted ones) |
+| `issue_contract_version(slot_id, purpose, inputs, outputs)` → `contract_version_id` | `functions.issue_contract_version` | resource bounds within the installation's ceilings (A02 rule 2 refuses omitted ones) when `resource_bounds` is not given; `resource_bounds=` (ResourceBoundsRequest) is sent as given, a field set to `None` omitted from the request |
 | `compose_flow_version(flow_id, purpose, inputs, outputs, nodes, edges, constants)` → ComposedFlowVersion | `flows.compose_flow_version` | — |
 | `prove_flow_version(flow_version_id)` → ProofResult (M17) | `flows.prove_flow_version` | — |
+| `add_trial_case(contract_version_id, inputs, expected_outputs=None)` → ShownAddedTrialCase | `functions.add_trial_case` | — |
+| `submit_implementation(contract_version_id, code)` → ShownSubmission | `functions.submit_implementation` | — |
+| `roll_back_slot(slot_id, implementation_id)` → Activation (M09) | `functions.roll_back_slot` | — |
+| `read_slot(slot_id)` → SlotHistory | `functions.read_slot` (MCP `get_slot`) | — |
+| `read_contract_version(contract_version_id)` → ContractVersion (M03) | `functions.read_contract_version` | — |
+| `read_implementation(implementation_id)` → ShownImplementationRead | `functions.read_implementation` | — |
+| `active_flow_version(flow_id)` → FlowAnswer | `flows.active_flow_version` (MCP `get_flow`) | — |
+| `page_records(record_type, record_filter=None, page_size=None, continuation_token=None)` → RecordPageAnswer | `store.page_records` (MCP `list_records`) | `page_size_default` when `page_size` is not given (A16 rule 6) |
+| `try_implementation(implementation_id, trial_case_ids=())` → tuple[ShownTrialExecution] | `functions.try_implementation` | — |
+| `activate_flow_version(flow_version_id)` → FlowActivation (M18) | `flows.activate_flow_version` | — |
+| `start_run(flow_id, inputs)` → ShownRun | `runs.start_run` | — |
+| `capture_failed_execution(execution, contract_version_id)` → ShownTrialCase | `runs.capture_failed_execution` | — |
+| `get_repair_view(slot_id, page_size=None, continuation_token=None)` → RepairView | MCP `get_repair_view` (State 5 catalogue: `functions.read_slot`, `read_contract_version`, `read_implementation`, `store.page_records`) | `page_size_default` when `page_size` is not given |
+| `propose_binding(service_id, operation_name, inputs, outputs)` → OperationBinding (M11) | `bindings.propose_binding` | — |
+| `accept_binding(binding_id)` → OperationBinding (M11) | `bindings.accept_binding` | — |
+| `continue_after_approval(approval_id, decision)` → ShownRun | `runs.continue_after_approval` (MCP `decide_effect_approval`) | — |
+| `grant_standing_approval(flow_id, node_id)` → StandingGrant (M25) | `effects.grant_standing_approval` | — |
+| `read_run(run_id)` → ShownRun | `runs.read_run` (MCP `get_run`) | — |
+| `read_binding(binding_id)` → OperationBinding (M11) | `bindings.read_binding` (MCP `get_binding`) | — |
+| `resume_run(run_id)` → ShownRun | `runs.resume_run` | — |
+| `continue_after_resolution(attempt, resolution)` → ShownRun | `runs.continue_after_resolution` (MCP `resolve_unknown_outcome`) | — |
+| `cancel_run(run_id)` → ShownRun | `runs.cancel_run` | — |
+| `revoke_standing_approval(grant_id)` → StandingGrant (M25) | `effects.revoke_standing_approval` | — |
+| `release_run(run_id)` → ShownRun | `runs.release_run` | — |
+| `read_spooled_file(file)` → SpooledFileContent | MCP `read_spooled_file` (State 5 catalogue: `store.read_records`, `runs.read_run`, `store.read_value_bytes`) | — |
+| `read_fixture_file(value_id)` → FixtureFileContent | MCP `read_fixture_file` (State 5 catalogue: `store.read_records`, `store.read_value_bytes`) | — |
+
+## Named capabilities
+
+What a test needs beyond the calls: the Factory fixture provides each as
+an attribute of `semantic_runtime` under this name. Each is used only by
+the witnesses the next section lists for it.
+
+| capability | meaning |
+|---|---|
+| `installation` | the installation's configuration file: `owner_token`, `agent_token(name)`, `set_agent_tokens([AgentToken])`, `set_owner_token(token)`, `write_config_text(text)`, `set_config_mode(mode)`, `select_instance(service_id, instance_name)`, `set_credential(service_id, header_name, secret_value)` (writes an owner-only secret file and its reference; `None` references a missing file), `write_secret(service_id, value)`, `set_manifest_revision(revision)` |
+| `clock` | the kernel clock (`clock.kernel_now`) injected by the fixture: `set(epoch_us)`, `advance(ms=0, days=0)`; `fix_monotonic(ns)` fixes its monotonic source |
+| `mcp_request(operation, request, *, token=None, raw=None)` | one request over the MCP entrance: `request` the fields as sent, unknown ones included, `token` (default: the actor's), `raw` exact bytes; returns the answer or raises with `code` and `reason` |
+| `restart()` | stop the kernel process and start it again on the same data directory and configuration; returns StartOutcome (`started`, `exit_code`, `stderr`) |
+| `kernel_exited()` | the exit status of the kernel process when it ended on its own since its last start, `None` while it runs |
+| `host` | host conditions for the next start: `remove_bubblewrap()`, `set_env(name, value)` |
+| `sandbox_executions()` | per sandbox execution, observed from outside it: `network_interfaces`, `mounts` (host paths), `exchange_directory`, `processes_left` after completion |
+| `sandbox_runtime_paths()` | the host paths the release mounts read-only as the sandbox runtime |
+| `faults` | injected faults: `unconfirmed_cleanup(nth=1)` (the nth sandbox execution from now cannot confirm its cleanup), `fail_store_change(change_name)` (the next change of that name fails), `crash_during_value_write()`, `place_symlink(relative_path, target)`, `alter_value_write(kind, nth=1)` (the nth value write is changed after its temporary file is flushed and before the store checks it: `content` changes one byte, `size` appends one) |
+| `manifest` | the platform manifest the installation reads: `write_record(service_id, record, *, revision=None, file_name=None)` writes a record shaped as State 6 ManifestServiceRecord without `record_digest` in the platform's raw form (instance class as `class`, instances keyed by name; extra members of a capability, such as `note`, and an `exposed_as` without `http_api` written as given) at `revision` (default: the configured one) under `file_name` (default `<service_id>.json`); `write_record_text(...)` writes raw text; `new_revision()` makes a later revision starting as a copy of the configured one |
+| `stub_service()` | an HTTP service on loopback: `base_url`, `authority`; `on(method, path, status=200, json=None, body=None, headers=None, action=None)` sets the answer of a route, `action` one of `drop_after_request` (close after reading the request, no status line), `refuse_connection`, `redirect` (with `Location` in `headers`), `kill_kernel` (SIGKILL the kernel once the request arrived, before answering), `hold`; `set_down(flag)`; `requests` (method, target, headers as on the wire, body, peer) |
+| `store_dump()` | every byte the store holds (database and value area), for "appears in no record" |
+| `KernelStopped` | the exception a call in progress raises when the fixture killed the kernel under it |
+| `run_spool(run_id)` | the files left in the run's spool directory below the data directory (an empty list when it is gone) |
+| `kill_on_sandbox_start(nth=1)` | SIGKILL the kernel when its nth sandbox execution counted from now starts; the call in progress raises `KernelStopped` |
+| `surface_answers()` | the raw bytes of every answer the MCP entrance sent so far |
+| `token_comparisons()` | per request, each comparison of the presented token with the owner token and each agent token and the comparison primitive used, or a timing observer showing no dependence on the matching prefix — not yet specified; the test skips at that point |
+| `host_output()` | all text the kernel wrote to standard error or its log |
+| `process_arguments()` | the argv of the kernel and of every process it started |
+| `start_second_kernel()` | start another kernel process on the same data directory; returns StartOutcome |
+| `data_directory` | the kernel's data directory (`pathlib.Path`), for read-only inspection |
+| `value_file(value_digest)` | the path, relative to `data_directory`, where the store publishes the bytes of that digest (A18 rule 2's content-addressed area) |
+| `kernel_sources()` | the generated kernel's module sources, `{module path: text}` |
+| `release` | what the generated release declares: `ceilings` (`{name: value}`), `dependencies` (`{name: version}`), `sandbox_interpreter` |
+| `host_scratch_directory()` | a host directory (`pathlib.Path`) outside the data directory that the kernel process could write and the test can read |
 
 ## Places the surface cannot reach yet
 
@@ -47,3 +128,97 @@ is not written around.
 
 | witness | capability needed |
 |---|---|
+| `kernel_a01_equal_submission_returns_existing` | `installation` (a second author agent), `clock` (two submissions at known, different times) |
+| `kernel_a01_caller_supplied_identity_refused` | `mcp_request`: a request carrying a field no call has (`contract_version_id`) |
+| `kernel_a01_equal_contract_not_made_current` | `clock` (the first issue time stays) |
+| `kernel_a01_activation_identity_is_store_position` | `clock` (an activation asked again keeps its time) |
+| `kernel_a03_deadline_and_limits_classified` | `sandbox_executions()`: no process survives an execution |
+| `kernel_a03_kernel_refuses_start_without_sandbox` | `host.remove_bubblewrap()`, `restart()`: a start on a host without `bubblewrap` |
+| `kernel_a03_fresh_env_no_network_no_host_mounts` | `sandbox_executions()`, `sandbox_runtime_paths()`: the environment inspected from outside |
+| `kernel_a03_unconfirmed_cleanup_stops_kernel` | `faults.unconfirmed_cleanup()`, `kernel_exited()`, `restart()`: a cleanup that cannot be confirmed, and the process stopping |
+| `kernel_a04_verdict_set_only_by_kernel` | `mcp_request`: requests carrying a verdict field, by the owner and by an author |
+| `kernel_a05_proof_recomputed_on_demand` | `manifest.write_record`, `installation.select_instance`, `stub_service()`: an accepted binding needs a manifest record and a selected instance |
+| `kernel_a05_highest_effect_class_max_or_read` | `manifest.write_record`, `installation.select_instance`, `stub_service()` |
+| `kernel_a06_effectful_flow_owner_only_activation` | `manifest.write_record`, `installation.select_instance`, `stub_service()` |
+| `kernel_a06_activation_proves_version_again` | `manifest.write_record`, `installation.select_instance`, `stub_service()` |
+| `kernel_a06_new_version_inherits_nothing` | `manifest.write_record`, `installation.select_instance`, `stub_service()`; `stub.requests` (nothing sent without approval) |
+| `kernel_a07_proof_refuses_class_above_accepted` | `manifest.write_record`, `installation.select_instance`, `stub_service()` |
+| `kernel_a07_agent_gets_personal_data_as_digest` | `manifest.write_record`, `installation.select_instance`, `stub_service()` |
+| `kernel_a07_preview_hides_personal_data_from_agent` | `manifest.write_record`, `installation.select_instance`, `stub_service()` |
+| `kernel_a08_invocable_only_single_http_route` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential` |
+| `kernel_a08_non_read_key_field_must_be_input_port` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential` |
+| `kernel_a08_digest_covers_only_own_capability_entry` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, `manifest.new_revision`, `installation.set_manifest_revision`, `restart()` |
+| `kernel_a08_changed_digest_stale_nothing_sent` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, `manifest.new_revision`, `installation.set_manifest_revision`, `restart()`, `stub.requests` |
+| `kernel_a08_record_read_only_at_pinned_path` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `manifest.write_record(file_name=, revision=)`, `manifest.new_revision` |
+| `kernel_a08_several_http_routes_not_invocable` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential` |
+| `kernel_a09_possibly_sent_outcome_unknown_no_retry` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, stub action `drop_after_request`, `stub.requests` |
+| `kernel_a09_read_5xx_service_unreachable` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, `stub.requests` |
+| `kernel_a09_non_read_4xx_not_applied` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, `stub.requests` |
+| `kernel_a09_non_read_2xx_applied_even_if_invalid` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, `stub.requests` |
+| `kernel_a09_no_redirect_plain_http_restricted` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, two stubs, stub action `redirect`, `stub.requests` |
+| `kernel_a09_credential_echo_error_body_withheld` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, `stub.requests`, `store_dump()` |
+| `kernel_a09_credential_echo_2xx_no_output_stored` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, `stub.requests`, `store_dump()` |
+| `kernel_a09_read_unsent_or_unanswered_unreachable` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, stub actions `refuse_connection` and `drop_after_request`, `stub.requests` |
+| `kernel_a10_gated_send_waits_for_approval` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, `stub.requests` |
+| `kernel_a10_approval_scoped_per_element` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, `stub.requests` |
+| `kernel_a10_grant_authorizes_never_destructive` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, `stub.requests` |
+| `kernel_a10_revoked_grant_no_longer_authorizes` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, `stub.requests` |
+| `kernel_a10_only_owner_decides_grants_revokes` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential` |
+| `kernel_a10_approval_bound_to_request_digest` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, `stub.set_down`, `manifest.new_revision`, `installation.set_manifest_revision`, `installation.write_secret`, `restart()` |
+| `kernel_a10_used_approval_and_grant_do_not_cover_resend` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, stub action `drop_after_request`, `stub.requests` |
+| `kernel_a10_no_decision_changes_nothing` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, `clock.advance` (days pass) |
+| `kernel_a10_grant_bound_to_flow_version` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, `stub.requests` |
+| `kernel_a11_restart_turns_in_flight_unknown` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, stub action `kill_kernel`, `KernelStopped`, `restart()` |
+| `kernel_a11_applied_no_outputs_succeeds_one_execution` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, stub action `drop_after_request` |
+| `kernel_a11_not_applied_fresh_approval_next_attempt` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, stub action `drop_after_request` |
+| `kernel_a11_applied_with_outputs_fails_element` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, stub action `drop_after_request` |
+| `kernel_a11_unknown_blocks_dependants` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, stub action `drop_after_request`, `clock.advance`, `restart()` |
+| `kernel_a11_attempt_number_is_execution_ordinal` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, stub action `drop_after_request` |
+| `kernel_a12_pins_survive_later_records` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, `clock.advance` (a long wait for approval) |
+| `kernel_a13_next_node_min_node_id` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, `stub.requests` (order of sends) |
+| `kernel_a13_advance_only_inside_request` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, stub action `drop_after_request`, `stub.set_down`, `clock.advance` |
+| `kernel_a13_resolved_unknown_conclusion` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, stub action `drop_after_request`, `stub.requests`, `clock.advance` |
+| `kernel_a14_resume_resends_unreachable` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, `stub.set_down`, `stub.requests` |
+| `kernel_a14_resume_without_unreachable_refused` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, `stub.set_down`, `stub.requests` |
+| `kernel_a14_restart_in_flight_becomes_unknown` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, stub action `kill_kernel`, `kill_on_sandbox_start()`, `KernelStopped`, `restart()` |
+| `kernel_a14_cancel_empties_spool_keeps_trace` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, `run_spool()` |
+| `kernel_a14_failed_spool_kept_until_release` | `run_spool()`, `restart()` |
+| `kernel_a14_elapsed_wait_changes_nothing` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, `stub.set_down`, stub action `drop_after_request`, `clock.advance` |
+| `kernel_a14_resume_leaves_other_waits_untouched` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, `stub.set_down`, stub action `drop_after_request`, `stub.requests` |
+| `kernel_a14_cancel_owner_only_unended_only` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, `run_spool()` |
+| `kernel_a14_spool_emptied_on_succeeded_refused` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, `run_spool()` |
+| `kernel_a14_recovery_completes_before_surface` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, stub action `kill_kernel`, `KernelStopped`, `restart()` |
+| `kernel_a15_node_execution_immutable` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, `stub.set_down`, stub action `drop_after_request`, `restart()` |
+| `kernel_a15_failure_detail_bounded_no_secret` | `store_dump()` |
+| `kernel_a15_spool_file_ceiling` | `run_spool()` |
+| `kernel_a15_spool_run_ceiling` | `run_spool()` |
+| `kernel_a15_file_outlives_run_only_as_fixture` | `run_spool()` |
+| `kernel_a15_one_record_per_conclusion` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, stub action `drop_after_request`, `stub.requests` |
+| `kernel_a16_owner_only_actions_refuse_agents` | `manifest.write_record`, `installation.select_instance`, `stub_service()` (a real binding to accept) |
+| `kernel_a16_unknown_token_uniform_refusal` | `mcp_request` (unknown and missing token), `surface_answers()` |
+| `kernel_a16_revoked_token_refused_without_restart` | `mcp_request`, `installation` (token list rewritten) |
+| `kernel_a16_schema_checked_before_record_read` | `mcp_request` (an unknown field) |
+| `kernel_a16_token_match_unique_constant_time` | `mcp_request`, `installation`, `restart()`; constant-time comparison needs `token_comparisons()`, not yet specified: the test skips after its observable part |
+| `kernel_a16_request_size_and_field_bounds` | `mcp_request(raw=)` (a message over the request ceiling), `installation` |
+| `kernel_a17_canary_credential_never_written` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, `store_dump()`, `host_output()`, `process_arguments()`, `surface_answers()` |
+| `kernel_a17_config_file_owner_only` | `installation.set_config_mode`, `restart()` |
+| `kernel_a17_instance_fixed_by_installation` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, `mcp_request` (fields naming an instance), `restart()` |
+| `kernel_a17_echoed_credential_body_withheld` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, `store_dump()`, `surface_answers()` |
+| `kernel_a17_credential_resolved_per_request` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential` (a missing secret file), `installation.write_secret`, `restart()` |
+| `kernel_a18_single_process_lock` | `start_second_kernel()`, `restart()` |
+| `kernel_a18_value_write_atomic_publish` | `faults.crash_during_value_write()`, `KernelStopped`, `data_directory`, `value_file()`, `restart()` |
+| `kernel_a18_failed_store_call_writes_nothing` | `faults.fail_store_change()` |
+| `kernel_a18_symlink_in_data_dir_refused` | `faults.place_symlink()`, `data_directory`, `value_file()`, `restart()` |
+| `kernel_a18_published_file_digest_never_overwritten` | `faults.alter_value_write()`, `data_directory`, `value_file()` |
+| `kernel_a18_store_module_sole_transaction_owner` | `kernel_sources()`: a static fact of the generated code |
+| `kernel_a19_timestamps_from_injected_clock` | `clock.set` |
+| `kernel_a19_service_timestamp_not_kernel_time` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `clock.set`, `stub.requests` |
+| `kernel_a19_request_cannot_supply_time` | `mcp_request` (a time field) |
+| `kernel_a19_monotonic_reading_never_stored` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `clock.fix_monotonic`, `store_dump()` |
+| `kernel_a20_ceiling_not_overridable_by_env` | `host.set_env`, `restart()` |
+| `kernel_a20_over_ceiling_refused_not_truncated` | `mcp_request(raw=)` |
+| `kernel_a20_ceilings_equal_release_constants` | `release`, `kernel_sources()`: static facts of the release |
+| `kernel_a20_dependencies_pinned_by_release` | `release`, `kernel_sources()`: static facts of the release |
+| `kernel_a21_security_review_gate_complete` | none the fixture can give: a design gate over the State 2 documents (`tools/design_lint.py --state 2`), not kernel behaviour; the test skips |
+| `kernel_a21_security_references_resolve` | none the fixture can give: the same design gate; the test skips |
+| `kernel_a16_agent_code_not_run_in_kernel` | `host_scratch_directory()`: where a marker would appear if the kernel process imported or evaluated agent code |
