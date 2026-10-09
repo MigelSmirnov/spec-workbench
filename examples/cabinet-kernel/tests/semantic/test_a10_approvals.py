@@ -659,9 +659,13 @@ def test_used_approval_and_grant_do_not_cover_resend(semantic_runtime):
     assert len(approvals) == 2
     fresh = approvals[1]
     assert _v(fresh.status) == "requested"
-    # A10 rule 1: fresh means an attempt number above the attempt resolved
-    # `not_applied`.
-    assert fresh.attempt_number > 1
+    # A10 rule 1: a fresh approval is a new one, requested after the
+    # resolution; the used one stays `used`. The request is unchanged, so the
+    # used approval matches its digest and still is no authority for it.
+    # (ShownApproval carries no `attempt_number`, State 6.)
+    assert fresh.approval_id != used.approval_id
+    assert fresh.request_digest == used.request_digest
+    assert _v(approvals[0].status) == "used"
     assert _v(waiting.status) == "awaiting_approval"
     assert _waits(waiting) == [("send", None, "owner_approval", fresh.approval_id)]
     assert [_v(a.status) for a in _attempts(semantic_runtime, run.run_id)] == [
@@ -709,6 +713,10 @@ def test_no_decision_changes_nothing(semantic_runtime):
     run = semantic_runtime.start_run("a10_undecided", _title("undecided"))
     approval = _approvals(semantic_runtime, run.run_id)[0]
     assert _v(approval.status) == "requested"
+    # Control: a second run of the same version, left waiting just as long.
+    control = semantic_runtime.start_run("a10_undecided", _title("decided late"))
+    control_approval = _approvals(semantic_runtime, control.run_id)[0]
+    assert _v(control_approval.status) == "requested"
 
     semantic_runtime.clock.advance(days=30)
 
@@ -726,6 +734,16 @@ def test_no_decision_changes_nothing(semantic_runtime):
     assert _attempts(semantic_runtime, run.run_id) == []
     assert stub.requests == []
 
+    # Control: an approval waiting the same days is still the owner's to
+    # decide — no time limit refuses the decision either — so the refusal
+    # below comes from the ended run, not from the elapsed time.
+    decided = semantic_runtime.continue_after_approval(
+        control_approval.approval_id, "approve"
+    )
+    assert _v(decided.status) == "succeeded"
+    assert len(stub.requests) == 1
+    assert stub.requests[0].body == b'{"title":"decided late"}'
+
     cancelled = semantic_runtime.cancel_run(run.run_id)
     assert _v(cancelled.status) == "cancelled"
 
@@ -742,7 +760,8 @@ def test_no_decision_changes_nothing(semantic_runtime):
     ]
     assert _v(semantic_runtime.read_run(run.run_id).status) == "cancelled"
     assert _executions(semantic_runtime, run.run_id) == []
-    assert stub.requests == []
+    assert _attempts(semantic_runtime, run.run_id) == []
+    assert len(stub.requests) == 1
 
 
 def test_grant_bound_to_flow_version(semantic_runtime):
