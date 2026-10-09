@@ -150,7 +150,7 @@ and no detection promises the runtime cannot keep.
 
 1. Every function execution, in trial and in a run alike, runs in a fresh
    isolated environment created by the sandbox: Linux `bubblewrap` with new user,
-   PID, IPC, UTS and network namespaces, no network interface but the namespace's own loopback — up, as bubblewrap leaves it in a new network namespace, and reaching nothing outside the execution, so K-02's "no network" holds — an environment
+   PID, IPC, UTS and network namespaces, no network interface but the namespace's own loopback — up, as bubblewrap leaves it in a new network namespace, and reaching nothing outside the execution, so K-02's "no network" holds; this is a property of how the kernel starts bubblewrap, which the kernel does not inspect or verify at run time — the start check (rule 8) asks only that a probe execution succeeds — an environment
    holding only `PYTHONHASHSEED=0` (rule 2), a read-only runtime, and one private exchange directory bounded by
    `sandbox_scratch_bytes_max`. No host directory is mounted except the read-only
    runtime and that exchange directory. There is no in-process or fast path.
