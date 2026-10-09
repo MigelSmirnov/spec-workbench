@@ -28,7 +28,9 @@ Fixture surface used here:
   RecordPageAnswer;
 - capabilities: ``clock`` (the injected ``clock.kernel_now`` and monotonic
   source), ``manifest``, ``installation`` and ``stub_service`` (one `read`
-  service on loopback), ``mcp_request`` (requests with an added field),
+  service on loopback; ``installation.set_credential`` gives it the credential
+  A17 rule 2 requires before anything is sent), ``mcp_request`` (requests
+  with an added field),
   ``store_dump`` (every byte the store holds).
 """
 
@@ -48,6 +50,11 @@ T_SUBMIT = T_ISSUE + 2_000_000
 T_COMPOSE = T_ISSUE + 3_000_000
 T_ACTIVATE = T_ISSUE + 4_000_000
 T_RUN = T_ISSUE + 5_000_000
+
+# A19 rule 3 needs the service answered: A17 rule 2 fails the pre-send check
+# `credential_unresolved` of a service the installation gives no credential.
+CREDENTIAL_HEADER = "X-Api-Key"
+CREDENTIAL = "a19-canary-credential-5e2b"
 
 # Names of records that do not exist.
 MISSING_CONTENT_ID = "0" * 64
@@ -124,7 +131,8 @@ def _status(record):
 
 
 def _stamp_service(semantic_runtime, service_id):
-    """A manifest record of one `read` operation on a loopback stub, selected."""
+    """A manifest record of one `read` operation on a loopback stub, selected,
+    with a credential (A17 rule 2: without one nothing is sent)."""
     stub = semantic_runtime.stub_service()
     semantic_runtime.manifest.write_record(
         service_id,
@@ -149,6 +157,7 @@ def _stamp_service(semantic_runtime, service_id):
         },
     )
     semantic_runtime.installation.select_instance(service_id, "local")
+    semantic_runtime.installation.set_credential(service_id, CREDENTIAL_HEADER, CREDENTIAL)
     return stub
 
 
@@ -312,7 +321,9 @@ def test_service_timestamp_not_kernel_time(semantic_runtime):
     semantic_runtime.clock.set(T_RUN)
     run_a = semantic_runtime.start_run("a19_stamp_flow", inputs=[], actor=OWNER)
 
-    # Run B, later by the kernel clock: the service answers a time in the past.
+    # Run B, the newer record although the kernel clock is set back before
+    # run A: the service answers a time in the past. Store order is then the
+    # opposite of both the service times and the kernel times.
     stub.on(
         "GET",
         "/stamp",
@@ -323,7 +334,7 @@ def test_service_timestamp_not_kernel_time(semantic_runtime):
             "Last-Modified": "Thu, 01 Jan 1970 00:00:01 GMT",
         },
     )
-    t_run_b = T_RUN + 1_000_000
+    t_run_b = T_RUN - 1_000_000
     semantic_runtime.clock.set(t_run_b)
     run_b = semantic_runtime.start_run("a19_stamp_flow", inputs=[], actor=OWNER)
 
@@ -352,7 +363,8 @@ def test_service_timestamp_not_kernel_time(semantic_runtime):
 
     # A19 rule 3: the kernel orders its records only by the store's order —
     # newest first (A16 rule 6) — whatever the services said: run B, whose
-    # service time is the earlier, is the newer record.
+    # service time is the earlier, is the newer record. Ordering by service
+    # time, or by kernel time, would put run A first.
     runs = semantic_runtime.page_records("run", page_size=200).records.runs
     assert [run.run_id for run in runs] == [run_b.run_id, run_a.run_id]
     trace = semantic_runtime.page_records(
@@ -530,11 +542,14 @@ def test_monotonic_reading_never_stored(semantic_runtime):
     semantic_runtime.clock.fix_monotonic(sentinel_ns)
     semantic_runtime.clock.set(T_ISSUE)
 
+    # Bounds given, so the sandbox deadline the kernel derives is known.
+    bounds = _bounds()
     contract_version_id = semantic_runtime.issue_contract_version(
         "a19_mono_slot",
         purpose="A19 witness: monotonic readings",
         inputs=[_port("x", "input", TEXT, "open")],
         outputs=[_port("y", "output", TEXT)],
+        resource_bounds=bounds,
     )
     semantic_runtime.add_trial_case(
         contract_version_id,
@@ -586,7 +601,19 @@ def test_monotonic_reading_never_stored(semantic_runtime):
     # A19 rule 2: a monotonic reading is never stored — in any unit, as text
     # or as an 8-byte integer.
     dump = semantic_runtime.store_dump()
-    for reading in (sentinel_ns, sentinel_ns // 1_000, sentinel_ns // 1_000_000):
-        assert str(reading).encode("ascii") not in dump, reading
-        assert reading.to_bytes(8, "big") not in dump, reading
-        assert reading.to_bytes(8, "little") not in dump, reading
+    # Control: the dump holds what the run stored — the service's answer as
+    # canonical value bytes (A18 rule 2) — so an absence below is meaningful.
+    assert b'"answered"' in dump
+    # The readings themselves, and the deadlines derived from them: the
+    # sandbox's (the contract's wall time, and the start probe's at the
+    # release ceiling) and the HTTP request's (`transport_timeout_ms`), A20
+    # rule 1; 80_notes.md `monotonic_deadline`: a deadline is never stored.
+    readings = [sentinel_ns] + [
+        sentinel_ns + duration_ms * 1_000_000
+        for duration_ms in (bounds["wall_time_ms"], 30000, 60000)
+    ]
+    for reading in readings:
+        for value in (reading, reading // 1_000, reading // 1_000_000):
+            assert str(value).encode("ascii") not in dump, value
+            assert value.to_bytes(8, "big") not in dump, value
+            assert value.to_bytes(8, "little") not in dump, value

@@ -212,9 +212,9 @@ is not written around.
 | `kernel_a18_published_file_digest_never_overwritten` | `faults.alter_value_write()`, `data_directory`, `value_file()`, `restart()` (the process ends after an `internal_error` answer) |
 | `kernel_a18_store_module_sole_transaction_owner` | `kernel_sources()`: a static fact of the generated code |
 | `kernel_a19_timestamps_from_injected_clock` | `clock.set` |
-| `kernel_a19_service_timestamp_not_kernel_time` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `clock.set`, `stub.requests` |
+| `kernel_a19_service_timestamp_not_kernel_time` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, `clock.set`, `stub.requests` |
 | `kernel_a19_request_cannot_supply_time` | `mcp_request` (a time field) |
-| `kernel_a19_monotonic_reading_never_stored` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `clock.fix_monotonic`, `store_dump()` |
+| `kernel_a19_monotonic_reading_never_stored` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, `clock.set`, `clock.fix_monotonic`, `store_dump()` |
 | `kernel_a20_ceiling_not_overridable_by_env` | `host.set_env`, `restart()` |
 | `kernel_a20_over_ceiling_refused_not_truncated` | `mcp_request(raw=)` |
 | `kernel_a20_ceilings_equal_release_constants` | `release`, `kernel_sources()`: static facts of the release |
