@@ -281,13 +281,16 @@ def _people_service(semantic_runtime):
     )
 
 
-def _lookup(semantic_runtime, output_class):
-    """A `read` binding of `people.lookup` declaring `output_class` on `person`."""
+def _lookup(semantic_runtime, output_class, input_class="open"):
+    """A `read` binding of `people.lookup` declaring `output_class` on `person`.
+
+    Its input `q` accepts `input_class`.
+    """
     return _accepted(
         semantic_runtime,
         "people",
         "lookup",
-        inputs=[_port("q", "input", TEXT, "open")],
+        inputs=[_port("q", "input", TEXT, input_class)],
         outputs=[_port("person", "output", TEXT, output_class)],
     )
 
@@ -299,8 +302,13 @@ def test_proof_refuses_class_above_accepted(semantic_runtime):
     into an input accepting `business_confidential` is refused by the proof.
     """
     _people_service(semantic_runtime)
-    personal_lookup = _lookup(semantic_runtime, "personal_data")
-    confidential_lookup = _lookup(semantic_runtime, "business_confidential")
+    # `q` accepts `business_confidential` and receives the `open` query: an
+    # edge whose class is below what its input accepts passes phase 8 (A07
+    # rule 1: open < business_confidential, not the order of the names).
+    personal_lookup = _lookup(semantic_runtime, "personal_data", "business_confidential")
+    confidential_lookup = _lookup(
+        semantic_runtime, "business_confidential", "business_confidential"
+    )
     relay_fn = _contract(
         semantic_runtime,
         "relay",
@@ -340,7 +348,8 @@ def test_proof_refuses_class_above_accepted(semantic_runtime):
     # declares; each function's output is the highest class reaching its
     # inputs, so `personal_data` reaches f2.y. A05 rule 1 phase 8: that exceeds
     # the `business_confidential` sink.x accepts. f1.x and f2.x accept
-    # `personal_data`, so the edge into sink.x is the first that fails.
+    # `personal_data` and lookup.q more than `open`, so the edge into sink.x,
+    # last in edge order, is the first that fails.
     refused = compose("a07_class_above", personal_lookup)
     assert refused.proof.proven is False
     assert _value(refused.proof.failure.phase) == "disclosure"
@@ -432,6 +441,16 @@ def test_agent_gets_personal_data_as_digest(semantic_runtime):
     _assert_digest(_item(agent_trace["f2"].inputs, "x"), "personal_data")
     _assert_digest(_item(agent_trace["f2"].outputs, "n"), "personal_data")
 
+    # Each digest is the digest of that value's bytes: equal bytes give equal
+    # digests along an edge, different bytes different ones.
+    person_digest = _item(agent_trace["lookup"].outputs, "person").value_digest
+    upper_digest = _item(agent_trace["f1"].outputs, "y").value_digest
+    length_digest = _item(agent_trace["f2"].outputs, "n").value_digest
+    assert _item(agent_trace["f1"].inputs, "x").value_digest == person_digest
+    assert _item(agent_trace["f2"].inputs, "x").value_digest == upper_digest
+    assert _output(agent_run, "length").value_digest == length_digest
+    assert len({person_digest, upper_digest, length_digest}) == 3
+
     # The owner receives all content.
     owner_run = semantic_runtime.read_run(run.run_id, actor=OWNER)
     _assert_content(_output(owner_run, "length"), "12", "personal_data")
@@ -445,6 +464,9 @@ def test_agent_gets_personal_data_as_digest(semantic_runtime):
     _assert_content(_item(owner_trace["f1"].outputs, "y"), '"ADA LOVELACE"', "personal_data")
     _assert_content(_item(owner_trace["f2"].inputs, "x"), '"ADA LOVELACE"', "personal_data")
     _assert_content(_item(owner_trace["f2"].outputs, "n"), "12", "personal_data")
+    # A07 rule 4: the agent's digest is not the `value_id` under another name.
+    assert _item(owner_trace["lookup"].outputs, "person").value_id != person_digest
+    assert _item(owner_trace["f2"].outputs, "n").value_id != length_digest
 
 
 def test_preview_hides_personal_data_from_agent(semantic_runtime):
@@ -526,6 +548,9 @@ def test_preview_hides_personal_data_from_agent(semantic_runtime):
     assert request.body.json_text == '{"name":"Ada Lovelace","topic":"billing"}'
     _assert_content(_item(owner_view.preview.inputs, "name"), '"Ada Lovelace"', "personal_data")
     _assert_content(_item(owner_view.preview.inputs, "topic"), '"billing"', "open")
+    # The agent's digest is not the `value_id` under another name.
+    agent_name = _item(agent_view.preview.inputs, "name")
+    assert agent_name.value_digest != _item(owner_view.preview.inputs, "name").value_id
 
     # Control: the same node fed `business_confidential` instead shows the
     # agent the built request and the content, so the masking above is
