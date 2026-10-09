@@ -355,6 +355,9 @@ def test_activation_proves_version_again(semantic_runtime):
     with pytest.raises(Exception) as exc:
         semantic_runtime.activate_flow_version(flow_version_id, actor=OWNER)
     assert exc.value.code == "refused"
+    # A06 rule 1: refused with its proof failure, which names the node `save`
+    # (A05 rule 1 phase 1), not with some other check.
+    assert "save" in exc.value.reason
     flow = semantic_runtime.active_flow_version(flow_id)
     assert flow.active_version is None
     assert flow.activation is None

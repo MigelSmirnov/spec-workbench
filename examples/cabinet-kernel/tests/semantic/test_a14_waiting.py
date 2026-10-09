@@ -924,6 +924,17 @@ def test_cancel_owner_only_unended_only(semantic_runtime):
     assert semantic_runtime.run_spool(failed.run_id) == failed_spool
     assert semantic_runtime.read_spooled_file(failed_file).content == b"crash-photo"
 
+    # A cancel of a run that ended `succeeded` is refused too: "ended" is
+    # every ended status, not only `failed` (A13 rule 7, A14 rule 3).
+    succeeded = semantic_runtime.start_run("a14_cancel_failed", inputs=[_json("word", "photo-ok")])
+    assert _v(succeeded.status) == "succeeded"
+    succeeded_trace = _trace(semantic_runtime, succeeded.run_id)
+    with pytest.raises(Exception) as exc:
+        semantic_runtime.cancel_run(succeeded.run_id)
+    assert exc.value.code == "refused"
+    assert semantic_runtime.read_run(succeeded.run_id) == succeeded
+    assert _trace(semantic_runtime, succeeded.run_id) == succeeded_trace
+
     # Control: the owner's cancel of the unended run succeeds, so the refusals
     # above come from the actor and from the ended run.
     cancelled = semantic_runtime.cancel_run(waiting.run_id)

@@ -16,7 +16,7 @@ Fixture surface used here:
 - ``issue_contract_version(slot_id, purpose, inputs, outputs,
   resource_bounds)`` -> contract_version_id (acts as agent ``author``; the
   bounds are sent as given);
-- ``page_records(record_type)`` -> RecordPageAnswer;
+- ``page_records(record_type, page_size=None)`` -> RecordPageAnswer;
 - capabilities: ``host.set_env``, ``restart()``, ``mcp_request`` (with
   ``raw=``), ``installation.agent_token``, ``release``, ``kernel_sources()``.
 """
@@ -82,16 +82,18 @@ def _issue(semantic_runtime, slot_id, purpose=None, **bounds):
 
 
 def _check_ceilings_hold(semantic_runtime, tag):
-    """Two ceilings the kernel reads, each at its value and one unit over."""
-    # A02 rules 1-2: a bound at its ceiling is accepted, one over is refused.
+    """Six ceilings the kernel reads, each at its value and one unit over."""
+    # A02 rules 1-2: every bound at its ceiling is accepted, each one unit over
+    # is refused.
     _issue(semantic_runtime, f"a20_{tag}_at")
-    with pytest.raises(Exception) as exc:
-        _issue(
-            semantic_runtime,
-            f"a20_{tag}_over",
-            wall_time_ms=CEILINGS["wall_time_ms"] + 1,
-        )
-    assert exc.value.code == "refused"
+    for name in BOUNDS:
+        with pytest.raises(Exception) as exc:
+            _issue(
+                semantic_runtime,
+                f"a20_{tag}_over_{name}",
+                **{name: CEILINGS[name] + 1},
+            )
+        assert exc.value.code == "refused", name
 
     # A16 rule 4: a string at `bounded_text_bytes_max` bytes is accepted, one
     # byte over is a field over its bound.
@@ -101,9 +103,20 @@ def _check_ceilings_hold(semantic_runtime, tag):
         _issue(semantic_runtime, f"a20_{tag}_text_over", purpose=at_bound + "p")
     assert exc.value.code == "invalid_request"
 
-    slots = {s.slot_id for s in semantic_runtime.page_records("slot").records.slots}
+    # A16 rule 6: a page of `page_size_max` items may be asked, one more is
+    # refused (State 5: invalid_request).
+    page_size_max = CEILINGS["page_size_max"]
+    slots = {
+        s.slot_id
+        for s in semantic_runtime.page_records("slot", page_size=page_size_max).records.slots
+    }
+    with pytest.raises(Exception) as exc:
+        semantic_runtime.page_records("slot", page_size=page_size_max + 1)
+    assert exc.value.code == "invalid_request"
+
     assert f"a20_{tag}_at" in slots and f"a20_{tag}_text_at" in slots
-    assert f"a20_{tag}_over" not in slots and f"a20_{tag}_text_over" not in slots
+    assert f"a20_{tag}_text_over" not in slots
+    assert not any(slot.startswith(f"a20_{tag}_over_") for slot in slots)
 
 
 def _module_name(module_path):
@@ -115,40 +128,59 @@ def _ceiling_named(identifier):
     return any(name in lowered for name in CEILINGS) or lowered == "page_size"
 
 
-def _numeric(node):
-    if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.USub):
-        node = node.operand
-    return (
-        isinstance(node, ast.Constant)
-        and isinstance(node.value, (int, float))
-        and not isinstance(node.value, bool)
-    )
+def _number(node):
+    """The value of a numeric literal or of constant arithmetic over literals
+    (``512 * 1024 * 1024``, ``1 << 20``), else None."""
+    if isinstance(node, ast.Constant):
+        value = node.value
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            return value
+        return None
+    if isinstance(node, ast.UnaryOp) and isinstance(node.op, (ast.USub, ast.UAdd)):
+        operand = _number(node.operand)
+        if operand is None:
+            return None
+        return -operand if isinstance(node.op, ast.USub) else operand
+    if isinstance(node, ast.BinOp):
+        left, right = _number(node.left), _number(node.right)
+        if left is None or right is None:
+            return None
+        operations = {
+            ast.Add: lambda a, b: a + b,
+            ast.Sub: lambda a, b: a - b,
+            ast.Mult: lambda a, b: a * b,
+            ast.Pow: lambda a, b: a**b if abs(b) <= 64 else None,
+            ast.LShift: lambda a, b: a << b if isinstance(a, int) and 0 <= b <= 64 else None,
+        }
+        operation = operations.get(type(node.op))
+        return operation(left, right) if operation else None
+    return None
 
 
-def _bound_numbers(statements):
-    """(name, literal) of ceiling-named numbers bound by these statements."""
+def _bindings(statements):
+    """(name, value node) of names and attributes bound by these statements."""
     found = []
     for node in statements:
         if isinstance(node, (ast.Assign, ast.AnnAssign)) and node.value is not None:
             targets = node.targets if isinstance(node, ast.Assign) else [node.target]
             for target in targets:
                 name = getattr(target, "id", None) or getattr(target, "attr", None)
-                if name and _ceiling_named(name) and _numeric(node.value):
-                    found.append((name, ast.literal_eval(node.value)))
+                if name:
+                    found.append((name, node.value))
     return found
 
 
-def _ceiling_definitions(source):
-    """(name, literal value) of every ceiling-named number a module defines.
+def _definitions(source):
+    """(name, value node) of every definition a module makes.
 
     Module and class level bindings, and parameter defaults; a local variable
     inside a function body is not a definition.
     """
     tree = ast.parse(source)
-    found = _bound_numbers(tree.body)
+    found = _bindings(tree.body)
     for node in ast.walk(tree):
         if isinstance(node, ast.ClassDef):
-            found.extend(_bound_numbers(node.body))
+            found.extend(_bindings(node.body))
         elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
             arguments = node.args
             positional = arguments.posonlyargs + arguments.args
@@ -158,10 +190,42 @@ def _ceiling_definitions(source):
                 for arg, default in zip(arguments.kwonlyargs, arguments.kw_defaults)
                 if default is not None
             ]
-            for arg, default in pairs:
-                if _ceiling_named(arg.arg) and _numeric(default):
-                    found.append((arg.arg, ast.literal_eval(default)))
+            found.extend((arg.arg, default) for arg, default in pairs)
     return found
+
+
+def _ceiling_definitions(source):
+    """(name, value) of every ceiling-named number a module defines."""
+    return [
+        (name, _number(value))
+        for name, value in _definitions(source)
+        if _ceiling_named(name) and _number(value) is not None
+    ]
+
+
+# Ceiling values no module has another reason to hold: a definition of one of
+# them outside the data provider is a second default under another name.
+# (Small or common sizes — 8, 50, 200, 4096, 16384, 1 MiB — are left out.)
+DISTINCT_CEILING_VALUES = {
+    CEILINGS[name]
+    for name in (
+        "wall_time_ms",
+        "memory_bytes",
+        "output_bytes",
+        "sandbox_scratch_bytes_max",
+        "service_response_bytes_max",
+        "transport_timeout_ms",
+    )
+}
+
+
+def _ceiling_valued_definitions(source):
+    """(name, value) of every definition whose number is a distinct ceiling."""
+    return [
+        (name, _number(value))
+        for name, value in _definitions(source)
+        if _number(value) in DISTINCT_CEILING_VALUES
+    ]
 
 
 def _top_level_imports(source):
@@ -273,12 +337,13 @@ def test_ceilings_equal_release_constants(semantic_runtime):
         name.startswith("RELEASE_CEILING_") for name in constants
     ), "the data provider holds no second spelling of a ceiling"
 
-    # No other module binds a ceiling-named number: no second default.
+    # No other module binds a ceiling-named number, nor a ceiling's value
+    # under another name (`MAX_BODY = 128 * 1024 * 1024`): no second default.
     second_defaults = {
         path: found
         for path, source in sources.items()
         if path != provider
-        for found in [_ceiling_definitions(source)]
+        for found in [_ceiling_definitions(source) + _ceiling_valued_definitions(source)]
         if found
     }
     assert second_defaults == {}

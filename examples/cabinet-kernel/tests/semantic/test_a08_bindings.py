@@ -222,13 +222,19 @@ def test_non_read_key_field_must_be_input_port(semantic_runtime):
     )
     _install(semantic_runtime, SERVICE)
 
-    with pytest.raises(Exception) as exc:
-        semantic_runtime.propose_binding(
-            SERVICE, "save_draft", [_port("title", "input", TEXT)], DRAFT_OUTPUTS
-        )
     # A08 rules 4-5: for an operation other than `read`, each key field must be
-    # the name of one `value` input port of the proposal.
-    assert exc.value.code == "refused"
+    # the name of one `value` input port of the proposal. `material_id` is
+    # first no port at all, then an output port: a port of the other direction
+    # is still not an input port.
+    for outputs in (
+        DRAFT_OUTPUTS,
+        DRAFT_OUTPUTS + [_port("material_id", "output", TEXT)],
+    ):
+        with pytest.raises(Exception) as exc:
+            semantic_runtime.propose_binding(
+                SERVICE, "save_draft", [_port("title", "input", TEXT)], outputs
+            )
+        assert exc.value.code == "refused", [p["name"] for p in outputs]
     assert list(_bindings(semantic_runtime)) == []
 
     # Control: with `material_id` as a value input port the same proposal is
@@ -400,12 +406,15 @@ def test_record_read_only_at_pinned_path(semantic_runtime):
     # At the pinned path, with another `service` field.
     write("mismatch", record(SERVICE), file_name="mismatch.json")
     # At the path a kernel would build from the raw identity, each with a
-    # matching `service` field: only the identity check can refuse these.
+    # matching `service` field and a selected instance: only the identity
+    # check can refuse these.
     write("Drafts", record("Drafts"), file_name="Drafts.json")
     write("nested/drafts", record("nested/drafts"), file_name="nested/drafts.json")
     # Control record at its pinned path.
     write(SERVICE, record(SERVICE))
-    for service_id in ("renamed", "archived", "mismatch", SERVICE):
+    for service_id in (
+        "renamed", "archived", "mismatch", "Drafts", "nested/drafts", SERVICE
+    ):
         _select(semantic_runtime, service_id)
 
     inputs = [_port("q", "input", TEXT)]

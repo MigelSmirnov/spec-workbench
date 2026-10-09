@@ -32,6 +32,7 @@ Fixture surface used here:
 
 import ast
 import hashlib
+import re
 from pathlib import PurePosixPath
 
 import pytest
@@ -44,12 +45,21 @@ DATABASE_CALLS = (
     "executemany",
     "executescript",
     "cursor",
-    "commit",
-    "rollback",
     "isolation_level",
     "in_transaction",
 )
-TRANSACTION_SQL = ("BEGIN", "COMMIT", "ROLLBACK", "SAVEPOINT", "RELEASE SAVEPOINT")
+# A connection's `commit()` / `rollback()` take no argument; a call with one
+# (a version-control `repo.commit(revision)`) is not a database transaction.
+TRANSACTION_CALLS = ("commit", "rollback")
+# A transaction statement is the whole SQL text, in upper case; a docstring
+# that merely starts with "Begin ..." or "Commit ...", or a git object type
+# "commit", is not one. (A module that sends SQL also needs `.execute`.)
+TRANSACTION_SQL = re.compile(
+    r"\s*(BEGIN(\s+(DEFERRED|IMMEDIATE|EXCLUSIVE))?(\s+TRANSACTION)?"
+    r"|COMMIT(\s+TRANSACTION)?|END\s+TRANSACTION"
+    r"|ROLLBACK(\s+TRANSACTION)?(\s+TO(\s+SAVEPOINT)?\s+\w+)?"
+    r"|SAVEPOINT\s+\w+|RELEASE\s+SAVEPOINT\s+\w+)\s*;?\s*"
+)
 
 
 def _port(name, direction, schema, disclosure_class=None):
@@ -151,6 +161,9 @@ def _database_uses(source):
         elif isinstance(node, ast.ImportFrom):
             if (node.module or "").split(".")[0] in DATABASE_DRIVERS:
                 found.append(f"from {node.module} import")
+        elif isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
+            if node.func.attr in TRANSACTION_CALLS and not node.args and not node.keywords:
+                found.append(f".{node.func.attr}()")
         elif isinstance(node, ast.Attribute):
             if node.attr in DATABASE_CALLS or "transaction" in node.attr.lower():
                 found.append(f".{node.attr}")
@@ -167,8 +180,7 @@ def _database_uses(source):
             if "transaction" in node.name.lower():
                 found.append(f"def {node.name}")
         elif isinstance(node, ast.Constant) and isinstance(node.value, str):
-            head = node.value.lstrip().upper()
-            if head.startswith(TRANSACTION_SQL):
+            if TRANSACTION_SQL.fullmatch(node.value):
                 found.append(f"sql {node.value.strip()[:20]!r}")
     return found
 
@@ -221,6 +233,17 @@ def test_value_write_atomic_publish(semantic_runtime):
     assert len(_cases_of(semantic_runtime, contract_version_id)) == 0
     assert not published.exists()
 
+    # A18 rule 4: the start also removes the temporary file the crash left —
+    # no file anywhere in the data directory holds any part of those bytes.
+    # No record was written, so the value is in no database file either.
+    marker = b'"a18-atomic-'
+    leftovers = [
+        path
+        for path in semantic_runtime.data_directory.rglob("*")
+        if path.is_file() and not path.is_symlink() and marker in path.read_bytes()
+    ]
+    assert leftovers == []
+
     # Control: the same write without a crash publishes the complete file.
     added = _case(semantic_runtime, contract_version_id, json_text)
     assert added.trial_case.inputs[0].items[0].json_text == json_text
@@ -249,6 +272,11 @@ def test_failed_store_call_writes_nothing(semantic_runtime):
         semantic_runtime.compose_flow_version("a18_failed_flow", **request)
     # State 5 Conventions: a failed store call is answered `internal_error`.
     assert exc.value.code == "internal_error"
+
+    # 80_notes.md `serve_kernel`/`answer_request`: after an internal_error
+    # answer the process ends; the records are read from a new start, which
+    # also shows that nothing of the change was committed.
+    assert semantic_runtime.restart().started is True
 
     # A18 rule 3: the call changed no record — neither of the two.
     assert len(semantic_runtime.page_records("flow").records.flows) == 0
@@ -284,23 +312,30 @@ def test_symlink_in_data_dir_refused(semantic_runtime, tmp_path):
     # under, pointing outside the data directory.
     second_text, _, second_digest = _text_value("a18-symlink-second")
     outside = tmp_path / "outside_target"
+    link = _published(semantic_runtime, second_digest)
     semantic_runtime.faults.place_symlink(
         semantic_runtime.value_file(second_digest), str(outside)
     )
+    assert link.is_symlink()
 
     # A18 rule 2: the store call that meets it fails with nothing written
     # (State 5 `put_value_bytes`: a link is `internal_error`, nothing published).
     with pytest.raises(Exception) as exc:
         _case(semantic_runtime, contract_version_id, second_text)
     assert exc.value.code == "internal_error"
-    assert len(_cases_of(semantic_runtime, contract_version_id)) == 1
+    # Nothing written through the link, and the link not replaced by a
+    # published file. (80_notes.md `serve_kernel`: the process then ends, and
+    # with the link in place no start can follow to read the records.)
     assert not outside.exists()
+    assert link.is_symlink()
+    assert _published(semantic_runtime, first_digest).read_bytes() == first_bytes
 
     # A18 rule 2: a link found at start stops the start.
     stopped = semantic_runtime.restart()
     assert stopped.started is False
     assert stopped.exit_code not in (None, 0)
     assert not outside.exists()
+    assert link.is_symlink()
 
 
 def test_published_file_digest_never_overwritten(semantic_runtime):
@@ -319,10 +354,18 @@ def test_published_file_digest_never_overwritten(semantic_runtime):
     # temporary file, `kind="size"` appends one byte.
     for kind in ("content", "size"):
         semantic_runtime.faults.alter_value_write(kind)
-        with pytest.raises(Exception):
+        with pytest.raises(Exception) as exc:
             _case(semantic_runtime, contract_version_id, json_text)
-        assert not published.exists()
-        assert len(_cases_of(semantic_runtime, contract_version_id)) == 0
+        # 80_notes.md `put_value_bytes`: a failed re-check after writing is
+        # StoreInternalError, answered `internal_error` (State 5 Conventions).
+        assert exc.value.code == "internal_error", kind
+        # Inspected before any restart, which would remove an unnamed file.
+        assert not published.exists(), kind
+        # The process ends after an internal_error (80_notes.md
+        # `serve_kernel`); the records are read from a new start.
+        assert semantic_runtime.restart().started is True
+        assert not published.exists(), kind
+        assert len(_cases_of(semantic_runtime, contract_version_id)) == 0, kind
 
     # Control: unaltered, the same write publishes the file.
     _case(semantic_runtime, contract_version_id, json_text)

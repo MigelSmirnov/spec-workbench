@@ -362,29 +362,36 @@ def test_fan_in_one_delivering_edge_per_port(semantic_runtime):
     assert control.proof.failure is None
 
 
-def _guard_flow(semantic_runtime, flow_id, guard_values):
-    """`check` routes the item to `save.x` over two edges from two of its outputs.
-
-    `guard_values` gives the guard value of each edge on `check.verdict`, or
-    None for an unguarded edge.
-    """
-    check_fn = _contract(
+def _check_contract(semantic_runtime):
+    """`check_step`: one text input `x`; text outputs `a`, `b`; closed-set `kind`, `verdict`."""
+    return _contract(
         semantic_runtime,
         "check_step",
         inputs=[_port("x", "input", TEXT, "open")],
         outputs=[
             _port("a", "output", TEXT),
             _port("b", "output", TEXT),
+            _port("kind", "output", VERDICT),
             _port("verdict", "output", VERDICT),
         ],
     )
+
+
+def _guard_flow(semantic_runtime, flow_id, guard_values, guard_ports=("verdict", "verdict")):
+    """`check` routes the item to `save.x` over two edges from two of its outputs.
+
+    `guard_values` gives the guard value of each edge, or None for an unguarded
+    edge; `guard_ports` the output of `check` each edge is guarded on —
+    `verdict` or `kind`, both closed sets of `new` and `duplicate`.
+    """
+    check_fn = _check_contract(semantic_runtime)
     save_fn = _function(semantic_runtime, "save_step", TEXT)
     routes = []
-    for from_port, guard_value in zip(("a", "b"), guard_values):
+    for from_port, guard_port, guard_value in zip(("a", "b"), guard_ports, guard_values):
         if guard_value is None:
             routes.append(_edge("check", from_port, "save", "x"))
         else:
-            routes.append(_guarded("check", from_port, "save", "x", "verdict", guard_value))
+            routes.append(_guarded("check", from_port, "save", "x", guard_port, guard_value))
     return semantic_runtime.compose_flow_version(
         flow_id,
         purpose=f"A05 witness: {flow_id}",
@@ -417,6 +424,45 @@ def test_exclusive_guards_share_input_port(semantic_runtime):
     assert _phase(control.proof.failure) == "fan_in"
     assert control.proof.failure.node_id == "save"
     assert control.proof.failure.port == "x"
+
+    # Control: the same values on two different guard ports of `check` can
+    # both deliver (A05 rule 3: only the same guard port excludes), so the
+    # proof above compared the guard ports, not only the values.
+    other_ports = _guard_flow(
+        semantic_runtime,
+        "a05_exclusive_guards_other_ports",
+        ('"new"', '"duplicate"'),
+        guard_ports=("verdict", "kind"),
+    )
+    assert other_ports.proof.proven is False
+    assert _phase(other_ports.proof.failure) == "fan_in"
+    assert other_ports.proof.failure.node_id == "save"
+    assert other_ports.proof.failure.port == "x"
+
+    # Control: guard ports of the same name on two different source nodes can
+    # both deliver too (A05 rule 3: the same guard port of the same source
+    # node), so the proof above compared the source nodes as well.
+    check_fn = _check_contract(semantic_runtime)
+    save_fn = _function(semantic_runtime, "save_step", TEXT)
+    other_sources = semantic_runtime.compose_flow_version(
+        "a05_exclusive_guards_other_sources",
+        purpose="A05 witness: a05_exclusive_guards_other_sources",
+        inputs=[_port("item", "input", TEXT, "open")],
+        outputs=[_port("out", "output", TEXT)],
+        nodes=[_node("check", check_fn), _node("check2", check_fn), _node("save", save_fn)],
+        edges=[
+            _edge("", "item", "check", "x"),
+            _edge("", "item", "check2", "x"),
+            _edge("save", "y", "", "out"),
+            _guarded("check", "a", "save", "x", "verdict", '"new"'),
+            _guarded("check2", "a", "save", "x", "verdict", '"duplicate"'),
+        ],
+        constants=[],
+    )
+    assert other_sources.proof.proven is False
+    assert _phase(other_sources.proof.failure) == "fan_in"
+    assert other_sources.proof.failure.node_id == "save"
+    assert other_sources.proof.failure.port == "x"
 
 
 def test_proof_recomputed_on_demand(semantic_runtime):
@@ -594,6 +640,27 @@ def test_highest_effect_class_max_or_read(semantic_runtime):
     assert _value(both.proof.highest_effect_class) == "draft-write"
     again = semantic_runtime.prove_flow_version(both.flow_version.flow_version_id)
     assert _value(again.highest_effect_class) == "draft-write"
+
+    # The same two operation nodes with the `draft-write` node first in
+    # `node_id` order: still `draft-write`, so the class is the maximum, not
+    # that of the first or of the last operation node.
+    swapped = semantic_runtime.compose_flow_version(
+        "a05_effect_both_swapped",
+        purpose="A05 witness: draft-write node first",
+        inputs=[
+            _port("material", "input", TEXT, "open"),
+            _port("query", "input", TEXT, "open"),
+        ],
+        outputs=[],
+        nodes=[_operation_node("a_save", save), _operation_node("b_lookup", lookup)],
+        edges=[
+            _edge("", "query", "b_lookup", "q"),
+            _edge("", "material", "a_save", "material"),
+        ],
+        constants=[],
+    )
+    assert swapped.proof.proven is True
+    assert _value(swapped.proof.highest_effect_class) == "draft-write"
 
     # Control: a version whose only operation node is `read` has `read`, so
     # `draft-write` above is the maximum, not "any operation node".

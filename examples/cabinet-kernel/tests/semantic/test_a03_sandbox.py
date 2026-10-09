@@ -452,11 +452,16 @@ def test_fresh_env_no_network_no_host_mounts(semantic_runtime):
     )
     semantic_runtime.add_trial_case(cv, inputs=[_json("x", "one")])
     semantic_runtime.add_trial_case(cv, inputs=[_json("x", "two")])
+    # Counted from here: the kernel has started, so its start probe (A03 rule
+    # 8) is already behind this count.
+    baseline = len(semantic_runtime.sandbox_executions())
 
     # Admission (two executions), a try (two more) ...
     submission = semantic_runtime.submit_implementation(cv, CONFORMING)
     assert submission.activation is not None
     semantic_runtime.try_implementation(submission.implementation.implementation_id)
+    # A03 rule 1: every trial execution ran in a sandbox environment.
+    assert len(semantic_runtime.sandbox_executions()) == baseline + 4
 
     # ... and one execution inside a run: A03 rule 1 holds for trial and run
     # alike.
@@ -486,7 +491,9 @@ def test_fresh_env_no_network_no_host_mounts(semantic_runtime):
     assert _value(run.status) == "succeeded"
 
     executions = semantic_runtime.sandbox_executions()
-    assert len(executions) >= 5
+    # A03 rule 1: the run's one execution ran in a sandbox environment too —
+    # there is no in-process or fast path for a run.
+    assert len(executions) == baseline + 5
     runtime = set(semantic_runtime.sandbox_runtime_paths())
 
     exchange_directories = []
