@@ -20,7 +20,7 @@ Fixture surface used here:
   ``author``;
 - ``read_contract_version(contract_version_id)`` -> ContractVersion (M03);
 - ``page_records(record_type, record_filter)`` -> RecordPageAnswer, to show
-  that a refusal recorded nothing.
+  that a refusal recorded nothing (no contract version, no slot).
 
 A refusal is read by its code and, where A02 rule 2 makes the reason name a
 field, by its reason.
@@ -80,6 +80,28 @@ def _contract_versions_of(semantic_runtime, slot_id):
     return list(page.records.contract_versions)
 
 
+def _slot_ids(semantic_runtime):
+    page = semantic_runtime.page_records("slot", None, page_size=200)
+    return [s.slot_id for s in page.records.slots]
+
+
+def _assert_nothing_recorded(semantic_runtime, slot_id):
+    # State 5 Conventions: a refusal is decided before the operation's first
+    # store change, so it writes nothing — no contract version and, for a new
+    # slot name, no slot (the `issue_contract_version` change writes both).
+    assert _contract_versions_of(semantic_runtime, slot_id) == []
+    assert slot_id not in _slot_ids(semantic_runtime)
+
+
+def _assert_names_only(reason, field):
+    # A02 rule 2 / State 5: the refusal names the failing field; the other
+    # bounds, which hold, are not named.
+    assert field in reason
+    for other in BOUND_FIELDS:
+        if other != field:
+            assert other not in reason
+
+
 def _bounds(contract_version):
     bounds = contract_version.resource_bounds
     return {field: getattr(bounds, field) for field in BOUND_FIELDS}
@@ -105,9 +127,9 @@ def test_bound_at_ceiling_ok_over_refused(semantic_runtime):
             _issue(semantic_runtime, slot_id, resource_bounds=over)
         # A02 rule 2: refused, never clamped; the refusal names the field.
         assert exc.value.code == "refused"
-        assert field in exc.value.reason
+        _assert_names_only(exc.value.reason, field)
         # Nothing was recorded: no contract version, clamped or otherwise.
-        assert _contract_versions_of(semantic_runtime, slot_id) == []
+        _assert_nothing_recorded(semantic_runtime, slot_id)
 
 
 def test_absent_bound_refused(semantic_runtime):
@@ -120,8 +142,8 @@ def test_absent_bound_refused(semantic_runtime):
         _issue(semantic_runtime, "a02_absent_bound", resource_bounds=without_memory)
     # A02 rule 2: an omitted bound is refused; the kernel supplies no default.
     assert exc.value.code == "refused"
-    assert "memory_bytes" in exc.value.reason
-    assert _contract_versions_of(semantic_runtime, "a02_absent_bound") == []
+    _assert_names_only(exc.value.reason, "memory_bytes")
+    _assert_nothing_recorded(semantic_runtime, "a02_absent_bound")
 
     # Control: the same contract with `memory_bytes` given is issued, so the
     # refusal above came from the omission.
@@ -141,7 +163,7 @@ def test_output_disclosure_class_refused(semantic_runtime):
         _issue(semantic_runtime, slot_id, outputs=[_output("y", "open")])
     # A02 rule 1 (M01): no output port declares a disclosure class.
     assert exc.value.code == "refused"
-    assert _contract_versions_of(semantic_runtime, slot_id) == []
+    _assert_nothing_recorded(semantic_runtime, slot_id)
 
     # Control: the same contract with an output port without a class is issued.
     issued = _issue(semantic_runtime, slot_id, outputs=[_output("y", None)])
@@ -162,8 +184,8 @@ def test_zero_bound_refused(semantic_runtime):
             _issue(semantic_runtime, slot_id, resource_bounds=zero)
         # A02 rule 1: every bound is a positive integer.
         assert exc.value.code == "refused"
-        assert field in exc.value.reason
-        assert _contract_versions_of(semantic_runtime, slot_id) == []
+        _assert_names_only(exc.value.reason, field)
+        _assert_nothing_recorded(semantic_runtime, slot_id)
 
     # Control: the smallest positive bound, 1 for every field, is issued, so
     # the refusals above came from the zero, not from a lower limit above it.
@@ -182,7 +204,7 @@ def test_no_output_port_refused(semantic_runtime):
         _issue(semantic_runtime, slot_id, outputs=[])
     # A02 rule 1: there is at least one output port.
     assert exc.value.code == "refused"
-    assert _contract_versions_of(semantic_runtime, slot_id) == []
+    _assert_nothing_recorded(semantic_runtime, slot_id)
 
     # Control: the same contract with one output port is issued.
     issued = _issue(semantic_runtime, slot_id, outputs=[_output()])
@@ -202,7 +224,7 @@ def test_port_names_unique_per_direction(semantic_runtime):
         _issue(semantic_runtime, slot_id, inputs=[_input("x"), _input("x")])
     # A02 rule 1: every port name is unique within its direction.
     assert exc.value.code == "refused"
-    assert _contract_versions_of(semantic_runtime, slot_id) == []
+    _assert_nothing_recorded(semantic_runtime, slot_id)
 
     # Control: one name used once per direction is issued, so the refusal
     # above came from the repetition within the inputs, not from the name.
