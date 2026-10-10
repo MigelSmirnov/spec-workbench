@@ -665,6 +665,26 @@ existing equal version is still returned before the ceiling checks (A01
 rule 4, A20 rule 4). The other link finding was the linker's (code-factory
 #67).
 
+## Decision closed at the first verification (2026-10-10)
+
+The first Route B to reach verification deployed all fifteen modules; the
+kernel stopped in its start sequence for two reasons the texts left open.
+
+29. **The sandbox root and the manifest path.**
+    - *Root links.* Binding only `SANDBOX_RUNTIME_PATHS` ("/usr") leaves a
+      usr-merged host's interpreter unable to start inside bubblewrap (its
+      loader is named under `/lib64`; `execvp ... No such file or
+      directory`). `SANDBOX_ROOT_SYMLINKS` — `/bin`, `/lib`, `/lib64` to
+      `usr/bin`, `usr/lib`, `usr/lib64` — are made inside the new root by
+      `execute_function` and by `probe_sandbox`'s interpreter run. They are
+      links in bubblewrap's own root, not host paths, so A03 rule 1's
+      "no other host directory" holds.
+    - *Manifest path.* `read_service_record` reads
+      `git -C manifest_location show <revision>:./<service_id><suffix>`: a bare
+      `<revision>:<file>` names a path from the repository's root, which is not
+      `manifest_location` (decision 8 puts the manifest in a directory of the
+      repository).
+
 ## Texts of earlier states changed by State 6
 
 - States 3, 4 and 5 (2026-10-10, decision 26): `clock`'s capabilities are
