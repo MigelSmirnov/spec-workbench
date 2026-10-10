@@ -655,6 +655,16 @@ value_digest is content_identity of a BytesContent holding the bytes, value_id
 content_identity of the StoredValueContent — so every such module imports
 BytesContent (`flows`, `functions`, `effects`, `runs`).
 
+### After Route B on the value-digest rule (2026-10-10)
+
+The link of `functions` found `contract_version_id` possibly None where the
+change is built: the round-02 fix computed the identity only when every bound
+was given and left an omitted bound to a later check. An omitted bound is now
+refused right after the purpose rule, before any identity is computed; an
+existing equal version is still returned before the ceiling checks (A01
+rule 4, A20 rule 4). The other link finding was the linker's (code-factory
+#67).
+
 ## Texts of earlier states changed by State 6
 
 - States 3, 4 and 5 (2026-10-10, decision 26): `clock`'s capabilities are
