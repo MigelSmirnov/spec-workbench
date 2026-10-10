@@ -6,7 +6,9 @@ smaller than what it hides. Each accepted decision has one primary owner, the
 module that holds the decision's central mechanism, and consumers. Ownership is
 by rule, not by decision: a consumer owns exactly the rules and parts of the
 decision its own section below names, and the primary owner owns every rule of
-the decision that no other section names. The table is the one mapping;
+the decision that no other section names, except a rule this text places
+outside the running kernel (A20 rule 3, A21), which no module owns. The table
+is the one mapping;
 `30_trace.json` records the same:
 
 | decision | primary owner | consumers |
@@ -261,7 +263,9 @@ record checked by `design_lint --state 2`, recorded as such in `30_trace.json`.
   only for classes other than `read` (A08 rule 4, A10).
 - **Pinned versions.** The pinned Python dependencies and sandbox runtime of A20
   rule 3 are a release artifact built and checked outside the running kernel;
-  at run time only `sandbox.probe_sandbox` checks that a sandbox works.
+  at run time only `sandbox.probe_sandbox` checks that a sandbox works. No
+  module owns them: the release that builds the kernel selects, records and
+  verifies them, and `data_provider` holds no pin.
 - **Start.** `surface.serve_kernel` runs the start in this order:
   `installation.load_installation`; `bindings.check_installed_instances`;
   `store.open_store`, which takes the lock,
