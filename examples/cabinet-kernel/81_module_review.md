@@ -399,6 +399,10 @@ operation whose notes already needed them. The remark "Published inputSchema
 and null" below is decided: `X | None` is published as `anyOf [X, null]`. No
 verdict changed; every `slice_sha256` recomputed.
 
+## Value-digest rule delta (2026-10-10)
+
+The one value-digest rule, now stated in every publishing note, moved `flows`, `effects`, `runs`; State 7 rounds 14-15 closed them clear. No verdict changed; hashes recomputed.
+
 ## Remarks, not blocking
 
 - **Published `inputSchema` and null.** By decision 22's closed rule, the published `inputSchema`
