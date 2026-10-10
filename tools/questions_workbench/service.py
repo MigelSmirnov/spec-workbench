@@ -528,7 +528,9 @@ def _module_round(provider: Provider, state: int, runs: int, read: StateTexts, s
         mine = _group(provider, [r for r in reviews if r["unit"] == module], keep_points=True)
         for topic in mine:
             topic["units"] = [module]
-        again = [t for t in mine if len(t["runs"]) >= REPEATED]
+        # a State 7 topic is a contradiction quoted on both sides and checked
+        # mechanically, so one review is enough to judge it
+        again = list(mine)
         if again:
             text = prompts.module_input(module, read.units[module]["text"])
             module_old = None if old is None else {module: old.get(module, "")}

@@ -50,25 +50,21 @@ def unit_scope(state: int, scope: list[tuple[str, str]], changed: dict[str, str]
 MODULE_ASK = """You are the model that will generate the module below. You receive exactly
 the prompt the Factory will give you to generate it: its imports, its contracts,
 the contracts and constants it may use, its models and its notes. You will
-write the module from this prompt alone; whatever it leaves open, you will
-decide silently, and another generator given the same prompt will decide
-differently.
+write the module from this prompt alone.
 
-List every point where generating from this prompt would force you to guess.
+List every place where this prompt contradicts itself — where you could not
+obey one passage without breaking another:
 
-Scope of State {state} — report a point only if it belongs here:
 {scope}
 
-Before you write anything, read the prompt as the code you would write from it:
-for every function you must define, what would you have to guess? Where does
-the prompt contradict itself — a note that allows what the IMPORTS list does not
-hold, two notes that order the same checks differently, a note naming a value
-or an error the contracts do not carry? What is missing for two generators to
-write the same behaviour?
-
-Do not propose designs as settled. Report only genuine gaps, not style.
+Read the prompt as the code you would write from it: for every function you
+must define, does any note allow or require what the IMPORTS list, a contract,
+a model's fields or a constant do not hold, or what another note forbids or
+decides differently? Report only such contradictions, each with both passages
+copied character for character from the prompt. Do not report what the prompt
+leaves open, style, or designs you would prefer.
 Output strict JSON, nothing else:
-{{"open_points":[{{"subject":"<function, class, note or section of the prompt>","kind":"<short kind>","text":"<the exact phrase of the prompt that is silent, vague or contradictory>","question":"<the question the prompt must answer>","options":["<option you see>"],"default_guess":"<what you would do if forced>"}}]}}"""
+{{"open_points":[{{"subject":"<function, class, note or section of the prompt>","kind":"contradiction","text":"<the first passage, verbatim>","other_text":"<the passage it contradicts, verbatim>","question":"<which of the two must change, or how they are reconciled>"}}]}}"""
 
 
 MODULE_CHANGE = """
