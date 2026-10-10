@@ -407,6 +407,10 @@ The one value-digest rule, now stated in every publishing note, moved `flows`, `
 
 `issue_contract_version` refuses an omitted bound before any identity; moved `functions`; State 7 rounds 16-17 closed it clear. No verdict changed; hashes recomputed.
 
+## Import-cycle delta (2026-10-10)
+
+`open_store` no longer names `recover_running_runs`, so `store` no longer imports `runs`; moved `store`; State 7 rounds 18-19 closed it clear. No verdict changed; hashes recomputed.
+
 ## Remarks, not blocking
 
 - **Published `inputSchema` and null.** By decision 22's closed rule, the published `inputSchema`
