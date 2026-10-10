@@ -354,6 +354,36 @@ bindings prints `platform.python_implementation()` and `python_version()`;
   `inputs: tuple[ShownPort, ...]`). The `handle_list_records` note would then pass the inputs
   through `show_port_refs`.
 
+## Decision 26 delta review (2026-10-10)
+
+Decision 26 (the clock is emitted by `system_clock_backend/v3`; owner, after
+the first Route B stopped at `clock` and code-factory PR #57 closed the
+`single_host_source` opt-out) moved every slice. Built at `77d5707` and after,
+and diffed without note positions:
+
+- **Content changed** —
+  - `clock`: now `deterministic_backend`; `kernel_now` and `monotonic_ns`
+    lowered by `python_host_clock_v1`, no notes. The withdrawn private-reader
+    note is what the Factory's time-source gate had refused.
+  - `sandbox`: `execute_function`'s wall deadline is the `monotonic_ns`
+    reading at the environment's start plus `bounds.wall_time_ms`, held in a
+    local variable; `clock.monotonic_ns` imported.
+  - `service_invoker`: `send_prepared_request` bounds the whole exchange by one
+    deadline from a `monotonic_ns` reading plus the transport ceiling, each
+    socket wait given the time left rounded up to whole milliseconds
+    (convention 15); `clock.monotonic_ns` imported.
+- **Flow text only** — the four steps of State 4 that bound a wait now name
+  `capability:clock.monotonic_ns`; the packets of `bindings`,
+  `canonical_values`, `effects`, `flows`, `functions`, `installation`, `runs`,
+  `store`, `surface` carry them. No note of those modules changed.
+
+Review: both deadlines keep A19 rule 2 (the reading is never stored: it lives
+in the waiting function) and A14 rule 1 (it bounds only its own wait); one
+`monotonic_ns` call per reading matches `samples_per_read: 1`; the A19
+witnesses fix the monotonic source of the replaced clock module, which now
+means fixing `monotonic_ns`. No verdict changed; every `slice_sha256`
+recomputed.
+
 ## Remarks, not blocking
 
 - **Published `inputSchema` and null.** By decision 22's closed rule, the published `inputSchema`
