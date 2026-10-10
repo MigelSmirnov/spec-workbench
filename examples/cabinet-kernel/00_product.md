@@ -229,7 +229,11 @@ not implementation bodies.
 ### K-13 — Knowledge lives in the kernel and the platform (keeps D0-045)
 
 A second agent with the same access continues the work from the kernel's
-records, the platform manifest and the repositories alone.
+records, the platform manifest and the repositories alone. "The repositories"
+are the platform's git repositories the platform manifest names (the manifest's
+own and each service's); the kernel keeps every implementation's code in its
+own records and depends on no repository to run, admit or roll back. Which
+repositories exist and who may read them is the platform's, not the kernel's.
 
 ### K-14 — Disclosure classes are checked in the proof (narrows D0-047)
 
@@ -280,6 +284,11 @@ caller acts on the difference; otherwise one refusal with a reason for the trace
 - No business data store, reporting database or search index.
 - No management of microservice deployment, scaling or configuration.
 - No agent-to-agent trust.
+- No authority over how an agent reaches a microservice directly. An agent's own
+  access to a service — as for processing a photo (decision 17) — is granted by
+  that service and the owner outside the kernel; the kernel neither gives nor
+  checks it, and its personal-data promise (K-14) covers what the kernel itself
+  returns.
 - No HTTP surface of the kernel's own, no automatic outcome reconciliation, no
   semantic vocabulary, no store-continuity mechanism and no value expiry in this
   kernel.
