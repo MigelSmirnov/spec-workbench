@@ -156,6 +156,12 @@ def _judge(provider: Provider, state: int, text: str, texts: list[tuple[int, str
         items.append({"id": topic["id"], "topic": topic["topic"], "points": topic.get("points", topic["questions"])})
     later = later if later and getattr(provider, "reads_files", False) else None
     later_files = [f"{LATER_DIR}/{name}" for name in sorted(later)] if later else None
+    # Offer only a precedent the judge can still follow. One whose quoted
+    # passages changed invites `judged_before`, which `judge.check` then rejects
+    # as blocking; such a topic is judged afresh (QUESTIONS.md).
+    current = "\n\n".join(b for _, _, b in texts)
+    later_text = "\n\n".join(later.values()) if later else None
+    precedents = [p for p in precedents or [] if judge.precedent_holds(p, current, later_text)]
     instruction = prompts.judge_instruction(state, old is not None, later_files, bool(precedents))
     judge_text = prompts.judge_input(text, items, change, precedents)
     if later:

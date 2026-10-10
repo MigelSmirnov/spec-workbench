@@ -112,8 +112,11 @@ topics contradictions or gaps. With that many topics, two clear rounds in a row
 are a matter of luck, and editing the texts does not change the odds.
 
 So the judge is shown the verified non-blocking judgements of the state's latest
-three judged rounds (newest first, one per topic) and may follow one as
-`judged_before`, naming it. The tool accepts that only when the named judgement
+three judged rounds (newest first, one per topic) whose quoted passages are all
+still found verbatim, and may follow one as `judged_before`, naming it. A
+judgement whose passages changed is not offered: on Cabinet Kernel State 5
+round 104 a precedent quoting notes reworded by the Stage 8.1 modality repair
+was offered, followed, and then refused as blocking. The tool accepts that only when the named judgement
 was offered and every passage it quoted is still found verbatim — in the texts,
 or for `answered_later` in the later states' texts; a judgement that followed a
 precedent passes the original kind and quotes on. A topic whose passages
