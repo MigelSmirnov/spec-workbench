@@ -1,0 +1,102 @@
+{
+ "open_points": [
+  {
+   "subject": "store_persistence public operations",
+   "kind": "missing operations",
+   "text": "“One public operation per State 3 capability” is stated, but State 3 exposes `SqliteStoreRepository` and `create_store_schema` and State 5 defines no public operations for either, nor for the repository’s load, find, list, insert and update calls.",
+   "question": "What exact operations may `store` call on `store_persistence`, and what are each operation’s inputs, outputs, errors and transactional effects?",
+   "options": [
+    "Define `create_store_schema` plus separate typed load/find/list/insert/update operations for every record type",
+    "Expose one generic typed repository operation with a closed request union",
+    "Treat the repository interface as generated entirely by `persistence_backend/v3` and include that complete external contract in the accepted text"
+   ],
+   "default_guess": "Define explicit typed schema, load, list, insert and lifecycle-update operations, all taking the connection or transaction owned by `store` and returning persistence errors only."
+  },
+  {
+   "subject": "canonical_values.canonical_bytes input",
+   "kind": "contradictory input",
+   "text": "The convention says `surface` turns “every JSON text” into canonical form with `canonical_values.canonical_bytes` and that a duplicate key is rejected there, while the operation’s Inputs say “One JSON value.” A parsed JSON value no longer preserves duplicate object members.",
+   "question": "Does `canonical_bytes` accept raw JSON text and parse it with duplicate-key detection, or does `surface` perform a separate duplicate-preserving parse before calling it?",
+   "options": [
+    "Accept raw UTF-8 JSON text as an additional input form and detect duplicate keys inside `canonical_bytes`",
+    "Require a parsed representation that preserves object-member occurrences",
+    "Make `surface` reject duplicate keys with a separately specified parser before passing a JSON value"
+   ],
+   "default_guess": "Let `canonical_bytes` accept raw UTF-8 JSON text at ingress, perform duplicate-key detection, and return canonical bytes; internal callers may pass an already validated JSON value."
+  },
+  {
+   "subject": "canonical_values.content_identity result",
+   "kind": "ambiguous digest",
+   "text": "The operation accepts “one content record’s meaning facts … or one value” and returns “The SHA-256 hex digest of its canonical form,” while M21 requires both a `value_digest` of the value bytes and a distinct `value_id` derived from `value_digest`, schema, carriage, media type and disclosure class.",
+   "question": "For a value-related call, which digest does `content_identity` return, and how must callers obtain both `value_digest` and `value_id` without confusing them?",
+   "options": [
+    "Use distinct tagged inputs: raw value returns `value_digest`, StoredValue meaning facts return `value_id`",
+    "Return both digests from one value-identity operation",
+    "Split raw-value digest and content-record identity into separate public operations"
+   ],
+   "default_guess": "Use tagged inputs: hashing a raw JSON or file value returns `value_digest`; hashing the complete M21 meaning facts returns `value_id`."
+  },
+  {
+   "subject": "EffectApproval inputs used by refusal",
+   "kind": "missing persisted data",
+   "text": "M24 stores `input_digests` and a `preview`, while `effects.decide_effect_approval` takes only an approval identity, the decision, the actor and the fact that the run has not ended, yet a refusal must write a NodeExecution whose `inputs` are StoredValue and SpooledFile references.",
+   "question": "What durable data supplies the exact input references for the `refused_by_owner` NodeExecution, and is it part of EffectApproval or an additional input to `decide_effect_approval`?",
+   "options": [
+    "Store the complete ordered StoredValue and SpooledFile references in EffectApproval",
+    "Pass the element’s input references from `runs` to `effects.decide_effect_approval`",
+    "Have `effects` reconstruct the references from the run graph and trace"
+   ],
+   "default_guess": "Store the exact input references in EffectApproval in addition to the display preview and digests, so refusal and restart use the same immutable inputs."
+  },
+  {
+   "subject": "post-sandbox function-output handling",
+   "kind": "unspecified effect order",
+   "text": "The run flow says, “On success it validates each output … a value above `stored_value_bytes_max` concludes `contract_violation` … files go to the run’s spool,” but it does not order validation, value publication and spooling across multiple output ports.",
+   "question": "In what order are multiple function outputs checked and published, and are all non-writing checks completed before any file is spooled or value bytes are published?",
+   "options": [
+    "Prevalidate every output in port-name order, then publish values and spool files in port-name/list order",
+    "Process each port completely in port-name order, allowing earlier files to remain unnamed if a later value fails",
+    "Publish all files first, then validate and publish values"
+   ],
+   "default_guess": "Prevalidate all outputs and target deliveries in port-name order, then publish value bytes and spool files in port-name and list-index order; a spool-ceiling failure removes every file already spooled for that attempt."
+  },
+  {
+   "subject": "manifest source at a configured revision",
+   "kind": "undefined external read",
+   "text": "The manifest is read from `<manifest_location>/<service_id>.json` “at the configured `manifest_revision`,” while `installation.manifest_source` returns only a location and revision; no operation defines how bytes at that revision are obtained.",
+   "question": "What repository or snapshot mechanism resolves a manifest file at `manifest_revision`, and what failures or consistency guarantees does that read have?",
+   "options": [
+    "Read the file from a Git object at the exact revision without consulting the working tree",
+    "Require `manifest_location` to identify an immutable revision-materialized directory and use the revision only as metadata",
+    "Call a specified manifest-provider interface that returns bytes for location, revision and service path"
+   ],
+   "default_guess": "Treat `manifest_location` as a Git repository and read the blob at the exact configured revision without checking out or reading the mutable working tree."
+  },
+  {
+   "subject": "service base URL validation and joining",
+   "kind": "underspecified request building",
+   "text": "A usable `api_base_url` is only required to be “an absolute `http` or `https` URL with a host,” and the request URL is formed by taking it “without a trailing `/` followed by the declared path.” The texts do not decide base URLs containing user information, a query, a fragment or an existing path, nor exactly which host spellings count as a loopback address.",
+   "question": "Which URL components are permitted in `api_base_url`, how is its path joined with the operation path, and how is the plain-HTTP loopback exception classified?",
+   "options": [
+    "Forbid user information, query and fragment; allow a base path and append the declared path textually; recognize only canonical IPv4/IPv6 loopback literals",
+    "Require an origin-only base URL with no path, user information, query or fragment; recognize loopback IP literals and `localhost`",
+    "Allow every absolute URL with a host and define RFC-based resolution plus DNS-based loopback checking"
+   ],
+   "default_guess": "Forbid user information, query and fragment; allow a base path with a precisely defined slash join; grant the loopback exception only to parsed IPv4 or IPv6 loopback literals, never DNS names."
+  },
+  {
+   "subject": "MCP network surface",
+   "kind": "undefined protocol profile",
+   "text": "The kernel exposes “one fixed set of typed operations over `mcp`” and listens on `mcp_listen_address`, but no text fixes the MCP transport, protocol version, endpoint path, framing, session behavior or connection lifecycle.",
+   "question": "Which concrete MCP transport and protocol profile must `surface.serve_kernel` implement so independently generated surfaces interoperate?",
+   "options": [
+    "A fixed Streamable HTTP MCP version and endpoint behind the reverse proxy",
+    "A fixed legacy HTTP/SSE MCP profile",
+    "A separately supplied MCP server adapter whose complete contract is part of the release"
+   ],
+   "default_guess": "Use one pinned Streamable HTTP MCP protocol version on a fixed endpoint, with no server-managed session state beyond each authenticated request."
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"store_persistence public operations\",\"kind\":\"missing operations\",\"text\":\"“One public operation per State 3 capability” is stated, but State 3 exposes `SqliteStoreRepository` and `create_store_schema` and State 5 defines no public operations for either, nor for the repository’s load, find, list, insert and update calls.\",\"question\":\"What exact operations may `store` call on `store_persistence`, and what are each operation’s inputs, outputs, errors and transactional effects?\",\"options\":[\"Define `create_store_schema` plus separate typed load/find/list/insert/update operations for every record type\",\"Expose one generic typed repository operation with a closed request union\",\"Treat the repository interface as generated entirely by `persistence_backend/v3` and include that complete external contract in the accepted text\"],\"default_guess\":\"Define explicit typed schema, load, list, insert and lifecycle-update operations, all taking the connection or transaction owned by `store` and returning persistence errors only.\"},{\"subject\":\"canonical_values.canonical_bytes input\",\"kind\":\"contradictory input\",\"text\":\"The convention says `surface` turns “every JSON text” into canonical form with `canonical_values.canonical_bytes` and that a duplicate key is rejected there, while the operation’s Inputs say “One JSON value.” A parsed JSON value no longer preserves duplicate object members.\",\"question\":\"Does `canonical_bytes` accept raw JSON text and parse it with duplicate-key detection, or does `surface` perform a separate duplicate-preserving parse before calling it?\",\"options\":[\"Accept raw UTF-8 JSON text as an additional input form and detect duplicate keys inside `canonical_bytes`\",\"Require a parsed representation that preserves object-member occurrences\",\"Make `surface` reject duplicate keys with a separately specified parser before passing a JSON value\"],\"default_guess\":\"Let `canonical_bytes` accept raw UTF-8 JSON text at ingress, perform duplicate-key detection, and return canonical bytes; internal callers may pass an already validated JSON value.\"},{\"subject\":\"canonical_values.content_identity result\",\"kind\":\"ambiguous digest\",\"text\":\"The operation accepts “one content record’s meaning facts … or one value” and returns “The SHA-256 hex digest of its canonical form,” while M21 requires both a `value_digest` of the value bytes and a distinct `value_id` derived from `value_digest`, schema, carriage, media type and disclosure class.\",\"question\":\"For a value-related call, which digest does `content_identity` return, and how must callers obtain both `value_digest` and `value_id` without confusing them?\",\"options\":[\"Use distinct tagged inputs: raw value returns `value_digest`, StoredValue meaning facts return `value_id`\",\"Return both digests from one value-identity operation\",\"Split raw-value digest and content-record identity into separate public operations\"],\"default_guess\":\"Use tagged inputs: hashing a raw JSON or file value returns `value_digest`; hashing the complete M21 meaning facts returns `value_id`.\"},{\"subject\":\"EffectApproval inputs used by refusal\",\"kind\":\"missing persisted data\",\"text\":\"M24 stores `input_digests` and a `preview`, while `effects.decide_effect_approval` takes only an approval identity, the decision, the actor and the fact that the run has not ended, yet a refusal must write a NodeExecution whose `inputs` are StoredValue and SpooledFile references.\",\"question\":\"What durable data supplies the exact input references for the `refused_by_owner` NodeExecution, and is it part of EffectApproval or an additional input to `decide_effect_approval`?\",\"options\":[\"Store the complete ordered StoredValue and SpooledFile references in EffectApproval\",\"Pass the element’s input references from `runs` to `effects.decide_effect_approval`\",\"Have `effects` reconstruct the references from the run graph and trace\"],\"default_guess\":\"Store the exact input references in EffectApproval in addition to the display preview and digests, so refusal and restart use the same immutable inputs.\"},{\"subject\":\"post-sandbox function-output handling\",\"kind\":\"unspecified effect order\",\"text\":\"The run flow says, “On success it validates each output … a value above `stored_value_bytes_max` concludes `contract_violation` … files go to the run’s spool,” but it does not order validation, value publication and spooling across multiple output ports.\",\"question\":\"In what order are multiple function outputs checked and published, and are all non-writing checks completed before any file is spooled or value bytes are published?\",\"options\":[\"Prevalidate every output in port-name order, then publish values and spool files in port-name/list order\",\"Process each port completely in port-name order, allowing earlier files to remain unnamed if a later value fails\",\"Publish all files first, then validate and publish values\"],\"default_guess\":\"Prevalidate all outputs and target deliveries in port-name order, then publish value bytes and spool files in port-name and list-index order; a spool-ceiling failure removes every file already spooled for that attempt.\"},{\"subject\":\"manifest source at a configured revision\",\"kind\":\"undefined external read\",\"text\":\"The manifest is read from `<manifest_location>/<service_id>.json` “at the configured `manifest_revision`,” while `installation.manifest_source` returns only a location and revision; no operation defines how bytes at that revision are obtained.\",\"question\":\"What repository or snapshot mechanism resolves a manifest file at `manifest_revision`, and what failures or consistency guarantees does that read have?\",\"options\":[\"Read the file from a Git object at the exact revision without consulting the working tree\",\"Require `manifest_location` to identify an immutable revision-materialized directory and use the revision only as metadata\",\"Call a specified manifest-provider interface that returns bytes for location, revision and service path\"],\"default_guess\":\"Treat `manifest_location` as a Git repository and read the blob at the exact configured revision without checking out or reading the mutable working tree.\"},{\"subject\":\"service base URL validation and joining\",\"kind\":\"underspecified request building\",\"text\":\"A usable `api_base_url` is only required to be “an absolute `http` or `https` URL with a host,” and the request URL is formed by taking it “without a trailing `/` followed by the declared path.” The texts do not decide base URLs containing user information, a query, a fragment or an existing path, nor exactly which host spellings count as a loopback address.\",\"question\":\"Which URL components are permitted in `api_base_url`, how is its path joined with the operation path, and how is the plain-HTTP loopback exception classified?\",\"options\":[\"Forbid user information, query and fragment; allow a base path and append the declared path textually; recognize only canonical IPv4/IPv6 loopback literals\",\"Require an origin-only base URL with no path, user information, query or fragment; recognize loopback IP literals and `localhost`\",\"Allow every absolute URL with a host and define RFC-based resolution plus DNS-based loopback checking\"],\"default_guess\":\"Forbid user information, query and fragment; allow a base path with a precisely defined slash join; grant the loopback exception only to parsed IPv4 or IPv6 loopback literals, never DNS names.\"},{\"subject\":\"MCP network surface\",\"kind\":\"undefined protocol profile\",\"text\":\"The kernel exposes “one fixed set of typed operations over `mcp`” and listens on `mcp_listen_address`, but no text fixes the MCP transport, protocol version, endpoint path, framing, session behavior or connection lifecycle.\",\"question\":\"Which concrete MCP transport and protocol profile must `surface.serve_kernel` implement so independently generated surfaces interoperate?\",\"options\":[\"A fixed Streamable HTTP MCP version and endpoint behind the reverse proxy\",\"A fixed legacy HTTP/SSE MCP profile\",\"A separately supplied MCP server adapter whose complete contract is part of the release\"],\"default_guess\":\"Use one pinned Streamable HTTP MCP protocol version on a fixed endpoint, with no server-managed session state beyond each authenticated request.\"}]}"
+}
