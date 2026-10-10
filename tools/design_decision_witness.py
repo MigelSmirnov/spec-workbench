@@ -41,7 +41,7 @@ import design_index
 
 try:
     import yaml
-except ImportError:  # pragma: no cover - pyyaml is a workbench dependency
+except ImportError:  # the MCP venv once lacked it and every check read "unavailable"
     yaml = None
 
 SCHEMA_VERSION = "spec_workbench_decision_witness.v1"
@@ -76,21 +76,23 @@ def _load_json(path: Path) -> dict[str, Any]:
     return payload if isinstance(payload, dict) else {}
 
 
-def _verification_check_names(case: Path, factory: Path) -> set[str] | None:
-    """Focused command-check names of the target factory project; None = unverifiable."""
+def _verification_check_names(case: Path, factory: Path) -> tuple[set[str] | None, str]:
+    """Focused command-check names of the target factory project, or None and why they are unverifiable."""
     if yaml is None:
-        return None
+        return None, f"PyYAML is not installed for {sys.executable}"
     target = _load_json(case / FACTORY_TARGET_FILE)
     project = target.get("factory_project")
     if not isinstance(project, str) or not project:
-        return None
+        return None, f"{FACTORY_TARGET_FILE} names no factory_project"
     config_path = factory / "verification" / "configs" / f"{project}.yaml"
     try:
         config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
-    except (OSError, yaml.YAMLError):
-        return None
+    except OSError:
+        return None, f"{config_path} is not readable (set {FACTORY_ROOT_ENV} to the factory checkout)"
+    except yaml.YAMLError:
+        return None, f"{config_path} is not valid YAML"
     commands = ((config or {}).get("checks") or {}).get("commands") or []
-    return {str(item.get("name")) for item in commands if isinstance(item, dict) and item.get("name")}
+    return {str(item.get("name")) for item in commands if isinstance(item, dict) and item.get("name")}, ""
 
 
 def _test_evidence_scopes(case: Path) -> set[str] | None:
@@ -129,7 +131,7 @@ def coverage(case: Path, factory: Path | None = None) -> dict[str, Any]:
     case = case.resolve()
     if factory is None:
         factory = factory_root(Path(__file__).resolve().parents[1])
-    check_names = _verification_check_names(case, factory)
+    check_names, unavailable = _verification_check_names(case, factory)
     evidence_scopes = _test_evidence_scopes(case)
 
     findings: list[dict[str, Any]] = []
@@ -177,7 +179,7 @@ def coverage(case: Path, factory: Path | None = None) -> dict[str, Any]:
                     findings.append({
                         "severity": "warning", "code": "witness_unverifiable",
                         "decision": item.get("key"), "witness": f"{kind}:{name}", "location": location,
-                        "message": f"{item.get('key')}: factory verification config unavailable; "
+                        "message": f"{item.get('key')}: factory verification config unavailable ({unavailable}); "
                                    f"witness {name} will be judged at factory admission",
                     })
                     resolved_any = True
