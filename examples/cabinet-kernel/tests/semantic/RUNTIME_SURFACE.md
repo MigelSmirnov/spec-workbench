@@ -56,7 +56,7 @@ change.
 | call | operation | defaults the fixture supplies |
 |---|---|---|
 | `issue_contract_version(slot_id, purpose, inputs, outputs)` → `contract_version_id` | `functions.issue_contract_version` | resource bounds within the installation's ceilings (A02 rule 2 refuses omitted ones) when `resource_bounds` is not given; `resource_bounds=` (ResourceBoundsRequest) is sent as given, a field set to `None` omitted from the request |
-| `compose_flow_version(flow_id, purpose, inputs, outputs, nodes, edges, constants)` → ComposedFlowVersion | `flows.compose_flow_version` | — |
+| `compose_flow_version(flow_id, purpose, inputs, outputs, nodes, edges, constants)` → ShownComposedFlowVersion | `flows.compose_flow_version` | — |
 | `prove_flow_version(flow_version_id)` → ProofResult (M17) | `flows.prove_flow_version` | — |
 | `add_trial_case(contract_version_id, inputs, expected_outputs=None)` → ShownAddedTrialCase | `functions.add_trial_case` | — |
 | `submit_implementation(contract_version_id, code)` → ShownSubmission | `functions.submit_implementation` | — |
@@ -65,12 +65,12 @@ change.
 | `read_contract_version(contract_version_id)` → ContractVersion (M03) | `functions.read_contract_version` | — |
 | `read_implementation(implementation_id)` → ShownImplementationRead | `functions.read_implementation` | — |
 | `active_flow_version(flow_id)` → FlowAnswer | `flows.active_flow_version` (MCP `get_flow`) | — |
-| `page_records(record_type, record_filter=None, page_size=None, continuation_token=None)` → RecordPageAnswer | `store.page_records` (MCP `list_records`) | `page_size_default` when `page_size` is not given (A16 rule 6) |
+| `page_records(record_type, record_filter=None, page_size=None, continuation_token=None)` → RecordPageAnswer | `store.page_records` (MCP `list_records`) | `page_size` left out of the request when not given, so the kernel applies its own `page_size_default` (A16 rule 6) |
 | `try_implementation(implementation_id, trial_case_ids=())` → tuple[ShownTrialExecution] | `functions.try_implementation` | — |
 | `activate_flow_version(flow_version_id)` → FlowActivation (M18) | `flows.activate_flow_version` | — |
 | `start_run(flow_id, inputs)` → ShownRun | `runs.start_run` | — |
 | `capture_failed_execution(execution, contract_version_id)` → ShownTrialCase | `runs.capture_failed_execution` | — |
-| `get_repair_view(slot_id, page_size=None, continuation_token=None)` → RepairView | MCP `get_repair_view` (State 5 catalogue: `functions.read_slot`, `read_contract_version`, `read_implementation`, `store.page_records`) | `page_size_default` when `page_size` is not given |
+| `get_repair_view(slot_id, page_size=None, continuation_token=None)` → RepairView | MCP `get_repair_view` (State 5 catalogue: `functions.read_slot`, `read_contract_version`, `read_implementation`, `store.page_records`) | `page_size` left out of the request when not given, so the kernel applies its own `page_size_default` |
 | `propose_binding(service_id, operation_name, inputs, outputs)` → OperationBinding (M11) | `bindings.propose_binding` | — |
 | `accept_binding(binding_id)` → OperationBinding (M11) | `bindings.accept_binding` | — |
 | `continue_after_approval(approval_id, decision)` → ShownRun | `runs.continue_after_approval` (MCP `decide_effect_approval`) | — |
@@ -95,18 +95,18 @@ the witnesses the next section lists for it.
 |---|---|
 | `installation` | the installation's configuration file: `owner_token`, `agent_token(name)`, `set_agent_tokens([AgentToken])`, `set_owner_token(token)`, `write_config_text(text)`, `set_config_mode(mode)`, `select_instance(service_id, instance_name)`, `set_credential(service_id, header_name, secret_value)` (writes an owner-only secret file and its reference; `None` references a missing file), `write_secret(service_id, value)`, `set_manifest_revision(revision)` |
 | `clock` | the kernel clock (`clock.kernel_now`) injected by the fixture: `set(epoch_us)`, `advance(ms=0, days=0)`; `fix_monotonic(ns)` fixes its monotonic source; a setting holds in the running kernel at once and carries over `restart()`, which returns only once the surface answers |
-| `mcp_request(operation, request, *, token=None, raw=None)` | one request over the MCP entrance: `request` the fields as sent, unknown ones included, `token` (default: the actor's), `raw` exact bytes; returns the answer or raises with `code` and `reason` |
+| `mcp_request(operation, request, *, token=None, raw=None)` | one request over the MCP entrance: `request` the fields as sent, unknown ones included, `token` (not given: the actor's token; `token=None`: no Authorization header at all), `raw` the exact bytes of the HTTP request body (one JSON-RPC message), sent as they are; returns the answer or raises with `code` and `reason` |
 | `restart()` | stop the kernel process and start it again on the same data directory and configuration; returns StartOutcome (`started`, `exit_code`, `stderr`) |
 | `kernel_exited()` | the exit status of the kernel process when it ended on its own since its last start, `None` while it runs |
 | `host` | host conditions for the next start: `remove_bubblewrap()`, `set_env(name, value)` |
 | `sandbox_executions()` | per sandbox execution, observed from outside it: `network_interfaces`, `mounts` (host paths), `exchange_directory`, `processes_left` after completion |
-| `sandbox_runtime_paths()` | the host paths the release mounts read-only as the sandbox runtime |
+| `sandbox_runtime_paths()` | the host paths the release mounts read-only as the sandbox runtime: the `SANDBOX_RUNTIME_PATHS` constant of `data_provider` (decision 25) |
 | `faults` | injected faults: `unconfirmed_cleanup(nth=1)` (the nth sandbox execution from now cannot confirm its cleanup), `place_symlink(relative_path, target)` |
 | `manifest` | the platform manifest the installation reads: `write_record(service_id, record, *, revision=None, file_name=None)` writes a record shaped as State 6 ManifestServiceRecord without `record_digest` in the platform's raw form (instance class as `class`, instances keyed by name; extra members of a capability, such as `note`, and an `exposed_as` without `http_api` written as given) at `revision` (default: the configured one) under `file_name` (default `<service_id>.json`); `write_record_text(...)` writes raw text; `new_revision()` makes a later revision starting as a copy of the configured one |
 | `stub_service()` | an HTTP service on loopback: `base_url`, `authority`; `on(method, path, status=200, json=None, body=None, headers=None, action=None)` sets the answer of a route, `action` one of `drop_after_request` (close after reading the request, no status line), `refuse_connection`, `redirect` (with `Location` in `headers`), `kill_kernel` (SIGKILL the kernel once the request arrived, before answering), `hold`; `set_down(flag)`; `requests` (method, target, headers as on the wire, body, peer) |
 | `store_dump()` | every byte the store holds (database and value area), for "appears in no record" |
 | `KernelStopped` | the exception a call in progress raises when the fixture killed the kernel under it |
-| `run_spool(run_id)` | the files left in the run's spool directory below the data directory (an empty list when it is gone) |
+| `run_spool(run_id)` | the files left in the run's spool directory, `STORE_SPOOL_AREA_DIRECTORY/<run_id>/` below the data directory (decision 25), as a list of their paths relative to that directory (an empty list when it is gone) |
 | `kill_on_sandbox_start(nth=1)` | SIGKILL the kernel when its nth sandbox execution counted from now starts; the call in progress raises `KernelStopped` |
 | `surface_answers()` | the raw bytes of every answer the MCP entrance sent so far |
 | `host_output()` | all text the kernel wrote to standard error or its log |
@@ -115,7 +115,7 @@ the witnesses the next section lists for it.
 | `data_directory` | the kernel's data directory (`pathlib.Path`), for read-only inspection |
 | `value_file(value_digest)` | the path, relative to `data_directory`, where the store publishes the bytes of that digest (A18 rule 2's content-addressed area) |
 | `kernel_sources()` | the generated kernel's module sources, `{module path: text}` |
-| `release` | what the generated release declares: `ceilings` (`{name: value}`), `dependencies` (`{name: version}`), `sandbox_interpreter` |
+| `release` | what the generated release declares: `ceilings` (`{name: value}`), `dependencies` (`{name: version}`, the `RELEASE_PYTHON_DEPENDENCIES` constant), `sandbox_interpreter` (the `RELEASE_SANDBOX_INTERPRETER` constant), all read from `data_provider` (decision 25) |
 | `host_scratch_directory()` | a host directory (`pathlib.Path`) outside the data directory that the kernel process could write and the test can read |
 
 ## Places the surface cannot reach yet

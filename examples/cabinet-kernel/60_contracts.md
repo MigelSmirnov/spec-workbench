@@ -217,7 +217,8 @@ each the narrowest the MCP specification allows.
 22. **Dependencies and the MCP subset of release v1.**
     - *Dependencies.* The kernel imports only the standard library of CPython
       3.12; no third-party package (`imports.third_party` is empty by this
-      decision). The entrance is `http.server.HTTPServer`, which serves one
+      decision). Amended by decision 25: pydantic, on which the Factory emits
+      the models and the store repository, is the one third-party package. The entrance is `http.server.HTTPServer`, which serves one
       request at a time (A18 rule 3); services are called through
       `http.client`, which lets the kernel send exactly the headers of A10;
       the store is `sqlite3`. Two host programs belong to the release with
@@ -334,8 +335,47 @@ owner decided each on 2026-10-10.
     - *A port named twice in a trial case* (Stage 8.1 note repair N07): the
       case is refused, never one of the two values kept silently.
 
+## Decisions closed before the first Route B (2026-10-10)
+
+The `semantic_runtime` fixture review (code-factory PR #51) found that the
+Factory's emitters contradict decision 22 and that the release, the entry
+point and the store's directory names were nowhere written. The owner decided
+each on 2026-10-10.
+
+25. **Release v1 pins, the entry point and the store layout.**
+    - *pydantic.* The Factory emits `models` as pydantic models and the store
+      repository's JSON columns through pydantic (SPEC_STANDARD §6.3); the
+      kernel therefore imports the standard library and pydantic, nothing
+      else. `imports.third_party` stays empty: the emitters import it, no
+      generated module names it. Decision 23's key-column form is that of
+      this pinned pydantic.
+    - *What the release pins* (A20 rule 3), as `data_provider` constants:
+      `RELEASE_SANDBOX_INTERPRETER` "CPython 3.12.3", `RELEASE_BWRAP_VERSION`
+      "0.9.0", `RELEASE_PYTHON_DEPENDENCIES` {pydantic: 2.12.5} — the versions
+      of the owner's host on 2026-10-10 — and `SANDBOX_RUNTIME_PATHS`
+      ("/usr"), the only host paths `execute_function` binds read-only. The
+      sandbox is the security boundary, so `probe_sandbox` stops the start when
+      `bwrap --version` or the probe's interpreter differs from these. `git`
+      2.43.0 is recorded here only: it reads manifests and bounds no sandbox,
+      and the kernel does not check it.
+    - *Entry point.* The host starts the kernel as
+      `python -m cabinet_kernel.surface <config_path>`; run as a script, the
+      surface module calls `serve_kernel` and exits with its status.
+    - *Store layout.* The content-addressed area is
+      `STORE_VALUE_AREA_DIRECTORY` ("values") with a value's bytes named by
+      its digest, the spool area `STORE_SPOOL_AREA_DIRECTORY` ("spool") with
+      one directory per `run_id`, both directly inside `data_directory`.
+    - *Smaller points.* An answer writes a field that is None as `null`,
+      never omitting it; `probe_sandbox` looks for `bwrap` on the process's
+      `PATH`; the fixture's one wrapper process between the kernel and
+      `bwrap`, and its way of obstructing a cleanup, are accepted as test
+      harness; `RUNTIME_SURFACE.md` is corrected (`ShownComposedFlowVersion`,
+      `token=None`, `raw`, `run_spool`, the default page size).
+
 ## Texts of earlier states changed by State 6
 
+- Semantic test documents (2026-10-10, decision 25):
+  `tests/semantic/RUNTIME_SURFACE.md` corrected; no test file changed.
 - State 5 (2026-10-10, decision 24): the relation "runs by status" answers
   the runs of any of the given statuses, oldest first in store order.
 - State 5 (2026-10-10, Stage 9 FA018): eight names of "Named store changes"

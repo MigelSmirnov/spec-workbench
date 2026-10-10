@@ -460,6 +460,7 @@
     "record_change: [SECURITY_BOUNDARY] Content records and trace records (contract versions, implementations, trial cases, trial executions, admission verdicts, activations, flow versions, flow activations, stored values, node executions, spooled files) are never updated or deleted once written; only the status and decision fields of Run, OperationBinding, EffectApproval, StandingGrant and EffectAttempt records change, and only through record_change.",
     "open_store: [BEHAVIOR] MUST run, in this order, stopping at the first failure: take an exclusive non-blocking lock on a lock file inside data_directory, opened without following links and held for the life of the process; check that data_directory and everything inside it are owned by the process's effective user and grant no permission to group or others; walk the directory without following links and find no symbolic link; then open the database file inside data_directory as the module's one SQLite connection with synchronous FULL, the file opened without following links; create its tables with create_store_schema, which leaves existing tables as they are; then remove the module's own temporary files left by an interrupted publish and every file of the content-addressed area whose digest no StoredValue and no file fixture record names, which is a digest for which list_stored_value_rows_by_value_digest answers no row, and create the content-addressed area and the spool area when absent.",
     "open_store: [SECURITY_BOUNDARY] Every file and directory the module creates inside data_directory — the lock file, the database file and its journal, the content-addressed area, the spool area, each run's spool directory, every temporary and every published file — MUST be created owned by the process's effective user and granting no permission to group or others, so that the privacy check of the next start passes on the kernel's own files (A18 rule 2).",
+    "open_store: [PATH_OR_ARTIFACT_POLICY] MUST keep the content-addressed area as the directory named by the imported STORE_VALUE_AREA_DIRECTORY constant directly inside data_directory, a value's bytes in the file named by its value_digest directly inside that area, and the spool area as the directory named by the imported STORE_SPOOL_AREA_DIRECTORY constant directly inside data_directory, each run's spool directory named by its run_id directly inside the spool area (decision 25).",
     "open_store: [VALIDATION_ERROR] MUST raise RefusedError whose reason names the failed check: data_directory does not exist (it is never created here), lock held by another process, directory not private (naming the first offending path), or symbolic link found (naming its path); it removes and creates nothing when a check fails.",
     "open_store: [RETURN_SHAPE] Returns StoreOpened with data_directory and temporary_files_removed, the count of temporary files removed, unnamed value files not counted; no record, named value file or spool is removed by this call.",
     "page_records: [BEHAVIOR] MUST return records of record_type only, newest first in reverse store order, that match record_filter when one is given: an equals filter keeps records whose named field equals value, an in_set filter records whose field equals one of values; for node executions the field executed_implementation matches the implementation_id of an executed implementation and executed_binding the binding_id of an executed binding, and a node execution without executed matches neither.",
@@ -517,7 +518,7 @@
     "resolve_service_credential: [VALIDATION_ERROR] MUST raise CredentialUnresolvedError, whose reason names the service and the failing check, when no credential is configured for service_id or the secret file is missing, unreadable, not private, larger than the imported RELEASE_CEILING_BOUNDED_TEXT_BYTES_MAX constant (reading at most one byte past it and no further) or not valid UTF-8, or its value is empty or holds a control character; the reason never holds any part of the secret; the failure concerns this one request only and stops nothing else.",
     "resolve_service_credential: [RETURN_SHAPE] Returns ResolvedCredential with the configured header_name and the resolved header_value, for the one request being built.",
     "execute_function: [SECURITY_BOUNDARY] Agent code is untrusted: it MUST only ever run inside a fresh bubblewrap environment created for that one execution, never in the kernel process and never through a faster path, and the environment never receives a credential, a host path other than its own exchange directory, or any variable outside the imported SANDBOX_ENVIRONMENT constant.",
-    "execute_function: [SECURITY_BOUNDARY] MUST start bubblewrap with new user, PID, IPC, UTS and network namespaces and no network interface but the new namespace's own loopback, which bubblewrap brings up, the environment cleared and then set exactly to the imported SANDBOX_ENVIRONMENT constant, the release's Python runtime and standard library bound read-only, one fresh private exchange directory bound read-write and bounded by the imported RELEASE_CEILING_SANDBOX_SCRATCH_BYTES_MAX constant, bubblewrap's own fresh proc and minimal dev mounts, and no other host directory; the child dies with its parent.",
+    "execute_function: [SECURITY_BOUNDARY] MUST start bubblewrap with new user, PID, IPC, UTS and network namespaces and no network interface but the new namespace's own loopback, which bubblewrap brings up, the environment cleared and then set exactly to the imported SANDBOX_ENVIRONMENT constant, exactly the host paths of the imported SANDBOX_RUNTIME_PATHS constant bound read-only, which hold the release's Python runtime and standard library, one fresh private exchange directory bound read-write and bounded by the imported RELEASE_CEILING_SANDBOX_SCRATCH_BYTES_MAX constant, bubblewrap's own fresh proc and minimal dev mounts, and no other host directory; the child dies with its parent.",
     "execute_function: [BEHAVIOR] The in-sandbox runner, before loading the code, MUST replace every entry point named by the imported SANDBOX_TRAPPED_FUNCTIONS constant with one that raises, those of the imported SANDBOX_TRAPPED_WITHOUT_ARGUMENT constant with ones that raise when called without an argument, every method of the class named by the imported SANDBOX_TRAPPED_CLASS constant, and the class named by the imported SANDBOX_UNSEEDED_CONSTRUCTOR constant when constructed without a seed or with None, and that class's seed method when called on an instance without a seed or with None, since that draws entropy as an unseeded construction does (A03 rule 4: an explicitly seeded instance stays usable because it draws none), and install an audit hook that raises on socket, subprocess and ctypes use and on opening any path outside the exchange directory and the read-only runtime; each trap first writes its hit to a channel to the parent that the code cannot unsend, and the parent passes these lists to the runner at launch instead of writing them into the runner.",
     "execute_function: [BEHAVIOR] The runner loads code as a module, calls its top-level run once with a dict holding one entry per input port: a value port's canonical JSON decoded to Python, a file port's bytes, and for cardinality many a list of those in order; it expects a dict back with exactly one entry per output port and sends the outputs to the parent, value outputs serialized as JSON text and file outputs as bytes.",
     "execute_function: [BEHAVIOR] The parent MUST enforce bounds from outside: address space limited to bounds.memory_bytes with setrlimit and the process count with setrlimit set above bounds.process_count by the tasks the runner and bubblewrap need, process_count itself being enforced by the runner's audit hook, a wall deadline from monotonic_deadline of bounds.wall_time_ms after which it kills every process of the environment, and an output count, the sum of the canonical bytes (from canonical_bytes) of every value output and the bytes of every file output, a many file output counting each element, compared with bounds.output_bytes; output over a bound is a failure, never truncated.",
@@ -528,7 +529,7 @@
     "execute_function: [SECURITY_BOUNDARY] The sandboxed process's standard input, standard output and standard error MUST be connected to /dev/null, so nothing the code prints is read, kept, counted toward output_bytes or able to fill a pipe or the scratch area; code that writes without end is stopped only by its wall deadline and concludes timeout; the exception type and message reach the parent through the exchange channel, never through standard error (A03 rules 5 and 6).",
     "execute_function: [BEHAVIOR] An execution completes only after every process of the environment is reaped and the exchange directory is removed; when either cannot be confirmed the outputs are discarded and the result is outcome crashed with detail_code cleanup_failed of = models.DetailCode; the function returns that result and neither raises StopRequiredError nor stops the process, which its caller does after recording the execution, and it never retries.",
     "execute_function: [RETURN_SHAPE] Returns SandboxResult with the outcome, outputs only for succeeded as PortPayload entries in output port name order (a value as its canonical JSON bytes, a file as its bytes, a many file port as the list of its bytes), resources_used with elapsed wall_time_ms, peak memory_bytes and the output count as output_bytes, failure_detail, and detail_code None except for cleanup_failed.",
-    "probe_sandbox: [VALIDATION_ERROR] MUST raise SandboxUnavailableError naming what is missing when the bubblewrap executable cannot be found, or when one probe execution through execute_function of a minimal implementation with no ports, under bounds equal to the imported RELEASE_CEILING_WALL_TIME_MS, RELEASE_CEILING_MEMORY_BYTES, RELEASE_CEILING_OUTPUT_BYTES and RELEASE_CEILING_PROCESS_COUNT constants, does not end succeeded, naming its outcome.",
+    "probe_sandbox: [VALIDATION_ERROR] MUST raise SandboxUnavailableError naming what is missing when the bubblewrap executable, bwrap, cannot be found on the process's PATH, when bwrap --version, which prints \"bubblewrap\" and the version, names a version other than the imported RELEASE_BWRAP_VERSION constant, when the interpreter execute_function starts inside bubblewrap, run once through bwrap with the same read-only bindings of the imported SANDBOX_RUNTIME_PATHS constant to print platform.python_implementation() and platform.python_version() joined by one space, does not print exactly the imported RELEASE_SANDBOX_INTERPRETER constant, or when one probe execution through execute_function of a minimal implementation with no ports, under bounds equal to the imported RELEASE_CEILING_WALL_TIME_MS, RELEASE_CEILING_MEMORY_BYTES, RELEASE_CEILING_OUTPUT_BYTES and RELEASE_CEILING_PROCESS_COUNT constants, does not end succeeded, naming its outcome.",
     "probe_sandbox: [RETURN_SHAPE] Returns None when bubblewrap is present and the probe execution succeeded; it writes no record.",
     "prepare_request: [DEPENDENCY_BOUNDARY] Reads nothing from the installation except the credential through resolve_service_credential, reads and writes no record, and decides neither authority nor staleness.",
     "check_request_shape: [VALIDATION_ERROR] Judges the ports by their declarations alone, in this order, and answers with fits false and a reason naming the first failing rule: first every placeholder segment of the path, the placeholders taken in name order by Unicode code point, must name an input port whose value_schema declares type string or integer; then, only for http_method GET or DELETE, input ports in name order by Unicode code point must have no file carriage and every input that is not a placeholder must have a value_schema whose type is string, integer, number, boolean or null, or array whose items declare one of those types; then an output port of file carriage must be the only output port and must have cardinality one.",
@@ -705,7 +706,8 @@
     "serve_kernel: [BEHAVIOR] MUST read at most one byte more of a request body than the imported RELEASE_CEILING_SURFACE_REQUEST_BYTES_MAX constant allows, so an oversized request still reaches answer_request and is refused there; when answer_request raises StopRequiredError or any other failure it let propagate because its answer is internal_error, MUST first send that request the internal_error answer built by translate_failure, without detail, and then end the process with a non-zero exit code, so the next start derives every run that has not ended (A03 rule 7, A14 rules 5 and 7).",
     "serve_kernel: [DETERMINISM_OR_ORDERING] Requests are handled strictly one at a time, each to its end, run advancement included, before the next one is read (A18 rule 3).",
     "serve_kernel: [RETURN_SHAPE] Returns the process exit code: non-zero after a failed start, a required stop, or any internal_error that answer_request let propagate — in both of the last two cases the request is first answered internal_error without detail and then the process ends — zero only when serving ends normally.",
-    "serve_kernel: [DEPENDENCY_BOUNDARY] The entrance is the standard library's http.server.HTTPServer, which serves one request at a time, never a threading or forking server; like every kernel module it imports no package outside the CPython 3.12 standard library (60_contracts.md decision 22).",
+    "serve_kernel: [ORCHESTRATION] When the surface module is run as a script, python -m cabinet_kernel.surface <config_path>, which is how the host starts the kernel, it MUST call serve_kernel with that one argument and exit with the status serve_kernel returns (decision 25).",
+    "serve_kernel: [DEPENDENCY_BOUNDARY] The entrance is the standard library's http.server.HTTPServer, which serves one request at a time, never a threading or forking server; like every kernel module it imports nothing outside the CPython 3.12 standard library except pydantic, the one third-party package, pinned by the release in the imported RELEASE_PYTHON_DEPENDENCIES constant, on which the models and the store repository are emitted (60_contracts.md decisions 22 and 25).",
     "serve_kernel: [BEHAVIOR] Only a POST to the path equal to the imported MCP_ENDPOINT_PATH constant reaches answer_request; any other method on that path is answered 405, any other path 404, and a request carrying an Origin header 403, each without a body and without calling answer_request; no Mcp-Session-Id header is ever sent, one presented is ignored, and no event stream is opened.",
     "serve_kernel: [FIELD_PROJECTION] An empty result of answer_request is answered 202 without a body; any other result is answered 200 with Content-Type application/json and the result as the body. The internal_error answer sent before the process ends is the JSON-RPC error response of answer_request with code -32603, message internal_error and the RefusalAnswer from translate_failure as data, its id read from the body by the same rule as answer_request.",
     "run_start_sequence: [ORCHESTRATION] MUST call, in exactly this order and each exactly once: load_installation with config_path; check_installed_instances with the loaded Installation; open_store with that Installation's data_directory; probe_sandbox; recover_in_flight_attempts; recover_running_runs (A03 rule 8, A09 rule 1, A14 rule 5, A18).",
@@ -719,6 +721,7 @@
     "answer_request: [SECURITY_BOUNDARY] Text an agent supplies — purposes, implementation code, names, JSON texts — is data: it is never evaluated, imported, compiled, formatted or interpreted in the kernel process; no answer and no refusal carries a token, a service credential, a host path or a stack trace, an internal error included (A16 rules 5 and 7).",
     "answer_request: [BEHAVIOR] The body is one JSON-RPC 2.0 message, read only after the size and token checks. A JSON object whose jsonrpc is \"2.0\" with a string method and an id is a request; one with a method and no id is a notification and one with no method a response: both are answered with empty bytes and change nothing. A request's method decides: initialize answers the result {protocolVersion: the imported MCP_PROTOCOL_VERSION constant, capabilities: {tools: {listChanged: false}}, serverInfo: {name: the imported MCP_SERVER_NAME constant, version: the imported MCP_SERVER_VERSION constant}} whatever version its params ask, and keeps no state; ping answers an empty result object; tools/list answers {tools: [...]} as below, ignoring any cursor; tools/call names the catalogue operation in params.name and carries its request in params.arguments, which then pass the remaining checks of the first note.",
     "answer_request: [FIELD_PROJECTION] tools/list lists one tool per catalogue operation in State 5 catalogue order, each {name: the operation name, inputSchema: the schema of its request model}, derived only by this rule: a model is {\"type\": \"object\", \"properties\": its fields in declared order, \"required\": its fields not typed X | None, \"additionalProperties\": false}; str is {\"type\": \"string\"}, int {\"type\": \"integer\"}, X | None the schema of X, tuple[X, ...] {\"type\": \"array\", \"items\": the schema of X}, an enumeration {\"type\": \"string\", \"enum\": its members in declared order}, a Literal tag {\"const\": the tag}, and a discriminated union {\"anyOf\": the schemas of its variants in declared order}; no description, title or other keyword is added.",
+    "answer_request: [FIELD_PROJECTION] MUST write every field of an answer model in the JSON text T, a field whose value is None as null, never omitting it (decision 25).",
     "answer_request: [FIELD_PROJECTION] The id of every response is the body's id member when the body is one JSON object whose id is a string or an integer, and null otherwise; reading it checks nothing and decides nothing.",
     "answer_request: [VALIDATION_ERROR] A refusal decided before the operation is known is a JSON-RPC error response whose error is {code, message: the refusal code, data: the RefusalAnswer as {code, reason}}: a body over the size ceiling is -32600 invalid_request; a token refusal -32600 unauthorized; a body that is not JSON -32700 invalid_request; a body that is not one JSON object — a batch array included — or whose jsonrpc is not \"2.0\" -32600 invalid_request; a request whose method is none of initialize, ping, tools/list and tools/call -32601 invalid_request; a tools/call whose params is not an object with a string name and an object arguments, or whose name is no catalogue operation, -32602 invalid_request.",
     "answer_request: [RETURN_SHAPE] Returns the bytes of one JSON-RPC 2.0 response as UTF-8 JSON, or empty bytes for a notification or a response. A tools/call that reached its operation returns the result {content: [{type: \"text\", text: T}], isError: B}: T is the answer of the operation as JSON text and B false, or T is the RefusalAnswer as the JSON object {code, reason} and B true for every refusal decided once the operation is known — fit, bounds, canonical form, permission, or translate_failure of an exception the handler raised; every refusal code is a member of = models.RefusalCode.",
@@ -3690,6 +3693,10 @@
             "disposable_rig"
           ]
         },
+        "RELEASE_BWRAP_VERSION": {
+          "value_type": "string",
+          "value": "0.9.0"
+        },
         "RELEASE_CEILING_BOUNDED_TEXT_BYTES_MAX": {
           "value_type": "positive_integer",
           "value": 16384
@@ -3758,11 +3765,27 @@
           "value_type": "positive_integer",
           "value": 30000
         },
+        "RELEASE_PYTHON_DEPENDENCIES": {
+          "value_type": "string_mapping",
+          "value": {
+            "pydantic": "2.12.5"
+          }
+        },
+        "RELEASE_SANDBOX_INTERPRETER": {
+          "value_type": "string",
+          "value": "CPython 3.12.3"
+        },
         "SANDBOX_ENVIRONMENT": {
           "value_type": "string_mapping",
           "value": {
             "PYTHONHASHSEED": "0"
           }
+        },
+        "SANDBOX_RUNTIME_PATHS": {
+          "value_type": "string_tuple",
+          "value": [
+            "/usr"
+          ]
         },
         "SANDBOX_TRAPPED_CLASS": {
           "value_type": "string",
@@ -3836,6 +3859,14 @@
         "SERVICE_ID_PATTERN": {
           "value_type": "string",
           "value": "^[a-z0-9_]+\\Z"
+        },
+        "STORE_SPOOL_AREA_DIRECTORY": {
+          "value_type": "string",
+          "value": "spool"
+        },
+        "STORE_VALUE_AREA_DIRECTORY": {
+          "value_type": "string",
+          "value": "values"
         }
       }
     },
@@ -7191,6 +7222,7 @@
         "MCP_SERVER_NAME",
         "MCP_SERVER_VERSION",
         "PLAIN_HTTP_INSTANCE_CLASSES",
+        "RELEASE_BWRAP_VERSION",
         "RELEASE_CEILING_BOUNDED_TEXT_BYTES_MAX",
         "RELEASE_CEILING_FAILURE_DETAIL_BYTES_MAX",
         "RELEASE_CEILING_IMPLEMENTATION_CODE_BYTES_MAX",
@@ -7208,12 +7240,17 @@
         "RELEASE_CEILING_TRANSPORT_TIMEOUT_MS",
         "RELEASE_CEILING_TRIAL_FIXTURE_BYTES_MAX",
         "RELEASE_CEILING_WALL_TIME_MS",
+        "RELEASE_PYTHON_DEPENDENCIES",
+        "RELEASE_SANDBOX_INTERPRETER",
         "SANDBOX_ENVIRONMENT",
+        "SANDBOX_RUNTIME_PATHS",
         "SANDBOX_TRAPPED_CLASS",
         "SANDBOX_TRAPPED_FUNCTIONS",
         "SANDBOX_TRAPPED_WITHOUT_ARGUMENT",
         "SANDBOX_UNSEEDED_CONSTRUCTOR",
-        "SERVICE_ID_PATTERN"
+        "SERVICE_ID_PATTERN",
+        "STORE_SPOOL_AREA_DIRECTORY",
+        "STORE_VALUE_AREA_DIRECTORY"
       ],
       "canonical_values": [
         "canonical_bytes",
@@ -7789,7 +7826,9 @@
         ],
         "data_provider": [
           "RELEASE_CEILING_SPOOL_FILE_BYTES_MAX",
-          "RELEASE_CEILING_SPOOL_RUN_BYTES_MAX"
+          "RELEASE_CEILING_SPOOL_RUN_BYTES_MAX",
+          "STORE_SPOOL_AREA_DIRECTORY",
+          "STORE_VALUE_AREA_DIRECTORY"
         ],
         "store_persistence": [
           "SqliteStoreRepository",
@@ -7820,13 +7859,16 @@
           "SandboxResult"
         ],
         "data_provider": [
+          "RELEASE_BWRAP_VERSION",
           "RELEASE_CEILING_FAILURE_DETAIL_BYTES_MAX",
           "RELEASE_CEILING_MEMORY_BYTES",
           "RELEASE_CEILING_OUTPUT_BYTES",
           "RELEASE_CEILING_PROCESS_COUNT",
           "RELEASE_CEILING_SANDBOX_SCRATCH_BYTES_MAX",
           "RELEASE_CEILING_WALL_TIME_MS",
-          "SANDBOX_ENVIRONMENT"
+          "RELEASE_SANDBOX_INTERPRETER",
+          "SANDBOX_ENVIRONMENT",
+          "SANDBOX_RUNTIME_PATHS"
         ],
         "canonical_values": [
           "canonical_bytes",
@@ -8430,7 +8472,8 @@
           "RELEASE_CEILING_PAGE_SIZE_MAX",
           "RELEASE_CEILING_STORED_VALUE_BYTES_MAX",
           "RELEASE_CEILING_SURFACE_REQUEST_BYTES_MAX",
-          "RELEASE_CEILING_TRIAL_FIXTURE_BYTES_MAX"
+          "RELEASE_CEILING_TRIAL_FIXTURE_BYTES_MAX",
+          "RELEASE_PYTHON_DEPENDENCIES"
         ],
         "canonical_values": [
           "NonCanonicalValueError",
@@ -8812,6 +8855,7 @@
       "MCP_SERVER_NAME",
       "MCP_SERVER_VERSION",
       "PLAIN_HTTP_INSTANCE_CLASSES",
+      "RELEASE_BWRAP_VERSION",
       "RELEASE_CEILING_BOUNDED_TEXT_BYTES_MAX",
       "RELEASE_CEILING_FAILURE_DETAIL_BYTES_MAX",
       "RELEASE_CEILING_IMPLEMENTATION_CODE_BYTES_MAX",
@@ -8829,12 +8873,17 @@
       "RELEASE_CEILING_TRANSPORT_TIMEOUT_MS",
       "RELEASE_CEILING_TRIAL_FIXTURE_BYTES_MAX",
       "RELEASE_CEILING_WALL_TIME_MS",
+      "RELEASE_PYTHON_DEPENDENCIES",
+      "RELEASE_SANDBOX_INTERPRETER",
       "SANDBOX_ENVIRONMENT",
+      "SANDBOX_RUNTIME_PATHS",
       "SANDBOX_TRAPPED_CLASS",
       "SANDBOX_TRAPPED_FUNCTIONS",
       "SANDBOX_TRAPPED_WITHOUT_ARGUMENT",
       "SANDBOX_UNSEEDED_CONSTRUCTOR",
-      "SERVICE_ID_PATTERN"
+      "SERVICE_ID_PATTERN",
+      "STORE_SPOOL_AREA_DIRECTORY",
+      "STORE_VALUE_AREA_DIRECTORY"
     ],
     "canonical_values": [
       "NonCanonicalValueError",
