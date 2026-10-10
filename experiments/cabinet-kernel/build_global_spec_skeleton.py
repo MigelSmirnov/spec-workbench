@@ -21,7 +21,8 @@ every key of models as a model, does not export role/schema_version.
 When 70_persistence_closure.json is present: each repository module exports its
 class and schema function, imports every model its codecs name and the port it
 implements (SPEC_STANDARD 6.3, 5.1); a module that imports the class imports
-every model of the class's operations; implementation_obligations names the
+every model of the class's operations, and every consumer imports the models
+named by the signature of each callable it imports; implementation_obligations names the
 repository class as the local implementation of each interface whose every
 operation it carries. Models are read from every 60_model_closure_*.json.
 """
@@ -163,6 +164,20 @@ for repository in repositories:
     for consumer, edges in module_internal.items():
         if consumer != module and repository["repository"] in edges.get(module, []):
             edges["models"] = sorted(set(edges.get("models", [])) | models_named(operations))
+
+
+# a consumer imports every model named by the signature of a callable it
+# imports (Factory Spec Inspector, module_type_surface_incomplete)
+for consumer, edges in module_internal.items():
+    named = set()
+    for provider, symbols in edges.items():
+        if provider == "models":
+            continue
+        for symbol in symbols:
+            named |= models_named(" ".join(signature for name, signature in contracts.items()
+                                           if name == symbol or name.startswith(symbol + ".")))
+    if named:
+        edges["models"] = sorted(set(edges.get("models", [])) | named)
 
 
 skeleton = {
