@@ -384,6 +384,21 @@ witnesses fix the monotonic source of the replaced clock module, which now
 means fixing `monotonic_ns`. No verdict changed; every `slice_sha256`
 recomputed.
 
+## Decisions 27-28 delta review (2026-10-10)
+
+Decision 27 (the surface alone names pydantic) and decision 28 (the State 7
+contradiction rounds, round-02 through round-13) moved the slices of
+`store`, `sandbox`, `service_invoker`, `functions`, `bindings`, `effects`, `runs`, `surface`. The review of this delta is
+those rounds themselves: each read the Factory's prompt of every generated
+module — the same packet this stage reviews, as the generator receives it —
+for passages that cannot both hold, and every module closed by two clear
+rounds on its current prompt (`questions/state7/round-13`). The changes follow
+States 2-6 (decision 28 names the rule each one matches); the one contract
+change, `send_under_authority` taking the element's inputs, completes an
+operation whose notes already needed them. The remark "Published inputSchema
+and null" below is decided: `X | None` is published as `anyOf [X, null]`. No
+verdict changed; every `slice_sha256` recomputed.
+
 ## Remarks, not blocking
 
 - **Published `inputSchema` and null.** By decision 22's closed rule, the published `inputSchema`
