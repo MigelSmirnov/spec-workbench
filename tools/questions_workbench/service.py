@@ -175,7 +175,11 @@ def _judge(provider: Provider, state: int, text: str, texts: list[tuple[int, str
     current = "\n\n".join(b for _, _, b in texts)
     later_text = "\n\n".join(later.values()) if later else None
     precedents = [p for p in precedents or [] if judge.precedent_holds(p, current, later_text)]
-    instruction = prompts.judge_instruction(state, old is not None, later_files, bool(precedents))
+    try:
+        scope = documents.question_scope(state)
+    except documents.QuestionScopeError:
+        scope = None
+    instruction = prompts.judge_instruction(state, old is not None, later_files, bool(precedents), scope)
     judge_text = prompts.judge_input(text, items, change, precedents)
     if later:
         answer = provider.complete_with_files(instruction, judge_text, later)[0]

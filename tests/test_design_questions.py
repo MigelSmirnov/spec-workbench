@@ -526,3 +526,21 @@ def test_round_100_comes_after_round_99(tmp_path):
             "round": f"round-{number}", "documents": {}, "closed": False, "clear": True,
             "repeated_topics": 0, "topics": []}), encoding="utf-8")
     assert service.status(case, 1)["round"] == "round-100"
+
+
+def test_the_judge_is_given_the_scope_of_the_state_it_judges():
+    """Cabinet Kernel State 0 round-01 (2026-10-10): the reviewers had the State 0
+    scope, the judge did not, and blocked State 0 on acceptance mechanics that
+    belong to the rules of State 2. The judge reads the same stop rule, and a
+    topic outside it is later_state, never blocking here."""
+    from questions_workbench import documents, prompts
+
+    scope = documents.question_scope(0)
+    instruction = prompts.judge_instruction(0, False, None, False, scope)
+    assert scope in instruction
+    assert "does not keep State 0 open" in instruction
+    assert '"later_state": the question belongs to a later state — it is outside the\n  scope of State 0' in instruction
+    # the last design state is judged against its own scope, with no later state to defer to
+    last = prompts.judge_instruction(7, False, None, False, documents.question_scope(7))
+    assert documents.question_scope(7) in last
+    assert '- "later_state"' not in last
