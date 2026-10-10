@@ -637,6 +637,14 @@ spool is removed, and recover_running_runs removes ended runs' spools
 (A18 rule 4); the general per-element progress change excepts cleanup_failed;
 ended_at is the draft's; a waiting operation element is not reached again.
 
+### State 7 round-08 (2026-10-10)
+
+Two more: round-07's wording moved attempt_number to the change, against the
+derivation note that has record_change compute it — it is the module's again,
+and a caller spooling first reads the same next number; a start failure writes
+a kernel module's own reason, which holds no secret, and only the type of an
+exception no kernel module raised.
+
 ## Texts of earlier states changed by State 6
 
 - States 3, 4 and 5 (2026-10-10, decision 26): `clock`'s capabilities are

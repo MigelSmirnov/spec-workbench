@@ -1,0 +1,550 @@
+Module: surface
+Target path: cabinet_kernel/surface.py
+Target file: surface.py
+
+IMPORTS:
+from pydantic import BaseModel
+
+from cabinet_kernel.bindings import accept_binding, check_installed_instances, propose_binding, read_binding
+from cabinet_kernel.canonical_values import NonCanonicalValueError, canonical_bytes
+from cabinet_kernel.data_provider import MCP_ENDPOINT_PATH, MCP_PROTOCOL_VERSION, MCP_SERVER_NAME, MCP_SERVER_VERSION, RELEASE_CEILING_BOUNDED_TEXT_BYTES_MAX, RELEASE_CEILING_IMPLEMENTATION_CODE_BYTES_MAX, RELEASE_CEILING_PAGE_SIZE_DEFAULT, RELEASE_CEILING_PAGE_SIZE_MAX, RELEASE_CEILING_STORED_VALUE_BYTES_MAX, RELEASE_CEILING_SURFACE_REQUEST_BYTES_MAX, RELEASE_CEILING_TRIAL_FIXTURE_BYTES_MAX, RELEASE_PYTHON_DEPENDENCIES
+from cabinet_kernel.effects import decide_effect_approval, grant_standing_approval, recover_in_flight_attempts, resolve_unknown_outcome, revoke_standing_approval
+from cabinet_kernel.flows import activate_flow_version, active_flow_version, compose_flow_version, prove_flow_version, read_flow_version
+from cabinet_kernel.functions import add_trial_case, issue_contract_version, read_contract_version, read_implementation, read_slot, roll_back_slot, submit_implementation, try_implementation
+from cabinet_kernel.installation import InstallationRejectedError, current_token_list, load_installation
+from cabinet_kernel.models import AcceptBindingRequest, ActivateFlowVersionRequest, Activation, ActivationAuthority, ActivationBeforeRun, ActiveFlow, ActiveGrantOfNode, Actor, ActorKind, AddTrialCaseRequest, AddedTrialCase, AdmissionRefusalReason, AdmissionVerdict, AdmissionVerdictKind, AgentToken, ApprovalAuthority, ApprovalDecision, ApprovalPreview, ApprovalStatus, ApprovalsOfElement, AttemptKey, AttemptResolution, AttemptStatus, AttemptsByStatus, AttemptsOfElement, Authority, BindingStatus, ByteSource, CancelRunRequest, CaptureFailedExecutionRequest, Cardinality, Carriage, ComposeFlowVersionRequest, ComposedFlowVersion, ConstantInput, ContractVersion, ContractVersionHistory, ContractVersionsOfSlot, CorpusOfContractVersion, DecideEffectApprovalRequest, DescribedHeader, DescribedPart, DetailCode, DetailLength, DetailText, DisclosureClass, EdgeGuard, EffectApproval, EffectAttempt, EffectClass, ElementKey, EmptyCorpusRefusal, EqualsFilter, Executed, ExecutedBinding, ExecutedImplementation, ExecutionsOfElement, ExecutionsOfRun, FailingCaseRefusal, FileFacts, FileFactsRef, FileListPayload, FilePayload, FilterField, FixtureFileContent, Flow, FlowActivation, FlowAnswer, FlowConstant, FlowEdge, FlowEdgeKey, FlowNode, FlowVersion, GetBindingRequest, GetContractVersionRequest, GetFlowRequest, GetFlowVersionRequest, GetImplementationRequest, GetRepairViewRequest, GetRunRequest, GetSlotRequest, GrantAuthority, GrantStandingApprovalRequest, GrantStatus, HttpMethod, Implementation, ImplementationHistory, ImplementationRead, ImplementationsOfContractVersion, InSetFilter, Installation, IssueContractVersionRequest, IssuedContractVersion, JsonBodyDescription, JsonPayload, KernelInstant, LatestActivationOfContractVersion, LatestActivationOfFlow, ListRecordsRequest, MissingOutput, MultipartBodyDescription, NodeExecution, NodeExecutionStatus, NodeKind, OperationBinding, OutputReason, OwnerDecision, PinnedImplementation, Port, PortDirection, PortPayload, PortRef, ProducedOutput, ProofFailure, ProofPhase, ProofResult, ProposeBindingRequest, ProveFlowVersionRequest, ReadFixtureFileRequest, ReadSpooledFileRequest, RecordFilter, RecordPage, RecordPageAnswer, RecordQuery, RecordSet, RecordType, RecordsByAttempt, RecordsById, RecordsByPosition, RefusalAnswer, RefusalCode, ReleaseRunRequest, RepairView, RequestBodyDescription, RequestConstant, RequestDescription, RequestFile, RequestFileList, RequestJsonValue, RequestPayload, ResolveUnknownOutcomeRequest, ResourceBounds, ResourceBoundsRequest, ResourceUsage, ResumeRunRequest, Resumption, RevokeStandingApprovalRequest, RollBackSlotRequest, Run, RunAnswer, RunOutput, RunStatus, RunWait, RunsByStatus, ServiceCredential, ServiceInstanceSelection, ShownAddedTrialCase, ShownApproval, ShownApprovalPreview, ShownComposedFlowVersion, ShownConstant, ShownContent, ShownEffectAttempt, ShownFailureDetail, ShownFile, ShownFileDigest, ShownFlowVersion, ShownImplementation, ShownImplementationRead, ShownItem, ShownNodeExecution, ShownPort, ShownProducedOutput, ShownRecords, ShownRun, ShownRunOutput, ShownSubmission, ShownTrialCase, ShownTrialExecution, ShownValueDigest, Slot, SlotHistory, SpooledFile, SpooledFileContent, SpooledFileKey, SpooledFileSource, SpooledFilesByKey, SpooledFilesRef, StandingGrant, StartRunRequest, StoreOpened, StoredValue, StoredValueSource, StoredValuesRef, SubmissionResult, SubmitImplementationRequest, TokenList, TrialCase, TrialCaseOrigin, TrialExecution, TrialExecutionsOnCorpus, TrialOutcome, TryImplementationRequest, VerdictOverCorpus, VerdictsOfImplementation, VersionsOfFlow, WaitReason, WaitingPoint
+from cabinet_kernel.runs import cancel_run, capture_failed_execution, continue_after_approval, continue_after_resolution, read_run, recover_running_runs, release_run, resume_run, start_run
+from cabinet_kernel.sandbox import SandboxUnavailableError, StopRequiredError, probe_sandbox
+from cabinet_kernel.store import InvalidRequestError, RefusedError, StoreInternalError, UnknownReferenceError, open_store, page_records, read_records, read_value_bytes
+
+CONTRACTS (function signatures — follow exactly):
+def answer_request(request_bytes: bytes, presented_token: str | None) -> bytes
+def authenticate_token(presented_token: str | None) -> Actor | None
+def handle_accept_binding(actor: Actor, request: AcceptBindingRequest) -> OperationBinding
+def handle_activate_flow_version(actor: Actor, request: ActivateFlowVersionRequest) -> FlowActivation
+def handle_add_trial_case(actor: Actor, request: AddTrialCaseRequest) -> ShownAddedTrialCase
+def handle_cancel_run(actor: Actor, request: CancelRunRequest) -> ShownRun
+def handle_capture_failed_execution(actor: Actor, request: CaptureFailedExecutionRequest) -> ShownTrialCase
+def handle_compose_flow_version(actor: Actor, request: ComposeFlowVersionRequest) -> ShownComposedFlowVersion
+def handle_decide_effect_approval(actor: Actor, request: DecideEffectApprovalRequest) -> ShownRun
+def handle_get_binding(actor: Actor, request: GetBindingRequest) -> OperationBinding
+def handle_get_contract_version(actor: Actor, request: GetContractVersionRequest) -> ContractVersion
+def handle_get_flow(actor: Actor, request: GetFlowRequest) -> FlowAnswer
+def handle_get_flow_version(actor: Actor, request: GetFlowVersionRequest) -> ShownFlowVersion
+def handle_get_implementation(actor: Actor, request: GetImplementationRequest) -> ShownImplementationRead
+def handle_get_repair_view(actor: Actor, request: GetRepairViewRequest) -> RepairView
+def handle_get_run(actor: Actor, request: GetRunRequest) -> ShownRun
+def handle_get_slot(actor: Actor, request: GetSlotRequest) -> SlotHistory
+def handle_grant_standing_approval(actor: Actor, request: GrantStandingApprovalRequest) -> StandingGrant
+def handle_issue_contract_version(actor: Actor, request: IssueContractVersionRequest) -> IssuedContractVersion
+def handle_list_records(actor: Actor, request: ListRecordsRequest) -> RecordPageAnswer
+def handle_propose_binding(actor: Actor, request: ProposeBindingRequest) -> OperationBinding
+def handle_prove_flow_version(actor: Actor, request: ProveFlowVersionRequest) -> ProofResult
+def handle_read_fixture_file(actor: Actor, request: ReadFixtureFileRequest) -> FixtureFileContent
+def handle_read_spooled_file(actor: Actor, request: ReadSpooledFileRequest) -> SpooledFileContent
+def handle_release_run(actor: Actor, request: ReleaseRunRequest) -> ShownRun
+def handle_resolve_unknown_outcome(actor: Actor, request: ResolveUnknownOutcomeRequest) -> ShownRun
+def handle_resume_run(actor: Actor, request: ResumeRunRequest) -> ShownRun
+def handle_revoke_standing_approval(actor: Actor, request: RevokeStandingApprovalRequest) -> StandingGrant
+def handle_roll_back_slot(actor: Actor, request: RollBackSlotRequest) -> Activation
+def handle_start_run(actor: Actor, request: StartRunRequest) -> ShownRun
+def handle_submit_implementation(actor: Actor, request: SubmitImplementationRequest) -> ShownSubmission
+def handle_try_implementation(actor: Actor, request: TryImplementationRequest) -> tuple[ShownTrialExecution, ...]
+def run_start_sequence(config_path: str) -> Installation
+def serve_kernel(config_path: str) -> int
+def show_port_refs(refs: tuple[PortRef, ...], reader: Actor) -> tuple[ShownPort, ...]
+def translate_failure(failure: Exception) -> RefusalAnswer
+
+IMPORTED FUNCTION SIGNATURES (these come from the imports above):
+def canonical_bytes(json_text: str) -> bytes
+def open_store(data_directory: str) -> StoreOpened
+def page_records(record_type: RecordType, record_filter: RecordFilter | None, page_size: int, continuation_token: str | None) -> RecordPage
+def read_records(query: RecordQuery) -> RecordSet
+def read_value_bytes(source: ByteSource) -> bytes
+def current_token_list() -> TokenList | None
+def load_installation(config_path: str) -> Installation
+def probe_sandbox() -> None
+def add_trial_case(contract_version_id: str, inputs: tuple[PortPayload, ...], expected_outputs: tuple[PortPayload, ...] | None, actor: Actor) -> AddedTrialCase
+def issue_contract_version(slot_id: str, purpose: str | None, inputs: tuple[Port, ...], outputs: tuple[Port, ...], resource_bounds: ResourceBoundsRequest, actor: Actor) -> IssuedContractVersion
+def read_contract_version(contract_version_id: str) -> ContractVersion
+def read_implementation(implementation_id: str) -> ImplementationRead
+def read_slot(slot_id: str) -> SlotHistory
+def roll_back_slot(slot_id: str, implementation_id: str, actor: Actor) -> Activation
+def submit_implementation(contract_version_id: str, code: str, actor: Actor) -> SubmissionResult
+def try_implementation(implementation_id: str, trial_case_ids: tuple[str, ...], actor: Actor) -> tuple[TrialExecution, ...]
+def accept_binding(binding_id: str, actor: Actor) -> OperationBinding
+def check_installed_instances(installation: Installation) -> None
+def propose_binding(service_id: str, operation_name: str, inputs: tuple[Port, ...], outputs: tuple[Port, ...], actor: Actor) -> OperationBinding
+def read_binding(binding_id: str) -> OperationBinding
+def activate_flow_version(flow_version_id: str, actor: Actor) -> FlowActivation
+def active_flow_version(flow_id: str) -> ActiveFlow
+def compose_flow_version(flow_id: str, purpose: str | None, inputs: tuple[Port, ...], outputs: tuple[Port, ...], nodes: tuple[FlowNode, ...], edges: tuple[FlowEdge, ...], constants: tuple[ConstantInput, ...], actor: Actor) -> ComposedFlowVersion
+def prove_flow_version(flow_version_id: str) -> ProofResult
+def read_flow_version(flow_version_id: str) -> FlowVersion
+def decide_effect_approval(approval_id: str, decision: OwnerDecision, actor: Actor) -> ApprovalDecision
+def grant_standing_approval(flow_id: str, node_id: str, actor: Actor) -> StandingGrant
+def recover_in_flight_attempts() -> int
+def resolve_unknown_outcome(attempt: AttemptKey, resolution: AttemptResolution, actor: Actor) -> EffectAttempt
+def revoke_standing_approval(grant_id: str, actor: Actor) -> StandingGrant
+def cancel_run(run_id: str, actor: Actor) -> RunAnswer
+def capture_failed_execution(execution: AttemptKey, contract_version_id: str, actor: Actor) -> TrialCase
+def continue_after_approval(approval_id: str, decision: OwnerDecision, actor: Actor) -> RunAnswer
+def continue_after_resolution(attempt: AttemptKey, resolution: AttemptResolution, actor: Actor) -> RunAnswer
+def read_run(run_id: str) -> RunAnswer
+def recover_running_runs() -> int
+def release_run(run_id: str, actor: Actor) -> RunAnswer
+def resume_run(run_id: str, actor: Actor) -> RunAnswer
+def start_run(flow_id: str, inputs: tuple[PortPayload, ...], actor: Actor) -> RunAnswer
+
+IMPORTED DATA ACCESS SIGNATURES (constants from the imports above — read them, never redefine them; their values are not part of this context):
+MCP_ENDPOINT_PATH: str
+MCP_PROTOCOL_VERSION: str
+MCP_SERVER_NAME: str
+MCP_SERVER_VERSION: str
+RELEASE_CEILING_BOUNDED_TEXT_BYTES_MAX: int
+RELEASE_CEILING_IMPLEMENTATION_CODE_BYTES_MAX: int
+RELEASE_CEILING_PAGE_SIZE_DEFAULT: int
+RELEASE_CEILING_PAGE_SIZE_MAX: int
+RELEASE_CEILING_STORED_VALUE_BYTES_MAX: int
+RELEASE_CEILING_SURFACE_REQUEST_BYTES_MAX: int
+RELEASE_CEILING_TRIAL_FIXTURE_BYTES_MAX: int
+RELEASE_PYTHON_DEPENDENCIES: Mapping[str, str]
+
+OWNED FUNCTIONS REQUIRED (must be defined as top-level functions):
+- answer_request: (request_bytes: bytes, presented_token: str | None) -> bytes
+- authenticate_token: (presented_token: str | None) -> Actor | None
+- handle_accept_binding: (actor: Actor, request: AcceptBindingRequest) -> OperationBinding
+- handle_activate_flow_version: (actor: Actor, request: ActivateFlowVersionRequest) -> FlowActivation
+- handle_add_trial_case: (actor: Actor, request: AddTrialCaseRequest) -> ShownAddedTrialCase
+- handle_cancel_run: (actor: Actor, request: CancelRunRequest) -> ShownRun
+- handle_capture_failed_execution: (actor: Actor, request: CaptureFailedExecutionRequest) -> ShownTrialCase
+- handle_compose_flow_version: (actor: Actor, request: ComposeFlowVersionRequest) -> ShownComposedFlowVersion
+- handle_decide_effect_approval: (actor: Actor, request: DecideEffectApprovalRequest) -> ShownRun
+- handle_get_binding: (actor: Actor, request: GetBindingRequest) -> OperationBinding
+- handle_get_contract_version: (actor: Actor, request: GetContractVersionRequest) -> ContractVersion
+- handle_get_flow: (actor: Actor, request: GetFlowRequest) -> FlowAnswer
+- handle_get_flow_version: (actor: Actor, request: GetFlowVersionRequest) -> ShownFlowVersion
+- handle_get_implementation: (actor: Actor, request: GetImplementationRequest) -> ShownImplementationRead
+- handle_get_repair_view: (actor: Actor, request: GetRepairViewRequest) -> RepairView
+- handle_get_run: (actor: Actor, request: GetRunRequest) -> ShownRun
+- handle_get_slot: (actor: Actor, request: GetSlotRequest) -> SlotHistory
+- handle_grant_standing_approval: (actor: Actor, request: GrantStandingApprovalRequest) -> StandingGrant
+- handle_issue_contract_version: (actor: Actor, request: IssueContractVersionRequest) -> IssuedContractVersion
+- handle_list_records: (actor: Actor, request: ListRecordsRequest) -> RecordPageAnswer
+- handle_propose_binding: (actor: Actor, request: ProposeBindingRequest) -> OperationBinding
+- handle_prove_flow_version: (actor: Actor, request: ProveFlowVersionRequest) -> ProofResult
+- handle_read_fixture_file: (actor: Actor, request: ReadFixtureFileRequest) -> FixtureFileContent
+- handle_read_spooled_file: (actor: Actor, request: ReadSpooledFileRequest) -> SpooledFileContent
+- handle_release_run: (actor: Actor, request: ReleaseRunRequest) -> ShownRun
+- handle_resolve_unknown_outcome: (actor: Actor, request: ResolveUnknownOutcomeRequest) -> ShownRun
+- handle_resume_run: (actor: Actor, request: ResumeRunRequest) -> ShownRun
+- handle_revoke_standing_approval: (actor: Actor, request: RevokeStandingApprovalRequest) -> StandingGrant
+- handle_roll_back_slot: (actor: Actor, request: RollBackSlotRequest) -> Activation
+- handle_start_run: (actor: Actor, request: StartRunRequest) -> ShownRun
+- handle_submit_implementation: (actor: Actor, request: SubmitImplementationRequest) -> ShownSubmission
+- handle_try_implementation: (actor: Actor, request: TryImplementationRequest) -> tuple[ShownTrialExecution, ...]
+- run_start_sequence: (config_path: str) -> Installation
+- serve_kernel: (config_path: str) -> int
+- show_port_refs: (refs: tuple[PortRef, ...], reader: Actor) -> tuple[ShownPort, ...]
+- translate_failure: (failure: Exception) -> RefusalAnswer
+
+STATIC GATE CONTRACT (deterministic checks; a violating candidate is rejected without repair):
+- Reflective attribute access is rejected: never call getattr, hasattr,
+  setattr, delattr, or vars; every declared field and operation is
+  addressed directly by name, including in try/finally cleanup.
+- A definition whose parameter list differs from its declared contract
+  signature is rejected; keep names and order exactly.
+- A constructed record accepted by a declared insert_*/upsert_*/append_*
+  operation must reach a call or return; a built-and-dropped record is
+  rejected.
+- Instantiating a spec-declared interface is rejected; construct the
+  module-owned concrete class instead.
+- A stub, placeholder, or fail-closed body for a contracted callable is
+  rejected; implement the complete specified behavior.
+- A top-level import of a package outside the Python standard library and
+  this project's own modules is rejected unless IMPORTS lists it; a note
+  never adds a package to IMPORTS.
+
+OWNED CLASSES REQUIRED (must be defined locally, not merely referenced):
+No owned local classes required.
+
+CONCRETE IMPLEMENTATION OBLIGATIONS:
+No local concrete-to-interface obligations.
+
+REQUIREMENTS (notes — implement these):
+- answer_request: [SECURITY_BOUNDARY] MUST check one request in exactly this order, the first failure deciding: the byte length of request_bytes is within the imported RELEASE_CEILING_SURFACE_REQUEST_BYTES_MAX constant, else invalid_request; authenticate_token with presented_token gives an Actor, else unauthorized with one fixed reason that reveals nothing about any record; for tools/call, the message names a catalogue operation and fits that operation's request model with no unknown field — a field typed X | None fitting when it is absent or JSON null — and every bound below, else invalid_request; the actor may call that operation by the actor table, else not_permitted; only then is the operation's handler called (A16 rule 1). initialize, ping and tools/list name no catalogue operation and are answered after the size and token checks, as the note on methods says.
+- answer_request: [SECURITY_BOUNDARY] Actor table, the only one: owner only — accept_binding, decide_effect_approval, resolve_unknown_outcome, cancel_run, grant_standing_approval, revoke_standing_approval, read_spooled_file, read_fixture_file; an agent whose AgentToken has may_author true only — issue_contract_version, add_trial_case, submit_implementation; owner or an agent with may_author — capture_failed_execution, roll_back_slot; any agent only — try_implementation, propose_binding, compose_flow_version, prove_flow_version; owner or any agent — activate_flow_version, start_run, resume_run, release_run, get_slot, get_repair_view, get_contract_version, get_implementation, get_binding, get_flow, get_flow_version, get_run, list_records; may_author is read from the current token list entry of the agent named by the Actor, and no request field names or changes the actor (A16 rule 3).
+- answer_request: [VALIDATION_ERROR] Request bounds, each counted as UTF-8 bytes of the field as received: implementation code within the imported RELEASE_CEILING_IMPLEMENTATION_CODE_BYTES_MAX constant; the json_text of a trial case input or expected output, of a flow constant and of a run input within the imported RELEASE_CEILING_STORED_VALUE_BYTES_MAX constant; the decoded bytes of a trial case file within the imported RELEASE_CEILING_TRIAL_FIXTURE_BYTES_MAX constant; every other string anywhere in the request within the imported RELEASE_CEILING_BOUNDED_TEXT_BYTES_MAX constant; a page_size given below 1 or above the imported RELEASE_CEILING_PAGE_SIZE_MAX constant; base64 text that does not decode; each a failure answered invalid_request (A16 rules 4 and 6).
+- answer_request: [FIELD_ASSIGNMENT] Before any handler runs, MUST replace every JSON text the request carries — the json_text of each RequestJsonValue and RequestConstant, the value_schema of every Port and RequestConstant, the guard_value of every EdgeGuard — by its canonical form obtained from canonical_bytes; a NonCanonicalValueError there is invalid_request, so modules below receive only canonical JSON (A01 rule 1).
+- answer_request: [ORCHESTRATION] MUST call the handler of the named operation, whose name is handle_ followed by the operation name — exactly one of handle_accept_binding, handle_activate_flow_version, handle_add_trial_case, handle_cancel_run, handle_capture_failed_execution, handle_compose_flow_version, handle_decide_effect_approval, handle_get_binding, handle_get_contract_version, handle_get_flow, handle_get_flow_version, handle_get_implementation, handle_get_repair_view, handle_get_run, handle_get_slot, handle_grant_standing_approval, handle_issue_contract_version, handle_list_records, handle_propose_binding, handle_prove_flow_version, handle_read_fixture_file, handle_read_spooled_file, handle_release_run, handle_resolve_unknown_outcome, handle_resume_run, handle_revoke_standing_approval, handle_roll_back_slot, handle_start_run, handle_submit_implementation and handle_try_implementation — with the Actor and the validated request, encode its answer as the tool result — values as JSON text, file bytes as base64 — and turn any exception the handler raises into a refusal answer through translate_failure, except any failure translate_failure answers internal_error — StopRequiredError, StoreInternalError or any unexpected exception, whatever the handler — which it lets propagate to serve_kernel unchanged, since a store change may already be written and only the next start derives every run again.
+- answer_request: [SECURITY_BOUNDARY] Text an agent supplies — purposes, implementation code, names — is data: it is never evaluated, imported, compiled, formatted or interpreted in the kernel process; a JSON text it supplies is data too, parsed only as JSON by canonical_bytes and by the schema check of the module that judges it, never evaluated or executed; no answer and no refusal carries a token, a service credential, a host path or a stack trace, an internal error included (A16 rules 5 and 7).
+- answer_request: [BEHAVIOR] The body is one JSON-RPC 2.0 message, read only after the size and token checks. A JSON object whose jsonrpc is "2.0" with a string method and an id is a request; one with a method and no id is a notification and one with no method a response: both are answered with empty bytes and change nothing. A request's method decides: initialize answers the result {protocolVersion: the imported MCP_PROTOCOL_VERSION constant, capabilities: {tools: {listChanged: false}}, serverInfo: {name: the imported MCP_SERVER_NAME constant, version: the imported MCP_SERVER_VERSION constant}} whatever version its params ask, and keeps no state; ping answers an empty result object; tools/list answers {tools: [...]} as below, ignoring any cursor; tools/call names the catalogue operation in params.name and carries its request in params.arguments, which then pass the remaining checks of the first note.
+- answer_request: [FIELD_PROJECTION] tools/list lists one tool per catalogue operation in State 5 catalogue order, each {name: the operation name, inputSchema: the schema of its request model}, derived only by this rule: a model is {"type": "object", "properties": its fields in declared order, "required": its fields not typed X | None, "additionalProperties": false}; str is {"type": "string"}, int {"type": "integer"}, X | None {"anyOf": [the schema of X, {"type": "null"}]}, so the published schema admits the null a request may carry, tuple[X, ...] {"type": "array", "items": the schema of X}, an enumeration {"type": "string", "enum": its members in declared order}, a Literal tag {"const": the tag}, and a discriminated union {"anyOf": the schemas of its variants in declared order}; no description, title or other keyword is added.
+- answer_request: [FIELD_PROJECTION] MUST write every field of an answer model in the JSON text T, a field whose value is None as null, never omitting it (decision 25).
+- answer_request: [FIELD_PROJECTION] The id of every response is the body's id member when the body is one JSON object whose id is a string or an integer, and null otherwise; reading it checks nothing and decides nothing.
+- answer_request: [VALIDATION_ERROR] A refusal decided before the operation is known is a JSON-RPC error response whose error is {code, message: the refusal code, data: the RefusalAnswer as {code, reason}}: a body over the size ceiling is -32600 invalid_request; a token refusal -32600 unauthorized; a body that is not JSON -32700 invalid_request; a body that is not one JSON object — a batch array included — or whose jsonrpc is not "2.0" -32600 invalid_request; a request whose method is none of initialize, ping, tools/list and tools/call -32601 invalid_request; a tools/call whose params is not an object with a string name and an object arguments, or whose name is no catalogue operation, -32602 invalid_request.
+- answer_request: [RETURN_SHAPE] Returns the bytes of one JSON-RPC 2.0 response as UTF-8 JSON, or empty bytes for a notification or a response. A tools/call that reached its operation returns the result {content: [{type: "text", text: T}], isError: B}: T is the answer of the operation as JSON text and B false, or T is the RefusalAnswer as the JSON object {code, reason} and B true for every refusal decided once the operation is known — fit, bounds, canonical form, permission, or translate_failure of an exception the handler raised; every refusal code is a member of = models.RefusalCode.
+- authenticate_token: [SECURITY_BOUNDARY] MUST obtain the token list from current_token_list on every call, and answer None when it returns None, when presented_token is None, or when presented_token equals no token of that list; the comparison is constant-time with the hmac compare_digest function against the owner token and against every agent token, all of them compared whatever an earlier comparison found (A16 rules 1 and 2).
+- authenticate_token: [RETURN_SHAPE] Returns an Actor of kind owner with no agent_name for the owner token, an Actor of kind agent with the agent_name of the matching AgentToken for an agent token, or None; never an Actor of kind kernel.
+- handle_accept_binding: [ORCHESTRATION] MUST call accept_binding with the binding_id and the actor, the owner; every refusal is that function's.
+- handle_accept_binding: [RETURN_SHAPE] Returns the OperationBinding accept_binding returned, unchanged.
+- handle_activate_flow_version: [ORCHESTRATION] MUST call activate_flow_version with the flow_version_id and the actor; that function refuses an agent asking for a version whose highest effect class is above read (A06 rules 3 and 4), so the handler passes the actor and decides nothing itself.
+- handle_activate_flow_version: [RETURN_SHAPE] Returns the FlowActivation activate_flow_version returned, unchanged.
+- handle_add_trial_case: [FIELD_PROJECTION] MUST turn each RequestPayload into a PortPayload of the same port: RequestJsonValue to JsonPayload with the canonical JSON bytes, RequestFile to FilePayload with the base64-decoded bytes, RequestFileList to FileListPayload with each element decoded, in list order; expected_outputs absent stays absent.
+- handle_add_trial_case: [ORCHESTRATION] MUST call add_trial_case with the contract_version_id, the converted inputs and expected outputs and the actor, then show the case's inputs and expected outputs to the actor through show_port_refs.
+- handle_add_trial_case: [RETURN_SHAPE] Returns ShownAddedTrialCase with the ShownTrialCase and the corpus_position add_trial_case returned.
+- handle_cancel_run: [ORCHESTRATION] MUST call cancel_run with the run_id and the actor, the owner, and show the RunAnswer as handle_start_run shows one.
+- handle_cancel_run: [RETURN_SHAPE] Returns the ShownRun.
+- handle_capture_failed_execution: [ORCHESTRATION] MUST call capture_failed_execution with the execution AttemptKey, the contract_version_id and the actor, and show the returned TrialCase's inputs and expected outputs to the actor through show_port_refs.
+- handle_capture_failed_execution: [RETURN_SHAPE] Returns the ShownTrialCase of the captured case.
+- handle_compose_flow_version: [FIELD_PROJECTION] MUST turn each RequestConstant into a ConstantInput with the same to_node, to_port, canonical value_schema text and disclosure_class and with canonical_json set to the canonical bytes of its json_text.
+- handle_compose_flow_version: [ORCHESTRATION] MUST call compose_flow_version with the flow_id, purpose, inputs, outputs, nodes, edges, the converted constants and the actor, and show the composed version's constants to the actor, each FlowConstant value being the value_id of a StoredValue shown through show_port_refs.
+- handle_compose_flow_version: [RETURN_SHAPE] Returns ShownComposedFlowVersion with the ShownFlowVersion, the Flow when the call created it, else None, and the ProofResult unchanged.
+- handle_decide_effect_approval: [ORCHESTRATION] MUST call continue_after_approval with the approval_id, the decision of = models.OwnerDecision and the actor, the owner, because the decision moves the run; it never calls the effects decision function directly.
+- handle_decide_effect_approval: [RETURN_SHAPE] Returns the ShownRun of the RunAnswer continue_after_approval returned, shown as handle_start_run shows one.
+- handle_get_binding: [ORCHESTRATION] MUST call read_binding with the binding_id; an UnknownReferenceError it raises is the answer.
+- handle_get_binding: [RETURN_SHAPE] Returns the OperationBinding unchanged.
+- handle_get_contract_version: [ORCHESTRATION] MUST call read_contract_version with the contract_version_id; an UnknownReferenceError it raises is the answer.
+- handle_get_contract_version: [RETURN_SHAPE] Returns the ContractVersion unchanged.
+- handle_get_flow: [ORCHESTRATION] MUST call active_flow_version with the flow_id and show the active version, when there is one, with its constants shown as handle_compose_flow_version shows them; an UnknownReferenceError it raises is the answer.
+- handle_get_flow: [RETURN_SHAPE] Returns FlowAnswer with the Flow, the ShownFlowVersion of the active version or None, and the FlowActivation or None when no version is active.
+- handle_get_flow_version: [ORCHESTRATION] MUST call read_flow_version with the flow_version_id and show its constants as handle_compose_flow_version shows them; an UnknownReferenceError it raises is the answer.
+- handle_get_flow_version: [RETURN_SHAPE] Returns the ShownFlowVersion.
+- handle_get_implementation: [ORCHESTRATION] MUST call read_implementation with the implementation_id; an UnknownReferenceError it raises is the answer.
+- handle_get_implementation: [SECURITY_BOUNDARY] The ShownImplementation carries the code only when the actor is the owner; for an agent its code is None (K-12).
+- handle_get_implementation: [RETURN_SHAPE] Returns ShownImplementationRead with that ShownImplementation and the ContractVersion unchanged.
+- handle_get_repair_view: [ORCHESTRATION] MUST assemble the repair view of one slot: read_slot for the SlotHistory; read_contract_version for its current_contract_version_id; the whole corpus of that version with read_records using CorpusOfContractVersion; the current implementation, the one named by the serving_activation of the current contract version's history, with read_implementation, and its trial executions with read_records using TrialExecutionsOnCorpus — when the current contract version has no current activation there is no current implementation and no trial execution of it, which is no error; and a page of NodeExecutions with page_records over the record type node_execution, an InSetFilter on executed_implementation holding every implementation of every contract version of the slot, the page size and the store continuation token.
+- handle_get_repair_view: [VALIDATION_ERROR] An unknown slot_id is unknown_reference; the page size is the imported RELEASE_CEILING_PAGE_SIZE_DEFAULT constant when absent; a given continuation token that is not base64url text without padding of the canonical JSON this handler issues, or that names another slot_id, is invalid_request; a store token it carries that names no record of that type is refused by page_records as invalid_request (A16 rule 6).
+- handle_get_repair_view: [DETERMINISM_OR_ORDERING] The continuation token this handler issues is base64url without padding of the canonical JSON of the slot_id, the implementation set used for the first page and the store token of the last item; passed back, the next page uses that saved implementation set, not the current one, and every other part of the view is read again as of the new request; the token is None when page_records returns none.
+- handle_get_repair_view: [SECURITY_BOUNDARY] The current implementation is the only place where an agent receives implementation code: it is shown with code to owner and agent alike; corpus cases, trial executions and NodeExecutions are masked under the surface masking rule, each NodeExecution's failure_detail by the class of its execution (K-12, A07).
+- handle_get_repair_view: [RETURN_SHAPE] Returns RepairView with the SlotHistory, the current ContractVersion, the corpus as ShownTrialCase in corpus order, the ShownImplementation or None when nothing serves, its ShownTrialExecutions in corpus order, the page as ShownNodeExecution newest first, and the continuation token.
+- handle_get_repair_view: [FIELD_ASSIGNMENT] The class of a NodeExecution is the highest class among the items of its inputs, each SpooledFilesRef counting with its disclosure_class even when empty, and when its executed names a binding also of its outputs; the class of an operation execution's failure_detail is the highest of that class and the disclosure classes read_binding declares for that binding's outputs; the class of a TrialExecution is the highest class among its TrialCase's inputs (A07 rule 5, A09 rule 7); a failure_detail becomes DetailLength with its UTF-8 byte length and that class when the reader is an agent and the class is above open, and DetailText otherwise, always for the owner.
+- handle_get_run: [ORCHESTRATION] MUST call read_run with the run_id and show the RunAnswer as handle_start_run shows one; an UnknownReferenceError it raises is the answer.
+- handle_get_run: [RETURN_SHAPE] Returns the ShownRun.
+- handle_get_slot: [ORCHESTRATION] MUST call read_slot with the slot_id; an UnknownReferenceError it raises is the answer.
+- handle_get_slot: [RETURN_SHAPE] Returns the SlotHistory read_slot returned, unchanged.
+- handle_grant_standing_approval: [ORCHESTRATION] MUST call grant_standing_approval with the flow_id, the node_id and the actor, the owner; a grant moves no run.
+- handle_grant_standing_approval: [RETURN_SHAPE] Returns the StandingGrant grant_standing_approval returned, unchanged.
+- handle_issue_contract_version: [ORCHESTRATION] MUST call issue_contract_version with the request's slot_id, purpose, inputs, outputs and resource_bounds and the actor, and return its IssuedContractVersion unchanged; every refusal is that function's.
+- handle_issue_contract_version: [RETURN_SHAPE] Returns the IssuedContractVersion, with slot set only when the call created the slot.
+- handle_list_records: [VALIDATION_ERROR] MUST refuse as invalid_request, before any read: a record_type that is not listable — activation, flow_activation, stored_value or spooled_file; a filter on a field not allowed for its type — none for slot and flow, slot_id for contract_version, contract_version_id for implementation and trial_case, implementation_id or trial_case_id for trial_execution, implementation_id for admission_verdict, status or service_id for binding, flow_id for flow_version, flow_version_id or status for run, run_id, executed_implementation or executed_binding for node_execution, run_id or status for approval, flow_version_id or status for grant, run_id or status for effect_attempt; a status value that is not a member of that type's status enumeration — = models.BindingStatus, = models.RunStatus, = models.ApprovalStatus, = models.GrantStatus or = models.AttemptStatus; a continuation token that is not base64url text without padding; an in_set filter whose values are empty or, after duplicates are removed, more than the imported RELEASE_CEILING_PAGE_SIZE_MAX constant.
+- handle_list_records: [ORCHESTRATION] MUST call page_records with the record_type, the filter — an in_set filter in canonical form, its values without duplicates and in code-point order, so that equal sets page alike and the continuation token binds to that form —, the page size — the imported RELEASE_CEILING_PAGE_SIZE_DEFAULT constant when absent — and the continuation token; for the record type run, each listed Run is answered with read_run and shown as handle_start_run shows one; every other record is shown under the surface masking rule, implementations without code for an agent and with code for the owner, NodeExecutions and TrialExecutions with their failure_detail masked by the class of their execution.
+- handle_list_records: [BEHAVIOR] A filter value naming no record, or a set filter some of whose members name none, is not a refusal: the page holds what the existing members match, possibly nothing; a page_records refusal of a token issued for another type or filter is passed on as invalid_request.
+- handle_list_records: [RETURN_SHAPE] Returns RecordPageAnswer with the record_type, ShownRecords whose field for that type holds the page newest first and whose other fields are empty, and the continuation token page_records returned.
+- handle_list_records: [FIELD_ASSIGNMENT] Execution classes for masking failure_detail are computed as handle_get_repair_view computes them, from the records themselves and, for an operation execution's failure_detail, the output classes read_binding declares.
+- handle_list_records: [FIELD_PROJECTION] MUST show an effect attempt as ShownEffectAttempt with every field of the EffectAttempt copied and its inputs passed through show_port_refs for the actor, never as the EffectAttempt itself (decision 24, A07 rule 4).
+- handle_list_records: [SECURITY_BOUNDARY] An approval is shown as ShownApproval with its preview's inputs passed through show_port_refs for the actor; the preview's request is the stored RequestDescription for the owner, and for an agent too unless any item of the preview's inputs has class personal_data (= models.DisclosureClass), in which case request is None, since the built request embeds input values in its path, query, headers and body; input_digests and request_digest are always shown (A07 rule 4).
+- handle_propose_binding: [ORCHESTRATION] MUST call propose_binding with the service_id, operation_name, inputs, outputs and the actor; every refusal is that function's.
+- handle_propose_binding: [RETURN_SHAPE] Returns the OperationBinding propose_binding returned, unchanged.
+- handle_prove_flow_version: [ORCHESTRATION] MUST call prove_flow_version with the flow_version_id; a failed proof is a result, not a refusal.
+- handle_prove_flow_version: [RETURN_SHAPE] Returns the ProofResult prove_flow_version returned, unchanged.
+- handle_read_fixture_file: [VALIDATION_ERROR] After the actor check, MUST check in this order: the StoredValue named by the request's value_id exists, read with read_records using RecordsById for record_type stored_value, else unknown_reference; then its carriage is file, else refused, since a value carriage StoredValue is shown in full in the answers that name it (M21: a file carriage StoredValue is only a trial case's fixture).
+- handle_read_fixture_file: [ORCHESTRATION] Only after both checks MUST read the bytes with read_value_bytes from a StoredValueSource naming that value_id; there is no spool check, since a fixture is kept with its trial case (K-10).
+- handle_read_fixture_file: [RETURN_SHAPE] Returns FixtureFileContent with the StoredValue record and its bytes whole.
+- handle_read_spooled_file: [VALIDATION_ERROR] After the actor check, MUST check in this order: the SpooledFile named by the request's whole SpooledFileKey exists, read with read_records using SpooledFilesByKey, else unknown_reference — a key whose map_index or list_index is present where the record has none, or absent where it has one, names no record; then the run holds its spool, from the RunAnswer of read_run: its status of = models.RunStatus is running, awaiting_approval or pending, or it is failed with no released_at, else refused (A15 rule 5).
+- handle_read_spooled_file: [ORCHESTRATION] Only after both checks MUST read the bytes with read_value_bytes from a SpooledFileSource naming that key; the decision is taken from the run's record, never from whether bytes are still on disk.
+- handle_read_spooled_file: [RETURN_SHAPE] Returns SpooledFileContent with the SpooledFile record and its bytes whole.
+- handle_release_run: [ORCHESTRATION] MUST call release_run with the run_id and the actor and show the RunAnswer as handle_start_run shows one.
+- handle_release_run: [RETURN_SHAPE] Returns the ShownRun, carrying released_by and released_at.
+- handle_resolve_unknown_outcome: [ORCHESTRATION] MUST call continue_after_resolution with the attempt AttemptKey, the resolution and the actor, the owner, because the resolution moves the run.
+- handle_resolve_unknown_outcome: [RETURN_SHAPE] Returns the ShownRun of the RunAnswer continue_after_resolution returned, shown as handle_start_run shows one.
+- handle_resume_run: [ORCHESTRATION] MUST call resume_run with the run_id and the actor and show the RunAnswer as handle_start_run shows one.
+- handle_resume_run: [RETURN_SHAPE] Returns the ShownRun.
+- handle_revoke_standing_approval: [ORCHESTRATION] MUST call revoke_standing_approval with the grant_id and the actor, the owner.
+- handle_revoke_standing_approval: [RETURN_SHAPE] Returns the StandingGrant revoke_standing_approval returned, unchanged.
+- handle_roll_back_slot: [ORCHESTRATION] MUST call roll_back_slot with the slot_id, the implementation_id and the actor; every refusal is that function's.
+- handle_roll_back_slot: [RETURN_SHAPE] Returns the Activation roll_back_slot returned, unchanged.
+- handle_start_run: [ORCHESTRATION] MUST turn each RequestJsonValue into a JsonPayload of the same port with its canonical JSON bytes, call start_run with the flow_id, those inputs and the actor, and show the RunAnswer it returns as a ShownRun.
+- handle_start_run: [FIELD_PROJECTION] A ShownRun copies every field of the RunAnswer except outputs, where each ProducedOutput becomes ShownProducedOutput whose value is its value_id shown through show_port_refs for the actor, and each MissingOutput is kept as it is; the waiting entries keep their approval_id (A13 rule 7).
+- handle_start_run: [RETURN_SHAPE] Returns the ShownRun of the run as it rests or ended when start_run returned.
+- handle_submit_implementation: [ORCHESTRATION] MUST call submit_implementation with the contract_version_id, the code exactly as received and the actor, and show the result to the actor.
+- handle_submit_implementation: [SECURITY_BOUNDARY] The ShownImplementation in the answer carries no code for an agent; the owner never calls this operation (K-12).
+- handle_submit_implementation: [RETURN_SHAPE] Returns ShownSubmission with the ShownImplementation, the AdmissionVerdict and the Activation or None that submit_implementation returned.
+- handle_try_implementation: [ORCHESTRATION] MUST call try_implementation with the implementation_id, the trial_case_ids in request order and the actor, and show each returned TrialExecution under the surface masking rule, its outputs through show_port_refs and its failure_detail masked by the class of that execution.
+- handle_try_implementation: [FIELD_ASSIGNMENT] The class of a TrialExecution is the highest class among the inputs of its TrialCase, read with read_records using RecordsById; its failure_detail becomes DetailLength with that class for an agent when the class is above open, and DetailText otherwise (A07 rule 5).
+- handle_try_implementation: [RETURN_SHAPE] Returns one ShownTrialExecution per execution, in the order try_implementation returned them.
+- run_start_sequence: [ORCHESTRATION] MUST call, in exactly this order and each exactly once: load_installation with config_path; check_installed_instances with the loaded Installation; open_store with that Installation's data_directory; probe_sandbox; recover_in_flight_attempts; recover_running_runs (A03 rule 8, A09 rule 1, A14 rule 5, A18).
+- run_start_sequence: [VALIDATION_ERROR] Every step is required: the first step that raises — InstallationRejectedError, RefusedError from the instance check, a store refusal, SandboxUnavailableError, StopRequiredError or any other exception — stops the sequence there and propagates unchanged to the caller, the same exception with its own reason; before it propagates MUST write the failing step's name — load_installation, check_installed_instances, open_store, probe_sandbox, recover_in_flight_attempts or recover_running_runs — as one line to standard error, so the step is named there and the reason stays the exception's own; no later step runs and nothing is retried or skipped.
+- run_start_sequence: [RETURN_SHAPE] Returns the Installation that load_installation returned, after every step succeeded.
+- serve_kernel: [ORCHESTRATION] MUST call run_start_sequence with config_path, the process's one command-line argument, and open the MCP entrance — MCP over streamable HTTP at the mcp_listen_address of the returned Installation, one tool per catalogue operation — only after it returned; while serving it reads one HTTP request at a time, takes the presented token from its Authorization header in the Bearer form (None when the header is absent or not in that form), passes the body bytes and that token to answer_request and writes back the bytes it returns.
+- serve_kernel: [VALIDATION_ERROR] When run_start_sequence raises, which has already written the failing step's name, MUST write the exception's reason to standard error, without any token, credential value, configuration content or stack trace, open no entrance and return a non-zero exit code; there is no partial start and no retry. Ending the process releases the store lock; nothing the steps already committed is rolled back, and the next start runs the whole sequence again from those records. Binding the listener at mcp_listen_address is the last start step and fails the same way, the step named open_entrance, when the address cannot be parsed as a host and port or the socket cannot be bound; a listener lost while serving ends the process with a non-zero exit code, without retry.
+- serve_kernel: [BEHAVIOR] MUST read at most one byte more of a request body than the imported RELEASE_CEILING_SURFACE_REQUEST_BYTES_MAX constant allows, so an oversized request still reaches answer_request and is refused there; when answer_request raises StopRequiredError or any other failure it let propagate because its answer is internal_error, MUST first send that request the internal_error answer built by translate_failure, without detail, and then end the process with a non-zero exit code, so the next start derives every run that has not ended (A03 rule 7, A14 rules 5 and 7).
+- serve_kernel: [DETERMINISM_OR_ORDERING] Requests are handled strictly one at a time, each to its end, run advancement included, before the next one is read (A18 rule 3).
+- serve_kernel: [RETURN_SHAPE] Returns the process exit code: non-zero after a failed start, a required stop, or any internal_error that answer_request let propagate — in both of the last two cases the request is first answered internal_error without detail and then the process ends — zero only when serving ends normally.
+- serve_kernel: [ORCHESTRATION] When the surface module is run as a script, python -m cabinet_kernel.surface <config_path>, which is how the host starts the kernel, it MUST call serve_kernel with that one argument and exit with the status serve_kernel returns (decision 25).
+- serve_kernel: [DEPENDENCY_BOUNDARY] The entrance is the standard library's http.server.HTTPServer, which serves one request at a time, never a threading or forking server; the surface imports nothing outside the CPython 3.12 standard library except BaseModel from pydantic, the one third-party package, pinned by the release in the imported RELEASE_PYTHON_DEPENDENCIES constant, on which the models and the store repository are emitted and which the surface uses to recognise and serialise models (60_contracts.md decisions 22, 25 and 27).
+- serve_kernel: [BEHAVIOR] Only a POST to the path equal to the imported MCP_ENDPOINT_PATH constant reaches answer_request; any other method on that path is answered 405, any other path 404, and a request carrying an Origin header 403, each without a body and without calling answer_request; no Mcp-Session-Id header is ever sent, one presented is ignored, and no event stream is opened.
+- serve_kernel: [FIELD_PROJECTION] An empty result of answer_request is answered 202 without a body; any other result is answered 200 with Content-Type application/json and the result as the body. The internal_error answer sent before the process ends is the JSON-RPC error response of answer_request with code -32603, message internal_error and the RefusalAnswer from translate_failure as data, its id read from the body by the same rule as answer_request.
+- show_port_refs: [FIELD_PROJECTION] For each PortRef, in order, MUST produce one ShownPort with the same port name and one ShownItem per referenced item in order: a StoredValuesRef reads its StoredValue records with read_records using RecordsById, and a value carriage item becomes ShownContent with its value_id, its canonical JSON text read with read_value_bytes from a StoredValueSource and its class, a file carriage item becomes ShownFile with digest, size, media type, class, its value_id and no spooled_file; a file carriage StoredValue always has a media type, its fixture taking its port's one media type (decision 18), so one whose media_type is None is a record that cannot be read and raises StoreInternalError, propagating as the validation note says; a SpooledFilesRef reads its SpooledFile records with SpooledFilesByKey and each becomes ShownFile carrying its full SpooledFileKey and no value_id; a FileFactsRef becomes one ShownFile per FileFacts with the class the FileFactsRef carries, no spooled_file and no value_id.
+- show_port_refs: [SECURITY_BOUNDARY] This is the one masking rule of every answer: the owner receives every item in full; when reader is not of kind owner and an item's class is personal_data, MUST produce ShownValueDigest with the value digest and class for a value, or ShownFileDigest with the content digest and class for a file, and read no bytes for it (A07 rule 4).
+- show_port_refs: [VALIDATION_ERROR] A referenced StoredValue or SpooledFile that cannot be read, or bytes that cannot be read, is not skipped: the exception propagates, so the whole answer is internal_error and no partial answer is returned.
+- show_port_refs: [RETURN_SHAPE] Returns the tuple of ShownPort, one per given PortRef, in the given order.
+- translate_failure: [FIELD_PROJECTION] MUST map a failure to its code of = models.RefusalCode: UnknownReferenceError to unknown_reference, RefusedError to refused, InvalidRequestError and NonCanonicalValueError to invalid_request; StoreInternalError, StopRequiredError and every other exception to internal_error.
+- translate_failure: [SECURITY_BOUNDARY] The reason of every code but internal_error is the exception's own message cut to at most the imported RELEASE_CEILING_BOUNDED_TEXT_BYTES_MAX constant bytes at a UTF-8 character boundary; internal_error carries an empty reason, never the exception text, type, path or stack trace (A16 rule 7). A kernel module's exception message names records by identity and checks by name and never holds a token, a credential value, configuration content or a stored value, so the cut message reveals nothing those rules keep back.
+- translate_failure: [RETURN_SHAPE] MUST return one RefusalAnswer with that code and reason.
+
+MODEL DATA DEFINITIONS (READ-ONLY SPEC DATA, NOT CODE):
+The following JSON values are read-only spec data, not Python class definitions.
+Do not emit classes, Pydantic models, create_model calls, or assignments from this section.
+Omitted model-schema/data references:
+- ApprovalStatus: omitted because it is an imported runtime model schema
+- AttemptStatus: omitted because it is an imported runtime model schema
+- BindingStatus: omitted because it is an imported runtime model schema
+- DisclosureClass: omitted because it is an imported runtime model schema
+- GrantStatus: omitted because it is an imported runtime model schema
+- OwnerDecision: omitted because it is an imported runtime model schema
+- RefusalCode: omitted because it is an imported runtime model schema
+- RunStatus: omitted because it is an imported runtime model schema
+
+MODEL DATA ADDRESSES (SPEC DATA, NOT IMPORT PATHS):
+The following = models.* references are canonical spec data addresses, not Python module paths.
+Read their structured JSON values from MODEL DATA DEFINITIONS when present in this prompt.
+Never convert a spec data address into `import models` or `from models.* import ...`.
+models.* entries listed as spec data are read-only spec addresses, not Python import paths and not cabinet_kernel.models imports.
+Only import runtime model symbols from cabinet_kernel.models when they are explicitly listed in IMPORTS.
+- models.ApprovalStatus: runtime model schema omitted from non-model prompt; exported from cabinet_kernel.models by IMPORTS.
+- models.AttemptStatus: runtime model schema omitted from non-model prompt; exported from cabinet_kernel.models by IMPORTS.
+- models.BindingStatus: runtime model schema omitted from non-model prompt; exported from cabinet_kernel.models by IMPORTS.
+- models.DisclosureClass: runtime model schema omitted from non-model prompt; exported from cabinet_kernel.models by IMPORTS.
+- models.GrantStatus: runtime model schema omitted from non-model prompt; exported from cabinet_kernel.models by IMPORTS.
+- models.OwnerDecision: runtime model schema omitted from non-model prompt; exported from cabinet_kernel.models by IMPORTS.
+- models.RefusalCode: runtime model schema omitted from non-model prompt; exported from cabinet_kernel.models by IMPORTS.
+- models.RunStatus: runtime model schema omitted from non-model prompt; exported from cabinet_kernel.models by IMPORTS.
+
+IMPORTED MODEL OWNERSHIP (DO NOT REDEFINE):
+Imported runtime model symbols are owned by their source modules listed in IMPORTS; use them as imported and do not redefine them here.
+
+RUNTIME MODEL SURFACE (CORE.MODELS IMPORTS):
+These are imported runtime symbols from cabinet_kernel.models. Use the listed enum member names and model fields exactly.
+- AcceptBindingRequest fields (exact, no others exist): binding_id: str
+- ActivateFlowVersionRequest fields (exact, no others exist): flow_version_id: str
+- Activation fields (exact, no others exist): store_position: int, contract_version_id: str, implementation_id: str, activated_by: Actor, activated_at: KernelInstant
+- ActivationAuthority fields (exact, no others exist): authority_kind: Literal['flow_activation'], store_position: int
+- ActivationBeforeRun fields (exact, no others exist): query_kind: Literal['activation_before_run'], flow_version_id: str, run_id: str
+- ActiveFlow fields (exact, no others exist): flow: Flow, active_version: FlowVersion | None, activation: FlowActivation | None
+- ActiveGrantOfNode fields (exact, no others exist): query_kind: Literal['active_grant_of_node'], flow_version_id: str, node_id: str
+- Actor fields (exact, no others exist): kind: ActorKind, agent_name: str | None
+- ActorKind enum values: 'owner', 'agent', 'kernel'; Python member names were not available in models context.
+- AddTrialCaseRequest fields (exact, no others exist): contract_version_id: str, inputs: tuple[RequestPayload, ...], expected_outputs: tuple[RequestPayload, ...] | None
+- AddedTrialCase fields (exact, no others exist): trial_case: TrialCase, corpus_position: int
+- AdmissionRefusalReason: imported runtime symbol; no local surface details available.
+- AdmissionVerdict fields (exact, no others exist): implementation_id: str, corpus_digest: str, trial_executions: tuple[str, ...], verdict: AdmissionVerdictKind, reason: AdmissionRefusalReason | None, decided_at: KernelInstant
+- AdmissionVerdictKind enum values: 'admitted', 'refused'; Python member names were not available in models context.
+- AgentToken fields (exact, no others exist): agent_name: str, token: str, may_author: bool
+- ApprovalAuthority fields (exact, no others exist): authority_kind: Literal['approval'], approval_id: str
+- ApprovalDecision fields (exact, no others exist): approval: EffectApproval, refusal_record: NodeExecution | None
+- ApprovalPreview fields (exact, no others exist): service_id: str, operation_name: str, effect_class: EffectClass, request: RequestDescription, inputs: tuple[PortRef, ...]
+- ApprovalStatus enum values: 'requested', 'approved', 'refused', 'used'; Python member names were not available in models context.
+- ApprovalsOfElement fields (exact, no others exist): query_kind: Literal['approvals_of_element'], element: ElementKey
+- AttemptKey fields (exact, no others exist): run_id: str, node_id: str, map_index: int | None, attempt_number: int
+- AttemptResolution enum values: 'applied', 'not_applied'; Python member names were not available in models context.
+- AttemptStatus enum values: 'in_flight', 'applied', 'not_applied', 'not_sent', 'unknown'; Python member names were not available in models context.
+- AttemptsByStatus fields (exact, no others exist): query_kind: Literal['attempts_by_status'], status: AttemptStatus
+- AttemptsOfElement fields (exact, no others exist): query_kind: Literal['attempts_of_element'], element: ElementKey
+- Authority: imported runtime symbol; no local surface details available.
+- BindingStatus enum values: 'proposed', 'accepted'; Python member names were not available in models context.
+- ByteSource: imported runtime symbol; no local surface details available.
+- CancelRunRequest fields (exact, no others exist): run_id: str
+- CaptureFailedExecutionRequest fields (exact, no others exist): execution: AttemptKey, contract_version_id: str
+- Cardinality enum values: 'one', 'many'; Python member names were not available in models context.
+- Carriage enum values: 'value', 'file'; Python member names were not available in models context.
+- ComposeFlowVersionRequest fields (exact, no others exist): flow_id: str, purpose: str | None, inputs: tuple[Port, ...], outputs: tuple[Port, ...], nodes: tuple[FlowNode, ...], edges: tuple[FlowEdge, ...], constants: tuple[RequestConstant, ...]
+- ComposedFlowVersion fields (exact, no others exist): flow_version: FlowVersion, flow: Flow | None, proof: ProofResult
+- ConstantInput fields (exact, no others exist): to_node: str, to_port: str, value_schema: str, canonical_json: bytes, disclosure_class: DisclosureClass
+- ContractVersion fields (exact, no others exist): contract_version_id: str, slot_id: str, inputs: tuple[Port, ...], outputs: tuple[Port, ...], resource_bounds: ResourceBounds, issued_by: Actor, issued_at: KernelInstant
+- ContractVersionHistory fields (exact, no others exist): contract_version: ContractVersion, corpus_digest: str, implementations: tuple[ImplementationHistory, ...], serving_activation: Activation | None
+- ContractVersionsOfSlot fields (exact, no others exist): query_kind: Literal['contract_versions_of_slot'], slot_id: str
+- CorpusOfContractVersion fields (exact, no others exist): query_kind: Literal['corpus_of_contract_version'], contract_version_id: str
+- DecideEffectApprovalRequest fields (exact, no others exist): approval_id: str, decision: OwnerDecision
+- DescribedHeader fields (exact, no others exist): name: str, value: str | None
+- DescribedPart fields (exact, no others exist): name: str, filename: str | None, media_type: str, content_digest: str
+- DetailCode enum values: 'binding_stale', 'instance_not_selected', 'instance_address_missing', 'required_header_repeated', 'required_header_invalid', 'plain_http_not_allowed', 'credential_unresolved', 'input_not_placeable', 'redirect_not_followed', 'value_too_large', 'cleanup_failed', 'applied_outputs_unknown'; Python member names were not available in models context.
+- DetailLength fields (exact, no others exist): detail_kind: Literal['length'], length_bytes: int, disclosure_class: DisclosureClass
+- DetailText fields (exact, no others exist): detail_kind: Literal['text'], text: str
+- DisclosureClass enum values: 'open', 'business_confidential', 'personal_data'; Python member names were not available in models context.
+- EdgeGuard fields (exact, no others exist): guard_port: str, guard_value: str
+- EffectApproval fields (exact, no others exist): approval_id: str, run_id: str, node_id: str, map_index: int | None, binding_id: str, attempt_number: int, input_digests: tuple[str, ...], request_digest: str, preview: ApprovalPreview, status: ApprovalStatus, requested_at: KernelInstant, decided_by: Actor | None, decided_at: KernelInstant | None
+- EffectAttempt fields (exact, no others exist): run_id: str, node_id: str, map_index: int | None, attempt_number: int, binding_id: str, inputs: tuple[PortRef, ...], idempotency_key: str | None, authority: Authority, status: AttemptStatus, recorded_at: KernelInstant, concluded_at: KernelInstant | None, resolved_by: Actor | None
+- EffectClass enum values: 'read', 'draft-write', 'state-transition', 'external-effect', 'destructive'; Python member names were not available in models context.
+- ElementKey fields (exact, no others exist): run_id: str, node_id: str, map_index: int | None
+- EmptyCorpusRefusal fields (exact, no others exist): reason_kind: Literal['empty_corpus']
+- EqualsFilter fields (exact, no others exist): filter_kind: Literal['equals'], field: FilterField, value: str
+- Executed: imported runtime symbol; no local surface details available.
+- ExecutedBinding fields (exact, no others exist): executed_kind: Literal['binding'], binding_id: str
+- ExecutedImplementation fields (exact, no others exist): executed_kind: Literal['implementation'], implementation_id: str
+- ExecutionsOfElement fields (exact, no others exist): query_kind: Literal['executions_of_element'], element: ElementKey
+- ExecutionsOfRun fields (exact, no others exist): query_kind: Literal['executions_of_run'], run_id: str
+- FailingCaseRefusal fields (exact, no others exist): reason_kind: Literal['failing_case'], trial_case_id: str, outcome: TrialOutcome
+- FileFacts fields (exact, no others exist): content_digest: str, size_bytes: int, media_type: str
+- FileFactsRef fields (exact, no others exist): ref_kind: Literal['file_facts'], port: str, files: tuple[FileFacts, ...], disclosure_class: DisclosureClass
+- FileListPayload fields (exact, no others exist): payload_kind: Literal['file_list'], port: str, contents: tuple[bytes, ...]
+- FilePayload fields (exact, no others exist): payload_kind: Literal['file'], port: str, content: bytes
+- FilterField enum values: 'slot_id', 'contract_version_id', 'implementation_id', 'trial_case_id', 'status', 'service_id', 'flow_id', 'flow_version_id', 'run_id', 'executed_implementation', 'executed_binding'; Python member names were not available in models context.
+- FixtureFileContent fields (exact, no others exist): value: StoredValue, content: bytes
+- Flow fields (exact, no others exist): flow_id: str, purpose: str, created_by: Actor, created_at: KernelInstant
+- FlowActivation fields (exact, no others exist): store_position: int, flow_version_id: str, highest_effect_class: EffectClass, activated_by: Actor, activated_at: KernelInstant
+- FlowAnswer fields (exact, no others exist): flow: Flow, active_version: ShownFlowVersion | None, activation: FlowActivation | None
+- FlowConstant fields (exact, no others exist): to_node: str, to_port: str, value: str
+- FlowEdge fields (exact, no others exist): from_node: str, from_port: str, to_node: str, to_port: str, guard: EdgeGuard | None
+- FlowEdgeKey fields (exact, no others exist): from_node: str, from_port: str, to_node: str, to_port: str
+- FlowNode fields (exact, no others exist): node_id: str, kind: NodeKind, contract_version_id: str | None, binding_id: str | None, map_over: str | None
+- FlowVersion fields (exact, no others exist): flow_version_id: str, flow_id: str, inputs: tuple[Port, ...], outputs: tuple[Port, ...], nodes: tuple[FlowNode, ...], edges: tuple[FlowEdge, ...], constants: tuple[FlowConstant, ...], authored_by: Actor, authored_at: KernelInstant
+- GetBindingRequest fields (exact, no others exist): binding_id: str
+- GetContractVersionRequest fields (exact, no others exist): contract_version_id: str
+- GetFlowRequest fields (exact, no others exist): flow_id: str
+- GetFlowVersionRequest fields (exact, no others exist): flow_version_id: str
+- GetImplementationRequest fields (exact, no others exist): implementation_id: str
+- GetRepairViewRequest fields (exact, no others exist): slot_id: str, page_size: int | None, continuation_token: str | None
+- GetRunRequest fields (exact, no others exist): run_id: str
+- GetSlotRequest fields (exact, no others exist): slot_id: str
+- GrantAuthority fields (exact, no others exist): authority_kind: Literal['grant'], grant_id: str
+- GrantStandingApprovalRequest fields (exact, no others exist): flow_id: str, node_id: str
+- GrantStatus enum values: 'active', 'revoked'; Python member names were not available in models context.
+- HttpMethod enum values: 'GET', 'POST', 'PUT', 'PATCH', 'DELETE'; Python member names were not available in models context.
+- Implementation fields (exact, no others exist): implementation_id: str, contract_version_id: str, code: str, submitted_by: Actor, submitted_at: KernelInstant
+- ImplementationHistory fields (exact, no others exist): implementation_id: str, submitted_by: Actor, submitted_at: KernelInstant, verdicts: tuple[AdmissionVerdict, ...], admitted_over_current_corpus: bool
+- ImplementationRead fields (exact, no others exist): implementation: Implementation, contract_version: ContractVersion
+- ImplementationsOfContractVersion fields (exact, no others exist): query_kind: Literal['implementations_of_contract_version'], contract_version_id: str
+- InSetFilter fields (exact, no others exist): filter_kind: Literal['in_set'], field: FilterField, values: tuple[str, ...]
+- Installation fields (exact, no others exist): data_directory: str, manifest_location: str, manifest_revision: str, service_instances: tuple[ServiceInstanceSelection, ...], service_credentials: tuple[ServiceCredential, ...], owner_token: str, agent_tokens: tuple[AgentToken, ...], mcp_listen_address: str
+- IssueContractVersionRequest fields (exact, no others exist): slot_id: str, purpose: str | None, inputs: tuple[Port, ...], outputs: tuple[Port, ...], resource_bounds: ResourceBoundsRequest
+- IssuedContractVersion fields (exact, no others exist): contract_version: ContractVersion, slot: Slot | None
+- JsonBodyDescription fields (exact, no others exist): body_kind: Literal['json'], json_text: str
+- JsonPayload fields (exact, no others exist): payload_kind: Literal['json'], port: str, canonical_json: bytes
+- KernelInstant fields (exact, no others exist): epoch_us: int
+- LatestActivationOfContractVersion fields (exact, no others exist): query_kind: Literal['latest_activation_of_contract_version'], contract_version_id: str
+- LatestActivationOfFlow fields (exact, no others exist): query_kind: Literal['latest_activation_of_flow'], flow_id: str
+- ListRecordsRequest fields (exact, no others exist): record_type: RecordType, record_filter: RecordFilter | None, page_size: int | None, continuation_token: str | None
+- MissingOutput fields (exact, no others exist): output_kind: Literal['missing'], port: str, reason: OutputReason
+- MultipartBodyDescription fields (exact, no others exist): body_kind: Literal['multipart'], parts: tuple[DescribedPart, ...]
+- NodeExecution fields (exact, no others exist): run_id: str, node_id: str, map_index: int | None, attempt_number: int, executed: Executed | None, inputs: tuple[PortRef, ...], outputs: tuple[PortRef, ...], status: NodeExecutionStatus, detail_code: DetailCode | None, failure_detail: str | None, resources_used: ResourceUsage | None, started_at: KernelInstant, ended_at: KernelInstant
+- NodeExecutionStatus enum values: 'succeeded', 'contract_violation', 'sandbox_violation', 'timeout', 'resource_exhausted', 'crashed', 'refused_by_owner', 'operation_refused', 'operation_failed', 'service_unreachable', 'outcome_unknown', 'skipped_by_guard', 'upstream_failed'; Python member names were not available in models context.
+- NodeKind enum values: 'function', 'operation'; Python member names were not available in models context.
+- OperationBinding fields (exact, no others exist): binding_id: str, service_id: str, operation_name: str, record_digest: str, effect_class: EffectClass, idempotency_key_fields: tuple[str, ...], inputs: tuple[Port, ...], outputs: tuple[Port, ...], status: BindingStatus, proposed_by: Actor, proposed_at: KernelInstant, accepted_by: Actor | None, accepted_at: KernelInstant | None
+- OutputReason enum values: 'skipped_by_guard', 'not_produced'; Python member names were not available in models context.
+- OwnerDecision enum values: 'approve', 'refuse'; Python member names were not available in models context.
+- PinnedImplementation fields (exact, no others exist): node_id: str, implementation_id: str
+- Port fields (exact, no others exist): name: str, direction: PortDirection, value_schema: str, carriage: Carriage, media_type: str | None, cardinality: Cardinality, disclosure_class: DisclosureClass | None
+- PortDirection enum values: 'input', 'output'; Python member names were not available in models context.
+- PortPayload: imported runtime symbol; no local surface details available.
+- PortRef: imported runtime symbol; no local surface details available.
+- ProducedOutput fields (exact, no others exist): output_kind: Literal['produced'], port: str, value_id: str
+- ProofFailure fields (exact, no others exist): phase: ProofPhase, node_id: str | None, port: str | None, edge: FlowEdgeKey | None, reason: str
+- ProofPhase enum values: 'nodes', 'constants', 'edges', 'guards', 'cardinality', 'fan_in', 'cycles', 'disclosure', 'reach'; Python member names were not available in models context.
+- ProofResult fields (exact, no others exist): flow_version_id: str, proven: bool, failure: ProofFailure | None, highest_effect_class: EffectClass | None
+- ProposeBindingRequest fields (exact, no others exist): service_id: str, operation_name: str, inputs: tuple[Port, ...], outputs: tuple[Port, ...]
+- ProveFlowVersionRequest fields (exact, no others exist): flow_version_id: str
+- ReadFixtureFileRequest fields (exact, no others exist): value_id: str
+- ReadSpooledFileRequest fields (exact, no others exist): file: SpooledFileKey
+- RecordFilter: imported runtime symbol; no local surface details available.
+- RecordPage fields (exact, no others exist): records: RecordSet, continuation_token: str | None
+- RecordPageAnswer fields (exact, no others exist): record_type: RecordType, records: ShownRecords, continuation_token: str | None
+- RecordQuery: imported runtime symbol; no local surface details available.
+- RecordSet fields (exact, no others exist): slots: tuple[Slot, ...], contract_versions: tuple[ContractVersion, ...], implementations: tuple[Implementation, ...], trial_cases: tuple[TrialCase, ...], trial_executions: tuple[TrialExecution, ...], admission_verdicts: tuple[AdmissionVerdict, ...], activations: tuple[Activation, ...], bindings: tuple[OperationBinding, ...], flows: tuple[Flow, ...], flow_versions: tuple[FlowVersion, ...], flow_activations: tuple[FlowActivation, ...], runs: tuple[Run, ...], node_executions: tuple[NodeExecution, ...], stored_values: tuple[StoredValue, ...], spooled_files: tuple[SpooledFile, ...], approvals: tuple[EffectApproval, ...], grants: tuple[StandingGrant, ...], effect_attempts: tuple[EffectAttempt, ...]
+- RecordType enum values: 'slot', 'contract_version', 'implementation', 'trial_case', 'trial_execution', 'admission_verdict', 'activation', 'binding', 'flow', 'flow_version', 'flow_activation', 'run', 'node_execution', 'stored_value', 'spooled_file', 'approval', 'grant', 'effect_attempt'; Python member names were not available in models context.
+- RecordsByAttempt fields (exact, no others exist): query_kind: Literal['by_attempt'], record_type: RecordType, attempts: tuple[AttemptKey, ...]
+- RecordsById fields (exact, no others exist): query_kind: Literal['by_id'], record_type: RecordType, record_ids: tuple[str, ...]
+- RecordsByPosition fields (exact, no others exist): query_kind: Literal['by_position'], record_type: RecordType, store_positions: tuple[int, ...]
+- RefusalAnswer fields (exact, no others exist): code: RefusalCode, reason: str
+- RefusalCode enum values: 'unauthorized', 'invalid_request', 'not_permitted', 'unknown_reference', 'refused', 'internal_error'; Python member names were not available in models context.
+- ReleaseRunRequest fields (exact, no others exist): run_id: str
+- RepairView fields (exact, no others exist): slot: SlotHistory, contract_version: ContractVersion, corpus: tuple[ShownTrialCase, ...], implementation: ShownImplementation | None, trial_executions: tuple[ShownTrialExecution, ...], recent_executions: tuple[ShownNodeExecution, ...], continuation_token: str | None
+- RequestBodyDescription: imported runtime symbol; no local surface details available.
+- RequestConstant fields (exact, no others exist): to_node: str, to_port: str, value_schema: str, json_text: str, disclosure_class: DisclosureClass
+- RequestDescription fields (exact, no others exist): method: HttpMethod, url: str, headers: tuple[DescribedHeader, ...], body: RequestBodyDescription | None
+- RequestFile fields (exact, no others exist): payload_kind: Literal['file'], port: str, content_base64: str
+- RequestFileList fields (exact, no others exist): payload_kind: Literal['file_list'], port: str, contents_base64: tuple[str, ...]
+- RequestJsonValue fields (exact, no others exist): payload_kind: Literal['json'], port: str, json_text: str
+- RequestPayload: imported runtime symbol; no local surface details available.
+- ResolveUnknownOutcomeRequest fields (exact, no others exist): attempt: AttemptKey, resolution: AttemptResolution
+- ResourceBounds fields (exact, no others exist): wall_time_ms: int, memory_bytes: int, output_bytes: int, process_count: int
+- ResourceBoundsRequest fields (exact, no others exist): wall_time_ms: int | None, memory_bytes: int | None, output_bytes: int | None, process_count: int | None
+- ResourceUsage fields (exact, no others exist): wall_time_ms: int, memory_bytes: int, output_bytes: int
+- ResumeRunRequest fields (exact, no others exist): run_id: str
+- Resumption fields (exact, no others exist): resumed_by: Actor, resumed_at: KernelInstant
+- RevokeStandingApprovalRequest fields (exact, no others exist): grant_id: str
+- RollBackSlotRequest fields (exact, no others exist): slot_id: str, implementation_id: str
+- Run fields (exact, no others exist): run_id: str, flow_version_id: str, pinned_implementations: tuple[PinnedImplementation, ...], inputs: tuple[PortRef, ...], outputs: tuple[PortRef, ...], status: RunStatus, cancelled_by: Actor | None, waiting: tuple[WaitingPoint, ...], started_by: Actor, started_at: KernelInstant, ended_at: KernelInstant | None, resumptions: tuple[Resumption, ...], released_by: Actor | None, released_at: KernelInstant | None
+- RunAnswer fields (exact, no others exist): run_id: str, flow_version_id: str, status: RunStatus, started_by: Actor, started_at: KernelInstant, ended_at: KernelInstant | None, outputs: tuple[RunOutput, ...], waiting: tuple[RunWait, ...], cancelled_by: Actor | None, released_by: Actor | None, released_at: KernelInstant | None
+- RunOutput: imported runtime symbol; no local surface details available.
+- RunStatus enum values: 'running', 'awaiting_approval', 'pending', 'succeeded', 'failed', 'refused', 'cancelled'; Python member names were not available in models context.
+- RunWait fields (exact, no others exist): node_id: str, map_index: int | None, reason: WaitReason, approval_id: str | None
+- RunsByStatus fields (exact, no others exist): query_kind: Literal['runs_by_status'], statuses: tuple[RunStatus, ...]
+- ServiceCredential fields (exact, no others exist): service_id: str, header_name: str, secret_file: str
+- ServiceInstanceSelection fields (exact, no others exist): service_id: str, instance_name: str
+- ShownAddedTrialCase fields (exact, no others exist): trial_case: ShownTrialCase, corpus_position: int
+- ShownApproval fields (exact, no others exist): approval_id: str, run_id: str, node_id: str, map_index: int | None, binding_id: str, attempt_number: int, input_digests: tuple[str, ...], request_digest: str, preview: ShownApprovalPreview, status: ApprovalStatus, requested_at: KernelInstant, decided_by: Actor | None, decided_at: KernelInstant | None
+- ShownApprovalPreview fields (exact, no others exist): service_id: str, operation_name: str, effect_class: EffectClass, request: RequestDescription | None, inputs: tuple[ShownPort, ...]
+- ShownComposedFlowVersion fields (exact, no others exist): flow_version: ShownFlowVersion, flow: Flow | None, proof: ProofResult
+- ShownConstant fields (exact, no others exist): to_node: str, to_port: str, value: ShownItem
+- ShownContent fields (exact, no others exist): shown_kind: Literal['content'], value_id: str, json_text: str, disclosure_class: DisclosureClass
+- ShownEffectAttempt fields (exact, no others exist): run_id: str, node_id: str, map_index: int | None, attempt_number: int, binding_id: str, inputs: tuple[ShownPort, ...], idempotency_key: str | None, authority: Authority, status: AttemptStatus, recorded_at: KernelInstant, concluded_at: KernelInstant | None, resolved_by: Actor | None
+- ShownFailureDetail: imported runtime symbol; no local surface details available.
+- ShownFile fields (exact, no others exist): shown_kind: Literal['file'], content_digest: str, size_bytes: int, media_type: str, disclosure_class: DisclosureClass, spooled_file: SpooledFileKey | None, value_id: str | None
+- ShownFileDigest fields (exact, no others exist): shown_kind: Literal['file_digest'], content_digest: str, disclosure_class: DisclosureClass
+- ShownFlowVersion fields (exact, no others exist): flow_version_id: str, flow_id: str, inputs: tuple[Port, ...], outputs: tuple[Port, ...], nodes: tuple[FlowNode, ...], edges: tuple[FlowEdge, ...], constants: tuple[ShownConstant, ...], authored_by: Actor, authored_at: KernelInstant
+- ShownImplementation fields (exact, no others exist): implementation_id: str, contract_version_id: str, code: str | None, submitted_by: Actor, submitted_at: KernelInstant
+- ShownImplementationRead fields (exact, no others exist): implementation: ShownImplementation, contract_version: ContractVersion
+- ShownItem: imported runtime symbol; no local surface details available.
+- ShownNodeExecution fields (exact, no others exist): run_id: str, node_id: str, map_index: int | None, attempt_number: int, executed: Executed | None, inputs: tuple[ShownPort, ...], outputs: tuple[ShownPort, ...], status: NodeExecutionStatus, detail_code: DetailCode | None, failure_detail: ShownFailureDetail | None, resources_used: ResourceUsage | None, started_at: KernelInstant, ended_at: KernelInstant
+- ShownPort fields (exact, no others exist): port: str, items: tuple[ShownItem, ...]
+- ShownProducedOutput fields (exact, no others exist): output_kind: Literal['produced'], port: str, value: ShownItem
+- ShownRecords fields (exact, no others exist): slots: tuple[Slot, ...], flows: tuple[Flow, ...], contract_versions: tuple[ContractVersion, ...], implementations: tuple[ShownImplementation, ...], trial_cases: tuple[ShownTrialCase, ...], trial_executions: tuple[ShownTrialExecution, ...], admission_verdicts: tuple[AdmissionVerdict, ...], bindings: tuple[OperationBinding, ...], flow_versions: tuple[ShownFlowVersion, ...], runs: tuple[ShownRun, ...], node_executions: tuple[ShownNodeExecution, ...], approvals: tuple[ShownApproval, ...], grants: tuple[StandingGrant, ...], effect_attempts: tuple[ShownEffectAttempt, ...]
+- ShownRun fields (exact, no others exist): run_id: str, flow_version_id: str, status: RunStatus, started_by: Actor, started_at: KernelInstant, ended_at: KernelInstant | None, outputs: tuple[ShownRunOutput, ...], waiting: tuple[RunWait, ...], cancelled_by: Actor | None, released_by: Actor | None, released_at: KernelInstant | None
+- ShownRunOutput: imported runtime symbol; no local surface details available.
+- ShownSubmission fields (exact, no others exist): implementation: ShownImplementation, verdict: AdmissionVerdict, activation: Activation | None
+- ShownTrialCase fields (exact, no others exist): trial_case_id: str, contract_version_id: str, inputs: tuple[ShownPort, ...], expected_outputs: tuple[ShownPort, ...] | None, origin: TrialCaseOrigin, captured_from: AttemptKey | None, added_by: Actor, added_at: KernelInstant
+- ShownTrialExecution fields (exact, no others exist): trial_execution_id: str, implementation_id: str, trial_case_id: str, outcome: TrialOutcome, outputs: tuple[ShownPort, ...] | None, resources_used: ResourceUsage, detail_code: DetailCode | None, failure_detail: ShownFailureDetail | None, executed_at: KernelInstant
+- ShownValueDigest fields (exact, no others exist): shown_kind: Literal['value_digest'], value_digest: str, disclosure_class: DisclosureClass
+- Slot fields (exact, no others exist): slot_id: str, purpose: str, created_by: Actor, created_at: KernelInstant
+- SlotHistory fields (exact, no others exist): slot: Slot, current_contract_version_id: str, contract_versions: tuple[ContractVersionHistory, ...]
+- SpooledFile fields (exact, no others exist): run_id: str, producer_node_id: str, map_index: int | None, attempt_number: int, producer_port: str, list_index: int | None, content_digest: str, size_bytes: int, media_type: str, disclosure_class: DisclosureClass
+- SpooledFileContent fields (exact, no others exist): file: SpooledFile, content: bytes
+- SpooledFileKey fields (exact, no others exist): run_id: str, producer_node_id: str, map_index: int | None, attempt_number: int, producer_port: str, list_index: int | None
+- SpooledFileSource fields (exact, no others exist): source_kind: Literal['spooled_file'], file: SpooledFileKey
+- SpooledFilesByKey fields (exact, no others exist): query_kind: Literal['spooled_files'], files: tuple[SpooledFileKey, ...]
+- SpooledFilesRef fields (exact, no others exist): ref_kind: Literal['spooled_files'], port: str, files: tuple[SpooledFileKey, ...], disclosure_class: DisclosureClass
+- StandingGrant fields (exact, no others exist): grant_id: str, flow_version_id: str, node_id: str, status: GrantStatus, granted_by: Actor, granted_at: KernelInstant, revoked_by: Actor | None, revoked_at: KernelInstant | None
+- StartRunRequest fields (exact, no others exist): flow_id: str, inputs: tuple[RequestJsonValue, ...]
+- StoreOpened fields (exact, no others exist): data_directory: str, temporary_files_removed: int
+- StoredValue fields (exact, no others exist): value_id: str, value_digest: str, carriage: Carriage, media_type: str | None, value_schema: str, disclosure_class: DisclosureClass, size_bytes: int
+- StoredValueSource fields (exact, no others exist): source_kind: Literal['stored_value'], value_id: str
+- StoredValuesRef fields (exact, no others exist): ref_kind: Literal['stored_values'], port: str, value_id: str
+- SubmissionResult fields (exact, no others exist): implementation: Implementation, verdict: AdmissionVerdict, activation: Activation | None
+- SubmitImplementationRequest fields (exact, no others exist): contract_version_id: str, code: str
+- TokenList fields (exact, no others exist): owner_token: str, agent_tokens: tuple[AgentToken, ...]
+- TrialCase fields (exact, no others exist): trial_case_id: str, contract_version_id: str, inputs: tuple[PortRef, ...], expected_outputs: tuple[PortRef, ...] | None, origin: TrialCaseOrigin, captured_from: AttemptKey | None, added_by: Actor, added_at: KernelInstant
+- TrialCaseOrigin enum values: 'authored', 'captured'; Python member names were not available in models context.
+- TrialExecution fields (exact, no others exist): trial_execution_id: str, implementation_id: str, trial_case_id: str, outcome: TrialOutcome, outputs: tuple[PortRef, ...] | None, resources_used: ResourceUsage, detail_code: DetailCode | None, failure_detail: str | None, executed_at: KernelInstant, executed_by: Actor
+- TrialExecutionsOnCorpus fields (exact, no others exist): query_kind: Literal['trial_executions_on_corpus'], implementation_id: str
+- TrialOutcome enum values: 'passed', 'output_mismatch', 'contract_violation', 'sandbox_violation', 'timeout', 'resource_exhausted', 'crashed'; Python member names were not available in models context.
+- TryImplementationRequest fields (exact, no others exist): implementation_id: str, trial_case_ids: tuple[str, ...]
+- VerdictOverCorpus fields (exact, no others exist): query_kind: Literal['verdict_over_corpus'], implementation_id: str, corpus_digest: str
+- VerdictsOfImplementation fields (exact, no others exist): query_kind: Literal['verdicts_of_implementation'], implementation_id: str
+- VersionsOfFlow fields (exact, no others exist): query_kind: Literal['versions_of_flow'], flow_id: str
+- WaitReason enum values: 'owner_approval', 'service_unreachable', 'outcome_unknown'; Python member names were not available in models context.
+- WaitingPoint fields (exact, no others exist): node_id: str, map_index: int | None, reason: WaitReason
+
+MODULE-LOCAL EXCEPTION EXPORTS:
+If any exception class is listed here, define it in this file at top level.
+Do not import these classes from core.errors or any other module.
+No module-local exception exports required.
+
+FUNCTION ORDER (define in this order):
+answer_request, authenticate_token, handle_accept_binding, handle_activate_flow_version, handle_add_trial_case, handle_cancel_run, handle_capture_failed_execution, handle_compose_flow_version, handle_decide_effect_approval, handle_get_binding, handle_get_contract_version, handle_get_flow, handle_get_flow_version, handle_get_implementation, handle_get_repair_view, handle_get_run, handle_get_slot, handle_grant_standing_approval, handle_issue_contract_version, handle_list_records, handle_propose_binding, handle_prove_flow_version, handle_read_fixture_file, handle_read_spooled_file, handle_release_run, handle_resolve_unknown_outcome, handle_resume_run, handle_revoke_standing_approval, handle_roll_back_slot, handle_start_run, handle_submit_implementation, handle_try_implementation, run_start_sequence, serve_kernel, show_port_refs, translate_failure
+
+Generate the complete surface.py file.
+Every owned function listed above must be implemented exactly once at module top level.
+Define every class and method listed in OWNED CLASSES REQUIRED in this file.
+For every local binding in CONCRETE IMPLEMENTATION OBLIGATIONS, inherit the declared interface and implement its complete method surface with non-placeholder bodies.
+If this is the models module, emit every enum/model in MODEL DEFINITIONS exactly once.
+If this is not the models module, do not emit Pydantic model classes, enums, create_model calls, or local model schema shadows.
+Do not invent model fields or enum values not present in the imported runtime models.
+Use only the IMPORTS listed above plus required standard library imports.
+Never import from a top-level models module or models.*; runtime models live in cabinet_kernel.models only when listed in IMPORTS.
+`models.<name>` in notes is a canonical spec data address, not an importable Python module.
+When one owner module provides a function and cabinet_kernel.models provides a DTO with a similar name, split the imports by source exactly as listed in IMPORTS.
+Construct imported runtime models only with the fields listed in IMPORTED MODEL SURFACE; models are frozen and forbid extra fields, so an invented keyword argument fails at runtime.
+Read from a model value only the fields listed for its type; never use getattr(value, name, default) to probe for a field that is not declared.
+Never assign to an attribute of a model value (models are frozen): derive a changed value with value.model_copy(update={...}) or construct a new instance.
+Define every class listed in MODULE-LOCAL EXCEPTION EXPORTS in this file.
