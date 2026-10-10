@@ -7,11 +7,13 @@ smaller than what it hides. Ownership of each decision is recorded in
 
 The kernel is one process with one writer (K-17), so modules are not services:
 they are the parts of one program, and only `store` touches the database and the
-data directory. The dependency direction is fixed, from the bottom up:
+data directory — through `store_persistence`, its companion for the rows of the
+database, which only `store` calls (below). The dependency direction is fixed,
+from the bottom up:
 
 ```text
 models, data_provider
-canonical_values, clock
+canonical_values, clock, store_persistence
 store, installation
 sandbox, service_invoker
 functions, bindings
@@ -416,7 +418,8 @@ monotonic_deadline
 
 ### Owns
 
-A18: the data directory and the one SQLite database, the exclusive start lock,
+A18: the data directory and the one SQLite database — the one connection, opened
+at start, and the one transaction of every change — the exclusive start lock,
 the content-addressed area of value bytes and file fixtures, the per-run spool,
 publishing a file only complete and digest-checked, refusal of symbolic links,
 start-time removal of temporary files, and removal of the spools `runs` names.
@@ -429,7 +432,7 @@ deleted.
 
 ### Knows
 
-`models`, `canonical_values`, `data_provider`.
+`models`, `canonical_values`, `data_provider`, `store_persistence`.
 
 ### Must not own
 
@@ -440,7 +443,8 @@ may change what, when a run's spool is emptied or released (that is
 
 ### Hides
 
-SQLite, the schema, transactions, file layout under the data directory, atomic
+The SQLite connection and its transactions, which record goes into which row
+and in what order rows are read, file layout under the data directory, atomic
 rename, opening without following links.
 
 ### Candidate public capabilities
@@ -463,11 +467,65 @@ the run's spool; the caller names the record, never a place (owner,
 2026-10-03, raised by State 4 round 3). A spooled file whose run no longer
 holds its spool is refused.
 
+Every read and write of a row goes through one typed record port,
+`StoreRepository`: an interface whose operations are the typed row operations
+of the closed record types — load by the complete key, find by store position,
+list by an equality filter in store order, insert, and, for the five records
+whose lifecycle fields change (OperationBinding, Run, EffectApproval,
+StandingGrant, EffectAttempt), update of the row in place — and nothing else.
+It accepts no table name, SQL fragment, untyped payload or path. Its one
+implementation is `SqliteStoreRepository`, owned by `store_persistence` and
+lowered from `persistence_backend/v3` (`implementation_obligations`,
+disposition `local`). `store` builds it over its own connection inside the
+transaction it opened, and keeps everything a row operation does not say:
+opening, committing and rolling back the transaction, the order of store
+positions, attempt numbers and minted identities, which rows a relation or a
+page reads and how they combine, the files and their durability, and the lock.
+
 ### Depth assessment
 
 - kind: deep
 - hidden mechanism: one writer whose every change is whole or absent, and one
   order of records nobody else can produce
+
+## `store_persistence`
+
+### Owns
+
+Only the deterministic SQLite repository class and schema function lowered from
+`persistence_backend/v3` for the store's closed tables: one table per record
+type of `store.read_records` and one for the store-position counter. A row is
+the store's envelope of one record: its store position, its record type, the
+fields a lookup filters on, and the record itself, whole.
+
+### Knows
+
+`models`.
+
+### Must not own
+
+The connection or its transaction, store positions, attempt numbers, minted
+identities, which rows a relation or a page reads, any file, or any rule of
+another module — all of these are `store`'s. It is part of the store module of
+A18: only `store` calls it, inside the transaction `store` opened, so no other
+module touches the database through it.
+
+### Hides
+
+SQLite table creation, row codecs and the typed insert, load, list and update
+statements.
+
+### Candidate public capabilities
+
+```text
+SqliteStoreRepository
+create_store_schema
+```
+
+### Depth assessment
+
+- kind: deep
+- hidden mechanism: version-bound SQLite lowering from persistence_backend/v3
 
 ## `installation`
 
