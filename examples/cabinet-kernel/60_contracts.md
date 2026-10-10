@@ -627,6 +627,16 @@ the null a request may carry (the 8.1 remark "Published inputSchema and null",
 decided); an end of stream is a transport failure only before the response is
 complete — a body delimited by the connection's close is complete at it.
 
+### State 7 round-07 (2026-10-10)
+
+Six more, by wording: lifecycle fields are those the model declares (a
+resolution sets status and resolved_by and records no time); attempt_number
+comes from the change, the element's next number the caller read and spooled
+under; a failed change's unnamed spool file stays until replaced or its run's
+spool is removed, and recover_running_runs removes ended runs' spools
+(A18 rule 4); the general per-element progress change excepts cleanup_failed;
+ended_at is the draft's; a waiting operation element is not reached again.
+
 ## Texts of earlier states changed by State 6
 
 - States 3, 4 and 5 (2026-10-10, decision 26): `clock`'s capabilities are
