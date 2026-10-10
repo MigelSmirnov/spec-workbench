@@ -55,16 +55,24 @@ or redeployment.
 - **Agent-written code** — untrusted forever; runs only inside the sandbox.
 - **Outside senders** (employee, supplier, client) — never reach the kernel.
   Their material stays at a microservice's own intake until the owner or an agent
-  submits it. Who sent it stays in that service's intake record and reaches a flow
-  only as data; the kernel records the owner or agent who submitted it.
+  submits it, which is running a flow (`run a flow`) whose operation node takes
+  it from that service — there is no separate submission action. Who sent it
+  stays in that service's intake record and reaches a flow only as data; the
+  kernel records the owner or agent who started the run.
 - **Secrets** — service credentials and tokens live in the installation's
   protected configuration; the kernel never puts one into a function, a flow,
-  a trace or an answer. A service's own answer that echoes one verbatim is
-  withheld; one that carries it in another encoding cannot be recognised and
-  is protected by that answer's class (owner, 2026-10-07).
+  a trace or an answer. A service's own answer body that echoes one verbatim is
+  withheld from everyone, the owner included, and never used as an output; one
+  that carries it in another encoding, or inside a file the kernel only moves,
+  cannot be recognised and is protected by that answer's class (owner,
+  2026-10-07). "The owner receives every value" (K-14) is about personal data,
+  not about such a withheld body.
 - **Network surface** — one inbound channel, `mcp`, behind the host's reverse
-  proxy. Outbound, the kernel calls microservices over their HTTP APIs.
-  Brute-force protection is the proxy's, not the kernel's.
+  proxy. The proxy terminates TLS and is the only client of the kernel's
+  listener, whose address the installation names and which the host does not
+  expose otherwise; tokens therefore travel encrypted up to the proxy. Outbound,
+  the kernel calls microservices over their HTTP APIs. Brute-force protection is
+  the proxy's, not the kernel's.
 
 ## Primary actions
 
@@ -341,7 +349,9 @@ against the obligations of its notes, not only against gates of form.
     the recommendation.
 17. **Libraries in the sandbox** (2026-09-30): the Python standard library only.
     Photo processing is not a kernel function: the agent processes a photo itself,
-    outside the kernel, and the kernel moves the file between services. The
+    outside the kernel, with its own access to the service that holds the photo —
+    never through the kernel, which hands no caller a file — and the kernel moves
+    the file between services. The
     owner's answer.
 18. **What an approval covers** (2026-10-01, raised by State 2 round 17): the
     fully built request as the owner was shown it — method, URL, headers and
