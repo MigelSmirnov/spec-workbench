@@ -260,7 +260,10 @@ each agent's and the kernel's own are distinguishable in every record.
 
 An installation selects one manifest instance per service; no flow, run or agent
 chooses another. Effectful flows are rehearsed on an installation of disposable
-rigs.
+rigs: the owner runs a second kernel installation whose services select their
+`disposable_rig` instances, and runs the flow there as anywhere else. The
+rehearsal is the owner's practice, not a kernel step — no kernel requires,
+records or checks one, and activating a flow does not depend on it.
 
 State 2 reads "one" as "at most one": an installation may leave a service
 without an instance; that service is not invocable, and no binding for it can be
