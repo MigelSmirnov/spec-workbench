@@ -21,8 +21,9 @@ python tools/design_questions.py ask examples/<case> --state <N>
 python tools/design_questions.py status examples/<case> --state <N>
 ```
 
-`ask` gives the texts of States 0..N to several independent reviews (three by
-default) with the state's `question_scope` from `authoring_sequence.json`, then
+`ask` gives the texts of States 0..N (for State 7: one generated module's
+prompt, below) to several independent reviews (three by default) with the
+state's `question_scope` from `authoring_sequence.json`, then
 groups their open points into topics, and has every topic raised by two or more
 reviews judged (below). The round is kept under
 `examples/<case>/questions/state<N>/round-<k>/`: each review, and `summary.json`
@@ -128,7 +129,7 @@ like a gap. Closing what blocks is the work below; a non-blocking topic is
 recorded in the round and, for `later_state`, must reach that state's texts as
 a carried question.
 
-### A state of rules closes decision by decision
+### Every state closes unit by unit
 
 A review of a whole state of rules finds about fifty topics a round: on
 Cabinet Kernel State 2 (21 decisions), rounds 80–82 of 2026-10-06 each blocked
@@ -136,19 +137,36 @@ on two new topics, never repeated, half of them misreadings, each about a
 decision nobody had changed. Two clear rounds in a row over all of it are luck,
 and a one-line edit to one decision reopened all 21.
 
-So a state whose documents hold accepted decisions closes in units: one per
-decision (`## Accepted decision Axx` to the next level-2 heading), one per other
-level-2 section and per document preamble, and `context` — whether the earlier
-states' texts and this state agree. A round asks only about the units that are
-not closed: the reviewers still read every text, but each point names its
-unit, and a point about a closed unit is set aside (kept in the review, not
-grouped). A blocking topic keeps open only the units its points name; one that
-names none keeps every reviewed unit open. A unit is closed when the two latest
-rounds that reviewed it were clear for it on its current text; the state is
-closed when every unit is. Editing one decision reopens that decision; editing
-an earlier state reopens `context`. Rounds kept before units existed close no
-unit, so the first two rounds under this rule review everything. Decided by the
-owner 2026-10-06.
+So a state closes in units: one per accepted decision (`## Accepted decision
+Axx` to the next level-2 heading), one per other level-2 section and per
+document preamble, and `context` — whether the earlier states' texts and this
+state agree. A round asks only about the units that are not closed: the
+reviewers still read every text, but each point names its unit, and a point
+about a closed unit is set aside (kept in the review, not grouped). A blocking
+topic keeps open only the units its points name; one that names none keeps
+every reviewed unit open. A unit is closed when the two latest rounds that
+reviewed it were clear for it on its current text; the state is closed when
+every unit is. Editing one section reopens that section; editing an earlier
+state reopens `context`. Decided by the owner 2026-10-06 for State 2.
+
+Until 2026-10-10 only State 2 was cut so; the other states closed as one text,
+and any edit reopened all of it — Cabinet Kernel State 5 ran 107 rounds. Late
+decisions therefore went around the rounds: decision 26 rewrote States 3–5,
+nobody asked again, and the pipeline went on to assembly. Every state with a
+round is now cut into units (owner, 2026-10-10), so a late edit costs a round
+about what it changed, not a re-audit of the state.
+
+**A closure kept before units is carried.** A state closed as one text before
+this rule — its latest round closed it, or its two latest rounds were clear on
+the same documents — counts as closed unit by unit on the text it closed on.
+The round finds that text in the case's git history (the commit that kept the
+closing round first), cuts it into units and treats each as closed on its
+digest then; the first unit round records what it carried (`carried` in its
+summary), so later calls need no search. After a late edit only the edited
+units are open, and each is reviewed for its diff (below). A state that never
+closed, or whose closed text git no longer holds, carries nothing: its first
+two unit rounds review everything. A state already closing in units (State 2)
+needs no carrying.
 
 A unit that was closed and then edited is reviewed for its edit, not again
 whole: the round finds the text it closed on in the case's git history, gives
@@ -159,6 +177,58 @@ A18, and three reviewers given the whole decision raised new storage-hardening
 topics every round — corrupt databases, hard links, link races — none about the
 edit. A unit never closed, or whose closed text git no longer holds, is
 reviewed whole (owner, 2026-10-08).
+
+### State 7 is asked as the generator reads it
+
+The notes are not read as one text by anyone who generates: the Factory cuts
+one local specification per module and builds one prompt from it — the
+module's imports, contracts, the contracts and constants it may use, its
+models and its notes. The method was first measured that way: on Cabinet Flow
+the generator was given its own module prompt and asked to list every guess it
+would be forced to make, and named 86% of the decisions nobody had made
+(Factory `docs/CABINET_FLOW_SPEC_AUDIT_20260927.md`,
+`docs/cabinet_flow_pochemuchka_trial_20260927.json`, branch
+`agent/cabinet-flow-runtime-run`, commit `9641888`).
+
+So a State 7 round has one unit per **generated** module, and its text is the
+prompt the Factory builds for it: the Factory's own normalizer and slicer, then
+its `generate_agent.build_prompt` (`factory_slice_workbench.module_prompts`).
+A module the Factory emits without a model (`deterministic_emission_kind`:
+`models`, the data provider, the declared backends, table repositories) is not
+asked. Each review reads one module's prompt; its points are that module's;
+topics are grouped and judged per module, on that prompt. An edit to a note,
+an import, a contract or a model a module sees changes its prompt and reopens
+exactly that module, reviewed for the diff of its prompt; the prompts a round
+asked about are kept in its `prompts/` directory so the diff can be found.
+
+The prompts are built from the case's assembled `global_spec.json`: a round
+refuses when it does not hold the current design (run
+`design_spec_projection.py --apply` and propagate the notes first), and when no
+Factory is found (`SPEC_WORKBENCH_FACTORY_ROOT` or the sibling `code_factory`).
+It never closes a state it could not ask. On 2026-10-10 Cabinet Kernel
+decision 25 added a note allowing `surface` to import pydantic while its
+IMPORTS list held none; the contradiction stood in that one prompt, and Route
+B met it as `unknown_top_level_import`.
+
+State 6 is asked like States 0–5: its sections are units, the reviews read
+States 0–6, and its scope is the contracts' own — an argument with no source, a
+returned value with no consumer, a decision no contract owns, a contract that
+contradicts another.
+
+In States 6 and 7 a gap that quotes no passage blocks: those states are where
+such a gap must be answered, so there is nothing later to defer it to.
+
+### Closed on the current texts, before anything after State 5
+
+A round no one runs closes nothing, and until 2026-10-10 nothing asked for
+one: the sequencer went to assembly and admission said READY_TO_EXPORT while
+`status --state 3` said the texts had changed. Now, past State 5,
+`authoring.py next` first checks every state whose phase it has passed and that
+declares a `question_scope` and has a document; the earliest one not closed on
+its current texts becomes the step, blocked, with its open units and the `ask`
+command — with `--since` the ref it last closed at, when it did. Stage 9
+admission checks the same as `FA019`. A case with no round for a state is
+blocked too ("no question round yet"): that is the rule, not a migration gap.
 
 ## Closing a question
 
@@ -180,12 +250,13 @@ Ask first who uses what the question is about.
   state and is closed there; without this rule reviews descend forever into
   orders, encodings and formats.
 - **Clear round.** No judged topic blocks.
-- **Closure.** The two latest rounds are clear on the same texts, and the texts
-  have not changed since (`status` compares digests). One clear round can be
-  luck; two on the same texts show the questions have stopped mattering, not
-  merely changed. A topic raised by one review is closed or carried when cheap,
-  but does not hold the state open. Rounds kept before the judge existed keep
-  their rule: closed when no topic was raised by two reviews.
+- **Closure.** Every unit's two latest reviews are clear for it on the same
+  text, and that text has not changed since (`status` compares digests). One
+  clear round can be luck; two on the same texts show the questions have
+  stopped mattering, not merely changed. A topic raised by one review is
+  closed or carried when cheap, but does not hold the state open. Rounds kept
+  before the judge existed keep their rule: closed when no topic was raised by
+  two reviews.
 - **Reopened state.** When a closed state is edited, re-close it with
   `ask --since <git-ref where it was closed>`: the judge sees the change and
   sets aside, as `preexisting`, topics about passages the change did not touch.

@@ -162,6 +162,7 @@ def test_authoring_gate_advances_past_contracts_and_notes_to_the_witness_stop(tm
     # declare invariants nobody witnesses. The pipeline stops there, with a
     # hint on every finding, instead of advancing to assembly.
     monkeypatch.setattr(design_authoring_next, "_promoted_states_step", lambda sequence, project, text: None)
+    monkeypatch.setattr(design_authoring_next, "_question_gate", lambda *args: None)  # rounds: test_design_questions_gates.py
     report = design_authoring_next.next_step(_ready(tmp_path))
     assert report["phase"] == "decision_witness_resolution"
     assert report["blocked"] is True
@@ -175,6 +176,7 @@ def test_authoring_gate_returns_to_state6_when_contract_is_unresolved(tmp_path: 
     project = _project(tmp_path)
     _make_unresolved(project)
     monkeypatch.setattr(design_authoring_next, "_promoted_states_step", lambda sequence, project, text: None)
+    monkeypatch.setattr(design_authoring_next, "_question_gate", lambda *args: None)  # rounds: test_design_questions_gates.py
     report = design_authoring_next.next_step(project)
     assert report["phase"] == "state6_exact_contracts"
     assert report["router_allowed"] is False

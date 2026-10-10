@@ -17,6 +17,8 @@ from module_review_workbench import build_slice
 from external_contract_workbench import coverage as external_contract_coverage
 from notes_workbench.language import signature_parameters
 from factory_slice_workbench import probe as probe_factory_slices
+from questions_workbench import documents as question_documents
+from questions_workbench import service as question_rounds
 from interface_workbench import implementation_obligation_findings
 from interface_workbench.service import _annotation_mentions
 from spec_language_workbench import SpecLanguageError, verify_payload as verify_language_payload
@@ -842,6 +844,49 @@ def _factory_slices_check(
     )
 
 
+def _question_rounds_check(case_root: Path | None, factory_root: Path) -> AdmissionCheck:
+    """FA019: every state with a question round is closed on its current texts.
+
+    Cabinet Kernel decision 25 wrote a note that contradicted the IMPORTS of
+    the module it was cut into, and decision 26 rewrote States 3–5; no round
+    was asked about either, the assembly and every other check passed, and
+    Route B stopped twice. A state is closed only unit by unit on the texts
+    it has now (skills/spec-authoring/QUESTIONS.md); State 7 on the prompts
+    this Factory builds. A state with a document and no round blocks too.
+    """
+    if case_root is None:
+        return AdmissionCheck(
+            "FA019",
+            CHECK_NOT_APPLICABLE,
+            "Explicit --spec admission has no design texts to have asked about.",
+            {},
+        )
+    states: dict[str, Any] = {}
+    for state in question_documents.question_states():
+        if not any(found == state for found, _ in question_documents.design_documents(case_root, state)):
+            continue
+        status = question_rounds.status(case_root, state, factory_root)
+        states[f"state{state}"] = {
+            "closed": status["closed"],
+            "round": status.get("round"),
+            "reason": status["reason"],
+            "units": status.get("units"),
+            "open_units": status.get("open_units", []),
+            "closed_at": status.get("closed_at"),
+        }
+    still_open = {name: row for name, row in states.items() if not row["closed"]}
+    return AdmissionCheck(
+        "FA019",
+        CHECK_PASS if not still_open else CHECK_BLOCK,
+        "Every state with a question round is closed, unit by unit, on its current texts."
+        if not still_open
+        else "Question rounds are not closed on the current texts of "
+        + ", ".join(f"{name.replace('state', 'State ')} ({row['reason']})" for name, row in still_open.items())
+        + ".",
+        {"states": states, "open": sorted(still_open)},
+    )
+
+
 def _semantic_check(case_root: Path | None) -> AdmissionCheck:
     if case_root is None:
         return AdmissionCheck(
@@ -1047,6 +1092,7 @@ def check(
         validation_check,
         inspector_check,
         _factory_slices_check(factory_root, source, case_root, project),
+        _question_rounds_check(case_root, factory_root),
         _semantic_check(case_root),
         _target_check(factory_root, project, source, update_existing),
         _factory_toolchain_check(factory_root),

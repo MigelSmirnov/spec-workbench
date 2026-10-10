@@ -27,6 +27,8 @@ import design_stage6_contracts
 import design_stage6_data
 import design_trace
 from notes_workbench import gate as notes_gate
+from questions_workbench import documents as question_documents
+from questions_workbench import service as question_rounds
 from persistence_workbench import authoring as persistence_authoring
 from router_workbench import authoring as router_authoring
 from router_workbench.model import (
@@ -180,7 +182,51 @@ def next_step(project: Path, *, display_path: str | None = None) -> dict[str, An
     pending = _promoted_states_step(sequence, project, project_text)
     if pending is not None:
         return pending
-    return _post_state5_step(sequence, project, project_text)
+    step = _post_state5_step(sequence, project, project_text)
+    return _question_gate(sequence, project, project_text, step["phase"]) or step
+
+
+def _question_gate(sequence: dict[str, Any], project: Path, project_text: str, reached: str) -> dict[str, Any] | None:
+    """The first state whose question round is not closed on its current texts.
+
+    Once the chain is past State 5, every state with a question_scope whose own
+    phase the chain has passed, and that has a document, must be closed on the
+    texts it has now (QUESTIONS.md). A late edit — Cabinet Kernel decisions 25
+    and 26 rewrote States 3–7 after their rounds — reopens the units it touched,
+    and the chain stops at the earliest such state instead of assembling.
+    """
+    order = [phase["id"] for phase in sequence["phases"]]
+    reached_at = order.index(reached)
+    for phase in sequence["phases"]:
+        if not phase.get("question_scope") or order.index(phase["id"]) >= reached_at:
+            continue
+        state = int(phase["semantic_state"])
+        if not any(found == state for found, _ in question_documents.design_documents(project, state)):
+            continue
+        status = question_rounds.status(project, state)
+        if status["closed"]:
+            continue
+        since = status.get("closed_at")
+        command = [
+            "python", "tools/design_questions.py", "ask", project_text, "--state", str(state),
+            *(["--since", since] if since else []),
+        ]
+        return _result(
+            sequence=sequence, project=project, project_text=project_text,
+            phase=phase["id"], blocked=True,
+            reason=(f"State {state} is not closed by its question rounds on its current texts: {status['reason']}. "
+                    "Close it before anything after State 5 proceeds."),
+            summary={
+                "state": state,
+                "round": status.get("round"),
+                "units": status.get("units"),
+                "open_units": status.get("open_units", []),
+                "changed_units": status.get("changed_units", []),
+                "closed_at": since,
+            },
+            question_round=shlex.join(command),
+        )
+    return None
 
 
 def _promoted_states_step(sequence: dict[str, Any], project: Path, project_text: str) -> dict[str, Any] | None:

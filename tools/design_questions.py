@@ -11,8 +11,12 @@
 raised by two reviews are judged) and keeps it under
 examples/<case>/questions/state<N>/. `--since` reopens a state closed at that
 git ref: the judge sees the change and may set aside topics about passages the
-change did not touch. `status` exits 0 when the state is closed — two latest
-rounds clear on the same texts, unchanged since — and 1 otherwise.
+change did not touch. `status` exits 0 when the state is closed — every unit
+closed by its two latest reviews, clear on its current text — and 1 otherwise.
+
+State 7 is asked module by module on the prompts the Factory builds for the
+generated modules (`--factory-root`, default SPEC_WORKBENCH_FACTORY_ROOT or the
+sibling code_factory), from the case's assembled global_spec.json.
 The method is skills/spec-authoring/QUESTIONS.md.
 """
 from __future__ import annotations
@@ -65,23 +69,28 @@ def main(argv: list[str] | None = None) -> int:
     ask.add_argument("--model")
     ask.add_argument("--reasoning")
     ask.add_argument("--since", help="git ref at which a reopened state was closed")
+    ask.add_argument("--factory-root", type=Path, help="the Factory that builds the State 7 prompts")
     ask.add_argument("--json", action="store_true")
     stat = sub.add_parser("status")
     stat.add_argument("case", type=Path)
     stat.add_argument("--state", type=int, required=True)
+    stat.add_argument("--factory-root", type=Path, help="the Factory that builds the State 7 prompts")
     stat.add_argument("--json", action="store_true")
     args = parser.parse_args(argv)
     try:
         if args.command == "ask":
-            summary = service.ask_round(args.case, args.state, _provider(args), args.runs, args.since)
+            summary = service.ask_round(args.case, args.state, _provider(args), args.runs, args.since,
+                                        args.factory_root)
             print(json.dumps(summary, ensure_ascii=False, indent=2) if args.json else _human_round(summary))
             return 0 if summary["closed"] else 1
-        result = service.status(args.case, args.state)
+        result = service.status(args.case, args.state, args.factory_root)
         if args.json:
             print(json.dumps(result, ensure_ascii=False, indent=2))
         else:
             print(f"State {result['state']} questions: closed={str(result['closed']).lower()} "
                   f"round={result['round']} provider={result.get('provider')} — {result['reason']}")
+            if result.get("closed_at") and not result["closed"]:
+                print(f"  reopened since {result['closed_at']}: ask --since {result['closed_at']}")
             for topic in result.get("repeated", []):
                 print(f"  [{len(topic['runs'])}] {topic['topic']}")
         return 0 if result["closed"] else 1
