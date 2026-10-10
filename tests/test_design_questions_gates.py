@@ -1,5 +1,6 @@
 """Question rounds cover late decisions: units for every state, the carried
-closure of a state closed as one text, and State 7 on the Factory's prompts."""
+closure of a state closed as one text, State 7 on the Factory's prompts, and
+the gates that stop a late edit from going around the rounds."""
 from __future__ import annotations
 
 import hashlib
@@ -9,6 +10,9 @@ from pathlib import Path
 
 import pytest
 
+import design_authoring_next
+from factory_admission_workbench.model import CHECK_BLOCK, CHECK_NOT_APPLICABLE, CHECK_PASS
+from factory_admission_workbench.service import _question_rounds_check
 from questions_workbench import documents, service
 
 MODULES = """# State 3 — Demo modules
@@ -312,3 +316,70 @@ def test_state6_closes_by_sections_too(tmp_path):
                                 "60_contracts.md:store.save", "context"]
     assert documents.question_scope(6) in provider.instructions[0]
     assert "=== 30_modules.md (State 3) ===" in provider.inputs[0]
+
+
+# 3. The gates
+
+
+def _assembly_step(sequence, project, text):
+    return design_authoring_next._result(sequence=sequence, project=project, project_text=text,
+                                         phase="state8_assembly", blocked=False, reason="assemble")
+
+
+def test_authoring_next_stops_at_a_state_edited_after_its_rounds_closed(tmp_path, monkeypatch):
+    case = _closed_as_one_text(tmp_path)
+    monkeypatch.setattr(design_authoring_next, "_promoted_states_step", lambda sequence, project, text: None)
+    monkeypatch.setattr(design_authoring_next, "_post_state5_step", _assembly_step)
+    assert design_authoring_next.next_step(case, display_path="examples/demo")["phase"] == "state8_assembly"
+    (case / "30_modules.md").write_text(MODULES.replace("serves the owner.", "serves the owner only."),
+                                        encoding="utf-8")
+    report = design_authoring_next.next_step(case, display_path="examples/demo")
+    assert report["phase"] == "state3_module_responsibilities" and report["blocked"] is True
+    assert report["summary"]["open_units"] == ["30_modules.md:Module surface"]
+    closed_at = _git(case, "rev-parse", "HEAD").strip()  # the commit that kept the closing round
+    assert report["summary"]["closed_at"] == closed_at
+    assert report["question_round"] == (
+        f"python tools/design_questions.py ask examples/demo --state 3 --since {closed_at}")
+
+
+def test_authoring_next_asks_the_earliest_open_state_first(tmp_path, monkeypatch):
+    case = _closed_as_one_text(tmp_path)
+    _write(case / "00_product.md", "# State 0 — Demo\n\nA product.\n")
+    monkeypatch.setattr(design_authoring_next, "_promoted_states_step", lambda sequence, project, text: None)
+    monkeypatch.setattr(design_authoring_next, "_post_state5_step", _assembly_step)
+    report = design_authoring_next.next_step(case)
+    assert report["phase"] == "state0_product_frame" and "no question round yet" in report["reason"]
+    assert report["question_round"].endswith("--state 0")
+
+
+def test_authoring_next_does_not_ask_a_state_whose_own_phase_is_ahead(tmp_path, monkeypatch):
+    case = _closed_as_one_text(tmp_path)
+    _write(case / "60_contracts.md", "# State 6 — Demo contracts\n")
+    monkeypatch.setattr(design_authoring_next, "_promoted_states_step", lambda sequence, project, text: None)
+    monkeypatch.setattr(design_authoring_next, "_post_state5_step",
+                        lambda sequence, project, text: design_authoring_next._result(
+                            sequence=sequence, project=project, project_text=text,
+                            phase="state6_exact_contracts", blocked=False, reason="author contracts"))
+    assert design_authoring_next.next_step(case)["phase"] == "state6_exact_contracts"
+
+
+def test_admission_blocks_on_an_open_unit_and_passes_when_every_state_is_closed(tmp_path):
+    case = _closed_as_one_text(tmp_path)
+    check = _question_rounds_check(case, tmp_path)
+    assert check.status == CHECK_PASS and check.check_id == "FA019"
+    (case / "30_modules.md").write_text(MODULES.replace("serves the owner.", "serves the owner only."),
+                                        encoding="utf-8")
+    check = _question_rounds_check(case, tmp_path)
+    assert check.status == CHECK_BLOCK and check.evidence["open"] == ["state3"]
+    assert check.evidence["states"]["state3"]["open_units"] == ["30_modules.md:Module surface"]
+    service.ask_round(case, 3, Provider())
+    service.ask_round(case, 3, Provider())
+    assert _question_rounds_check(case, tmp_path).status == CHECK_PASS
+
+
+def test_admission_blocks_a_case_with_no_round_and_skips_an_explicit_spec(tmp_path):
+    case = tmp_path / "demo"
+    _write(case / "00_product.md", "# State 0 — Demo\n\nA product.\n")
+    check = _question_rounds_check(case, tmp_path)
+    assert check.status == CHECK_BLOCK and "no question round yet" in check.summary
+    assert _question_rounds_check(None, tmp_path).status == CHECK_NOT_APPLICABLE

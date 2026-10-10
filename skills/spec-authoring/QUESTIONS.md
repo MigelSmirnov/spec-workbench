@@ -218,6 +218,18 @@ contradicts another.
 In States 6 and 7 a gap that quotes no passage blocks: those states are where
 such a gap must be answered, so there is nothing later to defer it to.
 
+### Closed on the current texts, before anything after State 5
+
+A round no one runs closes nothing, and until 2026-10-10 nothing asked for
+one: the sequencer went to assembly and admission said READY_TO_EXPORT while
+`status --state 3` said the texts had changed. Now, past State 5,
+`authoring.py next` first checks every state whose phase it has passed and that
+declares a `question_scope` and has a document; the earliest one not closed on
+its current texts becomes the step, blocked, with its open units and the `ask`
+command — with `--since` the ref it last closed at, when it did. Stage 9
+admission checks the same as `FA019`. A case with no round for a state is
+blocked too ("no question round yet"): that is the rule, not a migration gap.
+
 ## Closing a question
 
 Ask first who uses what the question is about.
