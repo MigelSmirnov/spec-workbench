@@ -645,6 +645,16 @@ and a caller spooling first reads the same next number; a start failure writes
 a kernel module's own reason, which holds no secret, and only the type of an
 exception no kernel module raised.
 
+### After Route B on decision 28 (2026-10-10)
+
+Route B stopped at `effects`: its candidate computed a value's digest as
+`content_identity(BytesContent(...))`, the rule round-03 had written for
+`add_trial_case` only, and BytesContent was no import of `effects`. Every note
+that publishes a value with `put_value_bytes` now states the one rule —
+value_digest is content_identity of a BytesContent holding the bytes, value_id
+content_identity of the StoredValueContent — so every such module imports
+BytesContent (`flows`, `functions`, `effects`, `runs`).
+
 ## Texts of earlier states changed by State 6
 
 - States 3, 4 and 5 (2026-10-10, decision 26): `clock`'s capabilities are
