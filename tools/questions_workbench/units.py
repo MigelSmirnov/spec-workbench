@@ -20,6 +20,12 @@ units, each closed on its own:
 - `context`: the documents of the earlier states. They close in their own
   states; this unit asks only whether they and this state agree.
 
+State 7 is cut differently (`module_units`): one unit per module the Factory
+generates, whose text is the very prompt the Factory builds for that module's
+generator. That is what the generator reads — not the notes of every module,
+but its own cut of notes, imports, contracts and models — and where a late
+note contradicting an IMPORTS list (Cabinet Kernel decision 25) shows up.
+
 A round reviews the units that are not closed; the reviewers read every text,
 but each point names its unit, and a point about a closed unit is set aside.
 A unit is closed when the two latest rounds that reviewed it were clear for it
@@ -88,6 +94,14 @@ def units(texts: list[tuple[int, str, str]], state: int) -> dict[str, dict[str, 
         found[CONTEXT] = {"title": "agreement of the earlier states' texts with this state",
                           "digest": _digest(context), "document": "", "text": context}
     return found
+
+
+def module_units(prompts: dict[str, str]) -> dict[str, dict[str, str]]:
+    """The units of State 7: one per generated module, its text the prompt the
+    Factory builds for that module's generator."""
+    return {module: {"title": f"the Factory's prompt for generating `{module}`", "digest": _digest(prompt),
+                     "document": module, "text": prompt}
+            for module, prompt in prompts.items()}
 
 
 def closed_digest(summaries: list[dict[str, Any]], key: str) -> str | None:

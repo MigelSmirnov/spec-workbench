@@ -206,6 +206,80 @@ def reachability_findings(
     ]
     return findings, len(addresses)
 
+
+PROMPT_BUILDER = "tools/generate_agent.py"
+EMISSION = "tools/deterministic_emission.py"
+
+_PROMPTS_SCRIPT = """
+import json, sys
+sys.path.insert(0, '.')
+from tools.deterministic_emission import deterministic_emission_kind
+from tools.generate_agent import build_prompt
+spec = json.load(open(sys.argv[1], encoding='utf-8'))
+out = {'prompts': {}, 'deterministic': {}, 'failed': {}}
+for path in sys.argv[2:]:
+    local_spec = json.load(open(path, encoding='utf-8'))
+    module = local_spec.get('module_name') or path
+    kind = deterministic_emission_kind(spec, module)
+    if kind:
+        out['deterministic'][module] = kind
+        continue
+    try:
+        out['prompts'][module] = build_prompt(local_spec, None)
+    except Exception as exc:
+        out['failed'][module] = f'{type(exc).__name__}: {exc}'
+print(json.dumps(out))
+"""
+
+
+class FactoryPromptError(RuntimeError):
+    """The Factory could not be asked for the prompts of the generated modules."""
+
+
+def module_prompts(source: Path, factory_root: Path) -> dict[str, str]:
+    """The prompt the Factory builds for each module it generates, by module.
+
+    The Factory's own normalizer and slicer cut the local specification, its
+    `deterministic_emission_kind` leaves out every module it emits without a
+    model (models, data provider, declared backends, table repositories), and
+    its `generate_agent.build_prompt` assembles the prompt from the cut, as a
+    generation run does. Nothing here rebuilds a prompt. Raises
+    `FactoryPromptError` when the Factory cannot be asked or refuses a module.
+    """
+    source, factory_root = Path(source).resolve(), Path(factory_root).resolve()
+    missing = [tool for tool in (NORMALIZER, SLICER, PROMPT_BUILDER, EMISSION) if not (factory_root / tool).is_file()]
+    if missing:
+        raise FactoryPromptError(f"no Factory at {factory_root}: missing {', '.join(missing)}")
+    with tempfile.TemporaryDirectory(prefix="spec-workbench-prompts-") as temp:
+        work = Path(temp)
+        shutil.copy(source, work / "global_spec.json")
+        normalized = work / "normalized.json"
+        result = _run(factory_root, [NORMALIZER, str(work / "global_spec.json"), str(normalized)])
+        if result.returncode or not normalized.is_file():
+            raise FactoryPromptError(f"the Factory normalizer rejects the specification: {_tail(result)}")
+        modules = list((json.loads(normalized.read_text(encoding="utf-8")).get("modules") or {}))
+        slices = work / "slices"
+        slices.mkdir()
+        paths = []
+        for module in modules:
+            result = _run(factory_root, [SLICER, module, str(normalized), str(work / "call_graph.json"), str(slices)])
+            path = slices / f"{module}.json"
+            if result.returncode or not path.is_file():
+                raise FactoryPromptError(f"the Factory slicer cannot cut `{module}`: {_tail(result)}")
+            paths.append(str(path))
+        if not paths:
+            return {}
+        result = _run(factory_root, ["-c", _PROMPTS_SCRIPT, str(work / "global_spec.json"), *paths])
+    try:
+        built = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        raise FactoryPromptError(f"the Factory prompt builder could not be asked: {_tail(result)}") from None
+    if built["failed"]:
+        raise FactoryPromptError("the Factory refuses to build the prompt of "
+                                 + "; ".join(f"`{m}` ({why})" for m, why in sorted(built["failed"].items())))
+    return {module: built["prompts"][module] for module in modules if module in built["prompts"]}
+
+
 def probe(
     source: Path,
     factory_root: Path,

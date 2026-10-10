@@ -1,11 +1,13 @@
-"""Question rounds cover late decisions: units for every state, and the
-carried closure of a state closed as one text."""
+"""Question rounds cover late decisions: units for every state, the carried
+closure of a state closed as one text, and State 7 on the Factory's prompts."""
 from __future__ import annotations
 
 import hashlib
 import json
 import subprocess
 from pathlib import Path
+
+import pytest
 
 from questions_workbench import documents, service
 
@@ -175,3 +177,138 @@ def test_a_state_never_closed_as_one_text_carries_nothing(tmp_path):
     _legacy_round(case, 3, 1)  # one clear round, not closed
     result = service.status(case, 3)
     assert result["closed"] is False and len(result["open_units"]) == 3
+
+
+# 2. State 7 on the Factory's prompts
+
+
+def _write(path: Path, text: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+
+
+def _factory(tmp_path: Path) -> Path:
+    """A Factory whose slicer gives a module the notes naming its functions, whose
+    prompt is the cut, and which emits `models` and `clock` without a model."""
+    root = tmp_path / "code_factory"
+    _write(root / "tools/normalize_spec.py", """import json, sys
+spec = json.load(open(sys.argv[1], encoding='utf-8'))
+spec['modules'] = {name: {} for name in spec['module_functions']}
+open(sys.argv[2], 'w', encoding='utf-8').write(json.dumps(spec))
+""")
+    _write(root / "tools/build_local_spec.py", """import json, sys
+from pathlib import Path
+module, spec_path, _graph, out = sys.argv[1:5]
+spec = json.load(open(spec_path, encoding='utf-8'))
+owned = spec['module_functions'][module]
+notes = [n for n in spec['notes'] if any(f in n for f in owned)]
+(Path(out) / f'{module}.json').write_text(json.dumps({'module_name': module, 'functions': owned, 'notes': notes}))
+""")
+    _write(root / "tools/generate_agent.py", """def build_prompt(local_spec, models_code=None):
+    return 'Module: ' + local_spec['module_name'] + '\\nNOTES:\\n' + '\\n'.join(local_spec['notes']) + '\\n'
+""")
+    _write(root / "tools/deterministic_emission.py", """def deterministic_emission_kind(spec, module):
+    return {'models': 'models', 'clock': 'system_clock'}.get(module)
+""")
+    return root
+
+
+SPEC = {
+    "module_functions": {"models": ["Thing"], "clock": ["kernel_now"], "store": ["save"], "surface": ["serve"]},
+    "notes": [
+        "- save: [PRECONDITION] The record fits the size limit.",
+        "- serve: [DEPENDENCY_BOUNDARY] The surface imports nothing outside the standard library.",
+    ],
+}
+
+
+def _notes_case(tmp_path: Path, monkeypatch) -> tuple[Path, Path]:
+    case = tmp_path / "demo"
+    _write(case / "80_notes.md", "# State 7 — Demo notes\n\n- save: the record fits.\n")
+    _write(case / "global_spec.json", json.dumps(SPEC))
+    monkeypatch.setattr(service, "_spec_out_of_sync", lambda case: None)
+    return case, _factory(tmp_path)
+
+
+def test_state7_units_are_the_generated_modules_and_their_text_the_prompt(tmp_path, monkeypatch):
+    case, factory = _notes_case(tmp_path, monkeypatch)
+    read = service.state_texts(case, 7, factory)
+    assert list(read.units) == ["store", "surface"]  # models and clock are emitted, not generated
+    assert read.units["store"]["text"] == "Module: store\nNOTES:\n- save: [PRECONDITION] The record fits the size limit.\n"
+    provider = Provider()
+    summary = service.ask_round(case, 7, provider, factory_root=factory)
+    assert summary["scope"] == ["store", "surface"] and summary["reviews"] == 3
+    assert len(provider.inputs) == 6 and all(text.count("Module: ") == 1 for text in provider.inputs)
+    assert provider.instructions[0].startswith("You are the model that will generate the module below.")
+    round_dir = service.rounds_dir(case, 7) / summary["round"]
+    assert (round_dir / "prompts" / "store.txt").is_file() and (round_dir / "review-store-1.json").is_file()
+
+
+def test_editing_one_modules_note_reopens_only_that_module_and_asks_its_prompt_diff(tmp_path, monkeypatch):
+    case, factory = _notes_case(tmp_path, monkeypatch)
+    service.ask_round(case, 7, Provider(), factory_root=factory)
+    service.ask_round(case, 7, Provider(), factory_root=factory)
+    assert service.status(case, 7, factory)["closed"] is True
+    spec = json.loads(json.dumps(SPEC))
+    spec["notes"][1] += " Like every module it may import pydantic."
+    _write(case / "global_spec.json", json.dumps(spec))
+    result = service.status(case, 7, factory)
+    assert result["open_units"] == ["surface"] and result["changed_units"] == ["surface"]
+    provider = Provider([_point("pydantic", text="it may import pydantic.")], blocking={"pydantic"})
+    summary = service.ask_round(case, 7, provider, factory_root=factory)
+    assert summary["scope"] == ["surface"] and summary["changed_units"] == ["surface"]
+    assert all("Module: surface" in text for text in provider.inputs)
+    assert "has changed since" in provider.instructions[0] and "+- serve:" in provider.instructions[0]
+    assert summary["blocked_units"] == ["surface"] and summary["topics"][0]["units"] == ["surface"]
+    # a gap with no passage is not deferred in State 7: it is answered here
+    assert summary["topics"][0]["judgement"]["blocking"] is True
+
+
+def test_a_reopened_state7_judges_the_prompt_change_since_it_closed(tmp_path, monkeypatch):
+    case, factory = _notes_case(tmp_path, monkeypatch)
+    _git(case, "init", "-q")
+    _commit(case, "notes")
+    spec = json.loads(json.dumps(SPEC))
+    spec["notes"][1] += " Like every module it may import pydantic."
+    _write(case / "global_spec.json", json.dumps(spec))
+    provider = Provider([_point("pydantic", text="it may import pydantic.")], blocking={"pydantic"})
+    service.ask_round(case, 7, provider, since="HEAD", factory_root=factory)
+    judged = {text.split("`")[1]: text for text in provider.judged}  # each module is judged on its own prompt
+    assert sorted(judged) == ["store", "surface"]
+    assert "(no change)" in judged["store"]
+    change = judged["surface"].split("=== CHANGE SINCE THE STATE WAS CLOSED (unified diff) ===")[1]
+    assert "+- serve: [DEPENDENCY_BOUNDARY] The surface imports nothing outside the standard library. Like" in change
+
+
+def test_state7_refuses_without_a_factory_or_with_an_unsynced_spec(tmp_path, monkeypatch):
+    case, _ = _notes_case(tmp_path, monkeypatch)
+    monkeypatch.setattr(documents, "factory_root", lambda: None)
+    with pytest.raises(service.QuestionRoundError, match="no Factory was found"):
+        service.ask_round(case, 7, Provider())
+    assert "no Factory was found" in service.status(case, 7)["reason"]
+    monkeypatch.setattr(service, "_spec_out_of_sync", lambda case: "global_spec.json is out of sync with the design")
+    with pytest.raises(service.QuestionRoundError, match="design_spec_projection.py .* --apply"):
+        service.ask_round(case, 7, Provider(), factory_root=tmp_path)
+
+
+def test_a_module_whose_prompt_the_factory_refuses_stops_the_state7_round(tmp_path, monkeypatch):
+    case, factory = _notes_case(tmp_path, monkeypatch)
+    _write(factory / "tools/generate_agent.py", """def build_prompt(local_spec, models_code=None):
+    if local_spec['module_name'] == 'surface':
+        raise ValueError('data in model context: rules.limit')
+    return 'Module: ' + local_spec['module_name']
+""")
+    with pytest.raises(service.QuestionRoundError, match="refuses to build the prompt of `surface`"):
+        service.ask_round(case, 7, Provider(), factory_root=factory)
+
+
+def test_state6_closes_by_sections_too(tmp_path):
+    case = tmp_path / "demo"
+    _write(case / "30_modules.md", MODULES)
+    _write(case / "60_contracts.md", "# State 6 — Demo contracts\n\n## Convention Time\n\nUTC.\n\n## store.save\n\n`save(r) -> None`\n")
+    provider = Provider()
+    summary = service.ask_round(case, 6, provider)
+    assert summary["scope"] == ["60_contracts.md:preamble", "60_contracts.md:Convention Time",
+                                "60_contracts.md:store.save", "context"]
+    assert documents.question_scope(6) in provider.instructions[0]
+    assert "=== 30_modules.md (State 3) ===" in provider.inputs[0]

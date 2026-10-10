@@ -60,9 +60,10 @@ def test_documents_are_the_states_up_to_the_asked_one(tmp_path):
     assert [p.name for _, p in documents.design_documents(case, 1)] == ["00_product.md", "01_models.md"]
 
 
-def test_every_design_state_up_to_5_declares_a_question_scope():
-    for state in range(6):
+def test_every_design_state_declares_a_question_scope():
+    for state in range(8):
         assert documents.question_scope(state)
+    assert documents.question_states() == list(range(8))
 
 
 def test_a_topic_raised_by_two_reviews_keeps_the_state_open(tmp_path):

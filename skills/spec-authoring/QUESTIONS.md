@@ -21,8 +21,9 @@ python tools/design_questions.py ask examples/<case> --state <N>
 python tools/design_questions.py status examples/<case> --state <N>
 ```
 
-`ask` gives the texts of States 0..N to several independent reviews (three by
-default) with the state's `question_scope` from `authoring_sequence.json`, then
+`ask` gives the texts of States 0..N (for State 7: one generated module's
+prompt, below) to several independent reviews (three by default) with the
+state's `question_scope` from `authoring_sequence.json`, then
 groups their open points into topics, and has every topic raised by two or more
 reviews judged (below). The round is kept under
 `examples/<case>/questions/state<N>/round-<k>/`: each review, and `summary.json`
@@ -176,6 +177,46 @@ A18, and three reviewers given the whole decision raised new storage-hardening
 topics every round — corrupt databases, hard links, link races — none about the
 edit. A unit never closed, or whose closed text git no longer holds, is
 reviewed whole (owner, 2026-10-08).
+
+### State 7 is asked as the generator reads it
+
+The notes are not read as one text by anyone who generates: the Factory cuts
+one local specification per module and builds one prompt from it — the
+module's imports, contracts, the contracts and constants it may use, its
+models and its notes. The method was first measured that way: on Cabinet Flow
+the generator was given its own module prompt and asked to list every guess it
+would be forced to make, and named 86% of the decisions nobody had made
+(Factory `docs/CABINET_FLOW_SPEC_AUDIT_20260927.md`,
+`docs/cabinet_flow_pochemuchka_trial_20260927.json`, branch
+`agent/cabinet-flow-runtime-run`, commit `9641888`).
+
+So a State 7 round has one unit per **generated** module, and its text is the
+prompt the Factory builds for it: the Factory's own normalizer and slicer, then
+its `generate_agent.build_prompt` (`factory_slice_workbench.module_prompts`).
+A module the Factory emits without a model (`deterministic_emission_kind`:
+`models`, the data provider, the declared backends, table repositories) is not
+asked. Each review reads one module's prompt; its points are that module's;
+topics are grouped and judged per module, on that prompt. An edit to a note,
+an import, a contract or a model a module sees changes its prompt and reopens
+exactly that module, reviewed for the diff of its prompt; the prompts a round
+asked about are kept in its `prompts/` directory so the diff can be found.
+
+The prompts are built from the case's assembled `global_spec.json`: a round
+refuses when it does not hold the current design (run
+`design_spec_projection.py --apply` and propagate the notes first), and when no
+Factory is found (`SPEC_WORKBENCH_FACTORY_ROOT` or the sibling `code_factory`).
+It never closes a state it could not ask. On 2026-10-10 Cabinet Kernel
+decision 25 added a note allowing `surface` to import pydantic while its
+IMPORTS list held none; the contradiction stood in that one prompt, and Route
+B met it as `unknown_top_level_import`.
+
+State 6 is asked like States 0–5: its sections are units, the reviews read
+States 0–6, and its scope is the contracts' own — an argument with no source, a
+returned value with no consumer, a decision no contract owns, a contract that
+contradicts another.
+
+In States 6 and 7 a gap that quotes no passage blocks: those states are where
+such a gap must be answered, so there is nothing later to defer it to.
 
 ## Closing a question
 

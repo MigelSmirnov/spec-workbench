@@ -46,6 +46,50 @@ def unit_scope(state: int, scope: list[tuple[str, str]], changed: dict[str, str]
     return UNIT_SCOPE.format(state=state, listing=listing)
 
 
+
+MODULE_ASK = """You are the model that will generate the module below. You receive exactly
+the prompt the Factory will give you to generate it: its imports, its contracts,
+the contracts and constants it may use, its models and its notes. You will
+write the module from this prompt alone; whatever it leaves open, you will
+decide silently, and another generator given the same prompt will decide
+differently.
+
+List every point where generating from this prompt would force you to guess.
+
+Scope of State {state} — report a point only if it belongs here:
+{scope}
+
+Before you write anything, read the prompt as the code you would write from it:
+for every function you must define, what would you have to guess? Where does
+the prompt contradict itself — a note that allows what the IMPORTS list does not
+hold, two notes that order the same checks differently, a note naming a value
+or an error the contracts do not carry? What is missing for two generators to
+write the same behaviour?
+
+Do not propose designs as settled. Report only genuine gaps, not style.
+Output strict JSON, nothing else:
+{{"open_points":[{{"subject":"<function, class, note or section of the prompt>","kind":"<short kind>","text":"<the exact phrase of the prompt that is silent, vague or contradictory>","question":"<the question the prompt must answer>","options":["<option you see>"],"default_guess":"<what you would do if forced>"}}]}}"""
+
+
+MODULE_CHANGE = """
+
+This prompt was reviewed and closed before, and has changed since. Review only
+this change and what it affects — a guess the change forces, or a contradiction
+it makes with any other part of the prompt. The unchanged passages were closed;
+a point about one of them, away from the change, is set aside.
+```diff
+{diff}```"""
+
+
+def module_ask_instruction(state: int, scope: str, diff: str | None = None) -> str:
+    instruction = MODULE_ASK.format(state=state, scope=scope)
+    return instruction + (MODULE_CHANGE.format(diff=diff) if diff is not None else "")
+
+
+def module_input(module: str, prompt: str) -> str:
+    return f"=== the Factory's prompt for generating `{module}` ===\n\n{prompt}"
+
+
 GROUP = """You receive the open points of several independent reviews of the same
 design texts. Group the points that ask about the same missing decision, even
 when worded differently. A point belongs to exactly one group; a point unlike any
@@ -73,15 +117,10 @@ from those that need not. Judge each topic by exactly one kind:
   implementers would build different behaviour that the owner, an agent, a
   caller or an external service would notice. Name the two behaviours and who
   notices in "divergence". Quote, verbatim, every passage of the texts that
-  leaves the choice open or bears on it. A gap with no passage at all — the
-  texts never speak to the matter — is recorded for State 6 contracts or
-  State 7 notes instead of blocking, so quote whenever a passage exists.
+  leaves the choice open or bears on it. {unquoted_gap}
 - "answered": the texts already answer the question. Quote the passage that
   answers it, verbatim.
-- "later_state": the question belongs to a later state (orders of checks,
-  encodings, formats, schemas, signatures, field types and notes belong to
-  State 6 or later). Name that state's number in "later_state".
-- "indifferent": any answer is acceptable, because no caller, owner or service
+{later_state}- "indifferent": any answer is acceptable, because no caller, owner or service
   acts differently on the difference. Say why in "why".{preexisting}{answered_later}{judged_before}
 
 Quotes are checked mechanically against the texts: copy them character for
@@ -118,11 +157,31 @@ JUDGED_BEFORE = """
   and judge afresh only when the texts the topic is about have changed."""
 
 
+DEFERRED_GAP = """A gap with no passage at all — the
+  texts never speak to the matter — is recorded for State 6 contracts or
+  State 7 notes instead of blocking, so quote whenever a passage exists."""
+
+ANSWERING_STATE_GAP = """A gap with no passage at all — the
+  texts never speak to the matter — blocks too: State {state} is where it must
+  be answered. Quote whenever a passage exists."""
+
+LATER_STATE = """- "later_state": the question belongs to a later state (orders of checks,
+  encodings, formats, schemas, signatures, field types and notes belong to
+  State 6 or later). Name that state's number in "later_state".
+"""
+
+# The last state a gap without a passage is deferred from (judge.LAST_DEFERRING_STATE).
+LAST_DEFERRING_STATE = 5
+LAST_DESIGN_STATE = 7
+
+
 def judge_instruction(state: int, reopened: bool, later_files: list[str] | None = None,
                       precedents: bool = False) -> str:
     answered_later = ANSWERED_LATER.format(files=", ".join(later_files), state=state) if later_files else ""
+    unquoted_gap = DEFERRED_GAP if state <= LAST_DEFERRING_STATE else ANSWERING_STATE_GAP.format(state=state)
     return JUDGE.format(state=state, preexisting=PREEXISTING if reopened else "", answered_later=answered_later,
-                        judged_before=JUDGED_BEFORE if precedents else "")
+                        judged_before=JUDGED_BEFORE if precedents else "", unquoted_gap=unquoted_gap,
+                        later_state=LATER_STATE if state < LAST_DESIGN_STATE else "")
 
 
 def judge_input(texts: str, topics: list[dict], change: str | None, precedents: list[dict] | None = None) -> str:
