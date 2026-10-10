@@ -404,6 +404,26 @@ backend (§6.9), whatever `single_host_source` says. The owner decided on
     - Tests still replace the clock module as a whole (A19 required tests);
       fixing its monotonic source fixes `monotonic_ns`.
 
+## Decision closed for the surface's imports (2026-10-10)
+
+Route B on decision 26 stopped at `surface`, the last generated module: its
+candidate imported `BaseModel` from pydantic, as the `serve_kernel` note
+allowed ("like every kernel module it imports nothing outside the CPython 3.12
+standard library except pydantic"), while decision 25 left
+`imports.third_party` empty, so the Factory's `unknown_top_level_import` gate
+refused it. The note and the declared imports said two things; the owner left
+the call to the agent.
+
+27. **The surface names pydantic; no other generated module does.**
+    `surface` declares `from pydantic import BaseModel`
+    (`imports.third_party_by_module`): it builds the published `inputSchema` of
+    each operation from its request model and writes every answer model as
+    JSON (decision 22), which needs to recognise a model class, and the
+    Factory's static gates forbid recognising it by reflection
+    (`getattr`/`hasattr`). Every other generated module reaches pydantic only
+    through the models it imports. Decision 25's "no generated module names
+    it" holds for every module but the surface; its pin is unchanged.
+
 ## Texts of earlier states changed by State 6
 
 - States 3, 4 and 5 (2026-10-10, decision 26): `clock`'s capabilities are

@@ -189,7 +189,9 @@ skeleton = {
     "models": {},
     "rules": {"role": "data", "schema_version": 1, "data_provider_backend": provider_ir},
     "implementation_obligations": implementation_obligations,
-    "imports": {"stdlib": [], "third_party": [], "internal": internal, "module_internal": module_internal},
+    "imports": {"stdlib": [], "third_party": [], "internal": internal, "module_internal": module_internal,
+                # 60_contracts.md decision 27: the surface alone names pydantic
+                "third_party_by_module": {"surface": ["from pydantic import BaseModel"]}},
     "module_functions": module_functions,
     "module_order": module_order,
     "module_paths": module_paths,
