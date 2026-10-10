@@ -619,6 +619,14 @@ module's, like positions and by-fields; store_position is a field exactly
 where it is the identity (Activation, FlowActivation); a mapped output's array
 takes the port's stored schema as items, so a many port nests arrays.
 
+### State 7 round-06 (2026-10-10)
+
+Two more: the closed inputSchema rule maps `X | None` to
+`{"anyOf": [the schema of X, {"type": "null"}]}`, so what is published admits
+the null a request may carry (the 8.1 remark "Published inputSchema and null",
+decided); an end of stream is a transport failure only before the response is
+complete — a body delimited by the connection's close is complete at it.
+
 ## Texts of earlier states changed by State 6
 
 - States 3, 4 and 5 (2026-10-10, decision 26): `clock`'s capabilities are
