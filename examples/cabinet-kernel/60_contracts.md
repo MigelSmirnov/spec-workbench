@@ -612,6 +612,13 @@ approval among those that count; the empty mapped list's StoredValue of `[]`
 is written and named by its one NodeExecution (A13 rule 6); a kernel
 exception's message holds no secret, so `translate_failure` may show it.
 
+### State 7 round-05 (2026-10-10)
+
+Three more, by wording: the statuses a variant writes or sets are the
+module's, like positions and by-fields; store_position is a field exactly
+where it is the identity (Activation, FlowActivation); a mapped output's array
+takes the port's stored schema as items, so a many port nests arrays.
+
 ## Texts of earlier states changed by State 6
 
 - States 3, 4 and 5 (2026-10-10, decision 26): `clock`'s capabilities are
