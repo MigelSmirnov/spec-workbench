@@ -6,8 +6,13 @@ Draft of 2026-10-03. The exact signatures are `60_contracts.json`, the function
 inventory `60_contract_plan.json`, the typed models `60_model_closure_domain.json`
 (State 1 records M01–M28 under their State 1 field names, the closed
 enumerations, the platform manifest record) and `60_model_closure_operations.json`
-(the arguments and answers the signatures name), the exception symbols
-`60_exception_taxonomy.json`, and the State 5 exposure `50_exposure_plan.json`.
+(the arguments and answers the signatures name), `60_model_closure_values.json`
+(contract-only values), `60_model_closure_store.json` (the store's rows, its
+counter and the `StoreRepository` port, contract-only), the exception symbols
+`60_exception_taxonomy.json`, the State 5 exposure `50_exposure_plan.json`, and
+the store's tables `70_persistence_closure.json` (decision 23). The store's row
+models, port contracts, table names and IR are expanded from one row table by
+`experiments/cabinet-kernel/build_store_persistence.py`.
 This text records the technical decisions those files rest on; the owner does
 not review fields, classes or formats, so each is the agent's and says why.
 
@@ -247,8 +252,55 @@ each the narrowest the MCP specification allows.
       `internal_error` is `-32603`. The kernel defines no error number of
       its own.
 
+## Decision closed for the store's persistence (2026-10-10)
+
+Factory admission FA013 found the store's tables and its repository of mutable
+records left to generation. They are now a deterministic closure
+(`persistence_backend/v3`, emitter `sqlite_sync_v2`, cabinet-flow 5987af6 as
+precedent); State 3 split `store_persistence` off `store` for it.
+
+23. **The store's rows and their port.**
+    - *One row per record.* Every record type of `store.read_records` has one
+      table whose row model is named after it (`RunRow` for Run): its
+      `store_position`, its `record_type`, the fields a lookup filters on, and
+      `record`, the record itself as one JSON object. A store position is the
+      store's fact, not a field of the record — records are returned as they are
+      (State 5) — so it cannot be a column of the record's own table; the row is
+      the store's envelope. Activation and FlowActivation, identified by their
+      store position, are keyed by it; the counter of store positions is one row
+      of `StorePositionCounter`, keyed by the one `StoreCounterName` member.
+    - *Keys of an element.* `map_index` is absent for an element of a node that
+      is not mapped, and an equality on an absent column matches nothing; so an
+      element and an attempt are columns holding the record's `ElementKey` and
+      `AttemptKey` (and a spooled file its `SpooledFileKey`), compared whole as
+      their JSON form, which is equal exactly when the keys are equal.
+    - *What the port offers.* Per row: insert; load by the complete key; for a
+      type `list_records` pages, the whole type in store order (an equality on
+      its own `record_type`, the one whole-table read `sqlite_sync_v2` lowers)
+      and find by store position (the continuation token's check); the equality
+      lists a relation or a page filter reads, in store order; and, for the five
+      records whose lifecycle fields change, an update of `status` and `record`
+      in place, which keeps the store position. No other record type has an
+      update, so A01 rule 6 holds by the port's shape.
+    - *What stays in `store`.* The transaction (`transaction: external`: `store`
+      begins, commits and rolls back on its one connection), store positions
+      (`next_store_position`, the one internal function that takes the port),
+      attempt numbers, minted identities, which rows a relation or a page reads
+      and how they combine — latest as the last of a list, a set filter as one
+      list per value merged by position, a page as the reverse of the list below
+      the token's position — the files, their durability and the lock (State 7).
+    - *Implementation.* `StoreRepository` is a `kind: interface` of `models`;
+      `implementation_obligations` names `SqliteStoreRepository` its `local`
+      implementation, and `store` builds that class over its connection.
+      `StoreRepository` and its rows are contract-only models: they are not State 1
+      records and carry no persistence class; the records keep theirs (five
+      `master`, thirteen `issued`).
+
 ## Texts of earlier states changed by State 6
 
+- State 3 (2026-10-10, decision 23): the companion module `store_persistence`
+  on the second line of the dependency list, `store` knowing it, and the record
+  port paragraph of `store`; `30_trace.json` names it a consumer of A01 and A18.
 - State 5: the relation "executions of an element", asked by `effects`, which
   reads an operation element's conclusion from its NodeExecution and
   EffectAttempt together (State 5, `operation_element_conclusion`) and spools a
@@ -279,5 +331,3 @@ each the narrowest the MCP specification allows.
 - **HTTP router.** The kernel has no HTTP API of its own (K-11): every State 5
   operation is `internal-only` in `50_exposure_plan.json`, and no router
   handler is planned. The MCP entrance is `surface`'s.
-- **Persistence backend.** No `70_persistence_closure.json`: the store is on the
-  ordinary generation path.
