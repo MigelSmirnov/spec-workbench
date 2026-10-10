@@ -220,13 +220,18 @@ decision 25 added a note allowing `surface` to import pydantic while its
 IMPORTS list held none; the contradiction stood in that one prompt, and Route
 B met it as `unknown_top_level_import`.
 
-State 6 is asked like States 0–5: its sections are units, the reviews read
-States 0–6, and its scope is the contracts' own — an argument with no source, a
-returned value with no consumer, a decision no contract owns, a contract that
-contradicts another.
+State 6 has no round of its own. Its exact contracts live in
+`60_contracts.json` and the closures, not in `60_contracts.md`, and the
+generator meets them only inside each module's prompt — signatures, models,
+constants, imports — which is exactly what State 7 asks. A round over the
+State 6 documents read prose about artifacts it could not see: Cabinet Kernel's
+first one (2026-10-10) blocked on "exact contract artifacts" and "release
+constant values" that stand in those JSON files, and descended into listen-
+address grammar and manifest size limits. A contract defect that reaches the
+generator stands in some module's prompt, and State 7 meets it there.
 
-In States 6 and 7 a gap that quotes no passage blocks: those states are where
-such a gap must be answered, so there is nothing later to defer it to.
+In State 7 a gap that quotes no passage blocks: it is where such a gap must be
+answered, so there is nothing later to defer it to.
 
 ### Closed on the current texts, before anything after State 5
 

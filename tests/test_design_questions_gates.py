@@ -306,16 +306,15 @@ def test_a_module_whose_prompt_the_factory_refuses_stops_the_state7_round(tmp_pa
         service.ask_round(case, 7, Provider(), factory_root=factory)
 
 
-def test_state6_closes_by_sections_too(tmp_path):
+def test_state6_has_no_round_of_its_own(tmp_path):
+    """Contracts reach the generator inside each module's prompt, which State 7
+    asks; a State 6 round over the documents could not see 60_contracts.json."""
+    with pytest.raises(documents.QuestionScopeError):
+        documents.question_scope(6)
     case = tmp_path / "demo"
-    _write(case / "30_modules.md", MODULES)
-    _write(case / "60_contracts.md", "# State 6 — Demo contracts\n\n## Convention Time\n\nUTC.\n\n## store.save\n\n`save(r) -> None`\n")
-    provider = Provider()
-    summary = service.ask_round(case, 6, provider)
-    assert summary["scope"] == ["60_contracts.md:preamble", "60_contracts.md:Convention Time",
-                                "60_contracts.md:store.save", "context"]
-    assert documents.question_scope(6) in provider.instructions[0]
-    assert "=== 30_modules.md (State 3) ===" in provider.inputs[0]
+    _write(case / "60_contracts.md", "# State 6 — Demo contracts\n\n## store.save\n\n`save(r) -> None`\n")
+    with pytest.raises(documents.QuestionScopeError):
+        service.ask_round(case, 6, Provider())
 
 
 # 3. The gates
