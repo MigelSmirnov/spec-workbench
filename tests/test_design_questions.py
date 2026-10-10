@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 import design_questions
-from questions_workbench import documents, provider, service
+from questions_workbench import documents, judge, provider, service
 
 
 QUOTED_GAP = {"kind": "consequential_gap", "quotes": ["## Model M01 — Thing"], "divergence": "a or b; the owner notices"}
@@ -438,9 +438,22 @@ def test_a_precedent_whose_quoted_passage_changed_no_longer_holds(tmp_path):
     case = _case(tmp_path)
     _repeated(case, {"kind": "answered", "quotes": ["## Model M01 — Thing"]})
     (case / "01_models.md").write_text("# State 1 — Demo models\n\n## Model M01 — Item\n", encoding="utf-8")
-    summary, _ = _repeated(case, {"kind": "judged_before", "precedent": "P1"})
+    summary, provider = _repeated(case, {"kind": "judged_before", "precedent": "P1"})
+    # A stale precedent is not offered, so the topic is judged afresh; a judge
+    # that names it anyway is still refused.
+    assert "=== PRIOR JUDGEMENTS" not in provider.judged[0]
     judgement = summary["topics"][0]["judgement"]
-    assert judgement["blocking"] is True and "no longer found" in judgement["failure"]
+    assert judgement["blocking"] is True and "prior judgements offered" in judgement["failure"]
+
+
+def test_precedent_holds_only_where_its_check_looks():
+    answered = {"kind": "answered", "quotes": ["## Model M01 — Thing"]}
+    assert judge.precedent_holds(answered, "## Model M01 — Thing\n")
+    assert not judge.precedent_holds(answered, "## Model M01 — Item\n")
+    later = {"kind": "answered_later", "quotes": ["parse: [BEHAVIOR] MUST return it."]}
+    assert judge.precedent_holds(later, "state text", "parse: [BEHAVIOR] MUST return it.")
+    assert not judge.precedent_holds(later, "parse: [BEHAVIOR] MUST return it.", None)
+    assert not judge.precedent_holds(later, "state text", "parse: [BEHAVIOR] Returns it.")
 
 
 def test_precedents_come_from_the_latest_judged_rounds_only(tmp_path):

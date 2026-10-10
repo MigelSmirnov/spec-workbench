@@ -39,6 +39,19 @@ def _found(quote: str, corpus: str) -> bool:
     return len(quote) >= 12 and quote in corpus
 
 
+def precedent_holds(precedent: dict[str, Any], texts: str, later_texts: str | None = None) -> bool:
+    """Whether a prior judgement can still be followed: every passage it quotes
+    is found verbatim where `check` looks for it — the later states' texts for
+    `answered_later`, the asked texts otherwise."""
+    if precedent.get("kind") == "answered_later":
+        if later_texts is None:
+            return False
+        where = _norm(later_texts)
+    else:
+        where = _norm(texts)
+    return all(_found(q, where) for q in precedent.get("quotes") or [])
+
+
 def check(judgement: dict[str, Any] | None, state: int, texts: str, old_texts: str | None,
           later_texts: str | None = None, precedents: dict[str, dict[str, Any]] | None = None,
           own_texts: str | None = None) -> dict[str, Any]:
