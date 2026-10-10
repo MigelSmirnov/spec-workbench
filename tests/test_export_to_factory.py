@@ -428,3 +428,26 @@ def test_export_blocks_note_drift_before_factory_admission(
 
     with pytest.raises(SystemExit, match="note propagation blocked export"):
         export_to_factory.main()
+
+
+def test_an_uncarried_project_owes_its_whole_surface(tmp_path: Path) -> None:
+    factory = tmp_path / "code_factory"
+    working = factory / "projects/demo/specs/working"
+    working.mkdir(parents=True)
+    scope = {"changed_modules": ["functions"], "projection": "factory_spec_delta"}
+    assert not export_to_factory.project_ever_carried(factory, "demo", working)
+    owed = export_to_factory.owe_global_until_carried(scope, False)
+    assert owed["changed_modules"] == ["global"] and owed["projection"] == "uncarried_project_global"
+
+    # a verification run whose OTK audit is ok counts as carried
+    audit = factory / "verification_runs/demo/20261010_000000/artifacts/control_audit.json"
+    _write_json(audit, {"audit_status": "blocked"})
+    assert not export_to_factory.project_ever_carried(factory, "demo", working)
+    _write_json(audit, {"audit_status": "ok"})
+    assert export_to_factory.project_ever_carried(factory, "demo", working)
+    assert export_to_factory.owe_global_until_carried(scope, True) == scope
+
+    # so does a passing Route B run manifest
+    audit.unlink()
+    _write_json(working / "route_b_run_manifest.json", {"status": "pass"})
+    assert export_to_factory.project_ever_carried(factory, "demo", working)
