@@ -2,11 +2,11 @@
 
 ## Verdict
 
-**Open.** 12 of the 15 assembled modules are `PASS`. `functions`, `runs` and `surface` are
-`AMBIGUITY`: each still allows two observably different behaviors, and closing that needs a
-decision in State 2 or State 6 that this review may not make (Questions to the owner, below).
-`81_module_review_status.json` records each module's verdict and its exact packet hash
-(`slice_sha256`, by the FA002 rule). Its `status` is `open`.
+**Closed (2026-10-10).** All 15 assembled modules are `PASS`. The cloud review left
+`functions`, `runs` and `surface` `AMBIGUITY`; the owner decided Q1–Q3 the same day (decision 24
+of `60_contracts.md`, "Owner decisions" below), and the five slices that moved were reviewed
+against that change only. `81_module_review_status.json` records each module's verdict and its
+exact packet hash (`slice_sha256`, by the FA002 rule). Its `status` is `closed`.
 
 How the review was done:
 - Each slice (`python tools/design_module_review.py examples/cabinet-kernel --module <m> --slice --json`)
@@ -39,21 +39,21 @@ underspec gate, and every symbol a note names is in that module's Factory import
 
 | Module | Mode | Contracts | Notes | Structural findings | Semantic result |
 |---|---|---:|---:|---:|---|
-| `models` | deterministic | 101 | 101 | 0 | PASS |
+| `models` | deterministic | 101 | 101 | 0 | PASS (decision 24 types) |
 | `data_provider` | deterministic | 0 | 0 | 0 | PASS |
 | `canonical_values` | behavioral | 4 | 18 | 0 | PASS |
 | `clock` | behavioral | 5 | 8 | 0 | PASS |
 | `store_persistence` | deterministic | 103 | 0 | 0 | PASS |
-| `store` | behavioral | 11 | 54 | 0 | PASS (N11) |
+| `store` | behavioral | 11 | 54 | 0 | PASS (N11; decision 24) |
 | `installation` | behavioral | 6 | 13 | 0 | PASS (N01–N03) |
 | `sandbox` | behavioral | 2 | 14 | 0 | PASS (N15, N16) |
 | `service_invoker` | behavioral | 3 | 24 | 0 | PASS (N17–N19) |
-| `functions` | behavioral | 13 | 39 | 0 | **AMBIGUITY** (Q1); repaired N00, N06–N08 |
+| `functions` | behavioral | 13 | 39 | 0 | PASS (Q1, decision 24); repaired N00, N06–N08 |
 | `bindings` | behavioral | 7 | 18 | 0 | PASS (N00) |
 | `flows` | behavioral | 6 | 19 | 0 | PASS (N00, N14) |
 | `effects` | behavioral | 9 | 32 | 0 | PASS (N04, N05) |
-| `runs` | behavioral | 12 | 38 | 0 | **AMBIGUITY** (Q2); repaired N09, N10 |
-| `surface` | behavioral | 36 | 107 | 0 | **AMBIGUITY** (Q3); repaired N00, N12, N13 |
+| `runs` | behavioral | 12 | 38 | 0 | PASS (Q2, decision 24); repaired N09, N10 |
+| `surface` | behavioral | 36 | 108 | 0 | PASS (Q3, decision 24); repaired N00, N12, N13 |
 
 "Structural findings" means the blocks reported by `--review`. The note counts are the ones after
 the repairs; `store` gained the one new note (N11).
@@ -245,7 +245,27 @@ Each moved slice was reviewed against the intended change only. Every added sent
 choice (which order, which bound, which record, which collaborator), and none adds one. No other
 import changed.
 
-## Questions to the owner (AMBIGUITY)
+## Owner decisions (2026-10-10, decision 24) and their delta review
+
+The owner chose the recommended answer to each question below and confirmed N07; decision 24 of
+`60_contracts.md` records them, in State 6 by the owner's choice so that States 2–4 stay closed.
+
+- **Q1.** `roll_back_slot` checks, after the contract version, whether the named implementation is
+  the current activation and then returns it with nothing recorded, before the verdict check.
+- **Q2.** `RunsByStatus.statuses: tuple[RunStatus, ...]` (non-empty, no repeats); `store` merges one
+  `list_run_rows_by_status` per status by store position; `recover_running_runs` asks once. The
+  State 5 relation row says "any of the given statuses, oldest first in store order".
+- **Q3.** `ShownEffectAttempt` (every EffectAttempt field, inputs as `ShownPort` through
+  `show_port_refs`) types `ShownRecords.effect_attempts`; `RecordSet` keeps the record.
+
+Slices that moved (built at `68d069d` and after decision 24, diffed): `models` (the two types and
+the field), `store` (the merge sentence, the malformed status set, the relation type), `functions`
+(the check order of `roll_back_slot`), `runs` (one query instead of three, the relation type),
+`surface` (one FIELD_PROJECTION note, the two types). Nothing else moved. Each delta removes a
+choice the question named and adds none. The witnesses read attempts' `status`, `node_id`,
+`authority`, `attempt_number`, `map_index`, `resolved_by` — all kept; none reads `inputs`.
+
+## Questions to the owner (answered above)
 
 ### Q1 — `functions.roll_back_slot`: the serving implementation without a current verdict
 
