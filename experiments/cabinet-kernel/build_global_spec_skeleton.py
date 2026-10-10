@@ -17,6 +17,13 @@ spec_import_hygiene finds in each consumer's contracts and positive note
 clauses; rules.data_provider_backend is 70_data_provider_closure.json backend_ir
 verbatim (no projector owns it). models stays {} so the projector, which lists
 every key of models as a model, does not export role/schema_version.
+
+When 70_persistence_closure.json is present: each repository module exports its
+class and schema function, imports every model its codecs name and the port it
+implements (SPEC_STANDARD 6.3, 5.1); a module that imports the class imports
+every model of the class's operations; implementation_obligations names the
+repository class as the local implementation of each interface whose every
+operation it carries. Models are read from every 60_model_closure_*.json.
 """
 from __future__ import annotations
 
@@ -47,6 +54,11 @@ provider_ir = load("70_data_provider_closure.json")["backend_ir"]
 package = provider_ir["wiring"]["models_module"].rsplit(".", 1)[0]  # cabinet_kernel
 module_paths = {m: f"{package}/{m}" for m in module_order}
 
+# --- deterministic persistence (70_persistence_closure.json, when present)
+persistence_path = CASE / "70_persistence_closure.json"
+persistence_ir = load(persistence_path.name)["backend_ir"] if persistence_path.is_file() else None
+repositories = persistence_ir["repositories"] if persistence_ir else []
+
 # --- contracts and ownership: State 6 (projector writes them; read here only to derive imports)
 contracts = load("60_contracts.json")["contracts"]
 plan = load("60_contract_plan.json")["functions"]
@@ -56,7 +68,9 @@ public = [row for row in plan if row["visibility"] == "public"]
 # --- non-contract symbols each module owns
 exceptions = load("60_exception_taxonomy.json")["exceptions"]
 constants = sorted(provider_ir["constants"])
-models = {**load("60_model_closure_domain.json")["models"], **load("60_model_closure_operations.json")["models"]}
+models = {name: declaration
+          for path in sorted(CASE.glob("60_model_closure_*.json"))
+          for name, declaration in load(path.name)["models"].items()}
 
 module_functions = {m: [] for m in module_order}
 module_functions["data_provider"] = list(constants)
@@ -71,7 +85,14 @@ classes = {name.split(".", 1)[0] for name in contracts if "." in name}
 for row in public:
     internal[owner[row["function"]]].append(row["function"])
 for cls in sorted(classes):
-    internal[owner[f"{cls}.__init__"] if f"{cls}.__init__" in owner else None].append(cls)
+    cls_owner = owner[f"{cls}.__init__"] if f"{cls}.__init__" in owner else owner[
+        next(name for name in contracts if name.startswith(cls + "."))]
+    if cls_owner != "models":  # an interface's contracts belong to models, which exports it already
+        internal[cls_owner].append(cls)
+# a deterministic repository module exports its class and its schema function to its owner
+for repository in repositories:
+    if repository["schema_function"] not in internal.setdefault(repository["module"], []):
+        internal[repository["module"]].append(repository["schema_function"])
 for row in exceptions:
     internal[row["module"].removeprefix("module:")].append(row["symbol"])
 internal = {m: s for m, s in internal.items() if s}
@@ -107,6 +128,43 @@ for consumer in module_order:
     if edges:
         module_internal[consumer] = edges
 
+
+def models_named(text):
+    return {name for name in models if re.search(rf"\b{re.escape(name)}\b", text)}
+
+
+# --- implementation_obligations: an interface whose every operation a
+# deterministic repository class carries is implemented locally by that class
+implementation_obligations = {}
+for name, declaration in models.items():
+    if declaration.get("kind") != "interface":
+        continue
+    operations = {key.split(".", 1)[1] for key in contracts if key.startswith(name + ".")}
+    for repository in repositories:
+        carried = {key.split(".", 1)[1] for key in contracts if key.startswith(repository["repository"] + ".")}
+        if operations and operations <= carried:
+            implementation_obligations[name] = {"disposition": "local", "implementations": [repository["repository"]]}
+
+
+# a repository module imports every model its codecs name (SPEC_STANDARD 6.3);
+# the module that builds its class imports every model of the class's operations
+for repository in repositories:
+    module = repository["module"]
+    tables = {table["table"]: table for table in persistence_ir["tables"]}
+    codec = {table["model"] for table in tables.values()} | {
+        column["element_model"] for table in tables.values() for column in table["columns"]
+        if column["element_model"]}
+    operations = " ".join(signature for name, signature in contracts.items()
+                          if name.startswith(repository["repository"] + "."))
+    own = module_internal.setdefault(module, {})
+    implemented = {name for name, row in implementation_obligations.items()
+                   if repository["repository"] in row["implementations"]}
+    own["models"] = sorted(set(own.get("models", [])) | codec | models_named(operations) | implemented)
+    for consumer, edges in module_internal.items():
+        if consumer != module and repository["repository"] in edges.get(module, []):
+            edges["models"] = sorted(set(edges.get("models", [])) | models_named(operations))
+
+
 skeleton = {
     "standard_version": 2,
     "default_module": "surface",
@@ -115,7 +173,7 @@ skeleton = {
     "config": {"role": "data", "schema_version": 1},
     "models": {},
     "rules": {"role": "data", "schema_version": 1, "data_provider_backend": provider_ir},
-    "implementation_obligations": {},
+    "implementation_obligations": implementation_obligations,
     "imports": {"stdlib": [], "third_party": [], "internal": internal, "module_internal": module_internal},
     "module_functions": module_functions,
     "module_order": module_order,
