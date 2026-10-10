@@ -32,7 +32,10 @@ KINDS = BLOCKING | {"answered", "answered_later", "later_state", "indifferent", 
 
 
 def _norm(text: str) -> str:
-    return " ".join(str(text).split())
+    # Markdown code marks are not content: a judge that writes a note as
+    # `handle_get_run: ...` quotes the same words the texts hold without them
+    # (Cabinet Kernel State 0 round-02, 2026-10-10).
+    return " ".join(str(text).replace("`", "").split())
 
 
 def _found(quote: str, corpus: str) -> bool:
