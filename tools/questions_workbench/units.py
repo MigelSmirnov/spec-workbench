@@ -1,4 +1,4 @@
-"""Closure units: a state with accepted decisions closes decision by decision.
+"""Closure units: every state with a question round closes unit by unit.
 
 A state of rules is large — Cabinet Kernel State 2 holds 21 decisions, and a
 review of all of them raises about fifty topics a round. Closing it as one
@@ -7,14 +7,18 @@ draws two new blocking topics about some decision nobody changed: rounds
 80–82 of 2026-10-06 never repeated a blocking topic. A one-line edit to one
 decision reopened every decision.
 
-So such a state is cut into units, each closed on its own:
+The other states closed as one text until 2026-10-10, and the same arithmetic
+held there: any edit reopened the whole state, Cabinet Kernel State 5 ran 107
+rounds, and late edits (decision 26 rewrote States 3–5) simply went around the
+rounds — nobody re-ran them, and nothing noticed. So every state is cut into
+units, each closed on its own:
 
 - one unit per accepted decision (`## Accepted decision Axx`), its heading to
   the next level-2 heading;
 - one unit per other level-2 section of the state's documents, and one for a
   document's text before its first section;
 - `context`: the documents of the earlier states. They close in their own
-  states; this unit asks only whether they and this state's units agree.
+  states; this unit asks only whether they and this state agree.
 
 A round reviews the units that are not closed; the reviewers read every text,
 but each point names its unit, and a point about a closed unit is set aside.
@@ -62,23 +66,27 @@ def split(name: str, text: str) -> list[tuple[str, str, str]]:
         lines.append(line)
     if lines:
         found.append((key, title, lines))
-    return [(k, t, "".join(body)) for k, t, body in found]
+    result, seen = [], {}
+    for k, t, body in found:
+        seen[k] = seen.get(k, 0) + 1
+        result.append((k if seen[k] == 1 else f"{k} #{seen[k]}", t, "".join(body)))
+    return result
 
 
-def units(texts: list[tuple[int, str, str]], state: int) -> dict[str, dict[str, str]] | None:
-    """The units of `state` as {key: {title, digest}}, or None when the state's
-    documents hold no accepted decision (it then closes as one text)."""
+def units(texts: list[tuple[int, str, str]], state: int) -> dict[str, dict[str, str]]:
+    """The units of `state` as {key: {title, digest, document, text}}: the
+    sections of its documents, and `context` when an earlier state exists."""
     found: dict[str, dict[str, str]] = {}
     for doc_state, name, body in texts:
         if doc_state != state:
             continue
         for key, title, block in split(name, body):
             found[key] = {"title": title, "digest": _digest(block), "document": name, "text": block}
-    if not any(re.fullmatch(r"A\d+", key) for key in found):
-        return None
-    context = "".join(f"=== {name} ===\n{body}" for doc_state, name, body in texts if doc_state < state)
-    found[CONTEXT] = {"title": "agreement of the earlier states' texts with this state", "digest": _digest(context),
-                      "document": "", "text": context}
+    earlier = [(name, body) for doc_state, name, body in texts if doc_state < state]
+    if earlier:
+        context = "".join(f"=== {name} ===\n{body}" for name, body in earlier)
+        found[CONTEXT] = {"title": "agreement of the earlier states' texts with this state",
+                          "digest": _digest(context), "document": "", "text": context}
     return found
 
 

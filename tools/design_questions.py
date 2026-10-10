@@ -11,8 +11,8 @@
 raised by two reviews are judged) and keeps it under
 examples/<case>/questions/state<N>/. `--since` reopens a state closed at that
 git ref: the judge sees the change and may set aside topics about passages the
-change did not touch. `status` exits 0 when the state is closed — two latest
-rounds clear on the same texts, unchanged since — and 1 otherwise.
+change did not touch. `status` exits 0 when the state is closed — every unit
+closed by its two latest reviews, clear on its current text — and 1 otherwise.
 The method is skills/spec-authoring/QUESTIONS.md.
 """
 from __future__ import annotations
@@ -82,6 +82,8 @@ def main(argv: list[str] | None = None) -> int:
         else:
             print(f"State {result['state']} questions: closed={str(result['closed']).lower()} "
                   f"round={result['round']} provider={result.get('provider')} — {result['reason']}")
+            if result.get("closed_at") and not result["closed"]:
+                print(f"  reopened since {result['closed_at']}: ask --since {result['closed_at']}")
             for topic in result.get("repeated", []):
                 print(f"  [{len(topic['runs'])}] {topic['topic']}")
         return 0 if result["closed"] else 1

@@ -128,7 +128,7 @@ like a gap. Closing what blocks is the work below; a non-blocking topic is
 recorded in the round and, for `later_state`, must reach that state's texts as
 a carried question.
 
-### A state of rules closes decision by decision
+### Every state closes unit by unit
 
 A review of a whole state of rules finds about fifty topics a round: on
 Cabinet Kernel State 2 (21 decisions), rounds 80–82 of 2026-10-06 each blocked
@@ -136,19 +136,36 @@ on two new topics, never repeated, half of them misreadings, each about a
 decision nobody had changed. Two clear rounds in a row over all of it are luck,
 and a one-line edit to one decision reopened all 21.
 
-So a state whose documents hold accepted decisions closes in units: one per
-decision (`## Accepted decision Axx` to the next level-2 heading), one per other
-level-2 section and per document preamble, and `context` — whether the earlier
-states' texts and this state agree. A round asks only about the units that are
-not closed: the reviewers still read every text, but each point names its
-unit, and a point about a closed unit is set aside (kept in the review, not
-grouped). A blocking topic keeps open only the units its points name; one that
-names none keeps every reviewed unit open. A unit is closed when the two latest
-rounds that reviewed it were clear for it on its current text; the state is
-closed when every unit is. Editing one decision reopens that decision; editing
-an earlier state reopens `context`. Rounds kept before units existed close no
-unit, so the first two rounds under this rule review everything. Decided by the
-owner 2026-10-06.
+So a state closes in units: one per accepted decision (`## Accepted decision
+Axx` to the next level-2 heading), one per other level-2 section and per
+document preamble, and `context` — whether the earlier states' texts and this
+state agree. A round asks only about the units that are not closed: the
+reviewers still read every text, but each point names its unit, and a point
+about a closed unit is set aside (kept in the review, not grouped). A blocking
+topic keeps open only the units its points name; one that names none keeps
+every reviewed unit open. A unit is closed when the two latest rounds that
+reviewed it were clear for it on its current text; the state is closed when
+every unit is. Editing one section reopens that section; editing an earlier
+state reopens `context`. Decided by the owner 2026-10-06 for State 2.
+
+Until 2026-10-10 only State 2 was cut so; the other states closed as one text,
+and any edit reopened all of it — Cabinet Kernel State 5 ran 107 rounds. Late
+decisions therefore went around the rounds: decision 26 rewrote States 3–5,
+nobody asked again, and the pipeline went on to assembly. Every state with a
+round is now cut into units (owner, 2026-10-10), so a late edit costs a round
+about what it changed, not a re-audit of the state.
+
+**A closure kept before units is carried.** A state closed as one text before
+this rule — its latest round closed it, or its two latest rounds were clear on
+the same documents — counts as closed unit by unit on the text it closed on.
+The round finds that text in the case's git history (the commit that kept the
+closing round first), cuts it into units and treats each as closed on its
+digest then; the first unit round records what it carried (`carried` in its
+summary), so later calls need no search. After a late edit only the edited
+units are open, and each is reviewed for its diff (below). A state that never
+closed, or whose closed text git no longer holds, carries nothing: its first
+two unit rounds review everything. A state already closing in units (State 2)
+needs no carrying.
 
 A unit that was closed and then edited is reviewed for its edit, not again
 whole: the round finds the text it closed on in the case's git history, gives
@@ -180,12 +197,13 @@ Ask first who uses what the question is about.
   state and is closed there; without this rule reviews descend forever into
   orders, encodings and formats.
 - **Clear round.** No judged topic blocks.
-- **Closure.** The two latest rounds are clear on the same texts, and the texts
-  have not changed since (`status` compares digests). One clear round can be
-  luck; two on the same texts show the questions have stopped mattering, not
-  merely changed. A topic raised by one review is closed or carried when cheap,
-  but does not hold the state open. Rounds kept before the judge existed keep
-  their rule: closed when no topic was raised by two reviews.
+- **Closure.** Every unit's two latest reviews are clear for it on the same
+  text, and that text has not changed since (`status` compares digests). One
+  clear round can be luck; two on the same texts show the questions have
+  stopped mattering, not merely changed. A topic raised by one review is
+  closed or carried when cheap, but does not hold the state open. Rounds kept
+  before the judge existed keep their rule: closed when no topic was raised by
+  two reviews.
 - **Reopened state.** When a closed state is edited, re-close it with
   `ask --since <git-ref where it was closed>`: the judge sees the change and
   sets aside, as `preexisting`, topics about passages the change did not touch.

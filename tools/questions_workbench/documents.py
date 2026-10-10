@@ -14,13 +14,18 @@ class QuestionScopeError(ValueError):
     pass
 
 
-def document_state(path: Path) -> int | None:
-    """The state a design document belongs to, read from its first heading."""
-    for line in path.read_text(encoding="utf-8").splitlines():
+def text_state(text: str) -> int | None:
+    """The state a design text belongs to, read from its first heading."""
+    for line in text.splitlines():
         if line.startswith("#"):
             match = STATE_HEADING.match(line)
             return int(match.group(1)) if match else None
     return None
+
+
+def document_state(path: Path) -> int | None:
+    """The state a design document belongs to, read from its first heading."""
+    return text_state(path.read_text(encoding="utf-8"))
 
 
 def design_documents(case: Path, state: int) -> list[tuple[int, Path]]:

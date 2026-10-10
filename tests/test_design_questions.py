@@ -71,7 +71,7 @@ def test_a_topic_raised_by_two_reviews_keeps_the_state_open(tmp_path):
     summary = service.ask_round(case, 1, provider)
     assert summary["closed"] is False
     assert summary["repeated_topics"] == 1
-    assert summary["topics"][0]["runs"] == [1, 2]
+    assert len(summary["topics"][0]["runs"]) == 2  # reviews run in parallel: which two is not fixed
     assert (case / "questions" / "state1" / "round-01" / "review-3.json").is_file()
     assert service.status(case, 1)["closed"] is False
 
@@ -283,9 +283,11 @@ def test_rounds_kept_before_the_judge_keep_their_rule(tmp_path):
         "schema_version": "spec_workbench_question_round.v1", "state": 1, "round": "round-01",
         "documents": digests, "reviews": 3, "points": [0, 0, 0], "closed": True, "repeated_topics": 0,
         "topics": []}), encoding="utf-8")
-    assert service.status(case, 1)["closed"] is True
-    # and a v1 round with no repeated topic counts as the first clear round
-    assert _repeated(case, {"kind": "later_state", "later_state": 6})[0]["closed"] is True
+    result = service.status(case, 1)
+    assert result["closed"] is True and result["carried"] is True
+    # the closure is carried to every unit, so there is nothing left to ask
+    with pytest.raises(service.QuestionRoundError, match="nothing to ask"):
+        _repeated(case, {"kind": "later_state", "later_state": 6})
 
 
 class FilesProvider(FakeProvider):
@@ -415,6 +417,8 @@ def test_a_followed_precedent_passes_on_its_original_judgement(tmp_path):
     case = _case(tmp_path)
     _repeated(case, {"kind": "answered", "quotes": ["## Model M01 — Thing"]})
     _repeated(case, {"kind": "judged_before", "precedent": "P1"})
+    # Two clear rounds closed every unit; an edit away from the quoted passage reopens one.
+    (case / "00_product.md").write_text("# State 0 — Demo\n\nA changed product.\n", encoding="utf-8")
     _, provider = _repeated(case, {"kind": "judged_before", "precedent": "P1"})
     assert "P1 (round-01, answered): M01" in provider.judged[0]
 

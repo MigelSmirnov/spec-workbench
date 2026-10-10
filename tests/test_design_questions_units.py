@@ -87,7 +87,18 @@ def test_a_state_with_decisions_is_cut_into_decision_section_preamble_and_contex
     texts = [(0, "00_product.md", "# State 0\n"), (2, "02_rules.md", RULES)]
     found = units.units(texts, 2)
     assert list(found) == ["02_rules.md:preamble", "A01", "A02", "02_rules.md:Carried to later states", "context"]
-    assert units.units([(1, "01_models.md", "# State 1\n## Model M01 — Thing\n")], 1) is None
+
+
+def test_a_state_without_decisions_is_cut_into_its_sections_too():
+    texts = [(0, "00_product.md", "# State 0\n"),
+             (3, "30_modules.md", "# State 3 — Modules\n\nWhy.\n\n## Module store\n\nKeeps.\n\n"
+                                  "## Module surface\n\nServes.\n\n## Module store\n\nAgain.\n")]
+    found = units.units(texts, 3)
+    assert list(found) == ["30_modules.md:preamble", "30_modules.md:Module store", "30_modules.md:Module surface",
+                           "30_modules.md:Module store #2", "context"]
+    assert found["30_modules.md:Module surface"]["text"] == "## Module surface\n\nServes.\n\n"
+    assert list(units.units([(0, "00_product.md", "# State 0\n\n## Goal\n")], 0)) == [
+        "00_product.md:preamble", "00_product.md:Goal"]
 
 
 def test_the_first_round_reviews_every_unit_and_asks_each_point_to_name_one(tmp_path):
@@ -143,13 +154,19 @@ def test_editing_an_earlier_state_reopens_only_the_context_unit(tmp_path):
     assert service.status(case, 2)["open_units"] == ["context"]
 
 
+def _review_with_set_aside(case, summary):
+    """A kept review that set a point aside (reviews run in parallel, so which one is not fixed)."""
+    reviews = [json.loads(p.read_text()) for p in (case / "questions" / "state2" / summary["round"]).glob("review-*.json")]
+    return next(r for r in reviews if r["set_aside"])
+
+
 def test_a_point_about_a_closed_unit_is_set_aside(tmp_path):
     case = _case(tmp_path)
     _ask(case, [_point("first", "A01")], blocking={"first"})
     _ask(case, [_point("first", "A01")], blocking={"first"})
     summary, _ = _ask(case, [_point("second", "A02")], blocking={"second"})
-    assert summary["set_aside"] == [1, 1, 0] and summary["topics"] == []
-    review = json.loads((case / "questions" / "state2" / summary["round"] / "review-1.json").read_text())
+    assert sorted(summary["set_aside"]) == [0, 1, 1] and summary["topics"] == []
+    review = _review_with_set_aside(case, summary)
     assert review["set_aside"][0]["unit"] == "A02"
 
 
@@ -227,9 +244,9 @@ def test_a_point_on_an_unchanged_passage_of_a_changed_unit_is_set_aside(tmp_path
     old_point = {**_point("old", "A02"), "text": "The first rule of the second decision stays as it was."}
     new_point = {**_point("new", "A02"), "text": "is about the spool size, now bounded."}
     summary, _ = _ask(case, [old_point, new_point], blocking={"old", "new"})
-    assert summary["set_aside"] == [1, 1, 0]
+    assert sorted(summary["set_aside"]) == [0, 1, 1]
     assert [t["topic"] for t in summary["topics"]] == ["new"] and summary["blocked_units"] == ["A02"]
-    review = json.loads((case / "questions" / "state2" / summary["round"] / "review-1.json").read_text())
+    review = _review_with_set_aside(case, summary)
     assert review["set_aside"][0]["set_aside_because"].startswith("an unchanged passage")
 
 
