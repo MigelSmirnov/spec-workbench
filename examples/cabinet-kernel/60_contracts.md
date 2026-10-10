@@ -424,6 +424,165 @@ the call to the agent.
     through the models it imports. Decision 25's "no generated module names
     it" holds for every module but the surface; its pin is unchanged.
 
+## Decisions closed by the State 7 contradiction round (2026-10-10)
+
+The State 7 round-02 (`questions/state7/round-02/summary.json`) read the prompt
+the Factory builds for each generated module and judged 36 topics blocking: two
+passages of one prompt that a generator cannot both satisfy. The owner left
+every technical call to the agent. Each topic was checked first; 31 are
+contradictions and are removed by the smallest edit of the text that owns them,
+5 are a general rule whose exception is already written beside it and are left
+as they are. No text of States 2–5 changed: every contradiction was in a note,
+or between a note and a State 6 signature, and each edit aligns the note with a
+rule States 2–5 already state. The exact text is in `80_notes.md`; the
+contradiction gate is `questions/state7/round-02`.
+
+28. **The State 7 contradiction round.**
+    - *canonical_values T3, not a contradiction.* `fit_port_value` judges list
+      elements one by one "within one check", and its size note takes a value
+      port's canonical JSON "as the whole value even for cardinality many": a
+      `many` value is one JSON array (decision 12), so its size check judges no
+      element, and the size note states that exception in its own words.
+    - *store T1, T4, T9.* `page_records` asked for a whole list and a find at a
+      position "for every listed type", which read as every record type, while
+      the port has none for StoredValue and SpooledFile (only lookups by digest,
+      attempt or run). It now names the fourteen types `list_records` lists
+      (decision 20); activation, flow_activation, stored_value and spooled_file
+      are never paged — the surface refuses them — and as `record_type` raise
+      `InvalidRequestError` before any read. Decision 23's port is unchanged.
+    - *store T2.* `open_store` kept the value files a StoredValue "and a file
+      fixture record" names, but no fixture record exists: a trial case's file
+      fixture is a file-carriage StoredValue (M21), so the digest lookup it
+      gives covers every kept file. The note now says so.
+    - *store T3.* The lock was taken on a lock file inside `data_directory`
+      before the privacy and link checks, while a failed check "creates
+      nothing" (State 5, `open_store`). The lock is now taken on
+      `data_directory` itself, opened as a directory without following links,
+      so no check can leave a created file; A18 rule 1's "an exclusive lock in
+      the data directory" holds, and the lock file leaves the list of files the
+      store creates.
+    - *store T5.* "Only the status and decision fields" change contradicted the
+      lifecycle fields the same function updates (outputs, waiting points,
+      times, resumptions). The boundary now names the lifecycle fields
+      `record_change` lists, a run's resumptions added there; State 5's "an
+      entity's lifecycle fields change in place" is the rule.
+    - *store T6, not a contradiction.* "A relation that finds nothing answers an
+      empty RecordSet" is the general rule; the validation note of the same
+      function writes its one exception, `ActivationBeforeRun` finding no
+      activation, which is a broken invariant (a run starts only under an active
+      version), not an empty relation.
+    - *store T7.* An over-ceiling `spool_file` at a position a SpooledFile
+      record names was both refused-and-cleaned and `StoreInternalError`. The
+      position check now comes first and removes nothing; the ceiling refusal
+      then removes only the attempt's files, none of which a record names, the
+      attempt being the element's next (A11 rule 1).
+    - *store T10.* `record_change` returned records "with every store position",
+      but a store position is not a field of a record (decision 23). It is now
+      returned only where it is the identity, of an Activation or a
+      FlowActivation.
+    - *sandbox T1.* The isolation note allowed no host path but the exchange
+      directory, while the next note binds `SANDBOX_RUNTIME_PATHS` read-only
+      (decision 25). The note now names both, as A03 rule 1 does ("no host
+      directory is mounted except the read-only runtime and that exchange
+      directory"); decision 25 is unchanged.
+    - *sandbox T2.* "A many file port as the list of its bytes" now says a
+      `FileListPayload` whose `contents` is the tuple of its files' bytes.
+    - *sandbox T4.* `probe_sandbox` returns None only when every check of its
+      validation note holds, the version and interpreter checks of decision 25
+      included.
+    - *service_invoker T1.* "Read at most to the ceiling, a longer body being
+      over it" could not detect a longer body. The body is now read to one byte
+      past `service_response_bytes_max`, that byte arriving meaning over the
+      ceiling, as `resolve_service_credential` already reads its secret; the
+      credential search and an output-less binding read the same way.
+    - *service_invoker T2.* A credential header named `host` would have given a
+      second Host header. The header note now states that the credential header
+      is never a name of `KERNEL_SET_HEADER_NAMES`: an installation holding such
+      a credential refuses to start (A09 rule 1) and credentials do not change
+      until restart.
+    - *functions T1.* `contract_version_id` was computed before the bound
+      checks, from a `ResourceBoundsRequest` that may hold None while
+      `ContractVersionContent` needs `ResourceBounds`. The identity is computed
+      when every bound is given; a request that omits one equals no stored
+      version, computes no identity and is refused by the bound check. A01
+      rule 4 and A20 rule 4 (an equal existing version returned even under a
+      lowered ceiling) are unchanged.
+    - *bindings T1.* `check_installed_instances` checked the credential header
+      name for every service, and also said a service with no selected instance
+      "fails nothing here". It now fails no check that reads the manifest; the
+      header-name check, which reads none, applies to it (A09 rule 1).
+    - *effects T1, T2, T3.* `send_under_authority` had to write the element's
+      input PortRefs and build the idempotency key from input values, with
+      neither among its arguments nor in `ElementRef`. The signature gains
+      `inputs: tuple[PortRef, ...]` (an internal function; no State 5 text
+      names it); `reach_operation_element` passes the inputs it was given, and
+      the key reads each key field's StoredValue bytes (a key field is a value
+      input, A08 rule 5).
+    - *effects T4.* A pre-send failure's `ended_at` was "the time of the check"
+      against the module rule "the moment the outcome change is built". It now
+      follows the rule: `started_at` when the checks began, `ended_at` when its
+      RecordOperationFailureChange is built (A19 rule 1).
+    - *effects T5, T7.* `authority` may be None and `SendResult.attempt_status`
+      may be None, while a non-read send writes both into fields that need a
+      value. Both are None exactly for a `read` binding: `reach_operation_element`
+      sends a non-read binding only with the authority found, and
+      `send_prepared_request` sets the attempt status for every other class. A
+      non-read send given either as None is a broken invariant,
+      `StoreInternalError`, nothing sent.
+    - *effects T6, T9.* The execution copied the SendResult outcome and one
+      output per port even when storing the outputs turned the outcome into
+      `contract_violation`. Its status, detail and outputs now come from the
+      outcome after storing: `value_too_large` for an output over the stored
+      value ceiling, no detail for a spool refusal (A09 rule 7: an answer
+      refused only by the spool ceilings keeps no `failure_detail`), outputs
+      only when succeeded (A13 rule 3: an element that does not succeed keeps
+      no output).
+    - *effects T8.* A binding port's `disclosure_class` is optional in the type,
+      but StoredValue and SpooledFile need one. The note now states that every
+      binding port has a class, a proposal without one being refused (A08
+      rule 5, M01).
+    - *runs T1.* A produced flow output needs a `value_id`, while a mapped
+      node's file output is a SpooledFilesRef. A flow output is never of file
+      carriage (A05 rule 7), so a file list reaches only node inputs and every
+      produced flow output is a StoredValuesRef; the notes now say so.
+    - *runs T2, T3.* `start_run` takes `PortPayload`, file forms included, but
+      fits every input as a JSON candidate and stores it as a value. Every flow
+      input is of value carriage (A05 rule 7): a file payload is refused at the
+      carriage check, naming the port, before a candidate is built.
+      `handle_start_run` builds only `JsonPayload`, so no answer changes.
+    - *runs T5, T7, not contradictions.* After each function element runs
+      writes the element's execution with the records it made non-executable,
+      and a failed element of a mapped node does not stop the next one; the
+      `cleanup_failed` note of the same function writes its exception in full
+      ("that one execution … execute and reach nothing more … raise
+      StopRequiredError"), which A03 rule 7 and State 3 "Unconfirmed cleanup"
+      require.
+    - *runs T6.* "No record of its own holds" a mapped node's file output, yet
+      over an empty list the node's one NodeExecution holds every output as an
+      empty list. The note now says what A13 rule 6 says: a non-empty list is
+      derived from its elements, an empty one is named by the node's one
+      NodeExecution without `map_index`.
+    - *surface T1.* The start sequence propagated an exception "unchanged with
+      the step named in its reason". The exception now propagates unchanged and
+      `run_start_sequence` writes the failing step's name to standard error
+      first; `serve_kernel` adds the reason. State 5 (`serve_kernel`: "the
+      failing step and its reason on the host's standard error") is unchanged.
+    - *surface T3, not a contradiction.* The first `answer_request` note orders
+      the checks of a catalogue operation; the method note writes the
+      exception: `initialize`, `ping` and `tools/list` answer after the size and
+      token checks, and only `tools/call` "then pass[es] the remaining checks of
+      the first note", as decision 22 ("checked in A16 rule 1 order — size,
+      then token — before its method is read") decides.
+    - *surface T4.* A file-carriage StoredValue's `media_type` is optional in the
+      type while `ShownFile` needs one. Every such value has its port's one
+      media type (decision 18); one without is a record that cannot be read,
+      `StoreInternalError`.
+    - *surface T8.* The note listed "JSON texts" among texts never
+      "interpreted", while the surface canonicalizes them. A16 rule 5 lists
+      purposes, code and names only; the note now does the same and says a
+      JSON text is data parsed only as JSON, by `canonical_bytes` and the
+      schema check that judges it, never evaluated or executed.
+
 ## Texts of earlier states changed by State 6
 
 - States 3, 4 and 5 (2026-10-10, decision 26): `clock`'s capabilities are
