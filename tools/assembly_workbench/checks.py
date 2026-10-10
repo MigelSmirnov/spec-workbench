@@ -5,6 +5,7 @@ from typing import Any, Callable
 
 import design_closure_gaps
 import design_decision_witness
+import design_router_context
 import design_stage3
 import fence
 import flow_closure
@@ -16,6 +17,8 @@ from model_surface_workbench import fields as model_fields
 from notes_workbench import gate as notes_gate
 from persistence_workbench import coverage as persistence_coverage
 from router_workbench import service as router_service
+from router_workbench.model import CATALOG_FILE as ROUTER_CLOSURE_FILE
+from router_workbench.slice import exposure_boundary
 from spec_language_workbench import verify as verify_language
 
 from assembly_workbench.model import AssemblyWorkbenchError, CheckResult
@@ -114,6 +117,22 @@ def _closure_gap_coverage(project: Path) -> dict[str, Any]:
     }
 
 
+def _router_coverage(project: Path) -> dict[str, Any]:
+    """Router coverage, or not applicable exactly where the sequencer skips the router phases.
+
+    A case with no router artifact whose State 5 exposure names no external
+    operation has no HTTP route (design_authoring_next._router_step).
+    """
+    has_artifact = (project / ROUTER_CLOSURE_FILE).is_file() or (project / design_router_context.FILE).is_file()
+    if not has_artifact and not list(exposure_boundary(project).external):
+        return {
+            "schema_version": None,
+            "summary": {"applicable": False, "errors": 0, "handoff_ready": True},
+            "findings": [],
+        }
+    return router_service.coverage(project)
+
+
 def _factory_storage_resolver(factory_root: Path | None = None):
     """The deterministic backend's version-bound storage registry, when the factory is reachable.
 
@@ -150,7 +169,7 @@ CHECKS: dict[str, ReportFunction] = {
     "external_contracts": external_contract_coverage,
     "notes": notes_gate.coverage,
     "closure_gaps": _closure_gap_coverage,
-    "router": router_service.coverage,
+    "router": _router_coverage,
     "persistence": lambda project: persistence_coverage(project, storage_resolver=_factory_storage_resolver()),
     "witness": design_decision_witness.coverage,
     "flows": flow_closure.coverage,

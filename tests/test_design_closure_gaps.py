@@ -191,3 +191,16 @@ def test_clock_port_in_init_silences_fresh_timestamp(tmp_path):
         },
     }
     assert codes(run(_time_case(tmp_path, spec, FRESH_MD))) == []
+
+
+def test_declared_time_source_module_is_not_an_ambient_clock(tmp_path):
+    spec = {
+        "models": {},
+        "contracts": {"now": "() -> int"},
+        "module_functions": {"clock": ["now"]},
+        "notes": ["now: [BEHAVIOR] MUST read the host clock and return its current time."],
+    }
+    assert codes(run(_time_case(tmp_path / "bare", spec=spec))) == ["ambient_time_note"]
+    spec["rules"] = {"time_source_policy": {"kind": "time_source_policy", "schema_version": 1,
+                                            "wall_clock": {"authority_modules": ["clock"]}}}
+    assert codes(run(_time_case(tmp_path / "declared", spec=spec))) == []

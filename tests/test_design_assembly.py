@@ -160,3 +160,18 @@ raise SystemExit(1 if bad else 0)
     assert rejected["summary"]["errors"] == 1
     assert rejected["findings"][0]["code"] == "SV-TEST"
     assert "unknown type Foo" in rejected["findings"][0]["message"]
+
+
+def test_router_check_is_not_applicable_without_http_exposure(tmp_path: Path, monkeypatch) -> None:
+    from types import SimpleNamespace
+    from assembly_workbench import checks
+
+    monkeypatch.setattr(checks, "exposure_boundary", lambda project: SimpleNamespace(external=()))
+    monkeypatch.setattr(checks.router_service, "coverage",
+                        lambda project: (_ for _ in ()).throw(AssertionError("router must not load")))
+    report = checks._router_coverage(tmp_path)
+    assert report["summary"] == {"applicable": False, "errors": 0, "handoff_ready": True}
+
+    monkeypatch.setattr(checks, "exposure_boundary", lambda project: SimpleNamespace(external=("op",)))
+    monkeypatch.setattr(checks.router_service, "coverage", lambda project: {"summary": {"routed": 1}})
+    assert checks._router_coverage(tmp_path) == {"summary": {"routed": 1}}

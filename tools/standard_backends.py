@@ -160,6 +160,13 @@ STANDARD_BACKENDS = (
         function_wiring_key="function",
         function_wiring_keys=("wall_clock_function", "elapsed_clock_function"),
     ),
+    # typed constants only: the module owns no callable, so no method scope is deterministic
+    StandardBackend(
+        id="data_provider",
+        closure_file="70_data_provider_closure.json",
+        closure_schema="spec_workbench_data_provider_backend_closure.v1",
+        rule_key="data_provider_backend",
+    ),
 )
 
 
