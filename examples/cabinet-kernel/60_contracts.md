@@ -604,6 +604,14 @@ misreading (`FileFactsRef` is in the IMPORTS of `functions`):
   attempt to stay applied. `execute_function_element`: spool_file's refusal
   has already removed the attempt's files.
 
+### State 7 round-04 (2026-10-10)
+
+Four more, by wording: `prepare_request`'s digest ignores the multipart
+boundary the description leaves out; `find_send_authority` takes the oldest
+approval among those that count; the empty mapped list's StoredValue of `[]`
+is written and named by its one NodeExecution (A13 rule 6); a kernel
+exception's message holds no secret, so `translate_failure` may show it.
+
 ## Texts of earlier states changed by State 6
 
 - States 3, 4 and 5 (2026-10-10, decision 26): `clock`'s capabilities are
