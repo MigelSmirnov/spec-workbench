@@ -41,9 +41,11 @@ class Provider:
 
     name = "fake"
 
-    def __init__(self, points: list[dict] | None = None, blocking: set[str] = frozenset()):
+    def __init__(self, points: list[dict] | None = None, blocking: set[str] = frozenset(),
+                 contradictions: dict[str, list[str]] | None = None):
         self.points = points or []
         self.blocking = set(blocking)
+        self.contradictions = contradictions or {}
         self.instructions: list[str] = []
         self.inputs: list[str] = []
         self.judged: list[str] = []
@@ -56,7 +58,9 @@ class Provider:
             for line in listing:
                 if line[:1] == "T":
                     tid, subject = line.split(": ", 1)
-                    if subject in self.blocking:
+                    if subject in self.contradictions:
+                        judgements.append({"id": tid, "kind": "contradiction", "quotes": self.contradictions[subject]})
+                    elif subject in self.blocking:
                         judgements.append({"id": tid, "kind": "consequential_gap", "divergence": "a or b; the owner notices"})
                     else:
                         judgements.append({"id": tid, "kind": "indifferent", "why": "no one acts on it"})
@@ -258,14 +262,53 @@ def test_editing_one_modules_note_reopens_only_that_module_and_asks_its_prompt_d
     _write(case / "global_spec.json", json.dumps(spec))
     result = service.status(case, 7, factory)
     assert result["open_units"] == ["surface"] and result["changed_units"] == ["surface"]
-    provider = Provider([_point("pydantic", text="it may import pydantic.")], blocking={"pydantic"})
+    quotes = ["The surface imports nothing outside the standard library.", "it may import pydantic."]
+    provider = Provider([_point("pydantic", text="it may import pydantic.")], contradictions={"pydantic": quotes})
     summary = service.ask_round(case, 7, provider, factory_root=factory)
     assert summary["scope"] == ["surface"] and summary["changed_units"] == ["surface"]
     assert all("Module: surface" in text for text in provider.inputs)
     assert "has changed since" in provider.instructions[0] and "+- serve:" in provider.instructions[0]
     assert summary["blocked_units"] == ["surface"] and summary["topics"][0]["units"] == ["surface"]
-    # a gap with no passage is not deferred in State 7: it is answered here
+    assert summary["topics"][0]["judgement"]["kind"] == "contradiction"
     assert summary["topics"][0]["judgement"]["blocking"] is True
+
+
+def test_state7_judges_a_contradiction_one_review_found_and_only_contradictions_block(tmp_path, monkeypatch):
+    """Cabinet Kernel State 7 round-01 (2026-10-10): 519 repeated topics, 445 of
+    them gaps, all blocking; the pydantic contradiction was raised by one review
+    of three and never judged. State 7 asks for contradictions only, judges each
+    topic, and a gap the judge still names is recorded without blocking."""
+    case, factory = _notes_case(tmp_path, monkeypatch)
+    spec = json.loads(json.dumps(SPEC))
+    spec["notes"][1] += " Like every module it may import pydantic."
+    _write(case / "global_spec.json", json.dumps(spec))
+    quotes = ["The surface imports nothing outside the standard library.", "it may import pydantic."]
+
+    import threading
+
+    class OneReview(Provider):
+        lock, raised = threading.Lock(), False
+
+        def complete(self, instruction, text):
+            if instruction.startswith("You are the model") and "Module: surface" in text:
+                with self.lock:
+                    first, OneReview.raised = not OneReview.raised, True
+                if first:
+                    self.instructions.append(instruction)
+                    return json.dumps({"open_points": [_point("pydantic", text="it may import pydantic.")]}), {}
+            return super().complete(instruction, text)
+
+    provider = OneReview(contradictions={"pydantic": quotes})
+    summary = service.ask_round(case, 7, provider, factory_root=factory)
+    assert "contradicts itself" in provider.instructions[0]
+    pydantic = [t for t in summary["topics"] if t["topic"] == "pydantic"]
+    assert len(pydantic) == 1 and len(pydantic[0]["runs"]) == 1
+    assert pydantic[0]["judgement"]["blocking"] is True and summary["blocked_units"] == ["surface"]
+
+    gap = Provider([_point("error text", text="x")], blocking={"error text"})
+    summary = service.ask_round(case, 7, gap, factory_root=factory)
+    judged = [t["judgement"] for t in summary["topics"]]
+    assert judged and all(j["kind"] == "consequential_gap" and j["blocking"] is False for j in judged)
 
 
 def test_a_reopened_state7_judges_the_prompt_change_since_it_closed(tmp_path, monkeypatch):
@@ -306,16 +349,15 @@ def test_a_module_whose_prompt_the_factory_refuses_stops_the_state7_round(tmp_pa
         service.ask_round(case, 7, Provider(), factory_root=factory)
 
 
-def test_state6_closes_by_sections_too(tmp_path):
+def test_state6_has_no_round_of_its_own(tmp_path):
+    """Contracts reach the generator inside each module's prompt, which State 7
+    asks; a State 6 round over the documents could not see 60_contracts.json."""
+    with pytest.raises(documents.QuestionScopeError):
+        documents.question_scope(6)
     case = tmp_path / "demo"
-    _write(case / "30_modules.md", MODULES)
-    _write(case / "60_contracts.md", "# State 6 — Demo contracts\n\n## Convention Time\n\nUTC.\n\n## store.save\n\n`save(r) -> None`\n")
-    provider = Provider()
-    summary = service.ask_round(case, 6, provider)
-    assert summary["scope"] == ["60_contracts.md:preamble", "60_contracts.md:Convention Time",
-                                "60_contracts.md:store.save", "context"]
-    assert documents.question_scope(6) in provider.instructions[0]
-    assert "=== 30_modules.md (State 3) ===" in provider.inputs[0]
+    _write(case / "60_contracts.md", "# State 6 — Demo contracts\n\n## store.save\n\n`save(r) -> None`\n")
+    with pytest.raises(documents.QuestionScopeError):
+        service.ask_round(case, 6, Provider())
 
 
 # 3. The gates

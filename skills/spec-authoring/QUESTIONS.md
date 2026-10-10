@@ -55,10 +55,20 @@ repeated topic into one kind, and only two kinds keep a state open:
 | `consequential_gap` | two careful implementers build different behaviour that the owner, an agent, a caller or a service notices | the two behaviours and who notices; any quote verbatim in the texts | yes, when it quotes a passage; deferred otherwise (below) |
 | `answered` | the texts already answer it | the answering quote, verbatim in the texts | no |
 | `answered_later` | only with `--provider codex`: a later state's text already decides it | the deciding quote, verbatim in the later states' texts | no |
-| `later_state` | it belongs to a later state | a state number after this one | no |
+| `later_state` | it is outside this state's `question_scope` and belongs to a later state | a state number after this one | no |
 | `judged_before` | the same question a recent round already judged non-blocking, on passages that have not changed | the prior judgement's id; its quotes still verbatim in the texts | no |
 | `indifferent` | no one acts differently on any answer | the reason | no |
 | `preexisting` | only with `--since`: about a passage the change did not touch | the quote, verbatim in both versions | no |
+
+The judge reads the same `question_scope` as the reviewers. Without it, State 0
+of Cabinet Kernel (its first round, 2026-10-10) was held open by seven
+acceptance-mechanics topics — what puts the photo case into `pending`, the
+oracle of the third-party analysis case — that belong to the rules of State 2
+and their required tests: the reviewers raised them inside the scope's words,
+and the judge, told only that "orders, encodings, formats, schemas, signatures,
+field types and notes" are later, could not place them there. A topic outside
+the state's scope is `later_state`, however real; the owning state's own round
+asks it.
 
 ### A gap no passage speaks to
 
@@ -210,13 +220,28 @@ decision 25 added a note allowing `surface` to import pydantic while its
 IMPORTS list held none; the contradiction stood in that one prompt, and Route
 B met it as `unknown_top_level_import`.
 
-State 6 is asked like States 0–5: its sections are units, the reviews read
-States 0–6, and its scope is the contracts' own — an argument with no source, a
-returned value with no consumer, a decision no contract owns, a contract that
-contradicts another.
+State 6 has no round of its own. Its exact contracts live in
+`60_contracts.json` and the closures, not in `60_contracts.md`, and the
+generator meets them only inside each module's prompt — signatures, models,
+constants, imports — which is exactly what State 7 asks. A round over the
+State 6 documents read prose about artifacts it could not see: Cabinet Kernel's
+first one (2026-10-10) blocked on "exact contract artifacts" and "release
+constant values" that stand in those JSON files, and descended into listen-
+address grammar and manifest size limits. A contract defect that reaches the
+generator stands in some module's prompt, and State 7 meets it there.
 
-In States 6 and 7 a gap that quotes no passage blocks: those states are where
-such a gap must be answered, so there is nothing later to defer it to.
+State 7 asks only for contradictions inside one module's prompt — a note that
+allows or names what the IMPORTS, a contract, a model or a constant does not
+hold, two notes deciding the same thing differently — each quoted on both
+sides. Its first round on Cabinet Kernel (2026-10-10) asked for every guess:
+519 repeated topics, 445 of them gaps such as the exact wording of an error
+message, all blocking, because State 7 has no later state to defer to; the one
+real contradiction (pydantic) was raised by one review of three and never
+judged. Behaviour is closed by States 2–5 and checked by the semantic
+witnesses; what only the prompt can show is that it contradicts itself. So
+every State 7 topic is judged, even from one review (both quotes are checked
+mechanically), only a `contradiction` blocks, and a gap the judge still names
+is recorded without blocking.
 
 ### Closed on the current texts, before anything after State 5
 

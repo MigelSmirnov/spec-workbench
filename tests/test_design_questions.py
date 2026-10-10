@@ -60,10 +60,11 @@ def test_documents_are_the_states_up_to_the_asked_one(tmp_path):
     assert [p.name for _, p in documents.design_documents(case, 1)] == ["00_product.md", "01_models.md"]
 
 
-def test_every_design_state_declares_a_question_scope():
-    for state in range(8):
+def test_every_design_state_but_the_contracts_declares_a_question_scope():
+    # State 6's contracts are asked inside State 7's module prompts (QUESTIONS.md)
+    for state in (0, 1, 2, 3, 4, 5, 7):
         assert documents.question_scope(state)
-    assert documents.question_states() == list(range(8))
+    assert documents.question_states() == [0, 1, 2, 3, 4, 5, 7]
 
 
 def test_a_topic_raised_by_two_reviews_keeps_the_state_open(tmp_path):
@@ -526,3 +527,21 @@ def test_round_100_comes_after_round_99(tmp_path):
             "round": f"round-{number}", "documents": {}, "closed": False, "clear": True,
             "repeated_topics": 0, "topics": []}), encoding="utf-8")
     assert service.status(case, 1)["round"] == "round-100"
+
+
+def test_the_judge_is_given_the_scope_of_the_state_it_judges():
+    """Cabinet Kernel State 0 round-01 (2026-10-10): the reviewers had the State 0
+    scope, the judge did not, and blocked State 0 on acceptance mechanics that
+    belong to the rules of State 2. The judge reads the same stop rule, and a
+    topic outside it is later_state, never blocking here."""
+    from questions_workbench import documents, prompts
+
+    scope = documents.question_scope(0)
+    instruction = prompts.judge_instruction(0, False, None, False, scope)
+    assert scope in instruction
+    assert "does not keep State 0 open" in instruction
+    assert '"later_state": the question belongs to a later state — it is outside the\n  scope of State 0' in instruction
+    # the last design state is judged against its own scope, with no later state to defer to
+    last = prompts.judge_instruction(7, False, None, False, documents.question_scope(7))
+    assert documents.question_scope(7) in last
+    assert '- "later_state"' not in last
