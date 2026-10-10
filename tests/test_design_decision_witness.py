@@ -133,6 +133,19 @@ def test_missing_factory_is_unverifiable_and_stops(tmp_path):
     report = design_decision_witness.coverage(case, tmp_path / "absent-factory")
     assert report["summary"]["handoff_ready"] is False
     assert [f["code"] for f in report["findings"]] == ["witness_unverifiable"]
+    assert "set SPEC_WORKBENCH_FACTORY_ROOT" in report["findings"][0]["message"]
+
+
+def test_missing_pyyaml_is_named_not_reported_as_absent_config(tmp_path, monkeypatch):
+    case, factory = _case(
+        tmp_path,
+        tag1="[witness: verification:streaming_download_behavior]",
+        check_names=["streaming_download_behavior"], notes=[],
+    )
+    monkeypatch.setattr(design_decision_witness, "yaml", None)
+    report = design_decision_witness.coverage(case, factory)
+    assert report["summary"]["handoff_ready"] is False
+    assert "PyYAML is not installed" in report["findings"][0]["message"]
 
 
 def test_real_case_stops_on_untagged_decisions(tmp_path):
