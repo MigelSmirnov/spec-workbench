@@ -407,10 +407,18 @@ authorizer, gateway). Интерфейс не вводит нового синт
   зарегистрированным deterministic backend IR; fallback в LLM-генерацию
   запрещён, потому что сигнатуры и prose не замыкают исполняемую границу;
 - `policy` — локальная реализация порта без исполняемой границы: каждый
-  аргумент её `__init__` имеет тип объявленного interface, объявленной
-  модели или скаляра (`str|int|bool|Decimal`), и сама она не владеет
-  соединениями, файлами или сетью. Такой класс генерируется как обычный
-  behavioral module; исполняемые границы остаются за его портами;
+  аргумент её `__init__` — позиционный, только по ключу, `*args` или
+  `**kwargs` — имеет тип объявленного interface, объявленной модели или
+  скаляра (`str|int|bool|float|Decimal|datetime`), и сама она не владеет
+  соединениями, файлами или сетью. Модуль-владелец не объявляет в
+  `imports.stdlib_by_module`/`third_party_by_module` и не использует в коде
+  модулей соединений, файлов, процессов и сети (закрытый список
+  `POLICY_FORBIDDEN_IMPORT_ROOTS` в `tools/implementation_obligations.py`;
+  `io` для буферов в памяти разрешён) и не вызывает `open`/`__import__`.
+  Такой класс генерируется как обычный behavioral module, но генератор
+  держит его к тем же обязательствам, что и `local`: наследует interface,
+  каждый метод порта не заглушка. Исполняемые границы остаются за его
+  портами;
 - `external` не содержит local implementations и явно оставляет создание
   реализации внешнему composition/deployment boundary;
 - имя, общий суффикс, соседство в модуле и prose note не доказывают отношение
@@ -1123,8 +1131,16 @@ Argon2id (`profile`) над `HMAC-SHA256(pepper, secret)`; проверка —
 - `authority_modules` — модули из `module_functions`. Пустой список вместе с
   пустым `allowed_primitives` означает «настенные часы не читает никто».
 - `single_host_source: true` требует ровно одного модуля и ровно одного
-  примитива; этот модуль обязан принадлежать детерминированному backend-у
-  (§6.9), иначе `local_implementation_requires_deterministic_backend`.
+  примитива; гейт тогда считает второго читателя `alternate_wall_clock_source`.
+- Каждый модуль из `wall_clock.authority_modules` и
+  `elapsed_time.authority_modules` — адаптер часов: он обязан принадлежать
+  детерминированному backend-у (§6.9), иначе
+  `local_implementation_requires_deterministic_backend` (capability
+  `wall_clock_authority`, `host_clock_authority` или
+  `elapsed_clock_authority`). Обязанность следует из полномочия, а не из
+  `single_host_source`: этот флаг задаёт, сколько читателей допускает гейт, и
+  `false` над одним полномочным модулем модуль часов в LLM-генерацию не
+  выпускает.
 - `conversion` — из закрытого набора `identity_ns`, `floor_ns_to_us`,
   `floor_ns_to_ms`, `floor_ns_to_s`; `unit` обязан совпадать с тем, что даёт
   конверсия, единица примитива — с её входом, а `models.<type>.fields.<field>`
@@ -1148,8 +1164,12 @@ Argon2id (`profile`) над `HMAC-SHA256(pepper, secret)`; проверка —
 Кому выданы часы и через какие имена — выводится из спеки
 (`imports.module_internal`, `implementation_obligations`, сигнатуры
 контрактов) и в блоке не повторяется. Спека без блока находится вне гейта:
-необъявленное полномочие проверить нельзя. Код детерминированных backend-ов
-проверяется против политики уже в `validate_spec`, до Route B.
+необъявленное полномочие проверить нельзя. Поэтому спека, объявившая
+`rules.system_clock_backend` (любой версии), обязана объявить и
+`rules.time_source_policy`, иначе `time_source_policy_required`: часы, выданные
+модулям, без политики не защищены от прямого чтения часов хоста. Код
+детерминированных backend-ов проверяется против политики уже в
+`validate_spec`, до Route B.
 
 ### 6.9 `system_clock_backend/v1`, `/v2`, `/v3`
 
@@ -1381,6 +1401,11 @@ Argon2id (`profile`) над `HMAC-SHA256(pepper, secret)`; проверка —
   настроек, полученного от `load_runtime_settings`, а не адресом `= config.*`.
 - Второго поставщика настроек не бывает: чтение окружения и значения по умолчанию
   вне этого модуля — дефект.
+- Объявленная таблица понижается только в модуль, который владеет ровно
+  `load_runtime_settings`: ровно один такой модуль и ни одного другого символа в
+  нём, иначе `runtime_settings_owner_missing`, `runtime_settings_owner_ambiguous`
+  или `runtime_settings_owner_not_exclusive`. Модуль с лишним символом ушёл бы в
+  LLM-генерацию вместе с границей окружения.
 - Спека без модуля настроек не имеет пути от листа `config` к генерируемому
   коду; такой лист либо читает детерминированный backend (§15.3.1), либо он
   недостижим и является ошибкой спеки (§15.3).
