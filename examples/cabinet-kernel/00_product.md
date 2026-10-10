@@ -205,7 +205,8 @@ through an operation node and leaves it into a service, so a caller never hands
 the kernel a file and never receives one. A
 file's media type is its producing port's single media type (K-06), and an edge
 between file ports requires the same type; the kernel does not inspect file
-content. Values and the records
+content to decide or check its type. The one search it makes in any answer
+body, a file's included, is for a credential echoed verbatim (Secrets above). Values and the records
 that name them are kept for as long as the kernel keeps its traces; this kernel
 expires nothing. Backup and restore of the kernel's store are an operational
 procedure outside the kernel.
