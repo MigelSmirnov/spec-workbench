@@ -115,9 +115,11 @@ AdmissionVerdict M08 and Activation M09 are written by `module:functions`.
    with `capability:clock.monotonic_deadline` and returns one outcome of
    the closed A03 rule 5 order and, on success, outputs that fit the output
    ports. `module:functions` stores the value outputs through
-   `capability:store.put_value_bytes` and records a file output by its facts
-   only (M07), each with the highest class of the case's inputs, computed by `capability:canonical_values.highest_disclosure_class`
-   (A07 rule 3), compares them with the expected outputs by digest (A04
+   `capability:store.put_value_bytes`, each StoredValue with the highest class
+   of the case's inputs, computed by
+   `capability:canonical_values.highest_disclosure_class` (A07 rule 3), and
+   records a file output by its facts only — digest, size and media type, no
+   class (M07) —, compares them with the expected outputs by digest (A04
    rule 3) and writes one TrialExecution per case. No verdict, no activation.
    The answer is the trial evidence per case.
 4. **Submit an implementation.** `capability:functions.submit_implementation`
@@ -237,8 +239,9 @@ come from the installation.
    the contract-port rules and classes of M01.
 2. **Pin.** `module:bindings` computes `record_digest` of the one capability
    entry with `capability:canonical_values.content_identity` (A08 rule 2),
-   mints `binding_id` (A01 rule 2) and writes the Binding `proposed` with
-   effect class, key fields and digest copied from the manifest. The answer
+   and writes the Binding `proposed` with effect class, key fields and digest
+   copied from the manifest through `capability:store.record_change`, which
+   mints `binding_id` inside that change (A01 rule 2, State 3). The answer
    is the proposed binding. Next decision: the owner's.
 3. **Inspect.** The owner, or any agent, reads the proposal through
    `capability:bindings.read_binding`, as `module:surface` returns it.
