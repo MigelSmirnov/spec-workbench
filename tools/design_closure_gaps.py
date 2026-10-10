@@ -275,9 +275,21 @@ def parse_state_impacts(case: Path) -> dict[str, dict[str, Any]]:
     return impacts
 
 
+def time_source_authorities(spec: dict[str, Any]) -> set[str]:
+    """Modules rules.time_source_policy (SPEC_STANDARD 6.8) declares as the host wall-clock reader.
+
+    Such a module is the named time source itself: it has no clock port to retain.
+    """
+    policy = (spec.get("rules") or {}).get("time_source_policy")
+    wall = policy.get("wall_clock") if isinstance(policy, dict) else None
+    modules = wall.get("authority_modules") if isinstance(wall, dict) else None
+    return {m for m in modules if isinstance(m, str)} if isinstance(modules, list) else set()
+
+
 def ambient_time_findings(models: dict[str, Any], contracts: dict[str, Any],
-                          func_module: dict[str, str], notes: list[Any]) -> list[dict[str, Any]]:
-    clocked = modules_with_clock(models, contracts, func_module)
+                          func_module: dict[str, str], notes: list[Any],
+                          sources: set[str] = frozenset()) -> list[dict[str, Any]]:
+    clocked = modules_with_clock(models, contracts, func_module) | sources
     findings = []
     for note in notes:
         text = str(note)
@@ -302,8 +314,9 @@ def ambient_time_findings(models: dict[str, Any], contracts: dict[str, Any],
 
 def fresh_timestamp_findings(models: dict[str, Any], contracts: dict[str, Any],
                              func_module: dict[str, str],
-                             impacts: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
-    clocked = modules_with_clock(models, contracts, func_module)
+                             impacts: dict[str, dict[str, Any]],
+                             sources: set[str] = frozenset()) -> list[dict[str, Any]]:
+    clocked = modules_with_clock(models, contracts, func_module) | sources
     findings = []
     for function in sorted(impacts):
         if impacts[function]["read_only"]:
@@ -333,8 +346,9 @@ def check_time_sources(case: Path, spec: dict[str, Any]) -> list[dict[str, Any]]
     contracts = spec.get("contracts") or {}
     func_module = {f: module for module, funcs in (spec.get("module_functions") or {}).items()
                    for f in (funcs or [])}
-    return (ambient_time_findings(models, contracts, func_module, spec.get("notes") or [])
-            + fresh_timestamp_findings(models, contracts, func_module, parse_state_impacts(case)))
+    sources = time_source_authorities(spec)
+    return (ambient_time_findings(models, contracts, func_module, spec.get("notes") or [], sources)
+            + fresh_timestamp_findings(models, contracts, func_module, parse_state_impacts(case), sources))
 
 
 def run(case: Path) -> dict[str, Any]:
