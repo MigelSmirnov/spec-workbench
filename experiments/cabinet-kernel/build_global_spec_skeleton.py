@@ -204,3 +204,8 @@ print(json.dumps({
     "upward_edges": upward,
     "interfaces": [n for n, d in models.items() if d.get("kind") == "interface"],
 }, indent=1))
+if upward:
+    # An import from a module later in module_order is a cycle the kernel
+    # cannot start with (2026-10-10: a store note naming recover_running_runs
+    # made store import runs; every witness failed on the partial import).
+    raise SystemExit(f"upward import edges against module_order: {upward}")
