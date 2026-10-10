@@ -265,6 +265,28 @@ the field), `store` (the merge sentence, the malformed status set, the relation 
 choice the question named and adds none. The witnesses read attempts' `status`, `node_id`,
 `authority`, `attempt_number`, `map_index`, `resolved_by` — all kept; none reads `inputs`.
 
+## Decision 25 delta review (2026-10-10)
+
+Decision 25 (pydantic, release pins, entry point, store layout; owner, after
+the `semantic_runtime` fixture review, code-factory PR #51) moved eleven
+slices. Built at the commit before it and after, and diffed without note
+positions:
+
+- **Content changed** — `data_provider` (six constants), `store` (the
+  `open_store` layout note and its two area constants), `sandbox`
+  (`SANDBOX_RUNTIME_PATHS` in `execute_function`; `probe_sandbox` finds `bwrap`
+  on `PATH` and stops the start on a bubblewrap or interpreter version other
+  than the release's), `surface` (`python -m cabinet_kernel.surface`, pydantic
+  as the one third-party package, `None` written as `null`).
+- **Note positions only** — `installation`, `service_invoker`, `functions`,
+  `bindings`, `flows`, `effects`, `runs`.
+
+Each content change removes a choice the fixture review named (which paths,
+which versions, which entry point, which names, null or omitted) and adds
+none. The interpreter check is concrete: one bwrap run with the same runtime
+bindings prints `platform.python_implementation()` and `python_version()`;
+`bwrap --version` prints "bubblewrap" and the version. All 15 stay `PASS`.
+
 ## Questions to the owner (answered above)
 
 ### Q1 — `functions.roll_back_slot`: the serving implementation without a current verdict
