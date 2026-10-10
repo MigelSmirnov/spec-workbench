@@ -149,12 +149,13 @@ def coverage(project: Path, *, storage_resolver: StorageResolver | None = None) 
         )
 
     payload = rules.get("persistence_backend")
+    masters = catalog.master_models(spec.get("persistence"))
     if closure is None and payload is None:
         return _report(
             project,
-            enabled=False,
+            enabled=bool(masters),
             payload=None,
-            findings=[],
+            findings=[catalog.required_closure_finding(masters)] if masters else [],
             codec_coverage=evaluate_codec_coverage(spec, storage_resolver=storage_resolver),
         )
 

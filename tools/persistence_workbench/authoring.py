@@ -15,6 +15,24 @@ from persistence_workbench.validator import validate
 def coverage(project: Path) -> dict[str, Any]:
     """Validate the optional post-State-6 persistence closure."""
     closure = catalog.load_optional(project)
+    masters = catalog.declared_master_models(project) if closure is None else []
+    if closure is None and masters:
+        return {
+            "schema_version": AUTHORING_SCHEMA,
+            "project_root": project.resolve().name,
+            "enabled": True,
+            "status": None,
+            "ready": False,
+            "summary": {
+                "repositories": 0,
+                "deterministic_methods": 0,
+                "errors": 1,
+                "closed": False,
+                "handoff_ready": False,
+            },
+            "deterministic_method_scopes": [],
+            "findings": [catalog.required_closure_finding(masters).to_dict()],
+        }
     if closure is None:
         return {
             "schema_version": AUTHORING_SCHEMA,
