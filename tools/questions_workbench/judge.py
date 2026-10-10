@@ -27,6 +27,7 @@ from typing import Any
 BLOCKING = {"contradiction", "consequential_gap"}
 DEFERRED_TO = "State 6 contracts or State 7 notes"
 LAST_DEFERRING_STATE = 5
+MODULE_STATE = 7
 KINDS = BLOCKING | {"answered", "answered_later", "later_state", "indifferent", "preexisting", "judged_before"}
 
 
@@ -130,7 +131,10 @@ def check(judgement: dict[str, Any] | None, state: int, texts: str, old_texts: s
                 and state <= LAST_DEFERRING_STATE)
     if deferred:
         kept["deferred_to"] = DEFERRED_TO if not quotes else "the states whose texts it quotes"
-    kept["blocking"] = (kind in BLOCKING and not deferred) or failure is not None
+    # State 7 asks only for contradictions inside a module's prompt: a gap the
+    # judge still names there is recorded, never a reason to keep notes open
+    gap_recorded = kind == "consequential_gap" and state == MODULE_STATE and failure is None
+    kept["blocking"] = (kind in BLOCKING and not deferred and not gap_recorded) or failure is not None
     if failure:
         kept["failure"] = failure
     return kept

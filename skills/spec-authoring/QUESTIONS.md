@@ -230,8 +230,18 @@ constant values" that stand in those JSON files, and descended into listen-
 address grammar and manifest size limits. A contract defect that reaches the
 generator stands in some module's prompt, and State 7 meets it there.
 
-In State 7 a gap that quotes no passage blocks: it is where such a gap must be
-answered, so there is nothing later to defer it to.
+State 7 asks only for contradictions inside one module's prompt — a note that
+allows or names what the IMPORTS, a contract, a model or a constant does not
+hold, two notes deciding the same thing differently — each quoted on both
+sides. Its first round on Cabinet Kernel (2026-10-10) asked for every guess:
+519 repeated topics, 445 of them gaps such as the exact wording of an error
+message, all blocking, because State 7 has no later state to defer to; the one
+real contradiction (pydantic) was raised by one review of three and never
+judged. Behaviour is closed by States 2–5 and checked by the semantic
+witnesses; what only the prompt can show is that it contradicts itself. So
+every State 7 topic is judged, even from one review (both quotes are checked
+mechanically), only a `contradiction` blocks, and a gap the judge still names
+is recorded without blocking.
 
 ### Closed on the current texts, before anything after State 5
 
