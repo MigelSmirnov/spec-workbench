@@ -295,6 +295,16 @@ precedent); State 3 split `store_persistence` off `store` for it.
       `StoreRepository` and its rows are contract-only models: they are not State 1
       records and carry no persistence class; the records keep theirs (five
       `master`, thirteen `issued`).
+    - *Accepted by the owner (2026-10-10).* A row is the store's envelope, not a
+      second domain model (§15.5.1): it adds no domain fact. A page reads the
+      whole equality list and is cut in `store`; v3 has no limit or range, and
+      one owner on one local kernel does not need one — a v4 form is asked for
+      only when a list's size makes it necessary. The JSON form of a key column
+      is that of the pinned pydantic of the release (A20 rule 3): a release that
+      changes the pydantic version checks that the form of `ElementKey`,
+      `AttemptKey` and `SpooledFileKey` is unchanged, or migrates those columns.
+      The A18 witness counts `store_persistence` as part of the store module:
+      it may send row statements (`.cursor`, `.execute`) and nothing else.
 
 ## Texts of earlier states changed by State 6
 

@@ -148,6 +148,18 @@ def _is_store_module(module_path):
     return "store" in parts
 
 
+# 30_modules.md `store_persistence` (decision 23): the store's companion is part
+# of the store module of A18. It sends the typed row statements over the
+# connection `store` gives it, inside the transaction `store` opened; it never
+# opens the database nor opens, names or passes a transaction.
+STORE_COMPANION = "store_persistence"
+ROW_STATEMENT_USES = (".cursor", ".execute")
+
+
+def _is_store_companion(module_path):
+    return PurePosixPath(str(module_path).replace("\\", "/")).with_suffix("").name == STORE_COMPANION
+
+
 def _database_uses(source):
     """Names, calls and SQL texts by which a module touches the database."""
     found = []
@@ -268,7 +280,13 @@ def test_store_module_sole_transaction_owner(semantic_runtime):
         path: uses
         for path, source in sources.items()
         if not _is_store_module(path)
-        for uses in [_database_uses(source)]
+        for uses in [
+            [
+                use
+                for use in _database_uses(source)
+                if not (_is_store_companion(path) and use in ROW_STATEMENT_USES)
+            ]
+        ]
         if uses
     }
     assert offenders == {}
