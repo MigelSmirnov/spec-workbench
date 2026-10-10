@@ -74,6 +74,25 @@ def load_json(path: Path) -> Any:
         raise SystemExit(f"invalid JSON: {path}: {exc}") from exc
 
 
+ACCEPTED_DIR = "specs/accepted"
+
+
+def path_free(value: Any, roots: list[Path]) -> Any:
+    """The value with every string path under one of `roots` made relative to it."""
+    if isinstance(value, dict):
+        return {key: path_free(item, roots) for key, item in value.items()}
+    if isinstance(value, list):
+        return [path_free(item, roots) for item in value]
+    if isinstance(value, str):
+        for root in roots:
+            text = str(root.resolve())
+            if value == text:
+                return "."
+            if value.startswith(text + "/"):
+                return value[len(text) + 1:]
+    return value
+
+
 def write_json_atomic(path: Path, data: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_suffix(path.suffix + ".tmp")
@@ -593,12 +612,23 @@ def main() -> int:
     if lineage["inputs"].get("codec_coverage") != codec_coverage:
         raise SystemExit("accepted Stage 9 lineage does not cover source codec evidence")
 
+    # The files that prove acceptance also go, with this machine's checkout
+    # roots removed from their paths, to the tracked specs/accepted/ beside the
+    # canonical spec: specs/working/ is git-ignored, and every Factory checkout
+    # that pulls the spec must hold its acceptance too (the Factory's
+    # factory_control/accepted_lineage.py materializes it before Route B).
+    accepted_dir = paths["root"] / ACCEPTED_DIR
+    for working_file in (lineage_path, manifest_path, validation_path, admission_path):
+        payload = json.loads(working_file.read_text(encoding="utf-8"))
+        write_json_atomic(accepted_dir / working_file.name, path_free(payload, [factory_root, workbench_root]))
+
     print(f"exported spec: {source}")
     print(f"canonical spec: {paths['canonical']}")
     if semantic_handoff:
         print(f"semantic tests: {len(semantic_handoff['files'])} copied byte-exact; Factory execution not verified")
     print(f"handoff manifest: {manifest_path}")
     print(f"accepted lineage: {lineage_path}")
+    print(f"tracked acceptance: {accepted_dir} (commit it with the canonical spec)")
     return 0
 
 

@@ -304,6 +304,22 @@ def test_export_creates_canonical_spec_and_bound_handoff(
     assert lineage["inputs"]["codec_coverage"] == codec_coverage
     assert lineage["change_summary"]["changed_modules"] == ["global"]
     assert lineage["outputs"]["base_spec_sha256_after"] == export_to_factory.sha256_file(canonical)
+    # The acceptance travels with the spec: tracked copies, free of this
+    # machine's checkout roots, beside the canonical spec.
+    accepted = factory / "projects/demo/specs/accepted"
+    assert sorted(path.name for path in accepted.iterdir()) == sorted([
+        "spec_editor_manifest.json",
+        "spec_workbench_handoff.json",
+        "spec_workbench_validation.json",
+        "spec_workbench_factory_admission.json",
+    ])
+    for path in accepted.iterdir():
+        text = path.read_text(encoding="utf-8")
+        assert str(factory.resolve()) not in text and str(workbench_root.resolve()) not in text, path.name
+    tracked = json.loads((accepted / "spec_editor_manifest.json").read_text(encoding="utf-8"))
+    assert tracked["accepted"] is True and tracked["verdict"] == "PASS"
+    assert tracked["outputs"]["base_spec_sha256_after"] == export_to_factory.sha256_file(canonical)
+    assert tracked["inputs"]["base_spec_path"] == "projects/demo/specs/base/global_spec.json"
 
 
 def test_export_blocks_when_authored_notes_are_missing_from_canonical_spec(
