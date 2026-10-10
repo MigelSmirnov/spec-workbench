@@ -1,10 +1,12 @@
 """The reference case with its undecided facts decided, for tests that need a ready State 6.
 
 Under the fence ``examples/cabinet-backend`` is truthfully not ready: two public
-mutating operations produce timestamps and their modules retain no clock port.
-A test that needs a ready State 6 decides that here, in a copy, the way an
-author would — a ``Clock`` port retained by the owning services — instead of
-pretending the reference case is ready.
+mutating operations produce timestamps and their modules retain no clock port,
+and three credential callables have notes in the imperative mood, which the
+Factory refuses as generation evidence. A test that needs a ready State 6 and
+State 7 decides both here, in a copy, the way an author would — a ``Clock`` port
+retained by the owning services, and the leading verb of those notes written as
+a modal requirement — instead of pretending the reference case is ready.
 """
 from __future__ import annotations
 
@@ -18,6 +20,11 @@ CONTRACTS = "60_contracts.json"
 PLAN = "60_contract_plan.json"
 MODEL_CLOSURE = "60_model_closure_support.json"
 PURPOSE = "Close the concrete service or bounded stream type required by canonical contracts."
+MODAL_REPAIRS = (
+    ("issue_service_credential: [SECURITY_BOUNDARY] Generate ", "issue_service_credential: [SECURITY_BOUNDARY] MUST generate "),
+    ("parse_service_token: [VALIDATION_ERROR] Raise ", "parse_service_token: [VALIDATION_ERROR] MUST raise "),
+    ("verify_service_secret: [SECURITY_BOUNDARY] Compare ", "verify_service_secret: [SECURITY_BOUNDARY] MUST compare "),
+)
 
 
 def decided_reference(tmp_path: Path) -> Path:
@@ -63,5 +70,13 @@ def decided_reference(tmp_path: Path) -> Path:
         "RegistryContextService.record_card_assignment_observation: [ORCHESTRATION] MUST record the supplied observation through the retained repository inside one transaction and return the stored observation unchanged.",
         "RegistryContextService.get_assignment_validation: [ORCHESTRATION] MUST validate the exact pinned revision through validate_card_assignment and return that ObjectAssignmentValidation without mutation.",
     )) + "\n"
+    # The three credential callables state their requirement with MUST.
+    for imperative, modal in MODAL_REPAIRS:
+        notes = notes.replace(imperative, modal)
     notes_path.write_text(notes, encoding="utf-8")
+    spec_path = project / "global_spec.json"
+    spec = spec_path.read_text(encoding="utf-8")
+    for imperative, modal in MODAL_REPAIRS:
+        spec = spec.replace(imperative, modal)
+    spec_path.write_text(spec, encoding="utf-8")
     return project
