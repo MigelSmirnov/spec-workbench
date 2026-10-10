@@ -582,11 +582,11 @@ None.
 
 Reads the host clock only.
 
-## `public_op:clock.monotonic_deadline`
+## `public_op:clock.monotonic_ns`
 
 ### Owner
 
-`module:clock`. Return a monotonic deadline for a bounded wait.
+`module:clock`. Return one reading of the host monotonic clock.
 
 ### Callers
 
@@ -594,11 +594,13 @@ Reads the host clock only.
 
 ### Inputs
 
-A duration in milliseconds.
+Nothing.
 
 ### Outputs
 
-A monotonic deadline and a way to ask whether it passed.
+The host monotonic clock in nanoseconds. The caller derives a bounded wait's
+deadline from it — the reading at the start plus the bound — and asks whether it
+passed with a later reading.
 
 ### Observable effect
 
@@ -606,8 +608,9 @@ None.
 
 ### Enforces
 
-Deadlines never read the wall clock; no time limit decides anything beyond the
-wait it bounds (A14 rule 1).
+Deadlines never read the wall clock and are held by the waiting caller only,
+never stored (A19 rule 2); no time limit decides anything beyond the wait it
+bounds (A14 rule 1). Replaceable as a whole in tests with the wall clock (A19).
 
 ### Errors
 

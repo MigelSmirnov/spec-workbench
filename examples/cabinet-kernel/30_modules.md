@@ -423,8 +423,8 @@ highest_disclosure_class
 
 ### Owns
 
-A19: the one source of kernel timestamps and of monotonic deadlines. Nothing
-else in the kernel reads a clock.
+A19: the one source of kernel timestamps and of monotonic readings, from which
+a bounded wait derives its deadline. Nothing else in the kernel reads a clock.
 
 ### Knows
 
@@ -442,7 +442,7 @@ The wall and monotonic clocks, and their replacement by a fixed clock in tests.
 
 ```text
 kernel_now
-monotonic_deadline
+monotonic_ns
 ```
 
 ### Depth assessment
@@ -621,7 +621,7 @@ with `cleanup_failed` (above, "Unconfirmed cleanup"), and the start probe.
 ### Knows
 
 `models`, `data_provider`, `canonical_values` (output fit), `clock` (monotonic
-deadline).
+readings for the wall deadline).
 
 ### Must not own
 

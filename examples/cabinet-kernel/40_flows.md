@@ -112,7 +112,7 @@ AdmissionVerdict M08 and Activation M09 are written by `module:functions`.
    anything executes (A04 rule 6). Each case, in corpus order, is one call of
    `capability:sandbox.execute_function` with the implementation's code, the
    case's inputs and the contract's bounds; the sandbox sets its wall deadline
-   with `capability:clock.monotonic_deadline` and returns one outcome of
+   from a `capability:clock.monotonic_ns` reading and returns one outcome of
    the closed A03 rule 5 order and, on success, outputs that fit the output
    ports. `module:functions` stores the value outputs through
    `capability:store.put_value_bytes`, each StoredValue with the highest class
@@ -429,8 +429,8 @@ records are the trace and the rest state.
    through `capability:store.read_records`. `module:runs` reads the pinned implementation's code
    and bounds through `capability:functions.read_implementation`, the inputs'
    bytes through `capability:store.read_value_bytes`, and calls
-   `capability:sandbox.execute_function`, which sets its wall deadline with
-   `capability:clock.monotonic_deadline`. On success it validates each output
+   `capability:sandbox.execute_function`, which sets its wall deadline from a
+   `capability:clock.monotonic_ns` reading. On success it validates each output
    against the source port, then against each target port before delivery;
    a failure against the source port concludes this node, a failure against a
    target port the receiving node, `contract_violation` (A13 rule 3); a value above `stored_value_bytes_max` concludes
@@ -450,8 +450,8 @@ records are the trace and the rest state.
    JSON values as `capability:canonical_values.canonical_bytes`, naming the
    first failure. A failure concludes `operation_failed` with nothing sent.
    Otherwise `capability:service_invoker.send_prepared_request` sends once,
-   within the transport deadline set with
-   `capability:clock.monotonic_deadline` — no redirect, proxy or retry — and names the outcome from the `read` column of
+   within the transport deadline set from a
+   `capability:clock.monotonic_ns` reading — no redirect, proxy or retry — and names the outcome from the `read` column of
    the A09 rule 5 table. `module:effects` writes the concluding NodeExecution
    and the output values, class from the binding, a returned file going to the
    run's spool. `module:runs` reads the
@@ -580,8 +580,8 @@ call; the run's status and WaitingPoints M20 written by `module:runs`.
    `capability:canonical_values.content_identity` (A08 rule 4) and the attempt
    number the store assigns inside that call
    (State 3, "Attempt numbers"). `capability:service_invoker.send_prepared_request`
-   sends once, within the transport deadline set with
-   `capability:clock.monotonic_deadline`, the key fields travelling as the
+   sends once, within the transport deadline set from a
+   `capability:clock.monotonic_ns` reading, the key fields travelling as the
    inputs themselves; a file the service returns goes to the run's spool
    through `capability:store.spool_file`. A second
    store call writes the outcome: the attempt's conclusion from the non-`read`

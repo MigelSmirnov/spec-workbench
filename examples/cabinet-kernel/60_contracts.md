@@ -48,10 +48,9 @@ not review fields, classes or formats, so each is the agent's and says why.
   outputs, a filter, a continuation token, an absent candidate).
 - **Time** is `KernelInstant` (`epoch_us`, integer microseconds since the Unix
   epoch, UTC), the one representation of every recorded `*_at` field;
-  `clock.kernel_now` returns it. `clock.monotonic_deadline` returns a
-  `MonotonicDeadline`, a class `clock` owns, with `has_passed` and
-  `remaining_ms` — the "way to ask whether it passed" of State 5; it is never
-  stored (A19 rule 2).
+  `clock.kernel_now` returns it. `clock.monotonic_ns` returns one raw host
+  monotonic reading in nanoseconds (`int`); a bounded wait derives its deadline
+  from it and keeps it in memory only, never stored (A19 rule 2; decision 26).
 - **Values in calls are bytes.** A `value` port's value travels as its RFC 8785
   canonical bytes, a file as its bytes (`PortPayload`); records refer to values
   by `value_id` and to spooled files by their identity (`PortRef`), and hold no
@@ -185,8 +184,9 @@ agent's and says why; the owner-facing rules they rest on are in State 2.
     order. An idempotency key is the object of port name to JSON value, `null`
     kept (decision 3). `request_digest` is the content identity of the request
     description's canonical JSON (A10 rule 7).
-15. **`MonotonicDeadline.remaining_ms`** rounds up, so zero remaining means
-    `has_passed`.
+15. **Time left before a deadline** rounds up to whole milliseconds, so zero
+    remaining means the deadline has passed (decision 26 moved this from the
+    withdrawn `MonotonicDeadline.remaining_ms` to each waiting function).
 16. **Store writes.** Writing a StoredValue whose `value_id` exists returns the
     existing record; repeating any other immutable record is
     `StoreInternalError`, since its caller checks existence first.
@@ -372,8 +372,44 @@ each on 2026-10-10.
       harness; `RUNTIME_SURFACE.md` is corrected (`ShownComposedFlowVersion`,
       `token=None`, `raw`, `run_spool`, the default page size).
 
+## Decision closed for the clock (2026-10-10)
+
+The first Route B stopped at `clock`: the Factory's time-source gate refused
+the generated module with `clock_representation_mismatch`, because the
+`kernel_now` note asked for a private reader function and SPEC_STANDARD §6.8
+wants the operation that samples the clock to return the instant itself — no
+generation could pass. The Factory then closed the gap that let `clock` be
+generated at all (code-factory PR #57): every module `rules.time_source_policy`
+grants a host clock is an executable boundary produced by a deterministic
+backend (§6.9), whatever `single_host_source` says. The owner decided on
+2026-10-10 to bring the kernel to Route B on that form, as Cabinet Flow did
+(its A25, which A19 reuses).
+
+26. **The clock is emitted, not generated.**
+    - `clock` owns exactly `kernel_now() -> KernelInstant` and
+      `monotonic_ns() -> int`, lowered by the Factory's `python_host_clock_v1`
+      from `70_system_clock_closure.json` (`system_clock_backend/v3`);
+      `rules.time_source_policy` names `clock` the single host source of both
+      clocks. The module has no notes: its code is fixed by the policy (one
+      `time.time_ns()` sample floored to microseconds, one raw
+      `time.monotonic_ns()` sample).
+    - `monotonic_deadline` and `MonotonicDeadline` are withdrawn. A bounded
+      wait reads `monotonic_ns` once at its start; its deadline is that
+      reading plus the bound in nanoseconds, held in a local variable of the
+      waiting function only and never stored (A19 rule 2); the wait has
+      passed when a later reading reaches it, and the time left is the
+      difference rounded up to whole milliseconds (convention 15).
+      `sandbox.execute_function` and `service_invoker.send_prepared_request`
+      each bound one wait this way.
+    - Tests still replace the clock module as a whole (A19 required tests);
+      fixing its monotonic source fixes `monotonic_ns`.
+
 ## Texts of earlier states changed by State 6
 
+- States 3, 4 and 5 (2026-10-10, decision 26): `clock`'s capabilities are
+  `kernel_now` and `monotonic_ns`; the flows that bound a wait name
+  `capability:clock.monotonic_ns`; `public_op:clock.monotonic_deadline` is
+  replaced by `public_op:clock.monotonic_ns`.
 - Semantic test documents (2026-10-10, decision 25):
   `tests/semantic/RUNTIME_SURFACE.md` corrected; no test file changed.
 - State 5 (2026-10-10, decision 24): the relation "runs by status" answers
