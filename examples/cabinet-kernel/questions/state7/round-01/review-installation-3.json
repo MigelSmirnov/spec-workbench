@@ -1,0 +1,688 @@
+{
+ "open_points": [
+  {
+   "subject": "module state initialization",
+   "kind": "missing lifecycle behavior",
+   "text": "keep the returned Installation for the life of the process",
+   "question": "What must current_token_list, manifest_source, resolve_service_credential, and selected_instance_name do when called before load_installation has successfully loaded an Installation?",
+   "options": [
+    "raise a specified initialization error",
+    "raise a built-in error",
+    "return None where the return type permits it",
+    "implicitly load a configuration"
+   ],
+   "default_guess": "raise RuntimeError indicating that the installation has not been loaded",
+   "unit": "installation"
+  },
+  {
+   "subject": "load_installation",
+   "kind": "ambiguous repeated call",
+   "text": "MUST call read_configuration once at start, keep the returned Installation for the life of the process",
+   "question": "What must happen if load_installation is called more than once, especially with a different config_path?",
+   "options": [
+    "return the originally kept Installation without reading again",
+    "reload and replace all kept state",
+    "reject the second call",
+    "call read_configuration on every invocation but keep only the first result"
+   ],
+   "default_guess": "return the originally kept Installation without reading again",
+   "unit": "installation"
+  },
+  {
+   "subject": "load_installation and current_token_list",
+   "kind": "missing state",
+   "text": "current_token_list: [BEHAVIOR] On every call MUST read the configuration file's bytes, opening config_path as read_configuration does",
+   "question": "Where is current_token_list's config_path obtained and must load_installation retain the exact supplied string for later token refreshes?",
+   "options": [
+    "retain the config_path supplied to the first successful load_installation call",
+    "derive a path from the loaded Installation",
+    "use an external fixed path"
+   ],
+   "default_guess": "retain the config_path supplied to the first successful load_installation call",
+   "unit": "installation"
+  },
+  {
+   "subject": "load_installation",
+   "kind": "inconsistent read source",
+   "text": "MUST call read_configuration once at start, keep the returned Installation for the life of the process, and keep the SHA-256 of the file's bytes as the last read digest",
+   "question": "How is load_installation to obtain a digest of the exact bytes validated by read_configuration when read_configuration returns only Installation and exposes neither bytes nor a digest?",
+   "options": [
+    "read the path a second time and hash those possibly different bytes",
+    "give read_configuration an unspecified module-side effect that records its bytes and digest",
+    "implement an internal helper shared by both functions despite the required public contract"
+   ],
+   "default_guess": "use a private helper returning the Installation and digest, with read_configuration returning only the Installation",
+   "unit": "installation"
+  },
+  {
+   "subject": "load_installation",
+   "kind": "atomicity ambiguity",
+   "text": "a failed check propagates InstallationRejectedError and nothing is kept",
+   "question": "If a later load_installation call fails after an earlier successful load, does 'nothing is kept' clear the previously kept process-lifetime state or leave it unchanged?",
+   "options": [
+    "clear all previously kept state",
+    "leave the earlier successful state unchanged",
+    "second calls are impossible because they are rejected before reading"
+   ],
+   "default_guess": "leave the earlier successful state unchanged",
+   "unit": "installation"
+  },
+  {
+   "subject": "load_installation",
+   "kind": "race behavior",
+   "text": "keep the SHA-256 of the file's bytes as the last read digest and the file's owner token and agent tokens as the current token list",
+   "question": "If the file changes between read_configuration's validated read and the operation that obtains the digest, which version supplies the kept Installation, digest, and initial TokenList?",
+   "options": [
+    "all state must come from one opened-file snapshot",
+    "Installation and TokenList come from the validated read while the digest may come from a later read",
+    "retry until the reads agree",
+    "reject the load"
+   ],
+   "default_guess": "make all state come from one opened-file snapshot through a shared private helper",
+   "unit": "installation"
+  },
+  {
+   "subject": "current_token_list",
+   "kind": "ambiguous read sequence",
+   "text": "On every call MUST read the configuration file's bytes ... and compare their SHA-256 with the last read digest; when different, or when the file cannot be read, it re-reads the file and applies exactly four checks",
+   "question": "Must a changed file always be opened and read twice, or may the bytes used for the digest comparison also be used for validation?",
+   "options": [
+    "always perform a second secure open and read",
+    "validate the first read's bytes",
+    "reuse the same open file but seek and read again"
+   ],
+   "default_guess": "perform the explicitly required second secure open and read",
+   "unit": "installation"
+  },
+  {
+   "subject": "current_token_list",
+   "kind": "race behavior",
+   "text": "when different ... it re-reads the file ... the new digest becomes the last read digest",
+   "question": "When the comparison read and validation re-read differ, which byte sequence is 'the new digest' and which sequence determines the returned tokens?",
+   "options": [
+    "digest and tokens both come from the validation re-read",
+    "digest comes from the comparison read and tokens from the validation re-read",
+    "retry until both reads match"
+   ],
+   "default_guess": "digest and tokens both come from the validation re-read",
+   "unit": "installation"
+  },
+  {
+   "subject": "current_token_list",
+   "kind": "ambiguous unreadable retry",
+   "text": "when different, or when the file cannot be read, it re-reads the file and applies exactly four checks",
+   "question": "If the initial comparison read fails but the required re-read succeeds, should the successful re-read be validated and installed, or must this call return None because the first read failed?",
+   "options": [
+    "validate and install the successful re-read",
+    "treat the call as unreadable and return None",
+    "retry the comparison from the beginning"
+   ],
+   "default_guess": "validate and install the successful re-read",
+   "unit": "installation"
+  },
+  {
+   "subject": "current_token_list",
+   "kind": "ambiguous digest update",
+   "text": "the new digest becomes the last read digest, and when the file cannot be read the last read digest is cleared",
+   "question": "When readable bytes fail parsing or one of the token checks, is their digest retained so identical invalid bytes are not checked again, or is the digest cleared?",
+   "options": [
+    "retain the digest of every readable re-read, including invalid content",
+    "retain it only for valid content",
+    "clear it for every failed check"
+   ],
+   "default_guess": "retain the digest for readable bytes even when their token checks fail",
+   "unit": "installation"
+  },
+  {
+   "subject": "current_token_list",
+   "kind": "validation scope ambiguity",
+   "text": "the file can be read and parses as a JSON object with owner_token and agent_tokens of the Installation types",
+   "question": "During token refresh, must the entire object still have exactly all Installation fields with valid types, or are only owner_token and agent_tokens required and validated?",
+   "options": [
+    "validate only the two token fields",
+    "validate the complete Installation schema but use only its tokens",
+    "require all fields to exist but ignore their types except for the token fields"
+   ],
+   "default_guess": "validate only owner_token and agent_tokens because the re-read takes only the token list",
+   "unit": "installation"
+  },
+  {
+   "subject": "current_token_list",
+   "kind": "extra-member ambiguity",
+   "text": "parses as a JSON object with owner_token and agent_tokens of the Installation types",
+   "question": "May a token-refresh object contain missing, extra, or malformed non-token members?",
+   "options": [
+    "ignore every non-token member",
+    "require the exact Installation member set",
+    "allow extra members but require all Installation members"
+   ],
+   "default_guess": "ignore non-token members",
+   "unit": "installation"
+  },
+  {
+   "subject": "current_token_list",
+   "kind": "bad-file exception boundary",
+   "text": "it never raises for a bad file",
+   "question": "Which failures count as a 'bad file' and must be converted to None, including path encoding errors, JSON decoder errors, model-construction errors, memory errors, and unexpected OS errors?",
+   "options": [
+    "catch ordinary filesystem, decoding, schema, and value errors only",
+    "catch every Exception",
+    "catch BaseException"
+   ],
+   "default_guess": "catch ordinary filesystem, JSON, Unicode, type, and value errors, but not process-level exceptions",
+   "unit": "installation"
+  },
+  {
+   "subject": "current_token_list and load_installation",
+   "kind": "concurrency unspecified",
+   "text": "the re-read's tokens replace the kept list",
+   "question": "What synchronization and observable behavior are required for concurrent calls to current_token_list and load_installation?",
+   "options": [
+    "serialize state transitions with a lock",
+    "allow races under ordinary Python execution",
+    "use compare-and-swap semantics so stale reads cannot overwrite newer tokens"
+   ],
+   "default_guess": "serialize reads and updates with a module lock",
+   "unit": "installation"
+  },
+  {
+   "subject": "read_configuration",
+   "kind": "path traversal unspecified",
+   "text": "opened component by component without following a symbolic link at any component",
+   "question": "What exact traversal algorithm and platform behavior are required for absolute paths, relative paths, '.', '..', repeated separators, an empty path, and a symlink in the final component?",
+   "options": [
+    "walk from root or current directory using directory file descriptors and no-follow flags, permitting '.' and '..'",
+    "lexically reject '.' and '..' before walking",
+    "use a platform-specific secure-open facility"
+   ],
+   "default_guess": "walk with directory file descriptors and no-follow flags, rejecting symlinks including the final component",
+   "unit": "installation"
+  },
+  {
+   "subject": "read_configuration",
+   "kind": "nonportable requirement",
+   "text": "opened component by component without following a symbolic link at any component",
+   "question": "What should happen on a platform that lacks the directory-file-descriptor or no-follow operations needed to enforce this rule?",
+   "options": [
+    "raise InstallationRejectedError",
+    "use a weaker lstat-then-open fallback",
+    "support only platforms with the required primitives"
+   ],
+   "default_guess": "raise InstallationRejectedError for the open check",
+   "unit": "installation"
+  },
+  {
+   "subject": "read_configuration",
+   "kind": "error text unspecified",
+   "text": "MUST raise InstallationRejectedError naming the first failing check",
+   "question": "What exact exception message or argument structure counts as naming a failing check?",
+   "options": [
+    "fixed human-readable messages",
+    "machine-readable check identifiers",
+    "include config_path plus a fixed reason",
+    "pass multiple exception arguments"
+   ],
+   "default_guess": "use fixed human-readable messages containing the path and failed-check description",
+   "unit": "installation"
+  },
+  {
+   "subject": "read_configuration",
+   "kind": "validation granularity ambiguity",
+   "text": "the bytes cannot be read or do not parse as one JSON object whose members are exactly the fields of Installation with their types",
+   "question": "Are unreadable bytes and every JSON/schema/type failure one check, or must their internal failures be separately named and ordered?",
+   "options": [
+    "one combined check and reason",
+    "separate read, JSON syntax, top-level shape, member-set, and member-type checks",
+    "separate read from all parse/schema failures"
+   ],
+   "default_guess": "use one read failure reason and one combined JSON/schema reason",
+   "unit": "installation"
+  },
+  {
+   "subject": "read_configuration",
+   "kind": "encoding unspecified",
+   "text": "the bytes cannot be read or do not parse as one JSON object",
+   "question": "Which byte encoding and BOM policy must be used for the JSON file?",
+   "options": [
+    "strict UTF-8 without BOM",
+    "UTF-8 with an optional BOM",
+    "the encodings accepted by the standard JSON byte parser"
+   ],
+   "default_guess": "strict UTF-8, accepting the standard parser's UTF-8 BOM behavior only if inherent",
+   "unit": "installation"
+  },
+  {
+   "subject": "read_configuration",
+   "kind": "duplicate JSON keys unspecified",
+   "text": "parse as one JSON object whose members are exactly the fields of Installation",
+   "question": "Are duplicate JSON member names rejected, or does the last occurrence win before exact-member validation?",
+   "options": [
+    "reject every duplicate JSON key at every object level",
+    "reject duplicates only in the top-level object",
+    "use the JSON parser's last-value-wins behavior"
+   ],
+   "default_guess": "reject duplicate keys at every object level",
+   "unit": "installation"
+  },
+  {
+   "subject": "read_configuration",
+   "kind": "type strictness unspecified",
+   "text": "whose members are exactly the fields of Installation with their types",
+   "question": "What constitutes an exact runtime type match for JSON-derived values, including whether booleans count as integers, arrays are accepted for tuple fields, and model constructors may coerce values?",
+   "options": [
+    "perform strict manual JSON-type validation and convert arrays to tuples",
+    "delegate coercion and validation to the imported model constructors",
+    "accept Python subtype relationships"
+   ],
+   "default_guess": "perform strict manual JSON-type validation, accept JSON arrays for tuple fields, and then construct the models",
+   "unit": "installation"
+  },
+  {
+   "subject": "read_configuration",
+   "kind": "nested object schema unspecified",
+   "text": "whose members are exactly the fields of Installation with their types",
+   "question": "Must each nested AgentToken, ServiceCredential, and ServiceInstanceSelection object also contain exactly its declared fields and no extras?",
+   "options": [
+    "yes, exact fields recursively",
+    "only the top-level Installation has an exact member set",
+    "delegate nested extra-field behavior to the runtime models"
+   ],
+   "default_guess": "require exact fields recursively",
+   "unit": "installation"
+  },
+  {
+   "subject": "read_configuration",
+   "kind": "file mutation behavior",
+   "text": "The ownership, mode and regular-file checks and the read MUST all use that one opened file, so the file checked is the file read",
+   "question": "If the opened regular file is modified, truncated, replaced through its existing inode, or has its mode/owner changed between fstat and read, must the implementation detect or retry?",
+   "options": [
+    "no retry; using one descriptor is sufficient",
+    "fstat before and after and reject changes",
+    "lock the file during validation and reading"
+   ],
+   "default_guess": "use one descriptor without retrying or comparing metadata afterward",
+   "unit": "installation"
+  },
+  {
+   "subject": "read_configuration",
+   "kind": "permission definition ambiguity",
+   "text": "grants any permission to group or others",
+   "question": "Does privacy mean only that the group/other POSIX mode bits are zero, or must ACLs and other platform permission mechanisms also be checked?",
+   "options": [
+    "check only the nine POSIX permission bits",
+    "also reject permissive ACLs",
+    "apply a platform-specific effective-access test"
+   ],
+   "default_guess": "check that all group and other POSIX mode bits are zero",
+   "unit": "installation"
+  },
+  {
+   "subject": "read_configuration",
+   "kind": "ownership definition ambiguity",
+   "text": "is not owned by the process's effective user",
+   "question": "Is ownership determined solely by comparing the file's numeric uid with the process effective uid, and what is required on platforms without those concepts?",
+   "options": [
+    "compare st_uid to geteuid",
+    "compare account identities through platform APIs",
+    "reject unsupported platforms"
+   ],
+   "default_guess": "compare st_uid with os.geteuid and reject if the platform cannot enforce it",
+   "unit": "installation"
+  },
+  {
+   "subject": "read_configuration",
+   "kind": "duplicate service key unspecified",
+   "text": "a service appears twice in service_instances or in service_credentials",
+   "question": "Does 'a service' mean exact equality of service_id, and are duplicates across the two different collections prohibited or only duplicates within each collection?",
+   "options": [
+    "exact service_id duplicates within each collection only",
+    "exact service_id duplicates across both collections as well",
+    "normalized or case-insensitive service_id duplicates"
+   ],
+   "default_guess": "use exact service_id equality and check duplicates separately within each collection",
+   "unit": "installation"
+  },
+  {
+   "subject": "read_configuration",
+   "kind": "duplicate failure order unspecified",
+   "text": "a service appears twice in service_instances or in service_credentials",
+   "question": "When both collections contain duplicates, which collection's failure must be reported first?",
+   "options": [
+    "check service_instances first",
+    "check service_credentials first",
+    "use their order in the JSON source"
+   ],
+   "default_guess": "check service_instances first because it is named first",
+   "unit": "installation"
+  },
+  {
+   "subject": "read_configuration",
+   "kind": "RFC boundary ambiguity",
+   "text": "an HTTP field-name token (one or more of the token characters of RFC 9110: letters, digits and the symbols allowed there)",
+   "question": "Must field-name validation use only ASCII tchar exactly, and should non-ASCII letters be rejected even when a language character-class treats them as letters?",
+   "options": [
+    "use the exact ASCII tchar set from RFC 9110",
+    "allow Unicode letters and digits plus the named symbols",
+    "use an available HTTP library's validator"
+   ],
+   "default_guess": "use the exact ASCII tchar set",
+   "unit": "installation"
+  },
+  {
+   "subject": "read_configuration",
+   "kind": "absolute path definition",
+   "text": "a credential's secret_file is not an absolute path",
+   "question": "Which platform's path syntax defines absolute, and are normalized paths, '..' components, alternate separators, or platform-specific prefixes accepted?",
+   "options": [
+    "use the host platform's absolute-path predicate",
+    "require POSIX slash-rooted paths",
+    "require an absolute path with no '.' or '..' components"
+   ],
+   "default_guess": "use the host platform's absolute-path predicate without normalization restrictions",
+   "unit": "installation"
+  },
+  {
+   "subject": "read_configuration and current_token_list",
+   "kind": "length unit unspecified",
+   "text": "every token is at least the imported ACCESS_TOKEN_LENGTH_MIN constant long",
+   "question": "Is token length measured in Unicode code points, UTF-8 bytes, UTF-16 units, or another unit?",
+   "options": [
+    "Python string length in Unicode code points",
+    "UTF-8 byte length",
+    "ASCII characters only"
+   ],
+   "default_guess": "use Python string length in Unicode code points",
+   "unit": "installation"
+  },
+  {
+   "subject": "read_configuration",
+   "kind": "token failure order unspecified",
+   "text": "the owner token or any agent token is shorter than the imported ACCESS_TOKEN_LENGTH_MIN constant",
+   "question": "If several tokens are too short, what exact iteration order determines the named first failure, and must the reason identify the particular token?",
+   "options": [
+    "owner first, then agent_tokens tuple order",
+    "agent tokens first, then owner",
+    "one generic token-length failure with no token identity"
+   ],
+   "default_guess": "check the owner first, then agent tokens in tuple order, and identify owner or agent name without including token content",
+   "unit": "installation"
+  },
+  {
+   "subject": "read_configuration",
+   "kind": "duplicate-token failure identity",
+   "text": "two tokens among the owner token and the agent tokens are equal",
+   "question": "When multiple duplicate pairs exist, what order selects the pair named in the error, and may agent names be included in the reason?",
+   "options": [
+    "owner followed by agent tuple order, first previously seen match",
+    "compare all explicit pairs in a specified nested-loop order",
+    "generic duplicate-token reason with no identities"
+   ],
+   "default_guess": "scan owner then agents in tuple order and report a generic duplicate-token reason without token values",
+   "unit": "installation"
+  },
+  {
+   "subject": "read_configuration",
+   "kind": "agent-name equality ambiguity",
+   "text": "two agent tokens have the same name",
+   "question": "Is agent-name equality exact, case-sensitive string equality, or is any normalization required?",
+   "options": [
+    "exact case-sensitive equality",
+    "case-insensitive equality",
+    "Unicode-normalized equality"
+   ],
+   "default_guess": "use exact case-sensitive equality",
+   "unit": "installation"
+  },
+  {
+   "subject": "manifest_source",
+   "kind": "construction error behavior",
+   "text": "MUST return ManifestSource with manifest_location and manifest_revision of the Installation loaded at start",
+   "question": "If constructing ManifestSource unexpectedly fails despite a loaded Installation, should that model error propagate or be translated?",
+   "options": [
+    "propagate the model-construction exception",
+    "translate to InstallationRejectedError",
+    "construct and cache ManifestSource during load"
+   ],
+   "default_guess": "construct it during the call and propagate unexpected model errors",
+   "unit": "installation"
+  },
+  {
+   "subject": "resolve_service_credential",
+   "kind": "lookup state unspecified",
+   "text": "MUST find the service_credentials entry of service_id",
+   "question": "Which kept Installation is searched if load_installation has been called repeatedly or concurrently?",
+   "options": [
+    "the first successfully loaded Installation",
+    "the most recently successfully loaded Installation",
+    "reject resolution while loading"
+   ],
+   "default_guess": "search the first successfully loaded process-lifetime Installation",
+   "unit": "installation"
+  },
+  {
+   "subject": "resolve_service_credential",
+   "kind": "path traversal unspecified",
+   "text": "opened component by component without following a symbolic link at any component",
+   "question": "Must secret_file use exactly the same unresolved path-component rules as config_path, including treatment of '.', '..', mount changes, and the final component?",
+   "options": [
+    "use one identical secure-open helper",
+    "apply stricter rules because secret_file is absolute",
+    "only prohibit a symlink at the final component"
+   ],
+   "default_guess": "use the same component-wise no-follow helper, starting at the filesystem root",
+   "unit": "installation"
+  },
+  {
+   "subject": "resolve_service_credential",
+   "kind": "failure order unspecified",
+   "text": "when no credential is configured for service_id or the secret file is missing, unreadable, not private, larger than the imported RELEASE_CEILING_BOUNDED_TEXT_BYTES_MAX constant ... or not valid UTF-8, or its value is empty or holds a control character",
+   "question": "What is the required order when more than one credential-file check fails?",
+   "options": [
+    "the order listed in the sentence",
+    "metadata checks before reading, then size, decoding, emptiness, and control characters",
+    "report whichever operating-system operation fails first"
+   ],
+   "default_guess": "use the listed order as far as observable: missing configuration/path, unreadable/open, metadata privacy, size, UTF-8, empty, control character",
+   "unit": "installation"
+  },
+  {
+   "subject": "resolve_service_credential",
+   "kind": "error text unspecified",
+   "text": "MUST raise CredentialUnresolvedError, whose reason names the service and the failing check",
+   "question": "What exact exception message or argument structure is required, and how should an arbitrary service_id be represented without risking accidental secret disclosure?",
+   "options": [
+    "fixed message including service_id and a human-readable check",
+    "machine-readable check code and service_id as separate arguments",
+    "fixed message omitting service_id when it could contain sensitive text"
+   ],
+   "default_guess": "use a fixed human-readable message containing repr(service_id) and a fixed failure description",
+   "unit": "installation"
+  },
+  {
+   "subject": "resolve_service_credential",
+   "kind": "privacy definition ambiguity",
+   "text": "owned by the process's effective user and granting no permission to group or others",
+   "question": "As with the configuration file, are POSIX mode bits sufficient, and what should unsupported platforms do?",
+   "options": [
+    "check numeric uid and POSIX mode bits only",
+    "also inspect ACLs",
+    "reject platforms unable to enforce the rule"
+   ],
+   "default_guess": "check st_uid and POSIX group/other mode bits",
+   "unit": "installation"
+  },
+  {
+   "subject": "resolve_service_credential",
+   "kind": "size measurement ambiguity",
+   "text": "larger than the imported RELEASE_CEILING_BOUNDED_TEXT_BYTES_MAX constant (reading at most one byte past it and no further)",
+   "question": "Is the limit applied to raw file bytes before UTF-8 decoding, decoded characters, or the value after removing a newline?",
+   "options": [
+    "raw bytes",
+    "decoded Unicode code points",
+    "UTF-8 bytes after removing one trailing newline"
+   ],
+   "default_guess": "apply the limit to raw file bytes",
+   "unit": "installation"
+  },
+  {
+   "subject": "resolve_service_credential",
+   "kind": "size detection ambiguity",
+   "text": "reading at most one byte past it and no further",
+   "question": "May an oversized file be rejected from stat metadata without reading, or must the implementation always read up to limit plus one to handle changing or nonstandard files?",
+   "options": [
+    "always perform a bounded read of limit plus one",
+    "reject from st_size when already oversized, otherwise bounded-read",
+    "ignore st_size and stream only"
+   ],
+   "default_guess": "perform a bounded read of at most limit plus one regardless of st_size",
+   "unit": "installation"
+  },
+  {
+   "subject": "resolve_service_credential",
+   "kind": "trailing newline definition",
+   "text": "with exactly one trailing newline removed when present",
+   "question": "Does 'newline' mean one LF byte/character only, one CRLF sequence, or any Unicode line terminator?",
+   "options": [
+    "remove one trailing LF only",
+    "remove one trailing CRLF or LF sequence",
+    "remove one trailing Unicode line-break character"
+   ],
+   "default_guess": "remove one trailing LF character only",
+   "unit": "installation"
+  },
+  {
+   "subject": "resolve_service_credential",
+   "kind": "validation order ambiguity",
+   "text": "the value is the file's content decoded as UTF-8 with exactly one trailing newline removed when present",
+   "question": "Are emptiness and control-character checks applied before or after removal of the one trailing newline?",
+   "options": [
+    "after newline removal",
+    "before newline removal",
+    "control characters before removal but emptiness after removal"
+   ],
+   "default_guess": "apply both checks after removing one trailing newline",
+   "unit": "installation"
+  },
+  {
+   "subject": "resolve_service_credential",
+   "kind": "control character definition",
+   "text": "its value is empty or holds a control character",
+   "question": "Which characters count as control characters: ASCII C0 and DEL, all Unicode general-category Cc characters, or additional Unicode formatting and line-separator characters?",
+   "options": [
+    "ASCII U+0000 through U+001F plus U+007F",
+    "all Unicode category Cc characters",
+    "all Unicode control/format/separator characters"
+   ],
+   "default_guess": "reject all Unicode category Cc characters",
+   "unit": "installation"
+  },
+  {
+   "subject": "resolve_service_credential",
+   "kind": "newline contradiction ambiguity",
+   "text": "decoded as UTF-8 with exactly one trailing newline removed when present",
+   "question": "If the file ends in two newlines, removal leaves one newline; must the remaining newline then cause the control-character check to fail?",
+   "options": [
+    "yes, remove exactly one and reject the remaining control character",
+    "remove all trailing newlines",
+    "allow one remaining newline"
+   ],
+   "default_guess": "remove exactly one LF and reject any remaining newline as a control character",
+   "unit": "installation"
+  },
+  {
+   "subject": "resolve_service_credential",
+   "kind": "NUL and service path error mapping",
+   "text": "the secret file is missing, unreadable, not private",
+   "question": "How are malformed paths, symlink components, non-directory components, non-regular files, ownership failures, and permission failures mapped onto the listed reason categories?",
+   "options": [
+    "map symlink/path/open failures to unreadable and metadata failures to not private",
+    "give each condition its own named failing check",
+    "map every secure-open or metadata failure to not private"
+   ],
+   "default_guess": "use distinct fixed checks for missing, unreadable, non-regular, wrong owner, and permissive mode even though the summary groups some of them",
+   "unit": "installation"
+  },
+  {
+   "subject": "resolve_service_credential",
+   "kind": "file mutation behavior",
+   "text": "the checks and the read using that one opened file",
+   "question": "If the secret file changes while being read or its metadata changes after checking, must the call detect the change, retry, or accept the bytes obtained from that descriptor?",
+   "options": [
+    "accept the bounded bytes read from the one descriptor",
+    "compare metadata before and after and reject changes",
+    "lock and retry until stable"
+   ],
+   "default_guess": "accept the bytes read from the one descriptor without stability checks",
+   "unit": "installation"
+  },
+  {
+   "subject": "resolve_service_credential",
+   "kind": "secret lifetime ambiguity",
+   "text": "a credential value never leaves resolve_service_credential's result: it is never logged, put into an exception reason, cached between calls or written anywhere",
+   "question": "May temporary local byte and string values exist until normal garbage collection, and may a model-construction exception expose the value through repr or validation details?",
+   "options": [
+    "ordinary local temporaries are permitted, but exceptions must be sanitized",
+    "explicitly overwrite temporary buffers before return",
+    "delegate model construction and allow its normal exception details"
+   ],
+   "default_guess": "use ordinary local temporaries and catch or avoid model-construction failures that could include the header value",
+   "unit": "installation"
+  },
+  {
+   "subject": "resolve_service_credential",
+   "kind": "header value semantics unspecified",
+   "text": "Returns ResolvedCredential with the configured header_name and the resolved header_value",
+   "question": "Besides empty/control-character rejection, are leading/trailing whitespace, non-ASCII text, or characters invalid in an HTTP field value allowed?",
+   "options": [
+    "allow all valid UTF-8 text without control characters",
+    "apply full RFC 9110 field-value validation",
+    "strip surrounding whitespace"
+   ],
+   "default_guess": "allow all nonempty UTF-8 text without control characters and preserve whitespace",
+   "unit": "installation"
+  },
+  {
+   "subject": "selected_instance_name",
+   "kind": "duplicate-state assumption",
+   "text": "the service_instances entry whose service_id equals the given one",
+   "question": "If this function somehow observes an Installation with duplicate matching entries, which instance_name is returned?",
+   "options": [
+    "first tuple entry",
+    "last tuple entry",
+    "raise an error"
+   ],
+   "default_guess": "return the first matching tuple entry",
+   "unit": "installation"
+  },
+  {
+   "subject": "all stateful functions",
+   "kind": "fork/process boundary unspecified",
+   "text": "keep the returned Installation for the life of the process",
+   "question": "Does inherited module state after a process fork count as loaded state for the child, or must the child reload?",
+   "options": [
+    "inherit the state unchanged",
+    "detect process-id changes and require reload",
+    "clear only token-refresh digest state in the child"
+   ],
+   "default_guess": "inherit module state unchanged",
+   "unit": "installation"
+  },
+  {
+   "subject": "exception classes",
+   "kind": "exception interface unspecified",
+   "text": "class CredentialUnresolvedError(Exception): pass; class InstallationRejectedError(Exception): pass",
+   "question": "Are callers expected to receive only a single reason string, or is any structured argument convention required?",
+   "options": [
+    "one human-readable reason string",
+    "path/service plus check code as separate arguments",
+    "custom attributes despite the prescribed pass-shaped classes"
+   ],
+   "default_guess": "raise each exception with one human-readable reason string",
+   "unit": "installation"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"module state initialization\",\"kind\":\"missing lifecycle behavior\",\"text\":\"keep the returned Installation for the life of the process\",\"question\":\"What must current_token_list, manifest_source, resolve_service_credential, and selected_instance_name do when called before load_installation has successfully loaded an Installation?\",\"options\":[\"raise a specified initialization error\",\"raise a built-in error\",\"return None where the return type permits it\",\"implicitly load a configuration\"],\"default_guess\":\"raise RuntimeError indicating that the installation has not been loaded\"},{\"subject\":\"load_installation\",\"kind\":\"ambiguous repeated call\",\"text\":\"MUST call read_configuration once at start, keep the returned Installation for the life of the process\",\"question\":\"What must happen if load_installation is called more than once, especially with a different config_path?\",\"options\":[\"return the originally kept Installation without reading again\",\"reload and replace all kept state\",\"reject the second call\",\"call read_configuration on every invocation but keep only the first result\"],\"default_guess\":\"return the originally kept Installation without reading again\"},{\"subject\":\"load_installation and current_token_list\",\"kind\":\"missing state\",\"text\":\"current_token_list: [BEHAVIOR] On every call MUST read the configuration file's bytes, opening config_path as read_configuration does\",\"question\":\"Where is current_token_list's config_path obtained and must load_installation retain the exact supplied string for later token refreshes?\",\"options\":[\"retain the config_path supplied to the first successful load_installation call\",\"derive a path from the loaded Installation\",\"use an external fixed path\"],\"default_guess\":\"retain the config_path supplied to the first successful load_installation call\"},{\"subject\":\"load_installation\",\"kind\":\"inconsistent read source\",\"text\":\"MUST call read_configuration once at start, keep the returned Installation for the life of the process, and keep the SHA-256 of the file's bytes as the last read digest\",\"question\":\"How is load_installation to obtain a digest of the exact bytes validated by read_configuration when read_configuration returns only Installation and exposes neither bytes nor a digest?\",\"options\":[\"read the path a second time and hash those possibly different bytes\",\"give read_configuration an unspecified module-side effect that records its bytes and digest\",\"implement an internal helper shared by both functions despite the required public contract\"],\"default_guess\":\"use a private helper returning the Installation and digest, with read_configuration returning only the Installation\"},{\"subject\":\"load_installation\",\"kind\":\"atomicity ambiguity\",\"text\":\"a failed check propagates InstallationRejectedError and nothing is kept\",\"question\":\"If a later load_installation call fails after an earlier successful load, does 'nothing is kept' clear the previously kept process-lifetime state or leave it unchanged?\",\"options\":[\"clear all previously kept state\",\"leave the earlier successful state unchanged\",\"second calls are impossible because they are rejected before reading\"],\"default_guess\":\"leave the earlier successful state unchanged\"},{\"subject\":\"load_installation\",\"kind\":\"race behavior\",\"text\":\"keep the SHA-256 of the file's bytes as the last read digest and the file's owner token and agent tokens as the current token list\",\"question\":\"If the file changes between read_configuration's validated read and the operation that obtains the digest, which version supplies the kept Installation, digest, and initial TokenList?\",\"options\":[\"all state must come from one opened-file snapshot\",\"Installation and TokenList come from the validated read while the digest may come from a later read\",\"retry until the reads agree\",\"reject the load\"],\"default_guess\":\"make all state come from one opened-file snapshot through a shared private helper\"},{\"subject\":\"current_token_list\",\"kind\":\"ambiguous read sequence\",\"text\":\"On every call MUST read the configuration file's bytes ... and compare their SHA-256 with the last read digest; when different, or when the file cannot be read, it re-reads the file and applies exactly four checks\",\"question\":\"Must a changed file always be opened and read twice, or may the bytes used for the digest comparison also be used for validation?\",\"options\":[\"always perform a second secure open and read\",\"validate the first read's bytes\",\"reuse the same open file but seek and read again\"],\"default_guess\":\"perform the explicitly required second secure open and read\"},{\"subject\":\"current_token_list\",\"kind\":\"race behavior\",\"text\":\"when different ... it re-reads the file ... the new digest becomes the last read digest\",\"question\":\"When the comparison read and validation re-read differ, which byte sequence is 'the new digest' and which sequence determines the returned tokens?\",\"options\":[\"digest and tokens both come from the validation re-read\",\"digest comes from the comparison read and tokens from the validation re-read\",\"retry until both reads match\"],\"default_guess\":\"digest and tokens both come from the validation re-read\"},{\"subject\":\"current_token_list\",\"kind\":\"ambiguous unreadable retry\",\"text\":\"when different, or when the file cannot be read, it re-reads the file and applies exactly four checks\",\"question\":\"If the initial comparison read fails but the required re-read succeeds, should the successful re-read be validated and installed, or must this call return None because the first read failed?\",\"options\":[\"validate and install the successful re-read\",\"treat the call as unreadable and return None\",\"retry the comparison from the beginning\"],\"default_guess\":\"validate and install the successful re-read\"},{\"subject\":\"current_token_list\",\"kind\":\"ambiguous digest update\",\"text\":\"the new digest becomes the last read digest, and when the file cannot be read the last read digest is cleared\",\"question\":\"When readable bytes fail parsing or one of the token checks, is their digest retained so identical invalid bytes are not checked again, or is the digest cleared?\",\"options\":[\"retain the digest of every readable re-read, including invalid content\",\"retain it only for valid content\",\"clear it for every failed check\"],\"default_guess\":\"retain the digest for readable bytes even when their token checks fail\"},{\"subject\":\"current_token_list\",\"kind\":\"validation scope ambiguity\",\"text\":\"the file can be read and parses as a JSON object with owner_token and agent_tokens of the Installation types\",\"question\":\"During token refresh, must the entire object still have exactly all Installation fields with valid types, or are only owner_token and agent_tokens required and validated?\",\"options\":[\"validate only the two token fields\",\"validate the complete Installation schema but use only its tokens\",\"require all fields to exist but ignore their types except for the token fields\"],\"default_guess\":\"validate only owner_token and agent_tokens because the re-read takes only the token list\"},{\"subject\":\"current_token_list\",\"kind\":\"extra-member ambiguity\",\"text\":\"parses as a JSON object with owner_token and agent_tokens of the Installation types\",\"question\":\"May a token-refresh object contain missing, extra, or malformed non-token members?\",\"options\":[\"ignore every non-token member\",\"require the exact Installation member set\",\"allow extra members but require all Installation members\"],\"default_guess\":\"ignore non-token members\"},{\"subject\":\"current_token_list\",\"kind\":\"bad-file exception boundary\",\"text\":\"it never raises for a bad file\",\"question\":\"Which failures count as a 'bad file' and must be converted to None, including path encoding errors, JSON decoder errors, model-construction errors, memory errors, and unexpected OS errors?\",\"options\":[\"catch ordinary filesystem, decoding, schema, and value errors only\",\"catch every Exception\",\"catch BaseException\"],\"default_guess\":\"catch ordinary filesystem, JSON, Unicode, type, and value errors, but not process-level exceptions\"},{\"subject\":\"current_token_list and load_installation\",\"kind\":\"concurrency unspecified\",\"text\":\"the re-read's tokens replace the kept list\",\"question\":\"What synchronization and observable behavior are required for concurrent calls to current_token_list and load_installation?\",\"options\":[\"serialize state transitions with a lock\",\"allow races under ordinary Python execution\",\"use compare-and-swap semantics so stale reads cannot overwrite newer tokens\"],\"default_guess\":\"serialize reads and updates with a module lock\"},{\"subject\":\"read_configuration\",\"kind\":\"path traversal unspecified\",\"text\":\"opened component by component without following a symbolic link at any component\",\"question\":\"What exact traversal algorithm and platform behavior are required for absolute paths, relative paths, '.', '..', repeated separators, an empty path, and a symlink in the final component?\",\"options\":[\"walk from root or current directory using directory file descriptors and no-follow flags, permitting '.' and '..'\",\"lexically reject '.' and '..' before walking\",\"use a platform-specific secure-open facility\"],\"default_guess\":\"walk with directory file descriptors and no-follow flags, rejecting symlinks including the final component\"},{\"subject\":\"read_configuration\",\"kind\":\"nonportable requirement\",\"text\":\"opened component by component without following a symbolic link at any component\",\"question\":\"What should happen on a platform that lacks the directory-file-descriptor or no-follow operations needed to enforce this rule?\",\"options\":[\"raise InstallationRejectedError\",\"use a weaker lstat-then-open fallback\",\"support only platforms with the required primitives\"],\"default_guess\":\"raise InstallationRejectedError for the open check\"},{\"subject\":\"read_configuration\",\"kind\":\"error text unspecified\",\"text\":\"MUST raise InstallationRejectedError naming the first failing check\",\"question\":\"What exact exception message or argument structure counts as naming a failing check?\",\"options\":[\"fixed human-readable messages\",\"machine-readable check identifiers\",\"include config_path plus a fixed reason\",\"pass multiple exception arguments\"],\"default_guess\":\"use fixed human-readable messages containing the path and failed-check description\"},{\"subject\":\"read_configuration\",\"kind\":\"validation granularity ambiguity\",\"text\":\"the bytes cannot be read or do not parse as one JSON object whose members are exactly the fields of Installation with their types\",\"question\":\"Are unreadable bytes and every JSON/schema/type failure one check, or must their internal failures be separately named and ordered?\",\"options\":[\"one combined check and reason\",\"separate read, JSON syntax, top-level shape, member-set, and member-type checks\",\"separate read from all parse/schema failures\"],\"default_guess\":\"use one read failure reason and one combined JSON/schema reason\"},{\"subject\":\"read_configuration\",\"kind\":\"encoding unspecified\",\"text\":\"the bytes cannot be read or do not parse as one JSON object\",\"question\":\"Which byte encoding and BOM policy must be used for the JSON file?\",\"options\":[\"strict UTF-8 without BOM\",\"UTF-8 with an optional BOM\",\"the encodings accepted by the standard JSON byte parser\"],\"default_guess\":\"strict UTF-8, accepting the standard parser's UTF-8 BOM behavior only if inherent\"},{\"subject\":\"read_configuration\",\"kind\":\"duplicate JSON keys unspecified\",\"text\":\"parse as one JSON object whose members are exactly the fields of Installation\",\"question\":\"Are duplicate JSON member names rejected, or does the last occurrence win before exact-member validation?\",\"options\":[\"reject every duplicate JSON key at every object level\",\"reject duplicates only in the top-level object\",\"use the JSON parser's last-value-wins behavior\"],\"default_guess\":\"reject duplicate keys at every object level\"},{\"subject\":\"read_configuration\",\"kind\":\"type strictness unspecified\",\"text\":\"whose members are exactly the fields of Installation with their types\",\"question\":\"What constitutes an exact runtime type match for JSON-derived values, including whether booleans count as integers, arrays are accepted for tuple fields, and model constructors may coerce values?\",\"options\":[\"perform strict manual JSON-type validation and convert arrays to tuples\",\"delegate coercion and validation to the imported model constructors\",\"accept Python subtype relationships\"],\"default_guess\":\"perform strict manual JSON-type validation, accept JSON arrays for tuple fields, and then construct the models\"},{\"subject\":\"read_configuration\",\"kind\":\"nested object schema unspecified\",\"text\":\"whose members are exactly the fields of Installation with their types\",\"question\":\"Must each nested AgentToken, ServiceCredential, and ServiceInstanceSelection object also contain exactly its declared fields and no extras?\",\"options\":[\"yes, exact fields recursively\",\"only the top-level Installation has an exact member set\",\"delegate nested extra-field behavior to the runtime models\"],\"default_guess\":\"require exact fields recursively\"},{\"subject\":\"read_configuration\",\"kind\":\"file mutation behavior\",\"text\":\"The ownership, mode and regular-file checks and the read MUST all use that one opened file, so the file checked is the file read\",\"question\":\"If the opened regular file is modified, truncated, replaced through its existing inode, or has its mode/owner changed between fstat and read, must the implementation detect or retry?\",\"options\":[\"no retry; using one descriptor is sufficient\",\"fstat before and after and reject changes\",\"lock the file during validation and reading\"],\"default_guess\":\"use one descriptor without retrying or comparing metadata afterward\"},{\"subject\":\"read_configuration\",\"kind\":\"permission definition ambiguity\",\"text\":\"grants any permission to group or others\",\"question\":\"Does privacy mean only that the group/other POSIX mode bits are zero, or must ACLs and other platform permission mechanisms also be checked?\",\"options\":[\"check only the nine POSIX permission bits\",\"also reject permissive ACLs\",\"apply a platform-specific effective-access test\"],\"default_guess\":\"check that all group and other POSIX mode bits are zero\"},{\"subject\":\"read_configuration\",\"kind\":\"ownership definition ambiguity\",\"text\":\"is not owned by the process's effective user\",\"question\":\"Is ownership determined solely by comparing the file's numeric uid with the process effective uid, and what is required on platforms without those concepts?\",\"options\":[\"compare st_uid to geteuid\",\"compare account identities through platform APIs\",\"reject unsupported platforms\"],\"default_guess\":\"compare st_uid with os.geteuid and reject if the platform cannot enforce it\"},{\"subject\":\"read_configuration\",\"kind\":\"duplicate service key unspecified\",\"text\":\"a service appears twice in service_instances or in service_credentials\",\"question\":\"Does 'a service' mean exact equality of service_id, and are duplicates across the two different collections prohibited or only duplicates within each collection?\",\"options\":[\"exact service_id duplicates within each collection only\",\"exact service_id duplicates across both collections as well\",\"normalized or case-insensitive service_id duplicates\"],\"default_guess\":\"use exact service_id equality and check duplicates separately within each collection\"},{\"subject\":\"read_configuration\",\"kind\":\"duplicate failure order unspecified\",\"text\":\"a service appears twice in service_instances or in service_credentials\",\"question\":\"When both collections contain duplicates, which collection's failure must be reported first?\",\"options\":[\"check service_instances first\",\"check service_credentials first\",\"use their order in the JSON source\"],\"default_guess\":\"check service_instances first because it is named first\"},{\"subject\":\"read_configuration\",\"kind\":\"RFC boundary ambiguity\",\"text\":\"an HTTP field-name token (one or more of the token characters of RFC 9110: letters, digits and the symbols allowed there)\",\"question\":\"Must field-name validation use only ASCII tchar exactly, and should non-ASCII letters be rejected even when a language character-class treats them as letters?\",\"options\":[\"use the exact ASCII tchar set from RFC 9110\",\"allow Unicode letters and digits plus the named symbols\",\"use an available HTTP library's validator\"],\"default_guess\":\"use the exact ASCII tchar set\"},{\"subject\":\"read_configuration\",\"kind\":\"absolute path definition\",\"text\":\"a credential's secret_file is not an absolute path\",\"question\":\"Which platform's path syntax defines absolute, and are normalized paths, '..' components, alternate separators, or platform-specific prefixes accepted?\",\"options\":[\"use the host platform's absolute-path predicate\",\"require POSIX slash-rooted paths\",\"require an absolute path with no '.' or '..' components\"],\"default_guess\":\"use the host platform's absolute-path predicate without normalization restrictions\"},{\"subject\":\"read_configuration and current_token_list\",\"kind\":\"length unit unspecified\",\"text\":\"every token is at least the imported ACCESS_TOKEN_LENGTH_MIN constant long\",\"question\":\"Is token length measured in Unicode code points, UTF-8 bytes, UTF-16 units, or another unit?\",\"options\":[\"Python string length in Unicode code points\",\"UTF-8 byte length\",\"ASCII characters only\"],\"default_guess\":\"use Python string length in Unicode code points\"},{\"subject\":\"read_configuration\",\"kind\":\"token failure order unspecified\",\"text\":\"the owner token or any agent token is shorter than the imported ACCESS_TOKEN_LENGTH_MIN constant\",\"question\":\"If several tokens are too short, what exact iteration order determines the named first failure, and must the reason identify the particular token?\",\"options\":[\"owner first, then agent_tokens tuple order\",\"agent tokens first, then owner\",\"one generic token-length failure with no token identity\"],\"default_guess\":\"check the owner first, then agent tokens in tuple order, and identify owner or agent name without including token content\"},{\"subject\":\"read_configuration\",\"kind\":\"duplicate-token failure identity\",\"text\":\"two tokens among the owner token and the agent tokens are equal\",\"question\":\"When multiple duplicate pairs exist, what order selects the pair named in the error, and may agent names be included in the reason?\",\"options\":[\"owner followed by agent tuple order, first previously seen match\",\"compare all explicit pairs in a specified nested-loop order\",\"generic duplicate-token reason with no identities\"],\"default_guess\":\"scan owner then agents in tuple order and report a generic duplicate-token reason without token values\"},{\"subject\":\"read_configuration\",\"kind\":\"agent-name equality ambiguity\",\"text\":\"two agent tokens have the same name\",\"question\":\"Is agent-name equality exact, case-sensitive string equality, or is any normalization required?\",\"options\":[\"exact case-sensitive equality\",\"case-insensitive equality\",\"Unicode-normalized equality\"],\"default_guess\":\"use exact case-sensitive equality\"},{\"subject\":\"manifest_source\",\"kind\":\"construction error behavior\",\"text\":\"MUST return ManifestSource with manifest_location and manifest_revision of the Installation loaded at start\",\"question\":\"If constructing ManifestSource unexpectedly fails despite a loaded Installation, should that model error propagate or be translated?\",\"options\":[\"propagate the model-construction exception\",\"translate to InstallationRejectedError\",\"construct and cache ManifestSource during load\"],\"default_guess\":\"construct it during the call and propagate unexpected model errors\"},{\"subject\":\"resolve_service_credential\",\"kind\":\"lookup state unspecified\",\"text\":\"MUST find the service_credentials entry of service_id\",\"question\":\"Which kept Installation is searched if load_installation has been called repeatedly or concurrently?\",\"options\":[\"the first successfully loaded Installation\",\"the most recently successfully loaded Installation\",\"reject resolution while loading\"],\"default_guess\":\"search the first successfully loaded process-lifetime Installation\"},{\"subject\":\"resolve_service_credential\",\"kind\":\"path traversal unspecified\",\"text\":\"opened component by component without following a symbolic link at any component\",\"question\":\"Must secret_file use exactly the same unresolved path-component rules as config_path, including treatment of '.', '..', mount changes, and the final component?\",\"options\":[\"use one identical secure-open helper\",\"apply stricter rules because secret_file is absolute\",\"only prohibit a symlink at the final component\"],\"default_guess\":\"use the same component-wise no-follow helper, starting at the filesystem root\"},{\"subject\":\"resolve_service_credential\",\"kind\":\"failure order unspecified\",\"text\":\"when no credential is configured for service_id or the secret file is missing, unreadable, not private, larger than the imported RELEASE_CEILING_BOUNDED_TEXT_BYTES_MAX constant ... or not valid UTF-8, or its value is empty or holds a control character\",\"question\":\"What is the required order when more than one credential-file check fails?\",\"options\":[\"the order listed in the sentence\",\"metadata checks before reading, then size, decoding, emptiness, and control characters\",\"report whichever operating-system operation fails first\"],\"default_guess\":\"use the listed order as far as observable: missing configuration/path, unreadable/open, metadata privacy, size, UTF-8, empty, control character\"},{\"subject\":\"resolve_service_credential\",\"kind\":\"error text unspecified\",\"text\":\"MUST raise CredentialUnresolvedError, whose reason names the service and the failing check\",\"question\":\"What exact exception message or argument structure is required, and how should an arbitrary service_id be represented without risking accidental secret disclosure?\",\"options\":[\"fixed message including service_id and a human-readable check\",\"machine-readable check code and service_id as separate arguments\",\"fixed message omitting service_id when it could contain sensitive text\"],\"default_guess\":\"use a fixed human-readable message containing repr(service_id) and a fixed failure description\"},{\"subject\":\"resolve_service_credential\",\"kind\":\"privacy definition ambiguity\",\"text\":\"owned by the process's effective user and granting no permission to group or others\",\"question\":\"As with the configuration file, are POSIX mode bits sufficient, and what should unsupported platforms do?\",\"options\":[\"check numeric uid and POSIX mode bits only\",\"also inspect ACLs\",\"reject platforms unable to enforce the rule\"],\"default_guess\":\"check st_uid and POSIX group/other mode bits\"},{\"subject\":\"resolve_service_credential\",\"kind\":\"size measurement ambiguity\",\"text\":\"larger than the imported RELEASE_CEILING_BOUNDED_TEXT_BYTES_MAX constant (reading at most one byte past it and no further)\",\"question\":\"Is the limit applied to raw file bytes before UTF-8 decoding, decoded characters, or the value after removing a newline?\",\"options\":[\"raw bytes\",\"decoded Unicode code points\",\"UTF-8 bytes after removing one trailing newline\"],\"default_guess\":\"apply the limit to raw file bytes\"},{\"subject\":\"resolve_service_credential\",\"kind\":\"size detection ambiguity\",\"text\":\"reading at most one byte past it and no further\",\"question\":\"May an oversized file be rejected from stat metadata without reading, or must the implementation always read up to limit plus one to handle changing or nonstandard files?\",\"options\":[\"always perform a bounded read of limit plus one\",\"reject from st_size when already oversized, otherwise bounded-read\",\"ignore st_size and stream only\"],\"default_guess\":\"perform a bounded read of at most limit plus one regardless of st_size\"},{\"subject\":\"resolve_service_credential\",\"kind\":\"trailing newline definition\",\"text\":\"with exactly one trailing newline removed when present\",\"question\":\"Does 'newline' mean one LF byte/character only, one CRLF sequence, or any Unicode line terminator?\",\"options\":[\"remove one trailing LF only\",\"remove one trailing CRLF or LF sequence\",\"remove one trailing Unicode line-break character\"],\"default_guess\":\"remove one trailing LF character only\"},{\"subject\":\"resolve_service_credential\",\"kind\":\"validation order ambiguity\",\"text\":\"the value is the file's content decoded as UTF-8 with exactly one trailing newline removed when present\",\"question\":\"Are emptiness and control-character checks applied before or after removal of the one trailing newline?\",\"options\":[\"after newline removal\",\"before newline removal\",\"control characters before removal but emptiness after removal\"],\"default_guess\":\"apply both checks after removing one trailing newline\"},{\"subject\":\"resolve_service_credential\",\"kind\":\"control character definition\",\"text\":\"its value is empty or holds a control character\",\"question\":\"Which characters count as control characters: ASCII C0 and DEL, all Unicode general-category Cc characters, or additional Unicode formatting and line-separator characters?\",\"options\":[\"ASCII U+0000 through U+001F plus U+007F\",\"all Unicode category Cc characters\",\"all Unicode control/format/separator characters\"],\"default_guess\":\"reject all Unicode category Cc characters\"},{\"subject\":\"resolve_service_credential\",\"kind\":\"newline contradiction ambiguity\",\"text\":\"decoded as UTF-8 with exactly one trailing newline removed when present\",\"question\":\"If the file ends in two newlines, removal leaves one newline; must the remaining newline then cause the control-character check to fail?\",\"options\":[\"yes, remove exactly one and reject the remaining control character\",\"remove all trailing newlines\",\"allow one remaining newline\"],\"default_guess\":\"remove exactly one LF and reject any remaining newline as a control character\"},{\"subject\":\"resolve_service_credential\",\"kind\":\"NUL and service path error mapping\",\"text\":\"the secret file is missing, unreadable, not private\",\"question\":\"How are malformed paths, symlink components, non-directory components, non-regular files, ownership failures, and permission failures mapped onto the listed reason categories?\",\"options\":[\"map symlink/path/open failures to unreadable and metadata failures to not private\",\"give each condition its own named failing check\",\"map every secure-open or metadata failure to not private\"],\"default_guess\":\"use distinct fixed checks for missing, unreadable, non-regular, wrong owner, and permissive mode even though the summary groups some of them\"},{\"subject\":\"resolve_service_credential\",\"kind\":\"file mutation behavior\",\"text\":\"the checks and the read using that one opened file\",\"question\":\"If the secret file changes while being read or its metadata changes after checking, must the call detect the change, retry, or accept the bytes obtained from that descriptor?\",\"options\":[\"accept the bounded bytes read from the one descriptor\",\"compare metadata before and after and reject changes\",\"lock and retry until stable\"],\"default_guess\":\"accept the bytes read from the one descriptor without stability checks\"},{\"subject\":\"resolve_service_credential\",\"kind\":\"secret lifetime ambiguity\",\"text\":\"a credential value never leaves resolve_service_credential's result: it is never logged, put into an exception reason, cached between calls or written anywhere\",\"question\":\"May temporary local byte and string values exist until normal garbage collection, and may a model-construction exception expose the value through repr or validation details?\",\"options\":[\"ordinary local temporaries are permitted, but exceptions must be sanitized\",\"explicitly overwrite temporary buffers before return\",\"delegate model construction and allow its normal exception details\"],\"default_guess\":\"use ordinary local temporaries and catch or avoid model-construction failures that could include the header value\"},{\"subject\":\"resolve_service_credential\",\"kind\":\"header value semantics unspecified\",\"text\":\"Returns ResolvedCredential with the configured header_name and the resolved header_value\",\"question\":\"Besides empty/control-character rejection, are leading/trailing whitespace, non-ASCII text, or characters invalid in an HTTP field value allowed?\",\"options\":[\"allow all valid UTF-8 text without control characters\",\"apply full RFC 9110 field-value validation\",\"strip surrounding whitespace\"],\"default_guess\":\"allow all nonempty UTF-8 text without control characters and preserve whitespace\"},{\"subject\":\"selected_instance_name\",\"kind\":\"duplicate-state assumption\",\"text\":\"the service_instances entry whose service_id equals the given one\",\"question\":\"If this function somehow observes an Installation with duplicate matching entries, which instance_name is returned?\",\"options\":[\"first tuple entry\",\"last tuple entry\",\"raise an error\"],\"default_guess\":\"return the first matching tuple entry\"},{\"subject\":\"all stateful functions\",\"kind\":\"fork/process boundary unspecified\",\"text\":\"keep the returned Installation for the life of the process\",\"question\":\"Does inherited module state after a process fork count as loaded state for the child, or must the child reload?\",\"options\":[\"inherit the state unchanged\",\"detect process-id changes and require reload\",\"clear only token-refresh digest state in the child\"],\"default_guess\":\"inherit module state unchanged\"},{\"subject\":\"exception classes\",\"kind\":\"exception interface unspecified\",\"text\":\"class CredentialUnresolvedError(Exception): pass; class InstallationRejectedError(Exception): pass\",\"question\":\"Are callers expected to receive only a single reason string, or is any structured argument convention required?\",\"options\":[\"one human-readable reason string\",\"path/service plus check code as separate arguments\",\"custom attributes despite the prescribed pass-shaped classes\"],\"default_guess\":\"raise each exception with one human-readable reason string\"}]}",
+ "unit": "installation",
+ "set_aside": []
+}

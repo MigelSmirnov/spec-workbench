@@ -1,0 +1,1090 @@
+{
+ "open_points": [
+  {
+   "subject": "module-wide store state",
+   "kind": "missing state model",
+   "text": "open_store returns StoreOpened with data_directory and temporary_files_removed",
+   "question": "Where do page_records, put_value_bytes, read_records, read_value_bytes, record_change, remove_run_spool and spool_file obtain the connection, repository, data-directory path and lifetime lock, since none accepts StoreOpened or a repository?",
+   "options": [
+    "Maintain module-global connection, repository, paths and lock",
+    "Reopen the store from hidden configuration on every call",
+    "Attach hidden runtime state to StoreOpened despite its exact fields"
+   ],
+   "default_guess": "Maintain one module-global opened-store state initialized by open_store.",
+   "unit": "store"
+  },
+  {
+   "subject": "open_store repeated calls",
+   "kind": "lifecycle unspecified",
+   "text": "open the database file inside data_directory as the module's one SQLite connection",
+   "question": "What happens if open_store is called more than once, for the same or a different directory?",
+   "options": [
+    "Reject every second call",
+    "Return the existing store for the same path and reject another path",
+    "Close and replace the existing store",
+    "Support independent stores despite the one-connection wording"
+   ],
+   "default_guess": "Return the existing result for the same normalized path and reject a different path.",
+   "unit": "store"
+  },
+  {
+   "subject": "open_store lock lifetime",
+   "kind": "cleanup unspecified",
+   "text": "held for the life of the process",
+   "question": "How is the lock descriptor retained, and is it ever released or the lock file removed during normal process shutdown?",
+   "options": [
+    "Keep the descriptor globally and leave the lock file",
+    "Keep it globally and register shutdown cleanup",
+    "Rely on the SQLite connection or repository to retain it"
+   ],
+   "default_guess": "Keep the descriptor globally; let the OS release the lock and leave the lock file in place.",
+   "unit": "store"
+  },
+  {
+   "subject": "open_store artifact names",
+   "kind": "missing values",
+   "text": "take an exclusive non-blocking lock on a lock file inside data_directory; ... open the database file inside data_directory",
+   "question": "What are the lock-file and SQLite database filenames?",
+   "options": [
+    "Fixed hidden names chosen by the generator",
+    "Names derived from the imported area constants",
+    "Platform-specific conventional names"
+   ],
+   "default_guess": "Choose fixed hidden filenames such as .store.lock and store.sqlite3.",
+   "unit": "store"
+  },
+  {
+   "subject": "open_store check failure effects",
+   "kind": "contradiction",
+   "text": "take an exclusive non-blocking lock on a lock file inside data_directory ... [then perform later checks] ... it removes and creates nothing when a check fails",
+   "question": "If acquiring the lock creates the lock file and a later privacy or symlink check fails, must that newly created lock file be removed, retained, or must the lock operation require a pre-existing file?",
+   "options": [
+    "Remove a lock file created by this attempt",
+    "Retain the newly created lock file",
+    "Require the lock file to pre-exist",
+    "Interpret 'creates nothing' as applying only after validation"
+   ],
+   "default_guess": "Remove a lock file created by the failed open attempt after releasing it.",
+   "unit": "store"
+  },
+  {
+   "subject": "open_store validation order",
+   "kind": "boundary ambiguity",
+   "text": "check that data_directory and everything inside it are owned ... and grant no permission ...; walk the directory without following links and find no symbolic link",
+   "question": "How can ownership and permissions of entries be checked before the later symlink check without following links, and which refusal wins for a symlink whose target has bad ownership or permissions?",
+   "options": [
+    "Use lstat for privacy and report privacy first",
+    "Treat a symlink as the privacy check's first failure",
+    "Defer entry privacy checks until after detecting symlinks despite the stated order"
+   ],
+   "default_guess": "Use lstat without following links and report a privacy failure first if its link inode fails that check.",
+   "unit": "store"
+  },
+  {
+   "subject": "open_store first offending path",
+   "kind": "ordering unspecified",
+   "text": "directory not private (naming the first offending path), or symbolic link found (naming its path)",
+   "question": "What deterministic directory traversal order defines the first offending path?",
+   "options": [
+    "Lexicographic path order",
+    "Underlying filesystem enumeration order",
+    "Depth-first order with sorted entries",
+    "Breadth-first order with sorted entries"
+   ],
+   "default_guess": "Depth-first traversal with directory entries sorted lexicographically.",
+   "unit": "store"
+  },
+  {
+   "subject": "open_store privacy modes",
+   "kind": "permission boundary unspecified",
+   "text": "grant no permission to group or others",
+   "question": "What exact modes should newly created regular files and directories receive, and should existing owner permissions be required or altered?",
+   "options": [
+    "Files 0600 and directories 0700; never alter existing entries",
+    "Use umask 077 with conventional creation modes",
+    "Accept any owner bits and chmod newly created artifacts only",
+    "Chmod all existing entries to private modes"
+   ],
+   "default_guess": "Create files as 0600 and directories as 0700, accept any owner bits on existing entries, and never repair existing permissions.",
+   "unit": "store"
+  },
+  {
+   "subject": "open_store SQLite no-follow requirement",
+   "kind": "mechanism unspecified",
+   "text": "the file opened without following links ... as the module's one SQLite connection",
+   "question": "How is SQLite required to use a prevalidated/no-follow file descriptor when the standard SQLite API normally opens a pathname itself?",
+   "options": [
+    "Pre-open with O_NOFOLLOW, then connect through a descriptor path",
+    "lstat immediately before sqlite3.connect and accept the race",
+    "Use a custom SQLite URI/VFS option",
+    "The requirement assumes repository support not stated in the prompt"
+   ],
+   "default_guess": "Pre-open with O_NOFOLLOW and connect through the process file-descriptor path where supported.",
+   "unit": "store"
+  },
+  {
+   "subject": "open_store SQLite auxiliary files",
+   "kind": "security mechanism unspecified",
+   "text": "Every file and directory the module creates ... the database file and its journal ... MUST be created ... granting no permission to group or others",
+   "question": "How are SQLite-created journal, WAL or shared-memory files forced to private permissions and protected from symlink substitution without issuing additional SQL or configuring a VFS?",
+   "options": [
+    "Set process umask 077 around all SQLite activity",
+    "Force rollback-journal mode and validate artifacts",
+    "Rely on existing private directory permissions",
+    "Use a custom SQLite VFS"
+   ],
+   "default_guess": "Set a restrictive umask during opening and rely on the private parent directory.",
+   "unit": "store"
+  },
+  {
+   "subject": "open_store database configuration",
+   "kind": "transaction setup unspecified",
+   "text": "with synchronous FULL",
+   "question": "Must journal mode, isolation_level, timeout, thread policy, foreign-key behavior and autocommit behavior be set, or left at library defaults?",
+   "options": [
+    "Set only synchronous FULL and explicit transaction control",
+    "Choose additional conservative SQLite settings",
+    "Use repository defaults"
+   ],
+   "default_guess": "Set synchronous FULL and explicit transaction control, leaving unrelated settings at defaults.",
+   "unit": "store"
+  },
+  {
+   "subject": "open_store cleanup targets",
+   "kind": "missing identification rule",
+   "text": "remove the module's own temporary files left by an interrupted publish",
+   "question": "What filename pattern or metadata identifies module-owned temporary files without risking deletion of unrelated files?",
+   "options": [
+    "A fixed reserved prefix and suffix",
+    "All non-digest files in the value area",
+    "All dotfiles in both areas",
+    "Temporary-file names recorded elsewhere"
+   ],
+   "default_guess": "Use and clean a generator-chosen reserved temporary-file prefix.",
+   "unit": "store"
+  },
+  {
+   "subject": "open_store orphan value cleanup",
+   "kind": "missing repository surface",
+   "text": "every file of the content-addressed area whose digest no StoredValue and no file fixture record names",
+   "question": "How can the generator determine whether a digest is named by a 'file fixture record' when no such model or repository operation exists in the imports or contracts?",
+   "options": [
+    "Check only list_stored_value_rows_by_value_digest",
+    "Treat SpooledFile records as file fixtures",
+    "Scan other records' PortRefs",
+    "Do not remove any candidate because fixture reachability is unavailable"
+   ],
+   "default_guess": "Check StoredValue rows only, because no file-fixture record surface is supplied.",
+   "unit": "store"
+  },
+  {
+   "subject": "open_store orphan value filenames",
+   "kind": "boundary unspecified",
+   "text": "every file of the content-addressed area whose digest no StoredValue ... names",
+   "question": "Which filenames count as digest-addressed value files, and what happens to malformed names, directories or other artifacts in the value area?",
+   "options": [
+    "Only lowercase 64-character SHA-256 names are value files",
+    "Every non-temporary regular filename is treated as a digest",
+    "Malformed entries cause StoreInternalError",
+    "Malformed entries are ignored"
+   ],
+   "default_guess": "Treat only lowercase 64-hex regular filenames as value files and ignore unrelated entries.",
+   "unit": "store"
+  },
+  {
+   "subject": "open_store cleanup result",
+   "kind": "counting ambiguity",
+   "text": "temporary_files_removed, the count of temporary files removed, unnamed value files not counted",
+   "question": "Are temporary files removed from both the value and spool areas counted, and are directories or SQLite temporary artifacts included?",
+   "options": [
+    "Count only publish temporary regular files in both areas",
+    "Count value-area temporaries only",
+    "Count all temporary artifacts including directories and SQLite files"
+   ],
+   "default_guess": "Count only module publish temporary regular files removed from the value and spool areas.",
+   "unit": "store"
+  },
+  {
+   "subject": "exception payloads",
+   "kind": "error shape unspecified",
+   "text": "raise RefusedError whose reason names the failed check ... InvalidRequestError ... StoreInternalError ... UnknownReferenceError naming the first missing record",
+   "question": "What exception arguments or message text encode the reason, path or missing identity, since all four exceptions are bare Exception subclasses with no declared fields?",
+   "options": [
+    "Use a deterministic human-readable message",
+    "Pass structured values as positional arguments",
+    "Define custom constructors or fields despite only 'pass' being specified"
+   ],
+   "default_guess": "Raise each exception with one deterministic human-readable string argument.",
+   "unit": "store"
+  },
+  {
+   "subject": "continuation-token filter serialization",
+   "kind": "canonicalization unspecified",
+   "text": "canonical JSON of record_filter as an object keyed by its field names, or of null when there is no filter",
+   "question": "How are imported frozen model and enum values converted to JSON text, including enum encoding, tuple encoding and field order, before canonical_bytes is called?",
+   "options": [
+    "Build plain objects explicitly from declared variant fields and enum values",
+    "Use model_dump in JSON mode",
+    "Use a standard JSON encoder with custom model handling"
+   ],
+   "default_guess": "Build the exact plain object explicitly for EqualsFilter or InSetFilter and serialize enum values as their string values.",
+   "unit": "store"
+  },
+  {
+   "subject": "decode_continuation_token canonicality",
+   "kind": "validation boundary unspecified",
+   "text": "not unpadded base64url, does not decode to a canonical JSON object",
+   "question": "What exact lexical restrictions define unpadded base64url and canonical JSON: empty input, whitespace, non-ASCII text, alternate encodings, duplicate JSON keys, and noncanonical but semantically equal JSON?",
+   "options": [
+    "Require the alphabet [A-Za-z0-9_-], no '=', strict UTF-8, reject duplicate keys, and require byte-for-byte canonical re-encoding",
+    "Use permissive base64 and JSON parsers then validate the resulting object",
+    "Require only successful decode and exact member set"
+   ],
+   "default_guess": "Require the URL-safe alphabet with no padding, strict UTF-8 and duplicate-key rejection, then compare decoded bytes with canonical_bytes of the parsed object.",
+   "unit": "store"
+  },
+  {
+   "subject": "decode_continuation_token primitive types",
+   "kind": "type boundary unspecified",
+   "text": "store_position that is not a positive integer",
+   "question": "Are JSON booleans rejected as store positions even though bool is an int subtype in Python, and must record_type and filter_digest be strings of exact formats and case?",
+   "options": [
+    "Reject booleans; require exact strings and lowercase 64-hex digest",
+    "Accept any int-like JSON number and case-insensitive digest",
+    "Rely only on equality with computed values"
+   ],
+   "default_guess": "Reject booleans and require exact string values with a lowercase 64-character hexadecimal digest.",
+   "unit": "store"
+  },
+  {
+   "subject": "next_store_position counter selection",
+   "kind": "enum construction unspecified",
+   "text": "load_store_position_counter for = models.StoreCounterName store_position",
+   "question": "How is the store_position enum member selected when its Python member name is unavailable?",
+   "options": [
+    "Construct StoreCounterName('store_position')",
+    "Use a guessed member attribute such as StoreCounterName.store_position",
+    "Compare enum string representations"
+   ],
+   "default_guess": "Construct StoreCounterName('store_position').",
+   "unit": "store"
+  },
+  {
+   "subject": "next_store_position counter validity",
+   "kind": "invariant handling unspecified",
+   "text": "take one more than its last_position, or 1 when no counter row exists yet",
+   "question": "What happens if the persisted counter is zero, negative, nonintegral, or behind existing records?",
+   "options": [
+    "Trust the repository row",
+    "Raise StoreInternalError",
+    "Scan every record type to repair or verify it"
+   ],
+   "default_guess": "Trust a correctly typed repository row and raise StoreInternalError only if arithmetic or persistence fails.",
+   "unit": "store"
+  },
+  {
+   "subject": "page_records complete record-type support",
+   "kind": "missing repository operations",
+   "text": "with no filter the type's whole list (list_slot_rows for slots, list_run_rows for runs, and so for every listed type)",
+   "question": "How can unfiltered paging be implemented for activations, flow activations, stored values and spooled files when no whole-list repository operations are declared for those types?",
+   "options": [
+    "Add or call undeclared repository methods",
+    "Derive them by scanning other records or known keys",
+    "Treat those RecordType values as unsupported",
+    "The contract list is incomplete"
+   ],
+   "default_guess": "Treat the repository contract as incomplete; if forced, call conventionally named whole-list methods even though they are undeclared.",
+   "unit": "store"
+  },
+  {
+   "subject": "page_records position validation support",
+   "kind": "missing repository operations",
+   "text": "the type's find operation at that position ... and so for every listed type",
+   "question": "How can token positions be validated for activation, flow activation, stored value and spooled file record types when no find_*_row_at_position operation is declared for them?",
+   "options": [
+    "Add or call conventionally named find methods",
+    "Load by a key unavailable from the token",
+    "Scan a whole list where one exists",
+    "Reject paging for those types"
+   ],
+   "default_guess": "Call conventionally named find operations despite their absence from the declared interface.",
+   "unit": "store"
+  },
+  {
+   "subject": "page_records filter matrix",
+   "kind": "mapping unspecified",
+   "text": "allowed fields ... are checked by the caller and not again here",
+   "question": "Which FilterField values are allowed for each RecordType, and which repository equality method and value conversion corresponds to every allowed pair?",
+   "options": [
+    "Infer eligibility solely from declared row lookup fields and list methods",
+    "Accept any field physically present on the record and filter in memory",
+    "Maintain a hidden matrix not supplied by the prompt"
+   ],
+   "default_guess": "Infer the matrix from the available list_*_by_* repository methods and special node-execution rules.",
+   "unit": "store"
+  },
+  {
+   "subject": "page_records status conversion",
+   "kind": "enum type unspecified",
+   "text": "a status value passed as the member of the type's status enumeration",
+   "question": "For a filter whose value is a string, which status enum should be constructed for each record type, and what error results if conversion fails despite caller validation being assumed?",
+   "options": [
+    "Map Run, binding, approval, grant and attempt types to their specific enums",
+    "Compare status enum values as strings and avoid construction",
+    "Raise InvalidRequestError on conversion failure"
+   ],
+   "default_guess": "Map each status-bearing record type to its declared status enum and construct it from the string value.",
+   "unit": "store"
+  },
+  {
+   "subject": "page_records ordering assumptions",
+   "kind": "repository order unspecified",
+   "text": "MUST read the rows ... in store order through StoreRepository ... merged by store_position ... it then reverses that order",
+   "question": "Must the module sort every repository result by store_position defensively, or may it assume every list operation already returns store order?",
+   "options": [
+    "Assume repository list order is store order",
+    "Sort all returned rows by store_position",
+    "Validate order and raise StoreInternalError if violated"
+   ],
+   "default_guess": "Sort by store_position before merging to guarantee the required behavior.",
+   "unit": "store"
+  },
+  {
+   "subject": "page_records in-set semantics",
+   "kind": "duplicate and value-order ambiguity",
+   "text": "one such list per value, merged by store_position without repeating a row",
+   "question": "How are repeated filter values handled, and does their input order affect repository calls or the merged result?",
+   "options": [
+    "Deduplicate values at first occurrence",
+    "Call once per tuple element including duplicates and deduplicate rows",
+    "Sort unique values before querying"
+   ],
+   "default_guess": "Deduplicate values at first occurrence, call once per distinct value, and sort merged rows by store position.",
+   "unit": "store"
+  },
+  {
+   "subject": "page_records page-size edge cases",
+   "kind": "boundary unspecified",
+   "text": "returns the records of the first page_size of them",
+   "question": "What happens for page_size zero or negative if the caller failed to enforce its promised validation, and can an empty page carry a continuation token?",
+   "options": [
+    "Assume page_size is positive",
+    "Raise InvalidRequestError",
+    "Return an empty page with no token",
+    "Return an empty page retaining the incoming boundary"
+   ],
+   "default_guess": "Assume page_size is positive and raise InvalidRequestError defensively otherwise.",
+   "unit": "store"
+  },
+  {
+   "subject": "put_value_bytes existing destination",
+   "kind": "integrity check unspecified",
+   "text": "when a file for that digest already exists it returns without writing",
+   "question": "Must an existing regular file be opened without following links and verified for the expected digest and size before returning, or is mere existence sufficient?",
+   "options": [
+    "Verify digest and size and fail on mismatch",
+    "Return solely on regular-file existence",
+    "Trust filename but verify size only"
+   ],
+   "default_guess": "Open without following links and verify both digest and size before returning.",
+   "unit": "store"
+  },
+  {
+   "subject": "put_value_bytes publish collision",
+   "kind": "race behavior unspecified",
+   "text": "renames it into place without overwriting",
+   "question": "If another writer creates the destination between the existence check and rename, should the function verify and accept that file, raise StoreInternalError, or retry?",
+   "options": [
+    "Verify the winner and return if correct",
+    "Always raise StoreInternalError",
+    "Retry publication with a new temporary file"
+   ],
+   "default_guess": "Verify the winning file and return if its digest and size are correct; otherwise raise StoreInternalError.",
+   "unit": "store"
+  },
+  {
+   "subject": "put_value_bytes durability",
+   "kind": "fsync boundary unspecified",
+   "text": "writes a temporary file in the same area, flushes and fsyncs it ... and renames it into place",
+   "question": "Must the containing value-area directory also be fsynced after rename, as record_change's durability rule requires for files named by a change?",
+   "options": [
+    "Always fsync the directory after publication",
+    "Leave directory fsync to record_change",
+    "Do not fsync the directory"
+   ],
+   "default_guess": "Fsync the value-area directory immediately after publication.",
+   "unit": "store"
+  },
+  {
+   "subject": "read_records query discrimination",
+   "kind": "runtime surface missing",
+   "text": "RecordQuery: imported runtime symbol; no local surface details available",
+   "question": "How should the function safely discriminate all query variants without reflective access, given that the union's discriminator and complete variant membership are not declared on RecordQuery itself?",
+   "options": [
+    "Use isinstance against every imported query model",
+    "Branch on query.query_kind directly",
+    "Pattern-match on concrete model classes"
+   ],
+   "default_guess": "Use isinstance against the explicitly imported concrete query classes.",
+   "unit": "store"
+  },
+  {
+   "subject": "read_records identity-form matrix",
+   "kind": "mapping unspecified",
+   "text": "a record_type that has no such identity form",
+   "question": "Which RecordType values are legal for by_id, by_position and by_attempt, beyond the examples for activations, flow activations, node executions and effect attempts?",
+   "options": [
+    "Infer by_id from load_* signatures and reserve by_position/by_attempt for explicitly named types",
+    "Allow by_position for every type using find operations",
+    "Allow multiple forms whenever a repository operation could support them"
+   ],
+   "default_guess": "Infer by_id from string-keyed load operations, allow by_position only for Activation and FlowActivation, and by_attempt only for NodeExecution and EffectAttempt.",
+   "unit": "store"
+  },
+  {
+   "subject": "read_records malformed-query precedence",
+   "kind": "validation ordering unspecified",
+   "text": "MUST first raise StoreInternalError, before any record is looked up, when the query's arguments are malformed for its kind",
+   "question": "What is the exact validation order when several query arguments are malformed, and how are invalid runtime enum/model values possible or classified?",
+   "options": [
+    "Validate discriminator, form compatibility, nonempty collections, duplicates, then relation field consistency",
+    "Use model validation guarantees and check only the explicitly listed cases",
+    "Choose per-query ordering"
+   ],
+   "default_guess": "Validate query kind and record-type compatibility first, then collection emptiness and duplicates, before any repository call.",
+   "unit": "store"
+  },
+  {
+   "subject": "read_records relation reference checks",
+   "kind": "missing dependency order",
+   "text": "then raise UnknownReferenceError naming the first missing record ... in the order the relation's fields name them for a relation",
+   "question": "For each relation, which named fields require existence checks, including nested dependencies such as an implementation's contract version, a run's flow version, an ElementKey's run and node, and whether ActivationBeforeRun requires the run to use the supplied flow version?",
+   "options": [
+    "Check only direct identity fields appearing in the query",
+    "Check every linked record traversed to answer the relation",
+    "Check direct query fields and trust stored links"
+   ],
+   "default_guess": "Check direct record identities in query field order, then treat broken links in existing records as StoreInternalError.",
+   "unit": "store"
+  },
+  {
+   "subject": "read_records TrialExecutionsOnCorpus",
+   "kind": "selection ambiguity",
+   "text": "that implementation's latest TrialExecution on the case in store order",
+   "question": "If repository results are not ordered, if two rows share a position, or if a trial execution refers to a case outside the implementation's contract version, how is 'latest' determined and how is corrupted data handled?",
+   "options": [
+    "Sort by store_position and take the greatest matching row",
+    "Trust repository order and take the last",
+    "Raise StoreInternalError on inconsistent rows"
+   ],
+   "default_guess": "Sort by store_position, take the greatest matching row, and raise StoreInternalError for inconsistent links.",
+   "unit": "store"
+  },
+  {
+   "subject": "read_records LatestActivationOfFlow",
+   "kind": "algorithm ambiguity",
+   "text": "the latest FlowActivation of any version of the flow",
+   "question": "Should the implementation list every flow version then query activations per version and merge them, or use flow-id data derivable from FlowActivationRow despite no list-by-flow-id operation?",
+   "options": [
+    "List versions, list activations for each and choose maximum position",
+    "List all flow activations using an undeclared operation",
+    "Scan positions"
+   ],
+   "default_guess": "List the flow's versions, query activations for each version, and choose the greatest store_position.",
+   "unit": "store"
+  },
+  {
+   "subject": "read_records ExecutionsOfRun files",
+   "kind": "scope ambiguity",
+   "text": "the run's NodeExecutions together with the SpooledFiles they name ... the SpooledFiles of a NodeExecution are list_spooled_file_rows_by_attempt of its AttemptKey, of a run list_spooled_file_rows_by_run_id",
+   "question": "Should ExecutionsOfRun return every spooled-file row for the run or only files whose AttemptKey belongs to one of the returned NodeExecutions, and how are duplicate files avoided?",
+   "options": [
+    "Use list_spooled_file_rows_by_run_id exactly",
+    "Gather files per returned execution attempt",
+    "Use the run list then retain only files named by executions"
+   ],
+   "default_guess": "Use list_spooled_file_rows_by_run_id, because the repository note explicitly assigns that operation to a run.",
+   "unit": "store"
+  },
+  {
+   "subject": "read_records mixed-type ordering",
+   "kind": "return ordering unspecified",
+   "text": "Returns one RecordSet with each record ... in the field of its type",
+   "question": "For relations returning node executions and spooled files, what ordering should each field use when files can be grouped by attempt or listed globally?",
+   "options": [
+    "Independent global store order in each RecordSet field",
+    "Group files by execution order then file store order",
+    "Use repository-returned order"
+   ],
+   "default_guess": "Return each RecordSet field independently in ascending store_position order.",
+   "unit": "store"
+  },
+  {
+   "subject": "read_value_bytes source discrimination",
+   "kind": "runtime surface missing",
+   "text": "ByteSource: imported runtime symbol; no local surface details available",
+   "question": "Should source variants be selected by isinstance against StoredValueSource and SpooledFileSource or by reading source_kind directly?",
+   "options": [
+    "Use isinstance",
+    "Branch on source.source_kind",
+    "Pattern-match concrete models"
+   ],
+   "default_guess": "Use isinstance against the imported concrete source types.",
+   "unit": "store"
+  },
+  {
+   "subject": "read_value_bytes stored-value carriage",
+   "kind": "semantic ambiguity",
+   "text": "for a value carriage these are its canonical JSON bytes",
+   "question": "Must read_value_bytes enforce that carriage, media_type or schema agrees with the physical bytes, or only verify the recorded digest and size?",
+   "options": [
+    "Verify only digest and size",
+    "Additionally parse and canonicalize JSON for value carriage",
+    "Validate carriage-specific media type and schema"
+   ],
+   "default_guess": "Verify only the record's digest and size.",
+   "unit": "store"
+  },
+  {
+   "subject": "record_change variant discrimination",
+   "kind": "runtime surface missing",
+   "text": "StoreChange: imported runtime symbol; no local surface details available",
+   "question": "How should record_change distinguish variants without reflective access: isinstance against every concrete change class or direct access to change.change?",
+   "options": [
+    "Use isinstance against all imported change classes",
+    "Branch on change.change",
+    "Pattern-match concrete model types"
+   ],
+   "default_guess": "Use isinstance against every imported concrete change class.",
+   "unit": "store"
+  },
+  {
+   "subject": "record_change content identities",
+   "kind": "identity rule unspecified",
+   "text": "equal content submitted in another order is the same record ... content_identity",
+   "question": "For which supplied IDs must record_change recompute content_identity, what exact content DTO is used for each, and does a mismatch cause RefusedError or StoreInternalError?",
+   "options": [
+    "Recompute contract-version, implementation, trial-case, flow-version and stored-value identities from the corresponding Content models",
+    "Trust all caller-supplied IDs and use content_identity only for list sorting",
+    "Recompute every deterministic identity including corpus and binding digests"
+   ],
+   "default_guess": "Recompute identities for the imported Content model types and treat mismatches as StoreInternalError because they break a store invariant.",
+   "unit": "store"
+  },
+  {
+   "subject": "record_change order-free list sorting",
+   "kind": "enum sort representation unspecified",
+   "text": "ports by (direction, name)",
+   "question": "Is Port.direction sorted by its serialized enum value, declaration order, or another rank, and are equal sort keys allowed and kept stable or rejected?",
+   "options": [
+    "Sort by direction.value then name, stably",
+    "Use enum declaration order then name",
+    "Define input before output explicitly and reject duplicate keys"
+   ],
+   "default_guess": "Sort by direction.value then name using a stable sort, leaving duplicate validation to the caller.",
+   "unit": "store"
+  },
+  {
+   "subject": "record_change random identity format",
+   "kind": "value unspecified",
+   "text": "random identities trial_execution_id, binding_id, run_id, approval_id and grant_id, drawn from a cryptographically secure source",
+   "question": "What textual format, bit length and optional prefix must each generated identity use?",
+   "options": [
+    "UUID4 text",
+    "URL-safe random token",
+    "Lowercase hexadecimal random bytes",
+    "Type-prefixed random token"
+   ],
+   "default_guess": "Use UUID4 canonical text for every random identity.",
+   "unit": "store"
+  },
+  {
+   "subject": "record_change collision retry",
+   "kind": "loop boundary unspecified",
+   "text": "drawn again on a collision",
+   "question": "Is retry unbounded, and what error is raised if the secure random source fails or collisions continue?",
+   "options": [
+    "Retry indefinitely until unique",
+    "Use a bounded retry count then StoreInternalError",
+    "Propagate the random-source error"
+   ],
+   "default_guess": "Retry a small bounded number of times and raise StoreInternalError on exhaustion or random-source failure.",
+   "unit": "store"
+  },
+  {
+   "subject": "record_change status transitions",
+   "kind": "state machine missing",
+   "text": "a status change from a status the change does not start from",
+   "question": "What exact source and target statuses are valid for RecordRunProgressChange, RecordResumptionChange, ReleaseRunChange, RecordAttemptOutcomeChange, ResolveAttemptChange and RecoverInFlightChange?",
+   "options": [
+    "Infer only explicitly named starts such as proposed, requested, active, in_flight and unknown",
+    "Define full lifecycle matrices from conventional meanings",
+    "Trust caller-selected target status unless the note names a source"
+   ],
+   "default_guess": "Enforce only transitions explicitly stated in the notes and otherwise trust the caller.",
+   "unit": "store"
+  },
+  {
+   "subject": "record_change linked-record invariants",
+   "kind": "validation matrix missing",
+   "text": "checking only its own invariants: attempt numbers, unique and existing identities, existing linked records",
+   "question": "Which linked records must exist for every change variant, and which cross-record consistencies must be checked, such as implementation belonging to contract version, flow activation's version belonging to its flow, bindings matching nodes, approvals matching attempts, and files matching drafts?",
+   "options": [
+    "Validate every foreign-key-like relationship implied by model fields",
+    "Check only identities explicitly named in each field-assignment note",
+    "Rely on the caller for relationship consistency"
+   ],
+   "default_guess": "Validate every directly referenced record and obvious ownership relation implied by the stored row fields.",
+   "unit": "store"
+  },
+  {
+   "subject": "record_change validation order",
+   "kind": "check ordering unspecified",
+   "text": "one SQLite transaction ... any other broken invariant ... raises StoreInternalError with nothing written",
+   "question": "When multiple identities, links, statuses, attempt numbers or filesystem artifacts are invalid, in what deterministic order are checks performed and which error wins?",
+   "options": [
+    "Follow each variant's field-assignment order",
+    "Validate all references before uniqueness, status and files",
+    "Choose a common global validation order"
+   ],
+   "default_guess": "Validate in the order fields and records are listed for the change variant, before allocating positions or writing rows.",
+   "unit": "store"
+  },
+  {
+   "subject": "record_change duplicate StoredValue",
+   "kind": "conflict behavior unspecified",
+   "text": "A StoredValue whose value_id already exists is not written again and the existing record is returned in its place, since equal values share one identity",
+   "question": "Must the existing StoredValue be compared field-for-field with the supplied one, and what happens if the same value_id carries different metadata or digest?",
+   "options": [
+    "Require exact equality or raise StoreInternalError",
+    "Return the existing record regardless of supplied differences",
+    "Verify only value_digest"
+   ],
+   "default_guess": "Require exact record equality and raise StoreInternalError on any mismatch.",
+   "unit": "store"
+  },
+  {
+   "subject": "record_change StoredValue bytes",
+   "kind": "artifact validation unspecified",
+   "text": "a value list's StoredValues before the record naming them ... every file a change names is published, fsynced ... before the change is committed",
+   "question": "Must record_change verify that each new StoredValue's digest file exists and matches size before inserting its row, and should it fsync an already-published file and directory again?",
+   "options": [
+    "Verify digest and size and fsync file and directory",
+    "Verify existence only and rely on put_value_bytes",
+    "Trust the caller entirely"
+   ],
+   "default_guess": "Verify the file without following links, check digest and size, and fsync it and its directory before commit.",
+   "unit": "store"
+  },
+  {
+   "subject": "record_change spooled-file verification",
+   "kind": "artifact validation unspecified",
+   "text": "spooled files must already be published ... before the change that writes their SpooledFile records",
+   "question": "Must record_change verify every spooled file's key, digest, size and media type against disk, and what happens to an extra published file not listed by the change?",
+   "options": [
+    "Verify key, digest and size; ignore unnamed extras",
+    "Verify existence only",
+    "Trust the supplied SpooledFile records"
+   ],
+   "default_guess": "Verify the keyed file's digest and size without following links; ignore extra unnamed files.",
+   "unit": "store"
+  },
+  {
+   "subject": "record_change new Slot and Flow timestamps",
+   "kind": "field source missing",
+   "text": "IssueContractVersionChange writes ... the Slot with created_slot_purpose as purpose ... ComposeFlowVersionChange writes ... the Flow with created_flow_purpose as purpose",
+   "question": "What values populate Slot.created_at and Flow.created_at, since the changes provide only issued_at and authored_at respectively?",
+   "options": [
+    "Use issued_at for Slot and authored_at for Flow",
+    "Generate a current KernelInstant",
+    "Treat missing timestamps as a prompt error"
+   ],
+   "default_guess": "Use issued_at for Slot.created_at and authored_at for Flow.created_at.",
+   "unit": "store"
+  },
+  {
+   "subject": "record_change creation when parent exists",
+   "kind": "branch unspecified",
+   "text": "plus the Slot ... when that is given; ... plus the Flow ... when that is given",
+   "question": "If created_slot_purpose or created_flow_purpose is supplied but the named Slot or Flow already exists, or is absent when the parent does not exist, should the change fail, reuse the existing record, or omit creation?",
+   "options": [
+    "Require purpose iff the parent is absent and fail otherwise",
+    "Reuse an existing equal-purpose parent",
+    "Always attempt insertion when purpose is supplied"
+   ],
+   "default_guess": "Require the purpose exactly when the parent is absent; otherwise raise StoreInternalError.",
+   "unit": "store"
+  },
+  {
+   "subject": "record_change activation uniqueness",
+   "kind": "duplicate semantics unspecified",
+   "text": "RecordAdmissionVerdictChange writes the AdmissionVerdict and, when activate is true, an Activation ... RecordActivationChange writes one Activation",
+   "question": "May the same contract version or implementation be activated repeatedly, and if so does 'latest' simply select the newest, or is any duplicate activation an invariant violation?",
+   "options": [
+    "Allow repeated append-only activations",
+    "Reject an identical repeated activation",
+    "Allow only one activation per contract version"
+   ],
+   "default_guess": "Allow repeated activation records and use store order to determine the latest.",
+   "unit": "store"
+  },
+  {
+   "subject": "record_change multiple executions of one element",
+   "kind": "attempt allocation ambiguity",
+   "text": "attempt_number ... is one more than the number of NodeExecutions the element already has ... RecordRunProgressChange writes its executions in (node_id, map_index) order",
+   "question": "If one RecordRunProgressChange contains multiple drafts for the same ElementKey, do they receive sequential attempt numbers within the transaction, the same initially computed number, or is that input invalid?",
+   "options": [
+    "Assign sequential numbers as each execution is inserted",
+    "Reject duplicate elements in one change",
+    "Assign the same number, causing a uniqueness failure"
+   ],
+   "default_guess": "Assign sequential attempt numbers in sorted draft order.",
+   "unit": "store"
+  },
+  {
+   "subject": "record_change draft/key consistency",
+   "kind": "invariant unspecified",
+   "text": "A NodeExecution whose files were spooled before it is written carries the attempt_number its caller spooled them under",
+   "question": "How are drafts associated with StoredValues and SpooledFiles in changes that contain several executions, and what exact mismatches cause refusal versus internal error?",
+   "options": [
+    "Associate files by run_id, node_id, map_index and assigned attempt number; values are shared by all records",
+    "Require every file to match exactly one execution and allow unreferenced values",
+    "Infer associations through PortRef contents"
+   ],
+   "default_guess": "Match files by the assigned AttemptKey, require exactly one matching execution, and allow value records to be referenced by any draft.",
+   "unit": "store"
+  },
+  {
+   "subject": "record_change attempt-number refusal scope",
+   "kind": "error inconsistency",
+   "text": "the change is refused with RefusedError ... when that number is no longer the element's next ... For RecordAttemptOutcomeChange and RecoverInFlightChange MUST raise RefusedError ... when the named attempt's attempt_number is no longer one more than the number of NodeExecutions",
+   "question": "Which other change variants with pre-spooled files use RefusedError for a stale attempt number, and do variants without files use StoreInternalError or the same refusal?",
+   "options": [
+    "Apply RefusedError to every NodeExecution-producing change with a caller-implied attempt number",
+    "Apply it only to the two explicitly named attempt changes",
+    "Apply it whenever any assigned attempt conflicts"
+   ],
+   "default_guess": "Use RefusedError for every change whose caller has already spooled files under the expected next attempt number; use StoreInternalError for other attempt invariant failures.",
+   "unit": "store"
+  },
+  {
+   "subject": "record_change RequestApproval attempt number",
+   "kind": "future-conflict ambiguity",
+   "text": "RequestApprovalChange gives the EffectApproval it writes that same next number as its attempt_number without writing a NodeExecution",
+   "question": "What happens if multiple approvals are requested for the same element before a NodeExecution is written, or an execution is written before an approval decision?",
+   "options": [
+    "Allow duplicate reserved attempt numbers",
+    "Reject a second outstanding approval",
+    "Count approvals as reservations despite the stated NodeExecution-count formula"
+   ],
+   "default_guess": "Reject a second live approval for the same element and require the later execution to use the approval's reserved number.",
+   "unit": "store"
+  },
+  {
+   "subject": "record_change DecideApproval refusal execution",
+   "kind": "branch constraints missing",
+   "text": "for a refusal, writes its refusal_execution as the element's NodeExecution",
+   "question": "Must refusal_execution be present exactly when decision is refuse and absent when approve, and must its element and attempt match the approval?",
+   "options": [
+    "Require exact presence rule and matching element/attempt",
+    "Allow a refused approval without an execution",
+    "Ignore an execution supplied for approval"
+   ],
+   "default_guess": "Require it for refusal, forbid it for approval, and require its element to match the approval while assigning the approval's attempt number.",
+   "unit": "store"
+  },
+  {
+   "subject": "record_change attempt outcome status",
+   "kind": "target set unspecified",
+   "text": "RecordAttemptOutcomeChange sets the in_flight attempt's status",
+   "question": "Which AttemptStatus targets are valid outcomes—applied, not_applied, not_sent, unknown, or even in_flight—and must the NodeExecution status agree with that outcome?",
+   "options": [
+    "Allow every status except in_flight",
+    "Allow only terminal statuses implied by execution results",
+    "Trust the supplied status with no cross-check"
+   ],
+   "default_guess": "Allow applied, not_applied, not_sent or unknown, reject in_flight, and require only the explicitly stated links rather than inventing a status mapping.",
+   "unit": "store"
+  },
+  {
+   "subject": "record_change ResolveAttempt mapping",
+   "kind": "field mapping unspecified",
+   "text": "ResolveAttemptChange sets an unknown attempt to the = models.AttemptResolution value",
+   "question": "How are AttemptResolution values mapped into AttemptStatus, and which fields besides status and resolved_by change when no resolution timestamp exists?",
+   "options": [
+    "Map applied to AttemptStatus('applied') and not_applied to AttemptStatus('not_applied'), setting resolved_by only",
+    "Store AttemptResolution directly in the status field",
+    "Add an unstated resolution field or time"
+   ],
+   "default_guess": "Map the equal string values to AttemptStatus and set resolved_by from actor, leaving concluded_at unchanged.",
+   "unit": "store"
+  },
+  {
+   "subject": "record_change RecoverInFlightChange",
+   "kind": "optional-field constraints missing",
+   "text": "writes its NodeExecution when given and sets used_approval_id's approval to used when given",
+   "question": "Must the optional execution match the attempt's element and assigned number, may an approval be marked used without an execution, and what status must that approval currently have?",
+   "options": [
+    "Require matching execution and an approved approval; allow approval use with or without execution",
+    "Require execution whenever used_approval_id is present",
+    "Trust both optional values independently"
+   ],
+   "default_guess": "Require any execution to match the attempt, and require any used approval to exist, be approved and match the element/attempt; allow it without an execution because both fields are independently optional.",
+   "unit": "store"
+  },
+  {
+   "subject": "record_change Run progress transition fields",
+   "kind": "field-update ambiguity",
+   "text": "sets the run's status, outputs, waiting points ... ended_at and, when the new status is cancelled, cancelled_by",
+   "question": "When the new status is not cancelled, is an existing cancelled_by retained or cleared, and what consistency rules relate status to ended_at and waiting points?",
+   "options": [
+    "Set cancelled_by only on transition to cancelled and otherwise retain it",
+    "Clear cancelled_by for non-cancelled status",
+    "Reject combinations inconsistent with a conventional run-state model"
+   ],
+   "default_guess": "Set cancelled_by for cancelled and otherwise preserve the existing value; trust the caller for ended_at and waiting consistency.",
+   "unit": "store"
+  },
+  {
+   "subject": "record_change resumption behavior",
+   "kind": "incomplete lifecycle update",
+   "text": "RecordResumptionChange appends one Resumption to the run",
+   "question": "Does resumption also change run status, waiting points, ended_at or other fields, and from which statuses may it occur?",
+   "options": [
+    "Only append the resumption",
+    "Append and set status running while clearing waiting/ended state",
+    "Infer a transition based on the previous wait reason"
+   ],
+   "default_guess": "Only append the Resumption, because no other field update is listed.",
+   "unit": "store"
+  },
+  {
+   "subject": "record_change release behavior",
+   "kind": "precondition unspecified",
+   "text": "ReleaseRunChange sets released_by and released_at of the run",
+   "question": "May any run be released, may it be released twice, and does release require a terminal status or trigger spool removal?",
+   "options": [
+    "Allow once only for terminal runs and do not remove spool here",
+    "Allow once regardless of status",
+    "Allow idempotent repeated release",
+    "Release and remove the spool"
+   ],
+   "default_guess": "Allow release only once for a terminal run and leave spool removal to remove_run_spool.",
+   "unit": "store"
+  },
+  {
+   "subject": "record_change transaction/file failure semantics",
+   "kind": "atomicity boundary ambiguity",
+   "text": "one SQLite transaction that either writes every record ... or nothing ... a file published by a change that then failed stays unnamed",
+   "question": "Does 'nothing written' refer only to database records, and which filesystem publications may remain after rollback for each failure point?",
+   "options": [
+    "Database changes roll back but already-published files may remain unnamed",
+    "All filesystem changes must also be undone",
+    "Only value files may remain; spool files must be removed"
+   ],
+   "default_guess": "Treat atomicity as database-only and allow any safely published but unnamed file to remain for startup cleanup.",
+   "unit": "store"
+  },
+  {
+   "subject": "record_change commit failure",
+   "kind": "error recovery unspecified",
+   "text": "begins, commits or rolls back a transaction",
+   "question": "If commit raises, must rollback be attempted, what happens if rollback also raises, and which StoreInternalError message or chained exception is exposed?",
+   "options": [
+    "Attempt rollback and raise StoreInternalError from the commit failure",
+    "Raise the raw SQLite error",
+    "Prefer rollback failure over commit failure"
+   ],
+   "default_guess": "Attempt rollback, then raise StoreInternalError chained from the original commit failure.",
+   "unit": "store"
+  },
+  {
+   "subject": "remove_run_spool path encoding",
+   "kind": "path safety unspecified",
+   "text": "each run's spool directory named by its run_id directly inside the spool area",
+   "question": "What validation or encoding prevents run_id values such as '.', '..', separators, absolute paths or platform-special names from escaping or aliasing the spool area?",
+   "options": [
+    "Require run_id to be one safe path component",
+    "Encode run_id before using it, contradicting 'named by its run_id'",
+    "Trust model validation not shown"
+   ],
+   "default_guess": "Require run_id to be a nonempty safe single path component and raise StoreInternalError otherwise.",
+   "unit": "store"
+  },
+  {
+   "subject": "remove_run_spool partial failure",
+   "kind": "failure atomicity unspecified",
+   "text": "remove ... everything in it ... MUST raise StoreInternalError on an I/O failure while removing",
+   "question": "If deletion succeeds for some entries and then fails, is partial removal acceptable, and what deterministic traversal order is used?",
+   "options": [
+    "Partial removal is acceptable and reported as StoreInternalError",
+    "Preflight every entry so no removal occurs on detectable failure",
+    "Attempt rollback or restoration"
+   ],
+   "default_guess": "Use sorted bottom-up traversal; partial removal is acceptable because atomic recursive deletion is unavailable.",
+   "unit": "store"
+  },
+  {
+   "subject": "remove_run_spool symbolic links",
+   "kind": "link handling ambiguity",
+   "text": "remove ... without following symbolic links",
+   "question": "Should a symlink inside the run spool be unlinked as an entry, left in place with StoreInternalError, or treated as an I/O failure?",
+   "options": [
+    "Unlink the symlink itself without following it",
+    "Raise StoreInternalError and leave it",
+    "Ignore symlinks"
+   ],
+   "default_guess": "Unlink the symlink itself without following it.",
+   "unit": "store"
+  },
+  {
+   "subject": "spool_file destination layout",
+   "kind": "path scheme missing",
+   "text": "publish the file ... under its full SpooledFileKey ... a SpooledFile is named by its position alone",
+   "question": "What directory and filename encoding maps producer_node_id, map_index, attempt_number, producer_port and list_index to a unique path, and which subset is the 'position alone'?",
+   "options": [
+    "Nested directories for element and attempt plus a port/index filename",
+    "A reversible encoding of the entire key in one filename",
+    "Hash the key into a filename",
+    "Use producer_port and list_index as the position within an attempt directory"
+   ],
+   "default_guess": "Use nested safe components for node, map index and attempt, with producer_port and list_index forming the final position filename.",
+   "unit": "store"
+  },
+  {
+   "subject": "spool_file path-component safety",
+   "kind": "security boundary unspecified",
+   "text": "under its full SpooledFileKey",
+   "question": "How are arbitrary run_id, producer_node_id and producer_port strings validated or encoded to prevent traversal and collisions?",
+   "options": [
+    "Reject unsafe path components",
+    "Percent-encode components",
+    "Hash components while retaining a manifest",
+    "Trust upstream model validation"
+   ],
+   "default_guess": "Reject any component that is empty, '.', '..', absolute, contains separators or NUL.",
+   "unit": "store"
+  },
+  {
+   "subject": "spool_file run existence",
+   "kind": "reference validation unspecified",
+   "text": "publish the file into the spool directory of file's run_id",
+   "question": "Must the run record already exist before spooling, or may files be spooled for an unknown run for a later change?",
+   "options": [
+    "Require load_run_row to find the run",
+    "Allow unknown runs because spool_file only stages bytes",
+    "Create a run directory only when record_change starts the run"
+   ],
+   "default_guess": "Require the run record to exist before creating its spool directory.",
+   "unit": "store"
+  },
+  {
+   "subject": "spool_file ceiling check order",
+   "kind": "validation ordering unspecified",
+   "text": "MUST raise RefusedError when the size ... exceeds ... or when the run's spool ... would exceed ...",
+   "question": "If both per-file and per-run ceilings are exceeded, which check and reason is reported, and is attempt cleanup performed before or after computing the run total?",
+   "options": [
+    "Check file ceiling first, then run ceiling, cleaning on either",
+    "Check run ceiling first",
+    "Use one generic ceiling refusal"
+   ],
+   "default_guess": "Check the file ceiling first, then the run ceiling, and perform attempt cleanup after either refusal is determined.",
+   "unit": "store"
+  },
+  {
+   "subject": "spool_file quota accounting",
+   "kind": "counting boundary ambiguity",
+   "text": "counted as the bytes of the files already in it, less a file no SpooledFile record names at this file's position, plus content",
+   "question": "Are temporary files, malformed files, directories, symlinks and files from failed attempts counted, and how is an unreadable entry handled?",
+   "options": [
+    "Count every existing regular published file, excluding the replaceable destination; reject links and I/O failures",
+    "Count only files matching the module's final-name pattern",
+    "Count all directory entry sizes including temporaries"
+   ],
+   "default_guess": "Count all recognized published regular files, exclude the replaceable unnamed destination, ignore module temporary files, and raise StoreInternalError on links or unreadable entries.",
+   "unit": "store"
+  },
+  {
+   "subject": "spool_file existing named destination",
+   "kind": "record consistency ambiguity",
+   "text": "one a SpooledFile record names is never overwritten and raises StoreInternalError",
+   "question": "If the existing named file already has exactly the same bytes and metadata, must the call still raise, or may it be idempotent?",
+   "options": [
+    "Always raise StoreInternalError",
+    "Return existing facts when identical",
+    "Raise RefusedError for duplicate staging"
+   ],
+   "default_guess": "Always raise StoreInternalError as explicitly stated.",
+   "unit": "store"
+  },
+  {
+   "subject": "spool_file unnamed replacement",
+   "kind": "publish sequence unspecified",
+   "text": "a file already at that position that no SpooledFile record names ... is replaced",
+   "question": "How is replacement made crash-safe without overwriting—remove old then rename, atomic replace, or rename old aside—and what remains if the process crashes between steps?",
+   "options": [
+    "Atomically replace the unnamed destination",
+    "Unlink it then perform no-overwrite rename",
+    "Rename the old file aside, publish, then remove the old copy"
+   ],
+   "default_guess": "Atomically replace the verified unnamed destination after writing and fsyncing the new temporary file.",
+   "unit": "store"
+  },
+  {
+   "subject": "spool_file attempt cleanup scope",
+   "kind": "matching ambiguity",
+   "text": "every file already spooled under the same run_id, producer_node_id, map_index and attempt_number",
+   "question": "Does cleanup include the current destination, temporary files and files already backed by SpooledFile records if their AttemptKey matches?",
+   "options": [
+    "Remove only unnamed published files and temporaries for that attempt",
+    "Remove every matching path including recorded files",
+    "Remove all matching final files but not temporaries"
+   ],
+   "default_guess": "Remove unnamed final files and module temporaries for the attempt, but never remove a file named by an existing SpooledFile record.",
+   "unit": "store"
+  },
+  {
+   "subject": "spool_file refusal cleanup contradiction",
+   "kind": "immutability conflict",
+   "text": "on that refusal it removes this file and every file already spooled under the same ... attempt_number ... while one a SpooledFile record names is never overwritten",
+   "question": "If a recorded SpooledFile exists for the same attempt, does ceiling-refusal cleanup remove it as 'every file', preserve it because recorded files are immutable, or turn the refusal into StoreInternalError?",
+   "options": [
+    "Preserve recorded files and clean only unnamed staging files",
+    "Remove recorded files too",
+    "Raise StoreInternalError because complete cleanup is impossible"
+   ],
+   "default_guess": "Preserve recorded files and interpret 'spooled' cleanup as unnamed staged files only.",
+   "unit": "store"
+  },
+  {
+   "subject": "spool_file digest re-check",
+   "kind": "expected value ambiguity",
+   "text": "check its digest and size",
+   "question": "Against what expected values is the post-write digest and size checked when spool_file receives raw content but no expected digest or size?",
+   "options": [
+    "Compare with the digest and length computed from the input before writing",
+    "Read back and compare bytes directly to content",
+    "Only ensure the file can be hashed and sized"
+   ],
+   "default_guess": "Compute digest and size from content before writing and compare the persisted temporary file against them.",
+   "unit": "store"
+  },
+  {
+   "subject": "all filesystem functions",
+   "kind": "concurrency unspecified",
+   "text": "never overwritten ... no two records ever share a position ... module's one SQLite connection",
+   "question": "What synchronization protects module globals, the one SQLite connection, position allocation, quota calculation and no-overwrite publication when calls occur concurrently or from multiple threads?",
+   "options": [
+    "Use a module-wide reentrant lock",
+    "Rely solely on SQLite transactions and filesystem atomic operations",
+    "Declare the module single-threaded"
+   ],
+   "default_guess": "Use a module-wide reentrant lock around store operations, with the process lock excluding other processes.",
+   "unit": "store"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"module-wide store state\",\"kind\":\"missing state model\",\"text\":\"open_store returns StoreOpened with data_directory and temporary_files_removed\",\"question\":\"Where do page_records, put_value_bytes, read_records, read_value_bytes, record_change, remove_run_spool and spool_file obtain the connection, repository, data-directory path and lifetime lock, since none accepts StoreOpened or a repository?\",\"options\":[\"Maintain module-global connection, repository, paths and lock\",\"Reopen the store from hidden configuration on every call\",\"Attach hidden runtime state to StoreOpened despite its exact fields\"],\"default_guess\":\"Maintain one module-global opened-store state initialized by open_store.\"},{\"subject\":\"open_store repeated calls\",\"kind\":\"lifecycle unspecified\",\"text\":\"open the database file inside data_directory as the module's one SQLite connection\",\"question\":\"What happens if open_store is called more than once, for the same or a different directory?\",\"options\":[\"Reject every second call\",\"Return the existing store for the same path and reject another path\",\"Close and replace the existing store\",\"Support independent stores despite the one-connection wording\"],\"default_guess\":\"Return the existing result for the same normalized path and reject a different path.\"},{\"subject\":\"open_store lock lifetime\",\"kind\":\"cleanup unspecified\",\"text\":\"held for the life of the process\",\"question\":\"How is the lock descriptor retained, and is it ever released or the lock file removed during normal process shutdown?\",\"options\":[\"Keep the descriptor globally and leave the lock file\",\"Keep it globally and register shutdown cleanup\",\"Rely on the SQLite connection or repository to retain it\"],\"default_guess\":\"Keep the descriptor globally; let the OS release the lock and leave the lock file in place.\"},{\"subject\":\"open_store artifact names\",\"kind\":\"missing values\",\"text\":\"take an exclusive non-blocking lock on a lock file inside data_directory; ... open the database file inside data_directory\",\"question\":\"What are the lock-file and SQLite database filenames?\",\"options\":[\"Fixed hidden names chosen by the generator\",\"Names derived from the imported area constants\",\"Platform-specific conventional names\"],\"default_guess\":\"Choose fixed hidden filenames such as .store.lock and store.sqlite3.\"},{\"subject\":\"open_store check failure effects\",\"kind\":\"contradiction\",\"text\":\"take an exclusive non-blocking lock on a lock file inside data_directory ... [then perform later checks] ... it removes and creates nothing when a check fails\",\"question\":\"If acquiring the lock creates the lock file and a later privacy or symlink check fails, must that newly created lock file be removed, retained, or must the lock operation require a pre-existing file?\",\"options\":[\"Remove a lock file created by this attempt\",\"Retain the newly created lock file\",\"Require the lock file to pre-exist\",\"Interpret 'creates nothing' as applying only after validation\"],\"default_guess\":\"Remove a lock file created by the failed open attempt after releasing it.\"},{\"subject\":\"open_store validation order\",\"kind\":\"boundary ambiguity\",\"text\":\"check that data_directory and everything inside it are owned ... and grant no permission ...; walk the directory without following links and find no symbolic link\",\"question\":\"How can ownership and permissions of entries be checked before the later symlink check without following links, and which refusal wins for a symlink whose target has bad ownership or permissions?\",\"options\":[\"Use lstat for privacy and report privacy first\",\"Treat a symlink as the privacy check's first failure\",\"Defer entry privacy checks until after detecting symlinks despite the stated order\"],\"default_guess\":\"Use lstat without following links and report a privacy failure first if its link inode fails that check.\"},{\"subject\":\"open_store first offending path\",\"kind\":\"ordering unspecified\",\"text\":\"directory not private (naming the first offending path), or symbolic link found (naming its path)\",\"question\":\"What deterministic directory traversal order defines the first offending path?\",\"options\":[\"Lexicographic path order\",\"Underlying filesystem enumeration order\",\"Depth-first order with sorted entries\",\"Breadth-first order with sorted entries\"],\"default_guess\":\"Depth-first traversal with directory entries sorted lexicographically.\"},{\"subject\":\"open_store privacy modes\",\"kind\":\"permission boundary unspecified\",\"text\":\"grant no permission to group or others\",\"question\":\"What exact modes should newly created regular files and directories receive, and should existing owner permissions be required or altered?\",\"options\":[\"Files 0600 and directories 0700; never alter existing entries\",\"Use umask 077 with conventional creation modes\",\"Accept any owner bits and chmod newly created artifacts only\",\"Chmod all existing entries to private modes\"],\"default_guess\":\"Create files as 0600 and directories as 0700, accept any owner bits on existing entries, and never repair existing permissions.\"},{\"subject\":\"open_store SQLite no-follow requirement\",\"kind\":\"mechanism unspecified\",\"text\":\"the file opened without following links ... as the module's one SQLite connection\",\"question\":\"How is SQLite required to use a prevalidated/no-follow file descriptor when the standard SQLite API normally opens a pathname itself?\",\"options\":[\"Pre-open with O_NOFOLLOW, then connect through a descriptor path\",\"lstat immediately before sqlite3.connect and accept the race\",\"Use a custom SQLite URI/VFS option\",\"The requirement assumes repository support not stated in the prompt\"],\"default_guess\":\"Pre-open with O_NOFOLLOW and connect through the process file-descriptor path where supported.\"},{\"subject\":\"open_store SQLite auxiliary files\",\"kind\":\"security mechanism unspecified\",\"text\":\"Every file and directory the module creates ... the database file and its journal ... MUST be created ... granting no permission to group or others\",\"question\":\"How are SQLite-created journal, WAL or shared-memory files forced to private permissions and protected from symlink substitution without issuing additional SQL or configuring a VFS?\",\"options\":[\"Set process umask 077 around all SQLite activity\",\"Force rollback-journal mode and validate artifacts\",\"Rely on existing private directory permissions\",\"Use a custom SQLite VFS\"],\"default_guess\":\"Set a restrictive umask during opening and rely on the private parent directory.\"},{\"subject\":\"open_store database configuration\",\"kind\":\"transaction setup unspecified\",\"text\":\"with synchronous FULL\",\"question\":\"Must journal mode, isolation_level, timeout, thread policy, foreign-key behavior and autocommit behavior be set, or left at library defaults?\",\"options\":[\"Set only synchronous FULL and explicit transaction control\",\"Choose additional conservative SQLite settings\",\"Use repository defaults\"],\"default_guess\":\"Set synchronous FULL and explicit transaction control, leaving unrelated settings at defaults.\"},{\"subject\":\"open_store cleanup targets\",\"kind\":\"missing identification rule\",\"text\":\"remove the module's own temporary files left by an interrupted publish\",\"question\":\"What filename pattern or metadata identifies module-owned temporary files without risking deletion of unrelated files?\",\"options\":[\"A fixed reserved prefix and suffix\",\"All non-digest files in the value area\",\"All dotfiles in both areas\",\"Temporary-file names recorded elsewhere\"],\"default_guess\":\"Use and clean a generator-chosen reserved temporary-file prefix.\"},{\"subject\":\"open_store orphan value cleanup\",\"kind\":\"missing repository surface\",\"text\":\"every file of the content-addressed area whose digest no StoredValue and no file fixture record names\",\"question\":\"How can the generator determine whether a digest is named by a 'file fixture record' when no such model or repository operation exists in the imports or contracts?\",\"options\":[\"Check only list_stored_value_rows_by_value_digest\",\"Treat SpooledFile records as file fixtures\",\"Scan other records' PortRefs\",\"Do not remove any candidate because fixture reachability is unavailable\"],\"default_guess\":\"Check StoredValue rows only, because no file-fixture record surface is supplied.\"},{\"subject\":\"open_store orphan value filenames\",\"kind\":\"boundary unspecified\",\"text\":\"every file of the content-addressed area whose digest no StoredValue ... names\",\"question\":\"Which filenames count as digest-addressed value files, and what happens to malformed names, directories or other artifacts in the value area?\",\"options\":[\"Only lowercase 64-character SHA-256 names are value files\",\"Every non-temporary regular filename is treated as a digest\",\"Malformed entries cause StoreInternalError\",\"Malformed entries are ignored\"],\"default_guess\":\"Treat only lowercase 64-hex regular filenames as value files and ignore unrelated entries.\"},{\"subject\":\"open_store cleanup result\",\"kind\":\"counting ambiguity\",\"text\":\"temporary_files_removed, the count of temporary files removed, unnamed value files not counted\",\"question\":\"Are temporary files removed from both the value and spool areas counted, and are directories or SQLite temporary artifacts included?\",\"options\":[\"Count only publish temporary regular files in both areas\",\"Count value-area temporaries only\",\"Count all temporary artifacts including directories and SQLite files\"],\"default_guess\":\"Count only module publish temporary regular files removed from the value and spool areas.\"},{\"subject\":\"exception payloads\",\"kind\":\"error shape unspecified\",\"text\":\"raise RefusedError whose reason names the failed check ... InvalidRequestError ... StoreInternalError ... UnknownReferenceError naming the first missing record\",\"question\":\"What exception arguments or message text encode the reason, path or missing identity, since all four exceptions are bare Exception subclasses with no declared fields?\",\"options\":[\"Use a deterministic human-readable message\",\"Pass structured values as positional arguments\",\"Define custom constructors or fields despite only 'pass' being specified\"],\"default_guess\":\"Raise each exception with one deterministic human-readable string argument.\"},{\"subject\":\"continuation-token filter serialization\",\"kind\":\"canonicalization unspecified\",\"text\":\"canonical JSON of record_filter as an object keyed by its field names, or of null when there is no filter\",\"question\":\"How are imported frozen model and enum values converted to JSON text, including enum encoding, tuple encoding and field order, before canonical_bytes is called?\",\"options\":[\"Build plain objects explicitly from declared variant fields and enum values\",\"Use model_dump in JSON mode\",\"Use a standard JSON encoder with custom model handling\"],\"default_guess\":\"Build the exact plain object explicitly for EqualsFilter or InSetFilter and serialize enum values as their string values.\"},{\"subject\":\"decode_continuation_token canonicality\",\"kind\":\"validation boundary unspecified\",\"text\":\"not unpadded base64url, does not decode to a canonical JSON object\",\"question\":\"What exact lexical restrictions define unpadded base64url and canonical JSON: empty input, whitespace, non-ASCII text, alternate encodings, duplicate JSON keys, and noncanonical but semantically equal JSON?\",\"options\":[\"Require the alphabet [A-Za-z0-9_-], no '=', strict UTF-8, reject duplicate keys, and require byte-for-byte canonical re-encoding\",\"Use permissive base64 and JSON parsers then validate the resulting object\",\"Require only successful decode and exact member set\"],\"default_guess\":\"Require the URL-safe alphabet with no padding, strict UTF-8 and duplicate-key rejection, then compare decoded bytes with canonical_bytes of the parsed object.\"},{\"subject\":\"decode_continuation_token primitive types\",\"kind\":\"type boundary unspecified\",\"text\":\"store_position that is not a positive integer\",\"question\":\"Are JSON booleans rejected as store positions even though bool is an int subtype in Python, and must record_type and filter_digest be strings of exact formats and case?\",\"options\":[\"Reject booleans; require exact strings and lowercase 64-hex digest\",\"Accept any int-like JSON number and case-insensitive digest\",\"Rely only on equality with computed values\"],\"default_guess\":\"Reject booleans and require exact string values with a lowercase 64-character hexadecimal digest.\"},{\"subject\":\"next_store_position counter selection\",\"kind\":\"enum construction unspecified\",\"text\":\"load_store_position_counter for = models.StoreCounterName store_position\",\"question\":\"How is the store_position enum member selected when its Python member name is unavailable?\",\"options\":[\"Construct StoreCounterName('store_position')\",\"Use a guessed member attribute such as StoreCounterName.store_position\",\"Compare enum string representations\"],\"default_guess\":\"Construct StoreCounterName('store_position').\"},{\"subject\":\"next_store_position counter validity\",\"kind\":\"invariant handling unspecified\",\"text\":\"take one more than its last_position, or 1 when no counter row exists yet\",\"question\":\"What happens if the persisted counter is zero, negative, nonintegral, or behind existing records?\",\"options\":[\"Trust the repository row\",\"Raise StoreInternalError\",\"Scan every record type to repair or verify it\"],\"default_guess\":\"Trust a correctly typed repository row and raise StoreInternalError only if arithmetic or persistence fails.\"},{\"subject\":\"page_records complete record-type support\",\"kind\":\"missing repository operations\",\"text\":\"with no filter the type's whole list (list_slot_rows for slots, list_run_rows for runs, and so for every listed type)\",\"question\":\"How can unfiltered paging be implemented for activations, flow activations, stored values and spooled files when no whole-list repository operations are declared for those types?\",\"options\":[\"Add or call undeclared repository methods\",\"Derive them by scanning other records or known keys\",\"Treat those RecordType values as unsupported\",\"The contract list is incomplete\"],\"default_guess\":\"Treat the repository contract as incomplete; if forced, call conventionally named whole-list methods even though they are undeclared.\"},{\"subject\":\"page_records position validation support\",\"kind\":\"missing repository operations\",\"text\":\"the type's find operation at that position ... and so for every listed type\",\"question\":\"How can token positions be validated for activation, flow activation, stored value and spooled file record types when no find_*_row_at_position operation is declared for them?\",\"options\":[\"Add or call conventionally named find methods\",\"Load by a key unavailable from the token\",\"Scan a whole list where one exists\",\"Reject paging for those types\"],\"default_guess\":\"Call conventionally named find operations despite their absence from the declared interface.\"},{\"subject\":\"page_records filter matrix\",\"kind\":\"mapping unspecified\",\"text\":\"allowed fields ... are checked by the caller and not again here\",\"question\":\"Which FilterField values are allowed for each RecordType, and which repository equality method and value conversion corresponds to every allowed pair?\",\"options\":[\"Infer eligibility solely from declared row lookup fields and list methods\",\"Accept any field physically present on the record and filter in memory\",\"Maintain a hidden matrix not supplied by the prompt\"],\"default_guess\":\"Infer the matrix from the available list_*_by_* repository methods and special node-execution rules.\"},{\"subject\":\"page_records status conversion\",\"kind\":\"enum type unspecified\",\"text\":\"a status value passed as the member of the type's status enumeration\",\"question\":\"For a filter whose value is a string, which status enum should be constructed for each record type, and what error results if conversion fails despite caller validation being assumed?\",\"options\":[\"Map Run, binding, approval, grant and attempt types to their specific enums\",\"Compare status enum values as strings and avoid construction\",\"Raise InvalidRequestError on conversion failure\"],\"default_guess\":\"Map each status-bearing record type to its declared status enum and construct it from the string value.\"},{\"subject\":\"page_records ordering assumptions\",\"kind\":\"repository order unspecified\",\"text\":\"MUST read the rows ... in store order through StoreRepository ... merged by store_position ... it then reverses that order\",\"question\":\"Must the module sort every repository result by store_position defensively, or may it assume every list operation already returns store order?\",\"options\":[\"Assume repository list order is store order\",\"Sort all returned rows by store_position\",\"Validate order and raise StoreInternalError if violated\"],\"default_guess\":\"Sort by store_position before merging to guarantee the required behavior.\"},{\"subject\":\"page_records in-set semantics\",\"kind\":\"duplicate and value-order ambiguity\",\"text\":\"one such list per value, merged by store_position without repeating a row\",\"question\":\"How are repeated filter values handled, and does their input order affect repository calls or the merged result?\",\"options\":[\"Deduplicate values at first occurrence\",\"Call once per tuple element including duplicates and deduplicate rows\",\"Sort unique values before querying\"],\"default_guess\":\"Deduplicate values at first occurrence, call once per distinct value, and sort merged rows by store position.\"},{\"subject\":\"page_records page-size edge cases\",\"kind\":\"boundary unspecified\",\"text\":\"returns the records of the first page_size of them\",\"question\":\"What happens for page_size zero or negative if the caller failed to enforce its promised validation, and can an empty page carry a continuation token?\",\"options\":[\"Assume page_size is positive\",\"Raise InvalidRequestError\",\"Return an empty page with no token\",\"Return an empty page retaining the incoming boundary\"],\"default_guess\":\"Assume page_size is positive and raise InvalidRequestError defensively otherwise.\"},{\"subject\":\"put_value_bytes existing destination\",\"kind\":\"integrity check unspecified\",\"text\":\"when a file for that digest already exists it returns without writing\",\"question\":\"Must an existing regular file be opened without following links and verified for the expected digest and size before returning, or is mere existence sufficient?\",\"options\":[\"Verify digest and size and fail on mismatch\",\"Return solely on regular-file existence\",\"Trust filename but verify size only\"],\"default_guess\":\"Open without following links and verify both digest and size before returning.\"},{\"subject\":\"put_value_bytes publish collision\",\"kind\":\"race behavior unspecified\",\"text\":\"renames it into place without overwriting\",\"question\":\"If another writer creates the destination between the existence check and rename, should the function verify and accept that file, raise StoreInternalError, or retry?\",\"options\":[\"Verify the winner and return if correct\",\"Always raise StoreInternalError\",\"Retry publication with a new temporary file\"],\"default_guess\":\"Verify the winning file and return if its digest and size are correct; otherwise raise StoreInternalError.\"},{\"subject\":\"put_value_bytes durability\",\"kind\":\"fsync boundary unspecified\",\"text\":\"writes a temporary file in the same area, flushes and fsyncs it ... and renames it into place\",\"question\":\"Must the containing value-area directory also be fsynced after rename, as record_change's durability rule requires for files named by a change?\",\"options\":[\"Always fsync the directory after publication\",\"Leave directory fsync to record_change\",\"Do not fsync the directory\"],\"default_guess\":\"Fsync the value-area directory immediately after publication.\"},{\"subject\":\"read_records query discrimination\",\"kind\":\"runtime surface missing\",\"text\":\"RecordQuery: imported runtime symbol; no local surface details available\",\"question\":\"How should the function safely discriminate all query variants without reflective access, given that the union's discriminator and complete variant membership are not declared on RecordQuery itself?\",\"options\":[\"Use isinstance against every imported query model\",\"Branch on query.query_kind directly\",\"Pattern-match on concrete model classes\"],\"default_guess\":\"Use isinstance against the explicitly imported concrete query classes.\"},{\"subject\":\"read_records identity-form matrix\",\"kind\":\"mapping unspecified\",\"text\":\"a record_type that has no such identity form\",\"question\":\"Which RecordType values are legal for by_id, by_position and by_attempt, beyond the examples for activations, flow activations, node executions and effect attempts?\",\"options\":[\"Infer by_id from load_* signatures and reserve by_position/by_attempt for explicitly named types\",\"Allow by_position for every type using find operations\",\"Allow multiple forms whenever a repository operation could support them\"],\"default_guess\":\"Infer by_id from string-keyed load operations, allow by_position only for Activation and FlowActivation, and by_attempt only for NodeExecution and EffectAttempt.\"},{\"subject\":\"read_records malformed-query precedence\",\"kind\":\"validation ordering unspecified\",\"text\":\"MUST first raise StoreInternalError, before any record is looked up, when the query's arguments are malformed for its kind\",\"question\":\"What is the exact validation order when several query arguments are malformed, and how are invalid runtime enum/model values possible or classified?\",\"options\":[\"Validate discriminator, form compatibility, nonempty collections, duplicates, then relation field consistency\",\"Use model validation guarantees and check only the explicitly listed cases\",\"Choose per-query ordering\"],\"default_guess\":\"Validate query kind and record-type compatibility first, then collection emptiness and duplicates, before any repository call.\"},{\"subject\":\"read_records relation reference checks\",\"kind\":\"missing dependency order\",\"text\":\"then raise UnknownReferenceError naming the first missing record ... in the order the relation's fields name them for a relation\",\"question\":\"For each relation, which named fields require existence checks, including nested dependencies such as an implementation's contract version, a run's flow version, an ElementKey's run and node, and whether ActivationBeforeRun requires the run to use the supplied flow version?\",\"options\":[\"Check only direct identity fields appearing in the query\",\"Check every linked record traversed to answer the relation\",\"Check direct query fields and trust stored links\"],\"default_guess\":\"Check direct record identities in query field order, then treat broken links in existing records as StoreInternalError.\"},{\"subject\":\"read_records TrialExecutionsOnCorpus\",\"kind\":\"selection ambiguity\",\"text\":\"that implementation's latest TrialExecution on the case in store order\",\"question\":\"If repository results are not ordered, if two rows share a position, or if a trial execution refers to a case outside the implementation's contract version, how is 'latest' determined and how is corrupted data handled?\",\"options\":[\"Sort by store_position and take the greatest matching row\",\"Trust repository order and take the last\",\"Raise StoreInternalError on inconsistent rows\"],\"default_guess\":\"Sort by store_position, take the greatest matching row, and raise StoreInternalError for inconsistent links.\"},{\"subject\":\"read_records LatestActivationOfFlow\",\"kind\":\"algorithm ambiguity\",\"text\":\"the latest FlowActivation of any version of the flow\",\"question\":\"Should the implementation list every flow version then query activations per version and merge them, or use flow-id data derivable from FlowActivationRow despite no list-by-flow-id operation?\",\"options\":[\"List versions, list activations for each and choose maximum position\",\"List all flow activations using an undeclared operation\",\"Scan positions\"],\"default_guess\":\"List the flow's versions, query activations for each version, and choose the greatest store_position.\"},{\"subject\":\"read_records ExecutionsOfRun files\",\"kind\":\"scope ambiguity\",\"text\":\"the run's NodeExecutions together with the SpooledFiles they name ... the SpooledFiles of a NodeExecution are list_spooled_file_rows_by_attempt of its AttemptKey, of a run list_spooled_file_rows_by_run_id\",\"question\":\"Should ExecutionsOfRun return every spooled-file row for the run or only files whose AttemptKey belongs to one of the returned NodeExecutions, and how are duplicate files avoided?\",\"options\":[\"Use list_spooled_file_rows_by_run_id exactly\",\"Gather files per returned execution attempt\",\"Use the run list then retain only files named by executions\"],\"default_guess\":\"Use list_spooled_file_rows_by_run_id, because the repository note explicitly assigns that operation to a run.\"},{\"subject\":\"read_records mixed-type ordering\",\"kind\":\"return ordering unspecified\",\"text\":\"Returns one RecordSet with each record ... in the field of its type\",\"question\":\"For relations returning node executions and spooled files, what ordering should each field use when files can be grouped by attempt or listed globally?\",\"options\":[\"Independent global store order in each RecordSet field\",\"Group files by execution order then file store order\",\"Use repository-returned order\"],\"default_guess\":\"Return each RecordSet field independently in ascending store_position order.\"},{\"subject\":\"read_value_bytes source discrimination\",\"kind\":\"runtime surface missing\",\"text\":\"ByteSource: imported runtime symbol; no local surface details available\",\"question\":\"Should source variants be selected by isinstance against StoredValueSource and SpooledFileSource or by reading source_kind directly?\",\"options\":[\"Use isinstance\",\"Branch on source.source_kind\",\"Pattern-match concrete models\"],\"default_guess\":\"Use isinstance against the imported concrete source types.\"},{\"subject\":\"read_value_bytes stored-value carriage\",\"kind\":\"semantic ambiguity\",\"text\":\"for a value carriage these are its canonical JSON bytes\",\"question\":\"Must read_value_bytes enforce that carriage, media_type or schema agrees with the physical bytes, or only verify the recorded digest and size?\",\"options\":[\"Verify only digest and size\",\"Additionally parse and canonicalize JSON for value carriage\",\"Validate carriage-specific media type and schema\"],\"default_guess\":\"Verify only the record's digest and size.\"},{\"subject\":\"record_change variant discrimination\",\"kind\":\"runtime surface missing\",\"text\":\"StoreChange: imported runtime symbol; no local surface details available\",\"question\":\"How should record_change distinguish variants without reflective access: isinstance against every concrete change class or direct access to change.change?\",\"options\":[\"Use isinstance against all imported change classes\",\"Branch on change.change\",\"Pattern-match concrete model types\"],\"default_guess\":\"Use isinstance against every imported concrete change class.\"},{\"subject\":\"record_change content identities\",\"kind\":\"identity rule unspecified\",\"text\":\"equal content submitted in another order is the same record ... content_identity\",\"question\":\"For which supplied IDs must record_change recompute content_identity, what exact content DTO is used for each, and does a mismatch cause RefusedError or StoreInternalError?\",\"options\":[\"Recompute contract-version, implementation, trial-case, flow-version and stored-value identities from the corresponding Content models\",\"Trust all caller-supplied IDs and use content_identity only for list sorting\",\"Recompute every deterministic identity including corpus and binding digests\"],\"default_guess\":\"Recompute identities for the imported Content model types and treat mismatches as StoreInternalError because they break a store invariant.\"},{\"subject\":\"record_change order-free list sorting\",\"kind\":\"enum sort representation unspecified\",\"text\":\"ports by (direction, name)\",\"question\":\"Is Port.direction sorted by its serialized enum value, declaration order, or another rank, and are equal sort keys allowed and kept stable or rejected?\",\"options\":[\"Sort by direction.value then name, stably\",\"Use enum declaration order then name\",\"Define input before output explicitly and reject duplicate keys\"],\"default_guess\":\"Sort by direction.value then name using a stable sort, leaving duplicate validation to the caller.\"},{\"subject\":\"record_change random identity format\",\"kind\":\"value unspecified\",\"text\":\"random identities trial_execution_id, binding_id, run_id, approval_id and grant_id, drawn from a cryptographically secure source\",\"question\":\"What textual format, bit length and optional prefix must each generated identity use?\",\"options\":[\"UUID4 text\",\"URL-safe random token\",\"Lowercase hexadecimal random bytes\",\"Type-prefixed random token\"],\"default_guess\":\"Use UUID4 canonical text for every random identity.\"},{\"subject\":\"record_change collision retry\",\"kind\":\"loop boundary unspecified\",\"text\":\"drawn again on a collision\",\"question\":\"Is retry unbounded, and what error is raised if the secure random source fails or collisions continue?\",\"options\":[\"Retry indefinitely until unique\",\"Use a bounded retry count then StoreInternalError\",\"Propagate the random-source error\"],\"default_guess\":\"Retry a small bounded number of times and raise StoreInternalError on exhaustion or random-source failure.\"},{\"subject\":\"record_change status transitions\",\"kind\":\"state machine missing\",\"text\":\"a status change from a status the change does not start from\",\"question\":\"What exact source and target statuses are valid for RecordRunProgressChange, RecordResumptionChange, ReleaseRunChange, RecordAttemptOutcomeChange, ResolveAttemptChange and RecoverInFlightChange?\",\"options\":[\"Infer only explicitly named starts such as proposed, requested, active, in_flight and unknown\",\"Define full lifecycle matrices from conventional meanings\",\"Trust caller-selected target status unless the note names a source\"],\"default_guess\":\"Enforce only transitions explicitly stated in the notes and otherwise trust the caller.\"},{\"subject\":\"record_change linked-record invariants\",\"kind\":\"validation matrix missing\",\"text\":\"checking only its own invariants: attempt numbers, unique and existing identities, existing linked records\",\"question\":\"Which linked records must exist for every change variant, and which cross-record consistencies must be checked, such as implementation belonging to contract version, flow activation's version belonging to its flow, bindings matching nodes, approvals matching attempts, and files matching drafts?\",\"options\":[\"Validate every foreign-key-like relationship implied by model fields\",\"Check only identities explicitly named in each field-assignment note\",\"Rely on the caller for relationship consistency\"],\"default_guess\":\"Validate every directly referenced record and obvious ownership relation implied by the stored row fields.\"},{\"subject\":\"record_change validation order\",\"kind\":\"check ordering unspecified\",\"text\":\"one SQLite transaction ... any other broken invariant ... raises StoreInternalError with nothing written\",\"question\":\"When multiple identities, links, statuses, attempt numbers or filesystem artifacts are invalid, in what deterministic order are checks performed and which error wins?\",\"options\":[\"Follow each variant's field-assignment order\",\"Validate all references before uniqueness, status and files\",\"Choose a common global validation order\"],\"default_guess\":\"Validate in the order fields and records are listed for the change variant, before allocating positions or writing rows.\"},{\"subject\":\"record_change duplicate StoredValue\",\"kind\":\"conflict behavior unspecified\",\"text\":\"A StoredValue whose value_id already exists is not written again and the existing record is returned in its place, since equal values share one identity\",\"question\":\"Must the existing StoredValue be compared field-for-field with the supplied one, and what happens if the same value_id carries different metadata or digest?\",\"options\":[\"Require exact equality or raise StoreInternalError\",\"Return the existing record regardless of supplied differences\",\"Verify only value_digest\"],\"default_guess\":\"Require exact record equality and raise StoreInternalError on any mismatch.\"},{\"subject\":\"record_change StoredValue bytes\",\"kind\":\"artifact validation unspecified\",\"text\":\"a value list's StoredValues before the record naming them ... every file a change names is published, fsynced ... before the change is committed\",\"question\":\"Must record_change verify that each new StoredValue's digest file exists and matches size before inserting its row, and should it fsync an already-published file and directory again?\",\"options\":[\"Verify digest and size and fsync file and directory\",\"Verify existence only and rely on put_value_bytes\",\"Trust the caller entirely\"],\"default_guess\":\"Verify the file without following links, check digest and size, and fsync it and its directory before commit.\"},{\"subject\":\"record_change spooled-file verification\",\"kind\":\"artifact validation unspecified\",\"text\":\"spooled files must already be published ... before the change that writes their SpooledFile records\",\"question\":\"Must record_change verify every spooled file's key, digest, size and media type against disk, and what happens to an extra published file not listed by the change?\",\"options\":[\"Verify key, digest and size; ignore unnamed extras\",\"Verify existence only\",\"Trust the supplied SpooledFile records\"],\"default_guess\":\"Verify the keyed file's digest and size without following links; ignore extra unnamed files.\"},{\"subject\":\"record_change new Slot and Flow timestamps\",\"kind\":\"field source missing\",\"text\":\"IssueContractVersionChange writes ... the Slot with created_slot_purpose as purpose ... ComposeFlowVersionChange writes ... the Flow with created_flow_purpose as purpose\",\"question\":\"What values populate Slot.created_at and Flow.created_at, since the changes provide only issued_at and authored_at respectively?\",\"options\":[\"Use issued_at for Slot and authored_at for Flow\",\"Generate a current KernelInstant\",\"Treat missing timestamps as a prompt error\"],\"default_guess\":\"Use issued_at for Slot.created_at and authored_at for Flow.created_at.\"},{\"subject\":\"record_change creation when parent exists\",\"kind\":\"branch unspecified\",\"text\":\"plus the Slot ... when that is given; ... plus the Flow ... when that is given\",\"question\":\"If created_slot_purpose or created_flow_purpose is supplied but the named Slot or Flow already exists, or is absent when the parent does not exist, should the change fail, reuse the existing record, or omit creation?\",\"options\":[\"Require purpose iff the parent is absent and fail otherwise\",\"Reuse an existing equal-purpose parent\",\"Always attempt insertion when purpose is supplied\"],\"default_guess\":\"Require the purpose exactly when the parent is absent; otherwise raise StoreInternalError.\"},{\"subject\":\"record_change activation uniqueness\",\"kind\":\"duplicate semantics unspecified\",\"text\":\"RecordAdmissionVerdictChange writes the AdmissionVerdict and, when activate is true, an Activation ... RecordActivationChange writes one Activation\",\"question\":\"May the same contract version or implementation be activated repeatedly, and if so does 'latest' simply select the newest, or is any duplicate activation an invariant violation?\",\"options\":[\"Allow repeated append-only activations\",\"Reject an identical repeated activation\",\"Allow only one activation per contract version\"],\"default_guess\":\"Allow repeated activation records and use store order to determine the latest.\"},{\"subject\":\"record_change multiple executions of one element\",\"kind\":\"attempt allocation ambiguity\",\"text\":\"attempt_number ... is one more than the number of NodeExecutions the element already has ... RecordRunProgressChange writes its executions in (node_id, map_index) order\",\"question\":\"If one RecordRunProgressChange contains multiple drafts for the same ElementKey, do they receive sequential attempt numbers within the transaction, the same initially computed number, or is that input invalid?\",\"options\":[\"Assign sequential numbers as each execution is inserted\",\"Reject duplicate elements in one change\",\"Assign the same number, causing a uniqueness failure\"],\"default_guess\":\"Assign sequential attempt numbers in sorted draft order.\"},{\"subject\":\"record_change draft/key consistency\",\"kind\":\"invariant unspecified\",\"text\":\"A NodeExecution whose files were spooled before it is written carries the attempt_number its caller spooled them under\",\"question\":\"How are drafts associated with StoredValues and SpooledFiles in changes that contain several executions, and what exact mismatches cause refusal versus internal error?\",\"options\":[\"Associate files by run_id, node_id, map_index and assigned attempt number; values are shared by all records\",\"Require every file to match exactly one execution and allow unreferenced values\",\"Infer associations through PortRef contents\"],\"default_guess\":\"Match files by the assigned AttemptKey, require exactly one matching execution, and allow value records to be referenced by any draft.\"},{\"subject\":\"record_change attempt-number refusal scope\",\"kind\":\"error inconsistency\",\"text\":\"the change is refused with RefusedError ... when that number is no longer the element's next ... For RecordAttemptOutcomeChange and RecoverInFlightChange MUST raise RefusedError ... when the named attempt's attempt_number is no longer one more than the number of NodeExecutions\",\"question\":\"Which other change variants with pre-spooled files use RefusedError for a stale attempt number, and do variants without files use StoreInternalError or the same refusal?\",\"options\":[\"Apply RefusedError to every NodeExecution-producing change with a caller-implied attempt number\",\"Apply it only to the two explicitly named attempt changes\",\"Apply it whenever any assigned attempt conflicts\"],\"default_guess\":\"Use RefusedError for every change whose caller has already spooled files under the expected next attempt number; use StoreInternalError for other attempt invariant failures.\"},{\"subject\":\"record_change RequestApproval attempt number\",\"kind\":\"future-conflict ambiguity\",\"text\":\"RequestApprovalChange gives the EffectApproval it writes that same next number as its attempt_number without writing a NodeExecution\",\"question\":\"What happens if multiple approvals are requested for the same element before a NodeExecution is written, or an execution is written before an approval decision?\",\"options\":[\"Allow duplicate reserved attempt numbers\",\"Reject a second outstanding approval\",\"Count approvals as reservations despite the stated NodeExecution-count formula\"],\"default_guess\":\"Reject a second live approval for the same element and require the later execution to use the approval's reserved number.\"},{\"subject\":\"record_change DecideApproval refusal execution\",\"kind\":\"branch constraints missing\",\"text\":\"for a refusal, writes its refusal_execution as the element's NodeExecution\",\"question\":\"Must refusal_execution be present exactly when decision is refuse and absent when approve, and must its element and attempt match the approval?\",\"options\":[\"Require exact presence rule and matching element/attempt\",\"Allow a refused approval without an execution\",\"Ignore an execution supplied for approval\"],\"default_guess\":\"Require it for refusal, forbid it for approval, and require its element to match the approval while assigning the approval's attempt number.\"},{\"subject\":\"record_change attempt outcome status\",\"kind\":\"target set unspecified\",\"text\":\"RecordAttemptOutcomeChange sets the in_flight attempt's status\",\"question\":\"Which AttemptStatus targets are valid outcomes—applied, not_applied, not_sent, unknown, or even in_flight—and must the NodeExecution status agree with that outcome?\",\"options\":[\"Allow every status except in_flight\",\"Allow only terminal statuses implied by execution results\",\"Trust the supplied status with no cross-check\"],\"default_guess\":\"Allow applied, not_applied, not_sent or unknown, reject in_flight, and require only the explicitly stated links rather than inventing a status mapping.\"},{\"subject\":\"record_change ResolveAttempt mapping\",\"kind\":\"field mapping unspecified\",\"text\":\"ResolveAttemptChange sets an unknown attempt to the = models.AttemptResolution value\",\"question\":\"How are AttemptResolution values mapped into AttemptStatus, and which fields besides status and resolved_by change when no resolution timestamp exists?\",\"options\":[\"Map applied to AttemptStatus('applied') and not_applied to AttemptStatus('not_applied'), setting resolved_by only\",\"Store AttemptResolution directly in the status field\",\"Add an unstated resolution field or time\"],\"default_guess\":\"Map the equal string values to AttemptStatus and set resolved_by from actor, leaving concluded_at unchanged.\"},{\"subject\":\"record_change RecoverInFlightChange\",\"kind\":\"optional-field constraints missing\",\"text\":\"writes its NodeExecution when given and sets used_approval_id's approval to used when given\",\"question\":\"Must the optional execution match the attempt's element and assigned number, may an approval be marked used without an execution, and what status must that approval currently have?\",\"options\":[\"Require matching execution and an approved approval; allow approval use with or without execution\",\"Require execution whenever used_approval_id is present\",\"Trust both optional values independently\"],\"default_guess\":\"Require any execution to match the attempt, and require any used approval to exist, be approved and match the element/attempt; allow it without an execution because both fields are independently optional.\"},{\"subject\":\"record_change Run progress transition fields\",\"kind\":\"field-update ambiguity\",\"text\":\"sets the run's status, outputs, waiting points ... ended_at and, when the new status is cancelled, cancelled_by\",\"question\":\"When the new status is not cancelled, is an existing cancelled_by retained or cleared, and what consistency rules relate status to ended_at and waiting points?\",\"options\":[\"Set cancelled_by only on transition to cancelled and otherwise retain it\",\"Clear cancelled_by for non-cancelled status\",\"Reject combinations inconsistent with a conventional run-state model\"],\"default_guess\":\"Set cancelled_by for cancelled and otherwise preserve the existing value; trust the caller for ended_at and waiting consistency.\"},{\"subject\":\"record_change resumption behavior\",\"kind\":\"incomplete lifecycle update\",\"text\":\"RecordResumptionChange appends one Resumption to the run\",\"question\":\"Does resumption also change run status, waiting points, ended_at or other fields, and from which statuses may it occur?\",\"options\":[\"Only append the resumption\",\"Append and set status running while clearing waiting/ended state\",\"Infer a transition based on the previous wait reason\"],\"default_guess\":\"Only append the Resumption, because no other field update is listed.\"},{\"subject\":\"record_change release behavior\",\"kind\":\"precondition unspecified\",\"text\":\"ReleaseRunChange sets released_by and released_at of the run\",\"question\":\"May any run be released, may it be released twice, and does release require a terminal status or trigger spool removal?\",\"options\":[\"Allow once only for terminal runs and do not remove spool here\",\"Allow once regardless of status\",\"Allow idempotent repeated release\",\"Release and remove the spool\"],\"default_guess\":\"Allow release only once for a terminal run and leave spool removal to remove_run_spool.\"},{\"subject\":\"record_change transaction/file failure semantics\",\"kind\":\"atomicity boundary ambiguity\",\"text\":\"one SQLite transaction that either writes every record ... or nothing ... a file published by a change that then failed stays unnamed\",\"question\":\"Does 'nothing written' refer only to database records, and which filesystem publications may remain after rollback for each failure point?\",\"options\":[\"Database changes roll back but already-published files may remain unnamed\",\"All filesystem changes must also be undone\",\"Only value files may remain; spool files must be removed\"],\"default_guess\":\"Treat atomicity as database-only and allow any safely published but unnamed file to remain for startup cleanup.\"},{\"subject\":\"record_change commit failure\",\"kind\":\"error recovery unspecified\",\"text\":\"begins, commits or rolls back a transaction\",\"question\":\"If commit raises, must rollback be attempted, what happens if rollback also raises, and which StoreInternalError message or chained exception is exposed?\",\"options\":[\"Attempt rollback and raise StoreInternalError from the commit failure\",\"Raise the raw SQLite error\",\"Prefer rollback failure over commit failure\"],\"default_guess\":\"Attempt rollback, then raise StoreInternalError chained from the original commit failure.\"},{\"subject\":\"remove_run_spool path encoding\",\"kind\":\"path safety unspecified\",\"text\":\"each run's spool directory named by its run_id directly inside the spool area\",\"question\":\"What validation or encoding prevents run_id values such as '.', '..', separators, absolute paths or platform-special names from escaping or aliasing the spool area?\",\"options\":[\"Require run_id to be one safe path component\",\"Encode run_id before using it, contradicting 'named by its run_id'\",\"Trust model validation not shown\"],\"default_guess\":\"Require run_id to be a nonempty safe single path component and raise StoreInternalError otherwise.\"},{\"subject\":\"remove_run_spool partial failure\",\"kind\":\"failure atomicity unspecified\",\"text\":\"remove ... everything in it ... MUST raise StoreInternalError on an I/O failure while removing\",\"question\":\"If deletion succeeds for some entries and then fails, is partial removal acceptable, and what deterministic traversal order is used?\",\"options\":[\"Partial removal is acceptable and reported as StoreInternalError\",\"Preflight every entry so no removal occurs on detectable failure\",\"Attempt rollback or restoration\"],\"default_guess\":\"Use sorted bottom-up traversal; partial removal is acceptable because atomic recursive deletion is unavailable.\"},{\"subject\":\"remove_run_spool symbolic links\",\"kind\":\"link handling ambiguity\",\"text\":\"remove ... without following symbolic links\",\"question\":\"Should a symlink inside the run spool be unlinked as an entry, left in place with StoreInternalError, or treated as an I/O failure?\",\"options\":[\"Unlink the symlink itself without following it\",\"Raise StoreInternalError and leave it\",\"Ignore symlinks\"],\"default_guess\":\"Unlink the symlink itself without following it.\"},{\"subject\":\"spool_file destination layout\",\"kind\":\"path scheme missing\",\"text\":\"publish the file ... under its full SpooledFileKey ... a SpooledFile is named by its position alone\",\"question\":\"What directory and filename encoding maps producer_node_id, map_index, attempt_number, producer_port and list_index to a unique path, and which subset is the 'position alone'?\",\"options\":[\"Nested directories for element and attempt plus a port/index filename\",\"A reversible encoding of the entire key in one filename\",\"Hash the key into a filename\",\"Use producer_port and list_index as the position within an attempt directory\"],\"default_guess\":\"Use nested safe components for node, map index and attempt, with producer_port and list_index forming the final position filename.\"},{\"subject\":\"spool_file path-component safety\",\"kind\":\"security boundary unspecified\",\"text\":\"under its full SpooledFileKey\",\"question\":\"How are arbitrary run_id, producer_node_id and producer_port strings validated or encoded to prevent traversal and collisions?\",\"options\":[\"Reject unsafe path components\",\"Percent-encode components\",\"Hash components while retaining a manifest\",\"Trust upstream model validation\"],\"default_guess\":\"Reject any component that is empty, '.', '..', absolute, contains separators or NUL.\"},{\"subject\":\"spool_file run existence\",\"kind\":\"reference validation unspecified\",\"text\":\"publish the file into the spool directory of file's run_id\",\"question\":\"Must the run record already exist before spooling, or may files be spooled for an unknown run for a later change?\",\"options\":[\"Require load_run_row to find the run\",\"Allow unknown runs because spool_file only stages bytes\",\"Create a run directory only when record_change starts the run\"],\"default_guess\":\"Require the run record to exist before creating its spool directory.\"},{\"subject\":\"spool_file ceiling check order\",\"kind\":\"validation ordering unspecified\",\"text\":\"MUST raise RefusedError when the size ... exceeds ... or when the run's spool ... would exceed ...\",\"question\":\"If both per-file and per-run ceilings are exceeded, which check and reason is reported, and is attempt cleanup performed before or after computing the run total?\",\"options\":[\"Check file ceiling first, then run ceiling, cleaning on either\",\"Check run ceiling first\",\"Use one generic ceiling refusal\"],\"default_guess\":\"Check the file ceiling first, then the run ceiling, and perform attempt cleanup after either refusal is determined.\"},{\"subject\":\"spool_file quota accounting\",\"kind\":\"counting boundary ambiguity\",\"text\":\"counted as the bytes of the files already in it, less a file no SpooledFile record names at this file's position, plus content\",\"question\":\"Are temporary files, malformed files, directories, symlinks and files from failed attempts counted, and how is an unreadable entry handled?\",\"options\":[\"Count every existing regular published file, excluding the replaceable destination; reject links and I/O failures\",\"Count only files matching the module's final-name pattern\",\"Count all directory entry sizes including temporaries\"],\"default_guess\":\"Count all recognized published regular files, exclude the replaceable unnamed destination, ignore module temporary files, and raise StoreInternalError on links or unreadable entries.\"},{\"subject\":\"spool_file existing named destination\",\"kind\":\"record consistency ambiguity\",\"text\":\"one a SpooledFile record names is never overwritten and raises StoreInternalError\",\"question\":\"If the existing named file already has exactly the same bytes and metadata, must the call still raise, or may it be idempotent?\",\"options\":[\"Always raise StoreInternalError\",\"Return existing facts when identical\",\"Raise RefusedError for duplicate staging\"],\"default_guess\":\"Always raise StoreInternalError as explicitly stated.\"},{\"subject\":\"spool_file unnamed replacement\",\"kind\":\"publish sequence unspecified\",\"text\":\"a file already at that position that no SpooledFile record names ... is replaced\",\"question\":\"How is replacement made crash-safe without overwriting—remove old then rename, atomic replace, or rename old aside—and what remains if the process crashes between steps?\",\"options\":[\"Atomically replace the unnamed destination\",\"Unlink it then perform no-overwrite rename\",\"Rename the old file aside, publish, then remove the old copy\"],\"default_guess\":\"Atomically replace the verified unnamed destination after writing and fsyncing the new temporary file.\"},{\"subject\":\"spool_file attempt cleanup scope\",\"kind\":\"matching ambiguity\",\"text\":\"every file already spooled under the same run_id, producer_node_id, map_index and attempt_number\",\"question\":\"Does cleanup include the current destination, temporary files and files already backed by SpooledFile records if their AttemptKey matches?\",\"options\":[\"Remove only unnamed published files and temporaries for that attempt\",\"Remove every matching path including recorded files\",\"Remove all matching final files but not temporaries\"],\"default_guess\":\"Remove unnamed final files and module temporaries for the attempt, but never remove a file named by an existing SpooledFile record.\"},{\"subject\":\"spool_file refusal cleanup contradiction\",\"kind\":\"immutability conflict\",\"text\":\"on that refusal it removes this file and every file already spooled under the same ... attempt_number ... while one a SpooledFile record names is never overwritten\",\"question\":\"If a recorded SpooledFile exists for the same attempt, does ceiling-refusal cleanup remove it as 'every file', preserve it because recorded files are immutable, or turn the refusal into StoreInternalError?\",\"options\":[\"Preserve recorded files and clean only unnamed staging files\",\"Remove recorded files too\",\"Raise StoreInternalError because complete cleanup is impossible\"],\"default_guess\":\"Preserve recorded files and interpret 'spooled' cleanup as unnamed staged files only.\"},{\"subject\":\"spool_file digest re-check\",\"kind\":\"expected value ambiguity\",\"text\":\"check its digest and size\",\"question\":\"Against what expected values is the post-write digest and size checked when spool_file receives raw content but no expected digest or size?\",\"options\":[\"Compare with the digest and length computed from the input before writing\",\"Read back and compare bytes directly to content\",\"Only ensure the file can be hashed and sized\"],\"default_guess\":\"Compute digest and size from content before writing and compare the persisted temporary file against them.\"},{\"subject\":\"all filesystem functions\",\"kind\":\"concurrency unspecified\",\"text\":\"never overwritten ... no two records ever share a position ... module's one SQLite connection\",\"question\":\"What synchronization protects module globals, the one SQLite connection, position allocation, quota calculation and no-overwrite publication when calls occur concurrently or from multiple threads?\",\"options\":[\"Use a module-wide reentrant lock\",\"Rely solely on SQLite transactions and filesystem atomic operations\",\"Declare the module single-threaded\"],\"default_guess\":\"Use a module-wide reentrant lock around store operations, with the process lock excluding other processes.\"}]}",
+ "unit": "store",
+ "set_aside": []
+}

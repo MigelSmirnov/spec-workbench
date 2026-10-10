@@ -1,0 +1,142 @@
+Module: sandbox
+Target path: cabinet_kernel/sandbox.py
+Target file: sandbox.py
+
+IMPORTS:
+from cabinet_kernel.canonical_values import canonical_bytes, fit_port_value
+from cabinet_kernel.clock import monotonic_ns
+from cabinet_kernel.data_provider import RELEASE_BWRAP_VERSION, RELEASE_CEILING_FAILURE_DETAIL_BYTES_MAX, RELEASE_CEILING_MEMORY_BYTES, RELEASE_CEILING_OUTPUT_BYTES, RELEASE_CEILING_PROCESS_COUNT, RELEASE_CEILING_SANDBOX_SCRATCH_BYTES_MAX, RELEASE_CEILING_WALL_TIME_MS, RELEASE_SANDBOX_INTERPRETER, SANDBOX_ENVIRONMENT, SANDBOX_RUNTIME_PATHS, SANDBOX_TRAPPED_CLASS, SANDBOX_TRAPPED_FUNCTIONS, SANDBOX_TRAPPED_WITHOUT_ARGUMENT, SANDBOX_UNSEEDED_CONSTRUCTOR
+from cabinet_kernel.models import Cardinality, Carriage, DetailCode, DisclosureClass, FileCandidate, FileFacts, FileListCandidate, FileListPayload, FilePayload, FitCheck, JsonCandidate, JsonPayload, Port, PortCandidate, PortDirection, PortFit, PortPayload, ResourceBounds, ResourceUsage, SandboxOutcome, SandboxResult
+
+CONTRACTS (function signatures — follow exactly):
+def execute_function(code: str, inputs: tuple[PortPayload, ...], input_ports: tuple[Port, ...], output_ports: tuple[Port, ...], bounds: ResourceBounds) -> SandboxResult
+def probe_sandbox() -> None
+
+IMPORTED FUNCTION SIGNATURES (these come from the imports above):
+def canonical_bytes(json_text: str) -> bytes
+def fit_port_value(port: Port, size_bound: int, candidate: PortCandidate | None) -> PortFit
+def monotonic_ns() -> int
+
+IMPORTED DATA ACCESS SIGNATURES (constants from the imports above — read them, never redefine them; their values are not part of this context):
+RELEASE_BWRAP_VERSION: str
+RELEASE_CEILING_FAILURE_DETAIL_BYTES_MAX: int
+RELEASE_CEILING_MEMORY_BYTES: int
+RELEASE_CEILING_OUTPUT_BYTES: int
+RELEASE_CEILING_PROCESS_COUNT: int
+RELEASE_CEILING_SANDBOX_SCRATCH_BYTES_MAX: int
+RELEASE_CEILING_WALL_TIME_MS: int
+RELEASE_SANDBOX_INTERPRETER: str
+SANDBOX_ENVIRONMENT: Mapping[str, str]
+SANDBOX_RUNTIME_PATHS: tuple[str, ...]
+SANDBOX_TRAPPED_CLASS: str
+SANDBOX_TRAPPED_FUNCTIONS: tuple[str, ...]
+SANDBOX_TRAPPED_WITHOUT_ARGUMENT: tuple[str, ...]
+SANDBOX_UNSEEDED_CONSTRUCTOR: str
+
+OWNED FUNCTIONS REQUIRED (must be defined as top-level functions):
+- execute_function: (code: str, inputs: tuple[PortPayload, ...], input_ports: tuple[Port, ...], output_ports: tuple[Port, ...], bounds: ResourceBounds) -> SandboxResult
+- probe_sandbox: () -> None
+
+STATIC GATE CONTRACT (deterministic checks; a violating candidate is rejected without repair):
+- Reflective attribute access is rejected: never call getattr, hasattr,
+  setattr, delattr, or vars; every declared field and operation is
+  addressed directly by name, including in try/finally cleanup.
+- A definition whose parameter list differs from its declared contract
+  signature is rejected; keep names and order exactly.
+- A constructed record accepted by a declared insert_*/upsert_*/append_*
+  operation must reach a call or return; a built-and-dropped record is
+  rejected.
+- Instantiating a spec-declared interface is rejected; construct the
+  module-owned concrete class instead.
+- A stub, placeholder, or fail-closed body for a contracted callable is
+  rejected; implement the complete specified behavior.
+
+OWNED CLASSES REQUIRED (must be defined locally, not merely referenced):
+No owned local classes required.
+
+CONCRETE IMPLEMENTATION OBLIGATIONS:
+No local concrete-to-interface obligations.
+
+REQUIREMENTS (notes — implement these):
+- execute_function: [SECURITY_BOUNDARY] Agent code is untrusted: it MUST only ever run inside a fresh bubblewrap environment created for that one execution, never in the kernel process and never through a faster path, and the environment never receives a credential, a host path other than its own exchange directory, or any variable outside the imported SANDBOX_ENVIRONMENT constant.
+- execute_function: [SECURITY_BOUNDARY] MUST start bubblewrap with new user, PID, IPC, UTS and network namespaces and no network interface but the new namespace's own loopback, which bubblewrap brings up, the environment cleared and then set exactly to the imported SANDBOX_ENVIRONMENT constant, exactly the host paths of the imported SANDBOX_RUNTIME_PATHS constant bound read-only, which hold the release's Python runtime and standard library, one fresh private exchange directory bound read-write and bounded by the imported RELEASE_CEILING_SANDBOX_SCRATCH_BYTES_MAX constant, bubblewrap's own fresh proc and minimal dev mounts, and no other host directory; the child dies with its parent.
+- execute_function: [BEHAVIOR] The in-sandbox runner, before loading the code, MUST replace every entry point named by the imported SANDBOX_TRAPPED_FUNCTIONS constant with one that raises, those of the imported SANDBOX_TRAPPED_WITHOUT_ARGUMENT constant with ones that raise when called without an argument, every method of the class named by the imported SANDBOX_TRAPPED_CLASS constant, and the class named by the imported SANDBOX_UNSEEDED_CONSTRUCTOR constant when constructed without a seed or with None, and that class's seed method when called on an instance without a seed or with None, since that draws entropy as an unseeded construction does (A03 rule 4: an explicitly seeded instance stays usable because it draws none), and install an audit hook that raises on socket, subprocess and ctypes use and on opening any path outside the exchange directory and the read-only runtime; each trap first writes its hit to a channel to the parent that the code cannot unsend, and the parent passes these lists to the runner at launch instead of writing them into the runner.
+- execute_function: [BEHAVIOR] The runner loads code as a module, calls its top-level run once with a dict holding one entry per input port: a value port's canonical JSON decoded to Python, a file port's bytes, and for cardinality many a list of those in order; it expects a dict back with exactly one entry per output port and sends the outputs to the parent, value outputs serialized as JSON text and file outputs as bytes.
+- execute_function: [BEHAVIOR] The parent MUST enforce bounds from outside: address space limited to bounds.memory_bytes with setrlimit and the process count with setrlimit set above bounds.process_count by the tasks the runner and bubblewrap need, process_count itself being enforced by the runner's audit hook, a wall deadline, the monotonic_ns reading taken when the environment starts plus bounds.wall_time_ms in nanoseconds and held in a local variable of execute_function only, after which — once a later monotonic_ns reading reaches it — it kills every process of the environment, and an output count, the sum of the canonical bytes (from canonical_bytes) of every value output and the bytes of every file output, a many file output counting each element, compared with bounds.output_bytes; output over a bound is a failure, never truncated.
+- execute_function: [BEHAVIOR] process_count bounds the tasks of the code alive at once: the runner's main thread counts as the first, every live thread and every process the code forked with os.fork counts with its threads, and bubblewrap's own processes are not counted, so process_count 1 allows code without threads or forks. Process creation other than os.fork — subprocess, os.system, os.posix_spawn, os.posix_spawnp and the os.exec family — is subprocess use and raises in the audit hook as a trap hit (A03 rule 4). The runner's audit hook, on os.fork and on starting a thread, counts the tasks of the environment's proc and, when the new task would exceed process_count, writes a resource hit to the channel and raises, so the execution concludes resource_exhausted even when the code catches the error; the parent's setrlimit, set above process_count by the tasks the runner and bubblewrap need, stays the outer bound, and a creation it refuses is reported the same way (A03 required test 2).
+- execute_function: [BEHAVIOR] A memory, scratch or output bound counts as hit only when the parent observes it from outside: the environment was killed for it, or a MemoryError, or an OSError for a full or over-limit exchange directory, escaped run and reached the parent through the exchange channel; code that catches such an error and returns is judged by what it returned, like any other output (owner, 2026-10-06). Only the process bound is also seen inside, because every thread start and os.fork passes the runner's audit hook.
+- execute_function: [DETERMINISM_OR_ORDERING] The outcome is the first that holds, in this order of = models.SandboxOutcome: timeout when the wall deadline passed; resource_exhausted when the memory, process, scratch or output bound was hit; sandbox_violation when the channel recorded any trap hit, even if the code caught it and returned a conforming dict; crashed when the module failed to load, has no run, raised, or the process exited abnormally; contract_violation when the returned value is not a dict with exactly the output ports, a value output cannot be serialized to canonical JSON, a file output is not bytes, a many output is not a list, or fit_port_value with bounds.output_bytes as size bound does not fit an output to its port; otherwise succeeded. The stored value ceiling and the spool ceilings are not the sandbox's: the module that stores or spools an output applies them after the execution has otherwise succeeded.
+- execute_function: [PROVENANCE] failure_detail MUST hold only the type and message of an exception that escaped module loading or run, cut to at most the imported RELEASE_CEILING_FAILURE_DETAIL_BYTES_MAX constant bytes at a UTF-8 character boundary; it holds nothing the code printed; it is None for succeeded and when no exception escaped.
+- execute_function: [SECURITY_BOUNDARY] The sandboxed process's standard input, standard output and standard error MUST be connected to /dev/null, so nothing the code prints is read, kept, counted toward output_bytes or able to fill a pipe or the scratch area; code that writes without end is stopped only by its wall deadline and concludes timeout; the exception type and message reach the parent through the exchange channel, never through standard error (A03 rules 5 and 6).
+- execute_function: [BEHAVIOR] An execution completes only after every process of the environment is reaped and the exchange directory is removed; when either cannot be confirmed the outputs are discarded and the result is outcome crashed with detail_code cleanup_failed of = models.DetailCode; the function returns that result and neither raises StopRequiredError nor stops the process, which its caller does after recording the execution, and it never retries.
+- execute_function: [RETURN_SHAPE] Returns SandboxResult with the outcome, outputs only for succeeded as PortPayload entries in output port name order (a value as its canonical JSON bytes, a file as its bytes, a many file port as the list of its bytes), resources_used with elapsed wall_time_ms, peak memory_bytes and the output count as output_bytes, failure_detail, and detail_code None except for cleanup_failed.
+- probe_sandbox: [VALIDATION_ERROR] MUST raise SandboxUnavailableError naming what is missing when the bubblewrap executable, bwrap, cannot be found on the process's PATH, when bwrap --version, which prints "bubblewrap" and the version, names a version other than the imported RELEASE_BWRAP_VERSION constant, when the interpreter execute_function starts inside bubblewrap, run once through bwrap with the same read-only bindings of the imported SANDBOX_RUNTIME_PATHS constant to print platform.python_implementation() and platform.python_version() joined by one space, does not print exactly the imported RELEASE_SANDBOX_INTERPRETER constant, or when one probe execution through execute_function of a minimal implementation with no ports, under bounds equal to the imported RELEASE_CEILING_WALL_TIME_MS, RELEASE_CEILING_MEMORY_BYTES, RELEASE_CEILING_OUTPUT_BYTES and RELEASE_CEILING_PROCESS_COUNT constants, does not end succeeded, naming its outcome.
+- probe_sandbox: [RETURN_SHAPE] Returns None when bubblewrap is present and the probe execution succeeded; it writes no record.
+
+MODEL DATA DEFINITIONS (READ-ONLY SPEC DATA, NOT CODE):
+The following JSON values are read-only spec data, not Python class definitions.
+Do not emit classes, Pydantic models, create_model calls, or assignments from this section.
+Omitted model-schema/data references:
+- DetailCode: omitted because it is an imported runtime model schema
+- SandboxOutcome: omitted because it is an imported runtime model schema
+
+MODEL DATA ADDRESSES (SPEC DATA, NOT IMPORT PATHS):
+The following = models.* references are canonical spec data addresses, not Python module paths.
+Read their structured JSON values from MODEL DATA DEFINITIONS when present in this prompt.
+Never convert a spec data address into `import models` or `from models.* import ...`.
+models.* entries listed as spec data are read-only spec addresses, not Python import paths and not cabinet_kernel.models imports.
+Only import runtime model symbols from cabinet_kernel.models when they are explicitly listed in IMPORTS.
+- models.DetailCode: runtime model schema omitted from non-model prompt; exported from cabinet_kernel.models by IMPORTS.
+- models.SandboxOutcome: runtime model schema omitted from non-model prompt; exported from cabinet_kernel.models by IMPORTS.
+
+IMPORTED MODEL OWNERSHIP (DO NOT REDEFINE):
+Imported runtime model symbols are owned by their source modules listed in IMPORTS; use them as imported and do not redefine them here.
+
+RUNTIME MODEL SURFACE (CORE.MODELS IMPORTS):
+These are imported runtime symbols from cabinet_kernel.models. Use the listed enum member names and model fields exactly.
+- Cardinality enum values: 'one', 'many'; Python member names were not available in models context.
+- Carriage enum values: 'value', 'file'; Python member names were not available in models context.
+- DetailCode enum values: 'binding_stale', 'instance_not_selected', 'instance_address_missing', 'required_header_repeated', 'required_header_invalid', 'plain_http_not_allowed', 'credential_unresolved', 'input_not_placeable', 'redirect_not_followed', 'value_too_large', 'cleanup_failed', 'applied_outputs_unknown'; Python member names were not available in models context.
+- DisclosureClass enum values: 'open', 'business_confidential', 'personal_data'; Python member names were not available in models context.
+- FileCandidate fields (exact, no others exist): candidate_kind: Literal['file'], facts: FileFacts
+- FileFacts fields (exact, no others exist): content_digest: str, size_bytes: int, media_type: str
+- FileListCandidate fields (exact, no others exist): candidate_kind: Literal['file_list'], files: tuple[FileFacts, ...]
+- FileListPayload fields (exact, no others exist): payload_kind: Literal['file_list'], port: str, contents: tuple[bytes, ...]
+- FilePayload fields (exact, no others exist): payload_kind: Literal['file'], port: str, content: bytes
+- FitCheck enum values: 'presence', 'carriage', 'schema', 'size'; Python member names were not available in models context.
+- JsonCandidate fields (exact, no others exist): candidate_kind: Literal['json'], canonical_json: bytes
+- JsonPayload fields (exact, no others exist): payload_kind: Literal['json'], port: str, canonical_json: bytes
+- Port fields (exact, no others exist): name: str, direction: PortDirection, value_schema: str, carriage: Carriage, media_type: str | None, cardinality: Cardinality, disclosure_class: DisclosureClass | None
+- PortCandidate: imported runtime symbol; no local surface details available.
+- PortDirection enum values: 'input', 'output'; Python member names were not available in models context.
+- PortFit fields (exact, no others exist): fits: bool, failed_check: FitCheck | None, reason: str | None
+- PortPayload: imported runtime symbol; no local surface details available.
+- ResourceBounds fields (exact, no others exist): wall_time_ms: int, memory_bytes: int, output_bytes: int, process_count: int
+- ResourceUsage fields (exact, no others exist): wall_time_ms: int, memory_bytes: int, output_bytes: int
+- SandboxOutcome enum values: 'timeout', 'resource_exhausted', 'sandbox_violation', 'crashed', 'contract_violation', 'succeeded'; Python member names were not available in models context.
+- SandboxResult fields (exact, no others exist): outcome: SandboxOutcome, outputs: tuple[PortPayload, ...], resources_used: ResourceUsage, failure_detail: str | None, detail_code: DetailCode | None
+
+MODULE-LOCAL EXCEPTION EXPORTS:
+If any exception class is listed here, define it in this file at top level.
+Do not import these classes from core.errors or any other module.
+- class SandboxUnavailableError(Exception): pass
+- class StopRequiredError(Exception): pass
+
+FUNCTION ORDER (define in this order):
+execute_function, probe_sandbox
+
+Generate the complete sandbox.py file.
+Every owned function listed above must be implemented exactly once at module top level.
+Define every class and method listed in OWNED CLASSES REQUIRED in this file.
+For every local binding in CONCRETE IMPLEMENTATION OBLIGATIONS, inherit the declared interface and implement its complete method surface with non-placeholder bodies.
+If this is the models module, emit every enum/model in MODEL DEFINITIONS exactly once.
+If this is not the models module, do not emit Pydantic model classes, enums, create_model calls, or local model schema shadows.
+Do not invent model fields or enum values not present in the imported runtime models.
+Use only the IMPORTS listed above plus required standard library imports.
+Never import from a top-level models module or models.*; runtime models live in cabinet_kernel.models only when listed in IMPORTS.
+`models.<name>` in notes is a canonical spec data address, not an importable Python module.
+When one owner module provides a function and cabinet_kernel.models provides a DTO with a similar name, split the imports by source exactly as listed in IMPORTS.
+Construct imported runtime models only with the fields listed in IMPORTED MODEL SURFACE; models are frozen and forbid extra fields, so an invented keyword argument fails at runtime.
+Read from a model value only the fields listed for its type; never use getattr(value, name, default) to probe for a field that is not declared.
+Never assign to an attribute of a model value (models are frozen): derive a changed value with value.model_copy(update={...}) or construct a new instance.
+Define every class listed in MODULE-LOCAL EXCEPTION EXPORTS in this file.

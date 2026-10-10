@@ -1,0 +1,154 @@
+Module: canonical_values
+Target path: cabinet_kernel/canonical_values.py
+Target file: canonical_values.py
+
+IMPORTS:
+from cabinet_kernel.models import Actor, ActorKind, AttemptKey, BytesContent, Cardinality, Carriage, ContractVersion, ContractVersionContent, CorpusContent, DisclosureClass, EdgeGuard, FileCandidate, FileFacts, FileFactsRef, FileListCandidate, FitCheck, Flow, FlowConstant, FlowEdge, FlowNode, FlowVersion, FlowVersionContent, IdentitySubject, Implementation, ImplementationContent, JsonCandidate, JsonPayload, JsonTextContent, KernelInstant, KeyFieldsContent, NodeKind, Port, PortCandidate, PortDirection, PortFit, PortRef, ResourceBounds, SpooledFile, SpooledFileKey, SpooledFilesRef, StoredValue, StoredValueContent, StoredValuesRef, TrialCase, TrialCaseContent, TrialCaseOrigin
+
+CONTRACTS (function signatures — follow exactly):
+def canonical_bytes(json_text: str) -> bytes
+def content_identity(subject: IdentitySubject) -> str
+def fit_port_value(port: Port, size_bound: int, candidate: PortCandidate | None) -> PortFit
+def highest_disclosure_class(classes: tuple[DisclosureClass, ...]) -> DisclosureClass
+
+OWNED FUNCTIONS REQUIRED (must be defined as top-level functions):
+- canonical_bytes: (json_text: str) -> bytes
+- content_identity: (subject: IdentitySubject) -> str
+- fit_port_value: (port: Port, size_bound: int, candidate: PortCandidate | None) -> PortFit
+- highest_disclosure_class: (classes: tuple[DisclosureClass, ...]) -> DisclosureClass
+
+STATIC GATE CONTRACT (deterministic checks; a violating candidate is rejected without repair):
+- Reflective attribute access is rejected: never call getattr, hasattr,
+  setattr, delattr, or vars; every declared field and operation is
+  addressed directly by name, including in try/finally cleanup.
+- A definition whose parameter list differs from its declared contract
+  signature is rejected; keep names and order exactly.
+- A constructed record accepted by a declared insert_*/upsert_*/append_*
+  operation must reach a call or return; a built-and-dropped record is
+  rejected.
+- Instantiating a spec-declared interface is rejected; construct the
+  module-owned concrete class instead.
+- A stub, placeholder, or fail-closed body for a contracted callable is
+  rejected; implement the complete specified behavior.
+
+OWNED CLASSES REQUIRED (must be defined locally, not merely referenced):
+No owned local classes required.
+
+CONCRETE IMPLEMENTATION OBLIGATIONS:
+No local concrete-to-interface obligations.
+
+REQUIREMENTS (notes — implement these):
+- canonical_bytes: [BEHAVIOR] MUST parse json_text as one JSON value and emit its RFC 8785 (JCS) canonical form encoded as UTF-8: object members sorted by the UTF-16 code units of their names, numbers written in the ECMAScript shortest round-trip form (an integral double without a fraction or exponent, so a number written 1.0 becomes 1), strings escaped exactly as JCS prescribes, and no whitespace; it applies no Unicode normalization, so two texts that differ only in normalization give different bytes.
+- canonical_bytes: [VALIDATION_ERROR] MUST raise NonCanonicalValueError, with a reason naming the first offending item in text order, when json_text is not one well-formed JSON value, when an object repeats a member name at any depth, when it holds a non-finite number (NaN, Infinity or -Infinity tokens, which the default Python parser would accept and therefore MUST be rejected explicitly), when a number written without a fraction or exponent lies outside plus or minus (2 to the power 53 minus 1), which an IEEE double cannot hold exactly, or when a string holds a lone surrogate.
+- canonical_bytes: [RETURN_SHAPE] Returns the canonical UTF-8 bytes only; the length of these bytes is the size of the JSON value wherever the kernel measures a value.
+- content_identity: [BEHAVIOR] For every content variant of IdentitySubject (contract_version, implementation, trial_case, flow_version, stored_value, corpus) MUST build one JSON object whose members are exactly the variant's fields keyed by field name, subject_kind included, with nested models as objects keyed by field name, tuples as arrays, enum members as their value text, None as null and JSON-text fields such as value_schema kept as JSON strings, take its canonical bytes with canonical_bytes and return the lowercase hexadecimal SHA-256 of those bytes.
+- content_identity: [DETERMINISM_OR_ORDERING] Before hashing, lists whose order carries no meaning MUST be sorted so that the same content in another order has the same identity: ports by (direction, name), flow nodes by node_id, flow edges by (to_node, to_port, from_node, from_port), flow constants by (to_node, to_port), all compared as text by Unicode code point; every other list keeps its order, in particular trial_case_ids of a corpus (corpus order is meaningful) and the elements of any JSON value.
+- content_identity: [BEHAVIOR] For the idempotency_key variant MUST build one JSON object with one member per entry of fields, named by the entry's port and holding the JSON value its canonical_json encodes, so the order of the fields does not change the key, and return the hexadecimal SHA-256 of its canonical bytes; a field whose value is null is kept as null, not dropped.
+- content_identity: [BEHAVIOR] For the json_text variant MUST return the hexadecimal SHA-256 of the canonical bytes of json_text, and for the bytes variant the hexadecimal SHA-256 of content exactly as given, without any canonicalization; this is the digest of a file and of a value's bytes.
+- content_identity: [VALIDATION_ERROR] MUST let NonCanonicalValueError from canonical_bytes propagate unchanged when any JSON text the subject carries cannot be represented canonically; it computes no partial identity.
+- content_identity: [RETURN_SHAPE] Returns the 64-character lowercase hexadecimal SHA-256 digest as text.
+- fit_port_value: [DEPENDENCY_BOUNDARY] Like every function of its module it is pure: it reads no file, no clock, no environment and no store, writes nothing, and decides nothing about what a failed fit or a refused value means for its caller.
+- fit_port_value: [DETERMINISM_OR_ORDERING] MUST judge the candidate against the port with the checks in exactly this order and stop at the first that fails: presence (candidate is None), carriage, schema, size; within one check the elements of a list are judged in list order and the reason names the index of the first failing element.
+- fit_port_value: [BEHAVIOR] Carriage fits when a port of = models.Carriage value receives a json candidate, a file port of = models.Cardinality one receives a file candidate, and a file port of cardinality many receives a file_list candidate; any other pairing fails the carriage check.
+- fit_port_value: [SCHEMA_CONSTRAINT] The schema check of a value port parses the port's value_schema and the candidate's canonical_json; for cardinality many the candidate MUST be a JSON array and every element MUST fit the schema, for cardinality one the whole value MUST fit it. Supported schema keywords are only type (one of null, boolean, integer, number, string, array, object, given as one string), enum (non-empty array of distinct scalars), const (one scalar), properties and required for objects, additionalProperties given as true or false only, items (one schema) for arrays, minItems, maxItems, minLength, maxLength, minimum and maximum; integer means a number without a fraction; a schema that is not a JSON object or uses any other keyword ($ref, pattern, format, oneOf, anyOf, allOf and not among them) fits no value, so the schema check fails.
+- fit_port_value: [SCHEMA_CONSTRAINT] A file's content is never opened or inspected: the schema check of a file port compares each candidate file's media_type with the port's media_type as exactly equal text, and the size check compares each file's size_bytes with size_bound per file, never their sum.
+- fit_port_value: [BEHAVIOR] The size check of a value port compares the length of the candidate's canonical_json, taken as the whole value even for cardinality many, with size_bound and fails when it is larger; size_bound is whatever ceiling the caller passes and the function never chooses one itself.
+- fit_port_value: [RETURN_SHAPE] Never raises for a candidate that does not fit: returns PortFit with fits true, failed_check None and reason None, or with fits false, failed_check the first failing = models.FitCheck member and a reason naming the port and, for a list, the failing element index.
+- highest_disclosure_class: [BEHAVIOR] MUST return the highest member of classes by the declared order of = models.DisclosureClass (open, then business_confidential, then personal_data) and open when classes is empty; no input ever lowers the result.
+- highest_disclosure_class: [RETURN_SHAPE] Returns one DisclosureClass member.
+
+MODEL DATA DEFINITIONS (READ-ONLY SPEC DATA, NOT CODE):
+The following JSON values are read-only spec data, not Python class definitions.
+Do not emit classes, Pydantic models, create_model calls, or assignments from this section.
+Omitted model-schema/data references:
+- Cardinality: omitted because it is an imported runtime model schema
+- Carriage: omitted because it is an imported runtime model schema
+- DisclosureClass: omitted because it is an imported runtime model schema
+- FitCheck: omitted because it is an imported runtime model schema
+
+MODEL DATA ADDRESSES (SPEC DATA, NOT IMPORT PATHS):
+The following = models.* references are canonical spec data addresses, not Python module paths.
+Read their structured JSON values from MODEL DATA DEFINITIONS when present in this prompt.
+Never convert a spec data address into `import models` or `from models.* import ...`.
+models.* entries listed as spec data are read-only spec addresses, not Python import paths and not cabinet_kernel.models imports.
+Only import runtime model symbols from cabinet_kernel.models when they are explicitly listed in IMPORTS.
+- models.Cardinality: runtime model schema omitted from non-model prompt; exported from cabinet_kernel.models by IMPORTS.
+- models.Carriage: runtime model schema omitted from non-model prompt; exported from cabinet_kernel.models by IMPORTS.
+- models.DisclosureClass: runtime model schema omitted from non-model prompt; exported from cabinet_kernel.models by IMPORTS.
+- models.FitCheck: runtime model schema omitted from non-model prompt; exported from cabinet_kernel.models by IMPORTS.
+
+IMPORTED MODEL OWNERSHIP (DO NOT REDEFINE):
+Imported runtime model symbols are owned by their source modules listed in IMPORTS; use them as imported and do not redefine them here.
+
+RUNTIME MODEL SURFACE (CORE.MODELS IMPORTS):
+These are imported runtime symbols from cabinet_kernel.models. Use the listed enum member names and model fields exactly.
+- Actor fields (exact, no others exist): kind: ActorKind, agent_name: str | None
+- ActorKind enum values: 'owner', 'agent', 'kernel'; Python member names were not available in models context.
+- AttemptKey fields (exact, no others exist): run_id: str, node_id: str, map_index: int | None, attempt_number: int
+- BytesContent fields (exact, no others exist): subject_kind: Literal['bytes'], content: bytes
+- Cardinality enum values: 'one', 'many'; Python member names were not available in models context.
+- Carriage enum values: 'value', 'file'; Python member names were not available in models context.
+- ContractVersion fields (exact, no others exist): contract_version_id: str, slot_id: str, inputs: tuple[Port, ...], outputs: tuple[Port, ...], resource_bounds: ResourceBounds, issued_by: Actor, issued_at: KernelInstant
+- ContractVersionContent fields (exact, no others exist): subject_kind: Literal['contract_version'], slot_id: str, inputs: tuple[Port, ...], outputs: tuple[Port, ...], resource_bounds: ResourceBounds
+- CorpusContent fields (exact, no others exist): subject_kind: Literal['corpus'], trial_case_ids: tuple[str, ...]
+- DisclosureClass enum values: 'open', 'business_confidential', 'personal_data'; Python member names were not available in models context.
+- EdgeGuard fields (exact, no others exist): guard_port: str, guard_value: str
+- FileCandidate fields (exact, no others exist): candidate_kind: Literal['file'], facts: FileFacts
+- FileFacts fields (exact, no others exist): content_digest: str, size_bytes: int, media_type: str
+- FileFactsRef fields (exact, no others exist): ref_kind: Literal['file_facts'], port: str, files: tuple[FileFacts, ...], disclosure_class: DisclosureClass
+- FileListCandidate fields (exact, no others exist): candidate_kind: Literal['file_list'], files: tuple[FileFacts, ...]
+- FitCheck enum values: 'presence', 'carriage', 'schema', 'size'; Python member names were not available in models context.
+- Flow fields (exact, no others exist): flow_id: str, purpose: str, created_by: Actor, created_at: KernelInstant
+- FlowConstant fields (exact, no others exist): to_node: str, to_port: str, value: str
+- FlowEdge fields (exact, no others exist): from_node: str, from_port: str, to_node: str, to_port: str, guard: EdgeGuard | None
+- FlowNode fields (exact, no others exist): node_id: str, kind: NodeKind, contract_version_id: str | None, binding_id: str | None, map_over: str | None
+- FlowVersion fields (exact, no others exist): flow_version_id: str, flow_id: str, inputs: tuple[Port, ...], outputs: tuple[Port, ...], nodes: tuple[FlowNode, ...], edges: tuple[FlowEdge, ...], constants: tuple[FlowConstant, ...], authored_by: Actor, authored_at: KernelInstant
+- FlowVersionContent fields (exact, no others exist): subject_kind: Literal['flow_version'], flow_id: str, inputs: tuple[Port, ...], outputs: tuple[Port, ...], nodes: tuple[FlowNode, ...], edges: tuple[FlowEdge, ...], constants: tuple[FlowConstant, ...]
+- IdentitySubject: imported runtime symbol; no local surface details available.
+- Implementation fields (exact, no others exist): implementation_id: str, contract_version_id: str, code: str, submitted_by: Actor, submitted_at: KernelInstant
+- ImplementationContent fields (exact, no others exist): subject_kind: Literal['implementation'], contract_version_id: str, code: str
+- JsonCandidate fields (exact, no others exist): candidate_kind: Literal['json'], canonical_json: bytes
+- JsonPayload fields (exact, no others exist): payload_kind: Literal['json'], port: str, canonical_json: bytes
+- JsonTextContent fields (exact, no others exist): subject_kind: Literal['json_text'], json_text: str
+- KernelInstant fields (exact, no others exist): epoch_us: int
+- KeyFieldsContent fields (exact, no others exist): subject_kind: Literal['idempotency_key'], fields: tuple[JsonPayload, ...]
+- NodeKind enum values: 'function', 'operation'; Python member names were not available in models context.
+- Port fields (exact, no others exist): name: str, direction: PortDirection, value_schema: str, carriage: Carriage, media_type: str | None, cardinality: Cardinality, disclosure_class: DisclosureClass | None
+- PortCandidate: imported runtime symbol; no local surface details available.
+- PortDirection enum values: 'input', 'output'; Python member names were not available in models context.
+- PortFit fields (exact, no others exist): fits: bool, failed_check: FitCheck | None, reason: str | None
+- PortRef: imported runtime symbol; no local surface details available.
+- ResourceBounds fields (exact, no others exist): wall_time_ms: int, memory_bytes: int, output_bytes: int, process_count: int
+- SpooledFile fields (exact, no others exist): run_id: str, producer_node_id: str, map_index: int | None, attempt_number: int, producer_port: str, list_index: int | None, content_digest: str, size_bytes: int, media_type: str, disclosure_class: DisclosureClass
+- SpooledFileKey fields (exact, no others exist): run_id: str, producer_node_id: str, map_index: int | None, attempt_number: int, producer_port: str, list_index: int | None
+- SpooledFilesRef fields (exact, no others exist): ref_kind: Literal['spooled_files'], port: str, files: tuple[SpooledFileKey, ...], disclosure_class: DisclosureClass
+- StoredValue fields (exact, no others exist): value_id: str, value_digest: str, carriage: Carriage, media_type: str | None, value_schema: str, disclosure_class: DisclosureClass, size_bytes: int
+- StoredValueContent fields (exact, no others exist): subject_kind: Literal['stored_value'], value_digest: str, value_schema: str, carriage: Carriage, media_type: str | None, disclosure_class: DisclosureClass
+- StoredValuesRef fields (exact, no others exist): ref_kind: Literal['stored_values'], port: str, value_id: str
+- TrialCase fields (exact, no others exist): trial_case_id: str, contract_version_id: str, inputs: tuple[PortRef, ...], expected_outputs: tuple[PortRef, ...] | None, origin: TrialCaseOrigin, captured_from: AttemptKey | None, added_by: Actor, added_at: KernelInstant
+- TrialCaseContent fields (exact, no others exist): subject_kind: Literal['trial_case'], contract_version_id: str, inputs: tuple[PortRef, ...], expected_outputs: tuple[PortRef, ...] | None
+- TrialCaseOrigin enum values: 'authored', 'captured'; Python member names were not available in models context.
+
+MODULE-LOCAL EXCEPTION EXPORTS:
+If any exception class is listed here, define it in this file at top level.
+Do not import these classes from core.errors or any other module.
+- class NonCanonicalValueError(Exception): pass
+
+FUNCTION ORDER (define in this order):
+canonical_bytes, content_identity, fit_port_value, highest_disclosure_class
+
+Generate the complete canonical_values.py file.
+Every owned function listed above must be implemented exactly once at module top level.
+Define every class and method listed in OWNED CLASSES REQUIRED in this file.
+For every local binding in CONCRETE IMPLEMENTATION OBLIGATIONS, inherit the declared interface and implement its complete method surface with non-placeholder bodies.
+If this is the models module, emit every enum/model in MODEL DEFINITIONS exactly once.
+If this is not the models module, do not emit Pydantic model classes, enums, create_model calls, or local model schema shadows.
+Do not invent model fields or enum values not present in the imported runtime models.
+Use only the IMPORTS listed above plus required standard library imports.
+Never import from a top-level models module or models.*; runtime models live in cabinet_kernel.models only when listed in IMPORTS.
+`models.<name>` in notes is a canonical spec data address, not an importable Python module.
+When one owner module provides a function and cabinet_kernel.models provides a DTO with a similar name, split the imports by source exactly as listed in IMPORTS.
+Construct imported runtime models only with the fields listed in IMPORTED MODEL SURFACE; models are frozen and forbid extra fields, so an invented keyword argument fails at runtime.
+Read from a model value only the fields listed for its type; never use getattr(value, name, default) to probe for a field that is not declared.
+Never assign to an attribute of a model value (models are frozen): derive a changed value with value.model_copy(update={...}) or construct a new instance.
+Define every class listed in MODULE-LOCAL EXCEPTION EXPORTS in this file.

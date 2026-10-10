@@ -1,0 +1,817 @@
+{
+ "open_points": [
+  {
+   "subject": "advance_run trace derivation",
+   "kind": "attempt selection",
+   "text": "derive every element's conclusion from the trace: a function element from its NodeExecution's status",
+   "question": "When an element has multiple NodeExecutions, which execution determines its current conclusion?",
+   "options": [
+    "the greatest attempt_number",
+    "the last execution in store order",
+    "combine all executions according to status precedence"
+   ],
+   "default_guess": "Use the greatest attempt_number.",
+   "unit": "runs"
+  },
+  {
+   "subject": "advance_run flow wiring",
+   "kind": "missing endpoint convention",
+   "text": "flow inputs delivered along every edge from them",
+   "question": "How are flow-input and flow-output endpoints represented when FlowEdge only has from_node and to_node strings and no endpoint kind?",
+   "options": [
+    "reserved node identifiers",
+    "port names used as node identifiers",
+    "edges describe only node-to-node links and flow endpoints are inferred separately"
+   ],
+   "default_guess": "Treat an endpoint whose identifier is not a node_id as a flow port name.",
+   "unit": "runs"
+  },
+  {
+   "subject": "advance_run input assembly",
+   "kind": "multiple-source ambiguity",
+   "text": "a node is ready when every input port holds its value: flow inputs delivered along every edge from them, constants to their port, and outputs of a concluded succeeded node along every edge",
+   "question": "What happens when multiple enabled edges or a constant and an edge deliver values to the same input port?",
+   "options": [
+    "reject or fail the node",
+    "choose one by graph declaration order",
+    "choose one by source identifier order",
+    "require equal values"
+   ],
+   "default_guess": "Use graph declaration order and take the first available source.",
+   "unit": "runs"
+  },
+  {
+   "subject": "advance_run input ordering",
+   "kind": "unspecified order",
+   "text": "given ... inputs: tuple[PortRef, ...]",
+   "question": "In what order must a node element's input PortRefs be assembled?",
+   "options": [
+    "target port declaration order",
+    "edge and constant declaration order",
+    "PortRef port-name order"
+   ],
+   "default_guess": "Use target port declaration order.",
+   "unit": "runs"
+  },
+  {
+   "subject": "advance_run constants",
+   "kind": "materialization gap",
+   "text": "constants to their port",
+   "question": "How is a FlowConstant.value converted into a StoredValue/PortRef, including canonical bytes, schema, disclosure class, identity, persistence, and size checking?",
+   "options": [
+    "constants already refer to stored values",
+    "parse and publish constants when first delivered",
+    "publish all constants at run start"
+   ],
+   "default_guess": "Parse the value as canonical JSON and publish it when first delivered.",
+   "unit": "runs"
+  },
+  {
+   "subject": "advance_run guarded edges",
+   "kind": "guard semantics",
+   "text": "whose guard is absent or whose guard port value equals the guard value as canonical JSON text",
+   "question": "Which element or input supplies guard_port, and how are its bytes obtained and compared to guard_value?",
+   "options": [
+    "a port of the source node's outputs",
+    "a port of the destination node's inputs",
+    "a flow input",
+    "any currently available port in the run"
+   ],
+   "default_guess": "Treat guard_port as a source-node output port and compare decoded canonical JSON text exactly.",
+   "unit": "runs"
+  },
+  {
+   "subject": "advance_run guard evaluation",
+   "kind": "unavailable-value semantics",
+   "text": "every edge whose guard is absent or whose guard port value equals the guard value",
+   "question": "How is an edge classified while its guard port has not yet concluded or is waiting/failed?",
+   "options": [
+    "not yet decidable",
+    "disabled",
+    "upstream failed"
+   ],
+   "default_guess": "Treat it as not yet decidable until the guard source concludes.",
+   "unit": "runs"
+  },
+  {
+   "subject": "advance_run skipped nodes",
+   "kind": "boundary ambiguity",
+   "text": "every edge into it is disabled by its guard or comes from a skipped node",
+   "question": "What is the result for an input port with no incoming edge and no constant, or for a node with no inputs?",
+   "options": [
+    "missing inputs imply skipped_by_guard",
+    "missing inputs imply upstream_failed",
+    "the graph is assumed valid and this cannot occur",
+    "a zero-input node is ready"
+   ],
+   "default_guess": "Assume graph validity; make a zero-input node ready and treat an unsourced required input as skipped_by_guard.",
+   "unit": "runs"
+  },
+  {
+   "subject": "advance_run failure propagation",
+   "kind": "status precedence",
+   "text": "a node with an input from a failed or upstream_failed node concludes upstream_failed, which wins over skipped_by_guard",
+   "question": "When an input has several possible sources, does one failed source force upstream_failed even if another enabled source supplies a value?",
+   "options": [
+    "any failed source forces failure",
+    "failure only when no viable source remains",
+    "the graph forbids multiple sources"
+   ],
+   "default_guess": "Fail only when no viable source remains.",
+   "unit": "runs"
+  },
+  {
+   "subject": "advance_run operation context",
+   "kind": "record lookup ambiguity",
+   "text": "started_under the store_position of the FlowActivation read with ActivationBeforeRun",
+   "question": "Which RecordSet field and which record should be used if the ActivationBeforeRun query returns zero or multiple FlowActivations?",
+   "options": [
+    "require exactly one flow_activation",
+    "take the greatest store_position",
+    "take the first result"
+   ],
+   "default_guess": "Require exactly one flow_activation and raise StoreInternalError otherwise.",
+   "unit": "runs"
+  },
+  {
+   "subject": "advance_run operation retry",
+   "kind": "branch ambiguity",
+   "text": "operation elements that wait are not reached again here",
+   "question": "If a previous waiting conclusion has ceased to wait because an approval or attempt was decided, should advance_run itself reach the operation again or only continuation/recovery functions do so?",
+   "options": [
+    "advance_run reaches it once the wait is resolved",
+    "only the explicit continuation or recovery path reaches it",
+    "derive a conclusion without another reach"
+   ],
+   "default_guess": "Only the explicit continuation or recovery path reaches it.",
+   "unit": "runs"
+  },
+  {
+   "subject": "advance_run operation records",
+   "kind": "refresh ambiguity",
+   "text": "After an operation element, whose concluding record effects wrote, the next RecordRunProgressChange holds the records it made non-executable",
+   "question": "After reach_operation_element returns, must the run and complete trace be reread before determining newly non-executable elements, or is the returned conclusion sufficient?",
+   "options": [
+    "reread both run and trace",
+    "reread only the trace",
+    "use only the returned conclusion"
+   ],
+   "default_guess": "Reread the run and trace.",
+   "unit": "runs"
+  },
+  {
+   "subject": "advance_run refused execution",
+   "kind": "state transition gap",
+   "text": "If any NodeExecution of the run is refused_by_owner it reaches nothing and ends the run refused",
+   "question": "What outputs, waiting points, executions, and ended_at must be placed in the progress change that records the refused terminal state?",
+   "options": [
+    "retain produced outputs and clear waiting",
+    "clear outputs and waiting",
+    "retain both outputs and unresolved waiting points"
+   ],
+   "default_guess": "Retain already produced outputs, clear waiting points, write no executions, and set ended_at with kernel_now.",
+   "unit": "runs"
+  },
+  {
+   "subject": "advance_run mapped source",
+   "kind": "mapping semantics",
+   "text": "A mapped element receives the list element at its map_index ... or the spooled file at that position",
+   "question": "Which PortRef forms and cardinalities are valid for map_over, and how is the map length obtained for a value reference versus a file reference?",
+   "options": [
+    "only many value/file ports may be mapped",
+    "any JSON array value or SpooledFilesRef may be mapped",
+    "cardinality is ignored and runtime content decides"
+   ],
+   "default_guess": "Require map_over to name a many port; parse a stored JSON array or use the SpooledFilesRef.files length.",
+   "unit": "runs"
+  },
+  {
+   "subject": "advance_run mapped value elements",
+   "kind": "identity and persistence gap",
+   "text": "receives the list element at its map_index as its own StoredValue of the map_over port's value_schema and the list's class",
+   "question": "When and how is each element StoredValue published and recorded, and is its identity derived from the element bytes or inherited from the list?",
+   "options": [
+    "publish and record an element value before executing it",
+    "publish it with the element's progress change",
+    "use an ephemeral reference without recording a StoredValue"
+   ],
+   "default_guess": "Publish from the element's canonical bytes and include its StoredValue in the same progress change as the element execution.",
+   "unit": "runs"
+  },
+  {
+   "subject": "advance_run mapped output aggregation",
+   "kind": "canonicalization gap",
+   "text": "the canonical JSON array of the elements' values in element order",
+   "question": "What exact canonical JSON serialization and canonical array-schema serialization must be used?",
+   "options": [
+    "standard json with sorted keys and compact separators",
+    "concatenate already canonical element texts inside brackets",
+    "an external canonicalization algorithm not provided"
+   ],
+   "default_guess": "Concatenate the canonical element JSON bytes with commas inside brackets and construct a compact sorted-key JSON schema.",
+   "unit": "runs"
+  },
+  {
+   "subject": "advance_run mapped output aggregation",
+   "kind": "delivery boundary",
+   "text": "only a list that is delivered, to a node or a flow output, is measured, and an output no edge takes fails nothing",
+   "question": "If the same mapped output has both disabled and potentially enabled consumers, exactly when is it considered delivered and measured?",
+   "options": [
+    "when any enabled edge or flow output consumes it",
+    "when any edge exists regardless of its guard",
+    "when all guards are resolved"
+   ],
+   "default_guess": "Measure it once an enabled consumer or a flow output requires it, after relevant guards are resolved.",
+   "unit": "runs"
+  },
+  {
+   "subject": "advance_run mapped output aggregation",
+   "kind": "atomicity gap",
+   "text": "every delivered list of a mapped node MUST be measured before any of them is delivered or written, and when one exceeds the ceiling none of them is delivered",
+   "question": "How are all mapped outputs precomputed and size-checked atomically when put_value_bytes publishes values individually and provides no rollback?",
+   "options": [
+    "compute all bytes and sizes before any put_value_bytes call",
+    "publish then omit records on failure",
+    "the store transaction rolls back unpublished values"
+   ],
+   "default_guess": "Compute every aggregate byte string and validate all sizes before publishing any of them.",
+   "unit": "runs"
+  },
+  {
+   "subject": "advance_run mapped output aggregation",
+   "kind": "missing failure record",
+   "text": "when one exceeds the ceiling none of them is delivered ... counting as failed by the same derivation, with no record of its own",
+   "question": "How is this recordless mapped-node failure represented on later calls and distinguished from an aggregate that has not yet been delivered?",
+   "options": [
+    "recompute the oversized condition from element executions every time",
+    "write an upstream_failed record for the mapped node despite the note",
+    "store an implicit marker elsewhere"
+   ],
+   "default_guess": "Recompute the oversized condition deterministically from element executions whenever deriving state.",
+   "unit": "runs"
+  },
+  {
+   "subject": "advance_run mapped file outputs",
+   "kind": "missing file metadata lookup",
+   "text": "one SpooledFilesRef listing every element's files in element order, derived from the elements' NodeExecutions whenever it is delivered",
+   "question": "How are file keys and disclosure classes reconstructed from NodeExecution outputs after restart when NodeExecution stores only PortRefs and the exact ordering of many files must be preserved?",
+   "options": [
+    "read SpooledFile records by keys in each SpooledFilesRef",
+    "query all files for the run and sort their keys",
+    "the NodeExecution PortRefs contain sufficient ordered keys"
+   ],
+   "default_guess": "Use the ordered keys already contained in each execution's SpooledFilesRef and read file records only when facts are needed.",
+   "unit": "runs"
+  },
+  {
+   "subject": "advance_run mapped node conclusion",
+   "kind": "failure reduction",
+   "text": "a mapped node concludes only when every element concluded, succeeded only when all succeeded",
+   "question": "If elements finish with different failures or waits, which status/detail represents the mapped node for dependency propagation and final run status?",
+   "options": [
+    "first element by map_index",
+    "highest-severity status",
+    "mapped node has only an aggregate failed/waiting category"
+   ],
+   "default_guess": "Use the first non-success element in map_index order, while allowing waits to keep the aggregate waiting until all elements conclude.",
+   "unit": "runs"
+  },
+  {
+   "subject": "advance_run empty mapping",
+   "kind": "output representation ambiguity",
+   "text": "writes one NodeExecution succeeded without map_index ... every output an empty list",
+   "question": "For an empty mapping, how are one-cardinality outputs represented as empty lists, particularly file outputs and value outputs whose declared schema is not an array?",
+   "options": [
+    "all outputs become aggregate many references",
+    "only many outputs are permitted on mapped nodes",
+    "construct empty aggregate references regardless of declared cardinality"
+   ],
+   "default_guess": "Treat every mapped output as an aggregate list regardless of the underlying output port cardinality.",
+   "unit": "runs"
+  },
+  {
+   "subject": "advance_run progress batching",
+   "kind": "ordering conflict",
+   "text": "After each function element MUST write one RecordRunProgressChange ... holding that element's execution ... and every skipped_by_guard and upstream_failed record that became determined",
+   "question": "Must propagation continue transitively and include all newly determined records in that same change, or only records immediately determined by the just-finished element?",
+   "options": [
+    "include the full transitive closure",
+    "include only immediate dependants",
+    "include all currently determinable nodes after scanning in node order"
+   ],
+   "default_guess": "Include the full deterministically computed closure of non-executable records.",
+   "unit": "runs"
+  },
+  {
+   "subject": "advance_run progress batching",
+   "kind": "stored artifact association",
+   "text": "holding that element's execution, its StoredValues and SpooledFiles, and every skipped_by_guard and upstream_failed record",
+   "question": "Do StoredValues created for mapped input elements or aggregate mapped outputs belong in this change, a later change, or the final change?",
+   "options": [
+    "the change where they are first needed",
+    "the producing element's change",
+    "the next node's change"
+   ],
+   "default_guess": "Include them in the first progress change in which their references are delivered.",
+   "unit": "runs"
+  },
+  {
+   "subject": "advance_run cleanup",
+   "kind": "unimplementable cleanup",
+   "text": "the files its attempt spooled are discarded with no SpooledFile record naming them",
+   "question": "How can files from only the failed attempt be removed when the imports provide spool_file and remove_run_spool but no per-file or per-attempt removal operation?",
+   "options": [
+    "leave unrecorded spool files until whole-run cleanup",
+    "remove the entire run spool",
+    "spool only after every output has validated"
+   ],
+   "default_guess": "Buffer/validate outputs first and spool last; if a later spool fails, leave unrecorded files for whole-run cleanup.",
+   "unit": "runs"
+  },
+  {
+   "subject": "advance_run cleanup_failed",
+   "kind": "waiting-state ambiguity",
+   "text": "with status running and the waiting points unchanged",
+   "question": "Which waiting points are 'unchanged' if the in-memory run/trace already reveals resolved waits not reflected in the stored Run?",
+   "options": [
+    "copy run.waiting exactly",
+    "rederive current waits from the trace",
+    "retain only unrelated waits"
+   ],
+   "default_guess": "Copy run.waiting exactly.",
+   "unit": "runs"
+  },
+  {
+   "subject": "advance_run finalization",
+   "kind": "cycle and deadlock gap",
+   "text": "When nothing can execute: if any element waits ... if nothing waits, the run ends succeeded ... and failed otherwise",
+   "question": "How are unconcluded nodes in a cycle or with permanently missing inputs classified and recorded when they are neither ready, waiting, skipped_by_guard, nor upstream_failed?",
+   "options": [
+    "end failed without node records",
+    "record upstream_failed",
+    "raise StoreInternalError for an invalid graph"
+   ],
+   "default_guess": "Raise StoreInternalError because the graph cannot be deterministically progressed.",
+   "unit": "runs"
+  },
+  {
+   "subject": "advance_run terminal cleanup",
+   "kind": "error scope ambiguity",
+   "text": "ignore its StoreInternalError",
+   "question": "Should errors other than StoreInternalError from remove_run_spool propagate, and can remove_run_spool raise any declared alternative?",
+   "options": [
+    "propagate every other exception",
+    "ignore every cleanup exception",
+    "only StoreInternalError is possible"
+   ],
+   "default_guess": "Catch only StoreInternalError and propagate anything else.",
+   "unit": "runs"
+  },
+  {
+   "subject": "all validation refusals",
+   "kind": "error message unspecified",
+   "text": "raise RefusedError naming its status",
+   "question": "What exact RefusedError constructor arguments and message formats must be used for the many requirements that say an error must 'name' a status, port, failed check, or node?",
+   "options": [
+    "free-form human-readable strings",
+    "stable machine-readable codes",
+    "multiple positional constructor arguments"
+   ],
+   "default_guess": "Use a single concise string containing the named value.",
+   "unit": "runs"
+  },
+  {
+   "subject": "cancel_run",
+   "kind": "produced-output source",
+   "text": "with ... the produced outputs",
+   "question": "Should cancellation copy run.outputs exactly or rederive newly available flow outputs from the latest trace before writing the cancellation change?",
+   "options": [
+    "copy run.outputs",
+    "derive all currently produced outputs from the trace",
+    "call advance_run first"
+   ],
+   "default_guess": "Copy run.outputs exactly so cancellation sends nothing further.",
+   "unit": "runs"
+  },
+  {
+   "subject": "capture_failed_execution",
+   "kind": "type contradiction",
+   "text": "the record's inputs as they are — a StoredValuesRef as it is and spooled files as their SpooledFilesRef",
+   "question": "Does 'a StoredValuesRef' mean each individual StoredValuesRef in the tuple, or a nonexistent aggregate StoredValuesRef container?",
+   "options": [
+    "pass the tuple of individual PortRefs unchanged",
+    "wrap value references in an aggregate object",
+    "normalize references before passing"
+   ],
+   "default_guess": "Pass execution.inputs unchanged.",
+   "unit": "runs"
+  },
+  {
+   "subject": "capture_failed_execution",
+   "kind": "record cardinality",
+   "text": "read the NodeExecution of the AttemptKey with RecordsByAttempt",
+   "question": "What should happen if the query returns multiple matching NodeExecutions or a RecordSet with an unexpected cardinality?",
+   "options": [
+    "take the sole record and treat other cardinalities as StoreInternalError",
+    "take the last record",
+    "take the first record"
+   ],
+   "default_guess": "Require exactly one record; zero means UnknownReferenceError and multiple means StoreInternalError.",
+   "unit": "runs"
+  },
+  {
+   "subject": "continue_after_approval",
+   "kind": "reach arguments missing",
+   "text": "After an approve decision MUST reach the approval's element again with reach_operation_element in this request",
+   "question": "How are the RunContext and current input PortRefs required by reach_operation_element reconstructed, and which actor is passed?",
+   "options": [
+    "rederive context and inputs from the run graph/trace and pass the caller actor",
+    "reuse approval.preview.inputs and derive context",
+    "the ApprovalDecision supplies hidden reach data"
+   ],
+   "default_guess": "Rebuild the context and current inputs from the run and pass the caller actor.",
+   "unit": "runs"
+  },
+  {
+   "subject": "continue_after_approval",
+   "kind": "decision result ambiguity",
+   "text": "After a refuse decision MUST reach nothing and advance the run ... which ends it refused",
+   "question": "Must the refusal_record returned by decide_effect_approval be inspected or written here, and what if it is absent or its status is not refused_by_owner?",
+   "options": [
+    "effects already persisted it; validate and rely on the trace",
+    "write it through RecordRunProgressChange",
+    "ignore the returned record entirely"
+   ],
+   "default_guess": "Assume effects persisted it, validate that it exists for refusal, then let advance_run derive refusal from the trace.",
+   "unit": "runs"
+  },
+  {
+   "subject": "continue_after_resolution",
+   "kind": "reach arguments missing",
+   "text": "After a not_applied resolution MUST reach the element again with reach_operation_element",
+   "question": "How are the operation element's current inputs, RunContext.started_under, and actor chosen for this reach?",
+   "options": [
+    "rederive them and pass the caller actor",
+    "reuse EffectAttempt.inputs and derive the context",
+    "resolve_unknown_outcome performs the reach internally"
+   ],
+   "default_guess": "Use EffectAttempt.inputs, derive the activation context, and pass the caller actor.",
+   "unit": "runs"
+  },
+  {
+   "subject": "derive_run_answer waits",
+   "kind": "context unavailable",
+   "text": "for reason owner_approval, the approval_id that operation_element_conclusion gives",
+   "question": "How can derive_run_answer construct the RunContext required by operation_element_conclusion when it is not told to read ActivationBeforeRun, and what happens if that activation is absent?",
+   "options": [
+    "query ActivationBeforeRun inside derive_run_answer",
+    "find the approval directly with ApprovalsOfElement",
+    "approval_id should already be stored in WaitingPoint"
+   ],
+   "default_guess": "Query ActivationBeforeRun and raise StoreInternalError if it is absent.",
+   "unit": "runs"
+  },
+  {
+   "subject": "derive_run_answer waits",
+   "kind": "multiple approval ambiguity",
+   "text": "the approval_id that operation_element_conclusion gives",
+   "question": "What should be returned if the conclusion no longer waits, waits for a different reason, or yields no approval_id while the stored WaitingPoint still says owner_approval?",
+   "options": [
+    "use null",
+    "omit the stale wait",
+    "raise StoreInternalError"
+   ],
+   "default_guess": "Omit the stale wait after rederiving current conclusions.",
+   "unit": "runs"
+  },
+  {
+   "subject": "derive_run_answer outputs",
+   "kind": "model contradiction",
+   "text": "a ProducedOutput with the value_id for every produced output",
+   "question": "How can a produced file output be represented when ProducedOutput has only value_id and no file reference or file identifier field?",
+   "options": [
+    "ProducedOutput applies only to value outputs",
+    "put a serialized file-reference identity into value_id",
+    "file flow outputs are forbidden but that constraint is unstated"
+   ],
+   "default_guess": "Assume flow outputs are restricted to value carriage and raise StoreInternalError for a produced file output.",
+   "unit": "runs"
+  },
+  {
+   "subject": "derive_run_answer missing outputs",
+   "kind": "guard classification ambiguity",
+   "text": "reason skipped_by_guard when every edge into it was disabled by its guard or comes from a node recorded skipped_by_guard",
+   "question": "How is a missing flow output with no incoming edges, multiple mixed sources, or an upstream-failed source classified?",
+   "options": [
+    "not_produced unless all existing sources are guard-skipped",
+    "vacuously skipped_by_guard when there are no edges",
+    "inherit upstream failure as not_produced"
+   ],
+   "default_guess": "Use skipped_by_guard only when at least one incoming edge exists and all are disabled or skipped; otherwise use not_produced.",
+   "unit": "runs"
+  },
+  {
+   "subject": "execute_function_element input loading",
+   "kind": "source construction gap",
+   "text": "read every input's bytes with read_value_bytes into PortPayloads by port",
+   "question": "How are StoredValuesRef and SpooledFilesRef converted into ByteSource and then into JsonPayload, FilePayload, or FileListPayload, especially for many value inputs?",
+   "options": [
+    "construct StoredValueSource/SpooledFileSource for each reference and payload by target port metadata",
+    "read references directly despite the ByteSource contract",
+    "query StoredValue/SpooledFile records first"
+   ],
+   "default_guess": "Construct StoredValueSource for values and one SpooledFileSource per file key, then build payloads using the contract port's carriage and cardinality.",
+   "unit": "runs"
+  },
+  {
+   "subject": "execute_function_element output validation",
+   "kind": "missing checks",
+   "text": "On succeeded, each JSON output above ... concludes contract_violation ... otherwise JSON outputs are published",
+   "question": "Which checks are required for missing, duplicate, extra, wrong-carriage, wrong-cardinality, invalid-schema, noncanonical JSON, media-type, or oversized file outputs from the sandbox?",
+   "options": [
+    "run fit_port_value for every declared output and require exact names",
+    "trust execute_function to enforce everything except the stated JSON ceiling",
+    "perform only name and size checks"
+   ],
+   "default_guess": "Assume execute_function enforces the output contract except for the explicitly required stored-value ceiling.",
+   "unit": "runs"
+  },
+  {
+   "subject": "execute_function_element output ordering",
+   "kind": "unspecified order",
+   "text": "the StoredValues and SpooledFiles of its outputs",
+   "question": "In what order must output PortRefs, StoredValues, SpooledFiles, and files within many outputs be returned?",
+   "options": [
+    "contract output-port order and list order",
+    "SandboxResult.outputs order",
+    "port-name order"
+   ],
+   "default_guess": "Use contract output-port order and preserve list order within each port.",
+   "unit": "runs"
+  },
+  {
+   "subject": "execute_function_element disclosure",
+   "kind": "empty reduction",
+   "text": "highest_disclosure_class gives for the classes of every input value and file the element received",
+   "question": "What disclosure class is used for a zero-input function, where highest_disclosure_class would receive an empty tuple?",
+   "options": [
+    "open",
+    "the output port's declared disclosure_class",
+    "highest_disclosure_class defines an undocumented empty result"
+   ],
+   "default_guess": "Use open.",
+   "unit": "runs"
+  },
+  {
+   "subject": "execute_function_element disclosure",
+   "kind": "port policy ambiguity",
+   "text": "no output is of a lower class than an input",
+   "question": "Should an output's class also be raised to its output port's declared disclosure_class when that class is higher than every input?",
+   "options": [
+    "maximum of input-derived and port-declared class",
+    "input-derived class only",
+    "port-declared class only"
+   ],
+   "default_guess": "Use the maximum of the input-derived class and any declared output-port class.",
+   "unit": "runs"
+  },
+  {
+   "subject": "execute_function_element attempt number",
+   "kind": "concurrency boundary",
+   "text": "the element's next attempt_number — the count of its NodeExecutions read with ExecutionsOfElement plus one",
+   "question": "Does the count include every historical execution including derived skipped/upstream records, and how are concurrent attempts prevented from selecting the same number?",
+   "options": [
+    "count all NodeExecutions for the element",
+    "count only executions with executed present",
+    "use maximum attempt_number plus one"
+   ],
+   "default_guess": "Use the number of all NodeExecutions plus one, assuming run advancement is serialized.",
+   "unit": "runs"
+  },
+  {
+   "subject": "execute_function_element spool failure",
+   "kind": "partial cleanup contradiction",
+   "text": "a RefusedError from spool_file concluding resource_exhausted ... no outputs and no file of that attempt kept",
+   "question": "If a later spool_file call fails after earlier files were already spooled, how can those earlier files be removed without a per-file removal import?",
+   "options": [
+    "preflight cannot guarantee success; leave them unrecorded until run cleanup",
+    "remove the entire run spool",
+    "spool_file is assumed atomic across the whole attempt"
+   ],
+   "default_guess": "Leave earlier unrecorded files for whole-run cleanup and return no SpooledFile records.",
+   "unit": "runs"
+  },
+  {
+   "subject": "execute_function_element storage failure",
+   "kind": "error handling gap",
+   "text": "JSON outputs are published with put_value_bytes",
+   "question": "How should put_value_bytes failures be translated, and what happens to values successfully published before a later output fails?",
+   "options": [
+    "propagate store errors",
+    "translate RefusedError to resource_exhausted",
+    "translate any failure to crashed"
+   ],
+   "default_guess": "Propagate store errors; unpublished record references make earlier blobs unreachable.",
+   "unit": "runs"
+  },
+  {
+   "subject": "execute_function_element timestamps",
+   "kind": "time boundary ambiguity",
+   "text": "take started_at from kernel_now ... ended_at taken when the outcome is built",
+   "question": "For post-sandbox publication or spool failures, is ended_at taken immediately after execute_function, after all output validation, or after all publishing/cleanup?",
+   "options": [
+    "after all validation and publication work",
+    "immediately when execute_function returns",
+    "at the first detected failure"
+   ],
+   "default_guess": "Take ended_at when the final NodeExecutionDraft is constructed after validation and publication attempts.",
+   "unit": "runs"
+  },
+  {
+   "subject": "recover_running_runs cleanup enumeration",
+   "kind": "query gap",
+   "text": "first call remove_run_spool for every run that has ended and keeps no spool",
+   "question": "How are all such ended runs obtained when the described RunsByStatus query is only for running, awaiting_approval, and pending runs?",
+   "options": [
+    "issue a separate RunsByStatus query for terminal statuses",
+    "read all run records through an unspecified query",
+    "cleanup only terminal runs returned incidentally"
+   ],
+   "default_guess": "Issue a separate RunsByStatus query for succeeded, refused, cancelled, and failed, then filter failed by released_by.",
+   "unit": "runs"
+  },
+  {
+   "subject": "recover_running_runs kernel actor",
+   "kind": "unspecified value",
+   "text": "under an Actor of kind kernel",
+   "question": "What agent_name must the kernel Actor carry?",
+   "options": [
+    "null",
+    "kernel",
+    "the current process or service name"
+   ],
+   "default_guess": "Use agent_name null.",
+   "unit": "runs"
+  },
+  {
+   "subject": "recover_running_runs lag repair",
+   "kind": "algorithm missing",
+   "text": "a stored status or waiting point that lags them ... is rewritten",
+   "question": "Which change type and exact fields are used to rewrite each stale run before deciding whether it is running, and is ended_at changed?",
+   "options": [
+    "one RecordRunProgressChange with no executions and fully rederived state",
+    "RecordResumptionChange followed by advance_run",
+    "no explicit rewrite; advance_run handles it"
+   ],
+   "default_guess": "Write one RecordRunProgressChange with no executions and the fully rederived status, outputs, waiting points, and terminal timestamp if applicable.",
+   "unit": "runs"
+  },
+  {
+   "subject": "recover_running_runs counting",
+   "kind": "count boundary",
+   "text": "Returns the number of runs advanced",
+   "question": "Does the count include runs only repaired or re-reached, runs on which advance_run was called but made no change, or only calls made for runs left running?",
+   "options": [
+    "count calls to advance_run",
+    "count every processed non-ended run",
+    "count only runs whose records changed"
+   ],
+   "default_guess": "Count each run for which advance_run is actually called.",
+   "unit": "runs"
+  },
+  {
+   "subject": "release_run",
+   "kind": "timestamp/readback ambiguity",
+   "text": "with released_at, then ... return derive_run_answer showing released_by and released_at",
+   "question": "Is released_at one kernel_now value passed to the change, and must the Run be reread from record_change's result or via a new identity query?",
+   "options": [
+    "take one timestamp and use record_change's returned Run",
+    "take one timestamp and reread by identity",
+    "derive by locally copying the old Run"
+   ],
+   "default_guess": "Take one kernel_now value and use the Run returned in the RecordSet from record_change.",
+   "unit": "runs"
+  },
+  {
+   "subject": "resume_run current inputs",
+   "kind": "reconstruction gap",
+   "text": "reach again ... every element waiting with reason service_unreachable ... with its current inputs",
+   "question": "How are current inputs reconstructed for mapped and unmapped elements, including transient mapped-element StoredValues and aggregate file references after restart?",
+   "options": [
+    "rederive them from the pinned graph and trace",
+    "reuse the latest NodeExecution.inputs",
+    "reuse the latest EffectAttempt.inputs"
+   ],
+   "default_guess": "Reuse the latest waiting NodeExecution or EffectAttempt inputs for the exact element.",
+   "unit": "runs"
+  },
+  {
+   "subject": "resume_run partial resend",
+   "kind": "failure atomicity",
+   "text": "only after all those resends advance the run",
+   "question": "If reaching one waiting element raises after earlier elements were resent, should the function stop immediately, continue the remaining resends, or still call advance_run?",
+   "options": [
+    "stop immediately and propagate",
+    "continue all resends then propagate",
+    "advance before propagating"
+   ],
+   "default_guess": "Stop immediately and propagate.",
+   "unit": "runs"
+  },
+  {
+   "subject": "start_run supported input types",
+   "kind": "contract contradiction",
+   "text": "inputs: tuple[PortPayload, ...] ... each input ... a JsonCandidate of its canonical bytes ... publish each input's canonical bytes ... StoredValues of value carriage",
+   "question": "Are file and file-list flow inputs permitted by PortPayload and Port.carriage, or are start_run inputs restricted to JSON value payloads?",
+   "options": [
+    "only JsonPayload is permitted",
+    "all PortPayload variants are permitted and need carriage-specific handling",
+    "flow input ports are implicitly always value ports"
+   ],
+   "default_guess": "Restrict start_run to JsonPayload/value ports and refuse file inputs.",
+   "unit": "runs"
+  },
+  {
+   "subject": "start_run input disclosure",
+   "kind": "missing value",
+   "text": "StoredValues ... size and class",
+   "question": "What disclosure_class is assigned to each initial StoredValue when JsonPayload has no class and Port.disclosure_class is nullable?",
+   "options": [
+    "use the port's disclosure_class and default null to open",
+    "always open",
+    "reject ports whose disclosure_class is null"
+   ],
+   "default_guess": "Use the port's disclosure_class, defaulting null to open.",
+   "unit": "runs"
+  },
+  {
+   "subject": "start_run identities",
+   "kind": "identity construction ambiguity",
+   "text": "value_id and value_digest come from content_identity",
+   "question": "Which IdentitySubject is passed for value_digest and which for value_id, and how is the StoredValueContent identity computed when it itself requires value_digest?",
+   "options": [
+    "digest BytesContent for value_digest, then digest StoredValueContent for value_id",
+    "use put_value_bytes return value as digest, then content_identity for value_id",
+    "use one identity for both fields"
+   ],
+   "default_guess": "Compute value_digest from BytesContent, publish with that digest, then compute value_id from StoredValueContent.",
+   "unit": "runs"
+  },
+  {
+   "subject": "start_run run identity",
+   "kind": "generated identity gap",
+   "text": "write one StartRunChange ... Then MUST advance the run with advance_run",
+   "question": "How is the newly created run_id obtained when StartRunChange has no run_id field and starts are explicitly never deduplicated?",
+   "options": [
+    "record_change generates a Run and returns it",
+    "derive an identity using time or actor",
+    "the store provides an undocumented run-id generator"
+   ],
+   "default_guess": "Take the sole newly created Run from record_change's returned RecordSet.",
+   "unit": "runs"
+  },
+  {
+   "subject": "start_run activation consistency",
+   "kind": "race semantics",
+   "text": "one PinnedImplementation per function node with the implementation of that current activation",
+   "question": "If current_activation changes between validation reads, which activation is pinned, and must all activations be read from one consistent store snapshot?",
+   "options": [
+    "retain the Activation objects obtained during validation",
+    "reread immediately before StartRunChange",
+    "record_change detects stale activations"
+   ],
+   "default_guess": "Retain and pin the exact Activation objects read during validation.",
+   "unit": "runs"
+  },
+  {
+   "subject": "start_run publication failure",
+   "kind": "atomicity gap",
+   "text": "publish each input's canonical bytes with put_value_bytes, and write one StartRunChange",
+   "question": "If publication or record_change fails partway, how are already published input blobs handled, and must no-run-on-failure include cleanup of those blobs?",
+   "options": [
+    "leave unreachable content-addressed blobs",
+    "attempt cleanup through an unavailable API",
+    "the store guarantees transactionality across these calls"
+   ],
+   "default_guess": "Leave any successfully published content-addressed blobs unreferenced; no Run record is created.",
+   "unit": "runs"
+  },
+  {
+   "subject": "record_change consumers",
+   "kind": "returned-record selection",
+   "text": "record_change(change: StoreChange, actor: Actor) -> RecordSet",
+   "question": "For every function that must return or continue with the updated Run, which Run in the returned RecordSet is authoritative if it contains zero or multiple runs?",
+   "options": [
+    "require exactly one matching run_id",
+    "take the last run",
+    "always perform a separate read by identity"
+   ],
+   "default_guess": "Select exactly one Run matching the known run_id, and raise StoreInternalError for any other cardinality.",
+   "unit": "runs"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"advance_run trace derivation\",\"kind\":\"attempt selection\",\"text\":\"derive every element's conclusion from the trace: a function element from its NodeExecution's status\",\"question\":\"When an element has multiple NodeExecutions, which execution determines its current conclusion?\",\"options\":[\"the greatest attempt_number\",\"the last execution in store order\",\"combine all executions according to status precedence\"],\"default_guess\":\"Use the greatest attempt_number.\"},{\"subject\":\"advance_run flow wiring\",\"kind\":\"missing endpoint convention\",\"text\":\"flow inputs delivered along every edge from them\",\"question\":\"How are flow-input and flow-output endpoints represented when FlowEdge only has from_node and to_node strings and no endpoint kind?\",\"options\":[\"reserved node identifiers\",\"port names used as node identifiers\",\"edges describe only node-to-node links and flow endpoints are inferred separately\"],\"default_guess\":\"Treat an endpoint whose identifier is not a node_id as a flow port name.\"},{\"subject\":\"advance_run input assembly\",\"kind\":\"multiple-source ambiguity\",\"text\":\"a node is ready when every input port holds its value: flow inputs delivered along every edge from them, constants to their port, and outputs of a concluded succeeded node along every edge\",\"question\":\"What happens when multiple enabled edges or a constant and an edge deliver values to the same input port?\",\"options\":[\"reject or fail the node\",\"choose one by graph declaration order\",\"choose one by source identifier order\",\"require equal values\"],\"default_guess\":\"Use graph declaration order and take the first available source.\"},{\"subject\":\"advance_run input ordering\",\"kind\":\"unspecified order\",\"text\":\"given ... inputs: tuple[PortRef, ...]\",\"question\":\"In what order must a node element's input PortRefs be assembled?\",\"options\":[\"target port declaration order\",\"edge and constant declaration order\",\"PortRef port-name order\"],\"default_guess\":\"Use target port declaration order.\"},{\"subject\":\"advance_run constants\",\"kind\":\"materialization gap\",\"text\":\"constants to their port\",\"question\":\"How is a FlowConstant.value converted into a StoredValue/PortRef, including canonical bytes, schema, disclosure class, identity, persistence, and size checking?\",\"options\":[\"constants already refer to stored values\",\"parse and publish constants when first delivered\",\"publish all constants at run start\"],\"default_guess\":\"Parse the value as canonical JSON and publish it when first delivered.\"},{\"subject\":\"advance_run guarded edges\",\"kind\":\"guard semantics\",\"text\":\"whose guard is absent or whose guard port value equals the guard value as canonical JSON text\",\"question\":\"Which element or input supplies guard_port, and how are its bytes obtained and compared to guard_value?\",\"options\":[\"a port of the source node's outputs\",\"a port of the destination node's inputs\",\"a flow input\",\"any currently available port in the run\"],\"default_guess\":\"Treat guard_port as a source-node output port and compare decoded canonical JSON text exactly.\"},{\"subject\":\"advance_run guard evaluation\",\"kind\":\"unavailable-value semantics\",\"text\":\"every edge whose guard is absent or whose guard port value equals the guard value\",\"question\":\"How is an edge classified while its guard port has not yet concluded or is waiting/failed?\",\"options\":[\"not yet decidable\",\"disabled\",\"upstream failed\"],\"default_guess\":\"Treat it as not yet decidable until the guard source concludes.\"},{\"subject\":\"advance_run skipped nodes\",\"kind\":\"boundary ambiguity\",\"text\":\"every edge into it is disabled by its guard or comes from a skipped node\",\"question\":\"What is the result for an input port with no incoming edge and no constant, or for a node with no inputs?\",\"options\":[\"missing inputs imply skipped_by_guard\",\"missing inputs imply upstream_failed\",\"the graph is assumed valid and this cannot occur\",\"a zero-input node is ready\"],\"default_guess\":\"Assume graph validity; make a zero-input node ready and treat an unsourced required input as skipped_by_guard.\"},{\"subject\":\"advance_run failure propagation\",\"kind\":\"status precedence\",\"text\":\"a node with an input from a failed or upstream_failed node concludes upstream_failed, which wins over skipped_by_guard\",\"question\":\"When an input has several possible sources, does one failed source force upstream_failed even if another enabled source supplies a value?\",\"options\":[\"any failed source forces failure\",\"failure only when no viable source remains\",\"the graph forbids multiple sources\"],\"default_guess\":\"Fail only when no viable source remains.\"},{\"subject\":\"advance_run operation context\",\"kind\":\"record lookup ambiguity\",\"text\":\"started_under the store_position of the FlowActivation read with ActivationBeforeRun\",\"question\":\"Which RecordSet field and which record should be used if the ActivationBeforeRun query returns zero or multiple FlowActivations?\",\"options\":[\"require exactly one flow_activation\",\"take the greatest store_position\",\"take the first result\"],\"default_guess\":\"Require exactly one flow_activation and raise StoreInternalError otherwise.\"},{\"subject\":\"advance_run operation retry\",\"kind\":\"branch ambiguity\",\"text\":\"operation elements that wait are not reached again here\",\"question\":\"If a previous waiting conclusion has ceased to wait because an approval or attempt was decided, should advance_run itself reach the operation again or only continuation/recovery functions do so?\",\"options\":[\"advance_run reaches it once the wait is resolved\",\"only the explicit continuation or recovery path reaches it\",\"derive a conclusion without another reach\"],\"default_guess\":\"Only the explicit continuation or recovery path reaches it.\"},{\"subject\":\"advance_run operation records\",\"kind\":\"refresh ambiguity\",\"text\":\"After an operation element, whose concluding record effects wrote, the next RecordRunProgressChange holds the records it made non-executable\",\"question\":\"After reach_operation_element returns, must the run and complete trace be reread before determining newly non-executable elements, or is the returned conclusion sufficient?\",\"options\":[\"reread both run and trace\",\"reread only the trace\",\"use only the returned conclusion\"],\"default_guess\":\"Reread the run and trace.\"},{\"subject\":\"advance_run refused execution\",\"kind\":\"state transition gap\",\"text\":\"If any NodeExecution of the run is refused_by_owner it reaches nothing and ends the run refused\",\"question\":\"What outputs, waiting points, executions, and ended_at must be placed in the progress change that records the refused terminal state?\",\"options\":[\"retain produced outputs and clear waiting\",\"clear outputs and waiting\",\"retain both outputs and unresolved waiting points\"],\"default_guess\":\"Retain already produced outputs, clear waiting points, write no executions, and set ended_at with kernel_now.\"},{\"subject\":\"advance_run mapped source\",\"kind\":\"mapping semantics\",\"text\":\"A mapped element receives the list element at its map_index ... or the spooled file at that position\",\"question\":\"Which PortRef forms and cardinalities are valid for map_over, and how is the map length obtained for a value reference versus a file reference?\",\"options\":[\"only many value/file ports may be mapped\",\"any JSON array value or SpooledFilesRef may be mapped\",\"cardinality is ignored and runtime content decides\"],\"default_guess\":\"Require map_over to name a many port; parse a stored JSON array or use the SpooledFilesRef.files length.\"},{\"subject\":\"advance_run mapped value elements\",\"kind\":\"identity and persistence gap\",\"text\":\"receives the list element at its map_index as its own StoredValue of the map_over port's value_schema and the list's class\",\"question\":\"When and how is each element StoredValue published and recorded, and is its identity derived from the element bytes or inherited from the list?\",\"options\":[\"publish and record an element value before executing it\",\"publish it with the element's progress change\",\"use an ephemeral reference without recording a StoredValue\"],\"default_guess\":\"Publish from the element's canonical bytes and include its StoredValue in the same progress change as the element execution.\"},{\"subject\":\"advance_run mapped output aggregation\",\"kind\":\"canonicalization gap\",\"text\":\"the canonical JSON array of the elements' values in element order\",\"question\":\"What exact canonical JSON serialization and canonical array-schema serialization must be used?\",\"options\":[\"standard json with sorted keys and compact separators\",\"concatenate already canonical element texts inside brackets\",\"an external canonicalization algorithm not provided\"],\"default_guess\":\"Concatenate the canonical element JSON bytes with commas inside brackets and construct a compact sorted-key JSON schema.\"},{\"subject\":\"advance_run mapped output aggregation\",\"kind\":\"delivery boundary\",\"text\":\"only a list that is delivered, to a node or a flow output, is measured, and an output no edge takes fails nothing\",\"question\":\"If the same mapped output has both disabled and potentially enabled consumers, exactly when is it considered delivered and measured?\",\"options\":[\"when any enabled edge or flow output consumes it\",\"when any edge exists regardless of its guard\",\"when all guards are resolved\"],\"default_guess\":\"Measure it once an enabled consumer or a flow output requires it, after relevant guards are resolved.\"},{\"subject\":\"advance_run mapped output aggregation\",\"kind\":\"atomicity gap\",\"text\":\"every delivered list of a mapped node MUST be measured before any of them is delivered or written, and when one exceeds the ceiling none of them is delivered\",\"question\":\"How are all mapped outputs precomputed and size-checked atomically when put_value_bytes publishes values individually and provides no rollback?\",\"options\":[\"compute all bytes and sizes before any put_value_bytes call\",\"publish then omit records on failure\",\"the store transaction rolls back unpublished values\"],\"default_guess\":\"Compute every aggregate byte string and validate all sizes before publishing any of them.\"},{\"subject\":\"advance_run mapped output aggregation\",\"kind\":\"missing failure record\",\"text\":\"when one exceeds the ceiling none of them is delivered ... counting as failed by the same derivation, with no record of its own\",\"question\":\"How is this recordless mapped-node failure represented on later calls and distinguished from an aggregate that has not yet been delivered?\",\"options\":[\"recompute the oversized condition from element executions every time\",\"write an upstream_failed record for the mapped node despite the note\",\"store an implicit marker elsewhere\"],\"default_guess\":\"Recompute the oversized condition deterministically from element executions whenever deriving state.\"},{\"subject\":\"advance_run mapped file outputs\",\"kind\":\"missing file metadata lookup\",\"text\":\"one SpooledFilesRef listing every element's files in element order, derived from the elements' NodeExecutions whenever it is delivered\",\"question\":\"How are file keys and disclosure classes reconstructed from NodeExecution outputs after restart when NodeExecution stores only PortRefs and the exact ordering of many files must be preserved?\",\"options\":[\"read SpooledFile records by keys in each SpooledFilesRef\",\"query all files for the run and sort their keys\",\"the NodeExecution PortRefs contain sufficient ordered keys\"],\"default_guess\":\"Use the ordered keys already contained in each execution's SpooledFilesRef and read file records only when facts are needed.\"},{\"subject\":\"advance_run mapped node conclusion\",\"kind\":\"failure reduction\",\"text\":\"a mapped node concludes only when every element concluded, succeeded only when all succeeded\",\"question\":\"If elements finish with different failures or waits, which status/detail represents the mapped node for dependency propagation and final run status?\",\"options\":[\"first element by map_index\",\"highest-severity status\",\"mapped node has only an aggregate failed/waiting category\"],\"default_guess\":\"Use the first non-success element in map_index order, while allowing waits to keep the aggregate waiting until all elements conclude.\"},{\"subject\":\"advance_run empty mapping\",\"kind\":\"output representation ambiguity\",\"text\":\"writes one NodeExecution succeeded without map_index ... every output an empty list\",\"question\":\"For an empty mapping, how are one-cardinality outputs represented as empty lists, particularly file outputs and value outputs whose declared schema is not an array?\",\"options\":[\"all outputs become aggregate many references\",\"only many outputs are permitted on mapped nodes\",\"construct empty aggregate references regardless of declared cardinality\"],\"default_guess\":\"Treat every mapped output as an aggregate list regardless of the underlying output port cardinality.\"},{\"subject\":\"advance_run progress batching\",\"kind\":\"ordering conflict\",\"text\":\"After each function element MUST write one RecordRunProgressChange ... holding that element's execution ... and every skipped_by_guard and upstream_failed record that became determined\",\"question\":\"Must propagation continue transitively and include all newly determined records in that same change, or only records immediately determined by the just-finished element?\",\"options\":[\"include the full transitive closure\",\"include only immediate dependants\",\"include all currently determinable nodes after scanning in node order\"],\"default_guess\":\"Include the full deterministically computed closure of non-executable records.\"},{\"subject\":\"advance_run progress batching\",\"kind\":\"stored artifact association\",\"text\":\"holding that element's execution, its StoredValues and SpooledFiles, and every skipped_by_guard and upstream_failed record\",\"question\":\"Do StoredValues created for mapped input elements or aggregate mapped outputs belong in this change, a later change, or the final change?\",\"options\":[\"the change where they are first needed\",\"the producing element's change\",\"the next node's change\"],\"default_guess\":\"Include them in the first progress change in which their references are delivered.\"},{\"subject\":\"advance_run cleanup\",\"kind\":\"unimplementable cleanup\",\"text\":\"the files its attempt spooled are discarded with no SpooledFile record naming them\",\"question\":\"How can files from only the failed attempt be removed when the imports provide spool_file and remove_run_spool but no per-file or per-attempt removal operation?\",\"options\":[\"leave unrecorded spool files until whole-run cleanup\",\"remove the entire run spool\",\"spool only after every output has validated\"],\"default_guess\":\"Buffer/validate outputs first and spool last; if a later spool fails, leave unrecorded files for whole-run cleanup.\"},{\"subject\":\"advance_run cleanup_failed\",\"kind\":\"waiting-state ambiguity\",\"text\":\"with status running and the waiting points unchanged\",\"question\":\"Which waiting points are 'unchanged' if the in-memory run/trace already reveals resolved waits not reflected in the stored Run?\",\"options\":[\"copy run.waiting exactly\",\"rederive current waits from the trace\",\"retain only unrelated waits\"],\"default_guess\":\"Copy run.waiting exactly.\"},{\"subject\":\"advance_run finalization\",\"kind\":\"cycle and deadlock gap\",\"text\":\"When nothing can execute: if any element waits ... if nothing waits, the run ends succeeded ... and failed otherwise\",\"question\":\"How are unconcluded nodes in a cycle or with permanently missing inputs classified and recorded when they are neither ready, waiting, skipped_by_guard, nor upstream_failed?\",\"options\":[\"end failed without node records\",\"record upstream_failed\",\"raise StoreInternalError for an invalid graph\"],\"default_guess\":\"Raise StoreInternalError because the graph cannot be deterministically progressed.\"},{\"subject\":\"advance_run terminal cleanup\",\"kind\":\"error scope ambiguity\",\"text\":\"ignore its StoreInternalError\",\"question\":\"Should errors other than StoreInternalError from remove_run_spool propagate, and can remove_run_spool raise any declared alternative?\",\"options\":[\"propagate every other exception\",\"ignore every cleanup exception\",\"only StoreInternalError is possible\"],\"default_guess\":\"Catch only StoreInternalError and propagate anything else.\"},{\"subject\":\"all validation refusals\",\"kind\":\"error message unspecified\",\"text\":\"raise RefusedError naming its status\",\"question\":\"What exact RefusedError constructor arguments and message formats must be used for the many requirements that say an error must 'name' a status, port, failed check, or node?\",\"options\":[\"free-form human-readable strings\",\"stable machine-readable codes\",\"multiple positional constructor arguments\"],\"default_guess\":\"Use a single concise string containing the named value.\"},{\"subject\":\"cancel_run\",\"kind\":\"produced-output source\",\"text\":\"with ... the produced outputs\",\"question\":\"Should cancellation copy run.outputs exactly or rederive newly available flow outputs from the latest trace before writing the cancellation change?\",\"options\":[\"copy run.outputs\",\"derive all currently produced outputs from the trace\",\"call advance_run first\"],\"default_guess\":\"Copy run.outputs exactly so cancellation sends nothing further.\"},{\"subject\":\"capture_failed_execution\",\"kind\":\"type contradiction\",\"text\":\"the record's inputs as they are — a StoredValuesRef as it is and spooled files as their SpooledFilesRef\",\"question\":\"Does 'a StoredValuesRef' mean each individual StoredValuesRef in the tuple, or a nonexistent aggregate StoredValuesRef container?\",\"options\":[\"pass the tuple of individual PortRefs unchanged\",\"wrap value references in an aggregate object\",\"normalize references before passing\"],\"default_guess\":\"Pass execution.inputs unchanged.\"},{\"subject\":\"capture_failed_execution\",\"kind\":\"record cardinality\",\"text\":\"read the NodeExecution of the AttemptKey with RecordsByAttempt\",\"question\":\"What should happen if the query returns multiple matching NodeExecutions or a RecordSet with an unexpected cardinality?\",\"options\":[\"take the sole record and treat other cardinalities as StoreInternalError\",\"take the last record\",\"take the first record\"],\"default_guess\":\"Require exactly one record; zero means UnknownReferenceError and multiple means StoreInternalError.\"},{\"subject\":\"continue_after_approval\",\"kind\":\"reach arguments missing\",\"text\":\"After an approve decision MUST reach the approval's element again with reach_operation_element in this request\",\"question\":\"How are the RunContext and current input PortRefs required by reach_operation_element reconstructed, and which actor is passed?\",\"options\":[\"rederive context and inputs from the run graph/trace and pass the caller actor\",\"reuse approval.preview.inputs and derive context\",\"the ApprovalDecision supplies hidden reach data\"],\"default_guess\":\"Rebuild the context and current inputs from the run and pass the caller actor.\"},{\"subject\":\"continue_after_approval\",\"kind\":\"decision result ambiguity\",\"text\":\"After a refuse decision MUST reach nothing and advance the run ... which ends it refused\",\"question\":\"Must the refusal_record returned by decide_effect_approval be inspected or written here, and what if it is absent or its status is not refused_by_owner?\",\"options\":[\"effects already persisted it; validate and rely on the trace\",\"write it through RecordRunProgressChange\",\"ignore the returned record entirely\"],\"default_guess\":\"Assume effects persisted it, validate that it exists for refusal, then let advance_run derive refusal from the trace.\"},{\"subject\":\"continue_after_resolution\",\"kind\":\"reach arguments missing\",\"text\":\"After a not_applied resolution MUST reach the element again with reach_operation_element\",\"question\":\"How are the operation element's current inputs, RunContext.started_under, and actor chosen for this reach?\",\"options\":[\"rederive them and pass the caller actor\",\"reuse EffectAttempt.inputs and derive the context\",\"resolve_unknown_outcome performs the reach internally\"],\"default_guess\":\"Use EffectAttempt.inputs, derive the activation context, and pass the caller actor.\"},{\"subject\":\"derive_run_answer waits\",\"kind\":\"context unavailable\",\"text\":\"for reason owner_approval, the approval_id that operation_element_conclusion gives\",\"question\":\"How can derive_run_answer construct the RunContext required by operation_element_conclusion when it is not told to read ActivationBeforeRun, and what happens if that activation is absent?\",\"options\":[\"query ActivationBeforeRun inside derive_run_answer\",\"find the approval directly with ApprovalsOfElement\",\"approval_id should already be stored in WaitingPoint\"],\"default_guess\":\"Query ActivationBeforeRun and raise StoreInternalError if it is absent.\"},{\"subject\":\"derive_run_answer waits\",\"kind\":\"multiple approval ambiguity\",\"text\":\"the approval_id that operation_element_conclusion gives\",\"question\":\"What should be returned if the conclusion no longer waits, waits for a different reason, or yields no approval_id while the stored WaitingPoint still says owner_approval?\",\"options\":[\"use null\",\"omit the stale wait\",\"raise StoreInternalError\"],\"default_guess\":\"Omit the stale wait after rederiving current conclusions.\"},{\"subject\":\"derive_run_answer outputs\",\"kind\":\"model contradiction\",\"text\":\"a ProducedOutput with the value_id for every produced output\",\"question\":\"How can a produced file output be represented when ProducedOutput has only value_id and no file reference or file identifier field?\",\"options\":[\"ProducedOutput applies only to value outputs\",\"put a serialized file-reference identity into value_id\",\"file flow outputs are forbidden but that constraint is unstated\"],\"default_guess\":\"Assume flow outputs are restricted to value carriage and raise StoreInternalError for a produced file output.\"},{\"subject\":\"derive_run_answer missing outputs\",\"kind\":\"guard classification ambiguity\",\"text\":\"reason skipped_by_guard when every edge into it was disabled by its guard or comes from a node recorded skipped_by_guard\",\"question\":\"How is a missing flow output with no incoming edges, multiple mixed sources, or an upstream-failed source classified?\",\"options\":[\"not_produced unless all existing sources are guard-skipped\",\"vacuously skipped_by_guard when there are no edges\",\"inherit upstream failure as not_produced\"],\"default_guess\":\"Use skipped_by_guard only when at least one incoming edge exists and all are disabled or skipped; otherwise use not_produced.\"},{\"subject\":\"execute_function_element input loading\",\"kind\":\"source construction gap\",\"text\":\"read every input's bytes with read_value_bytes into PortPayloads by port\",\"question\":\"How are StoredValuesRef and SpooledFilesRef converted into ByteSource and then into JsonPayload, FilePayload, or FileListPayload, especially for many value inputs?\",\"options\":[\"construct StoredValueSource/SpooledFileSource for each reference and payload by target port metadata\",\"read references directly despite the ByteSource contract\",\"query StoredValue/SpooledFile records first\"],\"default_guess\":\"Construct StoredValueSource for values and one SpooledFileSource per file key, then build payloads using the contract port's carriage and cardinality.\"},{\"subject\":\"execute_function_element output validation\",\"kind\":\"missing checks\",\"text\":\"On succeeded, each JSON output above ... concludes contract_violation ... otherwise JSON outputs are published\",\"question\":\"Which checks are required for missing, duplicate, extra, wrong-carriage, wrong-cardinality, invalid-schema, noncanonical JSON, media-type, or oversized file outputs from the sandbox?\",\"options\":[\"run fit_port_value for every declared output and require exact names\",\"trust execute_function to enforce everything except the stated JSON ceiling\",\"perform only name and size checks\"],\"default_guess\":\"Assume execute_function enforces the output contract except for the explicitly required stored-value ceiling.\"},{\"subject\":\"execute_function_element output ordering\",\"kind\":\"unspecified order\",\"text\":\"the StoredValues and SpooledFiles of its outputs\",\"question\":\"In what order must output PortRefs, StoredValues, SpooledFiles, and files within many outputs be returned?\",\"options\":[\"contract output-port order and list order\",\"SandboxResult.outputs order\",\"port-name order\"],\"default_guess\":\"Use contract output-port order and preserve list order within each port.\"},{\"subject\":\"execute_function_element disclosure\",\"kind\":\"empty reduction\",\"text\":\"highest_disclosure_class gives for the classes of every input value and file the element received\",\"question\":\"What disclosure class is used for a zero-input function, where highest_disclosure_class would receive an empty tuple?\",\"options\":[\"open\",\"the output port's declared disclosure_class\",\"highest_disclosure_class defines an undocumented empty result\"],\"default_guess\":\"Use open.\"},{\"subject\":\"execute_function_element disclosure\",\"kind\":\"port policy ambiguity\",\"text\":\"no output is of a lower class than an input\",\"question\":\"Should an output's class also be raised to its output port's declared disclosure_class when that class is higher than every input?\",\"options\":[\"maximum of input-derived and port-declared class\",\"input-derived class only\",\"port-declared class only\"],\"default_guess\":\"Use the maximum of the input-derived class and any declared output-port class.\"},{\"subject\":\"execute_function_element attempt number\",\"kind\":\"concurrency boundary\",\"text\":\"the element's next attempt_number — the count of its NodeExecutions read with ExecutionsOfElement plus one\",\"question\":\"Does the count include every historical execution including derived skipped/upstream records, and how are concurrent attempts prevented from selecting the same number?\",\"options\":[\"count all NodeExecutions for the element\",\"count only executions with executed present\",\"use maximum attempt_number plus one\"],\"default_guess\":\"Use the number of all NodeExecutions plus one, assuming run advancement is serialized.\"},{\"subject\":\"execute_function_element spool failure\",\"kind\":\"partial cleanup contradiction\",\"text\":\"a RefusedError from spool_file concluding resource_exhausted ... no outputs and no file of that attempt kept\",\"question\":\"If a later spool_file call fails after earlier files were already spooled, how can those earlier files be removed without a per-file removal import?\",\"options\":[\"preflight cannot guarantee success; leave them unrecorded until run cleanup\",\"remove the entire run spool\",\"spool_file is assumed atomic across the whole attempt\"],\"default_guess\":\"Leave earlier unrecorded files for whole-run cleanup and return no SpooledFile records.\"},{\"subject\":\"execute_function_element storage failure\",\"kind\":\"error handling gap\",\"text\":\"JSON outputs are published with put_value_bytes\",\"question\":\"How should put_value_bytes failures be translated, and what happens to values successfully published before a later output fails?\",\"options\":[\"propagate store errors\",\"translate RefusedError to resource_exhausted\",\"translate any failure to crashed\"],\"default_guess\":\"Propagate store errors; unpublished record references make earlier blobs unreachable.\"},{\"subject\":\"execute_function_element timestamps\",\"kind\":\"time boundary ambiguity\",\"text\":\"take started_at from kernel_now ... ended_at taken when the outcome is built\",\"question\":\"For post-sandbox publication or spool failures, is ended_at taken immediately after execute_function, after all output validation, or after all publishing/cleanup?\",\"options\":[\"after all validation and publication work\",\"immediately when execute_function returns\",\"at the first detected failure\"],\"default_guess\":\"Take ended_at when the final NodeExecutionDraft is constructed after validation and publication attempts.\"},{\"subject\":\"recover_running_runs cleanup enumeration\",\"kind\":\"query gap\",\"text\":\"first call remove_run_spool for every run that has ended and keeps no spool\",\"question\":\"How are all such ended runs obtained when the described RunsByStatus query is only for running, awaiting_approval, and pending runs?\",\"options\":[\"issue a separate RunsByStatus query for terminal statuses\",\"read all run records through an unspecified query\",\"cleanup only terminal runs returned incidentally\"],\"default_guess\":\"Issue a separate RunsByStatus query for succeeded, refused, cancelled, and failed, then filter failed by released_by.\"},{\"subject\":\"recover_running_runs kernel actor\",\"kind\":\"unspecified value\",\"text\":\"under an Actor of kind kernel\",\"question\":\"What agent_name must the kernel Actor carry?\",\"options\":[\"null\",\"kernel\",\"the current process or service name\"],\"default_guess\":\"Use agent_name null.\"},{\"subject\":\"recover_running_runs lag repair\",\"kind\":\"algorithm missing\",\"text\":\"a stored status or waiting point that lags them ... is rewritten\",\"question\":\"Which change type and exact fields are used to rewrite each stale run before deciding whether it is running, and is ended_at changed?\",\"options\":[\"one RecordRunProgressChange with no executions and fully rederived state\",\"RecordResumptionChange followed by advance_run\",\"no explicit rewrite; advance_run handles it\"],\"default_guess\":\"Write one RecordRunProgressChange with no executions and the fully rederived status, outputs, waiting points, and terminal timestamp if applicable.\"},{\"subject\":\"recover_running_runs counting\",\"kind\":\"count boundary\",\"text\":\"Returns the number of runs advanced\",\"question\":\"Does the count include runs only repaired or re-reached, runs on which advance_run was called but made no change, or only calls made for runs left running?\",\"options\":[\"count calls to advance_run\",\"count every processed non-ended run\",\"count only runs whose records changed\"],\"default_guess\":\"Count each run for which advance_run is actually called.\"},{\"subject\":\"release_run\",\"kind\":\"timestamp/readback ambiguity\",\"text\":\"with released_at, then ... return derive_run_answer showing released_by and released_at\",\"question\":\"Is released_at one kernel_now value passed to the change, and must the Run be reread from record_change's result or via a new identity query?\",\"options\":[\"take one timestamp and use record_change's returned Run\",\"take one timestamp and reread by identity\",\"derive by locally copying the old Run\"],\"default_guess\":\"Take one kernel_now value and use the Run returned in the RecordSet from record_change.\"},{\"subject\":\"resume_run current inputs\",\"kind\":\"reconstruction gap\",\"text\":\"reach again ... every element waiting with reason service_unreachable ... with its current inputs\",\"question\":\"How are current inputs reconstructed for mapped and unmapped elements, including transient mapped-element StoredValues and aggregate file references after restart?\",\"options\":[\"rederive them from the pinned graph and trace\",\"reuse the latest NodeExecution.inputs\",\"reuse the latest EffectAttempt.inputs\"],\"default_guess\":\"Reuse the latest waiting NodeExecution or EffectAttempt inputs for the exact element.\"},{\"subject\":\"resume_run partial resend\",\"kind\":\"failure atomicity\",\"text\":\"only after all those resends advance the run\",\"question\":\"If reaching one waiting element raises after earlier elements were resent, should the function stop immediately, continue the remaining resends, or still call advance_run?\",\"options\":[\"stop immediately and propagate\",\"continue all resends then propagate\",\"advance before propagating\"],\"default_guess\":\"Stop immediately and propagate.\"},{\"subject\":\"start_run supported input types\",\"kind\":\"contract contradiction\",\"text\":\"inputs: tuple[PortPayload, ...] ... each input ... a JsonCandidate of its canonical bytes ... publish each input's canonical bytes ... StoredValues of value carriage\",\"question\":\"Are file and file-list flow inputs permitted by PortPayload and Port.carriage, or are start_run inputs restricted to JSON value payloads?\",\"options\":[\"only JsonPayload is permitted\",\"all PortPayload variants are permitted and need carriage-specific handling\",\"flow input ports are implicitly always value ports\"],\"default_guess\":\"Restrict start_run to JsonPayload/value ports and refuse file inputs.\"},{\"subject\":\"start_run input disclosure\",\"kind\":\"missing value\",\"text\":\"StoredValues ... size and class\",\"question\":\"What disclosure_class is assigned to each initial StoredValue when JsonPayload has no class and Port.disclosure_class is nullable?\",\"options\":[\"use the port's disclosure_class and default null to open\",\"always open\",\"reject ports whose disclosure_class is null\"],\"default_guess\":\"Use the port's disclosure_class, defaulting null to open.\"},{\"subject\":\"start_run identities\",\"kind\":\"identity construction ambiguity\",\"text\":\"value_id and value_digest come from content_identity\",\"question\":\"Which IdentitySubject is passed for value_digest and which for value_id, and how is the StoredValueContent identity computed when it itself requires value_digest?\",\"options\":[\"digest BytesContent for value_digest, then digest StoredValueContent for value_id\",\"use put_value_bytes return value as digest, then content_identity for value_id\",\"use one identity for both fields\"],\"default_guess\":\"Compute value_digest from BytesContent, publish with that digest, then compute value_id from StoredValueContent.\"},{\"subject\":\"start_run run identity\",\"kind\":\"generated identity gap\",\"text\":\"write one StartRunChange ... Then MUST advance the run with advance_run\",\"question\":\"How is the newly created run_id obtained when StartRunChange has no run_id field and starts are explicitly never deduplicated?\",\"options\":[\"record_change generates a Run and returns it\",\"derive an identity using time or actor\",\"the store provides an undocumented run-id generator\"],\"default_guess\":\"Take the sole newly created Run from record_change's returned RecordSet.\"},{\"subject\":\"start_run activation consistency\",\"kind\":\"race semantics\",\"text\":\"one PinnedImplementation per function node with the implementation of that current activation\",\"question\":\"If current_activation changes between validation reads, which activation is pinned, and must all activations be read from one consistent store snapshot?\",\"options\":[\"retain the Activation objects obtained during validation\",\"reread immediately before StartRunChange\",\"record_change detects stale activations\"],\"default_guess\":\"Retain and pin the exact Activation objects read during validation.\"},{\"subject\":\"start_run publication failure\",\"kind\":\"atomicity gap\",\"text\":\"publish each input's canonical bytes with put_value_bytes, and write one StartRunChange\",\"question\":\"If publication or record_change fails partway, how are already published input blobs handled, and must no-run-on-failure include cleanup of those blobs?\",\"options\":[\"leave unreachable content-addressed blobs\",\"attempt cleanup through an unavailable API\",\"the store guarantees transactionality across these calls\"],\"default_guess\":\"Leave any successfully published content-addressed blobs unreferenced; no Run record is created.\"},{\"subject\":\"record_change consumers\",\"kind\":\"returned-record selection\",\"text\":\"record_change(change: StoreChange, actor: Actor) -> RecordSet\",\"question\":\"For every function that must return or continue with the updated Run, which Run in the returned RecordSet is authoritative if it contains zero or multiple runs?\",\"options\":[\"require exactly one matching run_id\",\"take the last run\",\"always perform a separate read by identity\"],\"default_guess\":\"Select exactly one Run matching the known run_id, and raise StoreInternalError for any other cardinality.\"}]}",
+ "unit": "runs",
+ "set_aside": []
+}

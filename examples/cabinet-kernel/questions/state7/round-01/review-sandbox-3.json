@@ -1,0 +1,831 @@
+{
+ "open_points": [
+  {
+   "subject": "execute_function input payload mapping",
+   "kind": "missing validation",
+   "text": "\"calls its top-level run once with a dict holding one entry per input port\"",
+   "question": "How are inputs matched to input_ports, and what happens when payload count, port names, payload kinds, directions, or cardinalities do not match?",
+   "options": [
+    "Match payloads by port name and return contract_violation on any mismatch",
+    "Match inputs positionally and assume the caller supplied valid payloads",
+    "Reject invalid invocation by raising an exception"
+   ],
+   "default_guess": "Match by port name, validate exactly one payload per uniquely named input port, and return contract_violation on mismatch.",
+   "unit": "sandbox"
+  },
+  {
+   "subject": "execute_function value ports with cardinality many",
+   "kind": "model mismatch",
+   "text": "\"for cardinality many a list of those in order\" and \"a value as its canonical JSON bytes\"",
+   "question": "How is a many-valued value port represented when no JsonListPayload or JsonListCandidate exists?",
+   "options": [
+    "Use one JsonPayload whose canonical JSON is an array",
+    "Use multiple JsonPayload entries with the same port name",
+    "Treat many value ports as unsupported"
+   ],
+   "default_guess": "Use one JsonPayload containing the canonical JSON encoding of the complete array.",
+   "unit": "sandbox"
+  },
+  {
+   "subject": "execute_function output ordering",
+   "kind": "ambiguous order",
+   "text": "\"outputs only for succeeded as PortPayload entries in output port name order\"",
+   "question": "Does output port name order mean lexicographic order by name or the order in the output_ports tuple?",
+   "options": [
+    "Sort lexicographically by Port.name",
+    "Preserve output_ports tuple order"
+   ],
+   "default_guess": "Sort lexicographically by Port.name.",
+   "unit": "sandbox"
+  },
+  {
+   "subject": "execute_function duplicate port names",
+   "kind": "missing boundary",
+   "text": "\"a dict holding one entry per input port\" and \"exactly one entry per output port\"",
+   "question": "What happens if input_ports or output_ports contains duplicate names, which cannot be represented as distinct dictionary entries?",
+   "options": [
+    "Return contract_violation",
+    "Raise on an invalid caller contract",
+    "Deduplicate by name"
+   ],
+   "default_guess": "Return contract_violation.",
+   "unit": "sandbox"
+  },
+  {
+   "subject": "execute_function malformed input JSON",
+   "kind": "missing outcome",
+   "text": "\"a value port's canonical JSON decoded to Python\"",
+   "question": "What outcome and failure_detail apply when an input JsonPayload is not valid decodable canonical JSON?",
+   "options": [
+    "contract_violation with no failure_detail",
+    "crashed with the decode exception detail",
+    "Raise to the caller"
+   ],
+   "default_guess": "Return contract_violation with no failure_detail.",
+   "unit": "sandbox"
+  },
+  {
+   "subject": "execute_function bounds validity",
+   "kind": "missing boundary",
+   "text": "\"bounds: ResourceBounds\"",
+   "question": "Are zero, negative, or release-ceiling-exceeding wall_time_ms, memory_bytes, output_bytes, and process_count valid, clamped, rejected, or assumed impossible?",
+   "options": [
+    "Validate and return contract_violation",
+    "Raise ValueError",
+    "Clamp to release ceilings and minimums",
+    "Assume the caller always supplies valid bounds"
+   ],
+   "default_guess": "Assume the caller supplies positive bounds no greater than release ceilings.",
+   "unit": "sandbox"
+  },
+  {
+   "subject": "execute_function bubblewrap executable selection",
+   "kind": "missing value",
+   "text": "\"MUST start bubblewrap\"",
+   "question": "Which executable path does execute_function use, and what happens if bwrap is absent or cannot be started?",
+   "options": [
+    "Resolve bwrap from PATH and raise SandboxUnavailableError",
+    "Resolve bwrap from PATH and return crashed",
+    "Use a fixed executable path"
+   ],
+   "default_guess": "Resolve bwrap from PATH and raise SandboxUnavailableError if it cannot be started.",
+   "unit": "sandbox"
+  },
+  {
+   "subject": "execute_function bubblewrap command",
+   "kind": "underspecified security configuration",
+   "text": "\"MUST start bubblewrap with new user, PID, IPC, UTS and network namespaces ... bubblewrap's own fresh proc and minimal dev mounts\"",
+   "question": "Which exact bubblewrap flags, UID/GID mappings, mount points, working directory, session/process-group settings, and capability settings satisfy this requirement?",
+   "options": [
+    "Use standard --unshare-* flags, --proc /proc, --dev /dev, --die-with-parent, and drop all capabilities",
+    "Add explicit UID/GID, session, and capability flags beyond those named",
+    "Rely on bubblewrap defaults for unspecified settings"
+   ],
+   "default_guess": "Use the named namespace flags, --proc /proc, --dev /dev, --die-with-parent, a fixed exchange working directory, and drop all capabilities.",
+   "unit": "sandbox"
+  },
+  {
+   "subject": "execute_function network namespace",
+   "kind": "platform contradiction",
+   "text": "\"no network interface but the new namespace's own loopback, which bubblewrap brings up\"",
+   "question": "Must the implementation explicitly bring loopback up if the installed bubblewrap/kernel combination leaves it down, and how can it do so without another executable or capability being specified?",
+   "options": [
+    "Rely on bubblewrap to bring loopback up",
+    "Explicitly configure loopback inside the namespace",
+    "Accept loopback being down"
+   ],
+   "default_guess": "Rely on bubblewrap as the prompt states.",
+   "unit": "sandbox"
+  },
+  {
+   "subject": "execute_function runtime path bindings",
+   "kind": "missing mapping",
+   "text": "\"exactly the host paths of the imported SANDBOX_RUNTIME_PATHS constant bound read-only\"",
+   "question": "At which in-sandbox paths are runtime paths mounted, and are entries files or directories?",
+   "options": [
+    "Bind each source to the identical absolute path",
+    "Map them beneath a dedicated runtime root",
+    "Infer targets from RELEASE_SANDBOX_INTERPRETER"
+   ],
+   "default_guess": "Read-only bind every entry to the identical absolute path.",
+   "unit": "sandbox"
+  },
+  {
+   "subject": "execute_function interpreter invocation",
+   "kind": "missing value",
+   "text": "\"the interpreter execute_function starts inside bubblewrap\"",
+   "question": "Is RELEASE_SANDBOX_INTERPRETER an executable path, an implementation/version descriptor, or both, and which actual command starts the runner?",
+   "options": [
+    "Treat it as an executable path",
+    "Find an interpreter within SANDBOX_RUNTIME_PATHS",
+    "Use a fixed python command inside the sandbox"
+   ],
+   "default_guess": "Find and invoke the release Python executable exposed by SANDBOX_RUNTIME_PATHS rather than treating the descriptor as a path.",
+   "unit": "sandbox"
+  },
+  {
+   "subject": "execute_function scratch enforcement",
+   "kind": "missing mechanism",
+   "text": "\"one fresh private exchange directory bound read-write and bounded by the imported RELEASE_CEILING_SANDBOX_SCRATCH_BYTES_MAX constant\"",
+   "question": "How is a bind-mounted host directory given a hard byte limit when bubblewrap bind mounts do not themselves impose a quota?",
+   "options": [
+    "Use a size-limited tmpfs instead of a host bind",
+    "Continuously measure the host directory and kill on excess",
+    "Use a filesystem quota or preallocated image",
+    "Rely only on available host space"
+   ],
+   "default_guess": "Continuously measure the exchange directory from the parent and kill the sandbox once the ceiling is exceeded.",
+   "unit": "sandbox"
+  },
+  {
+   "subject": "execute_function exchange mount location",
+   "kind": "missing value",
+   "text": "\"one fresh private exchange directory bound read-write\"",
+   "question": "What path names the exchange directory inside the sandbox, and what files or subdirectories form its protocol?",
+   "options": [
+    "Use a fixed in-sandbox path with a documented file protocol",
+    "Expose the host temporary path unchanged",
+    "Pass all data through inherited file descriptors"
+   ],
+   "default_guess": "Mount it at a fixed path and use private input and output files there.",
+   "unit": "sandbox"
+  },
+  {
+   "subject": "execute_function trusted channel",
+   "kind": "security gap",
+   "text": "\"each trap first writes its hit to a channel to the parent that the code cannot unsend\"",
+   "question": "What channel guarantees an untrusted module cannot erase, forge, consume, close, or interfere with trap and resource reports?",
+   "options": [
+    "An inherited one-way pipe with parent-only reading",
+    "Append-only files in the writable exchange directory",
+    "A socket or separate monitor process",
+    "Trust the runner's in-process objects"
+   ],
+   "default_guess": "Use a dedicated inherited one-way pipe whose read end exists only in the parent.",
+   "unit": "sandbox"
+  },
+  {
+   "subject": "execute_function channel protocol",
+   "kind": "missing protocol",
+   "text": "\"sends the outputs to the parent\" and \"reached the parent through the exchange channel\"",
+   "question": "What framing, encoding, size limit, authentication, end-of-message rule, and malformed-message behavior apply to runner messages?",
+   "options": [
+    "Length-prefixed binary records with explicit message types",
+    "JSON-lines records",
+    "Files written atomically in the exchange directory"
+   ],
+   "default_guess": "Use length-prefixed records with strict maximum sizes and return crashed for malformed or incomplete protocol data.",
+   "unit": "sandbox"
+  },
+  {
+   "subject": "execute_function runner delivery",
+   "kind": "missing implementation",
+   "text": "\"the parent passes these lists to the runner at launch instead of writing them into the runner\"",
+   "question": "How are the trap lists passed while the environment must contain exactly SANDBOX_ENVIRONMENT and the runner still needs its own executable code?",
+   "options": [
+    "Pass serialized lists and runner source through argv",
+    "Pass them through inherited descriptors",
+    "Embed runner code but not the imported lists in a -c argument"
+   ],
+   "default_guess": "Invoke a fixed runner via the interpreter and pass the lists through an inherited descriptor.",
+   "unit": "sandbox"
+  },
+  {
+   "subject": "execute_function trap target resolution",
+   "kind": "missing semantics",
+   "text": "\"replace every entry point named by the imported SANDBOX_TRAPPED_FUNCTIONS constant ... every method of the class named by the imported SANDBOX_TRAPPED_CLASS constant\"",
+   "question": "What syntax do the imported names use, in which modules or namespaces are they resolved, and does “every method” include inherited, static, class, property, and private methods?",
+   "options": [
+    "Names are fully qualified and every callable in the class dictionary is replaced",
+    "Names refer to builtins only",
+    "Resolve dotted names dynamically across imported standard-library modules"
+   ],
+   "default_guess": "Treat names as fully qualified paths and replace directly declared callable methods, including static and class methods.",
+   "unit": "sandbox"
+  },
+  {
+   "subject": "execute_function trap exceptions",
+   "kind": "missing value",
+   "text": "\"with one that raises\"",
+   "question": "Which exception type and message must each function, constructor, method, audit, process, and resource trap raise?",
+   "options": [
+    "RuntimeError with a stable message",
+    "PermissionError",
+    "A private runner exception class",
+    "Preserve the original API's likely exception type"
+   ],
+   "default_guess": "Raise a private RuntimeError subclass with a stable generic message.",
+   "unit": "sandbox"
+  },
+  {
+   "subject": "execute_function without-argument traps",
+   "kind": "ambiguous branch",
+   "text": "\"ones that raise when called without an argument\"",
+   "question": "What counts as “without an argument” for positional arguments, keyword-only arguments, omitted defaults, empty containers, and explicit None?",
+   "options": [
+    "No positional and no keyword arguments",
+    "The API's relevant argument is absent",
+    "Absent or None, as for the unseeded constructor"
+   ],
+   "default_guess": "Trap only when both positional and keyword argument collections are empty.",
+   "unit": "sandbox"
+  },
+  {
+   "subject": "execute_function unseeded constructor traps",
+   "kind": "ambiguous branch",
+   "text": "\"when constructed without a seed or with None, and that class's seed method when called on an instance without a seed or with None\"",
+   "question": "How is the seed argument identified across positional and keyword calls, and are other false-like seed values such as 0 permitted?",
+   "options": [
+    "Use the first positional argument or the seed keyword; permit every value except None",
+    "Inspect the actual callable signature",
+    "Trap every false-like value"
+   ],
+   "default_guess": "Treat the first relevant positional argument or seed keyword as the seed and permit all values except None.",
+   "unit": "sandbox"
+  },
+  {
+   "subject": "execute_function trap persistence",
+   "kind": "security gap",
+   "text": "\"before loading the code, MUST replace every entry point\"",
+   "question": "Must traps remain effective if untrusted code reloads a module, imports a fresh alias, mutates the patched attribute, or accesses the original implementation indirectly?",
+   "options": [
+    "Prevent or retrap reloads and mutations",
+    "Patch only the initially imported objects",
+    "Rely solely on the audit hook for indirect access"
+   ],
+   "default_guess": "Patch the initial objects and use the audit hook as the persistent backstop where audit events exist.",
+   "unit": "sandbox"
+  },
+  {
+   "subject": "execute_function audit event policy",
+   "kind": "missing branch table",
+   "text": "\"install an audit hook that raises on socket, subprocess and ctypes use\"",
+   "question": "Which exact Python audit event names and prefixes constitute socket, subprocess, ctypes, os.system, posix_spawn, exec-family, fork, and thread-start use?",
+   "options": [
+    "Use an explicit allow/deny table of CPython audit event names",
+    "Reject events by string prefix",
+    "Patch APIs that have no suitable audit event"
+   ],
+   "default_guess": "Use explicit CPython audit-event names and patch thread-start APIs because a portable thread-start audit event is not specified.",
+   "unit": "sandbox"
+  },
+  {
+   "subject": "execute_function audited path checks",
+   "kind": "missing boundary semantics",
+   "text": "\"raises ... on opening any path outside the exchange directory and the read-only runtime\"",
+   "question": "How are relative paths, bytes paths, file descriptors, dir_fd operations, symlinks, hard links, deleted paths, /proc, /dev, and non-file open events classified?",
+   "options": [
+    "Resolve canonical real paths and permit only descendants of approved roots plus already-open descriptors",
+    "Compare lexical path prefixes",
+    "Deny every non-string or non-absolute path"
+   ],
+   "default_guess": "Resolve paths canonically relative to a fixed working directory, reject symlink escapes, and allow only the exchange and runtime roots.",
+   "unit": "sandbox"
+  },
+  {
+   "subject": "execute_function access to proc and dev",
+   "kind": "internal contradiction",
+   "text": "\"bubblewrap's own fresh proc and minimal dev mounts\" and \"opening any path outside the exchange directory and the read-only runtime\"",
+   "question": "Are /proc and /dev allowed paths for untrusted code, even though they are required mounts but are outside the two audit-hook allowlisted areas?",
+   "options": [
+    "Permit only narrowly enumerated /proc and /dev paths",
+    "Deny untrusted opens under both while allowing runner internals",
+    "Treat /proc and /dev as implicit allowed roots"
+   ],
+   "default_guess": "Permit only runner-required /proc task inspection and inherited /dev/null descriptors; deny other untrusted opens.",
+   "unit": "sandbox"
+  },
+  {
+   "subject": "execute_function module loading context",
+   "kind": "missing values",
+   "text": "\"The runner loads code as a module\"",
+   "question": "What module name, filename, package, __name__, __file__, sys.path, current directory, builtins, and import policy are used?",
+   "options": [
+    "Compile and exec under a fixed synthetic module name",
+    "Write a module file in exchange and import it normally",
+    "Run it as __main__"
+   ],
+   "default_guess": "Compile and execute it as a fixed synthetic module with the exchange directory as working directory and only release runtime paths on sys.path.",
+   "unit": "sandbox"
+  },
+  {
+   "subject": "execute_function run lookup",
+   "kind": "missing validation",
+   "text": "\"calls its top-level run once\" and \"has no run\"",
+   "question": "Does a present but non-callable run count as “has no run,” and are asynchronous, generator, or callable-object run values accepted?",
+   "options": [
+    "Require a synchronous directly callable value and call it once",
+    "Accept any callable and use its immediate return value",
+    "Support coroutine and generator results"
+   ],
+   "default_guess": "Require a synchronous callable and treat its immediate return value as the result.",
+   "unit": "sandbox"
+  },
+  {
+   "subject": "execute_function JSON serialization",
+   "kind": "missing serialization rules",
+   "text": "\"value outputs serialized as JSON text\" and \"a value output cannot be serialized to canonical JSON\"",
+   "question": "Which JSON encoder settings and accepted Python value types are used before canonical_bytes, including treatment of NaN, Infinity, duplicate-like keys, non-string keys, and custom objects?",
+   "options": [
+    "Use strict standard JSON with allow_nan false and string keys only",
+    "Use json.dumps defaults then canonicalize",
+    "Implement direct canonical JSON conversion"
+   ],
+   "default_guess": "Use strict json.dumps with allow_nan false and compact output, then pass the text to canonical_bytes.",
+   "unit": "sandbox"
+  },
+  {
+   "subject": "execute_function file candidate facts",
+   "kind": "missing values",
+   "text": "\"fit_port_value with bounds.output_bytes as size bound does not fit an output to its port\"",
+   "question": "What content_digest algorithm/format and media_type populate FileFacts when constructing FileCandidate or FileListCandidate for fit_port_value?",
+   "options": [
+    "SHA-256 in a named digest format and the port's declared media_type",
+    "SHA-256 bare hexadecimal and the port media type",
+    "An empty digest and inferred media type"
+   ],
+   "default_guess": "Use a SHA-256 digest in the repository's likely canonical digest format and Port.media_type.",
+   "unit": "sandbox"
+  },
+  {
+   "subject": "execute_function candidate semantics for many values",
+   "kind": "missing model surface",
+   "text": "\"fit_port_value ... does not fit an output to its port\"",
+   "question": "Which PortCandidate represents a many-valued value output when only JsonCandidate, FileCandidate, and FileListCandidate surfaces are given?",
+   "options": [
+    "JsonCandidate containing the canonical JSON array",
+    "Call fit_port_value separately for each item",
+    "Pass None and let fit_port_value reject it"
+   ],
+   "default_guess": "Use one JsonCandidate containing the canonical JSON array.",
+   "unit": "sandbox"
+  },
+  {
+   "subject": "execute_function output-size counting",
+   "kind": "ambiguous calculation",
+   "text": "\"the sum of the canonical bytes ... of every value output and the bytes of every file output, a many file output counting each element\"",
+   "question": "For a many value output, is output_bytes the length of the canonical array or the sum of each element's canonical encoding, and is framing overhead excluded?",
+   "options": [
+    "Count the complete canonical array",
+    "Sum canonical encodings of individual elements",
+    "Count transport framing too"
+   ],
+   "default_guess": "Count the complete canonical JSON array and exclude protocol overhead.",
+   "unit": "sandbox"
+  },
+  {
+   "subject": "execute_function invalid output versus output limit",
+   "kind": "ambiguous ordering",
+   "text": "\"resource_exhausted when ... output bound was hit\" before \"contract_violation when the returned value is not a dict ... [or] cannot be serialized\"",
+   "question": "How is the output bound evaluated when the returned structure or an output value is invalid and cannot be canonically counted?",
+   "options": [
+    "Validate enough to count, and use contract_violation if counting is impossible",
+    "Measure the raw transport representation before contract validation",
+    "Treat oversized malformed output as resource_exhausted"
+   ],
+   "default_guess": "Return contract_violation when no canonical logical size can be computed; otherwise let an observed size excess take precedence.",
+   "unit": "sandbox"
+  },
+  {
+   "subject": "execute_function output spool versus scratch",
+   "kind": "missing boundary",
+   "text": "\"The stored value ceiling and the spool ceilings are not the sandbox's\" and \"exchange directory ... bounded by ... SCRATCH_BYTES_MAX\"",
+   "question": "Do serialized outputs and control-channel files consume the sandbox scratch ceiling, and can their storage cause scratch resource_exhausted before logical output_bytes is checked?",
+   "options": [
+    "Everything in exchange counts toward scratch",
+    "Only files created directly by agent code count",
+    "Use a separate parent-controlled channel outside scratch"
+   ],
+   "default_guess": "All bytes physically stored in the exchange directory count toward scratch, while pipe protocol bytes do not.",
+   "unit": "sandbox"
+  },
+  {
+   "subject": "execute_function process-count setrlimit",
+   "kind": "missing value",
+   "text": "\"setrlimit set above bounds.process_count by the tasks the runner and bubblewrap need\"",
+   "question": "Which RLIMIT is set, what exact additive allowance is used, and how is it made per-sandbox rather than affecting unrelated processes sharing a UID?",
+   "options": [
+    "RLIMIT_NPROC with a fixed documented allowance inside a new user namespace",
+    "RLIMIT_NPROC after measuring bubblewrap/runner tasks",
+    "Use a cgroup pids limit instead"
+   ],
+   "default_guess": "Set RLIMIT_NPROC inside the new user namespace to process_count plus a fixed allowance for bubblewrap and runner tasks.",
+   "unit": "sandbox"
+  },
+  {
+   "subject": "execute_function live-task counting",
+   "kind": "missing algorithm",
+   "text": "\"counts the tasks of the environment's proc and, when the new task would exceed process_count, writes a resource hit to the channel and raises\"",
+   "question": "How are all processes and threads counted atomically, how are races between simultaneous creations handled, and is the prospective task included before or after creation?",
+   "options": [
+    "Maintain a synchronized runner-owned counter around patched creation APIs",
+    "Enumerate /proc before each creation and add one prospectively",
+    "Use a cgroup pids.current value"
+   ],
+   "default_guess": "Enumerate namespace /proc tasks immediately before creation, add one prospectively, and serialize checks within the runner where possible.",
+   "unit": "sandbox"
+  },
+  {
+   "subject": "execute_function child-process trap reporting",
+   "kind": "missing channel behavior",
+   "text": "\"every process the code forked\" and \"each trap first writes its hit to a channel\"",
+   "question": "After os.fork, do both processes share the reporting channel, who is allowed to produce the final result, and how are duplicate or conflicting messages resolved?",
+   "options": [
+    "Only the original runner PID may send a final result; every descendant may send hit records",
+    "Give each child a separate channel",
+    "Forbid child continuation after fork"
+   ],
+   "default_guess": "Allow descendants to send append-only hit records but accept a final output only from the original runner.",
+   "unit": "sandbox"
+  },
+  {
+   "subject": "execute_function outer memory enforcement",
+   "kind": "missing mechanism",
+   "text": "\"address space limited to bounds.memory_bytes with setrlimit\"",
+   "question": "To which process or processes is RLIMIT_AS applied, does the limit include interpreter/runtime overhead, and how are forked descendants and aggregate memory handled?",
+   "options": [
+    "Apply RLIMIT_AS to the runner and descendants individually, including interpreter overhead",
+    "Limit aggregate sandbox memory with a cgroup",
+    "Subtract a fixed runner allowance before applying it"
+   ],
+   "default_guess": "Apply RLIMIT_AS to the runner before loading code, inherited by descendants, with interpreter overhead included.",
+   "unit": "sandbox"
+  },
+  {
+   "subject": "execute_function memory-hit detection",
+   "kind": "missing branch",
+   "text": "\"A memory ... bound counts as hit only when the parent observes it from outside: the environment was killed for it, or a MemoryError ... escaped run\"",
+   "question": "How does the parent distinguish a process killed because of the memory bound from an unrelated signal, allocation failure, or abnormal exit?",
+   "options": [
+    "Use a cgroup or monitor that reports an OOM event",
+    "Infer from termination signal and measured peak memory",
+    "Classify only an escaped MemoryError as memory exhaustion"
+   ],
+   "default_guess": "Use an external memory monitor and classify resource_exhausted only when it records the limit crossing or receives an escaped MemoryError.",
+   "unit": "sandbox"
+  },
+  {
+   "subject": "execute_function scratch-error detection",
+   "kind": "missing branch",
+   "text": "\"an OSError for a full or over-limit exchange directory\"",
+   "question": "Which errno values and operations prove that an escaped OSError was caused by the scratch bound rather than another filesystem error?",
+   "options": [
+    "Recognize ENOSPC, EDQUOT, and EFBIG on exchange paths",
+    "Treat every escaped OSError as scratch exhaustion",
+    "Require the parent's measured directory size to reach the ceiling"
+   ],
+   "default_guess": "Recognize ENOSPC or EDQUOT for exchange paths, or an externally observed size limit crossing.",
+   "unit": "sandbox"
+  },
+  {
+   "subject": "execute_function deadline start",
+   "kind": "missing timing boundary",
+   "text": "\"the monotonic_ns reading taken when the environment starts plus bounds.wall_time_ms in nanoseconds\"",
+   "question": "Which event is “when the environment starts”: before spawning bwrap, after Popen succeeds, after namespace setup, or when the runner signals readiness?",
+   "options": [
+    "Immediately before spawning bwrap",
+    "Immediately after spawning bwrap",
+    "When the runner signals it is ready to load code"
+   ],
+   "default_guess": "Take the reading immediately before starting the bwrap process.",
+   "unit": "sandbox"
+  },
+  {
+   "subject": "execute_function deadline versus completion and cleanup",
+   "kind": "ambiguous ordering",
+   "text": "\"after which — once a later monotonic_ns reading reaches it — it kills every process\" and \"The outcome is the first that holds ... timeout when the wall deadline passed\"",
+   "question": "If run finishes before the deadline but result collection, descendant reaping, or cleanup crosses it, is the outcome timeout or the completed outcome?",
+   "options": [
+    "Timeout whenever the environment was still alive at the deadline",
+    "Timeout whenever any later check is at or beyond the deadline",
+    "Do not charge cleanup time to the execution deadline"
+   ],
+   "default_guess": "Return timeout only if some sandbox process remains alive when the deadline is reached.",
+   "unit": "sandbox"
+  },
+  {
+   "subject": "execute_function process-tree termination",
+   "kind": "missing mechanism",
+   "text": "\"it kills every process of the environment\"",
+   "question": "How is complete termination guaranteed across fork races, daemonized descendants, new process groups, and PID-namespace init behavior?",
+   "options": [
+    "Kill the PID-namespace init/bwrap process and verify namespace teardown",
+    "Use a cgroup kill operation",
+    "Repeatedly enumerate and signal descendants"
+   ],
+   "default_guess": "Kill the namespace-init process and its process group, then verify all descendants have exited.",
+   "unit": "sandbox"
+  },
+  {
+   "subject": "execute_function cleanup confirmation",
+   "kind": "missing boundary",
+   "text": "\"An execution completes only after every process of the environment is reaped and the exchange directory is removed; when either cannot be confirmed\"",
+   "question": "How long and by what checks are reaping and directory removal attempted before cleanup_failed, and how are files created with hostile permissions or names removed safely?",
+   "options": [
+    "Use a fixed cleanup timeout and descriptor-relative removal",
+    "Wait indefinitely until cleanup completes",
+    "Attempt once and mark cleanup_failed on any error"
+   ],
+   "default_guess": "Use a short fixed cleanup deadline, reap known children, and remove exchange contents with descriptor-relative operations.",
+   "unit": "sandbox"
+  },
+  {
+   "subject": "execute_function cleanup outcome precedence",
+   "kind": "ordering contradiction",
+   "text": "\"The outcome is the first that holds ... timeout ...\" and \"when either cannot be confirmed ... the result is outcome crashed with detail_code cleanup_failed\"",
+   "question": "Does cleanup_failed override an already established timeout, resource_exhausted, sandbox_violation, or contract_violation outcome?",
+   "options": [
+    "Always override with crashed/cleanup_failed",
+    "Preserve the earlier outcome and attach cleanup_failed",
+    "Override only succeeded"
+   ],
+   "default_guess": "Always override with crashed and detail_code cleanup_failed, as the explicit cleanup rule states.",
+   "unit": "sandbox"
+  },
+  {
+   "subject": "execute_function parent-side failures",
+   "kind": "missing outcome",
+   "text": "\"The function returns that result and neither raises StopRequiredError nor stops the process\"",
+   "question": "For setup, serialization, protocol, monitoring, bubblewrap-launch, or internal parent exceptions other than cleanup failure, must execute_function return crashed, raise SandboxUnavailableError, or propagate the exception?",
+   "options": [
+    "Return crashed for execution infrastructure failures and raise SandboxUnavailableError only when bwrap/runtime is unavailable",
+    "Propagate parent exceptions",
+    "Return cleanup_failed for every infrastructure failure"
+   ],
+   "default_guess": "Raise SandboxUnavailableError for unavailable sandbox prerequisites and return crashed for failures after the environment starts.",
+   "unit": "sandbox"
+  },
+  {
+   "subject": "execute_function failure_detail format",
+   "kind": "missing value",
+   "text": "\"failure_detail MUST hold only the type and message of an exception\"",
+   "question": "What exact string format identifies the type and message: separator, qualified versus unqualified type name, representation of an empty message, and handling of a failing __str__?",
+   "options": [
+    "UnqualifiedType: message",
+    "fully.qualified.Type: message",
+    "A structured JSON string"
+   ],
+   "default_guess": "Use the unqualified exception class name followed by ': ' and a safely obtained string message.",
+   "unit": "sandbox"
+  },
+  {
+   "subject": "execute_function failure_detail truncation",
+   "kind": "missing boundary",
+   "text": "\"cut to at most ... bytes at a UTF-8 character boundary\"",
+   "question": "Is truncation applied to the full formatted detail without a marker, and what happens when the byte ceiling cuts before any complete multibyte character?",
+   "options": [
+    "Take the longest valid UTF-8 prefix with no marker",
+    "Reserve space for an ellipsis",
+    "Truncate type and message separately"
+   ],
+   "default_guess": "Take the longest UTF-8 prefix not exceeding the ceiling and add no marker.",
+   "unit": "sandbox"
+  },
+  {
+   "subject": "execute_function escaped exception scope",
+   "kind": "ambiguous branch",
+   "text": "\"only the type and message of an exception that escaped module loading or run\"",
+   "question": "Do BaseException subclasses such as SystemExit and KeyboardInterrupt count, and does an exception during output serialization after run qualify for failure_detail?",
+   "options": [
+    "Catch BaseException from load/run only; serialization failures have no detail",
+    "Catch Exception only",
+    "Include runner serialization exceptions too"
+   ],
+   "default_guess": "Catch BaseException escaping load or run, but leave failure_detail None for output serialization failures.",
+   "unit": "sandbox"
+  },
+  {
+   "subject": "execute_function abnormal child exits",
+   "kind": "missing classification",
+   "text": "\"crashed when ... the process exited abnormally\"",
+   "question": "If run returns successfully but a forked descendant later exits abnormally, hangs, or writes conflicting state, is the whole execution crashed?",
+   "options": [
+    "Any abnormal sandbox descendant exit makes the execution crashed",
+    "Only the main runner's status matters",
+    "Ignore descendant status after they are reaped"
+   ],
+   "default_guess": "Treat any abnormal descendant exit as crashed unless a higher-priority outcome was recorded.",
+   "unit": "sandbox"
+  },
+  {
+   "subject": "execute_function outcome evidence races",
+   "kind": "missing ordering boundary",
+   "text": "\"The outcome is the first that holds, in this order\"",
+   "question": "When multiple hits are reported concurrently, what evidence cutoff determines that an earlier-priority condition “holds,” especially a deadline reached while trap or result records are pending?",
+   "options": [
+    "Collect all evidence after termination, then apply the fixed precedence",
+    "Use the first record received",
+    "Freeze classification when the main runner exits"
+   ],
+   "default_guess": "Collect all authenticated evidence through complete teardown, then apply the stated precedence.",
+   "unit": "sandbox"
+  },
+  {
+   "subject": "execute_function resource usage wall time",
+   "kind": "missing calculation",
+   "text": "\"resources_used with elapsed wall_time_ms\"",
+   "question": "Which interval is measured and how are nanoseconds converted to integer milliseconds—floor, ceiling, or rounding—and is cleanup included?",
+   "options": [
+    "Start-to-environment-exit, rounded up",
+    "Start-to-return including cleanup, floored",
+    "Start-to-main-runner-exit, floored"
+   ],
+   "default_guess": "Measure from environment start until all sandbox processes exit, convert by rounding up, and exclude exchange-directory cleanup.",
+   "unit": "sandbox"
+  },
+  {
+   "subject": "execute_function resource usage memory",
+   "kind": "missing calculation",
+   "text": "\"peak memory_bytes\"",
+   "question": "Does peak memory mean the aggregate simultaneous resident set, maximum RSS of any one task, total address space, or a platform-reported child ru_maxrss, and are runner/bubblewrap processes included?",
+   "options": [
+    "Aggregate peak RSS of runner and code descendants, excluding bubblewrap",
+    "Maximum per-process RSS",
+    "Peak virtual address space including runner",
+    "Use getrusage semantics"
+   ],
+   "default_guess": "Report aggregate peak RSS of runner and code descendants, excluding bubblewrap.",
+   "unit": "sandbox"
+  },
+  {
+   "subject": "execute_function resource usage on failure",
+   "kind": "missing values",
+   "text": "\"resources_used with elapsed wall_time_ms, peak memory_bytes and the output count as output_bytes\"",
+   "question": "What output_bytes and memory_bytes are reported for malformed, partial, timed-out, killed, cleanup-failed, or unobservable executions?",
+   "options": [
+    "Report the greatest externally observed values, using zero when unobservable",
+    "Always report zero for failed executions",
+    "Report only fully validated logical outputs"
+   ],
+   "default_guess": "Report the greatest externally observed usage and use zero for a metric that could not be observed.",
+   "unit": "sandbox"
+  },
+  {
+   "subject": "execute_function output retention",
+   "kind": "missing branch",
+   "text": "\"outputs only for succeeded\"",
+   "question": "Must every non-succeeded result contain an empty tuple even if conforming outputs were received before a later trap, resource hit, timeout, or cleanup failure?",
+   "options": [
+    "Always use an empty tuple for every non-succeeded outcome",
+    "Keep outputs for sandbox_violation or cleanup_failed",
+    "Keep outputs internally but omit only on resource failures"
+   ],
+   "default_guess": "Use an empty tuple for every non-succeeded outcome.",
+   "unit": "sandbox"
+  },
+  {
+   "subject": "probe_sandbox error messages",
+   "kind": "missing value",
+   "text": "\"MUST raise SandboxUnavailableError naming what is missing\" and \"naming its outcome\"",
+   "question": "What exact message text is required for missing bwrap, command failure, version mismatch, interpreter mismatch, and probe outcome failure?",
+   "options": [
+    "Stable human-readable messages containing the failed component and observed value",
+    "Machine-readable codes",
+    "Include full command stderr"
+   ],
+   "default_guess": "Use stable human-readable messages containing the component, expected value, and observed value or outcome, without stderr.",
+   "unit": "sandbox"
+  },
+  {
+   "subject": "probe_sandbox bwrap lookup",
+   "kind": "missing boundary",
+   "text": "\"when the bubblewrap executable, bwrap, cannot be found on the process's PATH\"",
+   "question": "Does an existing but non-executable, broken, or failing bwrap path count as not found or as a separate unavailable condition?",
+   "options": [
+    "Treat any inability to execute it as unavailable and name the execution failure",
+    "Only shutil.which failure counts",
+    "Propagate the OS error"
+   ],
+   "default_guess": "Treat not found and not executable as SandboxUnavailableError with distinct messages.",
+   "unit": "sandbox"
+  },
+  {
+   "subject": "probe_sandbox version parsing",
+   "kind": "missing parsing rules",
+   "text": "\"bwrap --version, which prints \\\"bubblewrap\\\" and the version, names a version other than ... RELEASE_BWRAP_VERSION\"",
+   "question": "How are exit status, stderr, whitespace, prefixes, suffixes, and multiple lines handled, and is RELEASE_BWRAP_VERSION the bare version or the complete output?",
+   "options": [
+    "Require successful exit and parse exactly two whitespace-separated tokens",
+    "Compare normalized complete stdout",
+    "Search stdout for the expected version token"
+   ],
+   "default_guess": "Require exit status zero and stdout matching 'bubblewrap ' plus RELEASE_BWRAP_VERSION after trimming one trailing newline.",
+   "unit": "sandbox"
+  },
+  {
+   "subject": "probe_sandbox version command timeout",
+   "kind": "missing bound",
+   "text": "\"when bwrap --version ... names a version\"",
+   "question": "How long may bwrap --version run before it is considered unavailable?",
+   "options": [
+    "Use a fixed short timeout",
+    "Use RELEASE_CEILING_WALL_TIME_MS",
+    "Wait indefinitely"
+   ],
+   "default_guess": "Use RELEASE_CEILING_WALL_TIME_MS as the timeout.",
+   "unit": "sandbox"
+  },
+  {
+   "subject": "probe_sandbox interpreter probe configuration",
+   "kind": "missing equivalence",
+   "text": "\"run once through bwrap with the same read-only bindings ... to print platform.python_implementation() and platform.python_version()\"",
+   "question": "Does “same” require all execute_function namespace, environment, proc/dev, exchange, limits, null-stream, and cleanup settings, or only the runtime path bindings?",
+   "options": [
+    "Use the complete execute_function sandbox configuration except capture stdout",
+    "Use only the same read-only runtime bindings",
+    "Perform the check through execute_function"
+   ],
+   "default_guess": "Use the complete sandbox configuration, temporarily capturing only this trusted probe's stdout.",
+   "unit": "sandbox"
+  },
+  {
+   "subject": "probe_sandbox standard-output handling",
+   "kind": "requirement tension",
+   "text": "\"to print ...\" and \"The sandboxed process's standard ... output ... MUST be connected to /dev/null\"",
+   "question": "May the trusted interpreter probe capture stdout even though execute_function sandbox processes must send stdout to /dev/null?",
+   "options": [
+    "Yes, the null-output rule applies only to untrusted execute_function runs",
+    "No, send the interpreter descriptor through the exchange channel instead",
+    "Temporarily violate the rule for the probe"
+   ],
+   "default_guess": "Capture stdout directly because the interpreter probe is trusted and is not an execute_function agent-code run.",
+   "unit": "sandbox"
+  },
+  {
+   "subject": "probe_sandbox interpreter output parsing",
+   "kind": "missing parsing rules",
+   "text": "\"does not print exactly the imported RELEASE_SANDBOX_INTERPRETER constant\"",
+   "question": "Does “exactly” permit the newline added by print, and how are encoding errors, extra output, stderr, or nonzero exit handled?",
+   "options": [
+    "Decode strict UTF-8 and remove exactly one trailing newline",
+    "Compare raw stdout including the newline",
+    "Strip all surrounding whitespace"
+   ],
+   "default_guess": "Require successful exit, strict UTF-8, no stderr dependency, and remove exactly one trailing newline before comparison.",
+   "unit": "sandbox"
+  },
+  {
+   "subject": "probe_sandbox minimal implementation",
+   "kind": "missing value",
+   "text": "\"one probe execution through execute_function of a minimal implementation with no ports\"",
+   "question": "What exact code is used for the minimal implementation and what argument shape must its run accept?",
+   "options": [
+    "def run(inputs): return {}",
+    "def run(): return {}",
+    "A module assigning run to a lambda"
+   ],
+   "default_guess": "Use 'def run(inputs): return {}' with empty input and output port tuples.",
+   "unit": "sandbox"
+  },
+  {
+   "subject": "probe_sandbox probe bounds",
+   "kind": "missing construction detail",
+   "text": "\"under bounds equal to the imported RELEASE_CEILING_WALL_TIME_MS, RELEASE_CEILING_MEMORY_BYTES, RELEASE_CEILING_OUTPUT_BYTES and RELEASE_CEILING_PROCESS_COUNT constants\"",
+   "question": "Are those values passed directly to the correspondingly named ResourceBounds fields, and is the global scratch ceiling implicitly used even though ResourceBounds has no scratch field?",
+   "options": [
+    "Map the four constants directly and use the global scratch ceiling implicitly",
+    "Subtract runner overhead from memory/process values",
+    "Add a separate internal scratch probe setting"
+   ],
+   "default_guess": "Map the four constants directly to ResourceBounds and use RELEASE_CEILING_SANDBOX_SCRATCH_BYTES_MAX implicitly.",
+   "unit": "sandbox"
+  },
+  {
+   "subject": "probe_sandbox failure propagation",
+   "kind": "missing branch",
+   "text": "\"does not end succeeded, naming its outcome\"",
+   "question": "If execute_function raises, returns cleanup_failed, or cannot produce a valid SandboxResult, does probe_sandbox wrap that as SandboxUnavailableError or propagate it?",
+   "options": [
+    "Wrap every probe failure as SandboxUnavailableError",
+    "Propagate SandboxUnavailableError but wrap other exceptions",
+    "Propagate all exceptions"
+   ],
+   "default_guess": "Propagate an existing SandboxUnavailableError and wrap every other probe failure in SandboxUnavailableError.",
+   "unit": "sandbox"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"execute_function input payload mapping\",\"kind\":\"missing validation\",\"text\":\"\\\"calls its top-level run once with a dict holding one entry per input port\\\"\",\"question\":\"How are inputs matched to input_ports, and what happens when payload count, port names, payload kinds, directions, or cardinalities do not match?\",\"options\":[\"Match payloads by port name and return contract_violation on any mismatch\",\"Match inputs positionally and assume the caller supplied valid payloads\",\"Reject invalid invocation by raising an exception\"],\"default_guess\":\"Match by port name, validate exactly one payload per uniquely named input port, and return contract_violation on mismatch.\"},{\"subject\":\"execute_function value ports with cardinality many\",\"kind\":\"model mismatch\",\"text\":\"\\\"for cardinality many a list of those in order\\\" and \\\"a value as its canonical JSON bytes\\\"\",\"question\":\"How is a many-valued value port represented when no JsonListPayload or JsonListCandidate exists?\",\"options\":[\"Use one JsonPayload whose canonical JSON is an array\",\"Use multiple JsonPayload entries with the same port name\",\"Treat many value ports as unsupported\"],\"default_guess\":\"Use one JsonPayload containing the canonical JSON encoding of the complete array.\"},{\"subject\":\"execute_function output ordering\",\"kind\":\"ambiguous order\",\"text\":\"\\\"outputs only for succeeded as PortPayload entries in output port name order\\\"\",\"question\":\"Does output port name order mean lexicographic order by name or the order in the output_ports tuple?\",\"options\":[\"Sort lexicographically by Port.name\",\"Preserve output_ports tuple order\"],\"default_guess\":\"Sort lexicographically by Port.name.\"},{\"subject\":\"execute_function duplicate port names\",\"kind\":\"missing boundary\",\"text\":\"\\\"a dict holding one entry per input port\\\" and \\\"exactly one entry per output port\\\"\",\"question\":\"What happens if input_ports or output_ports contains duplicate names, which cannot be represented as distinct dictionary entries?\",\"options\":[\"Return contract_violation\",\"Raise on an invalid caller contract\",\"Deduplicate by name\"],\"default_guess\":\"Return contract_violation.\"},{\"subject\":\"execute_function malformed input JSON\",\"kind\":\"missing outcome\",\"text\":\"\\\"a value port's canonical JSON decoded to Python\\\"\",\"question\":\"What outcome and failure_detail apply when an input JsonPayload is not valid decodable canonical JSON?\",\"options\":[\"contract_violation with no failure_detail\",\"crashed with the decode exception detail\",\"Raise to the caller\"],\"default_guess\":\"Return contract_violation with no failure_detail.\"},{\"subject\":\"execute_function bounds validity\",\"kind\":\"missing boundary\",\"text\":\"\\\"bounds: ResourceBounds\\\"\",\"question\":\"Are zero, negative, or release-ceiling-exceeding wall_time_ms, memory_bytes, output_bytes, and process_count valid, clamped, rejected, or assumed impossible?\",\"options\":[\"Validate and return contract_violation\",\"Raise ValueError\",\"Clamp to release ceilings and minimums\",\"Assume the caller always supplies valid bounds\"],\"default_guess\":\"Assume the caller supplies positive bounds no greater than release ceilings.\"},{\"subject\":\"execute_function bubblewrap executable selection\",\"kind\":\"missing value\",\"text\":\"\\\"MUST start bubblewrap\\\"\",\"question\":\"Which executable path does execute_function use, and what happens if bwrap is absent or cannot be started?\",\"options\":[\"Resolve bwrap from PATH and raise SandboxUnavailableError\",\"Resolve bwrap from PATH and return crashed\",\"Use a fixed executable path\"],\"default_guess\":\"Resolve bwrap from PATH and raise SandboxUnavailableError if it cannot be started.\"},{\"subject\":\"execute_function bubblewrap command\",\"kind\":\"underspecified security configuration\",\"text\":\"\\\"MUST start bubblewrap with new user, PID, IPC, UTS and network namespaces ... bubblewrap's own fresh proc and minimal dev mounts\\\"\",\"question\":\"Which exact bubblewrap flags, UID/GID mappings, mount points, working directory, session/process-group settings, and capability settings satisfy this requirement?\",\"options\":[\"Use standard --unshare-* flags, --proc /proc, --dev /dev, --die-with-parent, and drop all capabilities\",\"Add explicit UID/GID, session, and capability flags beyond those named\",\"Rely on bubblewrap defaults for unspecified settings\"],\"default_guess\":\"Use the named namespace flags, --proc /proc, --dev /dev, --die-with-parent, a fixed exchange working directory, and drop all capabilities.\"},{\"subject\":\"execute_function network namespace\",\"kind\":\"platform contradiction\",\"text\":\"\\\"no network interface but the new namespace's own loopback, which bubblewrap brings up\\\"\",\"question\":\"Must the implementation explicitly bring loopback up if the installed bubblewrap/kernel combination leaves it down, and how can it do so without another executable or capability being specified?\",\"options\":[\"Rely on bubblewrap to bring loopback up\",\"Explicitly configure loopback inside the namespace\",\"Accept loopback being down\"],\"default_guess\":\"Rely on bubblewrap as the prompt states.\"},{\"subject\":\"execute_function runtime path bindings\",\"kind\":\"missing mapping\",\"text\":\"\\\"exactly the host paths of the imported SANDBOX_RUNTIME_PATHS constant bound read-only\\\"\",\"question\":\"At which in-sandbox paths are runtime paths mounted, and are entries files or directories?\",\"options\":[\"Bind each source to the identical absolute path\",\"Map them beneath a dedicated runtime root\",\"Infer targets from RELEASE_SANDBOX_INTERPRETER\"],\"default_guess\":\"Read-only bind every entry to the identical absolute path.\"},{\"subject\":\"execute_function interpreter invocation\",\"kind\":\"missing value\",\"text\":\"\\\"the interpreter execute_function starts inside bubblewrap\\\"\",\"question\":\"Is RELEASE_SANDBOX_INTERPRETER an executable path, an implementation/version descriptor, or both, and which actual command starts the runner?\",\"options\":[\"Treat it as an executable path\",\"Find an interpreter within SANDBOX_RUNTIME_PATHS\",\"Use a fixed python command inside the sandbox\"],\"default_guess\":\"Find and invoke the release Python executable exposed by SANDBOX_RUNTIME_PATHS rather than treating the descriptor as a path.\"},{\"subject\":\"execute_function scratch enforcement\",\"kind\":\"missing mechanism\",\"text\":\"\\\"one fresh private exchange directory bound read-write and bounded by the imported RELEASE_CEILING_SANDBOX_SCRATCH_BYTES_MAX constant\\\"\",\"question\":\"How is a bind-mounted host directory given a hard byte limit when bubblewrap bind mounts do not themselves impose a quota?\",\"options\":[\"Use a size-limited tmpfs instead of a host bind\",\"Continuously measure the host directory and kill on excess\",\"Use a filesystem quota or preallocated image\",\"Rely only on available host space\"],\"default_guess\":\"Continuously measure the exchange directory from the parent and kill the sandbox once the ceiling is exceeded.\"},{\"subject\":\"execute_function exchange mount location\",\"kind\":\"missing value\",\"text\":\"\\\"one fresh private exchange directory bound read-write\\\"\",\"question\":\"What path names the exchange directory inside the sandbox, and what files or subdirectories form its protocol?\",\"options\":[\"Use a fixed in-sandbox path with a documented file protocol\",\"Expose the host temporary path unchanged\",\"Pass all data through inherited file descriptors\"],\"default_guess\":\"Mount it at a fixed path and use private input and output files there.\"},{\"subject\":\"execute_function trusted channel\",\"kind\":\"security gap\",\"text\":\"\\\"each trap first writes its hit to a channel to the parent that the code cannot unsend\\\"\",\"question\":\"What channel guarantees an untrusted module cannot erase, forge, consume, close, or interfere with trap and resource reports?\",\"options\":[\"An inherited one-way pipe with parent-only reading\",\"Append-only files in the writable exchange directory\",\"A socket or separate monitor process\",\"Trust the runner's in-process objects\"],\"default_guess\":\"Use a dedicated inherited one-way pipe whose read end exists only in the parent.\"},{\"subject\":\"execute_function channel protocol\",\"kind\":\"missing protocol\",\"text\":\"\\\"sends the outputs to the parent\\\" and \\\"reached the parent through the exchange channel\\\"\",\"question\":\"What framing, encoding, size limit, authentication, end-of-message rule, and malformed-message behavior apply to runner messages?\",\"options\":[\"Length-prefixed binary records with explicit message types\",\"JSON-lines records\",\"Files written atomically in the exchange directory\"],\"default_guess\":\"Use length-prefixed records with strict maximum sizes and return crashed for malformed or incomplete protocol data.\"},{\"subject\":\"execute_function runner delivery\",\"kind\":\"missing implementation\",\"text\":\"\\\"the parent passes these lists to the runner at launch instead of writing them into the runner\\\"\",\"question\":\"How are the trap lists passed while the environment must contain exactly SANDBOX_ENVIRONMENT and the runner still needs its own executable code?\",\"options\":[\"Pass serialized lists and runner source through argv\",\"Pass them through inherited descriptors\",\"Embed runner code but not the imported lists in a -c argument\"],\"default_guess\":\"Invoke a fixed runner via the interpreter and pass the lists through an inherited descriptor.\"},{\"subject\":\"execute_function trap target resolution\",\"kind\":\"missing semantics\",\"text\":\"\\\"replace every entry point named by the imported SANDBOX_TRAPPED_FUNCTIONS constant ... every method of the class named by the imported SANDBOX_TRAPPED_CLASS constant\\\"\",\"question\":\"What syntax do the imported names use, in which modules or namespaces are they resolved, and does “every method” include inherited, static, class, property, and private methods?\",\"options\":[\"Names are fully qualified and every callable in the class dictionary is replaced\",\"Names refer to builtins only\",\"Resolve dotted names dynamically across imported standard-library modules\"],\"default_guess\":\"Treat names as fully qualified paths and replace directly declared callable methods, including static and class methods.\"},{\"subject\":\"execute_function trap exceptions\",\"kind\":\"missing value\",\"text\":\"\\\"with one that raises\\\"\",\"question\":\"Which exception type and message must each function, constructor, method, audit, process, and resource trap raise?\",\"options\":[\"RuntimeError with a stable message\",\"PermissionError\",\"A private runner exception class\",\"Preserve the original API's likely exception type\"],\"default_guess\":\"Raise a private RuntimeError subclass with a stable generic message.\"},{\"subject\":\"execute_function without-argument traps\",\"kind\":\"ambiguous branch\",\"text\":\"\\\"ones that raise when called without an argument\\\"\",\"question\":\"What counts as “without an argument” for positional arguments, keyword-only arguments, omitted defaults, empty containers, and explicit None?\",\"options\":[\"No positional and no keyword arguments\",\"The API's relevant argument is absent\",\"Absent or None, as for the unseeded constructor\"],\"default_guess\":\"Trap only when both positional and keyword argument collections are empty.\"},{\"subject\":\"execute_function unseeded constructor traps\",\"kind\":\"ambiguous branch\",\"text\":\"\\\"when constructed without a seed or with None, and that class's seed method when called on an instance without a seed or with None\\\"\",\"question\":\"How is the seed argument identified across positional and keyword calls, and are other false-like seed values such as 0 permitted?\",\"options\":[\"Use the first positional argument or the seed keyword; permit every value except None\",\"Inspect the actual callable signature\",\"Trap every false-like value\"],\"default_guess\":\"Treat the first relevant positional argument or seed keyword as the seed and permit all values except None.\"},{\"subject\":\"execute_function trap persistence\",\"kind\":\"security gap\",\"text\":\"\\\"before loading the code, MUST replace every entry point\\\"\",\"question\":\"Must traps remain effective if untrusted code reloads a module, imports a fresh alias, mutates the patched attribute, or accesses the original implementation indirectly?\",\"options\":[\"Prevent or retrap reloads and mutations\",\"Patch only the initially imported objects\",\"Rely solely on the audit hook for indirect access\"],\"default_guess\":\"Patch the initial objects and use the audit hook as the persistent backstop where audit events exist.\"},{\"subject\":\"execute_function audit event policy\",\"kind\":\"missing branch table\",\"text\":\"\\\"install an audit hook that raises on socket, subprocess and ctypes use\\\"\",\"question\":\"Which exact Python audit event names and prefixes constitute socket, subprocess, ctypes, os.system, posix_spawn, exec-family, fork, and thread-start use?\",\"options\":[\"Use an explicit allow/deny table of CPython audit event names\",\"Reject events by string prefix\",\"Patch APIs that have no suitable audit event\"],\"default_guess\":\"Use explicit CPython audit-event names and patch thread-start APIs because a portable thread-start audit event is not specified.\"},{\"subject\":\"execute_function audited path checks\",\"kind\":\"missing boundary semantics\",\"text\":\"\\\"raises ... on opening any path outside the exchange directory and the read-only runtime\\\"\",\"question\":\"How are relative paths, bytes paths, file descriptors, dir_fd operations, symlinks, hard links, deleted paths, /proc, /dev, and non-file open events classified?\",\"options\":[\"Resolve canonical real paths and permit only descendants of approved roots plus already-open descriptors\",\"Compare lexical path prefixes\",\"Deny every non-string or non-absolute path\"],\"default_guess\":\"Resolve paths canonically relative to a fixed working directory, reject symlink escapes, and allow only the exchange and runtime roots.\"},{\"subject\":\"execute_function access to proc and dev\",\"kind\":\"internal contradiction\",\"text\":\"\\\"bubblewrap's own fresh proc and minimal dev mounts\\\" and \\\"opening any path outside the exchange directory and the read-only runtime\\\"\",\"question\":\"Are /proc and /dev allowed paths for untrusted code, even though they are required mounts but are outside the two audit-hook allowlisted areas?\",\"options\":[\"Permit only narrowly enumerated /proc and /dev paths\",\"Deny untrusted opens under both while allowing runner internals\",\"Treat /proc and /dev as implicit allowed roots\"],\"default_guess\":\"Permit only runner-required /proc task inspection and inherited /dev/null descriptors; deny other untrusted opens.\"},{\"subject\":\"execute_function module loading context\",\"kind\":\"missing values\",\"text\":\"\\\"The runner loads code as a module\\\"\",\"question\":\"What module name, filename, package, __name__, __file__, sys.path, current directory, builtins, and import policy are used?\",\"options\":[\"Compile and exec under a fixed synthetic module name\",\"Write a module file in exchange and import it normally\",\"Run it as __main__\"],\"default_guess\":\"Compile and execute it as a fixed synthetic module with the exchange directory as working directory and only release runtime paths on sys.path.\"},{\"subject\":\"execute_function run lookup\",\"kind\":\"missing validation\",\"text\":\"\\\"calls its top-level run once\\\" and \\\"has no run\\\"\",\"question\":\"Does a present but non-callable run count as “has no run,” and are asynchronous, generator, or callable-object run values accepted?\",\"options\":[\"Require a synchronous directly callable value and call it once\",\"Accept any callable and use its immediate return value\",\"Support coroutine and generator results\"],\"default_guess\":\"Require a synchronous callable and treat its immediate return value as the result.\"},{\"subject\":\"execute_function JSON serialization\",\"kind\":\"missing serialization rules\",\"text\":\"\\\"value outputs serialized as JSON text\\\" and \\\"a value output cannot be serialized to canonical JSON\\\"\",\"question\":\"Which JSON encoder settings and accepted Python value types are used before canonical_bytes, including treatment of NaN, Infinity, duplicate-like keys, non-string keys, and custom objects?\",\"options\":[\"Use strict standard JSON with allow_nan false and string keys only\",\"Use json.dumps defaults then canonicalize\",\"Implement direct canonical JSON conversion\"],\"default_guess\":\"Use strict json.dumps with allow_nan false and compact output, then pass the text to canonical_bytes.\"},{\"subject\":\"execute_function file candidate facts\",\"kind\":\"missing values\",\"text\":\"\\\"fit_port_value with bounds.output_bytes as size bound does not fit an output to its port\\\"\",\"question\":\"What content_digest algorithm/format and media_type populate FileFacts when constructing FileCandidate or FileListCandidate for fit_port_value?\",\"options\":[\"SHA-256 in a named digest format and the port's declared media_type\",\"SHA-256 bare hexadecimal and the port media type\",\"An empty digest and inferred media type\"],\"default_guess\":\"Use a SHA-256 digest in the repository's likely canonical digest format and Port.media_type.\"},{\"subject\":\"execute_function candidate semantics for many values\",\"kind\":\"missing model surface\",\"text\":\"\\\"fit_port_value ... does not fit an output to its port\\\"\",\"question\":\"Which PortCandidate represents a many-valued value output when only JsonCandidate, FileCandidate, and FileListCandidate surfaces are given?\",\"options\":[\"JsonCandidate containing the canonical JSON array\",\"Call fit_port_value separately for each item\",\"Pass None and let fit_port_value reject it\"],\"default_guess\":\"Use one JsonCandidate containing the canonical JSON array.\"},{\"subject\":\"execute_function output-size counting\",\"kind\":\"ambiguous calculation\",\"text\":\"\\\"the sum of the canonical bytes ... of every value output and the bytes of every file output, a many file output counting each element\\\"\",\"question\":\"For a many value output, is output_bytes the length of the canonical array or the sum of each element's canonical encoding, and is framing overhead excluded?\",\"options\":[\"Count the complete canonical array\",\"Sum canonical encodings of individual elements\",\"Count transport framing too\"],\"default_guess\":\"Count the complete canonical JSON array and exclude protocol overhead.\"},{\"subject\":\"execute_function invalid output versus output limit\",\"kind\":\"ambiguous ordering\",\"text\":\"\\\"resource_exhausted when ... output bound was hit\\\" before \\\"contract_violation when the returned value is not a dict ... [or] cannot be serialized\\\"\",\"question\":\"How is the output bound evaluated when the returned structure or an output value is invalid and cannot be canonically counted?\",\"options\":[\"Validate enough to count, and use contract_violation if counting is impossible\",\"Measure the raw transport representation before contract validation\",\"Treat oversized malformed output as resource_exhausted\"],\"default_guess\":\"Return contract_violation when no canonical logical size can be computed; otherwise let an observed size excess take precedence.\"},{\"subject\":\"execute_function output spool versus scratch\",\"kind\":\"missing boundary\",\"text\":\"\\\"The stored value ceiling and the spool ceilings are not the sandbox's\\\" and \\\"exchange directory ... bounded by ... SCRATCH_BYTES_MAX\\\"\",\"question\":\"Do serialized outputs and control-channel files consume the sandbox scratch ceiling, and can their storage cause scratch resource_exhausted before logical output_bytes is checked?\",\"options\":[\"Everything in exchange counts toward scratch\",\"Only files created directly by agent code count\",\"Use a separate parent-controlled channel outside scratch\"],\"default_guess\":\"All bytes physically stored in the exchange directory count toward scratch, while pipe protocol bytes do not.\"},{\"subject\":\"execute_function process-count setrlimit\",\"kind\":\"missing value\",\"text\":\"\\\"setrlimit set above bounds.process_count by the tasks the runner and bubblewrap need\\\"\",\"question\":\"Which RLIMIT is set, what exact additive allowance is used, and how is it made per-sandbox rather than affecting unrelated processes sharing a UID?\",\"options\":[\"RLIMIT_NPROC with a fixed documented allowance inside a new user namespace\",\"RLIMIT_NPROC after measuring bubblewrap/runner tasks\",\"Use a cgroup pids limit instead\"],\"default_guess\":\"Set RLIMIT_NPROC inside the new user namespace to process_count plus a fixed allowance for bubblewrap and runner tasks.\"},{\"subject\":\"execute_function live-task counting\",\"kind\":\"missing algorithm\",\"text\":\"\\\"counts the tasks of the environment's proc and, when the new task would exceed process_count, writes a resource hit to the channel and raises\\\"\",\"question\":\"How are all processes and threads counted atomically, how are races between simultaneous creations handled, and is the prospective task included before or after creation?\",\"options\":[\"Maintain a synchronized runner-owned counter around patched creation APIs\",\"Enumerate /proc before each creation and add one prospectively\",\"Use a cgroup pids.current value\"],\"default_guess\":\"Enumerate namespace /proc tasks immediately before creation, add one prospectively, and serialize checks within the runner where possible.\"},{\"subject\":\"execute_function child-process trap reporting\",\"kind\":\"missing channel behavior\",\"text\":\"\\\"every process the code forked\\\" and \\\"each trap first writes its hit to a channel\\\"\",\"question\":\"After os.fork, do both processes share the reporting channel, who is allowed to produce the final result, and how are duplicate or conflicting messages resolved?\",\"options\":[\"Only the original runner PID may send a final result; every descendant may send hit records\",\"Give each child a separate channel\",\"Forbid child continuation after fork\"],\"default_guess\":\"Allow descendants to send append-only hit records but accept a final output only from the original runner.\"},{\"subject\":\"execute_function outer memory enforcement\",\"kind\":\"missing mechanism\",\"text\":\"\\\"address space limited to bounds.memory_bytes with setrlimit\\\"\",\"question\":\"To which process or processes is RLIMIT_AS applied, does the limit include interpreter/runtime overhead, and how are forked descendants and aggregate memory handled?\",\"options\":[\"Apply RLIMIT_AS to the runner and descendants individually, including interpreter overhead\",\"Limit aggregate sandbox memory with a cgroup\",\"Subtract a fixed runner allowance before applying it\"],\"default_guess\":\"Apply RLIMIT_AS to the runner before loading code, inherited by descendants, with interpreter overhead included.\"},{\"subject\":\"execute_function memory-hit detection\",\"kind\":\"missing branch\",\"text\":\"\\\"A memory ... bound counts as hit only when the parent observes it from outside: the environment was killed for it, or a MemoryError ... escaped run\\\"\",\"question\":\"How does the parent distinguish a process killed because of the memory bound from an unrelated signal, allocation failure, or abnormal exit?\",\"options\":[\"Use a cgroup or monitor that reports an OOM event\",\"Infer from termination signal and measured peak memory\",\"Classify only an escaped MemoryError as memory exhaustion\"],\"default_guess\":\"Use an external memory monitor and classify resource_exhausted only when it records the limit crossing or receives an escaped MemoryError.\"},{\"subject\":\"execute_function scratch-error detection\",\"kind\":\"missing branch\",\"text\":\"\\\"an OSError for a full or over-limit exchange directory\\\"\",\"question\":\"Which errno values and operations prove that an escaped OSError was caused by the scratch bound rather than another filesystem error?\",\"options\":[\"Recognize ENOSPC, EDQUOT, and EFBIG on exchange paths\",\"Treat every escaped OSError as scratch exhaustion\",\"Require the parent's measured directory size to reach the ceiling\"],\"default_guess\":\"Recognize ENOSPC or EDQUOT for exchange paths, or an externally observed size limit crossing.\"},{\"subject\":\"execute_function deadline start\",\"kind\":\"missing timing boundary\",\"text\":\"\\\"the monotonic_ns reading taken when the environment starts plus bounds.wall_time_ms in nanoseconds\\\"\",\"question\":\"Which event is “when the environment starts”: before spawning bwrap, after Popen succeeds, after namespace setup, or when the runner signals readiness?\",\"options\":[\"Immediately before spawning bwrap\",\"Immediately after spawning bwrap\",\"When the runner signals it is ready to load code\"],\"default_guess\":\"Take the reading immediately before starting the bwrap process.\"},{\"subject\":\"execute_function deadline versus completion and cleanup\",\"kind\":\"ambiguous ordering\",\"text\":\"\\\"after which — once a later monotonic_ns reading reaches it — it kills every process\\\" and \\\"The outcome is the first that holds ... timeout when the wall deadline passed\\\"\",\"question\":\"If run finishes before the deadline but result collection, descendant reaping, or cleanup crosses it, is the outcome timeout or the completed outcome?\",\"options\":[\"Timeout whenever the environment was still alive at the deadline\",\"Timeout whenever any later check is at or beyond the deadline\",\"Do not charge cleanup time to the execution deadline\"],\"default_guess\":\"Return timeout only if some sandbox process remains alive when the deadline is reached.\"},{\"subject\":\"execute_function process-tree termination\",\"kind\":\"missing mechanism\",\"text\":\"\\\"it kills every process of the environment\\\"\",\"question\":\"How is complete termination guaranteed across fork races, daemonized descendants, new process groups, and PID-namespace init behavior?\",\"options\":[\"Kill the PID-namespace init/bwrap process and verify namespace teardown\",\"Use a cgroup kill operation\",\"Repeatedly enumerate and signal descendants\"],\"default_guess\":\"Kill the namespace-init process and its process group, then verify all descendants have exited.\"},{\"subject\":\"execute_function cleanup confirmation\",\"kind\":\"missing boundary\",\"text\":\"\\\"An execution completes only after every process of the environment is reaped and the exchange directory is removed; when either cannot be confirmed\\\"\",\"question\":\"How long and by what checks are reaping and directory removal attempted before cleanup_failed, and how are files created with hostile permissions or names removed safely?\",\"options\":[\"Use a fixed cleanup timeout and descriptor-relative removal\",\"Wait indefinitely until cleanup completes\",\"Attempt once and mark cleanup_failed on any error\"],\"default_guess\":\"Use a short fixed cleanup deadline, reap known children, and remove exchange contents with descriptor-relative operations.\"},{\"subject\":\"execute_function cleanup outcome precedence\",\"kind\":\"ordering contradiction\",\"text\":\"\\\"The outcome is the first that holds ... timeout ...\\\" and \\\"when either cannot be confirmed ... the result is outcome crashed with detail_code cleanup_failed\\\"\",\"question\":\"Does cleanup_failed override an already established timeout, resource_exhausted, sandbox_violation, or contract_violation outcome?\",\"options\":[\"Always override with crashed/cleanup_failed\",\"Preserve the earlier outcome and attach cleanup_failed\",\"Override only succeeded\"],\"default_guess\":\"Always override with crashed and detail_code cleanup_failed, as the explicit cleanup rule states.\"},{\"subject\":\"execute_function parent-side failures\",\"kind\":\"missing outcome\",\"text\":\"\\\"The function returns that result and neither raises StopRequiredError nor stops the process\\\"\",\"question\":\"For setup, serialization, protocol, monitoring, bubblewrap-launch, or internal parent exceptions other than cleanup failure, must execute_function return crashed, raise SandboxUnavailableError, or propagate the exception?\",\"options\":[\"Return crashed for execution infrastructure failures and raise SandboxUnavailableError only when bwrap/runtime is unavailable\",\"Propagate parent exceptions\",\"Return cleanup_failed for every infrastructure failure\"],\"default_guess\":\"Raise SandboxUnavailableError for unavailable sandbox prerequisites and return crashed for failures after the environment starts.\"},{\"subject\":\"execute_function failure_detail format\",\"kind\":\"missing value\",\"text\":\"\\\"failure_detail MUST hold only the type and message of an exception\\\"\",\"question\":\"What exact string format identifies the type and message: separator, qualified versus unqualified type name, representation of an empty message, and handling of a failing __str__?\",\"options\":[\"UnqualifiedType: message\",\"fully.qualified.Type: message\",\"A structured JSON string\"],\"default_guess\":\"Use the unqualified exception class name followed by ': ' and a safely obtained string message.\"},{\"subject\":\"execute_function failure_detail truncation\",\"kind\":\"missing boundary\",\"text\":\"\\\"cut to at most ... bytes at a UTF-8 character boundary\\\"\",\"question\":\"Is truncation applied to the full formatted detail without a marker, and what happens when the byte ceiling cuts before any complete multibyte character?\",\"options\":[\"Take the longest valid UTF-8 prefix with no marker\",\"Reserve space for an ellipsis\",\"Truncate type and message separately\"],\"default_guess\":\"Take the longest UTF-8 prefix not exceeding the ceiling and add no marker.\"},{\"subject\":\"execute_function escaped exception scope\",\"kind\":\"ambiguous branch\",\"text\":\"\\\"only the type and message of an exception that escaped module loading or run\\\"\",\"question\":\"Do BaseException subclasses such as SystemExit and KeyboardInterrupt count, and does an exception during output serialization after run qualify for failure_detail?\",\"options\":[\"Catch BaseException from load/run only; serialization failures have no detail\",\"Catch Exception only\",\"Include runner serialization exceptions too\"],\"default_guess\":\"Catch BaseException escaping load or run, but leave failure_detail None for output serialization failures.\"},{\"subject\":\"execute_function abnormal child exits\",\"kind\":\"missing classification\",\"text\":\"\\\"crashed when ... the process exited abnormally\\\"\",\"question\":\"If run returns successfully but a forked descendant later exits abnormally, hangs, or writes conflicting state, is the whole execution crashed?\",\"options\":[\"Any abnormal sandbox descendant exit makes the execution crashed\",\"Only the main runner's status matters\",\"Ignore descendant status after they are reaped\"],\"default_guess\":\"Treat any abnormal descendant exit as crashed unless a higher-priority outcome was recorded.\"},{\"subject\":\"execute_function outcome evidence races\",\"kind\":\"missing ordering boundary\",\"text\":\"\\\"The outcome is the first that holds, in this order\\\"\",\"question\":\"When multiple hits are reported concurrently, what evidence cutoff determines that an earlier-priority condition “holds,” especially a deadline reached while trap or result records are pending?\",\"options\":[\"Collect all evidence after termination, then apply the fixed precedence\",\"Use the first record received\",\"Freeze classification when the main runner exits\"],\"default_guess\":\"Collect all authenticated evidence through complete teardown, then apply the stated precedence.\"},{\"subject\":\"execute_function resource usage wall time\",\"kind\":\"missing calculation\",\"text\":\"\\\"resources_used with elapsed wall_time_ms\\\"\",\"question\":\"Which interval is measured and how are nanoseconds converted to integer milliseconds—floor, ceiling, or rounding—and is cleanup included?\",\"options\":[\"Start-to-environment-exit, rounded up\",\"Start-to-return including cleanup, floored\",\"Start-to-main-runner-exit, floored\"],\"default_guess\":\"Measure from environment start until all sandbox processes exit, convert by rounding up, and exclude exchange-directory cleanup.\"},{\"subject\":\"execute_function resource usage memory\",\"kind\":\"missing calculation\",\"text\":\"\\\"peak memory_bytes\\\"\",\"question\":\"Does peak memory mean the aggregate simultaneous resident set, maximum RSS of any one task, total address space, or a platform-reported child ru_maxrss, and are runner/bubblewrap processes included?\",\"options\":[\"Aggregate peak RSS of runner and code descendants, excluding bubblewrap\",\"Maximum per-process RSS\",\"Peak virtual address space including runner\",\"Use getrusage semantics\"],\"default_guess\":\"Report aggregate peak RSS of runner and code descendants, excluding bubblewrap.\"},{\"subject\":\"execute_function resource usage on failure\",\"kind\":\"missing values\",\"text\":\"\\\"resources_used with elapsed wall_time_ms, peak memory_bytes and the output count as output_bytes\\\"\",\"question\":\"What output_bytes and memory_bytes are reported for malformed, partial, timed-out, killed, cleanup-failed, or unobservable executions?\",\"options\":[\"Report the greatest externally observed values, using zero when unobservable\",\"Always report zero for failed executions\",\"Report only fully validated logical outputs\"],\"default_guess\":\"Report the greatest externally observed usage and use zero for a metric that could not be observed.\"},{\"subject\":\"execute_function output retention\",\"kind\":\"missing branch\",\"text\":\"\\\"outputs only for succeeded\\\"\",\"question\":\"Must every non-succeeded result contain an empty tuple even if conforming outputs were received before a later trap, resource hit, timeout, or cleanup failure?\",\"options\":[\"Always use an empty tuple for every non-succeeded outcome\",\"Keep outputs for sandbox_violation or cleanup_failed\",\"Keep outputs internally but omit only on resource failures\"],\"default_guess\":\"Use an empty tuple for every non-succeeded outcome.\"},{\"subject\":\"probe_sandbox error messages\",\"kind\":\"missing value\",\"text\":\"\\\"MUST raise SandboxUnavailableError naming what is missing\\\" and \\\"naming its outcome\\\"\",\"question\":\"What exact message text is required for missing bwrap, command failure, version mismatch, interpreter mismatch, and probe outcome failure?\",\"options\":[\"Stable human-readable messages containing the failed component and observed value\",\"Machine-readable codes\",\"Include full command stderr\"],\"default_guess\":\"Use stable human-readable messages containing the component, expected value, and observed value or outcome, without stderr.\"},{\"subject\":\"probe_sandbox bwrap lookup\",\"kind\":\"missing boundary\",\"text\":\"\\\"when the bubblewrap executable, bwrap, cannot be found on the process's PATH\\\"\",\"question\":\"Does an existing but non-executable, broken, or failing bwrap path count as not found or as a separate unavailable condition?\",\"options\":[\"Treat any inability to execute it as unavailable and name the execution failure\",\"Only shutil.which failure counts\",\"Propagate the OS error\"],\"default_guess\":\"Treat not found and not executable as SandboxUnavailableError with distinct messages.\"},{\"subject\":\"probe_sandbox version parsing\",\"kind\":\"missing parsing rules\",\"text\":\"\\\"bwrap --version, which prints \\\\\\\"bubblewrap\\\\\\\" and the version, names a version other than ... RELEASE_BWRAP_VERSION\\\"\",\"question\":\"How are exit status, stderr, whitespace, prefixes, suffixes, and multiple lines handled, and is RELEASE_BWRAP_VERSION the bare version or the complete output?\",\"options\":[\"Require successful exit and parse exactly two whitespace-separated tokens\",\"Compare normalized complete stdout\",\"Search stdout for the expected version token\"],\"default_guess\":\"Require exit status zero and stdout matching 'bubblewrap ' plus RELEASE_BWRAP_VERSION after trimming one trailing newline.\"},{\"subject\":\"probe_sandbox version command timeout\",\"kind\":\"missing bound\",\"text\":\"\\\"when bwrap --version ... names a version\\\"\",\"question\":\"How long may bwrap --version run before it is considered unavailable?\",\"options\":[\"Use a fixed short timeout\",\"Use RELEASE_CEILING_WALL_TIME_MS\",\"Wait indefinitely\"],\"default_guess\":\"Use RELEASE_CEILING_WALL_TIME_MS as the timeout.\"},{\"subject\":\"probe_sandbox interpreter probe configuration\",\"kind\":\"missing equivalence\",\"text\":\"\\\"run once through bwrap with the same read-only bindings ... to print platform.python_implementation() and platform.python_version()\\\"\",\"question\":\"Does “same” require all execute_function namespace, environment, proc/dev, exchange, limits, null-stream, and cleanup settings, or only the runtime path bindings?\",\"options\":[\"Use the complete execute_function sandbox configuration except capture stdout\",\"Use only the same read-only runtime bindings\",\"Perform the check through execute_function\"],\"default_guess\":\"Use the complete sandbox configuration, temporarily capturing only this trusted probe's stdout.\"},{\"subject\":\"probe_sandbox standard-output handling\",\"kind\":\"requirement tension\",\"text\":\"\\\"to print ...\\\" and \\\"The sandboxed process's standard ... output ... MUST be connected to /dev/null\\\"\",\"question\":\"May the trusted interpreter probe capture stdout even though execute_function sandbox processes must send stdout to /dev/null?\",\"options\":[\"Yes, the null-output rule applies only to untrusted execute_function runs\",\"No, send the interpreter descriptor through the exchange channel instead\",\"Temporarily violate the rule for the probe\"],\"default_guess\":\"Capture stdout directly because the interpreter probe is trusted and is not an execute_function agent-code run.\"},{\"subject\":\"probe_sandbox interpreter output parsing\",\"kind\":\"missing parsing rules\",\"text\":\"\\\"does not print exactly the imported RELEASE_SANDBOX_INTERPRETER constant\\\"\",\"question\":\"Does “exactly” permit the newline added by print, and how are encoding errors, extra output, stderr, or nonzero exit handled?\",\"options\":[\"Decode strict UTF-8 and remove exactly one trailing newline\",\"Compare raw stdout including the newline\",\"Strip all surrounding whitespace\"],\"default_guess\":\"Require successful exit, strict UTF-8, no stderr dependency, and remove exactly one trailing newline before comparison.\"},{\"subject\":\"probe_sandbox minimal implementation\",\"kind\":\"missing value\",\"text\":\"\\\"one probe execution through execute_function of a minimal implementation with no ports\\\"\",\"question\":\"What exact code is used for the minimal implementation and what argument shape must its run accept?\",\"options\":[\"def run(inputs): return {}\",\"def run(): return {}\",\"A module assigning run to a lambda\"],\"default_guess\":\"Use 'def run(inputs): return {}' with empty input and output port tuples.\"},{\"subject\":\"probe_sandbox probe bounds\",\"kind\":\"missing construction detail\",\"text\":\"\\\"under bounds equal to the imported RELEASE_CEILING_WALL_TIME_MS, RELEASE_CEILING_MEMORY_BYTES, RELEASE_CEILING_OUTPUT_BYTES and RELEASE_CEILING_PROCESS_COUNT constants\\\"\",\"question\":\"Are those values passed directly to the correspondingly named ResourceBounds fields, and is the global scratch ceiling implicitly used even though ResourceBounds has no scratch field?\",\"options\":[\"Map the four constants directly and use the global scratch ceiling implicitly\",\"Subtract runner overhead from memory/process values\",\"Add a separate internal scratch probe setting\"],\"default_guess\":\"Map the four constants directly to ResourceBounds and use RELEASE_CEILING_SANDBOX_SCRATCH_BYTES_MAX implicitly.\"},{\"subject\":\"probe_sandbox failure propagation\",\"kind\":\"missing branch\",\"text\":\"\\\"does not end succeeded, naming its outcome\\\"\",\"question\":\"If execute_function raises, returns cleanup_failed, or cannot produce a valid SandboxResult, does probe_sandbox wrap that as SandboxUnavailableError or propagate it?\",\"options\":[\"Wrap every probe failure as SandboxUnavailableError\",\"Propagate SandboxUnavailableError but wrap other exceptions\",\"Propagate all exceptions\"],\"default_guess\":\"Propagate an existing SandboxUnavailableError and wrap every other probe failure in SandboxUnavailableError.\"}]}",
+ "unit": "sandbox",
+ "set_aside": []
+}
