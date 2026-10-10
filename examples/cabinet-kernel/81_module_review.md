@@ -411,6 +411,10 @@ The one value-digest rule, now stated in every publishing note, moved `flows`, `
 
 `open_store` no longer names `recover_running_runs`, so `store` no longer imports `runs`; moved `store`; State 7 rounds 18-19 closed it clear. No verdict changed; hashes recomputed.
 
+## Decision 29 delta (2026-10-10)
+
+Sandbox root links and the manifest path relative to its directory moved `data_provider`, `sandbox`, `bindings`; State 7 rounds 20-21 closed them clear. No verdict changed; hashes recomputed.
+
 ## Remarks, not blocking
 
 - **Published `inputSchema` and null.** By decision 22's closed rule, the published `inputSchema`
