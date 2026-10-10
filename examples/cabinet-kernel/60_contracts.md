@@ -684,6 +684,13 @@ kernel stopped in its start sequence for two reasons the texts left open.
       `<revision>:<file>` names a path from the repository's root, which is not
       `manifest_location` (decision 8 puts the manifest in a directory of the
       repository).
+    - *Interpreter path.* The interpreter started in the sandbox is
+      `os.path.realpath(sys.executable)`, the kernel's own CPython by its
+      resolved path, which must lie under `SANDBOX_RUNTIME_PATHS`;
+      `probe_sandbox` stops the start otherwise. A launcher path (a virtual
+      environment's `bin/python`) is never bound into the sandbox; the second
+      verification run found the generated probe starting it and printing
+      nothing.
 
 ## Texts of earlier states changed by State 6
 
