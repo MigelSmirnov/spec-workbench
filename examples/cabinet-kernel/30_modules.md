@@ -14,22 +14,22 @@ the decision that no other section names. The table is the one mapping;
 | A01 | `canonical_values` | `store`, `functions`, `flows`, `runs`, `store_persistence` |
 | A02 | `functions` | `canonical_values`, `data_provider` |
 | A03 | `sandbox` | `functions`, `runs`, `surface`, `data_provider` |
-| A04 | `functions` | `store`, `sandbox` |
+| A04 | `functions` | `store`, `sandbox`, `canonical_values` |
 | A05 | `flows` | `canonical_values`, `bindings` |
 | A06 | `flows` | `surface` |
-| A07 | `surface` | `canonical_values`, `flows`, `runs` |
+| A07 | `surface` | `canonical_values`, `flows`, `runs`, `functions`, `effects` |
 | A08 | `bindings` | `installation`, `service_invoker`, `effects`, `data_provider` |
-| A09 | `service_invoker` | `bindings`, `effects`, `installation`, `data_provider` |
+| A09 | `service_invoker` | `bindings`, `effects`, `installation`, `data_provider`, `surface` |
 | A10 | `effects` | `service_invoker`, `runs`, `surface` |
 | A11 | `effects` | `runs`, `store` |
-| A12 | `runs` | `functions`, `flows` |
+| A12 | `runs` | `functions`, `flows`, `canonical_values` |
 | A13 | `runs` | `sandbox`, `effects`, `canonical_values` |
 | A14 | `runs` | `effects`, `store`, `surface` |
-| A15 | `runs` | `store`, `functions`, `effects` |
+| A15 | `runs` | `store`, `functions`, `effects`, `surface` |
 | A16 | `surface` | `installation`, `store`, `data_provider` |
 | A17 | `installation` | `service_invoker`, `sandbox` |
 | A18 | `store` | `runs`, `surface`, `store_persistence` |
-| A19 | `clock` | `sandbox`, `service_invoker`, `functions`, `effects`, `runs` |
+| A19 | `clock` | `sandbox`, `service_invoker`, `functions`, `effects`, `runs`, `bindings`, `flows` |
 | A20 | `data_provider` | `functions`, `sandbox`, `service_invoker`, `store`, `runs`, `surface` |
 
 The kernel is one process with one writer (K-17), so modules are not services:
