@@ -214,6 +214,48 @@ def project_change_scope(
     return report
 
 
+def project_ever_carried(factory_root: Path, project: str, working_dir: Path) -> bool:
+    """Whether any specification of the project has ridden a passing route.
+
+    The Factory's own evidence: a passing Route B run manifest, or a
+    verification run whose OTK audit is ok (``factory_state`` reads the same
+    ``control_audit.json``). Both live in the checkout, untracked.
+    """
+    route_path = working_dir / "route_b_run_manifest.json"
+    if route_path.is_file():
+        try:
+            if json.loads(route_path.read_text(encoding="utf-8")).get("status") == "pass":
+                return True
+        except (OSError, ValueError):
+            pass
+    for audit in sorted((factory_root / "verification_runs" / project).glob("*/artifacts/control_audit.json")):
+        try:
+            if json.loads(audit.read_text(encoding="utf-8")).get("audit_status") == "ok":
+                return True
+        except (OSError, ValueError):
+            continue
+    return False
+
+
+def owe_global_until_carried(change_scope: dict[str, Any], carried: bool) -> dict[str, Any]:
+    """A project no passing route has ever carried owes its whole surface.
+
+    One export records the delta from the previous accepted specification,
+    and carry_pending_scope unions one pending manifest; neither recovers a
+    scope lost earlier in the chain. Cabinet Kernel (2026-10-10): six exports,
+    the first `global`, none carried by a passing Route B; from the second on
+    each recorded only its own delta, Route B regenerated and deployed eight of
+    fifteen modules, and every witness failed on the modules never deployed.
+    Until some specification of the project has passed, the scope is global.
+    """
+    if carried or change_scope.get("changed_modules") == ["global"]:
+        return change_scope
+    owed = dict(change_scope)
+    owed["changed_modules"] = ["global"]
+    owed["projection"] = "uncarried_project_global"
+    return owed
+
+
 def carry_pending_scope(
     change_scope: dict[str, Any], working_dir: Path, previous_canonical_sha: str | None
 ) -> dict[str, Any]:
@@ -503,6 +545,9 @@ def main() -> int:
         change_scope,
         paths["working"],
         sha256_file(paths["canonical"]) if paths["canonical"].is_file() else None,
+    )
+    change_scope = owe_global_until_carried(
+        change_scope, project_ever_carried(factory_root, args.project, paths["working"])
     )
     admission["projected_change_scope"] = change_scope
     if args.check:
