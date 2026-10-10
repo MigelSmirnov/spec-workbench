@@ -308,6 +308,16 @@ precedent); State 3 split `store_persistence` off `store` for it.
 
 ## Texts of earlier states changed by State 6
 
+- State 5 (2026-10-10, Stage 9 FA018): eight names of "Named store changes"
+  and their "State impact" lines name the event, not the operation —
+  `contract_version_issued`, `trial_case_added`, `binding_proposed`,
+  `binding_accepted`, `flow_version_composed`, `flow_version_activated`,
+  `run_started`, `run_released`. Each was the discriminator value of its
+  StoreChange variant and the name of an exported function, so the Factory's
+  slice of `models` had to import that function (SPEC_STANDARD 6, `imports`:
+  a whole word in a module's text that names another module's export is an
+  import; a module that does not call the function does not name it). The
+  operations keep their names; only the change values moved.
 - State 3 (2026-10-10, decision 23): the companion module `store_persistence`
   on the second line of the dependency list, `store` knowing it, and the record
   port paragraph of `store`; `30_trace.json` names it a consumer of A01 and A18.

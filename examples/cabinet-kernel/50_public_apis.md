@@ -144,20 +144,20 @@ not listed are never written.
 
 | change | caller | writes |
 |---|---|---|
-| `issue_contract_version` | `functions` | ContractVersion M03, and Slot M02 when new |
-| `add_trial_case` | `functions` | StoredValues M21 of the case, TrialCase M06 |
+| `contract_version_issued` | `functions` | ContractVersion M03, and Slot M02 when new |
+| `trial_case_added` | `functions` | StoredValues M21 of the case, TrialCase M06 |
 | `record_implementation` | `functions` | Implementation M05 |
 | `record_trial_execution` | `functions` | one TrialExecution M07 and the StoredValues of its `value` outputs; a file output is held by its facts only, never as a StoredValue |
 | `record_admission_verdict` | `functions` | AdmissionVerdict M08, and Activation M09 when admitted and not current |
 | `record_activation` | `functions` | Activation M09 of a rollback, or of a reused `admitted` verdict whose implementation is not current |
-| `propose_binding` | `bindings` | OperationBinding M11 `proposed` |
-| `accept_binding` | `bindings` | the binding `accepted` |
-| `compose_flow_version` | `flows` | FlowVersion M13 with nodes, edges, constants and their StoredValues; Flow M12 when new |
-| `activate_flow_version` | `flows` | FlowActivation M18 |
-| `start_run` | `runs` | Run M19 `running` with pins and input StoredValues |
+| `binding_proposed` | `bindings` | OperationBinding M11 `proposed` |
+| `binding_accepted` | `bindings` | the binding `accepted` |
+| `flow_version_composed` | `flows` | FlowVersion M13 with nodes, edges, constants and their StoredValues; Flow M12 when new |
+| `flow_version_activated` | `flows` | FlowActivation M18 |
+| `run_started` | `runs` | Run M19 `running` with pins and input StoredValues |
 | `record_run_progress` | `runs` | NodeExecutions M23 written together, in (`node_id`, `map_index`) order, with their StoredValues and SpooledFiles M22; then the run's status, outputs, WaitingPoints M20, `ended_at`, `cancelled_by` |
 | `record_resumption` | `runs` | a resumption of the run |
-| `release_run` | `runs` | `released_by`, `released_at` |
+| `run_released` | `runs` | `released_by`, `released_at` |
 | `request_approval` | `effects` | EffectApproval M24 `requested` with its preview |
 | `decide_approval` | `effects` | the approval `approved`, or `refused` with the element's NodeExecution `refused_by_owner` |
 | `record_attempt_in_flight` | `effects` | EffectAttempt M26 `in_flight` with its authority |
@@ -1383,7 +1383,7 @@ copies nothing; inputs take the port's class (A04 rule 1, A15 rule 5, M21).
 
 ### State impact
 
-`add_trial_case`.
+`trial_case_added`.
 
 ## `public_op:functions.add_trial_case`
 
@@ -1421,7 +1421,7 @@ failing check.
 
 ### State impact
 
-`add_trial_case`.
+`trial_case_added`.
 
 ## `public_op:functions.current_activation`
 
@@ -1493,7 +1493,7 @@ omitted is refused, never clamped (A02 rule 2).
 
 ### State impact
 
-`issue_contract_version`.
+`contract_version_issued`.
 
 ## `public_op:functions.read_contract_version`
 
@@ -1762,7 +1762,7 @@ digest differs.
 
 ### State impact
 
-`accept_binding`, or nothing.
+`binding_accepted`, or nothing.
 
 ## `public_op:bindings.check_binding_current`
 
@@ -1886,7 +1886,7 @@ stated (M11).
 
 ### State impact
 
-`propose_binding`.
+`binding_proposed`.
 
 ## `public_op:bindings.read_binding`
 
@@ -1958,7 +1958,7 @@ active version returns its activation; actor kernel for `read`, owner otherwise
 
 ### State impact
 
-`activate_flow_version`, or nothing.
+`flow_version_activated`, or nothing.
 
 ## `public_op:flows.active_flow_version`
 
@@ -2036,7 +2036,7 @@ refusal (A05 rule 7).
 
 ### State impact
 
-`compose_flow_version`, or nothing.
+`flow_version_composed`, or nothing.
 
 ## `public_op:flows.prove_flow_version`
 
@@ -2658,7 +2658,7 @@ Only a `failed` run not yet released (A14 rule 4).
 
 ### State impact
 
-`release_run`, then `store.remove_run_spool`. A spool that cannot be removed
+`run_released`, then `store.remove_run_spool`. A spool that cannot be removed
 does not fail the request: the release is recorded, and the spool of a released
 run is removed at the next start (A18 rule 4).
 
@@ -2733,7 +2733,7 @@ from the sandbox.
 
 ### State impact
 
-`start_run`; `record_run_progress`.
+`run_started`; `record_run_progress`.
 
 ## `public_op:surface.serve_kernel`
 
