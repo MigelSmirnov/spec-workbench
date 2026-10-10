@@ -403,6 +403,10 @@ verdict changed; every `slice_sha256` recomputed.
 
 The one value-digest rule, now stated in every publishing note, moved `flows`, `effects`, `runs`; State 7 rounds 14-15 closed them clear. No verdict changed; hashes recomputed.
 
+## Omitted-bound order delta (2026-10-10)
+
+`issue_contract_version` refuses an omitted bound before any identity; moved `functions`; State 7 rounds 16-17 closed it clear. No verdict changed; hashes recomputed.
+
 ## Remarks, not blocking
 
 - **Published `inputSchema` and null.** By decision 22's closed rule, the published `inputSchema`
