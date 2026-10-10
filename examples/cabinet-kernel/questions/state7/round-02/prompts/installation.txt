@@ -1,0 +1,109 @@
+Module: installation
+Target path: cabinet_kernel/installation.py
+Target file: installation.py
+
+IMPORTS:
+from cabinet_kernel.data_provider import ACCESS_TOKEN_LENGTH_MIN, RELEASE_CEILING_BOUNDED_TEXT_BYTES_MAX
+from cabinet_kernel.models import AgentToken, Installation, ManifestSource, ResolvedCredential, ServiceCredential, ServiceInstanceSelection, TokenList
+
+CONTRACTS (function signatures — follow exactly):
+def current_token_list() -> TokenList | None
+def load_installation(config_path: str) -> Installation
+def manifest_source() -> ManifestSource
+def read_configuration(config_path: str) -> Installation
+def resolve_service_credential(service_id: str) -> ResolvedCredential
+def selected_instance_name(service_id: str) -> str | None
+
+IMPORTED DATA ACCESS SIGNATURES (constants from the imports above — read them, never redefine them; their values are not part of this context):
+ACCESS_TOKEN_LENGTH_MIN: int
+RELEASE_CEILING_BOUNDED_TEXT_BYTES_MAX: int
+
+OWNED FUNCTIONS REQUIRED (must be defined as top-level functions):
+- current_token_list: () -> TokenList | None
+- load_installation: (config_path: str) -> Installation
+- manifest_source: () -> ManifestSource
+- read_configuration: (config_path: str) -> Installation
+- resolve_service_credential: (service_id: str) -> ResolvedCredential
+- selected_instance_name: (service_id: str) -> str | None
+
+STATIC GATE CONTRACT (deterministic checks; a violating candidate is rejected without repair):
+- Reflective attribute access is rejected: never call getattr, hasattr,
+  setattr, delattr, or vars; every declared field and operation is
+  addressed directly by name, including in try/finally cleanup.
+- A definition whose parameter list differs from its declared contract
+  signature is rejected; keep names and order exactly.
+- A constructed record accepted by a declared insert_*/upsert_*/append_*
+  operation must reach a call or return; a built-and-dropped record is
+  rejected.
+- Instantiating a spec-declared interface is rejected; construct the
+  module-owned concrete class instead.
+- A stub, placeholder, or fail-closed body for a contracted callable is
+  rejected; implement the complete specified behavior.
+- A top-level import of a package outside the Python standard library and
+  this project's own modules is rejected unless IMPORTS lists it; a note
+  never adds a package to IMPORTS.
+
+OWNED CLASSES REQUIRED (must be defined locally, not merely referenced):
+No owned local classes required.
+
+CONCRETE IMPLEMENTATION OBLIGATIONS:
+No local concrete-to-interface obligations.
+
+REQUIREMENTS (notes — implement these):
+- current_token_list: [BEHAVIOR] On every call MUST read the configuration file's bytes, opening config_path as read_configuration does, component by component without following a symbolic link at any component (a path that cannot be opened so is a file that cannot be read), and compare their SHA-256 with the last read digest; when equal it returns the kept list unchanged (none stays none); when different, or when the file cannot be read, it re-reads the file and applies exactly four checks: the file can be read and parses as a JSON object with owner_token and agent_tokens of the Installation types, every token is at least the imported ACCESS_TOKEN_LENGTH_MIN constant long, no two tokens are equal, and no two agent tokens have the same name; the new digest becomes the last read digest, and when the file cannot be read the last read digest is cleared, so the next readable bytes are always re-read.
+- current_token_list: [FIELD_ASSIGNMENT] When all four checks hold, the re-read's tokens replace the kept list; when any fails the kept list becomes none and the old list is discarded, since it may hold a revoked token; a re-read takes only the token list, and no other field of the kept Installation changes until a restart.
+- current_token_list: [RETURN_SHAPE] Returns TokenList with owner_token and agent_tokens, or None when no valid list exists; it never raises for a bad file.
+- load_installation: [BEHAVIOR] MUST call read_configuration once at start, keep the returned Installation for the life of the process, and keep the SHA-256 of the file's bytes as the last read digest and the file's owner token and agent tokens as the current token list.
+- load_installation: [RETURN_SHAPE] Returns the loaded Installation; a failed check propagates InstallationRejectedError and nothing is kept.
+- manifest_source: [RETURN_SHAPE] MUST return ManifestSource with manifest_location and manifest_revision of the Installation loaded at start, unchanged until restart.
+- read_configuration: [VALIDATION_ERROR] MUST raise InstallationRejectedError naming the first failing check, in this order: config_path cannot be opened component by component without following a symbolic link at any component, the file so opened is not a regular file, is not owned by the process's effective user, or grants any permission to group or others; the bytes cannot be read or do not parse as one JSON object whose members are exactly the fields of Installation with their types; a service appears twice in service_instances or in service_credentials; a credential header name is not an HTTP field-name token (one or more of the token characters of RFC 9110: letters, digits and the symbols allowed there); a credential's secret_file is not an absolute path; the owner token or any agent token is shorter than the imported ACCESS_TOKEN_LENGTH_MIN constant; two tokens among the owner token and the agent tokens are equal; two agent tokens have the same name. The ownership, mode and regular-file checks and the read MUST all use that one opened file, so the file checked is the file read.
+- read_configuration: [RETURN_SHAPE] Returns the Installation built from the file, with a credential held as its header name and secret_file path only, never the secret.
+- resolve_service_credential: [SECURITY_BOUNDARY] Its module reads no environment variable, and a credential value never leaves resolve_service_credential's result: it is never logged, put into an exception reason, cached between calls or written anywhere.
+- resolve_service_credential: [BEHAVIOR] MUST find the service_credentials entry of service_id and read, at this call and never earlier, the file at its secret_file path, opened component by component without following a symbolic link at any component, the checks and the read using that one opened file, which must be a regular file, owned by the process's effective user and granting no permission to group or others; the value is the file's content decoded as UTF-8 with exactly one trailing newline removed when present.
+- resolve_service_credential: [VALIDATION_ERROR] MUST raise CredentialUnresolvedError, whose reason names the service and the failing check, when no credential is configured for service_id or the secret file is missing, unreadable, not private, larger than the imported RELEASE_CEILING_BOUNDED_TEXT_BYTES_MAX constant (reading at most one byte past it and no further) or not valid UTF-8, or its value is empty or holds a control character; the reason never holds any part of the secret; the failure concerns this one request only and stops nothing else.
+- resolve_service_credential: [RETURN_SHAPE] Returns ResolvedCredential with the configured header_name and the resolved header_value, for the one request being built.
+- selected_instance_name: [RETURN_SHAPE] MUST return the instance_name of the service_instances entry whose service_id equals the given one, or None when the installation selects no instance for it.
+
+MODEL DATA DEFINITIONS (READ-ONLY SPEC DATA, NOT CODE):
+No = models.* spec data addresses referenced by notes.
+
+MODEL DATA ADDRESSES (SPEC DATA, NOT IMPORT PATHS):
+No = models.* spec data addresses referenced by notes.
+
+IMPORTED MODEL OWNERSHIP (DO NOT REDEFINE):
+Imported runtime model symbols are owned by their source modules listed in IMPORTS; use them as imported and do not redefine them here.
+
+RUNTIME MODEL SURFACE (CORE.MODELS IMPORTS):
+These are imported runtime symbols from cabinet_kernel.models. Use the listed enum member names and model fields exactly.
+- AgentToken fields (exact, no others exist): agent_name: str, token: str, may_author: bool
+- Installation fields (exact, no others exist): data_directory: str, manifest_location: str, manifest_revision: str, service_instances: tuple[ServiceInstanceSelection, ...], service_credentials: tuple[ServiceCredential, ...], owner_token: str, agent_tokens: tuple[AgentToken, ...], mcp_listen_address: str
+- ManifestSource fields (exact, no others exist): manifest_location: str, manifest_revision: str
+- ResolvedCredential fields (exact, no others exist): header_name: str, header_value: str
+- ServiceCredential fields (exact, no others exist): service_id: str, header_name: str, secret_file: str
+- ServiceInstanceSelection fields (exact, no others exist): service_id: str, instance_name: str
+- TokenList fields (exact, no others exist): owner_token: str, agent_tokens: tuple[AgentToken, ...]
+
+MODULE-LOCAL EXCEPTION EXPORTS:
+If any exception class is listed here, define it in this file at top level.
+Do not import these classes from core.errors or any other module.
+- class CredentialUnresolvedError(Exception): pass
+- class InstallationRejectedError(Exception): pass
+
+FUNCTION ORDER (define in this order):
+current_token_list, load_installation, manifest_source, read_configuration, resolve_service_credential, selected_instance_name
+
+Generate the complete installation.py file.
+Every owned function listed above must be implemented exactly once at module top level.
+Define every class and method listed in OWNED CLASSES REQUIRED in this file.
+For every local binding in CONCRETE IMPLEMENTATION OBLIGATIONS, inherit the declared interface and implement its complete method surface with non-placeholder bodies.
+If this is the models module, emit every enum/model in MODEL DEFINITIONS exactly once.
+If this is not the models module, do not emit Pydantic model classes, enums, create_model calls, or local model schema shadows.
+Do not invent model fields or enum values not present in the imported runtime models.
+Use only the IMPORTS listed above plus required standard library imports.
+Never import from a top-level models module or models.*; runtime models live in cabinet_kernel.models only when listed in IMPORTS.
+`models.<name>` in notes is a canonical spec data address, not an importable Python module.
+When one owner module provides a function and cabinet_kernel.models provides a DTO with a similar name, split the imports by source exactly as listed in IMPORTS.
+Construct imported runtime models only with the fields listed in IMPORTED MODEL SURFACE; models are frozen and forbid extra fields, so an invented keyword argument fails at runtime.
+Read from a model value only the fields listed for its type; never use getattr(value, name, default) to probe for a field that is not declared.
+Never assign to an attribute of a model value (models are frozen): derive a changed value with value.model_copy(update={...}) or construct a new instance.
+Define every class listed in MODULE-LOCAL EXCEPTION EXPORTS in this file.
