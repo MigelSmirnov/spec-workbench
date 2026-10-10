@@ -2,13 +2,23 @@
 
 A topic raised by two or more reviews is judged (judge.py). A round is clear
 when no judged topic blocks: no contradiction, no gap with an observable
-consequence, and no judgement whose evidence failed its check. A state is
-closed when its two latest rounds are clear on the same texts, and the texts
-have not changed since. A topic raised by one review only is recorded and may
-be closed or carried, but it does not keep the state open.
+consequence, and no judgement whose evidence failed its check. A topic raised
+by one review only is recorded and may be closed or carried, but it does not
+keep the state open.
+
+Every state closes unit by unit (units.py): a unit is closed when its two
+latest reviews were clear for it on its current text, and the state when every
+unit is. A state closed as one text before units existed (its two latest
+rounds clear on the same documents) carries that closure to each of its units
+on the text it closed on, found in the case's git history; a later edit then
+reopens only the units it touched.
+
+State 7 is asked module by module: each review gets the prompt the Factory
+builds for one generated module (factory_slice_workbench.module_prompts), from
+the case's assembled specification.
 
 Rounds kept before the judge existed (no "judge" in the summary) keep their
-own rule: closed when no topic was raised by two reviews.
+own rule: clear when no topic was raised by two reviews.
 """
 from __future__ import annotations
 
@@ -22,6 +32,9 @@ from typing import Any
 
 from . import documents, judge, prompts, units
 from .provider import LATER_DIR, Provider
+
+PROMPTS_DIR = "prompts"
+MODULE_WORKERS = 6
 
 SCHEMA = "spec_workbench_question_round.v2"
 DEFAULT_RUNS = 3
@@ -188,18 +201,35 @@ def _summaries(case: Path, state: int) -> list[dict[str, Any]]:
     return [json.loads(p.read_text(encoding="utf-8")) for p in paths]
 
 
+def _git_out(case: Path, *args: str) -> str | None:
+    done = subprocess.run(["git", "-C", str(case), *args], capture_output=True, text=True)
+    return done.stdout if done.returncode == 0 else None
+
+
 def _unit_text_at(case: Path, texts: list[tuple[int, str, str]], state: int, key: str,
-                  digest: str, depth: int = 400) -> str | None:
-    """The text a unit had when its digest was `digest`, from the case's git
-    history of the documents it is cut from; None when no commit holds it."""
-    names = [name for _, name, _ in texts]
-    done = subprocess.run(["git", "-C", str(case), "log", f"-{depth}", "--format=%H", "--", *names],
-                          capture_output=True, text=True)
-    if done.returncode != 0:
+                  digest: str, depth: int = 400, hints: list[str] | None = None) -> str | None:
+    """The text a unit had when its digest was `digest`; None when nothing
+    holds it. A State 7 unit is found among the prompts kept with the rounds;
+    any other unit in the case's git history of the documents it is cut from,
+    `hints` (commits known to hold the closed texts) first."""
+    if state == documents.MODULE_STATE:
+        for path in sorted(rounds_dir(case, state).glob(f"round-*/{PROMPTS_DIR}/{key}.txt"),
+                           key=lambda p: -_round_number(p.parent)):
+            text = path.read_text(encoding="utf-8")
+            if units._digest(text) == digest:
+                return text
         return None
-    for commit in done.stdout.split():
-        old = _texts_at(case, names, commit)
-        found = units.units([(s, name, old[name]) for s, name, _ in texts], state) or {}
+    names = [name for _, name, _ in texts]
+    listed = _git_out(case, "log", f"-{depth}", "--format=%H", "--", *names)
+    if listed is None:
+        return None
+    commits = [*(hints or []), *[c for c in listed.split() if c not in (hints or [])]]
+    for commit in commits:
+        try:
+            old = _texts_at(case, names, commit)
+        except QuestionRoundError:
+            continue
+        found = units.units([(s, name, old[name]) for s, name, _ in texts], state)
         if found.get(key, {}).get("digest") == digest:
             return found[key]["text"]
     return None
@@ -210,14 +240,180 @@ def _changed_units(case: Path, texts: list[tuple[int, str, str]], state: int, sc
     """For each unit under review that was closed on another text: its diff since
     then and the regions of its current text the change touches."""
     changed = {}
+    hints = [s["ref"] for s in summaries if s.get("ref")]
     for key in scope:
         digest = units.closed_digest(summaries, key)
         if digest is None or digest == current[key]["digest"]:
             continue
-        old = _unit_text_at(case, texts, state, key, digest)
+        old = _unit_text_at(case, texts, state, key, digest, hints=hints)
         if old is not None:
             changed[key] = units.change_regions(old, current[key]["text"])
     return changed
+
+
+def _sha(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def _added_at(case: Path, path: Path) -> str | None:
+    """The commit that added a kept file, or None when it is not committed."""
+    try:
+        relative = path.resolve().relative_to(case.resolve())
+    except ValueError:
+        return None
+    found = _git_out(case, "log", "-1", "--format=%H", "--diff-filter=A", "--", str(relative))
+    return found.strip() or None if found else None
+
+
+def _texts_with_digests(case: Path, digests: dict[str, str], hint: str | None,
+                        depth: int = 1000) -> tuple[list[tuple[int, str, str]], str | None] | None:
+    """The documents whose sha256 digests are `digests`, as (state, name, text),
+    and the commit that holds them (None: the working tree does); None when no
+    commit of the case's history does."""
+    names = sorted(digests)
+
+    def read(texts: dict[str, str]) -> list[tuple[int, str, str]] | None:
+        if any(_sha(texts.get(name, "")) != digests[name] for name in names):
+            return None
+        found = []
+        for name in names:
+            state = documents.text_state(texts[name])
+            if state is None:
+                return None
+            found.append((state, name, texts[name]))
+        return sorted(found, key=lambda item: (item[0], item[1]))
+
+    here = {name: (case / name).read_text(encoding="utf-8") for name in names if (case / name).is_file()}
+    if len(here) == len(names) and (found := read(here)) is not None:
+        return found, None
+    listed = _git_out(case, "log", f"-{depth}", "--format=%H", "--", *names) or ""
+    commits = [*([hint] if hint else []), *[c for c in listed.split() if c != hint]]
+    for commit in commits:
+        try:
+            old = _texts_at(case, names, commit)
+        except QuestionRoundError:
+            continue
+        if (found := read(old)) is not None:
+            return found, commit
+    return None
+
+
+CARRIED = "carried:"
+
+
+def _synthetic(record: dict[str, Any]) -> list[dict[str, Any]]:
+    carried = {"round": f"{CARRIED}{record['from'][-1]}", "carried_from": record["from"], "ref": record["ref"],
+               "units": dict(record["units"]), "scope": list(record["units"]), "blocked_units": [], "clear": True}
+    return [carried, dict(carried)]
+
+
+def _carried(case: Path, state: int, summaries: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Two synthetic clear reviews of every unit, on the text a state closed on
+    as one text before units existed; [] when there is no such closure, when
+    the state closed unit by unit from the start (State 2), or when git no
+    longer holds that text. The first unit round keeps what it carried, so
+    later calls need no git search."""
+    with_units = [s for s in summaries if "units" in s]
+    for summary in with_units:
+        if isinstance(summary.get("carried"), dict):
+            return _synthetic(summary["carried"])
+    if with_units:
+        return []
+    if not summaries or not summaries[-1].get("documents"):
+        return []
+    last = summaries[-1]
+    # Closed by its own rule (rounds kept before the judge close on one round),
+    # or by two clear rounds on the same documents.
+    two_clear = (len(summaries) >= 2 and _clear(summaries[-2]) and _clear(last)
+                 and summaries[-2].get("documents") == last["documents"])
+    if not (last.get("closed") or two_clear):
+        return []
+    found = _texts_with_digests(case, last["documents"],
+                                _added_at(case, rounds_dir(case, state) / last["round"] / "summary.json"))
+    if found is None:
+        return []
+    texts, ref = found
+    closed_units = units.units(texts, state)
+    closing = [s["round"] for s in summaries[-2:]] if two_clear else [last["round"]]
+    return _synthetic({"from": closing, "ref": ref,
+                       "units": {key: unit["digest"] for key, unit in closed_units.items()}})
+
+
+class StateTexts:
+    """What a round of one state reads: its texts, its units, and the digests
+    a round keeps."""
+
+    def __init__(self, texts: list[tuple[int, str, str]], current: dict[str, dict[str, str]],
+                 digests: dict[str, str]):
+        self.texts, self.units, self.digests = texts, current, digests
+
+
+def _spec_out_of_sync(case: Path) -> str | None:
+    """Why the assembled specification does not hold the current design texts,
+    or None when it does: the State 8 projection and the notes of 80_notes.md."""
+    from notes_workbench import propagation
+    from spec_projection_workbench import verify
+    from spec_projection_workbench.model import SpecProjectionError
+
+    spec_path = case / documents.SPEC_FILE
+    if not spec_path.is_file():
+        return f"{documents.SPEC_FILE} is not assembled"
+    try:
+        projection = verify(case)
+    except (SpecProjectionError, ValueError, OSError) as exc:
+        return f"the State 8 projection cannot be verified: {exc}"
+    if not projection["ready"] or not projection["in_sync"]:
+        return f"{documents.SPEC_FILE} is out of sync with the design ({projection['summary']['changes']} change(s))"
+    notes_path = case / propagation.DEFAULT_SOURCE
+    if notes_path.is_file():
+        spec_notes = set(json.loads(spec_path.read_text(encoding="utf-8")).get("notes") or [])
+        missing = [n for n in propagation._canonical_notes(notes_path.read_text(encoding="utf-8"))
+                   if n not in spec_notes]
+        if missing:
+            return f"{len(missing)} note(s) of {propagation.DEFAULT_SOURCE} are not in {documents.SPEC_FILE}"
+    return None
+
+
+def _prompts_of(spec_path: Path, factory_root: Path | None) -> dict[str, str]:
+    from factory_slice_workbench import FactoryPromptError, module_prompts
+
+    if factory_root is None:
+        raise QuestionRoundError(
+            "State 7 is asked on the prompts the Factory builds, and no Factory was found: place "
+            f"code_factory beside this repository or name it in {documents.FACTORY_ROOT_ENV}")
+    try:
+        return module_prompts(spec_path, factory_root)
+    except FactoryPromptError as exc:
+        raise QuestionRoundError(f"the Factory's prompts cannot be built: {exc}") from exc
+
+
+def state_texts(case: Path, state: int, factory_root: Path | None = None) -> StateTexts:
+    """The texts and units of State `state`. Raises QuestionRoundError when the
+    state has no document, or for State 7, when its prompts cannot be built."""
+    docs = documents.design_documents(case, state)
+    if not any(found_state == state for found_state, _ in docs):
+        raise QuestionRoundError(f"{case.name} has no State {state} document")
+    if state != documents.MODULE_STATE:
+        texts = [(s, p.name, p.read_text(encoding="utf-8")) for s, p in docs]
+        return StateTexts(texts, units.units(texts, state), {name: _sha(body) for _, name, body in texts})
+    reason = _spec_out_of_sync(case)
+    if reason is not None:
+        raise QuestionRoundError(
+            f"State 7 is asked on the Factory's prompts, built from {documents.SPEC_FILE}, and {reason}: "
+            f"run `python tools/design_spec_projection.py {case} --apply` (and propagate the notes) first")
+    found = _prompts_of(case / documents.SPEC_FILE, factory_root or documents.factory_root())
+    if not found:
+        raise QuestionRoundError("the Factory generates no module of this specification: nothing to ask")
+    texts = [(state, module, prompt) for module, prompt in found.items()]
+    current = units.module_units(found)
+    return StateTexts(texts, current, {key: unit["digest"] for key, unit in current.items()})
+
+
+def unit_summaries(case: Path, state: int) -> list[dict[str, Any]]:
+    """The summaries a state's units close by: its rounds, after the carried
+    closure of a state closed as one text before units existed."""
+    summaries = _summaries(case, state)
+    return _carried(case, state, summaries) + summaries
 
 
 def _norm(text: str) -> str:
@@ -259,73 +455,130 @@ def _clear(summary: dict[str, Any]) -> bool:
     return summary.get("blocking_topics") == 0
 
 
+def _old_texts(case: Path, state: int, names: list[str], since: str | None,
+               factory_root: Path | None) -> dict[str, str] | None:
+    """The texts as they were at `since`: the documents, or for State 7 the
+    Factory's prompts built from the specification of that ref."""
+    if since is None:
+        return None
+    if state != documents.MODULE_STATE:
+        return _texts_at(case, names, since)
+    import tempfile
+
+    spec = _texts_at(case, [documents.SPEC_FILE], since)[documents.SPEC_FILE]
+    if not spec:
+        raise QuestionRoundError(f"{documents.SPEC_FILE} does not exist at {since}")
+    with tempfile.TemporaryDirectory(prefix="design-questions-since-") as temp:
+        path = Path(temp) / documents.SPEC_FILE
+        path.write_text(spec, encoding="utf-8")
+        old = _prompts_of(path, factory_root or documents.factory_root())
+    return {name: old.get(name, "") for name in names}
+
+
+def _document_round(provider: Provider, state: int, runs: int, read: StateTexts, scope: list[str],
+                    changed: dict[str, tuple[str, list[str]]], old: dict[str, str] | None,
+                    case: Path) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]], dict[str, Any]]:
+    """States 0-6: every review reads the texts of States 0..N, asked about the open units."""
+    instruction = prompts.ask_instruction(state, documents.question_scope(state))
+    instruction += prompts.unit_scope(state, [(key, read.units[key]["title"]) for key in scope],
+                                      {key: diff for key, (diff, _) in changed.items()})
+    text = prompts.ask_input(read.texts)
+    with ThreadPoolExecutor(max_workers=runs) as pool:
+        reviews = list(pool.map(lambda _: _review(provider, instruction, text), range(runs)))
+    for review in reviews:
+        _set_aside(review, scope, changed, read.units)
+    topics = _group(provider, reviews, keep_points=True)
+    repeated = [t for t in topics if len(t["runs"]) >= REPEATED]
+    later = {p.name: p.read_text(encoding="utf-8") for _, p in documents.later_documents(case, state)}
+    judged = (_judge(provider, state, text, read.texts, repeated, old, later, _precedents(case, state)) if repeated
+              else {"provider": provider.name})
+    return reviews, topics, repeated, judged
+
+
+def _module_round(provider: Provider, state: int, runs: int, read: StateTexts, scope: list[str],
+                  changed: dict[str, tuple[str, list[str]]], old: dict[str, str] | None,
+                  case: Path) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]], dict[str, Any]]:
+    """State 7: each review reads one module's prompt, as its generator would."""
+    scope_text = documents.question_scope(state)
+
+    def one(job: tuple[str, int]) -> dict[str, Any]:
+        module = job[0]
+        diff = changed[module][0] if module in changed else None
+        review = _review(provider, prompts.module_ask_instruction(state, scope_text, diff),
+                         prompts.module_input(module, read.units[module]["text"]))
+        review["unit"] = module
+        for point in review["open_points"]:
+            if isinstance(point, dict):
+                point["unit"] = module
+        _set_aside(review, [module], changed, read.units)
+        return review
+
+    jobs = [(module, run) for module in scope for run in range(runs)]
+    with ThreadPoolExecutor(max_workers=min(MODULE_WORKERS, len(jobs))) as pool:
+        reviews = list(pool.map(one, jobs))
+    precedents = _precedents(case, state)
+    topics: list[dict[str, Any]] = []
+    repeated: list[dict[str, Any]] = []
+    judged: dict[str, Any] = {"provider": provider.name, "modules": {}}
+    for module in scope:
+        mine = _group(provider, [r for r in reviews if r["unit"] == module], keep_points=True)
+        for topic in mine:
+            topic["units"] = [module]
+        again = [t for t in mine if len(t["runs"]) >= REPEATED]
+        if again:
+            text = prompts.module_input(module, read.units[module]["text"])
+            module_old = None if old is None else {module: old.get(module, "")}
+            judged["modules"][module] = _judge(provider, state, text, [(state, module, read.units[module]["text"])],
+                                               again, module_old, None, precedents)
+            for topic in again:
+                topic["id"] = f"{module}:{topic['id']}"
+        topics += mine
+        repeated += again
+    return reviews, topics, repeated, judged
+
+
 def ask_round(case: Path, state: int, provider: Provider, runs: int = DEFAULT_RUNS,
-              since: str | None = None) -> dict[str, Any]:
+              since: str | None = None, factory_root: Path | None = None) -> dict[str, Any]:
     """Run one question round for State `state` of `case` and keep it in the case.
 
     `since` names the git ref at which a reopened state was closed; the judge
     then sees the change since, and may judge a topic about an untouched passage
-    as preexisting.
+    as preexisting. `factory_root` is the Factory that builds the State 7
+    prompts (default: SPEC_WORKBENCH_FACTORY_ROOT or the sibling checkout).
     """
     if runs < REPEATED:
         raise QuestionRoundError(f"a round needs at least {REPEATED} reviews to tell a repeated topic")
-    docs = documents.design_documents(case, state)
-    if not any(found_state == state for found_state, _ in docs):
-        raise QuestionRoundError(f"{case.name} has no State {state} document")
-    texts = [(s, p.name, p.read_text(encoding="utf-8")) for s, p in docs]
-    current_units = units.units(texts, state)
-    previous_summaries = _summaries(case, state)
-    scope: list[str] | None = None
-    changed: dict[str, tuple[str, list[str]]] = {}
-    instruction = prompts.ask_instruction(state, documents.question_scope(state))
-    if current_units is not None:
-        still_open = units.closed(previous_summaries, current_units)
-        scope = [key for key in current_units if not still_open[key]]
-        if not scope:
-            raise QuestionRoundError(f"every unit of State {state} is closed on its current text; nothing to ask")
-        changed = _changed_units(case, texts, state, scope, current_units, previous_summaries)
-        instruction += prompts.unit_scope(state, [(key, current_units[key]["title"]) for key in scope],
-                                          {key: diff for key, (diff, _) in changed.items()})
-    text = prompts.ask_input(texts)
-    with ThreadPoolExecutor(max_workers=runs) as pool:
-        reviews = list(pool.map(lambda _: _review(provider, instruction, text), range(runs)))
-    if scope is not None:
-        for review in reviews:
-            _set_aside(review, scope, changed, current_units)
-    topics = _group(provider, reviews, keep_points=True)
-    repeated = [t for t in topics if len(t["runs"]) >= REPEATED]
-    old = _texts_at(case, [name for _, name, _ in texts], since) if since else None
-    later = {p.name: p.read_text(encoding="utf-8") for _, p in documents.later_documents(case, state)}
-    judged = (_judge(provider, state, text, texts, repeated, old, later, _precedents(case, state)) if repeated
-              else {"provider": provider.name})
+    read = state_texts(case, state, factory_root)
+    previous_summaries = unit_summaries(case, state)
+    still_open = units.closed(previous_summaries, read.units)
+    scope = [key for key in read.units if not still_open[key]]
+    if not scope:
+        raise QuestionRoundError(f"every unit of State {state} is closed on its current text; nothing to ask")
+    changed = _changed_units(case, read.texts, state, scope, read.units, previous_summaries)
+    old = _old_texts(case, state, [name for _, name, _ in read.texts], since, factory_root)
+    asked = _module_round if state == documents.MODULE_STATE else _document_round
+    reviews, topics, repeated, judged = asked(provider, state, runs, read, scope, changed, old, case)
     for topic in topics:
         topic.pop("points", None)
     directory = _next_round(case, state)
     directory.mkdir(parents=True)
-    for run, review in enumerate(reviews, 1):
-        (directory / f"review-{run}.json").write_text(json.dumps(review, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
-    digests = {name: hashlib.sha256(body.encode("utf-8")).hexdigest() for _, name, body in texts}
+    for index, review in enumerate(reviews, 1):
+        name = (f"review-{review['unit']}-{(index - 1) % runs + 1}.json" if "unit" in review
+                else f"review-{index}.json")
+        (directory / name).write_text(json.dumps(review, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+    if state == documents.MODULE_STATE:
+        kept = directory / PROMPTS_DIR
+        kept.mkdir()
+        for key in scope:
+            (kept / f"{key}.txt").write_text(read.units[key]["text"], encoding="utf-8")
     blocking = [t for t in repeated if t["judgement"]["blocking"]]
     deferred = [t for t in repeated if t["judgement"].get("deferred_to")]
-    previous = sorted(rounds_dir(case, state).glob("round-*/summary.json"), key=_round_number)
-    previous = [p for p in previous if p.parent != directory]
-    before = json.loads(previous[-1].read_text(encoding="utf-8")) if previous else None
-    clear = not blocking
-    unit_fields: dict[str, Any] = {}
-    if scope is not None:
-        unit_fields = {
-            "units": {key: unit["digest"] for key, unit in current_units.items()},
-            "scope": scope,
-            "changed_units": sorted(changed),
-            "blocked_units": units.blocked(repeated, scope),
-            "set_aside": [len(r["set_aside"]) for r in reviews],
-        }
     summary = {
         "schema_version": SCHEMA,
         "state": state,
         "round": directory.name,
         "provider": provider.name,
-        "documents": digests,
+        "documents": read.digests,
         "reviews": runs,
         "points": [len(r["open_points"]) for r in reviews],
         "since": since,
@@ -333,57 +586,76 @@ def ask_round(case: Path, state: int, provider: Provider, runs: int = DEFAULT_RU
         "repeated_topics": len(repeated),
         "blocking_topics": len(blocking),
         "deferred_topics": len(deferred),
-        "clear": clear,
-        "closed": bool(clear and before and _clear(before) and before.get("documents") == digests),
-        **unit_fields,
+        "clear": not blocking,
+        "closed": False,
+        "units": {key: unit["digest"] for key, unit in read.units.items()},
+        "scope": scope,
+        "changed_units": sorted(changed),
+        "blocked_units": units.blocked(repeated, scope),
+        "set_aside": [len(r["set_aside"]) for r in reviews],
         "topics": topics,
     }
-    if scope is not None:
-        open_after = units.closed(previous_summaries + [summary], current_units)
-        summary["closed"] = all(open_after.values())
-        summary["open_units"] = [key for key, done in open_after.items() if not done]
+    if previous_summaries and str(previous_summaries[0].get("round")).startswith(CARRIED):
+        first = previous_summaries[0]
+        summary["carried"] = {"from": first["carried_from"], "ref": first["ref"], "units": first["units"]}
+    open_after = units.closed(previous_summaries + [summary], read.units)
+    summary["closed"] = all(open_after.values())
+    summary["open_units"] = [key for key, done in open_after.items() if not done]
     (directory / "summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
     return summary
 
 
-def status(case: Path, state: int) -> dict[str, Any]:
-    """The latest round of a state, and whether it closed the state."""
-    rounds = sorted(rounds_dir(case, state).glob("round-*/summary.json"), key=_round_number)
+def _closed_at(case: Path, state: int, summaries: list[dict[str, Any]]) -> str | None:
+    """The git ref the state was last closed at, for `ask --since`: the commit
+    that kept the latest closing round, or that held a carried closure's texts."""
+    for summary in reversed(summaries):
+        if str(summary.get("round", "")).startswith(CARRIED):
+            return summary.get("ref") or "HEAD"
+        if summary.get("closed"):
+            ref = _added_at(case, rounds_dir(case, state) / summary["round"] / "summary.json")
+            if ref:
+                return ref
+    return None
+
+
+def status(case: Path, state: int, factory_root: Path | None = None) -> dict[str, Any]:
+    """Whether the state is closed on its current texts, unit by unit."""
+    rounds = _summaries(case, state)
+    latest = rounds[-1] if rounds else None
+    base = {"state": state, "round": latest["round"] if latest else None,
+            "provider": latest.get("provider") if latest else None}
+    try:
+        read = state_texts(case, state, factory_root)
+    except QuestionRoundError as exc:
+        return {**base, "closed": False, "reason": str(exc), "open_units": [], "units": 0, "repeated": []}
+    keys = list(read.units)
     if not rounds:
-        return {"state": state, "round": None, "closed": False, "reason": "no question round yet"}
-    summary = json.loads(rounds[-1].read_text(encoding="utf-8"))
-    current = {
-        path.name: hashlib.sha256(path.read_text(encoding="utf-8").encode("utf-8")).hexdigest()
-        for _, path in documents.design_documents(case, state)
-    }
-    stale = current != summary["documents"]
-    texts = [(s, p.name, p.read_text(encoding="utf-8")) for s, p in documents.design_documents(case, state)]
-    current_units = units.units(texts, state)
-    if current_units is not None and any("units" in s for s in _summaries(case, state)):
-        done = units.closed(_summaries(case, state), current_units)
-        open_units = [key for key, value in done.items() if not value]
-        return {
-            "state": state,
-            "round": summary["round"],
-            "closed": not open_units,
-            "stale": stale,
-            "provider": summary.get("provider"),
-            "reason": ("every unit closed by two clear rounds on its current text" if not open_units
-                       else f"{len(open_units)} of {len(done)} unit(s) open: {', '.join(open_units)}"),
-            "open_units": open_units,
-            "repeated": [t for t in summary["topics"] if len(t["runs"]) >= REPEATED],
-        }
+        return {**base, "closed": False, "reason": "no question round yet", "open_units": keys,
+                "units": len(keys), "closed_at": None, "repeated": []}
+    summaries = unit_summaries(case, state)
+    stale = read.digests != latest["documents"]
+    repeated = [t for t in latest["topics"] if len(t["runs"]) >= REPEATED]
+    if not any("units" in s for s in summaries):
+        # Rounds kept before units, which never closed the state: the next round reviews every unit.
+        return {**base, "closed": False, "stale": stale, "open_units": keys, "units": len(keys),
+                "closed_at": None, "repeated": repeated,
+                "reason": ("the design texts changed after the latest round" if stale else _open_reason(latest))
+                          + "; the state never closed, so every unit is open"}
+    done = units.closed(summaries, read.units)
+    open_units = [key for key, value in done.items() if not value]
+    changed = [key for key in open_units if units.closed_digest(summaries, key) is not None]
     return {
-        "state": state,
-        "round": summary["round"],
-        "closed": summary["closed"] and not stale,
+        **base,
+        "closed": not open_units,
         "stale": stale,
-        "provider": summary.get("provider"),
-        "reason": ("the design texts changed after the latest round" if stale
-                   else ("two clear rounds on these texts" if "judge" in summary else "no topic raised by two reviews")
-                   if summary["closed"]
-                   else _open_reason(summary)),
-        "repeated": [t for t in summary["topics"] if len(t["runs"]) >= REPEATED],
+        "carried": str(summaries[0].get("round", "")).startswith(CARRIED),
+        "reason": ("every unit closed by two clear rounds on its current text" if not open_units
+                   else f"{len(open_units)} of {len(done)} unit(s) open: {', '.join(open_units)}"),
+        "open_units": open_units,
+        "changed_units": changed,
+        "units": len(done),
+        "closed_at": _closed_at(case, state, summaries),
+        "repeated": repeated,
     }
 
 

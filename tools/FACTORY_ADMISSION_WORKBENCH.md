@@ -55,6 +55,23 @@ nobody made.
   resolver is asked about the changed data addresses Route B will resolve. See
   `FACTORY_SLICE_WORKBENCH.md`.
 
+- `FA019` — question rounds closed on the current texts: every state whose
+  phase declares a `question_scope` (States 0–7) and that has a document is
+  closed by `design_questions.py status` — every unit closed by its two latest
+  reviews, clear on the text it has now; State 7 on the prompts this Factory
+  builds for the generated modules. A state with no round blocks ("no question
+  round yet"). The evidence lists, per state, the reason, the open units and
+  the ref it was last closed at (`ask --since`). Explicit `--spec` admission
+  has no design texts and reports not applicable. See
+  `skills/spec-authoring/QUESTIONS.md`.
+
+`FA019` exists because a late decision passed every other check. On
+2026-10-10 Cabinet Kernel decision 25 added a note allowing pydantic to a
+module whose IMPORTS list held none, and decision 26 rewrote States 3–5; no
+round was asked about either, assembly and admission passed, and Route B
+stopped twice (`unknown_top_level_import`, then nothing had re-closed States
+3–5).
+
 `FA017` is unconditional on purpose. `FA010` and the port gates before it react
 to an interface the author chose to write; a case with no interface at all makes
 each of them report "not applicable", and the first Cabinet Flow runs were

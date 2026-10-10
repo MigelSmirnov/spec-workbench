@@ -35,6 +35,17 @@ the Factory. Authority stays with the Factory tools: the probe re-implements
 none of their rules and only compares what they produce with the names the
 specification already declares.
 
+`module_prompts(source, factory_root)` returns `{module: prompt}`: the prompt
+the Factory's own `tools/generate_agent.py` `build_prompt` assembles for every
+module it generates, from the cut of its own normalizer and slicer, built in a
+subprocess with the Factory as working directory. A module for which the
+Factory's `tools/deterministic_emission.py` `deterministic_emission_kind`
+selects a producer (models, data provider, declared backends, table
+repositories) is left out: no model reads a prompt for it. It raises
+`FactoryPromptError` when the Factory is missing, refuses the specification or
+refuses a module's prompt. The State 7 question round asks about these prompts
+(`skills/spec-authoring/QUESTIONS.md`).
+
 ## Findings
 
 All findings block.

@@ -124,6 +124,8 @@ def test_ready_states_continue_into_post_state5_chain(
         "lint",
         lambda project: {"summary": {"errors": 1, "warnings": 0}, "findings": []},
     )
+    # This test is about the deterministic chain; question rounds are gated in test_design_questions_gates.py.
+    monkeypatch.setattr(design_authoring_next, "_question_gate", lambda *args: None)
     result = design_authoring_next.next_step(tmp_path)
     assert result["phase"] == "pre_contract_structured_data_closure"
     assert result["blocked"] is True

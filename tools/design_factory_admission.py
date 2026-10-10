@@ -57,6 +57,10 @@ def main(argv: list[str] | None = None) -> int:
         )
         for item in report["checks"]:
             print(f"{item['id']}: {item['status']} — {item['summary']}")
+            if item["id"] == "FA019":
+                for name in item["evidence"].get("open", []):
+                    row = item["evidence"]["states"][name]
+                    print(f"  {name}: open units {', '.join(row['open_units']) or '-'}")
     return 0 if report["ready"] else 1
 
 
