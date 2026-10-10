@@ -23,6 +23,10 @@ from spec_projection_workbench.model import (
 )
 
 
+# SPEC_STANDARD 15.7: the envelope of config, models and rules, never a member of them
+RESERVED_SECTION_NAMES = ("role", "schema_version")
+
+
 def _read_json(path: Path, label: str) -> dict[str, Any]:
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
@@ -243,6 +247,8 @@ def _sync_model_ownership(
     for name in models:
         if not isinstance(name, str) or not name:
             raise SpecProjectionError("global_spec.models contains an invalid model name")
+        if name in RESERVED_SECTION_NAMES:
+            continue
         if name not in owned:
             owned.append(name)
     return result
@@ -263,6 +269,8 @@ def _sync_model_exports(imports: Any, models: dict[str, Any]) -> dict[str, Any]:
             "global_spec.imports.internal.models must be a string list"
         )
     for name in models:
+        if name in RESERVED_SECTION_NAMES:
+            continue
         if name not in exports:
             exports.append(name)
     return result
@@ -419,7 +427,8 @@ def _project(project: Path) -> tuple[dict[str, Any], dict[str, Any], list[dict[s
     data_errors = int(data_report.get("summary", {}).get("errors", 0))
     data_payload = design_stage6_data.load(project)
     data_status = data_payload.get("status")
-    data_ready = data_errors == 0 and data_status == "accepted"
+    # "closed" is the final status (design_stage6_data); "accepted" predates it
+    data_ready = data_errors == 0 and data_status in {"accepted", *design_stage6_data.FINAL_DATA_CLOSURE_STATUSES}
     source_checks.append(
         _source_check(
             design_stage6_data.DEFAULT_FILE,
@@ -434,7 +443,7 @@ def _project(project: Path) -> tuple[dict[str, Any], dict[str, Any], list[dict[s
             _finding(
                 "block",
                 "structured_data_handoff_not_ready",
-                "pre-contract structured data must be accepted and lint-clean before projection",
+                "pre-contract structured data must be closed and lint-clean before projection",
                 source=design_stage6_data.DEFAULT_FILE,
             )
         )
@@ -448,6 +457,10 @@ def _project(project: Path) -> tuple[dict[str, Any], dict[str, Any], list[dict[s
                 raise SpecProjectionError(
                     f"60_data_closure.json sections.{section} must be an object"
                 )
+            reserved = current.get(section) if section == "config" else None
+            if isinstance(reserved, dict):
+                # role/schema_version are the assembled section's envelope, not data of the closure
+                value = {**{k: reserved[k] for k in RESERVED_SECTION_NAMES if k in reserved}, **value}
             _set(projected, section, value)
         rules = sections.get("rules")
         if not isinstance(rules, dict):

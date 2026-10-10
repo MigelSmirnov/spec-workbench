@@ -322,3 +322,38 @@ def test_open_standard_backend_closure_blocks_projection(tmp_path, monkeypatch) 
     assert [row["code"] for row in plan["findings"]] == ["standard_backend_closure_not_closed"]
     _, projected, _, _ = service._project(project)
     assert "system_clock_backend" not in projected["rules"]
+
+
+def test_closed_data_closure_projects_and_keeps_section_envelopes(tmp_path, monkeypatch) -> None:
+    project = _project(tmp_path)
+    current = json.loads((project / "global_spec.json").read_text(encoding="utf-8"))
+    current["config"] = {"role": "data", "schema_version": 1, "old": True}
+    current["models"] = {"schema_version": 1, "ExistingRecord": {"fields": {"id": "str"}}}
+    (project / "global_spec.json").write_text(json.dumps(current, indent=2) + "\n", encoding="utf-8")
+    _patch_ready_sources(monkeypatch)
+    closed = dict(service.design_stage6_data.load(project), status="closed")
+    monkeypatch.setattr(service.design_stage6_data, "load", lambda project: closed)
+
+    _, projected, findings, _ = service._project(project)
+
+    assert findings == []
+    assert projected["config"] == {"role": "data", "schema_version": 1, "new": 1}
+    assert projected["models"]["schema_version"] == 1
+    assert "schema_version" not in projected["module_functions"]["models"]
+    assert "schema_version" not in projected["imports"]["internal"]["models"]
+
+
+def test_data_provider_closure_is_projected_into_rules(tmp_path, monkeypatch) -> None:
+    project = _project(tmp_path)
+    _patch_ready_sources(monkeypatch)
+    backend = {"kind": "data_provider_backend", "schema_version": 1,
+               "wiring": {"module": "data_provider"}, "constants": {}}
+    (project / "70_data_provider_closure.json").write_text(json.dumps({
+        "schema_version": "spec_workbench_data_provider_backend_closure.v1",
+        "status": "closed", "backend_ir": backend,
+    }), encoding="utf-8")
+
+    _, projected, findings, _ = service._project(project)
+
+    assert findings == []
+    assert projected["rules"]["data_provider_backend"] == backend
