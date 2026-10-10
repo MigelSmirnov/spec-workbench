@@ -1,0 +1,139 @@
+{
+ "open_points": [
+  {
+   "subject": "canonical_values.content_identity",
+   "kind": "hash domain ambiguity",
+   "text": "Inputs: “One content record's meaning facts as State 1 names them for that record, or one value.” Callers also use it for a manifest capability entry, a request description, an idempotency key and a corpus digest.",
+   "question": "How does the operation select the meaning-fact projection and list-sorting rules for each hashing domain, and are any domain or record-kind tags included in the canonical value being hashed?",
+   "options": [
+    "The caller supplies an explicit hash domain and the operation applies that domain's fixed projection and sorting rules.",
+    "The caller supplies an already projected JSON value and the operation only canonicalizes and hashes it.",
+    "The operation infers the domain from the runtime shape or type of its input."
+   ],
+   "default_guess": "Require an explicit typed hash domain; hash exactly its specified meaning facts, with special sorting only for the content-record domains named by A01."
+  },
+  {
+   "subject": "canonical_values.canonical_bytes",
+   "kind": "unrepresentable input",
+   "text": "Inputs: “One JSON value.” Errors: “refused for a value JCS cannot represent: a non-finite number, a duplicate key.”",
+   "question": "What input representation preserves duplicate object members so this operation can detect them, given that an ordinary parsed JSON value has already discarded or rejected duplicates?",
+   "options": [
+    "Accept raw JSON text or a duplicate-preserving parsed representation at parsing boundaries.",
+    "Accept only parsed JSON values and require parsers to reject duplicates before this operation.",
+    "Permit parser-specific last-member-wins behavior."
+   ],
+   "default_guess": "Reject duplicate members in the parser and let canonical_bytes accept only already duplicate-free parsed values."
+  },
+  {
+   "subject": "sandbox.execute_function canonicalization failure",
+   "kind": "error mapping",
+   "text": "“With the output count taken through canonical_values.canonical_bytes, exactly one outcome of timeout, resource_exhausted, sandbox_violation, crashed, contract_violation, succeeded” conflicts with canonical_bytes, which can “refuse a value JCS cannot represent.”",
+   "question": "Which sandbox outcome results when agent code returns a non-finite number or another Python result that canonical_bytes cannot encode, and does the canonical_values refusal ever escape sandbox.execute_function?",
+   "options": [
+    "Map it to contract_violation and never expose the lower-module refusal.",
+    "Map it to crashed.",
+    "Propagate refused from sandbox.execute_function despite its closed outcome set."
+   ],
+   "default_guess": "Map it to contract_violation and keep sandbox.execute_function's closed outcome contract."
+  },
+  {
+   "subject": "store.open_store startup cleanup",
+   "kind": "contradictory ordering",
+   "text": "“remove temporary files before any record is read” and “the value bytes no record names are removed”",
+   "question": "May open_store read database records internally to determine which value bytes are unreferenced, or does “before any record is read” prohibit the read needed to determine that set?",
+   "options": [
+    "It may scan records internally before exposing the opened store; the phrase prohibits only callers from reading first.",
+    "It must determine references from a separate filesystem index without reading records.",
+    "Unreferenced value-byte cleanup occurs after records are available, contrary to the stated order."
+   ],
+   "default_guess": "Allow an internal database scan during open_store before any caller can read records."
+  },
+  {
+   "subject": "store.open_store privacy check",
+   "kind": "undefined validation",
+   "text": "“private directory” and “a directory not private”",
+   "question": "What exact ownership and permission conditions make the data directory and its existing contents private, and are stricter modes such as 0700 required or merely no group/other permissions?",
+   "options": [
+    "Require ownership by the kernel user and no group or other permission bits, with appropriate file-versus-directory owner permissions.",
+    "Require exact modes such as 0700 for directories and 0600 for files.",
+    "Check only that group and others cannot write.",
+    "Rely on effective access checks rather than ownership and mode bits."
+   ],
+   "default_guess": "Require kernel-user ownership and no group or other permission bits recursively, without requiring one exact owner-mode value."
+  },
+  {
+   "subject": "store.record_change invariants",
+   "kind": "undefined error boundary",
+   "text": "“store checks only its own invariants — attempt numbers, unique and existing identities, links, no record of a kind A01 rule 6 lists edited” and “internal_error for any other broken invariant of its own”",
+   "question": "Which links and lifecycle relationships must store validate for each named change, and which invalid payloads are trusted caller defects rather than store invariant failures?",
+   "options": [
+    "Enumerate the required existing targets, foreign-key relationships and allowed lifecycle-field transitions for every named change.",
+    "Validate only database uniqueness and referential integrity, trusting every semantic relationship and lifecycle transition.",
+    "Validate all State 1 and State 2 invariants again inside store."
+   ],
+   "default_guess": "Validate a closed per-change list of structural references, immutable keys, uniqueness and allowed lifecycle-field updates; leave domain rules to the calling module."
+  },
+  {
+   "subject": "service_invoker.send_prepared_request failure_detail",
+   "kind": "underspecified output",
+   "text": "Outputs include “a bounded failure_detail,” while A09 fixes its content only for response bodies and credential echoes.",
+   "question": "For each transport, TLS, timeout, malformed-response, HTTP-status and output-validation outcome, is failure_detail required or absent, and what exact sanitized content may it contain?",
+   "options": [
+    "Define a closed detail value or absence rule for every outcome.",
+    "Return no detail except the body-derived and credential-withheld details already specified.",
+    "Return bounded implementation or HTTP-library messages after sanitization."
+   ],
+   "default_guess": "Return no detail unless the texts explicitly define a body-derived detail, credential-withheld note, value_too_large or another closed detail code."
+  },
+  {
+   "subject": "effects.operation_element_conclusion",
+   "kind": "attempt selection ambiguity",
+   "text": "“Return an operation element's conclusion from its records”",
+   "question": "When an element has several NodeExecutions, approvals and EffectAttempts after not_applied and resend, which attempt controls the current conclusion, and how are earlier unknown or not_applied attempts ignored or combined?",
+   "options": [
+    "Use the highest attempt_number, consulting that attempt's EffectAttempt and approval state.",
+    "Fold attempts in store order with explicit transition rules.",
+    "Treat any unresolved earlier unknown attempt as controlling even after a later attempt exists."
+   ],
+   "default_guess": "Use the greatest attempt_number; earlier resolved not_applied attempts supply resend history but do not override the latest attempt's conclusion."
+  },
+  {
+   "subject": "runs.recover_running_runs after refused approval",
+   "kind": "text contradiction",
+   "text": "State 5 says “an operation element whose wait no longer holds (its approval decided, its attempt resolved) is reached again through effects.reach_operation_element”; State 3 says “a refused_by_owner record ends its run refused before any element is reached.”",
+   "question": "During recovery, is an element whose approval was refused reached again, or must the run be derived refused and ended before any reach or send?",
+   "options": [
+    "Derive refused and end the run before reaching any element.",
+    "Reach every element with a decided approval, including a refused one.",
+    "Reach only approved decisions; refused decisions end the run first."
+   ],
+   "default_guess": "Reach only approved decisions; a refused_by_owner record ends the run before any element is reached."
+  },
+  {
+   "subject": "installation.load_installation JSON parsing",
+   "kind": "duplicate-member policy",
+   "text": "“one JSON object with exactly the installation's fields” does not say how duplicate JSON member names are handled.",
+   "question": "Are duplicate member names in the installation object or its nested service/token structures rejected, or may a parser choose first-member-wins or last-member-wins behavior?",
+   "options": [
+    "Reject every duplicate member name before interpreting the configuration.",
+    "Use last-member-wins parsing.",
+    "Use first-member-wins parsing."
+   ],
+   "default_guess": "Reject duplicate member names everywhere in the installation document."
+  },
+  {
+   "subject": "bindings manifest parsing and digest",
+   "kind": "duplicate-member policy",
+   "text": "A08 accepts a record that “is valid JSON” and computes record_digest from “the canonical JSON of that one capability entry,” but duplicate member names are not addressed for manifest objects.",
+   "question": "Are duplicate JSON member names in a manifest record or capability entry invalid, and at which ordered manifest check are they reported?",
+   "options": [
+    "Reject duplicates as invalid JSON at the record-validity check.",
+    "Accept the record but reject the capability entry when canonicalization fails.",
+    "Use parser-specific first-member-wins or last-member-wins semantics before hashing."
+   ],
+   "default_guess": "Reject duplicates as an invalid manifest JSON record at the earliest record-validity check."
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"canonical_values.content_identity\",\"kind\":\"hash domain ambiguity\",\"text\":\"Inputs: “One content record's meaning facts as State 1 names them for that record, or one value.” Callers also use it for a manifest capability entry, a request description, an idempotency key and a corpus digest.\",\"question\":\"How does the operation select the meaning-fact projection and list-sorting rules for each hashing domain, and are any domain or record-kind tags included in the canonical value being hashed?\",\"options\":[\"The caller supplies an explicit hash domain and the operation applies that domain's fixed projection and sorting rules.\",\"The caller supplies an already projected JSON value and the operation only canonicalizes and hashes it.\",\"The operation infers the domain from the runtime shape or type of its input.\"],\"default_guess\":\"Require an explicit typed hash domain; hash exactly its specified meaning facts, with special sorting only for the content-record domains named by A01.\"},{\"subject\":\"canonical_values.canonical_bytes\",\"kind\":\"unrepresentable input\",\"text\":\"Inputs: “One JSON value.” Errors: “refused for a value JCS cannot represent: a non-finite number, a duplicate key.”\",\"question\":\"What input representation preserves duplicate object members so this operation can detect them, given that an ordinary parsed JSON value has already discarded or rejected duplicates?\",\"options\":[\"Accept raw JSON text or a duplicate-preserving parsed representation at parsing boundaries.\",\"Accept only parsed JSON values and require parsers to reject duplicates before this operation.\",\"Permit parser-specific last-member-wins behavior.\"],\"default_guess\":\"Reject duplicate members in the parser and let canonical_bytes accept only already duplicate-free parsed values.\"},{\"subject\":\"sandbox.execute_function canonicalization failure\",\"kind\":\"error mapping\",\"text\":\"“With the output count taken through canonical_values.canonical_bytes, exactly one outcome of timeout, resource_exhausted, sandbox_violation, crashed, contract_violation, succeeded” conflicts with canonical_bytes, which can “refuse a value JCS cannot represent.”\",\"question\":\"Which sandbox outcome results when agent code returns a non-finite number or another Python result that canonical_bytes cannot encode, and does the canonical_values refusal ever escape sandbox.execute_function?\",\"options\":[\"Map it to contract_violation and never expose the lower-module refusal.\",\"Map it to crashed.\",\"Propagate refused from sandbox.execute_function despite its closed outcome set.\"],\"default_guess\":\"Map it to contract_violation and keep sandbox.execute_function's closed outcome contract.\"},{\"subject\":\"store.open_store startup cleanup\",\"kind\":\"contradictory ordering\",\"text\":\"“remove temporary files before any record is read” and “the value bytes no record names are removed”\",\"question\":\"May open_store read database records internally to determine which value bytes are unreferenced, or does “before any record is read” prohibit the read needed to determine that set?\",\"options\":[\"It may scan records internally before exposing the opened store; the phrase prohibits only callers from reading first.\",\"It must determine references from a separate filesystem index without reading records.\",\"Unreferenced value-byte cleanup occurs after records are available, contrary to the stated order.\"],\"default_guess\":\"Allow an internal database scan during open_store before any caller can read records.\"},{\"subject\":\"store.open_store privacy check\",\"kind\":\"undefined validation\",\"text\":\"“private directory” and “a directory not private”\",\"question\":\"What exact ownership and permission conditions make the data directory and its existing contents private, and are stricter modes such as 0700 required or merely no group/other permissions?\",\"options\":[\"Require ownership by the kernel user and no group or other permission bits, with appropriate file-versus-directory owner permissions.\",\"Require exact modes such as 0700 for directories and 0600 for files.\",\"Check only that group and others cannot write.\",\"Rely on effective access checks rather than ownership and mode bits.\"],\"default_guess\":\"Require kernel-user ownership and no group or other permission bits recursively, without requiring one exact owner-mode value.\"},{\"subject\":\"store.record_change invariants\",\"kind\":\"undefined error boundary\",\"text\":\"“store checks only its own invariants — attempt numbers, unique and existing identities, links, no record of a kind A01 rule 6 lists edited” and “internal_error for any other broken invariant of its own”\",\"question\":\"Which links and lifecycle relationships must store validate for each named change, and which invalid payloads are trusted caller defects rather than store invariant failures?\",\"options\":[\"Enumerate the required existing targets, foreign-key relationships and allowed lifecycle-field transitions for every named change.\",\"Validate only database uniqueness and referential integrity, trusting every semantic relationship and lifecycle transition.\",\"Validate all State 1 and State 2 invariants again inside store.\"],\"default_guess\":\"Validate a closed per-change list of structural references, immutable keys, uniqueness and allowed lifecycle-field updates; leave domain rules to the calling module.\"},{\"subject\":\"service_invoker.send_prepared_request failure_detail\",\"kind\":\"underspecified output\",\"text\":\"Outputs include “a bounded failure_detail,” while A09 fixes its content only for response bodies and credential echoes.\",\"question\":\"For each transport, TLS, timeout, malformed-response, HTTP-status and output-validation outcome, is failure_detail required or absent, and what exact sanitized content may it contain?\",\"options\":[\"Define a closed detail value or absence rule for every outcome.\",\"Return no detail except the body-derived and credential-withheld details already specified.\",\"Return bounded implementation or HTTP-library messages after sanitization.\"],\"default_guess\":\"Return no detail unless the texts explicitly define a body-derived detail, credential-withheld note, value_too_large or another closed detail code.\"},{\"subject\":\"effects.operation_element_conclusion\",\"kind\":\"attempt selection ambiguity\",\"text\":\"“Return an operation element's conclusion from its records”\",\"question\":\"When an element has several NodeExecutions, approvals and EffectAttempts after not_applied and resend, which attempt controls the current conclusion, and how are earlier unknown or not_applied attempts ignored or combined?\",\"options\":[\"Use the highest attempt_number, consulting that attempt's EffectAttempt and approval state.\",\"Fold attempts in store order with explicit transition rules.\",\"Treat any unresolved earlier unknown attempt as controlling even after a later attempt exists.\"],\"default_guess\":\"Use the greatest attempt_number; earlier resolved not_applied attempts supply resend history but do not override the latest attempt's conclusion.\"},{\"subject\":\"runs.recover_running_runs after refused approval\",\"kind\":\"text contradiction\",\"text\":\"State 5 says “an operation element whose wait no longer holds (its approval decided, its attempt resolved) is reached again through effects.reach_operation_element”; State 3 says “a refused_by_owner record ends its run refused before any element is reached.”\",\"question\":\"During recovery, is an element whose approval was refused reached again, or must the run be derived refused and ended before any reach or send?\",\"options\":[\"Derive refused and end the run before reaching any element.\",\"Reach every element with a decided approval, including a refused one.\",\"Reach only approved decisions; refused decisions end the run first.\"],\"default_guess\":\"Reach only approved decisions; a refused_by_owner record ends the run before any element is reached.\"},{\"subject\":\"installation.load_installation JSON parsing\",\"kind\":\"duplicate-member policy\",\"text\":\"“one JSON object with exactly the installation's fields” does not say how duplicate JSON member names are handled.\",\"question\":\"Are duplicate member names in the installation object or its nested service/token structures rejected, or may a parser choose first-member-wins or last-member-wins behavior?\",\"options\":[\"Reject every duplicate member name before interpreting the configuration.\",\"Use last-member-wins parsing.\",\"Use first-member-wins parsing.\"],\"default_guess\":\"Reject duplicate member names everywhere in the installation document.\"},{\"subject\":\"bindings manifest parsing and digest\",\"kind\":\"duplicate-member policy\",\"text\":\"A08 accepts a record that “is valid JSON” and computes record_digest from “the canonical JSON of that one capability entry,” but duplicate member names are not addressed for manifest objects.\",\"question\":\"Are duplicate JSON member names in a manifest record or capability entry invalid, and at which ordered manifest check are they reported?\",\"options\":[\"Reject duplicates as invalid JSON at the record-validity check.\",\"Accept the record but reject the capability entry when canonicalization fails.\",\"Use parser-specific first-member-wins or last-member-wins semantics before hashing.\"],\"default_guess\":\"Reject duplicates as an invalid manifest JSON record at the earliest record-validity check.\"}]}"
+}
