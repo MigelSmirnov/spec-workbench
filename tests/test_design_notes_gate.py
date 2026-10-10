@@ -98,7 +98,46 @@ def test_gate_blocks_semantic_stub(tmp_path):
     project = _project(tmp_path, "parse: [VALIDATION_ERROR] handle errors appropriately\n")
     report = gate.coverage(project)
     assert "semantic_stub" in _codes(report)
-    assert report["summary"]["blocks"] == 1
+    # the stub states no modal requirement either, so the Factory would refuse it
+    assert "contract_without_positive_note" in _codes(report)
+    assert report["summary"]["blocks"] == 2
+
+
+def test_gate_blocks_callable_whose_notes_state_no_modal_requirement(tmp_path):
+    # The Factory refuses to generate a callable whose notes carry no positive
+    # MUST/SHOULD/MAY; the gate meets that refusal at State 7.
+    project = _project(tmp_path, "parse: [BEHAVIOR] Returns the normalized value.\n")
+    report = gate.coverage(project)
+    findings = [item for item in report["findings"] if item["code"] == "contract_without_positive_note"]
+    assert [item["scope"] for item in findings] == ["parse"]
+    assert findings[0]["severity"] == "block"
+    assert report["summary"]["handoff_ready"] is False
+
+
+def test_gate_counts_only_a_positive_modal_as_evidence(tmp_path):
+    prohibition_only = gate.coverage(_project(tmp_path, "parse: [BEHAVIOR] MUST NOT read storage.\n"))
+    assert "contract_without_positive_note" in _codes(prohibition_only)
+
+    test_evidence_only = gate.coverage(_project(tmp_path, "parse: [TEST_EVIDENCE] MUST be covered by a unit test.\n"))
+    assert "contract_without_positive_note" in _codes(test_evidence_only)
+
+    stated = gate.coverage(_project(tmp_path, "parse: [BEHAVIOR] MUST return the normalized value.\n"))
+    assert "contract_without_positive_note" not in _codes(stated)
+
+
+def test_gate_reads_modal_evidence_from_modular_files_and_the_assembled_spec(tmp_path):
+    project = _project(tmp_path, "parse: [BEHAVIOR] Returns the normalized value.\n")
+    (project / "80_notes_parser.md").write_text(
+        "parse: [VALIDATION_ERROR] MUST return None for empty input.\n", encoding="utf-8"
+    )
+    assert "contract_without_positive_note" not in _codes(gate.coverage(project))
+
+    (project / "80_notes_parser.md").unlink()
+    (project / "global_spec.json").write_text(json.dumps({
+        "contracts": {"parse": "(raw: str) -> str | None"},
+        "notes": ["parse: [BEHAVIOR] MUST return the normalized value."],
+    }), encoding="utf-8")
+    assert "contract_without_positive_note" not in _codes(gate.coverage(project))
 
 
 def test_gate_blocks_interface_return_without_concrete_producer_guidance(tmp_path):

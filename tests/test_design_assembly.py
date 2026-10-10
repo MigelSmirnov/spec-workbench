@@ -33,14 +33,15 @@ def test_cabinet_assembly_stops_on_every_undecided_fact() -> None:
     ]
     by_name = {check["name"]: check for check in report["checks"]}
     assert all(check["warnings"] == 0 for check in report["checks"])
-    for name in ("modules", "contracts", "closure_gaps", "persistence", "witness", "flows"):
+    for name in ("modules", "contracts", "notes", "closure_gaps", "persistence", "witness", "flows"):
         if name == "persistence" and _factory_storage_resolver() is not None:
             assert by_name[name]["ready"] is True, name  # the factory registry proved the codec coverage
             continue
         assert by_name[name]["ready"] is False and by_name[name]["errors"] > 0, name
-    for name in ("language", "identity", "data", "external_contracts", "notes", "router"):
+    for name in ("language", "identity", "data", "external_contracts", "router"):
         assert by_name[name]["ready"] is True and by_name[name]["errors"] == 0, name
     assert by_name["contracts"]["errors"] == 2
+    assert by_name["notes"]["errors"] == 3  # three credential callables without a modal
     for check in inspect_check(CABINET, "contracts")["check"]["findings"]:
         assert check["severity"] == "error" and check["hint"].startswith("not decided — decide:")
 
@@ -82,7 +83,8 @@ def test_check_inspection_preserves_owner_report() -> None:
     assert report["schema_version"] == "spec_workbench_assembly_check.v1"
     assert report["check"]["schema_version"] == "spec_workbench_state7_notes_gate.v1"
     assert report["check"]["summary"]["notes"] == 255
-    assert report["check"]["ready"] is True
+    assert report["check"]["ready"] is False
+    assert {item["code"] for item in report["check"]["findings"]} == {"contract_without_positive_note"}
 
 
 def test_closure_gap_check_blocks_unnamed_time_sources() -> None:

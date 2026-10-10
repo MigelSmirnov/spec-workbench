@@ -123,6 +123,23 @@ editor, deploy, handoff, verification и terminal OTK записывают ег�
 
 Для методов всегда используй полное имя `ClassName.method_name`, не голое имя метода. `__init__`, `to_dict`, `from_dict`, `close` — без класса невозможно определить принадлежность.
 
+### Требование пишется модальностью
+
+Note — требование к функции только тогда, когда в ней есть положительная
+модальность: `MUST`, `SHOULD` или `MAY`, за которой не следует `NOT`. Каждая
+функция из `contracts`, которую генерирует LLM, обязана иметь хотя бы одну note
+с её точным префиксом, семантическим классом (любым, кроме `[TEST_EVIDENCE]` и
+`[FALLBACK]`) и положительной модальностью; иначе генератор фабрики её не
+генерирует (`tools/spec_underspec_gate.py`). Note только с запретом
+(`MUST NOT …`) или в повелительном наклонении («Returns …») требованием не
+является, даже если описывает поведение верно.
+
+```
+ПРАВИЛЬНО:   "parse_token: [VALIDATION_ERROR] MUST raise ValueError for a token without the separator"
+НЕПРАВИЛЬНО: "parse_token: [VALIDATION_ERROR] Raise ValueError for a token without the separator"
+НЕПРАВИЛЬНО: "parse_token: [SECURITY_BOUNDARY] MUST NOT touch storage"  ← единственная note: только запрет
+```
+
 ### Модуль-level notes
 Для общих правил модуля, не привязанных к конкретной функции, обязательно используй точный префикс модуля:
 

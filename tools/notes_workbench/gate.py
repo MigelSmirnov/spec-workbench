@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from interface_workbench import construction_boundary_findings
+from notes_workbench import language
 from notes_workbench.note_standard import (
     NOTE_CLASSES,
     REFERENCE_CLASS_PREFIX,
@@ -64,6 +65,14 @@ def _load_interface_spec(project: Path) -> dict[str, Any]:
         if isinstance(contracts, dict):
             assembled = {**assembled, "contracts": contracts}
     return assembled
+
+
+def _load_contract_signatures(project: Path) -> dict[str, Any]:
+    path = project / "60_contracts.json"
+    if not path.is_file():
+        return {}
+    contracts = json.loads(path.read_text(encoding="utf-8")).get("contracts", {})
+    return contracts if isinstance(contracts, dict) else {}
 
 
 def _load_module_scopes(project: Path) -> set[str]:
@@ -399,6 +408,41 @@ def coverage(project: Path) -> dict[str, Any]:
                 f"State 6 callable {scope} has no State 7 note and is not deterministically implemented.",
                 scope=scope,
             ))
+
+    # The Factory generates a callable only from a note that states a
+    # requirement: scoped to its bare name, of a semantic class, with a positive
+    # modal (MUST, SHOULD or MAY, not MUST NOT). notes_workbench.language
+    # replicates that rule; here it blocks, so the refusal is met at State 7
+    # rather than in Route B after export.
+    # The Factory reads the assembled notes, which also carry the modular
+    # 80_notes*.md files and semantic repairs made at assembly; before assembly
+    # the authored notes are all there is. The evidence is both.
+    required_classes, _drift = language.semantic_classes()
+    signatures = _load_contract_signatures(project)
+    evidence: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for note in language.authored_notes(project):
+        evidence[note["scope"]].append(note)
+    assembled_path = project / "global_spec.json"
+    if assembled_path.is_file():
+        assembled = json.loads(assembled_path.read_text(encoding="utf-8"))
+        for raw in assembled.get("notes") or [] if isinstance(assembled, dict) else []:
+            match = NOTE_RE.fullmatch(raw.strip()) if isinstance(raw, str) else None
+            if match:
+                evidence[match.group("scope")].append({"class": match.group("class"), "text": match.group("text")})
+    for scope in sorted(contract_scopes - deterministic_scopes):
+        scoped_notes = evidence.get(scope) or by_scope.get(scope)
+        if not scoped_notes or not language.is_function_contract(scope, signatures.get(scope)):
+            continue
+        if any(note["class"] in required_classes and language.is_positive(note["text"]) for note in scoped_notes):
+            continue
+        findings.append(_finding(
+            "block",
+            "contract_without_positive_note",
+            f"{scope} has notes but none states a requirement with MUST, SHOULD or MAY in a semantic "
+            "class; the Factory refuses to generate it. Write the leading verb as a modal requirement "
+            "(\"Returns\" -> \"MUST return\").",
+            scope=scope,
+        ))
 
     for scope, scoped_notes in sorted(by_scope.items()):
         known_classes = [note["class"] for note in scoped_notes if note["class"] in NOTE_CLASSES]
