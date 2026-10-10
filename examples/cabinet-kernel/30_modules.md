@@ -47,11 +47,15 @@ record checked by `design_lint --state 2`, recorded as such in `30_trace.json`.
   rule 5) is computed by `surface` from the records it returns.
 - **Writing records.** Every record is written through `store`, which owns
   its persistence and the invariants of A18. Most record types have one writing
-  module, named in its section. Two have several, on purpose: StoredValue M21
+  module, named in its section. Three have several, on purpose: StoredValue M21
   and value bytes are written by whichever module produces or receives the
   value — `flows` for constants, `functions` for trial values, `runs` for flow
   inputs and function outputs, `effects` for service outputs — always
   through `store.put_value_bytes`, which stores equal bytes once (A18 rule 4);
+  SpooledFile M22 and its bytes are written by the module that receives the
+  file — `runs` for a function's file output, `effects` for a service's —
+  the bytes through `store.spool_file` and the record in that module's change
+  that concludes the element;
   NodeExecution M23 is written by `effects` for the record that concludes an
   operation element by a send, a pre-send failure or the owner's refusal,
   because it must share `effects`' outcome transaction (A11 rule 1), and by
@@ -895,7 +899,8 @@ A18).
 
 ### Knows
 
-Every module's public capabilities.
+Every module's public capabilities, except `store_persistence`, which only
+`store` calls.
 
 ### Must not own
 
