@@ -202,6 +202,51 @@ agent's and says why; the owner-facing rules they rest on are in State 2.
     answer and then ends the process with a non-zero status (State 3,
     "Unconfirmed cleanup").
 
+## Decision closed at assembly (2026-10-10)
+
+Assembly found that no state named the kernel's dependencies (A20 rule 3)
+nor the MCP messages around the catalogue (decision 6). The owner chose the
+standard library (2026-10-10); the protocol details below are the agent's,
+each the narrowest the MCP specification allows.
+
+22. **Dependencies and the MCP subset of release v1.**
+    - *Dependencies.* The kernel imports only the standard library of CPython
+      3.12; no third-party package (`imports.third_party` is empty by this
+      decision). The entrance is `http.server.HTTPServer`, which serves one
+      request at a time (A18 rule 3); services are called through
+      `http.client`, which lets the kernel send exactly the headers of A10;
+      the store is `sqlite3`. Two host programs belong to the release with
+      the interpreter: `git`, through which `bindings` reads a manifest
+      record as a git object (decision 8), and `bwrap` (A03). The release
+      names their versions; the kernel runs no other program.
+    - *Transport.* Streamable HTTP without sessions and without event
+      streams: a POST to the path `MCP_ENDPOINT_PATH` carries one JSON-RPC
+      2.0 message and is answered `200` with `application/json` and one
+      response, or `202` without a body when the message is a notification
+      or a response. Any other method on that path is `405`, any other path
+      `404`, and a request with an `Origin` header `403`, all without a
+      body; no `Mcp-Session-Id` is issued, one presented is ignored.
+    - *Messages.* Every message is checked in A16 rule 1 order — size, then
+      token — before its method is read. `initialize` answers
+      `MCP_PROTOCOL_VERSION`, the tools capability without change
+      notification and the server `MCP_SERVER_NAME` / `MCP_SERVER_VERSION`,
+      whatever version the client asked; `ping` answers an empty result;
+      `tools/list` answers one tool per catalogue operation, in catalogue
+      order, without pagination, its `inputSchema` derived from the
+      operation's request model by a closed rule (State 7); `tools/call`
+      runs the operation. A batch, an unknown method, or a call whose name
+      is no catalogue operation is a JSON-RPC error.
+    - *Answers.* An operation's answer is a tool result with one text
+      content, the answer as JSON text, and `isError` false. A refusal
+      decided once the operation is known — fit, bounds, permission, or the
+      operation's own — is a tool result with `isError` true whose text is
+      the `RefusalAnswer` as JSON, so the agent reads the reason. A refusal
+      decided before — size, token, a malformed message, unknown method or
+      tool — is a JSON-RPC error with the code JSON-RPC defines for it, the
+      refusal code as its message and the `RefusalAnswer` as its data;
+      `internal_error` is `-32603`. The kernel defines no error number of
+      its own.
+
 ## Texts of earlier states changed by State 6
 
 - State 5: the relation "executions of an element", asked by `effects`, which
