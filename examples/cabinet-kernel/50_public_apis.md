@@ -259,7 +259,7 @@ not a record: a digest no verdict covers answers none. "Runs by status" and
 | latest activation of a flow version before a run's record in store order | `runs` | the FlowActivation; none cannot occur, and finding none is `internal_error` (closed question 3) |
 | executions of a run | `runs` | NodeExecutions M23 with their SpooledFiles M22 |
 | executions of an element | `effects`, `runs` | the element's NodeExecutions M23 with their SpooledFiles M22, from which it reads an operation element's conclusion (A11 rule 3) and the attempt number a read send's file — or, for `runs`, a function element's file — is spooled under |
-| runs by status | `runs` | Runs M19 with that status, oldest first (A14 rule 5) |
+| runs by status | `runs` | Runs M19 with any of the given statuses, oldest first in store order (A14 rule 5) |
 | approvals of an element | `effects` | EffectApprovals M24 |
 | attempts of an element | `effects` | EffectAttempts M26 |
 | attempts by status | `effects` | EffectAttempts with that status (A11 rule 4) |

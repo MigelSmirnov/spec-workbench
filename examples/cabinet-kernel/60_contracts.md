@@ -306,8 +306,38 @@ precedent); State 3 split `store_persistence` off `store` for it.
       The A18 witness counts `store_persistence` as part of the store module:
       it may send row statements (`.cursor`, `.execute`) and nothing else.
 
+## Decisions closed at Stage 8.1 (2026-10-10)
+
+The module review (spec-workbench PR #100) left three modules undecided; the
+owner decided each on 2026-10-10.
+
+24. **Rollback order, the runs to recover, and the shown effect attempt.**
+    - *Rollback to the serving implementation.* `roll_back_slot` checks, after
+      the slot, the implementation and its contract version, whether the named
+      implementation is the current activation; if it is, it returns that
+      Activation and records nothing, without the verdict check. A serving
+      implementation that lacks a verdict over a grown corpus (A04 rule 7) is
+      therefore named, not refused (A04 rule 5: "Naming the implementation that
+      is already current returns the current activation and records nothing").
+    - *Runs to recover, in store order.* `RunsByStatus` names a set of
+      statuses (`statuses: tuple[RunStatus, ...]`, non-empty, no repeats) and
+      answers the runs of any of them oldest first in store order: `store`
+      merges one `list_run_rows_by_status` per status by store position, as it
+      merges a page's set filter (decision 23). `runs.recover_running_runs`
+      asks once for `running`, `awaiting_approval` and `pending` (A14 rule 5,
+      A19 rule 3); a store position stays the store's fact.
+    - *The shown effect attempt.* `ShownRecords.effect_attempts` is
+      `tuple[ShownEffectAttempt, ...]`: every field of the EffectAttempt, its
+      inputs as `ShownPort` through `show_port_refs`, so an agent receives a
+      `personal_data` input only as digest and class (A07 rule 4). `RecordSet`,
+      the store's answer, keeps the record itself.
+    - *A port named twice in a trial case* (Stage 8.1 note repair N07): the
+      case is refused, never one of the two values kept silently.
+
 ## Texts of earlier states changed by State 6
 
+- State 5 (2026-10-10, decision 24): the relation "runs by status" answers
+  the runs of any of the given statuses, oldest first in store order.
 - State 5 (2026-10-10, Stage 9 FA018): eight names of "Named store changes"
   and their "State impact" lines name the event, not the operation —
   `contract_version_issued`, `trial_case_added`, `binding_proposed`,
