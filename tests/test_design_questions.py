@@ -545,3 +545,11 @@ def test_the_judge_is_given_the_scope_of_the_state_it_judges():
     last = prompts.judge_instruction(7, False, None, False, documents.question_scope(7))
     assert documents.question_scope(7) in last
     assert '- "later_state"' not in last
+
+
+def test_a_quote_is_found_whatever_code_marks_the_judge_or_the_texts_put_around_it():
+    from questions_workbench import judge
+
+    corpus = judge._norm("handle_get_run: [ORCHESTRATION] MUST call `read_run` with the run_id.")
+    assert judge._found("`handle_get_run: [ORCHESTRATION] MUST call read_run with the run_id.`", corpus)
+    assert not judge._found("handle_get_run: MUST call read_run with the run_id.", corpus)
