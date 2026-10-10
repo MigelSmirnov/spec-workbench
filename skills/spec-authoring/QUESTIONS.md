@@ -55,10 +55,20 @@ repeated topic into one kind, and only two kinds keep a state open:
 | `consequential_gap` | two careful implementers build different behaviour that the owner, an agent, a caller or a service notices | the two behaviours and who notices; any quote verbatim in the texts | yes, when it quotes a passage; deferred otherwise (below) |
 | `answered` | the texts already answer it | the answering quote, verbatim in the texts | no |
 | `answered_later` | only with `--provider codex`: a later state's text already decides it | the deciding quote, verbatim in the later states' texts | no |
-| `later_state` | it belongs to a later state | a state number after this one | no |
+| `later_state` | it is outside this state's `question_scope` and belongs to a later state | a state number after this one | no |
 | `judged_before` | the same question a recent round already judged non-blocking, on passages that have not changed | the prior judgement's id; its quotes still verbatim in the texts | no |
 | `indifferent` | no one acts differently on any answer | the reason | no |
 | `preexisting` | only with `--since`: about a passage the change did not touch | the quote, verbatim in both versions | no |
+
+The judge reads the same `question_scope` as the reviewers. Without it, State 0
+of Cabinet Kernel (its first round, 2026-10-10) was held open by seven
+acceptance-mechanics topics — what puts the photo case into `pending`, the
+oracle of the third-party analysis case — that belong to the rules of State 2
+and their required tests: the reviewers raised them inside the scope's words,
+and the judge, told only that "orders, encodings, formats, schemas, signatures,
+field types and notes" are later, could not place them there. A topic outside
+the state's scope is `later_state`, however real; the owning state's own round
+asks it.
 
 ### A gap no passage speaks to
 
