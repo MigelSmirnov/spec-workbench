@@ -583,6 +583,27 @@ contradiction gate is `questions/state7/round-02`.
       JSON text is data parsed only as JSON, by `canonical_bytes` and the
       schema check that judges it, never evaluated or executed.
 
+### State 7 round-03 (2026-10-10)
+
+Twelve contradictions remained; eleven are removed by wording, one was a
+misreading (`FileFactsRef` is in the IMPORTS of `functions`):
+
+- An exception written in another note is now stated at the general rule it
+  narrows: `read_records` (ActivationBeforeRun raises), `advance_run`
+  (`cleanup_failed` stops the run), `answer_request` (initialize, ping and
+  tools/list name no catalogue operation).
+- `record_change`: ResolveAttemptChange sets the AttemptStatus member named
+  like the AttemptResolution; a change's StoredValues take their positions
+  before every other record it writes.
+- `remove_run_spool`: a link inside the spool raises StoreInternalError with
+  nothing removed, as everywhere under the data directory (A18 rule 2).
+- `issue_contract_version`: a Port's value_schema is JSON text; a file port's
+  is `{}`. `add_trial_case`: value_digest is content_identity of a BytesContent.
+- `reach_operation_element`: a non-read binding with no authority requests the
+  approval and sends nothing. `send_under_authority`: a read binding has no
+  attempt to stay applied. `execute_function_element`: spool_file's refusal
+  has already removed the attempt's files.
+
 ## Texts of earlier states changed by State 6
 
 - States 3, 4 and 5 (2026-10-10, decision 26): `clock`'s capabilities are
