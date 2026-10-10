@@ -48,6 +48,14 @@ def test_review_flags_exact_duplicate_and_stub() -> None:
     assert "suspected_duplicate" in codes
 
 
-def test_cabinet_canonical_notes_gate_is_handoff_ready() -> None:
+UNMODAL_CREDENTIAL_CALLABLES = ["issue_service_credential", "parse_service_token", "verify_service_secret"]
+
+
+def test_cabinet_canonical_notes_gate_stops_on_notes_without_a_modal() -> None:
+    # The fence: the reference case's three credential callables have notes in
+    # the imperative mood; the Factory refuses them as generation evidence, so
+    # the gate stops there and nowhere else.
     payload = gate.coverage(CABINET)
-    assert payload["summary"]["handoff_ready"], payload["findings"]
+    assert not payload["summary"]["handoff_ready"]
+    assert {item["code"] for item in payload["findings"]} == {"contract_without_positive_note"}
+    assert sorted(item["scope"] for item in payload["findings"]) == UNMODAL_CREDENTIAL_CALLABLES

@@ -253,6 +253,11 @@ def _iter_authored_notes(project: Path):
             yield pending
 
 
+def authored_notes(project: Path) -> list[dict[str, Any]]:
+    """Every authored note of every 80_notes*.md file, as the Factory receives them."""
+    return list(_iter_authored_notes(project))
+
+
 def authored_repair_sites(project: Path) -> tuple[list[dict[str, Any]], list[str]]:
     """Findings at the Markdown line where a note must be reworded."""
     required, _drift = semantic_classes()
