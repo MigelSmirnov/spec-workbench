@@ -2,13 +2,42 @@
 
 Draft of 2026-10-01. Derived from the accepted State 2 decisions A01–A21. A module
 owns one hidden mechanism and has one reason to change; its public surface is
-smaller than what it hides. Ownership of each decision is recorded in
-`30_trace.json`: one primary owner, and the modules that consume the rule.
+smaller than what it hides. Each accepted decision has one primary owner, the
+module that holds the decision's central mechanism, and consumers. Ownership is
+by rule, not by decision: a consumer owns exactly the rules and parts of the
+decision its own section below names, and the primary owner owns every rule of
+the decision that no other section names. The table is the one mapping;
+`30_trace.json` records the same:
+
+| decision | primary owner | consumers |
+|---|---|---|
+| A01 | `canonical_values` | `store`, `functions`, `flows`, `runs`, `store_persistence` |
+| A02 | `functions` | `canonical_values`, `data_provider` |
+| A03 | `sandbox` | `functions`, `runs`, `surface`, `data_provider` |
+| A04 | `functions` | `store`, `sandbox` |
+| A05 | `flows` | `canonical_values`, `bindings` |
+| A06 | `flows` | `surface` |
+| A07 | `surface` | `canonical_values`, `flows`, `runs` |
+| A08 | `bindings` | `installation`, `service_invoker`, `effects`, `data_provider` |
+| A09 | `service_invoker` | `bindings`, `effects`, `installation`, `data_provider` |
+| A10 | `effects` | `service_invoker`, `runs`, `surface` |
+| A11 | `effects` | `runs`, `store` |
+| A12 | `runs` | `functions`, `flows` |
+| A13 | `runs` | `sandbox`, `effects`, `canonical_values` |
+| A14 | `runs` | `effects`, `store`, `surface` |
+| A15 | `runs` | `store`, `functions`, `effects` |
+| A16 | `surface` | `installation`, `store`, `data_provider` |
+| A17 | `installation` | `service_invoker`, `sandbox` |
+| A18 | `store` | `runs`, `surface`, `store_persistence` |
+| A19 | `clock` | `sandbox`, `service_invoker`, `functions`, `effects`, `runs` |
+| A20 | `data_provider` | `functions`, `sandbox`, `service_invoker`, `store`, `runs`, `surface` |
 
 The kernel is one process with one writer (K-17), so modules are not services:
 they are the parts of one program, and only `store` touches the database and the
-data directory — through `store_persistence`, its companion for the rows of the
-database, which only `store` calls (below). The dependency direction is fixed,
+data directory. `store` holds the connection and the transaction and decides
+which record goes into which row; the row statements themselves are executed by
+`store_persistence`, its companion, which only `store` calls, over that
+connection (below). The dependency direction is fixed,
 from the bottom up:
 
 ```text
