@@ -8,11 +8,50 @@ from persistence_workbench.model import (
     CATALOG_FILE,
     CATALOG_SCHEMA,
     CATALOG_STATUSES,
+    Finding,
     PersistenceBackendError,
 )
 
 
 CATALOG_FIELDS = frozenset({"schema_version", "status", "backend_ir"})
+
+
+DATA_CLOSURE_FILE = "60_data_closure.json"
+
+
+def master_models(persistence: Any) -> list[str]:
+    """Models a persistence section declares ``master``: mutable truth (SPEC_STANDARD 15.5)."""
+    if not isinstance(persistence, dict):
+        return []
+    return sorted(
+        name for name, declaration in persistence.items()
+        if isinstance(name, str) and isinstance(declaration, dict) and declaration.get("class") == "master"
+    )
+
+
+def declared_master_models(project: Path) -> list[str]:
+    """``master`` models of the pre-contract data closure, before anything is assembled."""
+    try:
+        payload = json.loads((project / DATA_CLOSURE_FILE).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+    sections = payload.get("sections") if isinstance(payload, dict) else None
+    return master_models(sections.get("persistence") if isinstance(sections, dict) else None)
+
+
+def required_closure_finding(masters: list[str]) -> Finding:
+    """Mutable records may not reach generation as prose: their tables are a deterministic closure.
+
+    The same rule as Factory admission FA013, raised where the closure is authored.
+    """
+    return Finding(
+        "error",
+        "persistence_closure_required",
+        "master persistence " + ", ".join(masters) + " needs a closed 70_persistence_closure.json: "
+        "without it the tables and repositories of mutable records are left to generation "
+        "(Factory admission FA013)",
+        location=CATALOG_FILE,
+    )
 
 
 def load_optional(project: Path) -> dict[str, Any] | None:
