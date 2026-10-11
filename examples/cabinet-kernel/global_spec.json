@@ -564,8 +564,8 @@
     "send_prepared_request: [RETURN_SHAPE] Returns a SendResult with outcome, attempt_status None for a read and the attempt status for any other class, detail_code only for operation_failed or value_too_large, outputs as JsonPayload with canonical bytes per port or one FilePayload for a file output when the answer is used and empty otherwise, and failure_detail; it never raises for any ending and writes nothing.",
     "assemble_mapped_lists: [BEHAVIOR] MUST build, for each MappedList in the order given, the list its elements' outputs make in element order, and write and publish nothing: a value list is one StoredValue whose bytes are canonical_bytes of the list of the elements' values — each read with read_value_bytes —, whose value_schema is the canonical array schema with the port's stored schema (M21: its value_schema, or for a many port the canonical array schema with it as items) as items, of the class highest_disclosure_class gives for the elements' StoredValues — read through read_records with one RecordsById naming their value_ids —, its value_digest content_identity of a BytesContent holding the bytes and value_id content_identity of the StoredValueContent; a file list is one SpooledFilesRef listing every element's files in element order, whose disclosure_class is the highest class among the elements' SpooledFilesRefs.",
     "assemble_mapped_lists: [VALIDATION_ERROR] MUST measure every value list against the imported RELEASE_CEILING_STORED_VALUE_BYTES_MAX constant before it answers anything, and when the canonical bytes of any exceed it answer ListsOverCeiling naming the node and the first such port in the order given, with no list; it is given only the lists an edge takes to a node or a flow output, so every delivered list of a node is measured before any of them is written or delivered.",
-    "assemble_mapped_lists: [RETURN_SHAPE] Returns AssembledLists with one AssembledList per given list in that order: a value list with its StoredValuesRef, its StoredValue and its canonical_json bytes; a file list with its SpooledFilesRef and neither.",
-    "deliver_input: [ORCHESTRATION] MUST take the value the source names and write it before anything reads or checks it: a RecordedSource names a written record; a ListElementSource first makes its list written as that list's own source says, then over a StoredValuesRef takes the element at map_index of the JSON array its StoredValue holds (read_value_bytes) as its own StoredValue of the receiving port's value_schema and the list's class — its bytes canonical_bytes of the element, value_digest content_identity of a BytesContent holding them and value_id content_identity of the StoredValueContent —, and over a SpooledFilesRef the file at that position, as a SpooledFilesRef of that one file with the list's disclosure_class; a MappedListSource names its AssembledList's value. A StoredValue that is not yet written — a list element, a mapped node's value list — MUST be published with put_value_bytes and written with record_change in one RecordDeliveryValuesChange under the given actor before fit_port_value checks it and before the reference is returned; an equal value already written is returned in its place.",
+    "assemble_mapped_lists: [RETURN_SHAPE] Returns AssembledLists with one AssembledList per given list in that order: a value list as an AssembledValueList with its StoredValuesRef, its StoredValue and its canonical_json bytes; a file list as an AssembledFileList with its SpooledFilesRef.",
+    "deliver_input: [ORCHESTRATION] MUST take the value the source names and write it before anything reads or checks it: a RecordedSource names a written record; a ListElementSource first makes its list written as that list's own source says, then over a StoredValuesRef takes the element at map_index of the JSON array its StoredValue holds (read_value_bytes) as its own StoredValue of the receiving port's value_schema and the list's class — its bytes canonical_bytes of the element, value_digest content_identity of a BytesContent holding them and value_id content_identity of the StoredValueContent —, and over a SpooledFilesRef the file at that position, as a SpooledFilesRef of that one file with the list's disclosure_class; a MappedListSource names its AssembledList: an AssembledValueList's StoredValue, with its canonical_json as the bytes to publish and to check, or an AssembledFileList's SpooledFilesRef, already written. A StoredValue that is not yet written — a list element, a mapped node's value list — MUST be published with put_value_bytes and written with record_change in one RecordDeliveryValuesChange under the given actor before fit_port_value checks it and before the reference is returned; an equal value already written is returned in its place.",
     "deliver_input: [VALIDATION_ERROR] MUST then check the written value with fit_port_value against port, with the imported RELEASE_CEILING_STORED_VALUE_BYTES_MAX constant for a value and the imported RELEASE_CEILING_SPOOL_FILE_BYTES_MAX constant for a file, the candidate a JsonCandidate of the value's canonical bytes, or a FileCandidate or FileListCandidate of the files' FileFacts read through read_records with SpooledFilesByKey, a read made only when there is a file to name, an empty list's candidate having no files; a misfit is answered, never raised, and the value stays written. A source record or source bytes that cannot be read (UnknownReferenceError), a RefusedError or StoreInternalError from put_value_bytes, and a failed record_change are broken invariants, raised as StoreInternalError; a change that fails writes nothing, while a list already written before it stays written.",
     "deliver_input: [RETURN_SHAPE] Returns DeliveredInput, or InputMisfit with the PortFit, whose ref names the receiving port by port's name: a StoredValuesRef naming exactly one StoredValue, a many value being one JSON array, or a SpooledFilesRef of the files.",
     "empty_list_outputs: [BEHAVIOR] MUST build, for each output port in port name order, an empty list of the class highest_disclosure_class gives for every input the node received — the mapped list and every other input, a StoredValuesRef counting with its StoredValue's class read through read_records with RecordsById (made only when there is a value_id to name), a SpooledFilesRef with its disclosure_class —: for a value port a StoredValue of the canonical bytes of [] with the canonical array schema with the port's stored schema as items, its bytes published with put_value_bytes, value_digest and value_id computed as for any StoredValue; for a file port an empty SpooledFilesRef. It writes no record: the StoredValue is written in the change of the node's one NodeExecution, which names these outputs.",
@@ -686,7 +686,7 @@
     "plan_run: [DETERMINISM_OR_ORDERING] A function element's conclusion is its latest NodeExecution's status: succeeded concludes succeeded, contract_violation, sandbox_violation, timeout, resource_exhausted and crashed conclude failed; an operation element's is operation_element_conclusion of its element under the context — ElementFailed is failed whatever its status — operation_failed, operation_refused, outcome_unknown or another —, except an ElementFailed whose status is skipped_by_guard or upstream_failed, which answers such a record and concludes as the record does; ElementWaiting waits and its dependants wait, ElementNotReached is not concluded; an operation element is judged by that answer alone, not by its NodeExecution status, which stays outcome_unknown after the owner's resolution; a skipped_by_guard or upstream_failed record, which runs writes only for a node none of whose elements executed, concludes the whole node so at once, mapped or not — the rule that a mapped node concludes only when every element concluded is for a node whose elements execute —, a function node and an operation node alike — for an operation element through the ElementFailed with that status operation_element_conclusion answers, as said above: skipped_by_guard concludes the node skipped and upstream_failed concludes it upstream_failed; a run with any refused_by_owner NodeExecution has status refused, no drafts and no next node, whatever else could be derived or be ready, and none of the status rules below applies to it. Records written together are sorted by (node_id, map_index) with an absent map_index before index 0, identifiers compared by Unicode code point.",
     "plan_run: [DETERMINISM_OR_ORDERING] The next node is the ready node with the smallest node_id; a node is ready when every input port holds its value: flow inputs delivered along every enabled edge from them — a flow input or output endpoint is the node_id empty string (A05 rule 2) —, constants to their port — a FlowConstant's value is the value_id composition wrote —, and outputs of a concluded succeeded node along every enabled edge. A mapped node, once selected, takes its elements in list order, every element that has no concluded record and does not wait; a node none of whose elements without a concluded record can execute is not ready, so the next ready node is selected among the others; a waiting or failed element does not stop the elements after it, and a concluded element is never taken again.",
     "plan_run: [BEHAVIOR] An edge with no guard is enabled once its source concluded succeeded; a guarded edge is decided only once its source node concluded succeeded, from that same source node's output on the edge's guard_port (M15), enabled when that value's canonical JSON text equals guard_value and disabled otherwise; an edge whose source has not concluded is undecided, so a port with such an edge can still receive a value. An edge whose source is a flow input (the node_id empty string) is decided from the start, since every flow input is delivered when the run starts: without a guard it is enabled, and a guarded one is decided as above from the flow input its guard_port names. A node one of whose input ports can no longer receive a value because every edge into that port is disabled or comes from a skipped node concludes skipped_by_guard, even when its other input ports receive theirs (A13 rule 4 is per input port); a node with an input from a failed or upstream_failed node concludes upstream_failed, which wins over skipped_by_guard. Such drafts are derived only from records already written and carry exactly: the run's run_id, the node's node_id, status skipped_by_guard or upstream_failed, no executed, no map_index — such a record is written only for a node none of whose elements executed, so it stands for the node —, no inputs, no outputs, failure_detail, detail_code and resources_used None, and started_at and ended_at both the given now; runs takes now from kernel_now just before it asks plan_run and writes the drafts in that very change.",
-    "plan_run: [BEHAVIOR] A mapped node's elements are the positions of a non-empty list delivered to its map_over port, counted from the JSON array its StoredValue holds — read with read_value_bytes of a StoredValueSource naming its value_id, or the canonical_json of an AssembledList not yet written — or the files of its SpooledFilesRef; a list with no position gives no element, and a mapped node over an empty list is instead ready with over_empty_list and one element without map_index, which stands for the node and is no position of the list, whose sources are the node's inputs as delivered — its map_over port's source is the source of the empty list itself, a RecordedSource or a MappedListSource, never a ListElementSource, which exists only for an element with a map_index; a mapped node concludes only when every element concluded, succeeded only when all succeeded. For a succeeded mapped node with elements, the lists an edge takes to a node or a flow output are asked of assemble_mapped_lists, an output no edge takes being asked nothing: ListsOverCeiling makes the node failed for its dependants, which conclude upstream_failed, with no record of its own and every element record staying as it is.",
+    "plan_run: [BEHAVIOR] A mapped node's elements are the positions of a non-empty list delivered to its map_over port, counted from the JSON array its StoredValue holds — read with read_value_bytes of a StoredValueSource naming its value_id, or the canonical_json of an AssembledValueList not yet written — or the files of its SpooledFilesRef; a list with no position gives no element, and a mapped node over an empty list is instead ready with over_empty_list and one element without map_index, which stands for the node and is no position of the list, whose sources are the node's inputs as delivered — its map_over port's source is the source of the empty list itself, a RecordedSource or a MappedListSource, never a ListElementSource, which exists only for an element with a map_index; a mapped node concludes only when every element concluded, succeeded only when all succeeded. For a succeeded mapped node with elements, the lists an edge takes to a node or a flow output are asked of assemble_mapped_lists, an output no edge takes being asked nothing: ListsOverCeiling makes the node failed for its dependants, which conclude upstream_failed, with no record of its own and every element record staying as it is.",
     "plan_run: [BEHAVIOR] Each element's sources are one per input port in port name order: a RecordedSource for a flow input's PortRef as Run.inputs holds it — a StoredValuesRef, or a SpooledFilesRef for a file port —, a constant's StoredValuesRef or the output ref of an unmapped succeeded node on the enabled edge — from its NodeExecution or its ElementSucceeded outputs —; a MappedListSource with the AssembledList of a mapped node's output; a ListElementSource with the list's own source and the element's map_index for a mapped element's map_over port. A guard's source node is never mapped (flows' proof), so a guard reads a written StoredValue, with read_value_bytes of a StoredValueSource naming its value_id. A flow output's source is formed the same way; an output reached by an edge straight from a flow input is a RecordedSource of that input's PortRef as Run.inputs holds it (A13 rule 3).",
     "plan_run: [BEHAVIOR] When nothing is derived and no node is ready, the status is: when any element waits, awaiting_approval if one waits with reason owner_approval and otherwise pending, with one WaitingPoint per waiting element — a mapped operation node's elements being the positions of its delivered list; when nothing waits, succeeded when every node concluded succeeded or skipped_by_guard and failed otherwise, a mapped node whose delivered list is over the ceiling counting as failed. While a draft is derived or a node is ready the status is running, except for a run with a refused_by_owner record, which is refused. The outputs are those produced so far, whatever the status (A13 rule 7), each named by its flow output port; once the status has ended (= models.RunStatus: succeeded, failed or refused here) every other flow output is a MissingOutput with reason skipped_by_guard when every edge into it was disabled or comes from a node concluded skipped_by_guard and not_produced otherwise (= models.OutputReason).",
     "plan_run: [RETURN_SHAPE] Returns RunPlan with every element's ElementState in (node_id, map_index) order, every edge's EdgeState in the flow version's edge order, the derived drafts, the next ReadyNode or None, the waiting points in (node_id, map_index) order, the produced outputs and missing outputs in flow output port name order, and the status.",
@@ -3249,14 +3249,31 @@
         "lists": "tuple[MappedList, ...]"
       }
     },
-    "AssembledList": {
+    "AssembledValueList": {
       "identity": "value",
       "fields": {
+        "list_kind": "Literal['value']",
         "port": "str",
-        "ref": "PortRef",
-        "stored_value": "StoredValue | None",
-        "canonical_json": "bytes | None"
+        "ref": "StoredValuesRef",
+        "stored_value": "StoredValue",
+        "canonical_json": "bytes"
       }
+    },
+    "AssembledFileList": {
+      "identity": "value",
+      "fields": {
+        "list_kind": "Literal['files']",
+        "port": "str",
+        "ref": "SpooledFilesRef"
+      }
+    },
+    "AssembledList": {
+      "kind": "discriminated_union",
+      "discriminator": "list_kind",
+      "variants": [
+        "AssembledValueList",
+        "AssembledFileList"
+      ]
     },
     "AssembledLists": {
       "identity": "value",
@@ -7929,6 +7946,8 @@
         "RunnerReport",
         "MappedList",
         "MappedLists",
+        "AssembledValueList",
+        "AssembledFileList",
         "AssembledList",
         "AssembledLists",
         "ListsOverCeiling",
@@ -8305,8 +8324,10 @@
       "run_values": {
         "models": [
           "Actor",
+          "AssembledFileList",
           "AssembledList",
           "AssembledLists",
+          "AssembledValueList",
           "ByteSource",
           "BytesContent",
           "DeliveredInput",
@@ -8666,6 +8687,7 @@
       "run_graph": {
         "models": [
           "AssembledList",
+          "AssembledValueList",
           "ByteSource",
           "EdgeState",
           "ElementConclusion",
@@ -9319,6 +9341,8 @@
       "RunnerReport",
       "MappedList",
       "MappedLists",
+      "AssembledValueList",
+      "AssembledFileList",
       "AssembledList",
       "AssembledLists",
       "ListsOverCeiling",

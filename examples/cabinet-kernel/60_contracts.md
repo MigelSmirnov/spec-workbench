@@ -1208,6 +1208,19 @@ item names the module, the witnesses, what the text said and what it says now.
         `StoredValueSource` and takes a flow input's PortRef as `Run.inputs`
         holds it, a SpooledFilesRef for a file port.
 
+    *Closed by the first generation after the split* (linker, 2026-10-11):
+
+    21. `AssembledList` is a discriminated union on `list_kind`:
+        `AssembledValueList` (a `StoredValuesRef`, its `StoredValue` and its
+        `canonical_json` bytes) or `AssembledFileList` (a `SpooledFilesRef`).
+        Was: one model with `stored_value: StoredValue | None` and
+        `canonical_json: bytes | None`, which admitted "both" and "neither"
+        although the notes allowed exactly one of two shapes; the generated
+        `run_values` passed the optional bytes on where bytes are required
+        and the linker refused it. Why: an either that the type leaves
+        open is an open decision; the union closes it, and a reader of a
+        value list no longer has to prove that its bytes are there.
+
 ## Texts of earlier states changed by State 6
 
 - State 2 (2026-10-11, decision 30 item 2): A03 rule 5 — the process count
