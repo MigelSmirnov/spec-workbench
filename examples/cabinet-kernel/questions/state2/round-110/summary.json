@@ -1,0 +1,205 @@
+{
+ "schema_version": "spec_workbench_question_round.v2",
+ "state": 2,
+ "round": "round-110",
+ "provider": "codex-cli:gpt-5.6-sol:medium",
+ "documents": {
+  "00_product.md": "3f693c12ff79d4df42b2bb69236954147b1ecaab2f04e1040ad711e3f1a80e80",
+  "01_models.md": "226f69279b310ceb5dfc67e166eec6b8cdf0d67f9140eefb0d902a116b831498",
+  "02_rules_flows.md": "ca179df250d033f97588956d5610adba50ab4ea4250cd2c74c73fbdbf9206c3a",
+  "02_rules_functions.md": "879e6c5d2bdc25ff6e2135c9df1128e3c2824542ee0fafc96ba8a2d213bc0e68",
+  "02_rules_installation.md": "a6068f391f2105afafab847d56cf3de51609242ad045c5e0a0a5cf5506d8ea9c",
+  "02_rules_runs.md": "82cb30f1b68bfe01b2778a5fa926a49a820ecee205b4dcc36db08c171f67354d",
+  "02_rules_services.md": "af7946b30b8db92533ab679baef196eb4ce8d4eb61fb5f63245a7d7b162def13"
+ },
+ "reviews": 3,
+ "points": [
+  3,
+  4,
+  4
+ ],
+ "since": "3e4552bc41d4aff7fcb0577c911d864fd2df2308",
+ "judge": {
+  "provider": "codex-cli:gpt-5.6-sol:medium",
+  "raw": "{\"judgements\":[{\"id\":\"T1\",\"kind\":\"answered_later\",\"quotes\":[\"execute_function: [BEHAVIOR] process_count bounds the tasks of the code alive at once: the runner's main thread counts as the first, every live thread and every process the code forked with os.fork counts with its threads, and bubblewrap's own processes are not counted, so process_count 1 allows code without threads or forks. Process creation other than os.fork — subprocess, os.system, os.posix_spawn, os.posix_spawnp and the os.exec family — is subprocess use and raises in the audit hook as a trap hit (A03 rule 4). The runner's audit hook, on os.fork and on starting a thread, counts the tasks of the environment's proc and, when the new task would exceed process_count, writes a resource hit to the channel and raises, so the execution concludes resource_exhausted even when the code catches the error; the runner's limit on the number of processes, process_count + 1, stays the outer bound, and a creation it refuses is reported the same way (A03 required test 2).\",\"execute_function: [BEHAVIOR] A memory, scratch or output bound counts as hit only when the parent observes it from outside: the environment was killed for it, or a MemoryError, or an OSError for a full or over-limit exchange directory, escaped run and reached the parent through the exchange channel; code that catches such an error and returns is judged by what it returned, like any other output (owner, 2026-10-06). Only the process bound is also seen inside, because every thread start and os.fork passes the runner's audit hook.\",\"execute_function: [DETERMINISM_OR_ORDERING] The outcome is the first that holds, in this order of = models.SandboxOutcome: timeout when the wall deadline passed; resource_exhausted when the memory, process, scratch or output bound was hit; sandbox_violation when the channel recorded any trap hit, even if the code caught it and returned a conforming dict; crashed when the module failed to load, has no run, raised, or the process exited abnormally; contract_violation when the returned value is not a dict with exactly the output ports, a value output cannot be serialized to canonical JSON, a file output is not bytes, a many output is not a list, or fit_port_value with bounds.output_bytes as size bound does not fit an output to its port; otherwise succeeded. The stored value ceiling and the spool ceilings are not the sandbox's: the module that stores or spools an output applies them after the execution has otherwise succeeded.\"],\"later_state\":8,\"precedent\":null,\"divergence\":\"\",\"why\":\"State 8 explicitly makes caught process-limit refusals durable resource hits while caught memory, scratch or output exceptions do not count unless they escape to the parent.\"},{\"id\":\"T2\",\"kind\":\"consequential_gap\",\"quotes\":[\"ResourceBounds M04 are enforced with `setrlimit` — address space by the parent, from outside the environment; the process count by the runner inside the environment's user namespace before the code loads, at `process_count` plus one, since a process limit set by the parent counts every process of the kernel's user on the host and the namespace could not be created (decision 30, 2026-10-11) — and the parent's own wall deadline and output count.\",\"Every such limit is set soft and hard to the same value, and the code runs without capabilities (bubblewrap's default for an unprivileged caller, never overridden), so it can neither raise nor bypass a limit.\",\"A runner that cannot set its limit exits before loading the code and the execution is `crashed`; the start probe (rule 8) runs the same runner, so a host where the limit cannot be set does not start the kernel.\",\"The kernel checks at start, before recovery and before the surface opens, that `bubblewrap` is present and that one probe execution succeeds; without both it does not start, and says why.\",\"A new release may change ceilings. They bind contract versions issued after it; a contract version issued earlier keeps its bounds and executes under them even when they exceed the new ceilings, and recorded executions are never reinterpreted.\",\"execute_function: [BEHAVIOR] The parent MUST enforce from outside every bound but the process count, which the runner sets inside as follows: address space limited to bounds.memory_bytes with setrlimit and the size of a file written in the scratch with setrlimit, the only limits the parent sets; the outer process bound is the setrlimit limit on the number of processes at bounds.process_count + 1, set by the runner inside the sandbox's user namespace before it loads the code, soft and hard alike (every limit is set soft and hard to the same value; bubblewrap is started without any capability option, so the code holds none and cannot raise a limit), a runner that cannot set it exiting before it loads the code so the execution is crashed — the one is the task bubblewrap's init would be, and with the runner as the namespace's init it is the margin that keeps the outer bound above the audit hook's exact count; set by the parent, that limit would count every process of the user on the host and bubblewrap could not create its namespace (EAGAIN) — process_count itself being enforced by the runner's audit hook, a wall deadline, the monotonic_ns reading taken when the environment starts plus bounds.wall_time_ms in nanoseconds and held in a local variable of execute_function only, after which — once a later monotonic_ns reading reaches it — it kills every process of the environment by sending SIGKILL, through a pidfd, to the environment's PID-namespace init, the child-pid bubblewrap reports on --info-fd — not to bubblewrap itself or its process group — and then waits for bubblewrap to exit, and an output count, the sum of the canonical bytes (from canonical_bytes) of every value output and the bytes of every file output, a many file output counting each element, compared with bounds.output_bytes; output over a bound is a failure, never truncated.\",\"probe_sandbox: [VALIDATION_ERROR] MUST raise SandboxUnavailableError naming what is missing when the bubblewrap executable, bwrap, cannot be found on the process's PATH, when bwrap --version, which prints \\\"bubblewrap\\\" and the version, names a version other than the imported RELEASE_BWRAP_VERSION constant, when the resolved interpreter path os.path.realpath(sys.executable) lies under no path of the imported SANDBOX_RUNTIME_PATHS constant, when that interpreter, the one execute_function starts inside bubblewrap, run once through bwrap with the same read-only bindings of the imported SANDBOX_RUNTIME_PATHS constant and the same links of the imported SANDBOX_ROOT_SYMLINKS constant to print platform.python_implementation() and platform.python_version() joined by one space, does not print exactly the imported RELEASE_SANDBOX_INTERPRETER constant, or when one probe execution through execute_function of a minimal implementation with no ports, under bounds equal to the imported RELEASE_CEILING_WALL_TIME_MS, RELEASE_CEILING_MEMORY_BYTES, RELEASE_CEILING_OUTPUT_BYTES and RELEASE_CEILING_PROCESS_COUNT constants, does not end succeeded, naming its outcome.\"],\"later_state\":null,\"precedent\":null,\"divergence\":\"One implementer can apply RLIMIT_AS to the child before starting bubblewrap, classify failure to install it as a crashed execution, and probe only the current release ceilings; another can install it later on the in-sandbox runner, treat an outside setup failure as startup or internal failure, and probe stored legacy bounds as well. The owner notices whether the kernel starts, whether an execution is recorded crashed, and whether an older contract whose retained bounds exceed the current ceilings can run.\",\"why\":\"The texts specify who sets each kind of limit and the current-ceiling probe values, but never identify the process receiving RLIMIT_AS, its installation point, or the classification of a parent-side installation failure, and the current-ceiling probe does not cover retained older bounds.\"}]}",
+  "later_documents": {
+   "30_modules.md": "1b75aa67f44eb1b5613cbfeed9099e80d950e8cdda8846155b91d6ebcbafcf06",
+   "40_flows.md": "be072c3e3b2f18c4efdcc15ff4ecf3db0ae636e59b696f8f1efdcde788506db2",
+   "50_public_apis.md": "924afc65a8a121cba7a909b5ba9841e98909e86c14ebf297c21e2ebe26292e43",
+   "60_contracts.md": "a21b5348310139f5a97311d4e2b22c36beb86880412648064030dd4526c5518a",
+   "80_notes.md": "47762b02053123ef27c47d69d7aa689db24f213972327b6284a96e004d776ec2"
+  }
+ },
+ "repeated_topics": 2,
+ "blocking_topics": 1,
+ "deferred_topics": 0,
+ "clear": false,
+ "closed": false,
+ "units": {
+  "02_rules_flows.md:preamble": "6be0fef54ce24c53b9ebfe2e46e753993f8bc78fd0c502ea08e8154ab078bc10",
+  "A05": "e842c8126dd05e90de059cfb2a533064bb5f9559ee89d64740a11cc46ce77b9f",
+  "A06": "ba3375880fbc62e499705ad0ad43d4c1f85f07cb56bae4ae990d577fefc6ba1b",
+  "A07": "844fc781a06bbf9c34afa68c7339ef100ad0d0bb6dbbc432dbb4c7c65a2ef50a",
+  "02_rules_functions.md:preamble": "cbe8d857a78e1ae6f1995cf12408d36fc7429967497a38f169e0aff5548c1a92",
+  "A01": "85ffbf6c5cbab23976cf4823a36a9878c6bedf1b1c019b62fe8a343814e181f5",
+  "A02": "73a3d0c0c4dae15d50c55fb93646954ecd5732838d0c0f8f5e78add5b4631e31",
+  "A03": "cbf75ab802146c7a5ecbef7fdd4076733fffc6bcd277eb2d09526098bb0933a7",
+  "A04": "74d02fbe7ae70dd2a9d6e2fa0746d2fa650e5a4f222b2db4a207cd46d5a405b2",
+  "02_rules_installation.md:preamble": "1fb3048cb39ed15ab1df560d429355a048046aa6cb3e7813192cced00fd5ce0e",
+  "A16": "84baeee9004a56728123ada36a839f6ceaf019b4dff021b1b3f0b36d58c1b1fb",
+  "A17": "39844d38384d797f2137232d2cb1ebfbb25457f3e33a3138d49dd4451cc74cea",
+  "A18": "bc6b5455f19b00df4c6fed7691235261108eb4e13ca07bb30c36ccc5c16dbd8b",
+  "A19": "864708a17cfd05c1dbf34672fbe4903f95b0844b16479b97e69a70890f19e6c2",
+  "A20": "32eee0a5eec2272fdc569a3d422b92d4b210e2b7bfbcf3e9f7801ed110b2e6ad",
+  "A21": "82bfd66e8e361c2cfdf7358fd861c48491f399f7c442d479323463b6a386f92c",
+  "02_rules_runs.md:preamble": "ec291fb4013343c29ba325a7f69f23976e2886bc09c0f1511f536c72a60d5029",
+  "A12": "19731af69004b4a737e28949a0b5ca191e2a8fad132ee27deeb23f9ca2542efc",
+  "A13": "571400bcafc057eaebf291cf0dff6db0081c7e8a59d94f3a9722b11cb2361e09",
+  "A14": "33dc55287b774b0b8bffbe9db868d632df3718dd26568659175a4ec4f855c91d",
+  "A15": "aea56b3a82f581b41c0e2b8e0d6652ae830986890182ce8f0130c92d1fb79f35",
+  "02_rules_runs.md:Carried to later states": "4fd48477c38794be21d172d740b12ffd61086856c17e9a3ef60155a982900179",
+  "02_rules_services.md:preamble": "41934416314f74c10858766b6a587f5e95077dfca7d191b8d0c06d35701ba404",
+  "A08": "8f8c43d23c68da11d04e41701924f7c35ab5e1e955b9c1d8d9c89e76dd3b32a3",
+  "A09": "34b552f78560cb71b4a261d0e8f3053cad3b0b8f201f53bac3ed741ed6a0eeb0",
+  "A10": "7e3db0dfa2ddaa66ca49822a4d314902985cf6e66dbf851c5d032e8987baf3a7",
+  "A11": "a2debf83633f7b0e5064acb8b05fab19ccd66e7f09f5ee8bd4d42efbbc39a933",
+  "context": "d0d3ba875e9b16b1d5dd8d727af23b7af22c8f09452ca86b9bb3d10a47b98fca"
+ },
+ "scope": [
+  "A05",
+  "A03",
+  "context"
+ ],
+ "changed_units": [
+  "A03",
+  "A05",
+  "context"
+ ],
+ "blocked_units": [
+  "A03"
+ ],
+ "set_aside": [
+  0,
+  0,
+  0
+ ],
+ "topics": [
+  {
+   "topic": "Classification and reporting of caught resource-limit hits",
+   "members": [
+    "r1.02",
+    "r2.01",
+    "r3.02"
+   ],
+   "runs": [
+    1,
+    2,
+    3
+   ],
+   "questions": [
+    "Does an allocation or process-creation refusal count as a limit hit even when user code catches the resulting exception and returns conforming outputs, and if so, how must the runner communicate that hit so the parent can enforce the stated outcome precedence?",
+    "When the in-sandbox process limit rejects process or thread creation but user code catches the resulting error and returns conforming output, how does the runner determine that the limit was hit and therefore make `resource_exhausted` take precedence?",
+    "Does a denied allocation or process creation count as `resource_exhausted` even when user code catches the error, and if so what runner-visible evidence records that hit and gives it precedence over success or another outcome?"
+   ],
+   "units": [
+    "?",
+    "A03"
+   ],
+   "id": "T1",
+   "judgement": {
+    "kind": "answered_later",
+    "quotes": [
+     "execute_function: [BEHAVIOR] process_count bounds the tasks of the code alive at once: the runner's main thread counts as the first, every live thread and every process the code forked with os.fork counts with its threads, and bubblewrap's own processes are not counted, so process_count 1 allows code without threads or forks. Process creation other than os.fork — subprocess, os.system, os.posix_spawn, os.posix_spawnp and the os.exec family — is subprocess use and raises in the audit hook as a trap hit (A03 rule 4). The runner's audit hook, on os.fork and on starting a thread, counts the tasks of the environment's proc and, when the new task would exceed process_count, writes a resource hit to the channel and raises, so the execution concludes resource_exhausted even when the code catches the error; the runner's limit on the number of processes, process_count + 1, stays the outer bound, and a creation it refuses is reported the same way (A03 required test 2).",
+     "execute_function: [BEHAVIOR] A memory, scratch or output bound counts as hit only when the parent observes it from outside: the environment was killed for it, or a MemoryError, or an OSError for a full or over-limit exchange directory, escaped run and reached the parent through the exchange channel; code that catches such an error and returns is judged by what it returned, like any other output (owner, 2026-10-06). Only the process bound is also seen inside, because every thread start and os.fork passes the runner's audit hook.",
+     "execute_function: [DETERMINISM_OR_ORDERING] The outcome is the first that holds, in this order of = models.SandboxOutcome: timeout when the wall deadline passed; resource_exhausted when the memory, process, scratch or output bound was hit; sandbox_violation when the channel recorded any trap hit, even if the code caught it and returned a conforming dict; crashed when the module failed to load, has no run, raised, or the process exited abnormally; contract_violation when the returned value is not a dict with exactly the output ports, a value output cannot be serialized to canonical JSON, a file output is not bytes, a many output is not a list, or fit_port_value with bounds.output_bytes as size bound does not fit an output to its port; otherwise succeeded. The stored value ceiling and the spool ceilings are not the sandbox's: the module that stores or spools an output applies them after the execution has otherwise succeeded."
+    ],
+    "later_state": 8,
+    "divergence": "",
+    "why": "State 8 explicitly makes caught process-limit refusals durable resource hits while caught memory, scratch or output exceptions do not count unless they escape to the parent.",
+    "verified": true,
+    "blocking": false
+   }
+  },
+  {
+   "topic": "Resource-limit installation scope, timing, failure handling, and startup-probe coverage",
+   "members": [
+    "r1.00",
+    "r1.01",
+    "r2.02",
+    "r2.03",
+    "r3.01",
+    "r3.03"
+   ],
+   "runs": [
+    1,
+    2,
+    3
+   ],
+   "questions": [
+    "To which process is the address-space limit applied, and is it installed before bubblewrap and Python start-up or only on the in-sandbox runner before loading the implementation?",
+    "What happens when the parent cannot install the address-space limit, and which memory and process-count values must the start probe attempt so that a successful probe establishes that every accepted contract bound can be installed?",
+    "Which `process_count` value does the probe use, and must startup prove that the runner can set every process limit allowed for existing and newly authored contract versions?",
+    "What happens when the parent cannot set the address-space soft and hard limits for an execution, and does the start probe have to detect that condition?",
+    "Which process-count value or set of values must the startup probe attempt so that its success proves every stored and newly issuable contract can set its required limit?",
+    "Which process has `RLIMIT_AS` set, at what point relative to starting bubblewrap, and how is failure of that outside setup classified during the startup probe and during a later execution?"
+   ],
+   "units": [
+    "?",
+    "A03"
+   ],
+   "id": "T2",
+   "judgement": {
+    "kind": "consequential_gap",
+    "quotes": [
+     "ResourceBounds M04 are enforced with `setrlimit` — address space by the parent, from outside the environment; the process count by the runner inside the environment's user namespace before the code loads, at `process_count` plus one, since a process limit set by the parent counts every process of the kernel's user on the host and the namespace could not be created (decision 30, 2026-10-11) — and the parent's own wall deadline and output count.",
+     "Every such limit is set soft and hard to the same value, and the code runs without capabilities (bubblewrap's default for an unprivileged caller, never overridden), so it can neither raise nor bypass a limit.",
+     "A runner that cannot set its limit exits before loading the code and the execution is `crashed`; the start probe (rule 8) runs the same runner, so a host where the limit cannot be set does not start the kernel.",
+     "The kernel checks at start, before recovery and before the surface opens, that `bubblewrap` is present and that one probe execution succeeds; without both it does not start, and says why.",
+     "A new release may change ceilings. They bind contract versions issued after it; a contract version issued earlier keeps its bounds and executes under them even when they exceed the new ceilings, and recorded executions are never reinterpreted.",
+     "execute_function: [BEHAVIOR] The parent MUST enforce from outside every bound but the process count, which the runner sets inside as follows: address space limited to bounds.memory_bytes with setrlimit and the size of a file written in the scratch with setrlimit, the only limits the parent sets; the outer process bound is the setrlimit limit on the number of processes at bounds.process_count + 1, set by the runner inside the sandbox's user namespace before it loads the code, soft and hard alike (every limit is set soft and hard to the same value; bubblewrap is started without any capability option, so the code holds none and cannot raise a limit), a runner that cannot set it exiting before it loads the code so the execution is crashed — the one is the task bubblewrap's init would be, and with the runner as the namespace's init it is the margin that keeps the outer bound above the audit hook's exact count; set by the parent, that limit would count every process of the user on the host and bubblewrap could not create its namespace (EAGAIN) — process_count itself being enforced by the runner's audit hook, a wall deadline, the monotonic_ns reading taken when the environment starts plus bounds.wall_time_ms in nanoseconds and held in a local variable of execute_function only, after which — once a later monotonic_ns reading reaches it — it kills every process of the environment by sending SIGKILL, through a pidfd, to the environment's PID-namespace init, the child-pid bubblewrap reports on --info-fd — not to bubblewrap itself or its process group — and then waits for bubblewrap to exit, and an output count, the sum of the canonical bytes (from canonical_bytes) of every value output and the bytes of every file output, a many file output counting each element, compared with bounds.output_bytes; output over a bound is a failure, never truncated.",
+     "probe_sandbox: [VALIDATION_ERROR] MUST raise SandboxUnavailableError naming what is missing when the bubblewrap executable, bwrap, cannot be found on the process's PATH, when bwrap --version, which prints \"bubblewrap\" and the version, names a version other than the imported RELEASE_BWRAP_VERSION constant, when the resolved interpreter path os.path.realpath(sys.executable) lies under no path of the imported SANDBOX_RUNTIME_PATHS constant, when that interpreter, the one execute_function starts inside bubblewrap, run once through bwrap with the same read-only bindings of the imported SANDBOX_RUNTIME_PATHS constant and the same links of the imported SANDBOX_ROOT_SYMLINKS constant to print platform.python_implementation() and platform.python_version() joined by one space, does not print exactly the imported RELEASE_SANDBOX_INTERPRETER constant, or when one probe execution through execute_function of a minimal implementation with no ports, under bounds equal to the imported RELEASE_CEILING_WALL_TIME_MS, RELEASE_CEILING_MEMORY_BYTES, RELEASE_CEILING_OUTPUT_BYTES and RELEASE_CEILING_PROCESS_COUNT constants, does not end succeeded, naming its outcome."
+    ],
+    "later_state": null,
+    "divergence": "One implementer can apply RLIMIT_AS to the child before starting bubblewrap, classify failure to install it as a crashed execution, and probe only the current release ceilings; another can install it later on the in-sandbox runner, treat an outside setup failure as startup or internal failure, and probe stored legacy bounds as well. The owner notices whether the kernel starts, whether an execution is recorded crashed, and whether an older contract whose retained bounds exceed the current ceilings can run.",
+    "why": "The texts specify who sets each kind of limit and the current-ceiling probe values, but never identify the process receiving RLIMIT_AS, its installation point, or the classification of a parent-side installation failure, and the current-ceiling probe does not cover retained older bounds.",
+    "verified": true,
+    "blocking": true
+   }
+  },
+  {
+   "topic": "Definition of process_count and which processes or threads it counts",
+   "members": [
+    "r2.00"
+   ],
+   "runs": [
+    2
+   ],
+   "questions": [
+    "What exactly does `process_count` count, and which sandbox-owned processes or threads consume the additional one or otherwise count against the limit?"
+   ],
+   "units": [
+    "?"
+   ]
+  },
+  {
+   "topic": "Whether the guarded-edge skip rule applies vacuously to constant-fed ports",
+   "members": [
+    "r3.00"
+   ],
+   "runs": [
+    3
+   ],
+   "questions": [
+    "Does the new per-input skip test apply only to edge-fed ports that have at least one incoming edge, or does a constant-fed port with zero incoming edges satisfy “every incoming edge” vacuously and skip the node?"
+   ],
+   "units": [
+    "context"
+   ]
+  }
+ ],
+ "open_units": [
+  "A05",
+  "A03",
+  "context"
+ ]
+}

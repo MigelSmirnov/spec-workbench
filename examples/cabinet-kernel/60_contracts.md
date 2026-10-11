@@ -735,7 +735,12 @@ item names the module, the witnesses, what the text said and what it says now.
        set soft and hard to the same value and the code holds no capability,
        so it cannot raise one; a runner that cannot set its limit exits before
        loading the code and the execution is `crashed`, and since the start
-       probe runs the same runner such a host never starts the kernel.
+       probe runs the same runner such a host never starts the kernel. Round 110
+       added: the parent sets its limits on the child after the fork and
+       before it executes bubblewrap; a limit the parent cannot set is
+       `crashed` too; the probe sets the current ceilings, and an earlier
+       contract version's larger bounds (A20 rule 4) are set when it executes,
+       `crashed` where the host refuses them.
     3. *How the runner installs a trap* (`sandbox`). An attribute of a module
        is replaced with `setattr` on the module. A method of a class or of a
        built-in type (`datetime.datetime.now`) is replaced by setting, on the

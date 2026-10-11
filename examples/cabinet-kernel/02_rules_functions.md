@@ -210,10 +210,16 @@ and no detection promises the runtime cannot keep.
    30, 2026-10-11) — and the parent's own wall deadline and output
    count. Every such limit is set soft and hard to the same value, and the code
    runs without capabilities (bubblewrap's default for an unprivileged
-   caller, never overridden), so it can neither raise nor bypass a limit. A
-   runner that cannot set its limit exits before loading the code and the
-   execution is `crashed`; the start probe (rule 8) runs the same runner, so a
-   host where the limit cannot be set does not start the kernel. The output count is the sum of the canonical JSON bytes of every
+   caller, never overridden), so it can neither raise nor bypass a limit. The
+   parent sets its limits on the child it starts, after the fork and before it
+   executes bubblewrap, so they hold for bubblewrap and everything inside. A
+   limit that cannot be set — by the parent before bubblewrap starts, or by the
+   runner before the code loads — means the code never runs and the execution
+   is `crashed`. The start probe (rule 8) sets its limits at the current
+   ceilings the same way, so a host where they cannot be set does not start
+   the kernel; an earlier contract version's larger bounds (A20 rule 4) are set
+   only when it executes, and an execution whose bounds the host refuses is
+   `crashed` by the same rule. The output count is the sum of the canonical JSON bytes of every
    `value` output and the bytes of every `file` output of the one call of `run` —
    for a `many` file output, the sum of its elements' bytes. Outcomes are closed and checked in this order, the first that holds
    deciding: wall deadline passed — `timeout`; a limit hit (memory, process count,
