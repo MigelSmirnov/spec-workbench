@@ -976,6 +976,46 @@ item names the module, the witnesses, what the text said and what it says now.
     returns the output model, whose sequences are tuples; that is the
     fixture's (code-factory `factory/cabinet-kernel-fixture-verify`).
 
+## Decision closed at the third verification (2026-10-11)
+
+31. **The third verification: seven texts made direct.** Route B run 11 on
+    decision 30 generated every module; with the linker fixed (code-factory
+    #74) and the tuple rule in the prompt (#75), `runs` regenerated, the
+    deployed kernel did not start: the probe execution crashed. On a copy
+    with seven fixes written as the texts below say, the witnesses gave 130 of
+    130 (from 0, then 112, 122). Each item names what the generated code did.
+
+    1. *A trapped path is a method when its owner is a class* (`sandbox`). The
+       runner subclassed only the trapped class and set
+       `datetime.datetime.now` on the built-in type, which raised before any
+       code ran: every execution crashed, so the kernel never started. The
+       trap note now chooses the way per path by the object before its last
+       dot.
+    2. *A request that does not fit is `invalid_request`* (`surface`). The fit
+       raised pydantic's ValidationError, which `translate_failure` answers
+       `internal_error`; the note now raises it again as InvalidRequestError.
+       Witnesses: a01 caller-supplied identity, a04 verdict only by kernel,
+       a16 schema before record read, a17 instance fixed, a19 request time.
+    3. *Answer bytes are base64* (`surface`). The note said so; the code used
+       `model_dump_json`, which writes bytes as UTF-8. Witnesses: a14 cancel,
+       failed spool, cancel owner-only; a15 spool run ceiling, file outlives
+       run.
+    4. *The runner measures the output count before encoding* (`sandbox`). A
+       128 MiB file output was encoded inside the environment and exhausted
+       its address space: `crashed`, not `resource_exhausted`. Witness: a15
+       spool file ceiling.
+    5. *An edge is disabled only after its source concluded* (`runs`). The
+       code judged a guard of a source not yet run as disabled and skipped its
+       target at once. Witnesses: a13 guard skip transitive, upstream_failed
+       wins over skip.
+    6. *A resting run carries the outputs produced so far* (`runs`). Only the
+       final change carried outputs; A13 rule 7 shows them on a resting run.
+       Witnesses: a14 resume resends unreachable, recovery before surface.
+    7. *An ElementFailed is failed whatever its status* (`runs`). The
+       applied-outputs-unknown conclusion has status `outcome_unknown`, which
+       the code's failed list left out. Witnesses: a11 applied with outputs,
+       a13 advance only inside request, resolved unknown conclusion.
+
 ## Texts of earlier states changed by State 6
 
 - State 2 (2026-10-11, decision 30 item 2): A03 rule 5 — the process count
