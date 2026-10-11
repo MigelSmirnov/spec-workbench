@@ -151,8 +151,8 @@ and no detection promises the runtime cannot keep.
 1. Every function execution, in trial and in a run alike, runs in a fresh
    isolated environment created by the sandbox: Linux `bubblewrap` with new user,
    PID, IPC, UTS and network namespaces, no network interface but the namespace's own loopback — up, as bubblewrap leaves it in a new network namespace, and reaching nothing outside the execution, so K-02's "no network" holds; this is a property of how the kernel starts bubblewrap, which the kernel does not inspect or verify at run time — the start check (rule 8) asks only that a probe execution succeeds — an environment
-   holding only `PYTHONHASHSEED=0` (rule 2), a read-only runtime, and one private exchange directory bounded by
-   `sandbox_scratch_bytes_max`. No host directory is mounted except the read-only
+   holding only `PYTHONHASHSEED=0` (rule 2), a read-only runtime, and one private exchange directory in which every file the code writes is
+   bounded by `sandbox_scratch_bytes_max` (rule 5). No host directory is mounted except the read-only
    runtime and that exchange directory. There is no in-process or fast path.
 2. The runtime is one Python interpreter with its standard library and nothing
    else, fixed by the kernel release (State 0 questions 4 and 17: photo processing
@@ -209,12 +209,12 @@ and no detection promises the runtime cannot keep.
    kernel's user on the host, and the namespace could not be created; decision
    30, 2026-10-11). Every limit is set soft and hard to the same value, and the
    code runs without capabilities (bubblewrap's default for an unprivileged
-   caller, never overridden), so it can neither raise nor bypass one. The parent
-   keeps, from outside, the wall deadline, the scratch total and the output
-   count. The scratch total is measured once, when the environment has ended:
-   the apparent sizes of the distinct regular files (each inode once) under the
-   exchange directory, the files the parent put there excluded; directories and
-   links count nothing, and a file removed before the end is not counted. A runner that cannot set a limit exits before loading the code and
+   caller, never overridden), so it can neither raise nor bypass one. The size
+   limit is the host kernel's own: the runner ignores the signal the host sends
+   for a write past it, so the write fails with an error the code can see, and
+   the directory as a whole has no separate bound in this release (decision 30:
+   a total measured by the kernel depends on what and when it measures). The
+   parent keeps, from outside, the wall deadline and the output count. A runner that cannot set a limit exits before loading the code and
    the execution is `crashed`. The start probe (rule 8) runs the same runner
    with the current ceilings, so a host where they cannot be set does not
    start the kernel; an earlier contract version's larger bounds (A20 rule 4)
