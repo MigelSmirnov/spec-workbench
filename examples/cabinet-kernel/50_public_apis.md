@@ -1173,7 +1173,7 @@ used; a bounded `failure_detail` otherwise.
 
 ### Observable effect
 
-A fresh environment was created and, on every result but `crashed` with `cleanup_failed`, confirmed removed — except when the parent could not set a limit before starting bubblewrap: then no environment was created and the execution is `crashed` (A03 rule 5).
+A fresh environment was created and, on every result but `crashed` with `cleanup_failed`, confirmed removed — except when the parent could not set a limit before starting bubblewrap: then no environment was created, the execution is `crashed` (A03 rule 5), and its resources used are the elapsed wall time with memory and output both zero, since no code ran.
 
 ### Enforces
 

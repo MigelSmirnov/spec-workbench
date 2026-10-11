@@ -740,7 +740,9 @@ item names the module, the witnesses, what the text said and what it says now.
        before it executes bubblewrap; a limit the parent cannot set is
        `crashed` too; the probe sets the current ceilings, and an earlier
        contract version's larger bounds (A20 rule 4) are set when it executes,
-       `crashed` where the host refuses them.
+       `crashed` where the host refuses them. When the parent cannot set
+       them no environment is created; the result's resources used are the
+       elapsed wall time with memory and output 0 (State 5 round 116).
     3. *How the runner installs a trap* (`sandbox`). An attribute of a module
        is replaced with `setattr` on the module. A method of a class or of a
        built-in type (`datetime.datetime.now`) is replaced by setting, on the
