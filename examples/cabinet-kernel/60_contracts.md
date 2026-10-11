@@ -932,9 +932,12 @@ item names the module, the witnesses, what the text said and what it says now.
     directory (measured by the parent while it waits, a resource hit past it);
     a refused verdict returns no Activation (item 16); a guard value is a
     member when its UTF-8 bytes equal `canonical_bytes` of the member's JSON
-    (item 8); the write-before-delivery rule of item 9 covers derived inputs
-    only — an output, the `[]` of a mapped node over an empty list included,
-    is written with its NodeExecution.
+    (item 8); the write-before-delivery rule of item 9 covers the values runs
+    derives and no NodeExecution names — a mapped element's value and a
+    non-empty mapped node's array output — while a value a NodeExecution names
+    as an output, the `[]` of a mapped node over an empty list included, is
+    written with that NodeExecution (round 25 corrected round 24's wording,
+    which had excluded every output).
 
     *Not changed here.* Three witnesses send to a service the installation
     gives no credential (`kernel_a06_new_version_inherits_nothing`,
