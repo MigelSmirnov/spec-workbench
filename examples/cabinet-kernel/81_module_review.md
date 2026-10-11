@@ -506,6 +506,10 @@ of its own; `test_restart_turns_in_flight_unknown` still holds (the element wait
 `outcome_unknown`, the run rests `pending`). No verdict changed; every `slice_sha256`
 recomputed with the admission's own `build_slice`.
 
+## Decision 32 item 21 delta (2026-10-12)
+
+`AssembledList` became a discriminated union of `AssembledValueList` and `AssembledFileList` after the linker refused the optional bytes `run_values` passed on. It moved `models`, `run_values`, `run_graph`. State 7 rounds 57-58 closed clear. No verdict changed; hashes recomputed.
+
 ## Remarks, not blocking
 
 - **Published `inputSchema` and null.** By decision 22's closed rule, the published `inputSchema`
