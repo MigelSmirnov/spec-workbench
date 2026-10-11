@@ -213,7 +213,13 @@ and no detection promises the runtime cannot keep.
    limit is the host kernel's own: the runner ignores the signal the host sends
    for a write past it, so the write fails with an error the code can see, and
    the directory as a whole has no separate bound in this release (decision 30:
-   a total measured by the kernel depends on what and when it measures). The
+   a total measured by the kernel depends on what and when it measures). Only
+   that error is a scratch hit: a write that fails because host storage is
+   exhausted is an ordinary raised error (`crashed` if it escapes `run`), and
+   this release promises no isolation of host storage beyond the per-file
+   bound. Code that restores the signal's default and is killed by it exited
+   abnormally (`crashed`); a short or partial write is the code's own concern,
+   and the file goes with the exchange directory. The
    parent keeps, from outside, the wall deadline and the output count. A runner that cannot set a limit exits before loading the code and
    the execution is `crashed`. The start probe (rule 8) runs the same runner
    with the current ceilings, so a host where they cannot be set does not

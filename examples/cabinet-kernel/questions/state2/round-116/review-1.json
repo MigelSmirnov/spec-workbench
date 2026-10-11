@@ -1,0 +1,72 @@
+{
+ "open_points": [
+  {
+   "subject": "A03 rule 5 scratch-limit outcome detection",
+   "kind": "unverifiable precedence",
+   "text": "The size limit is the host kernel's own: the runner ignores the signal the host sends for a write past it, so the write fails with an error the code can see ... Outcomes are closed and checked in this order ... a limit hit (memory, process count, scratch, `output_bytes`) — `resource_exhausted`.",
+   "question": "If user code catches the failed write and returns conforming outputs, how does the runner learn that the scratch limit was hit so that `resource_exhausted` still takes precedence?",
+   "options": [
+    "The runner independently records every RLIMIT_FSIZE hit and returns `resource_exhausted` even when caught",
+    "A caught write error is ordinary program behavior and the execution may succeed",
+    "The execution is `crashed` if the write error escapes, otherwise it may succeed"
+   ],
+   "default_guess": "Record the limit hit independently and classify the execution `resource_exhausted`.",
+   "unit": "A03"
+  },
+  {
+   "subject": "A03 rule 5 SIGXFSZ handling",
+   "kind": "bypass ambiguity",
+   "text": "The runner ignores the signal the host sends for a write past it.",
+   "question": "May agent code replace the runner's SIGXFSZ disposition, and if it does, is termination by that signal `resource_exhausted`, `crashed`, or a sandbox violation?",
+   "options": [
+    "Prevent or override changes to SIGXFSZ and always classify a hit as `resource_exhausted`",
+    "Permit handler changes but classify signal termination as `resource_exhausted`",
+    "Permit handler changes and classify abnormal termination as `crashed`"
+   ],
+   "default_guess": "Keep SIGXFSZ ignored in a way user code cannot alter and classify the recorded hit as `resource_exhausted`.",
+   "unit": "A03"
+  },
+  {
+   "subject": "A03 per-file scratch writes versus A20 no truncation",
+   "kind": "contradiction",
+   "text": "The size limit is the host kernel's own ... the write fails with an error the code can see. A20 says: \"Over a ceiling is always a refusal or a failure, never a truncation — for code, values, files, requests, responses and outputs.\"",
+   "question": "When one write crosses RLIMIT_FSIZE and the host performs a short write up to the limit, is that partial scratch-file write permitted, discarded, or treated as forbidden truncation?",
+   "options": [
+    "Partial scratch writes are permitted but the execution is `resource_exhausted`",
+    "All files from the attempt are discarded when the limit is hit",
+    "The implementation must arrange writes so a crossing write publishes no partial bytes"
+   ],
+   "default_guess": "Allow the kernel's partial write semantics, classify `resource_exhausted`, and discard the attempt's scratch contents.",
+   "unit": "A03"
+  },
+  {
+   "subject": "A03 unbounded aggregate scratch directory",
+   "kind": "uncovered exhaustion",
+   "text": "The directory as a whole has no separate bound in this release.",
+   "question": "What outcome applies when many individually valid files exhaust filesystem bytes, quotas, or inodes before any file reaches `sandbox_scratch_bytes_max`, and what prevents that execution from exhausting storage used by the kernel or other executions?",
+   "options": [
+    "Treat ENOSPC, EDQUOT, and inode exhaustion as scratch `resource_exhausted` and isolate scratch capacity from kernel storage",
+    "Let the write error reach the code; the execution may succeed if it catches it",
+    "Treat an escaping storage error as `crashed` and provide no aggregate storage guarantee"
+   ],
+   "default_guess": "Classify host storage exhaustion during a scratch write as `resource_exhausted` and place scratch on storage isolated from durable kernel data.",
+   "unit": "A03"
+  },
+  {
+   "subject": "A03 address-space limit moved inside the loaded runner",
+   "kind": "bound semantics",
+   "text": "ResourceBounds M04 are enforced with `setrlimit` by the runner, inside the environment's user namespace, before the code loads: address space ...",
+   "question": "What happens when the Python runner and interpreter already occupy more virtual address space than the contract's `memory_bytes` when the runner sets RLIMIT_AS, especially if setting the lower hard limit succeeds?",
+   "options": [
+    "Refuse or crash the execution before loading code when the runner's existing address space exceeds the requested bound",
+    "Allow the pre-existing runner footprint above the bound and restrict only subsequent allocations",
+    "Define `memory_bytes` as memory available to user code in addition to the runner footprint"
+   ],
+   "default_guess": "Exit before loading code and record `crashed` when the existing runner footprint already exceeds the requested address-space bound.",
+   "unit": "A03"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A03 rule 5 scratch-limit outcome detection\",\"kind\":\"unverifiable precedence\",\"text\":\"The size limit is the host kernel's own: the runner ignores the signal the host sends for a write past it, so the write fails with an error the code can see ... Outcomes are closed and checked in this order ... a limit hit (memory, process count, scratch, `output_bytes`) — `resource_exhausted`.\",\"question\":\"If user code catches the failed write and returns conforming outputs, how does the runner learn that the scratch limit was hit so that `resource_exhausted` still takes precedence?\",\"options\":[\"The runner independently records every RLIMIT_FSIZE hit and returns `resource_exhausted` even when caught\",\"A caught write error is ordinary program behavior and the execution may succeed\",\"The execution is `crashed` if the write error escapes, otherwise it may succeed\"],\"default_guess\":\"Record the limit hit independently and classify the execution `resource_exhausted`.\",\"unit\":\"A03\"},{\"subject\":\"A03 rule 5 SIGXFSZ handling\",\"kind\":\"bypass ambiguity\",\"text\":\"The runner ignores the signal the host sends for a write past it.\",\"question\":\"May agent code replace the runner's SIGXFSZ disposition, and if it does, is termination by that signal `resource_exhausted`, `crashed`, or a sandbox violation?\",\"options\":[\"Prevent or override changes to SIGXFSZ and always classify a hit as `resource_exhausted`\",\"Permit handler changes but classify signal termination as `resource_exhausted`\",\"Permit handler changes and classify abnormal termination as `crashed`\"],\"default_guess\":\"Keep SIGXFSZ ignored in a way user code cannot alter and classify the recorded hit as `resource_exhausted`.\",\"unit\":\"A03\"},{\"subject\":\"A03 per-file scratch writes versus A20 no truncation\",\"kind\":\"contradiction\",\"text\":\"The size limit is the host kernel's own ... the write fails with an error the code can see. A20 says: \\\"Over a ceiling is always a refusal or a failure, never a truncation — for code, values, files, requests, responses and outputs.\\\"\",\"question\":\"When one write crosses RLIMIT_FSIZE and the host performs a short write up to the limit, is that partial scratch-file write permitted, discarded, or treated as forbidden truncation?\",\"options\":[\"Partial scratch writes are permitted but the execution is `resource_exhausted`\",\"All files from the attempt are discarded when the limit is hit\",\"The implementation must arrange writes so a crossing write publishes no partial bytes\"],\"default_guess\":\"Allow the kernel's partial write semantics, classify `resource_exhausted`, and discard the attempt's scratch contents.\",\"unit\":\"A03\"},{\"subject\":\"A03 unbounded aggregate scratch directory\",\"kind\":\"uncovered exhaustion\",\"text\":\"The directory as a whole has no separate bound in this release.\",\"question\":\"What outcome applies when many individually valid files exhaust filesystem bytes, quotas, or inodes before any file reaches `sandbox_scratch_bytes_max`, and what prevents that execution from exhausting storage used by the kernel or other executions?\",\"options\":[\"Treat ENOSPC, EDQUOT, and inode exhaustion as scratch `resource_exhausted` and isolate scratch capacity from kernel storage\",\"Let the write error reach the code; the execution may succeed if it catches it\",\"Treat an escaping storage error as `crashed` and provide no aggregate storage guarantee\"],\"default_guess\":\"Classify host storage exhaustion during a scratch write as `resource_exhausted` and place scratch on storage isolated from durable kernel data.\",\"unit\":\"A03\"},{\"subject\":\"A03 address-space limit moved inside the loaded runner\",\"kind\":\"bound semantics\",\"text\":\"ResourceBounds M04 are enforced with `setrlimit` by the runner, inside the environment's user namespace, before the code loads: address space ...\",\"question\":\"What happens when the Python runner and interpreter already occupy more virtual address space than the contract's `memory_bytes` when the runner sets RLIMIT_AS, especially if setting the lower hard limit succeeds?\",\"options\":[\"Refuse or crash the execution before loading code when the runner's existing address space exceeds the requested bound\",\"Allow the pre-existing runner footprint above the bound and restrict only subsequent allocations\",\"Define `memory_bytes` as memory available to user code in addition to the runner footprint\"],\"default_guess\":\"Exit before loading code and record `crashed` when the existing runner footprint already exceeds the requested address-space bound.\",\"unit\":\"A03\"}]}",
+ "set_aside": []
+}

@@ -737,7 +737,10 @@ item names the module, the witnesses, what the text said and what it says now.
        while the code runs depends on when it is read (State 2 round 114), and
        one measured at the end left open whose files count and what a failed
        measurement gives (round 115); A03 rule 1 now says the bound is per
-       file. A runner
+       file. Only EFBIG is a scratch hit; exhausted host storage (ENOSPC,
+       EDQUOT) is an ordinary error, and code killed by SIGXFSZ after
+       restoring its default exited abnormally — both `crashed` (round 116).
+       A runner
        that cannot set a limit exits before loading the code and the execution
        is `crashed`; the start probe runs the same runner with the current
        ceilings, so such a host never starts the kernel, and an earlier

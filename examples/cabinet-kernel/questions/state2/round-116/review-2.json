@@ -1,0 +1,71 @@
+{
+ "open_points": [
+  {
+   "subject": "A03 rule 5 and ResourceBounds M04",
+   "kind": "model contradiction",
+   "text": "“ResourceBounds M04 are enforced with `setrlimit` … [including] the size of a file written in the scratch” conflicts with M04, whose only fields are `wall_time_ms`, `memory_bytes`, `output_bytes` and `process_count`; `sandbox_scratch_bytes_max` is instead a release-wide A20 ceiling.",
+   "question": "Is the per-file scratch limit the release constant `sandbox_scratch_bytes_max`, or is it a new per-contract ResourceBounds field?",
+   "options": [
+    "Use the release-wide `sandbox_scratch_bytes_max`",
+    "Add a scratch-file-size field to ResourceBounds M04"
+   ],
+   "default_guess": "Use the release-wide `sandbox_scratch_bytes_max`.",
+   "unit": "A03"
+  },
+  {
+   "subject": "A03 scratch-limit outcome",
+   "kind": "unobservable precedence",
+   "text": "“the runner ignores the signal … so the write fails with an error the code can see” and “a limit hit … scratch … `resource_exhausted`” do not say how the runner learns that the limit was hit when user code catches the write error and returns conforming output; unlike rule 4 traps, no hit is recorded to the parent.",
+   "question": "How is a scratch-file limit hit detected and made to win as `resource_exhausted` when the implementation catches the resulting error?",
+   "options": [
+    "Record every `SIGXFSZ`/`EFBIG` event through a protected runner channel",
+    "Classify it only when it terminates or escapes from the implementation",
+    "Allow a caught limit error followed by conforming output to succeed"
+   ],
+   "default_guess": "Record the event through a protected runner channel and classify the execution `resource_exhausted`.",
+   "unit": "A03"
+  },
+  {
+   "subject": "A03 scratch writes and SIGXFSZ",
+   "kind": "platform contradiction",
+   "text": "“the runner ignores the signal the host sends for a write past it, so the write fails with an error” assumes behavior that user code can change through the standard library’s signal APIs, and a write crossing `RLIMIT_FSIZE` may make a partial write before a later error; A20 says over a ceiling is a failure, “never a truncation.”",
+   "question": "Must the sandbox prevent code from changing `SIGXFSZ` handling and treat partial writes at the file-size boundary as a recorded limit hit, or are termination, partial files, and caught errors permitted to determine another outcome?",
+   "options": [
+    "Lock or trap signal-handler changes and record any boundary hit as `resource_exhausted`",
+    "Permit normal Linux signal and partial-write behavior but still specify its outcome mapping",
+    "Treat only an uncaught `SIGXFSZ` or `EFBIG` as a limit hit"
+   ],
+   "default_guess": "Prevent alteration of `SIGXFSZ` handling and classify any attempted write beyond the ceiling as `resource_exhausted`, discarding the partial result.",
+   "unit": "A03"
+  },
+  {
+   "subject": "A03 runner files versus code files",
+   "kind": "limit scope ambiguity",
+   "text": "Rule 1 limits “every file the code writes,” while rule 5 applies `RLIMIT_FSIZE` to the runner process before code loads and calls it “the size of a file written in the scratch.” The process limit also affects files the runner itself creates for loading, exchange, output, or control.",
+   "question": "Which scratch files are subject to the file-size limit, and how is a limit hit by runner-owned exchange infrastructure classified?",
+   "options": [
+    "All regular files written by the runner process, including exchange infrastructure",
+    "Only files opened or modified on behalf of user code",
+    "Separate runner infrastructure from the limited code process"
+   ],
+   "default_guess": "Separate runner infrastructure from the limited code process so only code-created scratch files consume this limit.",
+   "unit": "A03"
+  },
+  {
+   "subject": "A03 unbounded scratch directory",
+   "kind": "host exhaustion undefined",
+   "text": "“the directory as a whole has no separate bound in this release” permits many individually bounded files, but the rules do not say what happens when their aggregate exhausts the backing filesystem or a host quota.",
+   "question": "What execution outcome and kernel behavior apply when scratch creation or writing fails because aggregate scratch usage exhausts host storage rather than because one file reaches `sandbox_scratch_bytes_max`?",
+   "options": [
+    "Classify the execution `resource_exhausted`",
+    "Classify an uncaught storage error as `crashed` and allow a caught one to continue",
+    "Treat host-storage exhaustion as a fatal sandbox or kernel failure"
+   ],
+   "default_guess": "Classify the execution `resource_exhausted` and discard its outputs.",
+   "unit": "A03"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A03 rule 5 and ResourceBounds M04\",\"kind\":\"model contradiction\",\"text\":\"“ResourceBounds M04 are enforced with `setrlimit` … [including] the size of a file written in the scratch” conflicts with M04, whose only fields are `wall_time_ms`, `memory_bytes`, `output_bytes` and `process_count`; `sandbox_scratch_bytes_max` is instead a release-wide A20 ceiling.\",\"question\":\"Is the per-file scratch limit the release constant `sandbox_scratch_bytes_max`, or is it a new per-contract ResourceBounds field?\",\"options\":[\"Use the release-wide `sandbox_scratch_bytes_max`\",\"Add a scratch-file-size field to ResourceBounds M04\"],\"default_guess\":\"Use the release-wide `sandbox_scratch_bytes_max`.\",\"unit\":\"A03\"},{\"subject\":\"A03 scratch-limit outcome\",\"kind\":\"unobservable precedence\",\"text\":\"“the runner ignores the signal … so the write fails with an error the code can see” and “a limit hit … scratch … `resource_exhausted`” do not say how the runner learns that the limit was hit when user code catches the write error and returns conforming output; unlike rule 4 traps, no hit is recorded to the parent.\",\"question\":\"How is a scratch-file limit hit detected and made to win as `resource_exhausted` when the implementation catches the resulting error?\",\"options\":[\"Record every `SIGXFSZ`/`EFBIG` event through a protected runner channel\",\"Classify it only when it terminates or escapes from the implementation\",\"Allow a caught limit error followed by conforming output to succeed\"],\"default_guess\":\"Record the event through a protected runner channel and classify the execution `resource_exhausted`.\",\"unit\":\"A03\"},{\"subject\":\"A03 scratch writes and SIGXFSZ\",\"kind\":\"platform contradiction\",\"text\":\"“the runner ignores the signal the host sends for a write past it, so the write fails with an error” assumes behavior that user code can change through the standard library’s signal APIs, and a write crossing `RLIMIT_FSIZE` may make a partial write before a later error; A20 says over a ceiling is a failure, “never a truncation.”\",\"question\":\"Must the sandbox prevent code from changing `SIGXFSZ` handling and treat partial writes at the file-size boundary as a recorded limit hit, or are termination, partial files, and caught errors permitted to determine another outcome?\",\"options\":[\"Lock or trap signal-handler changes and record any boundary hit as `resource_exhausted`\",\"Permit normal Linux signal and partial-write behavior but still specify its outcome mapping\",\"Treat only an uncaught `SIGXFSZ` or `EFBIG` as a limit hit\"],\"default_guess\":\"Prevent alteration of `SIGXFSZ` handling and classify any attempted write beyond the ceiling as `resource_exhausted`, discarding the partial result.\",\"unit\":\"A03\"},{\"subject\":\"A03 runner files versus code files\",\"kind\":\"limit scope ambiguity\",\"text\":\"Rule 1 limits “every file the code writes,” while rule 5 applies `RLIMIT_FSIZE` to the runner process before code loads and calls it “the size of a file written in the scratch.” The process limit also affects files the runner itself creates for loading, exchange, output, or control.\",\"question\":\"Which scratch files are subject to the file-size limit, and how is a limit hit by runner-owned exchange infrastructure classified?\",\"options\":[\"All regular files written by the runner process, including exchange infrastructure\",\"Only files opened or modified on behalf of user code\",\"Separate runner infrastructure from the limited code process\"],\"default_guess\":\"Separate runner infrastructure from the limited code process so only code-created scratch files consume this limit.\",\"unit\":\"A03\"},{\"subject\":\"A03 unbounded scratch directory\",\"kind\":\"host exhaustion undefined\",\"text\":\"“the directory as a whole has no separate bound in this release” permits many individually bounded files, but the rules do not say what happens when their aggregate exhausts the backing filesystem or a host quota.\",\"question\":\"What execution outcome and kernel behavior apply when scratch creation or writing fails because aggregate scratch usage exhausts host storage rather than because one file reaches `sandbox_scratch_bytes_max`?\",\"options\":[\"Classify the execution `resource_exhausted`\",\"Classify an uncaught storage error as `crashed` and allow a caught one to continue\",\"Treat host-storage exhaustion as a fatal sandbox or kernel failure\"],\"default_guess\":\"Classify the execution `resource_exhausted` and discard its outputs.\",\"unit\":\"A03\"}]}",
+ "set_aside": []
+}
