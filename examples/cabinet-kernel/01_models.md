@@ -706,9 +706,11 @@ Candidate fields:
 - `guard`: present when the edge is guarded — an output port of the same source
   node whose value schema is a closed set of values, and the one member of that
   set that enables the edge when that port's value equals it; the proof refuses a
-  guard on a port without a closed set or with a value outside it. A node one of whose input ports has every incoming edge disabled by
-  its guard, or coming from a skipped node, is not executed and is recorded
-  `skipped_by_guard` (A13 rule 4, per input port); several enabled guarded edges each
+  guard on a port without a closed set or with a value outside it. A node one of whose input ports can no longer receive a value, because
+  every edge into that port is disabled by its guard or comes from a skipped
+  node, is not executed and is recorded `skipped_by_guard` (A13 rule 4, per
+  input port) — a port fed by a constant receives it and is never skipped, and
+  `upstream_failed` wins when both apply (A13); several enabled guarded edges each
   deliver independently, and the proof refuses two edges that can both deliver to
   one input port, whatever its cardinality (State 2, A05).
 
