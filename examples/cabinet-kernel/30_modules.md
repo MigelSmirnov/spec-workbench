@@ -13,26 +13,26 @@ is the one mapping;
 
 | decision | primary owner | consumers |
 |---|---|---|
-| A01 | `canonical_values` | `store`, `functions`, `flows`, `runs`, `store_persistence` |
+| A01 | `canonical_values` | `store`, `functions`, `flows`, `runs`, `run_values`, `store_persistence` |
 | A02 | `functions` | `canonical_values`, `data_provider` |
-| A03 | `sandbox` | `functions`, `runs`, `surface`, `data_provider` |
+| A03 | `sandbox` | `sandbox_runner`, `functions`, `runs`, `surface`, `data_provider` |
 | A04 | `functions` | `store`, `sandbox`, `canonical_values` |
 | A05 | `flows` | `canonical_values`, `bindings` |
 | A06 | `flows` | `surface` |
-| A07 | `surface` | `canonical_values`, `flows`, `runs`, `functions`, `effects` |
+| A07 | `surface` | `canonical_values`, `flows`, `runs`, `run_values`, `functions`, `effects` |
 | A08 | `bindings` | `installation`, `service_invoker`, `effects`, `data_provider` |
 | A09 | `service_invoker` | `bindings`, `effects`, `installation`, `data_provider`, `surface` |
 | A10 | `effects` | `service_invoker`, `runs`, `surface` |
-| A11 | `effects` | `runs`, `store` |
+| A11 | `effects` | `runs`, `run_graph`, `store` |
 | A12 | `runs` | `functions`, `flows`, `canonical_values` |
-| A13 | `runs` | `sandbox`, `effects`, `canonical_values` |
-| A14 | `runs` | `effects`, `store`, `surface` |
-| A15 | `runs` | `store`, `functions`, `effects`, `surface` |
+| A13 | `run_graph` | `runs`, `run_values`, `sandbox`, `effects`, `canonical_values` |
+| A14 | `runs` | `run_graph`, `effects`, `store`, `surface` |
+| A15 | `runs` | `run_graph`, `run_values`, `store`, `functions`, `effects`, `surface` |
 | A16 | `surface` | `installation`, `store`, `data_provider` |
 | A17 | `installation` | `service_invoker`, `sandbox` |
 | A18 | `store` | `runs`, `surface`, `store_persistence` |
-| A19 | `clock` | `sandbox`, `service_invoker`, `functions`, `effects`, `runs`, `bindings`, `flows` |
-| A20 | `data_provider` | `functions`, `sandbox`, `service_invoker`, `store`, `runs`, `surface` |
+| A19 | `clock` | `sandbox`, `service_invoker`, `functions`, `effects`, `runs`, `run_graph`, `bindings`, `flows` |
+| A20 | `data_provider` | `functions`, `sandbox`, `sandbox_runner`, `service_invoker`, `store`, `runs`, `run_values`, `surface` |
 
 The kernel is one process with one writer (K-17), so modules are not services:
 they are the parts of one program, and only `store` touches the database and the
@@ -44,12 +44,13 @@ from the bottom up:
 
 ```text
 models, data_provider
-canonical_values, clock, store_persistence
+canonical_values, clock, store_persistence, sandbox_runner
 store, installation
-sandbox, service_invoker
+sandbox, service_invoker, run_values
 functions, bindings
 flows
 effects
+run_graph
 runs
 surface
 ```
@@ -81,7 +82,8 @@ record checked by `design_lint --state 2`, recorded as such in `30_trace.json`.
   module, named in its section. Three have several, on purpose: StoredValue M21
   and value bytes are written by whichever module produces or receives the
   value — `flows` for constants, `functions` for trial values, `runs` for flow
-  inputs and function outputs, `effects` for service outputs — always
+  inputs and function outputs, `run_values` for the values a run derives for
+  delivery (below, "Delivering a value"), `effects` for service outputs — always
   through `store.put_value_bytes`, which stores equal bytes once (A18 rule 4);
   SpooledFile M22 and its bytes are written by the module that receives the
   file — `runs` for a function's file output, `effects` for a service's —
@@ -92,7 +94,8 @@ record checked by `design_lint --state 2`, recorded as such in `30_trace.json`.
   because it must share `effects`' outcome transaction (A11 rule 1), and by
   `runs` for every other record — an operation element concluded
   `contract_violation` on a misfit input before `effects` is called included
-  (A13 rule 3).
+  (A13 rule 3), and the skips and upstream failures `run_graph` derives as
+  drafts.
 - **Reading records.** A module reads what a module it may know owns through
   that module's capability, and never decides from another module's raw
   records. The one exception is `surface` returning records as they are for
@@ -101,9 +104,10 @@ record checked by `design_lint --state 2`, recorded as such in `30_trace.json`.
   versions through `functions.read_contract_version` and bindings through
   `bindings.read_binding`; `effects` reads bindings the same way and a flow
   version's nodes through `flows.read_flow_version`; `runs` reads the pinned
-  graph through `flows.read_flow_version`, the pinned code and bounds through
-  `functions.read_implementation`, and an operation element's conclusion
-  (A11 rule 3) through `effects.operation_element_conclusion`. No module reads
+  graph through `flows.read_flow_version` and the pinned code and bounds through
+  `functions.read_implementation`, and passes the graph and the run's trace to
+  `run_graph`, which reads an operation element's conclusion (A11 rule 3)
+  through `effects.operation_element_conclusion`. No module reads
   the records of a module above it.
 - **Facts passed down.** When a lower module needs a fact a module above owns,
   the caller passes it in the call; the lower module never looks it up. `runs`
@@ -138,10 +142,10 @@ record checked by `design_lint --state 2`, recorded as such in `30_trace.json`.
   execution's `failure_detail` from that class and the output classes
   `bindings.read_binding` declares (A09 rule 7). A run is read through `runs.read_run` (below).
 - **Run answers.** The run's status, its WaitingPoints and its produced
-  outputs are written by `runs` in its store calls, derived from the trace
-  (M19, M20); the reason per flow output not produced, `skipped_by_guard` or
-  `not_produced` (A13 rule 7), is computed from the trace when asked and is
-  not stored. `runs.read_run` and every `runs` capability that moves a run
+  outputs are derived from the trace by `run_graph.plan_run` and written by
+  `runs` in its store calls (M19, M20); the reason per flow output not
+  produced, `skipped_by_guard` or `not_produced` (A13 rule 7), is derived by
+  `run_graph` from the trace when asked and is not stored. `runs.read_run` and every `runs` capability that moves a run
   return that answer. A run that rests
   carries only the outputs produced so far; the reasons appear once it has
   ended (A13 rule 7).
@@ -165,8 +169,8 @@ record checked by `design_lint --state 2`, recorded as such in `30_trace.json`.
   empty list, a receiving element of either kind refused a misfit input (A13
   rule 3) — is built and written by `runs`.
 - **Order of records written together.** A15 rule 1 orders the records of nodes
-  that become non-executable together: skips and upstream failures, all written
-  by `runs` in one call. An operation's concluding record is an executed record,
+  that become non-executable together: skips and upstream failures, derived by
+  `run_graph` as drafts in that order and all written by `runs` in one call. An operation's concluding record is an executed record,
   not one of them; it is written first, in `effects`' own call, and the records
   it makes non-executable follow in `runs`' next call, in (`node_id`,
   `map_index`) order. `runs` then writes the run's status and waiting points and
@@ -204,7 +208,10 @@ record checked by `design_lint --state 2`, recorded as such in `30_trace.json`.
   computed with `canonical_values.highest_disclosure_class`: `flows` for
   constants (the class the composing agent declared, A07 rule 2), `runs` for
   flow inputs (the port's class) and for function outputs, values and files
-  alike (the highest class received), `effects` for service outputs, values and
+  alike (the highest class received), `run_values` for the values it derives
+  for delivery (a list element its list's class, a list the highest class of
+  its elements, an empty list the highest class of the node's inputs, A13
+  rule 6), `effects` for service outputs, values and
   files alike (the binding's declared class), `functions` for trial cases and
   trial outputs (a case input, authored or captured, the class its contract
   input port declares; an expected output and a trial output, the highest class
@@ -273,8 +280,9 @@ record checked by `design_lint --state 2`, recorded as such in `30_trace.json`.
   `effects.recover_in_flight_attempts`; `runs.recover_running_runs`, which first
   names to `store.remove_run_spool` every ended run that no longer keeps its
   spool (A14 rule 4), then derives again every run not ended — `running`,
-  `awaiting_approval` or `pending` — from its records, and then advances the
-  runs left `running`; and only then
+  `awaiting_approval` or `pending` — from its records (below, "Recovering a
+  waiting point"), and advances every run whose stored state lags them or
+  that is left `running`; and only then
   the first request (A03 rule 8, A14 rule 5, A18 rule 4).
 - **Unconfirmed cleanup.** A03 rule 7 records the execution `crashed` with
   `cleanup_failed` and then stops the kernel; the record comes first, so that
@@ -297,6 +305,37 @@ record checked by `design_lint --state 2`, recorded as such in `30_trace.json`.
   fixtures. Only a store failure between the
   copy and the case's write can leave bytes no record names; they are never
   served and enter no case (A18 rule 4).
+- **Delivering a value** (decision 32). `run_graph` names, for each element
+  of the next ready node, where each input comes from: a record already
+  written, the element of a list at a `map_index`, or a list a mapped node's
+  elements produced, which it has `run_values.assemble_mapped_lists` build and
+  measure without writing — every delivered list of the node against
+  `stored_value_bytes_max`, so a list over it fails the node with no record
+  (A13 rule 6, A15 rule 4). `runs` hands each source with its receiving port
+  to `run_values.deliver_input`, which writes what the source still needs
+  written through `store.record_change` and only then checks it with
+  `canonical_values.fit_port_value`, returning the written reference or the
+  misfit. No module below `runs` reads a value that is not written, and no
+  value reaches `sandbox` or `effects` unchecked. The empty list of a mapped
+  node over an empty list is built by `run_values.empty_list_outputs` and
+  written by `runs` with the node's one NodeExecution (A13 rule 6).
+- **Recovering a waiting point** (decision 32). At start `runs` compares every
+  stored WaitingPoint of a run not ended with
+  `effects.operation_element_conclusion` of its element: the same wait stands;
+  `ElementWaiting` with another reason rewrites only the waiting point — the
+  element is not reached; `ElementNotReached` — no NodeExecution and no
+  requested approval, as after an approval already decided — is reached again
+  through `effects.reach_operation_element` by the advance; a conclusion
+  advances the run. The run is then advanced with `runs`' own advance, which
+  reaches no element that waits and writes the waiting points and the status
+  `run_graph` derives (A11 rule 4, A14 rule 5).
+- **The runner** (decision 32). `sandbox_runner` owns the program that runs
+  inside the environment, its text, its command line and the reading of the
+  report it sends to the parent; `sandbox` owns the environment's launch, the
+  exchange directory and every judgement from outside. Every descriptor the
+  runner writes to reaches it by inheritance (`pass_fds`) at the number the
+  parent's own descriptor has, and the runner learns that number from its
+  command line; nothing renumbers a descriptor.
 - **Continuation tokens.** `surface` checks the token's form; whether it names
   a record of that type is answered by `store.page_records`, which refuses
   one that does not (A16 rule 6).
@@ -564,6 +603,58 @@ create_store_schema
 - kind: deep
 - hidden mechanism: version-bound SQLite lowering from persistence_backend/v3
 
+## `sandbox_runner`
+
+### Owns
+
+The inside of an execution (decision 32): the program that runs in the
+environment — it sets the environment variables, the `setrlimit` limits of
+A03 rule 5 and the traps and audit hook of A03 rule 4 before it loads the
+code, counts the code's tasks against `process_count`, loads the code, calls
+`run` once as A03 rule 3 says, pre-counts the outputs and sends them —; the
+text of that program, the command line it is started with, and the reading of
+the report it sent to the parent: trap hits, resource hits, the exception that
+escaped, the returned outputs.
+
+### Knows
+
+`models`, `data_provider` (the trap lists, the sandbox environment, the
+runtime paths, the scratch ceiling).
+
+### Must not own
+
+Starting, watching or killing the environment, the wall deadline, the output
+count that decides, the outcome order, cutting `failure_detail`, cleanup —
+all `sandbox`'s; which code runs or what an outcome means for a run or a
+verdict.
+
+### Hides
+
+The runner's source text, how each trap is installed (on the module or as a
+method, by the object the path names before its last dot, decision 31), the
+audit hook and its task count, how the runner reads its inputs and frames its
+messages on the channel.
+
+### Candidate public capabilities
+
+```text
+runner_source
+runner_arguments
+read_runner_report
+```
+
+### Depth assessment
+
+- kind: deep
+- hidden mechanism: everything that happens inside the environment, behind one
+  text, one command line and one decoded report; `sandbox` never learns how a
+  trap is installed or how a message is framed
+- the runner is a string: it runs in another interpreter and is never imported
+  by the kernel. The Factory's reflection gate
+  (`code_invariant_gates.reflective_access_findings`) judges calls in a
+  module's syntax tree, not the contents of a string, so the runner's
+  `setattr` stays legal while the module's own code calls none
+
 ## `installation`
 
 ### Owns
@@ -612,27 +703,31 @@ manifest_source
 
 ### Owns
 
-A03: every execution of agent code, trial and real alike — the fresh
-`bubblewrap` environment, the in-sandbox runner and its traps, limits set by the
-runner before the code loads with the deadline and output count kept from outside, the closed outcome order, the bounded `failure_detail`, confirmed
-cleanup, reporting an execution whose cleanup cannot be confirmed as `crashed`
-with `cleanup_failed` (above, "Unconfirmed cleanup"), and the start probe.
+A03: every execution of agent code, trial and real alike, from outside — the
+fresh `bubblewrap` environment and its launch, the exchange directory, every
+descriptor passed by inheritance at its own number, the runner started with
+the command line `sandbox_runner` gives; the wall deadline and the output
+count kept from outside, the closed outcome order, the bounded
+`failure_detail`, confirmed cleanup, reporting an execution whose cleanup
+cannot be confirmed as `crashed` with `cleanup_failed` (above, "Unconfirmed
+cleanup"), and the start probe. What happens inside the environment is
+`sandbox_runner`'s (above, "The runner").
 
 ### Knows
 
 `models`, `data_provider`, `canonical_values` (output fit), `clock` (monotonic
-readings for the wall deadline).
+readings for the wall deadline), `sandbox_runner`.
 
 ### Must not own
 
 Which implementation runs, what its outputs mean for a run or a verdict, where
 files go next, any retry, or stopping the process — it reports, and its caller
-records before `surface` stops.
+records before `surface` stops; the runner's text, traps or limits.
 
 ### Hides
 
-Namespaces and mounts, the runner and the exchange directory, `setrlimit`,
-the trap channel, process reaping.
+Namespaces and mounts, the exchange directory, descriptor inheritance, the
+wall deadline and the kill through a pidfd, process reaping.
 
 ### Candidate public capabilities
 
@@ -646,6 +741,53 @@ probe_sandbox
 - kind: deep
 - hidden mechanism: untrusted code computes and does nothing else, and every way
   it ends has one name
+
+## `run_values`
+
+### Owns
+
+A13 rule 3's delivery check and the values of rule 6 (decision 32): every
+StoredValue M21 a run derives for delivery and no NodeExecution names — the
+element a mapped element receives from its list, and a mapped node's value
+list, the canonical array of its elements' values —, measuring every
+delivered list of a mapped node against `stored_value_bytes_max` before any
+of them is written or delivered (A15 rule 4), writing each through
+`store.record_change` before it is checked or passed on, and
+`canonical_values.fit_port_value` against the receiving port; the reference
+to a mapped node's file list; the empty lists of a mapped node over an empty
+list, built for the node's own record; and the class of each of these values
+(A07 rule 3, A13 rule 6).
+
+### Knows
+
+`models`, `data_provider`, `canonical_values`, `store`.
+
+### Must not own
+
+Which element receives a value next, which list is delivered, or what a misfit
+or a list over the ceiling concludes for an element, a node or a run
+(`run_graph`, `runs`); any NodeExecution; a function's or a service's outputs.
+
+### Hides
+
+Slicing a JSON array, the canonical array of the elements' values, the size
+measure, the order write-then-check.
+
+### Candidate public capabilities
+
+```text
+assemble_mapped_lists
+deliver_input
+record_flow_output
+empty_list_outputs
+```
+
+### Depth assessment
+
+- kind: deep
+- hidden mechanism: a value reaches a node only once written and checked; the
+  signature returns a written reference or a misfit, so no caller can pass on
+  an unchecked value or read an unwritten one
 
 ## `service_invoker`
 
@@ -830,8 +972,8 @@ version and its nodes, for a grant).
 
 ### Must not own
 
-Which element is reached next, what a run's status is, or the trace of
-function nodes (`runs`).
+Which element is reached next or what a run's status is (`run_graph`), or the
+trace of function nodes (`runs`).
 
 ### Hides
 
@@ -859,37 +1001,83 @@ recover_in_flight_attempts
   same two store calls around one send (A11 rule 1), so splitting them would
   split one transaction topology
 
+## `run_graph`
+
+### Owns
+
+A13 rules 2, 4, 5, 7 and 8 as one derivation that writes nothing (decision
+32): from a run, its pinned flow version and its trace, the conclusion of every
+element — a function element's from its NodeExecution, an operation element's
+from `effects.operation_element_conclusion` —, which nodes are ready and the
+next one by the smallest `node_id`, with its elements in list order and where
+each input comes from; whether each edge is enabled, disabled or not yet
+decided, the guard read from the `guard_port` of the edge's own source node
+(M15); the `skipped_by_guard` and `upstream_failed` records that became
+determined, as drafts in (`node_id`, `map_index`) order (A15 rule 1); the
+WaitingPoints (A14 rule 1); the status the run stops in; its produced outputs
+and the reason of every missing one.
+
+### Knows
+
+`models`, `clock`, `store` (value bytes), `run_values` (mapped lists),
+`effects` (an operation element's conclusion).
+
+### Must not own
+
+Any write, executing or reaching an element, delivering or checking a value,
+the size measure of a list (`run_values`), or when the run is advanced (`runs`).
+
+### Hides
+
+Readiness, the smallest-`node_id` choice, element order, guard evaluation, skip
+and upstream failure propagation, run conclusion.
+
+### Candidate public capabilities
+
+```text
+plan_run
+```
+
+### Depth assessment
+
+- kind: deep
+- hidden mechanism: one deterministic answer to "where does this run stand and
+  what executes next", the same from any reader and after any restart
+
 ## `runs`
 
 ### Owns
 
-A12–A15: starting a run and pinning, advancing one node at a time inside the
-request that moves it, guards, maps and failures, waiting points, resume,
-cancel, the run's spool and its release, which ended runs no longer keep a
-spool at start, start-up recovery of every run not ended (derived again from
-its records, then advanced when left `running`), the conditions of
-capturing a failed execution (A15 rule 5), and the trace: every
-NodeExecution other than the one `effects` writes to conclude an operation
-element by a send, a pre-send failure or the owner's refusal, the
-order of records written together (A15 rule 1), and the class of function
-outputs and flow inputs (A07 rule 3).
+A12, A14, A15 and A13 rule 1: starting a run and pinning; advancing it inside
+the request that moves it, as the one loop that asks `run_graph` where the run
+stands, has `run_values` deliver each input, executes a function element
+through `sandbox` and reaches an operation element through `effects`, and
+writes the run's progress; resume, cancel, the run's spool and its release,
+which ended runs no longer keep a spool at start, start-up recovery of every
+run not ended (above, "Recovering a waiting point"), the conditions of
+capturing a failed execution (A15 rule 5), and the trace: every NodeExecution
+other than the one `effects` writes to conclude an operation element by a
+send, a pre-send failure or the owner's refusal — `run_graph`'s drafts
+included —, and the class of function outputs and flow inputs (A07 rule 3).
 
 ### Knows
 
 `models`, `data_provider`, `canonical_values`, `clock`, `store`, `sandbox`,
-`functions` (current activation, a function node's ports), `bindings` (an
-operation node's ports, through `bindings.read_binding`), `flows` (active
-version), `effects`.
+`run_values`, `functions` (current activation, a function node's ports),
+`bindings` (an operation node's ports, through `bindings.read_binding`), `flows`
+(active version), `effects`, `run_graph`.
 
 ### Must not own
 
-Approval coverage, attempt numbers or the send (`effects`), the proof
-(`flows`), or who may start, resume or cancel (`surface`).
+Readiness, guards, propagation or the run's derived status (`run_graph`), the
+values derived for delivery and their check (`run_values`), approval coverage,
+attempt numbers or the send (`effects`), the proof (`flows`), or who may start,
+resume or cancel (`surface`).
 
 ### Hides
 
-Readiness, the smallest-`node_id` choice, element order, skip and upstream
-failure propagation, run conclusion, the spool lifecycle.
+The order of one advance, the store calls that move a run, element execution,
+the spool lifecycle.
 
 ### Candidate public capabilities
 
@@ -908,8 +1096,8 @@ capture_failed_execution
 ### Depth assessment
 
 - kind: deep
-- hidden mechanism: the same flow on the same inputs always executes in the
-  same order, and a run is always in the state it truly is in
+- hidden mechanism: a run moves only inside a request, in one order of steps,
+  and every step is recorded before the next one
 
 ## `surface`
 
