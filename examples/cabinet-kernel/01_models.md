@@ -701,7 +701,8 @@ Candidate fields:
 - `from_node`, `from_port`: a node's output port or a flow input;
 - `to_node`, `to_port`: a node's input port or a flow output; a flow input or
   flow output endpoint has the empty string as its node (A05 rule 2), never the
-  `flow_id`;
+  `flow_id`; the empty string is reserved for these endpoints, so no node has it
+  as its `node_id` and composition refuses one that does;
 - `guard`: present when the edge is guarded — an output port of the same source
   node whose value schema is a closed set of values, and the one member of that
   set that enables the edge when that port's value equals it; the proof refuses a

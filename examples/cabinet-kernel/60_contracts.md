@@ -808,7 +808,10 @@ item names the module, the witnesses, what the text said and what it says now.
        `skipped_by_guard` and nothing was sent. 39 witnesses — A09 (8), A10
        (7), A14 (5), A17 (4), A11 (3), A08 (2), A07 (2), A15 (2), A19 (2), A04,
        A12, A13 `next_node_min_node_id`. Now the `advance_run` readiness note
-       and M15 say it.
+       and M15 say it. The empty string is reserved for these endpoints: no
+       node has it as its `node_id`, and `compose_flow_version` refuses a node
+       that does (State 1 round 48: otherwise an edge naming that node could
+       not be told from a boundary edge).
     7. *Every schema keyword is optional* (`functions`, `canonical_values`;
        decision 2). `issue_contract_version` required `type`, so a closed set
        `{"enum": [...]}` — the guard schema of A05 — was refused
