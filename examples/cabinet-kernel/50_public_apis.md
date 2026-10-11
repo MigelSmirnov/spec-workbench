@@ -51,10 +51,11 @@ Python signatures are State 6's.
   UTF-8 character boundary. It is text for a reader, naming the failed check
   and the record or field it concerns; it is not a machine identifier, and no
   caller branches on it — callers act only on the code, which is why codes are
-  closed and reasons are not (K-17). A missing record a request names is
-  `unknown_reference` naming it, whatever operation looked it up; a record that
-  another stored record names and the store cannot find is a defect,
-  `internal_error` (decision 30).
+  closed and reasons are not (K-17). A missing record is `unknown_reference`
+  naming it, whatever operation looked it up, unless that operation's own text
+  gives another outcome: a read by identity of `store.read_records` answers
+  as its call names — `unknown_reference`, `internal_error` or omission
+  (decision 30).
 - **Order.** Every collection in an output is in store order unless the
   operation names another order.
 - **`map_index`** is absent, never a sentinel, for an element of a node that
