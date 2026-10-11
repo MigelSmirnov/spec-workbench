@@ -1,0 +1,172 @@
+Module: run_graph
+Target path: cabinet_kernel/run_graph.py
+Target file: run_graph.py
+
+IMPORTS:
+from cabinet_kernel.clock import kernel_now
+from cabinet_kernel.effects import operation_element_conclusion
+from cabinet_kernel.models import Actor, ActorKind, AssembledList, AssembledLists, ByteSource, Cardinality, Carriage, DetailCode, DisclosureClass, EdgeDelivery, EdgeGuard, EdgeState, ElementConclusion, ElementFailed, ElementNotReached, ElementRef, ElementState, ElementSucceeded, ElementWaiting, Executed, ExecutedBinding, ExecutedImplementation, FileFacts, FileFactsRef, Flow, FlowConstant, FlowEdge, FlowNode, FlowVersion, Implementation, InputSource, KernelInstant, ListElementSource, ListSource, ListsOverCeiling, MappedList, MappedListSource, MappedLists, MappedListsOutcome, MissingOutput, NodeExecution, NodeExecutionDraft, NodeExecutionStatus, NodeKind, NodePorts, OutputReason, PinnedImplementation, Port, PortDirection, PortRef, ReadyElement, ReadyNode, RecordedSource, ResourceUsage, Resumption, Run, RunContext, RunPlan, RunStatus, SpooledFile, SpooledFileKey, SpooledFileSource, SpooledFilesRef, StoredValue, StoredValueSource, StoredValuesRef, WaitReason, WaitingPoint
+from cabinet_kernel.run_values import assemble_mapped_lists
+from cabinet_kernel.store import read_value_bytes
+
+CONTRACTS (function signatures — follow exactly):
+def plan_run(run: Run, context: RunContext, flow_version: FlowVersion, node_ports: tuple[NodePorts, ...], trace: tuple[NodeExecution, ...], now: KernelInstant) -> RunPlan
+
+IMPORTED FUNCTION SIGNATURES (these come from the imports above):
+def kernel_now() -> KernelInstant
+def read_value_bytes(source: ByteSource) -> bytes
+def assemble_mapped_lists(lists: MappedLists) -> MappedListsOutcome
+def operation_element_conclusion(run: RunContext, element: ElementRef) -> ElementConclusion
+
+OWNED FUNCTIONS REQUIRED (must be defined as top-level functions):
+- plan_run: (run: Run, context: RunContext, flow_version: FlowVersion, node_ports: tuple[NodePorts, ...], trace: tuple[NodeExecution, ...], now: KernelInstant) -> RunPlan
+
+STATIC GATE CONTRACT (deterministic checks; a violating candidate is rejected without repair):
+- Reflective attribute access is rejected: never call getattr, hasattr,
+  setattr, delattr, or vars; every declared field and operation is
+  addressed directly by name, including in try/finally cleanup.
+- A definition whose parameter list differs from its declared contract
+  signature is rejected; keep names and order exactly.
+- A constructed record accepted by a declared insert_*/upsert_*/append_*
+  operation must reach a call or return; a built-and-dropped record is
+  rejected.
+- Instantiating a spec-declared interface is rejected; construct the
+  module-owned concrete class instead.
+- A stub, placeholder, or fail-closed body for a contracted callable is
+  rejected; implement the complete specified behavior.
+- A top-level import of a package outside the Python standard library and
+  this project's own modules is rejected unless IMPORTS lists it; a note
+  never adds a package to IMPORTS.
+- A model is constructed with values of its declared field types; a field
+  typed tuple[...] receives a tuple, built with tuple(...) where the items
+  were collected in a list, never the list itself.
+
+OWNED CLASSES REQUIRED (must be defined locally, not merely referenced):
+No owned local classes required.
+
+CONCRETE IMPLEMENTATION OBLIGATIONS:
+No local concrete-to-interface obligations.
+
+REQUIREMENTS (notes — implement these):
+- plan_run: [DEPENDENCY_BOUNDARY] MUST trust the run, context, flow version, node ports, trace and now it is given and write nothing; it ignores the Run's stored status, outputs and waiting points and derives them again; the context serves only to ask operation_element_conclusion; a node's ports are the NodePorts runs passes for it, one per flow node, and plan_run reads no contract version and no binding; it reads value bytes with read_value_bytes and reads no clock: every time a draft names is the given now.
+- plan_run: [DETERMINISM_OR_ORDERING] A function element's conclusion is its latest NodeExecution's status: succeeded concludes succeeded, contract_violation, sandbox_violation, timeout, resource_exhausted and crashed conclude failed; an operation element's is operation_element_conclusion of its element under the context — ElementFailed is failed whatever its status — operation_failed, operation_refused, outcome_unknown or another —, except an ElementFailed whose status is skipped_by_guard or upstream_failed, which answers such a record and concludes as the record does; ElementWaiting waits and its dependants wait, ElementNotReached is not concluded; an operation element is judged by that answer alone, not by its NodeExecution status, which stays outcome_unknown after the owner's resolution; a skipped_by_guard or upstream_failed record, which runs writes only for a node none of whose elements executed, concludes the whole node so at once, mapped or not — the rule that a mapped node concludes only when every element concluded is for a node whose elements execute —, a function node and an operation node alike — for an operation element through the ElementFailed with that status operation_element_conclusion answers, as said above: skipped_by_guard concludes the node skipped and upstream_failed concludes it upstream_failed; a run with any refused_by_owner NodeExecution has status refused, no drafts and no next node, whatever else could be derived or be ready, and none of the status rules below applies to it. Records written together are sorted by (node_id, map_index) with an absent map_index before index 0, identifiers compared by Unicode code point.
+- plan_run: [DETERMINISM_OR_ORDERING] The next node is the ready node with the smallest node_id; a node is ready when every input port holds its value: flow inputs delivered along every enabled edge from them — a flow input or output endpoint is the node_id empty string (A05 rule 2) —, constants to their port — a FlowConstant's value is the value_id composition wrote —, and outputs of a concluded succeeded node along every enabled edge. A mapped node, once selected, takes its elements in list order, every element that has no concluded record and does not wait; a node none of whose elements without a concluded record can execute is not ready, so the next ready node is selected among the others; a waiting or failed element does not stop the elements after it, and a concluded element is never taken again.
+- plan_run: [BEHAVIOR] An edge with no guard is enabled once its source concluded succeeded; a guarded edge is decided only once its source node concluded succeeded, from that same source node's output on the edge's guard_port (M15), enabled when that value's canonical JSON text equals guard_value and disabled otherwise; an edge whose source has not concluded is undecided, so a port with such an edge can still receive a value. An edge whose source is a flow input (the node_id empty string) is decided from the start, since every flow input is delivered when the run starts: without a guard it is enabled, and a guarded one is decided as above from the flow input its guard_port names. A node one of whose input ports can no longer receive a value because every edge into that port is disabled or comes from a skipped node concludes skipped_by_guard, even when its other input ports receive theirs (A13 rule 4 is per input port); a node with an input from a failed or upstream_failed node concludes upstream_failed, which wins over skipped_by_guard. Such drafts are derived only from records already written and carry exactly: the run's run_id, the node's node_id, status skipped_by_guard or upstream_failed, no executed, no map_index — such a record is written only for a node none of whose elements executed, so it stands for the node —, no inputs, no outputs, failure_detail, detail_code and resources_used None, and started_at and ended_at both the given now; runs takes now from kernel_now just before it asks plan_run and writes the drafts in that very change.
+- plan_run: [BEHAVIOR] A mapped node's elements are the positions of a non-empty list delivered to its map_over port, counted from the JSON array its StoredValue holds — read with read_value_bytes of a StoredValueSource naming its value_id, or the canonical_json of an AssembledList not yet written — or the files of its SpooledFilesRef; a list with no position gives no element, and a mapped node over an empty list is instead ready with over_empty_list and one element without map_index, which stands for the node and is no position of the list, whose sources are the node's inputs as delivered — its map_over port's source is the source of the empty list itself, a RecordedSource or a MappedListSource, never a ListElementSource, which exists only for an element with a map_index; a mapped node concludes only when every element concluded, succeeded only when all succeeded. For a succeeded mapped node with elements, the lists an edge takes to a node or a flow output are asked of assemble_mapped_lists, an output no edge takes being asked nothing: ListsOverCeiling makes the node failed for its dependants, which conclude upstream_failed, with no record of its own and every element record staying as it is.
+- plan_run: [BEHAVIOR] Each element's sources are one per input port in port name order: a RecordedSource for a flow input's PortRef as Run.inputs holds it — a StoredValuesRef, or a SpooledFilesRef for a file port —, a constant's StoredValuesRef or the output ref of an unmapped succeeded node on the enabled edge — from its NodeExecution or its ElementSucceeded outputs —; a MappedListSource with the AssembledList of a mapped node's output; a ListElementSource with the list's own source and the element's map_index for a mapped element's map_over port. A guard's source node is never mapped (flows' proof), so a guard reads a written StoredValue, with read_value_bytes of a StoredValueSource naming its value_id. A flow output's source is formed the same way; an output reached by an edge straight from a flow input is a RecordedSource of that input's PortRef as Run.inputs holds it (A13 rule 3).
+- plan_run: [BEHAVIOR] When nothing is derived and no node is ready, the status is: when any element waits, awaiting_approval if one waits with reason owner_approval and otherwise pending, with one WaitingPoint per waiting element — a mapped operation node's elements being the positions of its delivered list; when nothing waits, succeeded when every node concluded succeeded or skipped_by_guard and failed otherwise, a mapped node whose delivered list is over the ceiling counting as failed. While a draft is derived or a node is ready the status is running, except for a run with a refused_by_owner record, which is refused. The outputs are those produced so far, whatever the status (A13 rule 7), each named by its flow output port; once the status has ended (= models.RunStatus: succeeded, failed or refused here) every other flow output is a MissingOutput with reason skipped_by_guard when every edge into it was disabled or comes from a node concluded skipped_by_guard and not_produced otherwise (= models.OutputReason).
+- plan_run: [RETURN_SHAPE] Returns RunPlan with every element's ElementState in (node_id, map_index) order, every edge's EdgeState in the flow version's edge order, the derived drafts, the next ReadyNode or None, the waiting points in (node_id, map_index) order, the produced outputs and missing outputs in flow output port name order, and the status.
+
+MODEL DATA DEFINITIONS (READ-ONLY SPEC DATA, NOT CODE):
+The following JSON values are read-only spec data, not Python class definitions.
+Do not emit classes, Pydantic models, create_model calls, or assignments from this section.
+Omitted model-schema/data references:
+- OutputReason: omitted because it is an imported runtime model schema
+- RunStatus: omitted because it is an imported runtime model schema
+
+MODEL DATA ADDRESSES (SPEC DATA, NOT IMPORT PATHS):
+The following = models.* references are canonical spec data addresses, not Python module paths.
+Read their structured JSON values from MODEL DATA DEFINITIONS when present in this prompt.
+Never convert a spec data address into `import models` or `from models.* import ...`.
+models.* entries listed as spec data are read-only spec addresses, not Python import paths and not cabinet_kernel.models imports.
+Only import runtime model symbols from cabinet_kernel.models when they are explicitly listed in IMPORTS.
+- models.OutputReason: runtime model schema omitted from non-model prompt; exported from cabinet_kernel.models by IMPORTS.
+- models.RunStatus: runtime model schema omitted from non-model prompt; exported from cabinet_kernel.models by IMPORTS.
+
+IMPORTED MODEL OWNERSHIP (DO NOT REDEFINE):
+Imported runtime model symbols are owned by their source modules listed in IMPORTS; use them as imported and do not redefine them here.
+
+RUNTIME MODEL SURFACE (CORE.MODELS IMPORTS):
+These are imported runtime symbols from cabinet_kernel.models. Use the listed enum member names and model fields exactly.
+- Actor fields (exact, no others exist): kind: ActorKind, agent_name: str | None
+- ActorKind enum values: 'owner', 'agent', 'kernel'; Python member names were not available in models context.
+- AssembledList fields (exact, no others exist): port: str, ref: PortRef, stored_value: StoredValue | None, canonical_json: bytes | None
+- AssembledLists fields (exact, no others exist): outcome_kind: Literal['assembled'], node_id: str, lists: tuple[AssembledList, ...]
+- ByteSource: imported runtime symbol; no local surface details available.
+- Cardinality enum values: 'one', 'many'; Python member names were not available in models context.
+- Carriage enum values: 'value', 'file'; Python member names were not available in models context.
+- DetailCode enum values: 'binding_stale', 'instance_not_selected', 'instance_address_missing', 'required_header_repeated', 'required_header_invalid', 'plain_http_not_allowed', 'credential_unresolved', 'input_not_placeable', 'redirect_not_followed', 'value_too_large', 'cleanup_failed', 'applied_outputs_unknown'; Python member names were not available in models context.
+- DisclosureClass enum values: 'open', 'business_confidential', 'personal_data'; Python member names were not available in models context.
+- EdgeDelivery enum values: 'enabled', 'disabled', 'undecided'; Python member names were not available in models context.
+- EdgeGuard fields (exact, no others exist): guard_port: str, guard_value: str
+- EdgeState fields (exact, no others exist): edge: FlowEdge, delivery: EdgeDelivery
+- ElementConclusion: imported runtime symbol; no local surface details available.
+- ElementFailed fields (exact, no others exist): conclusion_kind: Literal['failed'], status: NodeExecutionStatus, detail_code: DetailCode | None
+- ElementNotReached fields (exact, no others exist): conclusion_kind: Literal['not_reached']
+- ElementRef fields (exact, no others exist): node_id: str, map_index: int | None
+- ElementState fields (exact, no others exist): node_id: str, map_index: int | None, conclusion: ElementConclusion
+- ElementSucceeded fields (exact, no others exist): conclusion_kind: Literal['succeeded'], outputs: tuple[PortRef, ...]
+- ElementWaiting fields (exact, no others exist): conclusion_kind: Literal['waiting'], reason: WaitReason, approval_id: str | None
+- Executed: imported runtime symbol; no local surface details available.
+- ExecutedBinding fields (exact, no others exist): executed_kind: Literal['binding'], binding_id: str
+- ExecutedImplementation fields (exact, no others exist): executed_kind: Literal['implementation'], implementation_id: str
+- FileFacts fields (exact, no others exist): content_digest: str, size_bytes: int, media_type: str
+- FileFactsRef fields (exact, no others exist): ref_kind: Literal['file_facts'], port: str, files: tuple[FileFacts, ...], disclosure_class: DisclosureClass
+- Flow fields (exact, no others exist): flow_id: str, purpose: str, created_by: Actor, created_at: KernelInstant
+- FlowConstant fields (exact, no others exist): to_node: str, to_port: str, value: str
+- FlowEdge fields (exact, no others exist): from_node: str, from_port: str, to_node: str, to_port: str, guard: EdgeGuard | None
+- FlowNode fields (exact, no others exist): node_id: str, kind: NodeKind, contract_version_id: str | None, binding_id: str | None, map_over: str | None
+- FlowVersion fields (exact, no others exist): flow_version_id: str, flow_id: str, inputs: tuple[Port, ...], outputs: tuple[Port, ...], nodes: tuple[FlowNode, ...], edges: tuple[FlowEdge, ...], constants: tuple[FlowConstant, ...], authored_by: Actor, authored_at: KernelInstant
+- Implementation fields (exact, no others exist): implementation_id: str, contract_version_id: str, code: str, submitted_by: Actor, submitted_at: KernelInstant
+- InputSource: imported runtime symbol; no local surface details available.
+- KernelInstant fields (exact, no others exist): epoch_us: int
+- ListElementSource fields (exact, no others exist): source_kind: Literal['list_element'], port: str, list: ListSource, map_index: int
+- ListSource: imported runtime symbol; no local surface details available.
+- ListsOverCeiling fields (exact, no others exist): outcome_kind: Literal['over_ceiling'], node_id: str, port: str
+- MappedList fields (exact, no others exist): port: Port, elements: tuple[PortRef, ...]
+- MappedListSource fields (exact, no others exist): source_kind: Literal['mapped_list'], port: str, list: AssembledList
+- MappedLists fields (exact, no others exist): node_id: str, lists: tuple[MappedList, ...]
+- MappedListsOutcome: imported runtime symbol; no local surface details available.
+- MissingOutput fields (exact, no others exist): output_kind: Literal['missing'], port: str, reason: OutputReason
+- NodeExecution fields (exact, no others exist): run_id: str, node_id: str, map_index: int | None, attempt_number: int, executed: Executed | None, inputs: tuple[PortRef, ...], outputs: tuple[PortRef, ...], status: NodeExecutionStatus, detail_code: DetailCode | None, failure_detail: str | None, resources_used: ResourceUsage | None, started_at: KernelInstant, ended_at: KernelInstant
+- NodeExecutionDraft fields (exact, no others exist): run_id: str, node_id: str, map_index: int | None, executed: Executed | None, inputs: tuple[PortRef, ...], outputs: tuple[PortRef, ...], status: NodeExecutionStatus, detail_code: DetailCode | None, failure_detail: str | None, resources_used: ResourceUsage | None, started_at: KernelInstant, ended_at: KernelInstant
+- NodeExecutionStatus enum values: 'succeeded', 'contract_violation', 'sandbox_violation', 'timeout', 'resource_exhausted', 'crashed', 'refused_by_owner', 'operation_refused', 'operation_failed', 'service_unreachable', 'outcome_unknown', 'skipped_by_guard', 'upstream_failed'; Python member names were not available in models context.
+- NodeKind enum values: 'function', 'operation'; Python member names were not available in models context.
+- NodePorts fields (exact, no others exist): node_id: str, inputs: tuple[Port, ...], outputs: tuple[Port, ...]
+- OutputReason enum values: 'skipped_by_guard', 'not_produced'; Python member names were not available in models context.
+- PinnedImplementation fields (exact, no others exist): node_id: str, implementation_id: str
+- Port fields (exact, no others exist): name: str, direction: PortDirection, value_schema: str, carriage: Carriage, media_type: str | None, cardinality: Cardinality, disclosure_class: DisclosureClass | None
+- PortDirection enum values: 'input', 'output'; Python member names were not available in models context.
+- PortRef: imported runtime symbol; no local surface details available.
+- ReadyElement fields (exact, no others exist): map_index: int | None, sources: tuple[InputSource, ...]
+- ReadyNode fields (exact, no others exist): node: FlowNode, over_empty_list: bool, elements: tuple[ReadyElement, ...]
+- RecordedSource fields (exact, no others exist): source_kind: Literal['recorded'], port: str, ref: PortRef
+- ResourceUsage fields (exact, no others exist): wall_time_ms: int, memory_bytes: int, output_bytes: int
+- Resumption fields (exact, no others exist): resumed_by: Actor, resumed_at: KernelInstant
+- Run fields (exact, no others exist): run_id: str, flow_version_id: str, pinned_implementations: tuple[PinnedImplementation, ...], inputs: tuple[PortRef, ...], outputs: tuple[PortRef, ...], status: RunStatus, cancelled_by: Actor | None, waiting: tuple[WaitingPoint, ...], started_by: Actor, started_at: KernelInstant, ended_at: KernelInstant | None, resumptions: tuple[Resumption, ...], released_by: Actor | None, released_at: KernelInstant | None
+- RunContext fields (exact, no others exist): run_id: str, flow_version_id: str, started_under: int
+- RunPlan fields (exact, no others exist): conclusions: tuple[ElementState, ...], edges: tuple[EdgeState, ...], derived: tuple[NodeExecutionDraft, ...], next_node: ReadyNode | None, waiting: tuple[WaitingPoint, ...], outputs: tuple[InputSource, ...], missing_outputs: tuple[MissingOutput, ...], status: RunStatus
+- RunStatus enum values: 'running', 'awaiting_approval', 'pending', 'succeeded', 'failed', 'refused', 'cancelled'; Python member names were not available in models context.
+- SpooledFile fields (exact, no others exist): run_id: str, producer_node_id: str, map_index: int | None, attempt_number: int, producer_port: str, list_index: int | None, content_digest: str, size_bytes: int, media_type: str, disclosure_class: DisclosureClass
+- SpooledFileKey fields (exact, no others exist): run_id: str, producer_node_id: str, map_index: int | None, attempt_number: int, producer_port: str, list_index: int | None
+- SpooledFileSource fields (exact, no others exist): source_kind: Literal['spooled_file'], file: SpooledFileKey
+- SpooledFilesRef fields (exact, no others exist): ref_kind: Literal['spooled_files'], port: str, files: tuple[SpooledFileKey, ...], disclosure_class: DisclosureClass
+- StoredValue fields (exact, no others exist): value_id: str, value_digest: str, carriage: Carriage, media_type: str | None, value_schema: str, disclosure_class: DisclosureClass, size_bytes: int
+- StoredValueSource fields (exact, no others exist): source_kind: Literal['stored_value'], value_id: str
+- StoredValuesRef fields (exact, no others exist): ref_kind: Literal['stored_values'], port: str, value_id: str
+- WaitReason enum values: 'owner_approval', 'service_unreachable', 'outcome_unknown'; Python member names were not available in models context.
+- WaitingPoint fields (exact, no others exist): node_id: str, map_index: int | None, reason: WaitReason
+
+MODULE-LOCAL EXCEPTION EXPORTS:
+If any exception class is listed here, define it in this file at top level.
+Do not import these classes from core.errors or any other module.
+No module-local exception exports required.
+
+FUNCTION ORDER (define in this order):
+plan_run
+
+Generate the complete run_graph.py file.
+Every owned function listed above must be implemented exactly once at module top level.
+Define every class and method listed in OWNED CLASSES REQUIRED in this file.
+For every local binding in CONCRETE IMPLEMENTATION OBLIGATIONS, inherit the declared interface and implement its complete method surface with non-placeholder bodies.
+If this is the models module, emit every enum/model in MODEL DEFINITIONS exactly once.
+If this is not the models module, do not emit Pydantic model classes, enums, create_model calls, or local model schema shadows.
+Do not invent model fields or enum values not present in the imported runtime models.
+Use only the IMPORTS listed above plus required standard library imports.
+Never import from a top-level models module or models.*; runtime models live in cabinet_kernel.models only when listed in IMPORTS.
+`models.<name>` in notes is a canonical spec data address, not an importable Python module.
+When one owner module provides a function and cabinet_kernel.models provides a DTO with a similar name, split the imports by source exactly as listed in IMPORTS.
+Construct imported runtime models only with the fields listed in IMPORTED MODEL SURFACE; models are frozen and forbid extra fields, so an invented keyword argument fails at runtime.
+Read from a model value only the fields listed for its type; never use getattr(value, name, default) to probe for a field that is not declared.
+Never assign to an attribute of a model value (models are frozen): derive a changed value with value.model_copy(update={...}) or construct a new instance.
+Define every class listed in MODULE-LOCAL EXCEPTION EXPORTS in this file.
