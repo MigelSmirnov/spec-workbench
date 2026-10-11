@@ -900,20 +900,26 @@ EffectAttempt M26 and the concluding NodeExecution M23 written by
 7. `capability:runs.recover_running_runs`: first names to
    `capability:store.remove_run_spool` every ended run that does not keep its
    spool (A14 rule 4, A18 rule 4); then derives every run that has not ended — `running`, `awaiting_approval`
-   or `pending` — from its records, oldest first, rewriting a lagging status
-   or waiting point and reaching again, through
-   `capability:effects.reach_operation_element`, an operation element whose
-   wait no longer holds and whose records do not already conclude it — an
-   attempt the owner resolved `applied` concludes from its records and is not
-   reached again, one resolved `not_applied` is reached again for its fresh
-   approval (A11 rule 3) (A14 rule 5); then, as the kernel actor, advances every
-   run left `running`, oldest first: a function element without a concluded
+   or `pending` — from its records, oldest first, deciding each stored waiting
+   point by `capability:effects.operation_element_conclusion` of its element
+   (decision 32): the same wait stands; a wait for an approval never
+   requested — an attempt the owner resolved `not_applied` — is reached again
+   through `capability:effects.reach_operation_element` for its fresh approval
+   (A11 rule 3); a wait with another reason rewrites only the waiting point,
+   and the element is not reached — an approved element whose `in_flight`
+   attempt step 6 turned `unknown` now waits `outcome_unknown` (A11 rule 4);
+   an element not reached, with no record and no requested approval, is
+   reached by the advance; a conclusion — an attempt resolved `applied`
+   included — is taken by the advance (A14 rule 5). Then, as the kernel actor,
+   it advances every run with a waiting point that did not stand or left
+   `running`, oldest first: a function element without a concluded
    record is executed again; a `read` element without one is sent again; an
    operation element of another class with neither a concluded record nor an
    EffectAttempt is reached as for the first time, an unused approval covering
-   it only while the rebuilt request has its `request_digest` (A14 rule 5).
-   Each run is then derived — a `refused_by_owner` record ends it `refused`
-   before any element is reached.
+   it only while the rebuilt request has its `request_digest` (A14 rule 5); an
+   element that waits is not reached. Each run is then derived — a
+   `refused_by_owner` record ends it `refused` before any element is reached —
+   and its waiting points and status written as derived.
 8. Only then does `module:surface` accept the first request.
 
 ### Outcomes
