@@ -160,6 +160,7 @@ not listed are never written.
 | `run_started` | `runs` | Run M19 `running` with pins and input StoredValues |
 | `record_run_progress` | `runs` | NodeExecutions M23 written together, in (`node_id`, `map_index`) order, with their StoredValues and SpooledFiles M22; then the run's status, outputs, WaitingPoints M20, `ended_at`, `cancelled_by` |
 | `record_resumption` | `runs` | a resumption of the run |
+| `record_delivery_values` | `run_values` | StoredValues M21 a run derives for delivery and no NodeExecution names: a list element a mapped element receives, a mapped node's value list (decision 32) |
 | `run_released` | `runs` | `released_by`, `released_at` |
 | `request_approval` | `effects` | EffectApproval M24 `requested` with its preview |
 | `decide_approval` | `effects` | the approval `approved`, or `refused` with the element's NodeExecution `refused_by_owner` |
@@ -409,7 +410,7 @@ represent.
 
 ### Callers
 
-`module:sandbox`, `module:service_invoker`, `module:surface`.
+`module:sandbox`, `module:service_invoker`, `module:run_values`, `module:surface`.
 
 ### Inputs
 
@@ -446,7 +447,7 @@ form, order-free lists sorted.
 
 ### Callers
 
-`module:functions`, `module:bindings`, `module:flows`, `module:runs`, `module:effects`, `module:service_invoker`.
+`module:service_invoker`, `module:run_values`, `module:functions`, `module:bindings`, `module:flows`, `module:effects`, `module:runs`.
 
 ### Inputs
 
@@ -484,7 +485,7 @@ name the first failure.
 
 ### Callers
 
-`module:functions`, `module:flows`, `module:runs`, `module:sandbox`, `module:service_invoker`.
+`module:sandbox`, `module:service_invoker`, `module:run_values`, `module:functions`, `module:flows`, `module:runs`.
 
 ### Inputs
 
@@ -528,7 +529,7 @@ Pure; touches no record.
 
 ### Callers
 
-`module:functions`, `module:flows`, `module:runs`, `module:surface`.
+`module:run_values`, `module:functions`, `module:flows`, `module:runs`, `module:surface`.
 
 ### Inputs
 
@@ -563,7 +564,7 @@ Pure; touches no record.
 
 ### Callers
 
-`module:functions`, `module:bindings`, `module:flows`, `module:effects`, `module:runs`.
+`module:functions`, `module:bindings`, `module:flows`, `module:effects`, `module:run_graph`, `module:runs`.
 
 ### Inputs
 
@@ -626,6 +627,108 @@ None.
 ### State impact
 
 Reads the host monotonic clock only.
+
+## `public_op:sandbox_runner.runner_source`
+
+### Owner
+
+`module:sandbox_runner`. Return the text of the program that runs inside the sandbox environment.
+
+### Callers
+
+`module:sandbox`.
+
+### Inputs
+
+Nothing.
+
+### Outputs
+
+The runner's source text, the same for every execution of a release.
+
+### Observable effect
+
+None.
+
+### Enforces
+
+The runner sets the sandbox environment, the `setrlimit` limits and the traps of A03 rules 4 and 5 before it loads the code, loads the code and calls `run` once (A03 rule 3), counts the code's tasks against `process_count`, pre-counts the outputs against `output_bytes` and reports every hit on its channel to the parent (decision 32). Its configuration reaches it on its command line (`runner_arguments`), never written into the text.
+
+### Errors
+
+None.
+
+### State impact
+
+Read-only; runs nothing.
+
+## `public_op:sandbox_runner.runner_arguments`
+
+### Owner
+
+`module:sandbox_runner`. Build the runner's command line for one execution, the numbers of the descriptors it writes to among its arguments.
+
+### Callers
+
+`module:sandbox`.
+
+### Inputs
+
+The exchange directory and where the code and each input lie in it, the contract's output ports, the ResourceBounds M04 and the number of the descriptor of the channel to the parent.
+
+### Outputs
+
+The arguments that follow the runner's path on the interpreter's command line.
+
+### Observable effect
+
+None.
+
+### Enforces
+
+The descriptor numbers are the parent's own, which reach the runner by inheritance at the same numbers (decision 32); the trap lists, the environment, the runtime paths and the scratch ceiling of the release travel with the arguments (A03 rules 1, 4, 5; A20).
+
+### Errors
+
+None.
+
+### State impact
+
+Read-only.
+
+## `public_op:sandbox_runner.read_runner_report`
+
+### Owner
+
+`module:sandbox_runner`. Decode what the runner sent to the parent: trap hits, a resource hit, the escaped exception, the returned outputs.
+
+### Callers
+
+`module:sandbox`.
+
+### Inputs
+
+Every byte the runner wrote to its channel, read by the parent until the channel closed.
+
+### Outputs
+
+The trap hits in the order they were written, whether a bound was hit inside, the type and message of an exception that escaped loading or `run`, and the outputs `run` returned, each as JSON text, a file, a file list or not representable.
+
+### Observable effect
+
+None.
+
+### Enforces
+
+What the runner sends is read by one rule; an unreadable or partial report is not decoded into outputs (decision 32). It judges no outcome: the order of A03 rule 5 is `sandbox`'s.
+
+### Errors
+
+None.
+
+### State impact
+
+Read-only.
 
 ## `public_op:store.open_store`
 
@@ -723,7 +826,7 @@ content-addressed area, equal bytes once.
 
 ### Callers
 
-`module:functions`, `module:flows`, `module:runs`, `module:effects`.
+`module:run_values`, `module:functions`, `module:flows`, `module:effects`, `module:runs`.
 
 ### Inputs
 
@@ -761,7 +864,7 @@ reuse them, and the next start removes them (A13 rule 3, A18 rule 4).
 
 ### Callers
 
-`module:functions`, `module:bindings`, `module:flows`, `module:effects`, `module:runs`, `module:surface`.
+`module:run_values`, `module:functions`, `module:bindings`, `module:flows`, `module:effects`, `module:runs`, `module:surface`.
 
 ### Inputs
 
@@ -807,7 +910,7 @@ its spool is checked by its caller.
 
 ### Callers
 
-`module:functions`, `module:runs`, `module:effects`, `module:surface`.
+`module:run_values`, `module:functions`, `module:effects`, `module:run_graph`, `module:runs`, `module:surface`.
 
 ### Inputs
 
@@ -848,7 +951,7 @@ all.
 
 ### Callers
 
-`module:functions`, `module:bindings`, `module:flows`, `module:effects`, `module:runs`.
+`module:run_values`, `module:functions`, `module:bindings`, `module:flows`, `module:effects`, `module:runs`.
 
 ### Inputs
 
@@ -1356,6 +1459,142 @@ None: every ending is an outcome name.
 ### State impact
 
 Sends one request; writes nothing.
+
+## `public_op:run_values.assemble_mapped_lists`
+
+### Owner
+
+`module:run_values`. Build every delivered list of a mapped node from its elements' outputs and measure them against the stored value ceiling, writing nothing.
+
+### Callers
+
+`module:run_graph`.
+
+### Inputs
+
+A mapped node and, for each output port whose list is delivered, its elements' output references in element order.
+
+### Outputs
+
+Every list built — a value list as the StoredValue of the canonical array of the elements' values, a file list as the reference to the elements' files — each of the highest class among its elements; or that one list exceeds `stored_value_bytes_max`.
+
+### Observable effect
+
+None; nothing is written.
+
+### Enforces
+
+Every delivered list of the node is measured before any of them is written or delivered (A13 rule 6, A15 rule 4); an output no edge takes is not measured.
+
+### Errors
+
+None of its own; a failed read is `internal_error`.
+
+### State impact
+
+Read-only.
+
+## `public_op:run_values.deliver_input`
+
+### Owner
+
+`module:run_values`. Write the value a source still needs written, then check it against the receiving port; answer the written reference or the misfit.
+
+### Callers
+
+`module:runs`.
+
+### Inputs
+
+The source of one input — a record already written, the element of a list at a `map_index`, or a list `assemble_mapped_lists` built —, the receiving port and the actor.
+
+### Outputs
+
+The written reference that fits the port, or the written reference and the port check that failed.
+
+### Observable effect
+
+A list element or a mapped node's value list is written as a StoredValue M21 before it is checked.
+
+### Enforces
+
+A value is written before it is read or checked and checked with `canonical_values.fit_port_value` before it enters a node (A13 rule 3); a list element takes its list's class (A13 rule 6, A07 rule 3).
+
+### Errors
+
+None of its own: a misfit is an answer; a failed store change is `internal_error`.
+
+### State impact
+
+`record_delivery_values`.
+
+## `public_op:run_values.empty_list_outputs`
+
+### Owner
+
+`module:run_values`. Build the empty-list outputs of a mapped node over an empty list, of the highest class of its inputs, for the node's own record.
+
+### Callers
+
+`module:runs`.
+
+### Inputs
+
+The node's input references, the mapped list among them, and its output ports.
+
+### Outputs
+
+For each output port an empty list — a value port's StoredValue of `[]`, its bytes published, a file port's empty file list — and the references the node's record names.
+
+### Observable effect
+
+The bytes of `[]` are published; no record is written.
+
+### Enforces
+
+An empty list takes the highest class among the node's inputs (A13 rule 6); it is written by `runs` with the node's one NodeExecution, never before.
+
+### Errors
+
+None of its own.
+
+### State impact
+
+None; the caller writes `record_run_progress`.
+
+## `public_op:run_values.record_flow_output`
+
+### Owner
+
+`module:run_values`. Write the value a produced flow output still needs written and answer its reference.
+
+### Callers
+
+`module:runs`.
+
+### Inputs
+
+The source of one produced flow output and the actor.
+
+### Outputs
+
+The written reference the run's outputs name.
+
+### Observable effect
+
+A mapped node's value list that reaches a flow output is written as a StoredValue M21.
+
+### Enforces
+
+A flow output holds the value its edge delivered (A13 rule 3); a flow output is of value carriage (A05 rule 7).
+
+### Errors
+
+None of its own; a failed store change is `internal_error`.
+
+### State impact
+
+`record_delivery_values`.
 
 ## `public_op:functions.add_captured_trial_case`
 
@@ -2209,7 +2448,7 @@ no active version, for a node not in it (A10 rule 5), a function node, or a
 
 ### Callers
 
-`module:runs`.
+`module:run_graph`, `module:runs`.
 
 ### Inputs
 
@@ -2397,6 +2636,40 @@ Any active grant, whether or not its version is still active (M25).
 ### State impact
 
 `revoke`.
+
+## `public_op:run_graph.plan_run`
+
+### Owner
+
+`module:run_graph`. Derive, writing nothing, where a run stands: element conclusions, edges, derived skips and upstream failures, the next ready node, waits, status and outputs.
+
+### Callers
+
+`module:runs`.
+
+### Inputs
+
+A run, its context, its pinned flow version and its trace.
+
+### Outputs
+
+The conclusion of every element; each edge enabled, disabled or undecided; the `skipped_by_guard` and `upstream_failed` records that became determined, as drafts in (`node_id`, `map_index`) order; the next ready node with its elements and the source of each input; the waiting points; the produced outputs and, once ended, the reason per missing output; the status the run stops in.
+
+### Observable effect
+
+None.
+
+### Enforces
+
+A13 rules 2, 4, 5, 7 and 8: the ready node with the smallest `node_id`, elements in list order, a guard read from the `guard_port` of the edge's own source node (M15) and only once that node concluded `succeeded`, `upstream_failed` over `skipped_by_guard`, a mapped list over `stored_value_bytes_max` failing its node with no record; an operation element's conclusion is `effects.operation_element_conclusion`'s (A11 rule 3); a `refused_by_owner` record ends the run `refused` (A10 rule 3).
+
+### Errors
+
+None of its own; a failed read is `internal_error`.
+
+### State impact
+
+Read-only.
 
 ## `public_op:runs.cancel_run`
 

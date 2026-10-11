@@ -55,7 +55,9 @@ it. `module:functions` owns every rule of the flow: the contract version and its
 ceilings (A02), the slot and its purpose (A01 rule 5), the trial cases and the
 corpus (A04 rule 1), trying, admission and the kernel's activation (A04 rules
 2–4, 6). `module:sandbox` executes the agent's code and owns how an execution
-ends (A03). `module:canonical_values` computes identities, fits values to
+ends (A03); `module:sandbox_runner` owns what happens inside the environment —
+the runner's text, its command line and the report it sends (decision 32).
+`module:canonical_values` computes identities, fits values to
 ports and orders disclosure classes; it decides nothing about what a failed fit
 means. `module:store` holds every record and every byte; it decides
 nothing.
@@ -111,8 +113,13 @@ AdmissionVerdict M08 and Activation M09 are written by `module:functions`.
    case named twice and an empty corpus (`empty_corpus`) are refused before
    anything executes (A04 rule 6). Each case, in corpus order, is one call of
    `capability:sandbox.execute_function` with the implementation's code, the
-   case's inputs and the contract's bounds; the sandbox sets its wall deadline
-   from a `capability:clock.monotonic_ns` reading and returns one outcome of
+   case's inputs and the contract's bounds; the sandbox writes the runner from
+   `capability:sandbox_runner.runner_source` into the exchange directory,
+   starts it with `capability:sandbox_runner.runner_arguments` — the
+   descriptors it writes to passed by inheritance at their own numbers —,
+   sets its wall deadline from a `capability:clock.monotonic_ns` reading,
+   reads what the runner sent with `capability:sandbox_runner.read_runner_report`
+   and returns one outcome of
    the closed A03 rule 5 order and, on success, outputs that fit the output
    ports. `module:functions` stores the value outputs through
    `capability:store.put_value_bytes`, each StoredValue with the highest class
@@ -383,12 +390,16 @@ declared read operations, returning an analysis.
 `module:surface` checks the request's token against
 `capability:installation.current_token_list` (A16 rules 1–2) and admits the request; the owner or any agent may run (A16 rule
 3), and it answers only once the run rests or ends (A18 rule 3).
-`module:runs` owns the start checks and pins, the order of execution, guards,
-maps, failures, the trace other than an operation's concluding record, and the
-run's answer (A12, A13, A15). `module:flows` answers the active version and
-its graph. `module:functions` answers the current activation and an
-implementation's code and bounds. `module:sandbox` executes each function
-element. `module:effects` reaches each operation element and writes its
+`module:runs` owns the start checks and pins, the advance inside the request,
+the trace other than an operation's concluding record, and the run's answer
+(A12, A13 rule 1, A15). `module:run_graph` derives from the trace, writing
+nothing, the order of execution, guards, maps, failures, waits and the status
+(A13 rules 2, 4–8); `module:run_values` builds, writes and checks every value a
+run derives for delivery (A13 rules 3 and 6; decision 32). `module:flows`
+answers the active version and its graph. `module:functions` answers the
+current activation and an implementation's code and bounds. `module:sandbox`
+executes each function element, the runner inside it being
+`module:sandbox_runner`'s. `module:effects` reaches each operation element and writes its
 concluding record, even for `read`; for `read` it writes no EffectAttempt and
 asks no authority (A10 rule 6). `module:bindings` checks the binding is current
 before the send. `module:service_invoker` builds and sends the one request.
@@ -424,16 +435,25 @@ records are the trace and the rest state.
    (`capability:clock.kernel_now`), and the input values with their
    identities (`capability:canonical_values.content_identity`) and their port's
    class. It delivers inputs and constants along their edges (A13 rule 3).
-2. **Function element.** The next node is the ready node with the smallest
-   `node_id` (A13 rule 2), readiness derived from the run's records read
-   through `capability:store.read_records`. `module:runs` reads the pinned implementation's code
+2. **Function element.** `module:runs` reads the run's records through
+   `capability:store.read_records` and asks
+   `capability:run_graph.plan_run` where the run stands: the next node is the
+   ready node with the smallest `node_id` (A13 rule 2), with the source of
+   each input of each element. A mapped node's lists are built and measured by
+   `capability:run_values.assemble_mapped_lists` (A13 rule 6). `module:runs`
+   hands each source to `capability:run_values.deliver_input`, which writes
+   what is not yet written — a list element, a mapped node's list — and then
+   checks it against the target port with
+   `capability:canonical_values.fit_port_value`; a misfit concludes the
+   receiving element `contract_violation` (A13 rule 3). An empty list's
+   outputs come from `capability:run_values.empty_list_outputs`. `module:runs`
+   reads the pinned implementation's code
    and bounds through `capability:functions.read_implementation`, the inputs'
    bytes through `capability:store.read_value_bytes`, and calls
    `capability:sandbox.execute_function`, which sets its wall deadline from a
-   `capability:clock.monotonic_ns` reading. On success it validates each output
-   against the source port, then against each target port before delivery;
-   a failure against the source port concludes this node, a failure against a
-   target port the receiving node, `contract_violation` (A13 rule 3); a value above `stored_value_bytes_max` concludes
+   `capability:clock.monotonic_ns` reading. On success each output fits its
+   source port, a failure concluding this node `contract_violation` (A13 rule
+   3); a value above `stored_value_bytes_max` concludes
    `contract_violation` with `value_too_large` (A15 rule 4). Output classes are
    the highest class received
    (`capability:canonical_values.highest_disclosure_class`, A07 rule 3); files
@@ -458,9 +478,12 @@ records are the trace and the rest state.
    element's conclusion through
    `capability:effects.operation_element_conclusion`.
 4. **Propagate.** In its next store call `module:runs` writes the skips and
-   upstream failures that became determined (A13 rules 4, 5), in (`node_id`,
-   `map_index`) order (A15 rule 1), then the run's status and waiting points.
-   Steps 2–4 repeat until nothing can execute.
+   upstream failures `capability:run_graph.plan_run` derived as drafts (A13
+   rules 4, 5), in (`node_id`, `map_index`) order (A15 rule 1), a guard read
+   from the `guard_port` of the edge's own source node (M15), then the run's
+   status and waiting points. Steps 2–4 repeat until nothing can execute; the
+   produced flow outputs are written by
+   `capability:run_values.record_flow_output`.
 5. **Rest or end.** When nothing executes and nothing waits, the run ends
    `succeeded` or `failed` (A13 rule 7) and the spool of a `succeeded` run is
    emptied (A14 rule 4). An element `service_unreachable` waits and the run
@@ -485,8 +508,10 @@ records are the trace and the rest state.
   refusals: `module:surface`.
 - Function outcomes `timeout`, `resource_exhausted`, `sandbox_violation`,
   `crashed`, `contract_violation`: produced by `module:sandbox`, recorded by
-  `module:runs`; port violations on delivery and `value_too_large`: produced
-  and recorded by `module:runs`.
+  `module:runs`; port violations on delivery: found by `module:run_values`,
+  recorded by `module:runs`; `value_too_large`: produced and recorded by
+  `module:runs`; a mapped list over `stored_value_bytes_max`: measured by
+  `module:run_values`, its node failed by `module:run_graph` with no record.
 - Pre-send failures: `binding_stale` by `module:bindings`, instance, credential
   and input placement by `module:service_invoker`; both concluded
   `operation_failed` by `module:effects`. Send outcomes `operation_refused`,
