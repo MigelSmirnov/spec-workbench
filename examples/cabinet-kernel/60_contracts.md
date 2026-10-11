@@ -75,11 +75,14 @@ not review fields, classes or formats, so each is the agent's and says why.
 
 1. **Canonical bytes** (A01 rule 1, carried by States 1 and 2): RFC 8785 as
    written. `canonical_bytes` parses JSON text, refuses a duplicate member name,
-   a non-finite number and an integer outside ±(2^53 − 1), which an IEEE double
-   cannot hold exactly, and emits the JCS form. The size of a JSON value is the
+   a non-finite number and an integer outside ±(2^53 − 1) that an IEEE double
+   cannot hold exactly, and emits the JCS form; an integer an IEEE double holds
+   exactly is that double, so canonical bytes parse again to themselves
+   (decision 30). The size of a JSON value is the
    length of its canonical bytes.
 2. **Supported JSON Schema subset** (A02 rule 1, carried by States 1 and 2): a
-   schema is a JSON object using only `type` (one of `null`, `boolean`,
+   schema is a JSON object using only — each keyword optional, `type` included
+   (decision 30) — `type` (one of `null`, `boolean`,
    `integer`, `number`, `string`, `array`, `object`, as one string), `enum`
    (a non-empty array of distinct scalars), `const` (one scalar), `properties`
    and `required` (for `object`), `additionalProperties` (`true` or `false`
