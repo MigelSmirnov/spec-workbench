@@ -740,7 +740,13 @@ item names the module, the witnesses, what the text said and what it says now.
        file. Only EFBIG is a scratch hit; exhausted host storage (ENOSPC,
        EDQUOT) is an ordinary error, and code killed by SIGXFSZ after
        restoring its default exited abnormally — both `crashed` (round 116).
-       A runner
+       From round 118 A03 rule 5 states only the decision — which limits,
+       set inside before the code loads and beyond the code's power to raise,
+       an unsettable limit `crashed` — and the mechanics stand in the
+       `execute_function` notes: each round of 109–118 asked one level deeper
+       about mechanics written into State 2 itself (signals, host storage,
+       partial writes), which the method answers in notes (QUESTIONS.md, "A
+       gap no passage speaks to"). A runner
        that cannot set a limit exits before loading the code and the execution
        is `crashed`; the start probe runs the same runner with the current
        ceilings, so such a host never starts the kernel, and an earlier

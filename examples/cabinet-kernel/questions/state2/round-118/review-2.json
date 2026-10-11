@@ -1,0 +1,76 @@
+{
+ "open_points": [
+  {
+   "unit": "A03",
+   "subject": "memory bound enforcement",
+   "kind": "unbounded setup",
+   "text": "ResourceBounds M04 are enforced with `setrlimit` by the runner, inside the environment's user namespace, before the code loads: address space",
+   "question": "Does `memory_bytes` bound bubblewrap and runner startup as well as user code, and what happens when the runner's existing address space already exceeds the requested bound before `RLIMIT_AS` is set?",
+   "options": [
+    "Count the complete sandbox and runner from process creation, requiring the limit before bubblewrap starts",
+    "Count only allocations after the in-sandbox runner sets the limit",
+    "Detect an already-over-limit runner and conclude the execution `resource_exhausted`",
+    "Treat inability to enter the requested bound as `crashed`"
+   ],
+   "default_guess": "Detect existing address space above the requested bound and conclude `resource_exhausted` before loading the code."
+  },
+  {
+   "unit": "A03",
+   "subject": "process-count isolation",
+   "kind": "unenforceable invariant",
+   "text": "the process count at `process_count` plus one (a process limit set from outside counts every process of the kernel's user on the host, and the namespace could not be created; decision 30, 2026-10-11)",
+   "question": "What makes a process limit set inside the user namespace count only this execution, rather than every process using the mapped host UID, and how must unrelated host processes affect the execution?",
+   "options": [
+    "The limit must count only processes in this execution's PID/user namespaces",
+    "Host-user processes count, so the effective allowance may be lower than the contract",
+    "Use a separate host UID or another mechanism that provides per-execution accounting",
+    "Refuse kernel startup unless the host can demonstrate namespace-local process accounting"
+   ],
+   "default_guess": "Require a mechanism with per-execution process accounting; plain `RLIMIT_NPROC` under the kernel user's mapped UID is insufficient."
+  },
+  {
+   "unit": "A03",
+   "subject": "process_count meaning and offset",
+   "kind": "ambiguous accounting",
+   "text": "the process count at `process_count` plus one",
+   "question": "Which processes consume the extra one and the declared `process_count`—the runner, bubblewrap's PID-namespace init/helper, the user module process, and descendants—and what exact maximum process tree does a contract value permit?",
+   "options": [
+    "`process_count` is the total number of user-code processes, with one additional runner/init process",
+    "`process_count` includes the main user-code process and all descendants, with one additional sandbox process",
+    "Every process inside the namespace counts, making the `plus one` only a raw RLIMIT conversion",
+    "Count bubblewrap or namespace helpers outside the contract limit"
+   ],
+   "default_guess": "Treat `process_count` as including the main user-code process and its descendants, with sandbox helper processes accounted separately."
+  },
+  {
+   "unit": "A03",
+   "subject": "scratch-limit outcome detection",
+   "kind": "unobservable condition",
+   "text": "The size limit is the host kernel's own: the runner ignores the signal the host sends for a write past it, so the write fails with an error the code can see... Only that error is a scratch hit",
+   "question": "How can the runner determine that the scratch limit was hit, and therefore return `resource_exhausted`, when user code catches the write error and returns normally?",
+   "options": [
+    "Instrument every scratch-writing operation and report the limit error out of band",
+    "Treat the execution as successful when the code catches the error",
+    "Infer a hit from a file reaching the limit, despite false positives",
+    "Use a filesystem or supervisor mechanism that records limit hits independently of user code"
+   ],
+   "default_guess": "Use an out-of-band supervisor or filesystem signal that records the hit even when user code catches the error."
+  },
+  {
+   "unit": "A03",
+   "subject": "objects covered by the scratch bound",
+   "kind": "undefined scope",
+   "text": "one private exchange directory in which every file the code writes is bounded by `sandbox_scratch_bytes_max`... the size of a file written in the scratch",
+   "question": "Does “file” mean only regular files, and are user-created FIFOs, Unix sockets, device-like objects, hard links or other non-regular directory entries permitted or refused, given that the stated file-size limit does not bound all of them?",
+   "options": [
+    "Permit only regular files and directories in the exchange directory",
+    "Permit non-regular objects but define them as outside the size promise",
+    "Apply separate enforcement to every permitted object type"
+   ],
+   "default_guess": "Permit only regular files and directories and refuse creation of other filesystem object types."
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"A03\",\"subject\":\"memory bound enforcement\",\"kind\":\"unbounded setup\",\"text\":\"ResourceBounds M04 are enforced with `setrlimit` by the runner, inside the environment's user namespace, before the code loads: address space\",\"question\":\"Does `memory_bytes` bound bubblewrap and runner startup as well as user code, and what happens when the runner's existing address space already exceeds the requested bound before `RLIMIT_AS` is set?\",\"options\":[\"Count the complete sandbox and runner from process creation, requiring the limit before bubblewrap starts\",\"Count only allocations after the in-sandbox runner sets the limit\",\"Detect an already-over-limit runner and conclude the execution `resource_exhausted`\",\"Treat inability to enter the requested bound as `crashed`\"],\"default_guess\":\"Detect existing address space above the requested bound and conclude `resource_exhausted` before loading the code.\"},{\"unit\":\"A03\",\"subject\":\"process-count isolation\",\"kind\":\"unenforceable invariant\",\"text\":\"the process count at `process_count` plus one (a process limit set from outside counts every process of the kernel's user on the host, and the namespace could not be created; decision 30, 2026-10-11)\",\"question\":\"What makes a process limit set inside the user namespace count only this execution, rather than every process using the mapped host UID, and how must unrelated host processes affect the execution?\",\"options\":[\"The limit must count only processes in this execution's PID/user namespaces\",\"Host-user processes count, so the effective allowance may be lower than the contract\",\"Use a separate host UID or another mechanism that provides per-execution accounting\",\"Refuse kernel startup unless the host can demonstrate namespace-local process accounting\"],\"default_guess\":\"Require a mechanism with per-execution process accounting; plain `RLIMIT_NPROC` under the kernel user's mapped UID is insufficient.\"},{\"unit\":\"A03\",\"subject\":\"process_count meaning and offset\",\"kind\":\"ambiguous accounting\",\"text\":\"the process count at `process_count` plus one\",\"question\":\"Which processes consume the extra one and the declared `process_count`—the runner, bubblewrap's PID-namespace init/helper, the user module process, and descendants—and what exact maximum process tree does a contract value permit?\",\"options\":[\"`process_count` is the total number of user-code processes, with one additional runner/init process\",\"`process_count` includes the main user-code process and all descendants, with one additional sandbox process\",\"Every process inside the namespace counts, making the `plus one` only a raw RLIMIT conversion\",\"Count bubblewrap or namespace helpers outside the contract limit\"],\"default_guess\":\"Treat `process_count` as including the main user-code process and its descendants, with sandbox helper processes accounted separately.\"},{\"unit\":\"A03\",\"subject\":\"scratch-limit outcome detection\",\"kind\":\"unobservable condition\",\"text\":\"The size limit is the host kernel's own: the runner ignores the signal the host sends for a write past it, so the write fails with an error the code can see... Only that error is a scratch hit\",\"question\":\"How can the runner determine that the scratch limit was hit, and therefore return `resource_exhausted`, when user code catches the write error and returns normally?\",\"options\":[\"Instrument every scratch-writing operation and report the limit error out of band\",\"Treat the execution as successful when the code catches the error\",\"Infer a hit from a file reaching the limit, despite false positives\",\"Use a filesystem or supervisor mechanism that records limit hits independently of user code\"],\"default_guess\":\"Use an out-of-band supervisor or filesystem signal that records the hit even when user code catches the error.\"},{\"unit\":\"A03\",\"subject\":\"objects covered by the scratch bound\",\"kind\":\"undefined scope\",\"text\":\"one private exchange directory in which every file the code writes is bounded by `sandbox_scratch_bytes_max`... the size of a file written in the scratch\",\"question\":\"Does “file” mean only regular files, and are user-created FIFOs, Unix sockets, device-like objects, hard links or other non-regular directory entries permitted or refused, given that the stated file-size limit does not bound all of them?\",\"options\":[\"Permit only regular files and directories in the exchange directory\",\"Permit non-regular objects but define them as outside the size promise\",\"Apply separate enforcement to every permitted object type\"],\"default_guess\":\"Permit only regular files and directories and refuse creation of other filesystem object types.\"}]}",
+ "set_aside": []
+}

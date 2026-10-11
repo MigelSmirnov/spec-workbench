@@ -1,0 +1,98 @@
+{
+ "open_points": [
+  {
+   "unit": "A03",
+   "subject": "ResourceBounds M04 and scratch-file limit",
+   "kind": "model contradiction",
+   "text": "“ResourceBounds M04 are enforced with `setrlimit` ... [including] the size of a file written in the scratch” conflicts with M04, whose complete fields are only `wall_time_ms`, `memory_bytes`, `output_bytes`, and `process_count`; `sandbox_scratch_bytes_max` is instead a release-global ceiling in A20.",
+   "question": "Is the per-file scratch limit always the release constant `sandbox_scratch_bytes_max`, or is it a per-contract ResourceBounds value that M04 must carry?",
+   "options": [
+    "Use the release-global `sandbox_scratch_bytes_max` for every execution",
+    "Add a scratch-file bound to M04 and let each contract choose it",
+    "Derive the scratch-file bound from another existing M04 field"
+   ],
+   "default_guess": "Use the release-global `sandbox_scratch_bytes_max` named explicitly by A03 rule 1 and A20."
+  },
+  {
+   "unit": "A03",
+   "subject": "Detection of a caught scratch-limit error",
+   "kind": "unverifiable outcome",
+   "text": "“the runner ignores the signal ... so the write fails with an error the code can see” and “Only that error is a scratch hit” do not say how the runner learns that the error occurred when user code catches it and returns normally.",
+   "question": "If code catches the file-size-limit error and returns conforming outputs, must the execution still be `resource_exhausted`, and what trustworthy evidence records that hit?",
+   "options": [
+    "Any kernel file-size-limit error makes the execution `resource_exhausted`, even when caught, using an out-of-band record",
+    "A caught error is only visible to the code, so the execution may succeed",
+    "Classify it as `resource_exhausted` only when the error escapes `run`"
+   ],
+   "default_guess": "Treat any actual file-size-limit error as `resource_exhausted`, including when caught, and require the runner to record it out of band."
+  },
+  {
+   "unit": "A03",
+   "subject": "SIGXFSZ termination outcome",
+   "kind": "direct contradiction",
+   "text": "“Code that restores the signal's default and is killed by it exited abnormally (`crashed`)” conflicts with the later precedence rule “a limit hit (memory, process count, scratch, `output_bytes`) — `resource_exhausted`; ... the process exited abnormally — `crashed`.”",
+   "question": "When exceeding the scratch-file limit raises SIGXFSZ and kills the process, is the result `resource_exhausted` because the scratch limit was hit, or `crashed` because the process exited abnormally?",
+   "options": [
+    "`crashed`, following the explicit SIGXFSZ sentence",
+    "`resource_exhausted`, following the outcome precedence",
+    "Distinguish default-signal termination from other evidence of the same limit"
+   ],
+   "default_guess": "Use `crashed`, because the new text states that exact case explicitly."
+  },
+  {
+   "unit": "A03",
+   "subject": "Partial writes at the scratch ceiling",
+   "kind": "cross-text contradiction",
+   "text": "A03 says “a short or partial write is the code's own concern,” which permits the code to continue and potentially succeed, while A20 says “Over a ceiling is always a refusal or a failure, never a truncation — for ... files.”",
+   "question": "If a write crossing `sandbox_scratch_bytes_max` returns a short count without an error and the function accepts that result, must the execution fail or may it succeed with the partial file?",
+   "options": [
+    "Fail as `resource_exhausted` whenever the attempted write crossed the ceiling",
+    "Allow success because a short write is user-code-visible behavior",
+    "Fail only if a later write produces the file-size-limit error"
+   ],
+   "default_guess": "Fail as `resource_exhausted` to preserve A20's no-truncation rule."
+  },
+  {
+   "unit": "A03",
+   "subject": "Meaning of every file written in scratch",
+   "kind": "scope undefined",
+   "text": "Rule 1 promises that “every file the code writes is bounded,” but rule 5 specifies only the host kernel's file-size `setrlimit` and does not define which filesystem objects or write mechanisms count as a file write.",
+   "question": "Does the bound cover only growth of regular files, or must the sandbox also refuse or account for other writable objects and mechanisms inside the exchange directory, such as FIFOs, memory-mapped writes, links, truncation, or concurrent writes by child processes?",
+   "options": [
+    "Limit only regular-file size as enforced by the host's file-size rlimit",
+    "Permit only regular files in the exchange directory",
+    "Add enforcement covering every filesystem object and write mechanism"
+   ],
+   "default_guess": "Interpret the promise as a regular-file size limit exactly matching the specified kernel rlimit."
+  },
+  {
+   "unit": "A03",
+   "subject": "Memory bound installed after the runner starts",
+   "kind": "bound semantics",
+   "text": "The changed rule sets the address-space limit “by the runner, inside the environment's user namespace, before the code loads,” after the Python runner and runtime already exist, while M04 defines `memory_bytes` as the limit of one execution.",
+   "question": "Does `memory_bytes` cap the execution's total address space including the already-loaded runner, and what happens when that existing address space already exceeds the contract's bound?",
+   "options": [
+    "The total address space, including runner overhead, must never exceed the bound",
+    "The bound constrains only further allocation after it is installed",
+    "Refuse or crash executions whose bound is below the runner's existing address space"
+   ],
+   "default_guess": "Treat the bound as a total address-space cap and record the execution `crashed` if the runner cannot establish it before loading code."
+  },
+  {
+   "unit": "A03",
+   "subject": "Deterministic admission versus unbounded aggregate scratch",
+   "kind": "cross-text contradiction",
+   "text": "A03 now says “the directory as a whole has no separate bound” and host-storage exhaustion is an ordinary error, while K-05 and M08 describe admission as a deterministic verdict over the corpus.",
+   "question": "May the same implementation and trial case pass, crash, or otherwise differ solely because unrelated host storage is available on one execution but exhausted on another?",
+   "options": [
+    "Yes; the specific host-storage rule permits host-dependent admission outcomes",
+    "No; scratch capacity must be reserved or isolated so admission remains deterministic",
+    "Treat host-storage exhaustion as a distinct infrastructure failure that records no trial verdict"
+   ],
+   "default_guess": "Apply the specific A03 rule and allow an escaping host-storage error to produce `crashed`, despite the unresolved conflict with deterministic admission."
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"unit\":\"A03\",\"subject\":\"ResourceBounds M04 and scratch-file limit\",\"kind\":\"model contradiction\",\"text\":\"“ResourceBounds M04 are enforced with `setrlimit` ... [including] the size of a file written in the scratch” conflicts with M04, whose complete fields are only `wall_time_ms`, `memory_bytes`, `output_bytes`, and `process_count`; `sandbox_scratch_bytes_max` is instead a release-global ceiling in A20.\",\"question\":\"Is the per-file scratch limit always the release constant `sandbox_scratch_bytes_max`, or is it a per-contract ResourceBounds value that M04 must carry?\",\"options\":[\"Use the release-global `sandbox_scratch_bytes_max` for every execution\",\"Add a scratch-file bound to M04 and let each contract choose it\",\"Derive the scratch-file bound from another existing M04 field\"],\"default_guess\":\"Use the release-global `sandbox_scratch_bytes_max` named explicitly by A03 rule 1 and A20.\"},{\"unit\":\"A03\",\"subject\":\"Detection of a caught scratch-limit error\",\"kind\":\"unverifiable outcome\",\"text\":\"“the runner ignores the signal ... so the write fails with an error the code can see” and “Only that error is a scratch hit” do not say how the runner learns that the error occurred when user code catches it and returns normally.\",\"question\":\"If code catches the file-size-limit error and returns conforming outputs, must the execution still be `resource_exhausted`, and what trustworthy evidence records that hit?\",\"options\":[\"Any kernel file-size-limit error makes the execution `resource_exhausted`, even when caught, using an out-of-band record\",\"A caught error is only visible to the code, so the execution may succeed\",\"Classify it as `resource_exhausted` only when the error escapes `run`\"],\"default_guess\":\"Treat any actual file-size-limit error as `resource_exhausted`, including when caught, and require the runner to record it out of band.\"},{\"unit\":\"A03\",\"subject\":\"SIGXFSZ termination outcome\",\"kind\":\"direct contradiction\",\"text\":\"“Code that restores the signal's default and is killed by it exited abnormally (`crashed`)” conflicts with the later precedence rule “a limit hit (memory, process count, scratch, `output_bytes`) — `resource_exhausted`; ... the process exited abnormally — `crashed`.”\",\"question\":\"When exceeding the scratch-file limit raises SIGXFSZ and kills the process, is the result `resource_exhausted` because the scratch limit was hit, or `crashed` because the process exited abnormally?\",\"options\":[\"`crashed`, following the explicit SIGXFSZ sentence\",\"`resource_exhausted`, following the outcome precedence\",\"Distinguish default-signal termination from other evidence of the same limit\"],\"default_guess\":\"Use `crashed`, because the new text states that exact case explicitly.\"},{\"unit\":\"A03\",\"subject\":\"Partial writes at the scratch ceiling\",\"kind\":\"cross-text contradiction\",\"text\":\"A03 says “a short or partial write is the code's own concern,” which permits the code to continue and potentially succeed, while A20 says “Over a ceiling is always a refusal or a failure, never a truncation — for ... files.”\",\"question\":\"If a write crossing `sandbox_scratch_bytes_max` returns a short count without an error and the function accepts that result, must the execution fail or may it succeed with the partial file?\",\"options\":[\"Fail as `resource_exhausted` whenever the attempted write crossed the ceiling\",\"Allow success because a short write is user-code-visible behavior\",\"Fail only if a later write produces the file-size-limit error\"],\"default_guess\":\"Fail as `resource_exhausted` to preserve A20's no-truncation rule.\"},{\"unit\":\"A03\",\"subject\":\"Meaning of every file written in scratch\",\"kind\":\"scope undefined\",\"text\":\"Rule 1 promises that “every file the code writes is bounded,” but rule 5 specifies only the host kernel's file-size `setrlimit` and does not define which filesystem objects or write mechanisms count as a file write.\",\"question\":\"Does the bound cover only growth of regular files, or must the sandbox also refuse or account for other writable objects and mechanisms inside the exchange directory, such as FIFOs, memory-mapped writes, links, truncation, or concurrent writes by child processes?\",\"options\":[\"Limit only regular-file size as enforced by the host's file-size rlimit\",\"Permit only regular files in the exchange directory\",\"Add enforcement covering every filesystem object and write mechanism\"],\"default_guess\":\"Interpret the promise as a regular-file size limit exactly matching the specified kernel rlimit.\"},{\"unit\":\"A03\",\"subject\":\"Memory bound installed after the runner starts\",\"kind\":\"bound semantics\",\"text\":\"The changed rule sets the address-space limit “by the runner, inside the environment's user namespace, before the code loads,” after the Python runner and runtime already exist, while M04 defines `memory_bytes` as the limit of one execution.\",\"question\":\"Does `memory_bytes` cap the execution's total address space including the already-loaded runner, and what happens when that existing address space already exceeds the contract's bound?\",\"options\":[\"The total address space, including runner overhead, must never exceed the bound\",\"The bound constrains only further allocation after it is installed\",\"Refuse or crash executions whose bound is below the runner's existing address space\"],\"default_guess\":\"Treat the bound as a total address-space cap and record the execution `crashed` if the runner cannot establish it before loading code.\"},{\"unit\":\"A03\",\"subject\":\"Deterministic admission versus unbounded aggregate scratch\",\"kind\":\"cross-text contradiction\",\"text\":\"A03 now says “the directory as a whole has no separate bound” and host-storage exhaustion is an ordinary error, while K-05 and M08 describe admission as a deterministic verdict over the corpus.\",\"question\":\"May the same implementation and trial case pass, crash, or otherwise differ solely because unrelated host storage is available on one execution but exhausted on another?\",\"options\":[\"Yes; the specific host-storage rule permits host-dependent admission outcomes\",\"No; scratch capacity must be reserved or isolated so admission remains deterministic\",\"Treat host-storage exhaustion as a distinct infrastructure failure that records no trial verdict\"],\"default_guess\":\"Apply the specific A03 rule and allow an escaping host-storage error to produce `crashed`, despite the unresolved conflict with deterministic admission.\"}]}",
+ "set_aside": []
+}

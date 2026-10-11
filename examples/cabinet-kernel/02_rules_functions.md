@@ -202,30 +202,12 @@ and no detection promises the runtime cannot keep.
    catches it and returns a conforming output: `timeout` and `resource_exhausted`
    still come first. These traps classify ordinary attempts; the isolation of
    rule 1 is the security boundary, not the traps.
-5. ResourceBounds M04 are enforced with `setrlimit` by the runner, inside the
-   environment's user namespace, before the code loads: address space, the size
-   of a file written in the scratch, and the process count at `process_count`
-   plus one (a process limit set from outside counts every process of the
-   kernel's user on the host, and the namespace could not be created; decision
-   30, 2026-10-11). Every limit is set soft and hard to the same value, and the
-   code runs without capabilities (bubblewrap's default for an unprivileged
-   caller, never overridden), so it can neither raise nor bypass one. The size
-   limit is the host kernel's own: the runner ignores the signal the host sends
-   for a write past it, so the write fails with an error the code can see, and
-   the directory as a whole has no separate bound in this release (decision 30:
-   a total measured by the kernel depends on what and when it measures). Only
-   that error is a scratch hit: a write that fails because host storage is
-   exhausted is an ordinary raised error (`crashed` if it escapes `run`), and
-   this release promises no isolation of host storage beyond the per-file
-   bound. Code that restores the signal's default and is killed by it exited
-   abnormally (`crashed`); a short or partial write is the code's own concern,
-   and the file goes with the exchange directory. The
-   parent keeps, from outside, the wall deadline and the output count. A runner that cannot set a limit exits before loading the code and
-   the execution is `crashed`. The start probe (rule 8) runs the same runner
-   with the current ceilings, so a host where they cannot be set does not
-   start the kernel; an earlier contract version's larger bounds (A20 rule 4)
-   are set only when it executes, and an execution whose bounds the host
-   refuses is `crashed` by the same rule. The output count is the sum of the canonical JSON bytes of every
+5. ResourceBounds M04 are enforced with `setrlimit` (address space, each
+   scratch file's size, processes), set inside the environment before the code
+   loads and beyond the code's power to raise, and with the parent's own wall
+   deadline and output count; how is the sandbox's own (decision 30). A limit
+   that cannot be set means the code is not loaded and the execution is
+   `crashed`. The output count is the sum of the canonical JSON bytes of every
    `value` output and the bytes of every `file` output of the one call of `run` —
    for a `many` file output, the sum of its elements' bytes. Outcomes are closed and checked in this order, the first that holds
    deciding: wall deadline passed — `timeout`; a limit hit (memory, process count,
