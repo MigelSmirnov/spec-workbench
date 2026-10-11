@@ -229,9 +229,11 @@ minting again on a collision.
 
 Besides reading records by identity, `store.read_records` answers exactly these
 relations, each in store order unless named otherwise. A read by identity takes one or more identities and answers in the order
-given, a repeated identity once; it answers the records it finds and omits an
-identity no record has (decision 30), so its caller tells absence from the
-answer. A call names the
+given, a repeated identity once. The call also names what a missing identity
+means, and the store alone decides it (decision 30): omitted from the answer,
+`unknown_reference` (an identity the caller's own caller named), or
+`internal_error` (an identity a stored record names, which the store must
+hold); a caller never checks the answer for absence itself. A call names the
 relation and passes the records its name mentions — a slot, a contract
 version, an implementation and a corpus digest, a flow, a flow version and a
 run, a run, an element, a flow version's node — or, for "by status", the
@@ -780,10 +782,12 @@ edited, and an entity's lifecycle fields change in place (Conventions).
 
 ### Errors
 
-A read by identity omits a missing identity and is never `unknown_reference`
-(decision 30); a relation whose named record does not exist is
+A read by identity whose call names `unknown_reference` for a missing
+identity, and a relation whose named record does not exist, are
 `unknown_reference` for the whole call, naming the first missing one; nothing
-is returned.
+is returned. A read by identity whose call names `internal_error` for a missing
+identity is `internal_error` the same way; one that names omission answers the
+records found (decision 30).
 `internal_error` for a call whose relation arguments are a defect of its caller
 ("Relations of `store.read_records`"), decided before any record is looked up.
 

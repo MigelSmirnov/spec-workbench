@@ -751,31 +751,48 @@ item names the module, the witnesses, what the text said and what it says now.
        validation of Python objects refuses an enum given as its value string
        and a tuple given as a JSON array, which is how every request carries
        them: every call with an enum or a list was `invalid_request`.
-    5. *An identity read omits a missing identity* (`store` and its callers;
-       State 5 "Relations of `store.read_records`" and its Errors edited).
-       Every identity query of `read_records` — by id, by position, by attempt
-       and of spooled files — answers the records it finds, in the order
-       given, and omits an identity no record has; only a relation whose named
-       record is missing is `unknown_reference`. Was: `80_notes.md`
-       (`read_records` validation note) raised `UnknownReferenceError` for the
-       first missing identity, while most callers' notes and code read
-       existence from the answer (an existing slot, flow, flow version, trial
-       case, implementation; `recover_in_flight_attempts`' "finds no
-       NodeExecution"). Every caller whose note said "letting
-       UnknownReferenceError propagate" now says to raise it when the answer
-       holds no record: `decide_effect_approval`, `revoke_standing_approval`,
-       `resolve_unknown_outcome` (`effects`); `read_run`, `cancel_run`,
-       `release_run`, `resume_run`, `continue_after_approval`,
-       `continue_after_resolution`, `capture_failed_execution` (`runs`);
-       `add_captured_trial_case` (`functions`); `show_port_refs` (`surface`)
-       raises `StoreInternalError` for a StoredValue a reference names and the
-       read omits. Those whose note already said "MUST raise
-       UnknownReferenceError … when no record has it" (`read_binding`,
-       `read_flow_version`, `read_contract_version`, `read_slot`, …) and the
-       surface's own existence checks (`handle_read_spooled_file`,
-       `handle_read_fixture_file`) are unchanged. Witnesses:
-       `kernel_a16_owner_only_actions_refuse_agents` (an unknown approval and
-       grant ended the process `internal_error`, then
+    5. *The store decides a missing identity; its caller names how*
+       (`store` and its callers; models `MissingRecord` and the field
+       `when_missing` of `RecordsById`, `RecordsByPosition`, `RecordsByAttempt`
+       and `SpooledFilesByKey` added; State 5 "Relations of
+       `store.read_records`" and its Errors edited). Every identity query
+       carries `when_missing`: `omit` answers the records found;
+       `unknown_reference` raises `UnknownReferenceError` naming the first
+       missing identity in the order given; `internal_error` raises
+       `StoreInternalError` the same way. A caller passes `unknown_reference`
+       for an identity its own caller named, `internal_error` for one a stored
+       record names, and `omit` only when it asks whether a record exists; it
+       never checks the answer for absence itself. Was: the `read_records`
+       validation note raised `UnknownReferenceError` for every missing
+       identity, while the generated callers read existence from an empty
+       answer — `compose_flow_version` (does the flow, the version exist?) and
+       `recover_in_flight_attempts` ("finds no NodeExecution") need exactly
+       that — so the start stopped in `recover_in_flight_attempts` and an
+       unknown approval or grant ended the process `internal_error`.
+
+       Why the decision stays in the store (owner's review, 2026-10-11): the
+       first draft of this item had every identity read omit and every caller
+       raise on an empty answer — the same absence check written in six
+       modules, which is the store's decision leaking to its callers. With
+       `when_missing` the absence rule stands once, at the store's boundary,
+       and each caller states only its intent. Every identity read of the
+       run-10 package was classified (24 calls; the other read_records calls
+       are relations):
+
+       | caller (module) | query | `when_missing` |
+       |---|---|---|
+       | `decide_effect_approval`, `revoke_standing_approval`, `resolve_unknown_outcome` (effects) | by id / by attempt | `unknown_reference` |
+       | `read_run`, `cancel_run`, `release_run`, `resume_run`, `advance_run`, `continue_after_approval`, `continue_after_resolution`, `capture_failed_execution` (runs) | by id / by attempt | `unknown_reference` |
+       | `read_flow_version`, `active_flow_version` (flows) | by id | `unknown_reference` |
+       | `read_slot`, `read_contract_version`, `read_implementation`, `add_captured_trial_case`, a spooled file a request names (functions) | by id / spooled files | `unknown_reference` |
+       | `read_binding` (bindings) | by id | `unknown_reference` |
+       | `handle_read_fixture_file`, `handle_read_spooled_file` (surface) | by id / spooled files | `unknown_reference` |
+       | `show_port_refs`, a trial execution's class (surface); stored values and spooled files a PortRef names (runs); constants a version names (`prove_version`, flows) | by id / spooled files | `internal_error` |
+       | `compose_flow_version` (flows): the flow and an equal version | by id | `omit` |
+       | `recover_in_flight_attempts` (effects): the attempt's NodeExecution | by attempt | `omit` |
+
+       Witnesses: `kernel_a16_owner_only_actions_refuse_agents` (an unknown
+       approval and grant ended the process `internal_error`, then
        `kernel_a19_request_cannot_supply_time` found it gone),
        `kernel_a11_restart_turns_in_flight_unknown`,
        `kernel_a14_restart_in_flight_becomes_unknown`,
