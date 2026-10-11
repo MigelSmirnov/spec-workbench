@@ -731,7 +731,11 @@ item names the module, the witnesses, what the text said and what it says now.
        namespace (`EAGAIN`). Was: A03 rule 5 and the bounds note had the
        parent set "address space, processes" from outside. This refines A03
        rule 5 (State 2): the text of A03 is changed, which reopens the rounds
-       of States 2–5 for this block.
+       of States 2–5 for this block. State 2 round 109 added: every limit is
+       set soft and hard to the same value and the code holds no capability,
+       so it cannot raise one; a runner that cannot set its limit exits before
+       loading the code and the execution is `crashed`, and since the start
+       probe runs the same runner such a host never starts the kernel.
     3. *How the runner installs a trap* (`sandbox`). An attribute of a module
        is replaced with `setattr` on the module. A method of a class or of a
        built-in type (`datetime.datetime.now`) is replaced by setting, on the
@@ -811,7 +815,8 @@ item names the module, the witnesses, what the text said and what it says now.
        and M15 say it. The empty string is reserved for these endpoints: no
        node has it as its `node_id`, and `compose_flow_version` refuses a node
        that does (State 1 round 48: otherwise an edge naming that node could
-       not be told from a boundary edge).
+       not be told from a boundary edge; A05's composition refusals
+       name it first, State 2 round 109).
     7. *Every schema keyword is optional* (`functions`, `canonical_values`;
        decision 2). `issue_contract_version` required `type`, so a closed set
        `{"enum": [...]}` — the guard schema of A05 — was refused

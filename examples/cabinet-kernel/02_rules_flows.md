@@ -77,8 +77,9 @@ edges into one input, of flow outputs under guards, and of proving again later.
    proof failed because a binding was still `proposed` is proven again, with no
    new version, after the owner accepts that binding.
 7. State 0's "kept either way" is about the proof: a version is kept whether or
-   not it is proven. A malformed request is not a version. Composition refuses, before anything is kept, a flow version whose node ids
-   repeat, whose flow input or output port names repeat within a direction, or
+   not it is proven. A malformed request is not a version. Composition refuses, before anything is kept, a flow version a node id of
+   which is the empty string (reserved for the flow's own endpoints, rule 2),
+   whose node ids repeat, whose flow input or output port names repeat within a direction, or
    which declares a flow input or output of `file` carriage (M13), a flow input
    without a class, or a flow output with one (M01), or a constant whose value
    does not fit the schema declared with it (M16) — the first of these, in
