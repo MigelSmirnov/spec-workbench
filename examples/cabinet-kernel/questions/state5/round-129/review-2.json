@@ -1,0 +1,124 @@
+{
+ "open_points": [
+  {
+   "subject": "clock ownership of run-graph derivation",
+   "kind": "contradictory caller",
+   "text": "`clock.kernel_now` lists `module:run_graph` as a caller, while the conventions say “`run_graph` reads no clock” and `run_graph.plan_run` receives `now` from `runs`.",
+   "question": "May `run_graph` call `clock.kernel_now`, or must `runs` be the sole clock reader for run planning and pass the reading as `now`?",
+   "options": [
+    "Remove `module:run_graph` from the clock callers and keep `now` caller-supplied.",
+    "Permit `run_graph` to read the clock and remove the caller-supplied `now` rule."
+   ],
+   "default_guess": "Keep `run_graph` pure: `runs` reads the clock and passes `now`.",
+   "unit": "50_public_apis.md:`public_op:clock.kernel_now`"
+  },
+  {
+   "subject": "operation conclusions for non-executed operation nodes",
+   "kind": "incomplete output",
+   "text": "The output is “succeeded with outputs; failed with its status …; waiting …; or not reached”, but `run_graph` now calls this operation for every operation element, including elements whose `skipped_by_guard` or `upstream_failed` NodeExecution was written by `runs`.",
+   "question": "What conclusion does `effects.operation_element_conclusion` return for an operation element recorded `skipped_by_guard` or `upstream_failed`?",
+   "options": [
+    "Return distinct `skipped_by_guard` and `upstream_failed` conclusions.",
+    "Treat `upstream_failed` as failed and `skipped_by_guard` as succeeded.",
+    "Have `run_graph` bypass this operation for records written by `runs`."
+   ],
+   "default_guess": "Return distinct conclusions preserving both recorded statuses.",
+   "unit": "50_public_apis.md:`public_op:effects.operation_element_conclusion`"
+  },
+  {
+   "subject": "malformed or partial runner report",
+   "kind": "missing result",
+   "text": "“An unreadable or partial report is not decoded into outputs,” while the operation has no errors and its listed outputs contain no malformed, partial or undecodable-report result.",
+   "question": "What exactly does `read_runner_report` return when the report is unreadable, incomplete or malformed, so that `sandbox` can choose an A03 outcome?",
+   "options": [
+    "Return an explicit invalid-report result that `sandbox` classifies as `crashed`.",
+    "Return a synthetic escaped-exception report.",
+    "Raise an internal error."
+   ],
+   "default_guess": "Return an explicit invalid-report result, classified by `sandbox` as `crashed`.",
+   "unit": "50_public_apis.md:`public_op:sandbox_runner.read_runner_report`"
+  },
+  {
+   "subject": "runner-report channel ceiling",
+   "kind": "undefined boundary outcome",
+   "text": "Input is read “until the channel closed, the environment ended, or the channel bound was passed … at most eight times `output_bytes` plus 1 048 576 bytes,” but neither the returned result nor the resulting sandbox outcome when that bound is passed is fixed.",
+   "question": "Which `output_bytes` supplies this bound, how is the bound checked at its edge, and what report result and A03 outcome follow when the runner writes beyond it?",
+   "options": [
+    "Use the execution's ResourceBounds `output_bytes`; return a channel-limit result classified `resource_exhausted`.",
+    "Use the release ceiling; return an invalid-report result classified `crashed`.",
+    "Treat passing the channel bound as an internal error."
+   ],
+   "default_guess": "Use the execution's `output_bytes` and classify an exceeded report-channel bound as `resource_exhausted`.",
+   "unit": "50_public_apis.md:`public_op:sandbox_runner.read_runner_report`"
+  },
+  {
+   "subject": "delivery from an already-written source",
+   "kind": "ambiguous effect",
+   "text": "An input source may be “a record already written”, but the operation says “Write the value a source still needs written” and its State impact says “The published bytes of a derived value, then `record_delivery_values`.”",
+   "question": "When the source is an already-written StoredValue or file reference, does `deliver_input` simply check and return it, or must it still invoke `record_delivery_values` or create another value record?",
+   "options": [
+    "Check and return the existing reference with no store change.",
+    "Invoke `record_delivery_values` as an idempotent change.",
+    "Create a delivery-specific StoredValue even when the source is already written."
+   ],
+   "default_guess": "Return the existing reference after checking it, with no store change.",
+   "unit": "50_public_apis.md:`public_op:run_values.deliver_input`"
+  },
+  {
+   "subject": "flow-output source forms and conditional write",
+   "kind": "underspecified input and effect",
+   "text": "The input is only “The source of one produced flow output”, while the operation says it writes “the value … still needs written” and its State impact is unconditionally `record_delivery_values`.",
+   "question": "Which source forms may `record_flow_output` receive, and what does it do when the flow output comes from an already-written flow input, constant or ordinary node output rather than an unwritten mapped value list?",
+   "options": [
+    "Accept the same source variants as delivery and write only an unwritten derived mapped list.",
+    "Accept only unwritten mapped-list sources; `runs` handles already-written sources itself.",
+    "Always record a new delivery StoredValue for every produced flow output."
+   ],
+   "default_guess": "Accept all source variants, return an existing reference unchanged, and write only an unwritten derived mapped list.",
+   "unit": "50_public_apis.md:`public_op:run_values.record_flow_output`"
+  },
+  {
+   "subject": "contents of skip and upstream-failure drafts",
+   "kind": "incomplete output record",
+   "text": "`plan_run` returns “the `skipped_by_guard` and `upstream_failed` records that became determined, as drafts”, without fixing which M23 fields those drafts carry beyond their status, order and supplied `now`.",
+   "question": "For each draft, what are `inputs`, `outputs`, `executed`, `failure_detail`, `resources_used`, `started_at` and `ended_at`, especially when some inputs had already been delivered before the node became non-executable?",
+   "options": [
+    "Name all inputs already delivered; omit executed, outputs, detail and resources; set both times to `now`.",
+    "Name no inputs or outputs; omit executed, detail and resources; set both times to `now`.",
+    "Use different field rules for `skipped_by_guard` and `upstream_failed`."
+   ],
+   "default_guess": "Name the inputs already delivered, omit executed, outputs, detail and resources, and set both timestamps to `now`.",
+   "unit": "50_public_apis.md:`public_op:run_graph.plan_run`"
+  },
+  {
+   "subject": "plan containing both new drafts and executable work",
+   "kind": "undefined action ordering",
+   "text": "One answer contains both “records that became determined, as drafts” and “the next ready node with its elements”, but it does not say whether the ready node is computed before or after virtually applying those drafts, or whether callers may execute it without planning again.",
+   "question": "When `plan_run` returns non-empty drafts, may it also return an actionable next node, and must `runs` write the drafts and re-plan before executing anything?",
+   "options": [
+    "Return drafts only; `runs` writes them and calls `plan_run` again.",
+    "Return a next node computed after the drafts' virtual application; `runs` may use it after writing them.",
+    "Return both, but require `runs` to ignore the next node and re-plan."
+   ],
+   "default_guess": "Return drafts without an actionable next node; write them and re-plan.",
+   "unit": "50_public_apis.md:`public_op:run_graph.plan_run`"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"clock ownership of run-graph derivation\",\"kind\":\"contradictory caller\",\"text\":\"`clock.kernel_now` lists `module:run_graph` as a caller, while the conventions say “`run_graph` reads no clock” and `run_graph.plan_run` receives `now` from `runs`.\",\"question\":\"May `run_graph` call `clock.kernel_now`, or must `runs` be the sole clock reader for run planning and pass the reading as `now`?\",\"options\":[\"Remove `module:run_graph` from the clock callers and keep `now` caller-supplied.\",\"Permit `run_graph` to read the clock and remove the caller-supplied `now` rule.\"],\"default_guess\":\"Keep `run_graph` pure: `runs` reads the clock and passes `now`.\",\"unit\":\"50_public_apis.md:`public_op:clock.kernel_now`\"},{\"subject\":\"operation conclusions for non-executed operation nodes\",\"kind\":\"incomplete output\",\"text\":\"The output is “succeeded with outputs; failed with its status …; waiting …; or not reached”, but `run_graph` now calls this operation for every operation element, including elements whose `skipped_by_guard` or `upstream_failed` NodeExecution was written by `runs`.\",\"question\":\"What conclusion does `effects.operation_element_conclusion` return for an operation element recorded `skipped_by_guard` or `upstream_failed`?\",\"options\":[\"Return distinct `skipped_by_guard` and `upstream_failed` conclusions.\",\"Treat `upstream_failed` as failed and `skipped_by_guard` as succeeded.\",\"Have `run_graph` bypass this operation for records written by `runs`.\"],\"default_guess\":\"Return distinct conclusions preserving both recorded statuses.\",\"unit\":\"50_public_apis.md:`public_op:effects.operation_element_conclusion`\"},{\"subject\":\"malformed or partial runner report\",\"kind\":\"missing result\",\"text\":\"“An unreadable or partial report is not decoded into outputs,” while the operation has no errors and its listed outputs contain no malformed, partial or undecodable-report result.\",\"question\":\"What exactly does `read_runner_report` return when the report is unreadable, incomplete or malformed, so that `sandbox` can choose an A03 outcome?\",\"options\":[\"Return an explicit invalid-report result that `sandbox` classifies as `crashed`.\",\"Return a synthetic escaped-exception report.\",\"Raise an internal error.\"],\"default_guess\":\"Return an explicit invalid-report result, classified by `sandbox` as `crashed`.\",\"unit\":\"50_public_apis.md:`public_op:sandbox_runner.read_runner_report`\"},{\"subject\":\"runner-report channel ceiling\",\"kind\":\"undefined boundary outcome\",\"text\":\"Input is read “until the channel closed, the environment ended, or the channel bound was passed … at most eight times `output_bytes` plus 1 048 576 bytes,” but neither the returned result nor the resulting sandbox outcome when that bound is passed is fixed.\",\"question\":\"Which `output_bytes` supplies this bound, how is the bound checked at its edge, and what report result and A03 outcome follow when the runner writes beyond it?\",\"options\":[\"Use the execution's ResourceBounds `output_bytes`; return a channel-limit result classified `resource_exhausted`.\",\"Use the release ceiling; return an invalid-report result classified `crashed`.\",\"Treat passing the channel bound as an internal error.\"],\"default_guess\":\"Use the execution's `output_bytes` and classify an exceeded report-channel bound as `resource_exhausted`.\",\"unit\":\"50_public_apis.md:`public_op:sandbox_runner.read_runner_report`\"},{\"subject\":\"delivery from an already-written source\",\"kind\":\"ambiguous effect\",\"text\":\"An input source may be “a record already written”, but the operation says “Write the value a source still needs written” and its State impact says “The published bytes of a derived value, then `record_delivery_values`.”\",\"question\":\"When the source is an already-written StoredValue or file reference, does `deliver_input` simply check and return it, or must it still invoke `record_delivery_values` or create another value record?\",\"options\":[\"Check and return the existing reference with no store change.\",\"Invoke `record_delivery_values` as an idempotent change.\",\"Create a delivery-specific StoredValue even when the source is already written.\"],\"default_guess\":\"Return the existing reference after checking it, with no store change.\",\"unit\":\"50_public_apis.md:`public_op:run_values.deliver_input`\"},{\"subject\":\"flow-output source forms and conditional write\",\"kind\":\"underspecified input and effect\",\"text\":\"The input is only “The source of one produced flow output”, while the operation says it writes “the value … still needs written” and its State impact is unconditionally `record_delivery_values`.\",\"question\":\"Which source forms may `record_flow_output` receive, and what does it do when the flow output comes from an already-written flow input, constant or ordinary node output rather than an unwritten mapped value list?\",\"options\":[\"Accept the same source variants as delivery and write only an unwritten derived mapped list.\",\"Accept only unwritten mapped-list sources; `runs` handles already-written sources itself.\",\"Always record a new delivery StoredValue for every produced flow output.\"],\"default_guess\":\"Accept all source variants, return an existing reference unchanged, and write only an unwritten derived mapped list.\",\"unit\":\"50_public_apis.md:`public_op:run_values.record_flow_output`\"},{\"subject\":\"contents of skip and upstream-failure drafts\",\"kind\":\"incomplete output record\",\"text\":\"`plan_run` returns “the `skipped_by_guard` and `upstream_failed` records that became determined, as drafts”, without fixing which M23 fields those drafts carry beyond their status, order and supplied `now`.\",\"question\":\"For each draft, what are `inputs`, `outputs`, `executed`, `failure_detail`, `resources_used`, `started_at` and `ended_at`, especially when some inputs had already been delivered before the node became non-executable?\",\"options\":[\"Name all inputs already delivered; omit executed, outputs, detail and resources; set both times to `now`.\",\"Name no inputs or outputs; omit executed, detail and resources; set both times to `now`.\",\"Use different field rules for `skipped_by_guard` and `upstream_failed`.\"],\"default_guess\":\"Name the inputs already delivered, omit executed, outputs, detail and resources, and set both timestamps to `now`.\",\"unit\":\"50_public_apis.md:`public_op:run_graph.plan_run`\"},{\"subject\":\"plan containing both new drafts and executable work\",\"kind\":\"undefined action ordering\",\"text\":\"One answer contains both “records that became determined, as drafts” and “the next ready node with its elements”, but it does not say whether the ready node is computed before or after virtually applying those drafts, or whether callers may execute it without planning again.\",\"question\":\"When `plan_run` returns non-empty drafts, may it also return an actionable next node, and must `runs` write the drafts and re-plan before executing anything?\",\"options\":[\"Return drafts only; `runs` writes them and calls `plan_run` again.\",\"Return a next node computed after the drafts' virtual application; `runs` may use it after writing them.\",\"Return both, but require `runs` to ignore the next node and re-plan.\"],\"default_guess\":\"Return drafts without an actionable next node; write them and re-plan.\",\"unit\":\"50_public_apis.md:`public_op:run_graph.plan_run`\"},{\"subject\":\"startup recovery with waits and independent ready work\",\"kind\":\"cross-state contradiction\",\"text\":\"The changed recovery text says “a run that still waits is not advanced: only its lagging status and waiting points are rewritten … and no element is reached”, while A13 rule 8 says “While some elements wait, every other ready node keeps executing”.\",\"question\":\"During startup recovery, if a run still has one valid wait but also has an independent ready element, must recovery execute the ready element or leave the whole run untouched because a wait remains?\",\"options\":[\"Advance all independent ready work; only a run with waits and no ready work remains unadvanced.\",\"Do not advance any run that has at least one waiting element.\",\"Advance ready function elements but do not reach operation elements.\"],\"default_guess\":\"Advance every independent ready element; leave a waiting run unadvanced only when it has no executable work.\",\"unit\":\"context: agreement of the earlier states' texts with this state\"}]}",
+ "set_aside": [
+  {
+   "subject": "startup recovery with waits and independent ready work",
+   "kind": "cross-state contradiction",
+   "text": "The changed recovery text says “a run that still waits is not advanced: only its lagging status and waiting points are rewritten … and no element is reached”, while A13 rule 8 says “While some elements wait, every other ready node keeps executing”.",
+   "question": "During startup recovery, if a run still has one valid wait but also has an independent ready element, must recovery execute the ready element or leave the whole run untouched because a wait remains?",
+   "options": [
+    "Advance all independent ready work; only a run with waits and no ready work remains unadvanced.",
+    "Do not advance any run that has at least one waiting element.",
+    "Advance ready function elements but do not reach operation elements."
+   ],
+   "default_guess": "Advance every independent ready element; leave a waiting run unadvanced only when it has no executable work.",
+   "unit": "context: agreement of the earlier states' texts with this state"
+  }
+ ]
+}

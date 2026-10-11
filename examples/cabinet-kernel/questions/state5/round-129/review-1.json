@@ -1,0 +1,176 @@
+{
+ "open_points": [
+  {
+   "subject": "clock access by run_graph",
+   "kind": "contradiction",
+   "text": "`clock.kernel_now` lists `module:run_graph` as a caller, while the conventions say “`run_graph` reads no clock” and `run_graph`’s module contract says “no clock — the time of a draft is the `now` `runs` passes.”",
+   "question": "May `run_graph` call `clock.kernel_now`, or must every call receive its time exclusively through `plan_run.now`?",
+   "options": [
+    "Remove `module:run_graph` from the clock callers and require `runs` to pass `now`",
+    "Allow `run_graph` to read the clock and remove the passed `now` rule"
+   ],
+   "default_guess": "Require `runs` to pass `now`; `run_graph` does not call the clock.",
+   "unit": "50_public_apis.md:`public_op:clock.kernel_now`"
+  },
+  {
+   "subject": "unreadable, partial, or oversized runner report",
+   "kind": "missing output",
+   "text": "`read_runner_report` says “an unreadable or partial report is not decoded into outputs” but its Outputs list has no malformed, partial, or over-bound result and its Errors section says `None`.",
+   "question": "What exactly does `read_runner_report` return when framing is invalid, the report is partial, or the channel bound is exceeded, and how can `sandbox` distinguish that result from a valid report with no outputs?",
+   "options": [
+    "Return a distinct invalid-report result for `sandbox` to classify as `crashed`",
+    "Return a synthetic escaped-exception report",
+    "Raise an internal error"
+   ],
+   "default_guess": "Return a distinct invalid-report result which `sandbox` classifies as `crashed`.",
+   "unit": "50_public_apis.md:`public_op:sandbox_runner.read_runner_report`"
+  },
+  {
+   "subject": "runner-report termination information",
+   "kind": "insufficient input",
+   "text": "The input is “Every byte the runner wrote … until the channel closed, the environment ended, or the channel bound was passed,” with no indication of which condition stopped the read.",
+   "question": "Must the caller pass the termination condition or an over-bound flag, or must report framing alone distinguish a complete report from bytes truncated because the environment ended or the bound was passed?",
+   "options": [
+    "Pass the termination condition and over-bound flag",
+    "Require a self-delimiting complete frame and treat absence of its terminator as partial",
+    "Treat every collected byte sequence alike"
+   ],
+   "default_guess": "Pass the termination condition or over-bound flag and also validate a complete frame.",
+   "unit": "50_public_apis.md:`public_op:sandbox_runner.read_runner_report`"
+  },
+  {
+   "subject": "re-writing an existing derived StoredValue",
+   "kind": "idempotency gap",
+   "text": "`deliver_input` says it “writes what the source still needs written” through `record_delivery_values`, but neither operation fixes what happens when the same content-derived StoredValue already exists, including after a previous delivery write survived while later run progress did not.",
+   "question": "Does delivery return an existing equal StoredValue without a store change, make `record_delivery_values` an idempotent no-op for it, or treat the existing identity as an invariant failure?",
+   "options": [
+    "Read and return the existing equal StoredValue without a change",
+    "Allow `record_delivery_values` to return the existing record idempotently",
+    "Return `internal_error` for an existing identity"
+   ],
+   "default_guess": "Return the existing equal StoredValue without writing another record.",
+   "unit": "50_public_apis.md:`public_op:run_values.deliver_input`"
+  },
+  {
+   "subject": "record_delivery_values duplicate semantics",
+   "kind": "store effect gap",
+   "text": "The new `record_delivery_values` row says only that it writes derived StoredValues; the general store text says it checks “unique and existing identities” but does not say whether an already-existing equal content-derived identity is success, a no-op, or an error for this change.",
+   "question": "What are the exact output and effect of `record_delivery_values` when one or all supplied StoredValues already exist with the same identity and facts?",
+   "options": [
+    "Return the existing records and write nothing for them",
+    "Require every supplied record to be new",
+    "Accept an existing record only when all facts are byte-for-byte equal"
+   ],
+   "default_guess": "Accept and return an existing record only when all identity facts agree, writing only records that are new.",
+   "unit": "50_public_apis.md:Named store changes (`record_change`)"
+  },
+  {
+   "subject": "empty mapped file-list reference and class",
+   "kind": "undefined representation",
+   "text": "`empty_list_outputs` returns “a file port's empty file list — and the references the node's record names,” while an empty file list contains no SpooledFile reference on which to carry the list's disclosure class.",
+   "question": "What exact reference does the NodeExecution store for an empty mapped file output, and where is that empty list's disclosure class represented?",
+   "options": [
+    "Define a separate typed empty-file-list reference carrying the class",
+    "Store a value-like list record for the empty file list",
+    "Represent it as an empty SpooledFile list and add the class alongside the port entry"
+   ],
+   "default_guess": "Use a typed empty-file-list reference carrying its disclosure class in the NodeExecution output entry.",
+   "unit": "50_public_apis.md:`public_op:run_values.empty_list_outputs`"
+  },
+  {
+   "subject": "resolved not_applied element before fresh approval is recorded",
+   "kind": "contradiction",
+   "text": "`operation_element_conclusion` says `not reached` applies “when the element has no NodeExecution yet” and an `owner_approval` wait includes the requested `approval_id`; recovery nevertheless requires an attempt resolved `not_applied` to be reached again when its fresh approval was never requested. Such an element already has its `outcome_unknown` NodeExecution but has no requested fresh approval.",
+   "question": "What conclusion does the operation return in the crash window after `resolve_attempt(not_applied)` commits and before the fresh approval is requested, so recovery knows to reach the element without inventing an `approval_id`?",
+   "options": [
+    "A distinct `needs_fresh_approval` or `not_reached_for_next_attempt` conclusion",
+    "`owner_approval` waiting with no approval id",
+    "`not reached` even though an earlier NodeExecution exists"
+   ],
+   "default_guess": "Return a distinct conclusion meaning that the next attempt must be reached to request fresh approval.",
+   "unit": "50_public_apis.md:`public_op:effects.operation_element_conclusion`"
+  },
+  {
+   "subject": "fields of derived skip and upstream-failure drafts",
+   "kind": "underspecified output",
+   "text": "`plan_run` returns “the `skipped_by_guard` and `upstream_failed` records that became determined, as drafts” and receives `now`, but it does not fix the draft values for `started_at`, `ended_at`, `inputs`, `outputs`, `executed`, `resources_used` or `failure_detail`.",
+   "question": "Which complete NodeExecution fields must each kind of draft contain, and do both `started_at` and `ended_at` equal the supplied `now`?",
+   "options": [
+    "Both timestamps are `now`; executed, inputs, outputs, resources and detail are absent",
+    "Both timestamps are `now`; already available inputs are recorded",
+    "The draft omits timestamps and `runs` fills them"
+   ],
+   "default_guess": "Set both timestamps to `now` and leave executed, inputs, outputs, resources and failure detail absent.",
+   "unit": "50_public_apis.md:`public_op:run_graph.plan_run`"
+  },
+  {
+   "subject": "plan result action precedence",
+   "kind": "undefined caller protocol",
+   "text": "`plan_run` returns drafts, the next ready node, waiting points, outputs and status together, while the conventions require drafts to be written “in that very change”; it does not state whether a returned ready node may be executed before those drafts are persisted or whether the caller must write and re-plan first.",
+   "question": "When one plan contains newly determined drafts and also identifies a ready node, what exact action must `runs` take first?",
+   "options": [
+    "Write drafts and derived run state, then call `plan_run` again before executing",
+    "Write drafts, then execute the ready node from the same plan",
+    "Execute the ready node and include the drafts in the later progress change"
+   ],
+   "default_guess": "Write the drafts and derived run state first, then re-plan before executing another node.",
+   "unit": "50_public_apis.md:`public_op:run_graph.plan_run`"
+  },
+  {
+   "subject": "representation of a mapped-list ceiling failure",
+   "kind": "missing result shape",
+   "text": "`plan_run` enforces “a mapped list over `stored_value_bytes_max` failing its node with no record,” but its Outputs do not identify a distinct node-level derived failure, the offending output port, or its failure detail.",
+   "question": "How is this recordless failure represented in the plan's node conclusion and run answer, and does it carry `value_too_large` or identify an output port?",
+   "options": [
+    "A derived failed-node conclusion with detail `value_too_large` and the first offending port",
+    "A derived failed-node conclusion with no detail or port",
+    "An ordinary `contract_violation` draft despite the text saying no record"
+   ],
+   "default_guess": "Return a recordless failed-node conclusion with `value_too_large` and the first offending output port in deterministic order.",
+   "unit": "50_public_apis.md:`public_op:run_graph.plan_run`"
+  },
+  {
+   "subject": "record_flow_output behavior for an already-written source",
+   "kind": "effect ambiguity",
+   "text": "`record_flow_output` says “Write the value a produced flow output still needs written” and gives `record_delivery_values` as its state impact, but its source may already be a written StoredValue and the operation does not say whether it then performs a store change or simply returns that reference.",
+   "question": "For each allowed source kind, when does `record_flow_output` write `record_delivery_values`, and what does it do when the source is already a written StoredValue?",
+   "options": [
+    "Only persist an unwritten mapped value list; otherwise return the existing reference",
+    "Always invoke `record_delivery_values`, idempotently",
+    "Refuse any source other than an unwritten mapped value list"
+   ],
+   "default_guess": "Persist only an unwritten mapped value list and otherwise return the existing reference unchanged.",
+   "unit": "50_public_apis.md:`public_op:run_values.record_flow_output`"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"clock access by run_graph\",\"kind\":\"contradiction\",\"text\":\"`clock.kernel_now` lists `module:run_graph` as a caller, while the conventions say “`run_graph` reads no clock” and `run_graph`’s module contract says “no clock — the time of a draft is the `now` `runs` passes.”\",\"question\":\"May `run_graph` call `clock.kernel_now`, or must every call receive its time exclusively through `plan_run.now`?\",\"options\":[\"Remove `module:run_graph` from the clock callers and require `runs` to pass `now`\",\"Allow `run_graph` to read the clock and remove the passed `now` rule\"],\"default_guess\":\"Require `runs` to pass `now`; `run_graph` does not call the clock.\",\"unit\":\"50_public_apis.md:`public_op:clock.kernel_now`\"},{\"subject\":\"unreadable, partial, or oversized runner report\",\"kind\":\"missing output\",\"text\":\"`read_runner_report` says “an unreadable or partial report is not decoded into outputs” but its Outputs list has no malformed, partial, or over-bound result and its Errors section says `None`.\",\"question\":\"What exactly does `read_runner_report` return when framing is invalid, the report is partial, or the channel bound is exceeded, and how can `sandbox` distinguish that result from a valid report with no outputs?\",\"options\":[\"Return a distinct invalid-report result for `sandbox` to classify as `crashed`\",\"Return a synthetic escaped-exception report\",\"Raise an internal error\"],\"default_guess\":\"Return a distinct invalid-report result which `sandbox` classifies as `crashed`.\",\"unit\":\"50_public_apis.md:`public_op:sandbox_runner.read_runner_report`\"},{\"subject\":\"runner-report termination information\",\"kind\":\"insufficient input\",\"text\":\"The input is “Every byte the runner wrote … until the channel closed, the environment ended, or the channel bound was passed,” with no indication of which condition stopped the read.\",\"question\":\"Must the caller pass the termination condition or an over-bound flag, or must report framing alone distinguish a complete report from bytes truncated because the environment ended or the bound was passed?\",\"options\":[\"Pass the termination condition and over-bound flag\",\"Require a self-delimiting complete frame and treat absence of its terminator as partial\",\"Treat every collected byte sequence alike\"],\"default_guess\":\"Pass the termination condition or over-bound flag and also validate a complete frame.\",\"unit\":\"50_public_apis.md:`public_op:sandbox_runner.read_runner_report`\"},{\"subject\":\"measurement of mapped file-output lists\",\"kind\":\"undefined size rule\",\"text\":\"`assemble_mapped_lists` must “measure them against the stored value ceiling” and says “Every delivered list of the node is measured,” but a file list is only “the reference to the elements' files”; no canonical bytes whose size is measured are defined for that reference.\",\"question\":\"Does `stored_value_bytes_max` apply to a mapped file-output list, and if so, what exact bytes are measured?\",\"options\":[\"Do not apply the StoredValue ceiling to file lists; their files use spool ceilings\",\"Measure canonical JSON of the SpooledFile references\",\"Measure the sum of file contents\"],\"default_guess\":\"Do not apply `stored_value_bytes_max` to file lists; enforce only the spool ceilings on their files.\",\"unit\":\"50_public_apis.md:`public_op:run_values.assemble_mapped_lists`\"},{\"subject\":\"several oversized mapped value lists\",\"kind\":\"undefined ordering\",\"text\":\"The output is “Every list built …; or that one list exceeds `stored_value_bytes_max`,” although a mapped node may have several delivered output lists and more than one may exceed the ceiling.\",\"question\":\"When several delivered lists exceed the ceiling, what result identifies the failure, and in what deterministic output-port order is the first oversized list selected?\",\"options\":[\"Return all oversized output ports\",\"Return the first output port in code-point name order\",\"Return an unqualified node-level over-ceiling result\"],\"default_guess\":\"Return the first oversized output port in code-point name order after measuring every delivered list.\",\"unit\":\"50_public_apis.md:`public_op:run_values.assemble_mapped_lists`\"},{\"subject\":\"re-writing an existing derived StoredValue\",\"kind\":\"idempotency gap\",\"text\":\"`deliver_input` says it “writes what the source still needs written” through `record_delivery_values`, but neither operation fixes what happens when the same content-derived StoredValue already exists, including after a previous delivery write survived while later run progress did not.\",\"question\":\"Does delivery return an existing equal StoredValue without a store change, make `record_delivery_values` an idempotent no-op for it, or treat the existing identity as an invariant failure?\",\"options\":[\"Read and return the existing equal StoredValue without a change\",\"Allow `record_delivery_values` to return the existing record idempotently\",\"Return `internal_error` for an existing identity\"],\"default_guess\":\"Return the existing equal StoredValue without writing another record.\",\"unit\":\"50_public_apis.md:`public_op:run_values.deliver_input`\"},{\"subject\":\"record_delivery_values duplicate semantics\",\"kind\":\"store effect gap\",\"text\":\"The new `record_delivery_values` row says only that it writes derived StoredValues; the general store text says it checks “unique and existing identities” but does not say whether an already-existing equal content-derived identity is success, a no-op, or an error for this change.\",\"question\":\"What are the exact output and effect of `record_delivery_values` when one or all supplied StoredValues already exist with the same identity and facts?\",\"options\":[\"Return the existing records and write nothing for them\",\"Require every supplied record to be new\",\"Accept an existing record only when all facts are byte-for-byte equal\"],\"default_guess\":\"Accept and return an existing record only when all identity facts agree, writing only records that are new.\",\"unit\":\"50_public_apis.md:Named store changes (`record_change`)\"},{\"subject\":\"empty mapped file-list reference and class\",\"kind\":\"undefined representation\",\"text\":\"`empty_list_outputs` returns “a file port's empty file list — and the references the node's record names,” while an empty file list contains no SpooledFile reference on which to carry the list's disclosure class.\",\"question\":\"What exact reference does the NodeExecution store for an empty mapped file output, and where is that empty list's disclosure class represented?\",\"options\":[\"Define a separate typed empty-file-list reference carrying the class\",\"Store a value-like list record for the empty file list\",\"Represent it as an empty SpooledFile list and add the class alongside the port entry\"],\"default_guess\":\"Use a typed empty-file-list reference carrying its disclosure class in the NodeExecution output entry.\",\"unit\":\"50_public_apis.md:`public_op:run_values.empty_list_outputs`\"},{\"subject\":\"resolved not_applied element before fresh approval is recorded\",\"kind\":\"contradiction\",\"text\":\"`operation_element_conclusion` says `not reached` applies “when the element has no NodeExecution yet” and an `owner_approval` wait includes the requested `approval_id`; recovery nevertheless requires an attempt resolved `not_applied` to be reached again when its fresh approval was never requested. Such an element already has its `outcome_unknown` NodeExecution but has no requested fresh approval.\",\"question\":\"What conclusion does the operation return in the crash window after `resolve_attempt(not_applied)` commits and before the fresh approval is requested, so recovery knows to reach the element without inventing an `approval_id`?\",\"options\":[\"A distinct `needs_fresh_approval` or `not_reached_for_next_attempt` conclusion\",\"`owner_approval` waiting with no approval id\",\"`not reached` even though an earlier NodeExecution exists\"],\"default_guess\":\"Return a distinct conclusion meaning that the next attempt must be reached to request fresh approval.\",\"unit\":\"50_public_apis.md:`public_op:effects.operation_element_conclusion`\"},{\"subject\":\"fields of derived skip and upstream-failure drafts\",\"kind\":\"underspecified output\",\"text\":\"`plan_run` returns “the `skipped_by_guard` and `upstream_failed` records that became determined, as drafts” and receives `now`, but it does not fix the draft values for `started_at`, `ended_at`, `inputs`, `outputs`, `executed`, `resources_used` or `failure_detail`.\",\"question\":\"Which complete NodeExecution fields must each kind of draft contain, and do both `started_at` and `ended_at` equal the supplied `now`?\",\"options\":[\"Both timestamps are `now`; executed, inputs, outputs, resources and detail are absent\",\"Both timestamps are `now`; already available inputs are recorded\",\"The draft omits timestamps and `runs` fills them\"],\"default_guess\":\"Set both timestamps to `now` and leave executed, inputs, outputs, resources and failure detail absent.\",\"unit\":\"50_public_apis.md:`public_op:run_graph.plan_run`\"},{\"subject\":\"plan result action precedence\",\"kind\":\"undefined caller protocol\",\"text\":\"`plan_run` returns drafts, the next ready node, waiting points, outputs and status together, while the conventions require drafts to be written “in that very change”; it does not state whether a returned ready node may be executed before those drafts are persisted or whether the caller must write and re-plan first.\",\"question\":\"When one plan contains newly determined drafts and also identifies a ready node, what exact action must `runs` take first?\",\"options\":[\"Write drafts and derived run state, then call `plan_run` again before executing\",\"Write drafts, then execute the ready node from the same plan\",\"Execute the ready node and include the drafts in the later progress change\"],\"default_guess\":\"Write the drafts and derived run state first, then re-plan before executing another node.\",\"unit\":\"50_public_apis.md:`public_op:run_graph.plan_run`\"},{\"subject\":\"representation of a mapped-list ceiling failure\",\"kind\":\"missing result shape\",\"text\":\"`plan_run` enforces “a mapped list over `stored_value_bytes_max` failing its node with no record,” but its Outputs do not identify a distinct node-level derived failure, the offending output port, or its failure detail.\",\"question\":\"How is this recordless failure represented in the plan's node conclusion and run answer, and does it carry `value_too_large` or identify an output port?\",\"options\":[\"A derived failed-node conclusion with detail `value_too_large` and the first offending port\",\"A derived failed-node conclusion with no detail or port\",\"An ordinary `contract_violation` draft despite the text saying no record\"],\"default_guess\":\"Return a recordless failed-node conclusion with `value_too_large` and the first offending output port in deterministic order.\",\"unit\":\"50_public_apis.md:`public_op:run_graph.plan_run`\"},{\"subject\":\"record_flow_output behavior for an already-written source\",\"kind\":\"effect ambiguity\",\"text\":\"`record_flow_output` says “Write the value a produced flow output still needs written” and gives `record_delivery_values` as its state impact, but its source may already be a written StoredValue and the operation does not say whether it then performs a store change or simply returns that reference.\",\"question\":\"For each allowed source kind, when does `record_flow_output` write `record_delivery_values`, and what does it do when the source is already a written StoredValue?\",\"options\":[\"Only persist an unwritten mapped value list; otherwise return the existing reference\",\"Always invoke `record_delivery_values`, idempotently\",\"Refuse any source other than an unwritten mapped value list\"],\"default_guess\":\"Persist only an unwritten mapped value list and otherwise return the existing reference unchanged.\",\"unit\":\"50_public_apis.md:`public_op:run_values.record_flow_output`\"}]}",
+ "set_aside": [
+  {
+   "subject": "measurement of mapped file-output lists",
+   "kind": "undefined size rule",
+   "text": "`assemble_mapped_lists` must “measure them against the stored value ceiling” and says “Every delivered list of the node is measured,” but a file list is only “the reference to the elements' files”; no canonical bytes whose size is measured are defined for that reference.",
+   "question": "Does `stored_value_bytes_max` apply to a mapped file-output list, and if so, what exact bytes are measured?",
+   "options": [
+    "Do not apply the StoredValue ceiling to file lists; their files use spool ceilings",
+    "Measure canonical JSON of the SpooledFile references",
+    "Measure the sum of file contents"
+   ],
+   "default_guess": "Do not apply `stored_value_bytes_max` to file lists; enforce only the spool ceilings on their files.",
+   "unit": "50_public_apis.md:`public_op:run_values.assemble_mapped_lists`"
+  },
+  {
+   "subject": "several oversized mapped value lists",
+   "kind": "undefined ordering",
+   "text": "The output is “Every list built …; or that one list exceeds `stored_value_bytes_max`,” although a mapped node may have several delivered output lists and more than one may exceed the ceiling.",
+   "question": "When several delivered lists exceed the ceiling, what result identifies the failure, and in what deterministic output-port order is the first oversized list selected?",
+   "options": [
+    "Return all oversized output ports",
+    "Return the first output port in code-point name order",
+    "Return an unqualified node-level over-ceiling result"
+   ],
+   "default_guess": "Return the first oversized output port in code-point name order after measuring every delivered list.",
+   "unit": "50_public_apis.md:`public_op:run_values.assemble_mapped_lists`"
+  }
+ ]
+}

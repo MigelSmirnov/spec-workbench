@@ -569,7 +569,7 @@ Pure; touches no record.
 
 ### Callers
 
-`module:functions`, `module:bindings`, `module:flows`, `module:effects`, `module:run_graph`, `module:runs`.
+`module:functions`, `module:bindings`, `module:flows`, `module:effects`, `module:runs`.
 
 ### Inputs
 

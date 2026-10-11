@@ -31,7 +31,7 @@ is the one mapping;
 | A16 | `surface` | `installation`, `store`, `data_provider` |
 | A17 | `installation` | `service_invoker`, `sandbox` |
 | A18 | `store` | `runs`, `surface`, `store_persistence` |
-| A19 | `clock` | `sandbox`, `service_invoker`, `functions`, `effects`, `runs`, `run_graph`, `bindings`, `flows` |
+| A19 | `clock` | `sandbox`, `service_invoker`, `functions`, `effects`, `runs`, `bindings`, `flows` |
 | A20 | `data_provider` | `functions`, `sandbox`, `sandbox_runner`, `service_invoker`, `store`, `runs`, `run_values`, `surface` |
 
 The kernel is one process with one writer (K-17), so modules are not services:
@@ -333,8 +333,9 @@ record checked by `design_lint --state 2`, recorded as such in `30_trace.json`.
   `not_applied` — is reached again for its fresh approval (A11 rule 3). Every
   run that derivation leaves `running` is then advanced with `runs`' own
   advance; a run that still waits is not advanced: only its lagging status and
-  waiting points are rewritten as `run_graph` derives them, and no element is
-  reached (A11 rule 4, A14 rule 5).
+  waiting points are rewritten as `run_graph` derives them, and the advance
+  reaches nothing of it; the fresh approval above is requested before the
+  derivation, so it is requested for such a run too (A11 rule 4, A14 rule 5).
 - **The runner** (decision 32). `sandbox_runner` owns the program that runs
   inside the environment, its text, its command line and the reading of the
   report it sends to the parent; `sandbox` owns the environment's launch, the
