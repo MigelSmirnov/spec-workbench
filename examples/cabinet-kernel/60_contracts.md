@@ -918,6 +918,19 @@ item names the module, the witnesses, what the text said and what it says now.
         element still "waits". The recovery note now compares the reason.
         `kernel_a11_restart_turns_in_flight_unknown`.
 
+    *Contradictions State 7 round 24 found in the prompts of these items*
+    (wording only, no decision changed): the parent enforces every bound but
+    the process count (item 2); the code never sees a variable outside
+    `SANDBOX_ENVIRONMENT`, which the runner sets (item 19), whatever bubblewrap
+    and the interpreter add before it; the scratch ceiling bounds each file
+    (the parent's file-size limit) and the bytes added to the whole exchange
+    directory (measured by the parent while it waits, a resource hit past it);
+    a refused verdict returns no Activation (item 16); a guard value is a
+    member when its UTF-8 bytes equal `canonical_bytes` of the member's JSON
+    (item 8); the write-before-delivery rule of item 9 covers derived inputs
+    only — an output, the `[]` of a mapped node over an empty list included,
+    is written with its NodeExecution.
+
     *Not changed here.* Three witnesses send to a service the installation
     gives no credential (`kernel_a06_new_version_inherits_nothing`,
     `kernel_a07_agent_gets_personal_data_as_digest`,
