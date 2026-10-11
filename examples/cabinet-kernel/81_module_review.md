@@ -2,7 +2,7 @@
 
 ## Verdict
 
-**Closed (2026-10-10).** All 15 assembled modules are `PASS`. The cloud review left
+**Closed (2026-10-10; decision 32 delta 2026-10-11).** All 18 assembled modules are `PASS` (15 until decision 32 added `sandbox_runner`, `run_values` and `run_graph`, "Decision 32 delta" below). The cloud review left
 `functions`, `runs` and `surface` `AMBIGUITY`; the owner decided Q1–Q3 the same day (decision 24
 of `60_contracts.md`, "Owner decisions" below), and the five slices that moved were reviewed
 against that change only. `81_module_review_status.json` records each module's verdict and its
@@ -44,15 +44,18 @@ underspec gate, and every symbol a note names is in that module's Factory import
 | `canonical_values` | behavioral | 4 | 18 | 0 | PASS |
 | `clock` | behavioral | 5 | 8 | 0 | PASS |
 | `store_persistence` | deterministic | 103 | 0 | 0 | PASS |
-| `store` | behavioral | 11 | 54 | 0 | PASS (N11; decision 24) |
+| `store` | behavioral | 11 | 55 | 0 | PASS (N11; decision 24; decision 32) |
 | `installation` | behavioral | 6 | 13 | 0 | PASS (N01–N03) |
-| `sandbox` | behavioral | 2 | 14 | 0 | PASS (N15, N16) |
+| `sandbox_runner` | behavioral | 3 | 9 | 0 | PASS (decision 32) |
+| `sandbox` | behavioral | 3 | 14 | 0 | PASS (N15, N16; decision 32) |
 | `service_invoker` | behavioral | 3 | 24 | 0 | PASS (N17–N19) |
+| `run_values` | behavioral | 4 | 10 | 0 | PASS (decision 32) |
 | `functions` | behavioral | 13 | 39 | 0 | PASS (Q1, decision 24); repaired N00, N06–N08 |
 | `bindings` | behavioral | 7 | 18 | 0 | PASS (N00) |
 | `flows` | behavioral | 6 | 19 | 0 | PASS (N00, N14) |
 | `effects` | behavioral | 9 | 32 | 0 | PASS (N04, N05) |
-| `runs` | behavioral | 12 | 38 | 0 | PASS (Q2, decision 24); repaired N09, N10 |
+| `run_graph` | behavioral | 1 | 8 | 0 | PASS (decision 32) |
+| `runs` | behavioral | 12 | 33 | 0 | PASS (Q2, decision 24); repaired N09, N10; decision 32 |
 | `surface` | behavioral | 36 | 108 | 0 | PASS (Q3, decision 24); repaired N00, N12, N13 |
 
 "Structural findings" means the blocks reported by `--review`. The note counts are the ones after
@@ -422,6 +425,76 @@ The second verification's decision 30 moved every slice: `models` gained `Missin
 ## Decision 31 delta (2026-10-11)
 
 Decision 31 (seven notes made direct at the third verification) and the Factory's tuple-field prompt rule (code-factory #75) moved `sandbox`, `runs`, `surface`. State 7 rounds 44-48 closed every generated prompt clear. No verdict changed; hashes recomputed.
+
+## Decision 32 delta (2026-10-11)
+
+Decision 32 (`60_contracts.md`, the fourth verification) splits `runs.advance_run` and
+`sandbox.execute_function` by action into the new generated modules `run_graph`, `run_values`
+and `sandbox_runner`, and closes `recover_running_runs` per waiting point. The slices were
+rebuilt from the committed specification (skeleton, projection `--apply`, `--verify` in sync).
+
+Slices that did not move: `data_provider`, `store_persistence`.
+
+Slices whose own specification did not change; only the shared evidence moved (the State 4 text
+of a flow they take part in, a State 5 callers line, note positions): `canonical_values`, `clock`,
+`installation`, `service_invoker`, `functions`, `bindings`, `flows`, `effects`, `surface`. Their
+contracts, notes (by scope, class and text) and imports are as before. PASS kept.
+
+Slices reviewed against the change:
+- **`models`** (deterministic): the operation models of decision 32 (`RunPlan`, `ReadyNode`,
+  `ReadyElement`, `ElementState`, `EdgeState`, `EdgeDelivery`; `InputSource`, `ListSource`,
+  `DeliveryOutcome`, `MappedListsOutcome` and their variants, `EmptyListOutputs`;
+  `RunnerLaunch`, `RunnerInput`, `RunnerReport`, `RunnerReturn`, `ReturnedOutput`,
+  `ReturnedForm`, `ExecutionObservation`) and the `StoreChange` variant
+  `RecordDeliveryValuesChange`. Every sum type is a discriminated union (the Factory validator
+  refused the one untagged union of the first draft).
+- **`store`**: one clause — `RecordDeliveryValuesChange` writes its StoredValues and nothing else.
+  Store positions, equal values written once and the one transaction apply to it as to every
+  change.
+- **`sandbox`**: launch and supervision only. Q1: the descriptor rule leaves one behavior —
+  `pass_fds` at the parent's numbers, no `dup2`, no `preexec_fn` — and the runner learns the
+  number from `runner_arguments`. Q2: a trivial `execute_function` does not pass the probe. Q3:
+  wall deadline, pidfd kill, output count, outcome order, `failure_detail` and `cleanup_failed`
+  are all present, the last four in the pure `judge_execution`. Q4: closing the parent's copy of
+  the channel and reading it while the environment runs follow from one pipe between two
+  modules; nothing else is new.
+- **`sandbox_runner`** (new): the runner's text, its two arguments (descriptor number, one JSON
+  configuration) and the decoding of its one-line JSON messages are decided in one module, so
+  the two ends of the protocol cannot drift. Q2: a runner that writes no `returned` message makes
+  every execution `crashed`, so the probe refuses the start. Q3: environment, limits (exit 1 when
+  one cannot be set), traps by the owner of the path (decision 31), audit hook, task count,
+  pre-count and `MemoryError` are carried from the old `execute_function` notes. The
+  configuration members are not spelled like data symbols (Factory §15.11 finding during the
+  change).
+- **`run_values`** (new): Q1: `deliver_input` writes before `fit_port_value` and answers
+  `DeliveredInput | InputMisfit`; `assemble_mapped_lists` writes nothing and measures every
+  delivered list before any is written. Q3: a list element's list is written first when it is a
+  mapped node's list (`ListSource`); by-identity reads are made only with an identity to name.
+- **`run_graph`** (new): Q1: one derivation, readiness by smallest `node_id`, the guard from the
+  `guard_port` of the edge's own source node (M15), decided only once that node concluded
+  `succeeded`; a guard's source is never mapped (flows' proof). Q2: a trivial plan fails every
+  run witness. Q3: `upstream_failed` over `skipped_by_guard`, a list over the ceiling failing its
+  node without a record, `refused_by_owner` ending the run `refused`, the waits and the missing
+  output reasons are present.
+- **`runs`**: `advance_run` is the order of steps (plan, write drafts, deliver, execute or reach,
+  write, final change); `derive_run_answer` takes missing outputs from `plan_run`;
+  `recover_running_runs` decides each stored waiting point by `operation_element_conclusion`
+  (another wait rewrites only the point; not reached and a never-requested approval are reached
+  again; a conclusion is advanced), which is what `test_restart_turns_in_flight_unknown` needs.
+
+Witnesses (`tests/semantic/`) are unchanged. `RUNTIME_SURFACE.md` names operations of `runs`
+(`runs.start_run`, `runs.read_run`, `runs.resume_run`, …), whose owner did not change, and
+observes `sandbox_executions()` from outside the environment, which the split does not touch.
+
+Prompts: `factory_slice_workbench.module_prompts` builds the prompt of every generated module
+(`sandbox_runner` 17 465 characters, `sandbox` 22 712, `run_values` 40 237, `run_graph` 22 071,
+`runs` 58 292; before decision 32 `sandbox` 24 742 and `runs` 63 176). State 7 rounds on the moved prompts are the owner's (`design_questions.py ask` was
+not run here). Every `slice_sha256` recomputed with the admission's own `build_slice`.
+
+Note on imports: the Factory hygiene judge drops a clause that contains `without`, and the
+symbol `SANDBOX_TRAPPED_WITHOUT_ARGUMENT` contains it, so `module_internal` of `sandbox_runner`
+omits it (as it omitted it for `sandbox` before). The Factory slicer still lists it in the
+prompt's IMPORTS. Tool defect 2 below covers it.
 
 ## Remarks, not blocking
 
