@@ -1221,6 +1221,25 @@ item names the module, the witnesses, what the text said and what it says now.
         open is an open decision; the union closes it, and a reader of a
         value list no longer has to prove that its bytes are there.
 
+    *Closed by the first verification after the split* (2026-10-12):
+
+    22. The runner's command line and the peak memory. Was: `sandbox` wrote
+        the runner file and `sandbox_runner` gave "exactly two arguments",
+        but no module named the runner file in the command, so the
+        generated `sandbox` started the interpreter on the descriptor number
+        and every execution crashed; and "the peak memory_bytes" said what,
+        never how, so the generated `sandbox` read `/proc/<pid>/status` of
+        a process that may already have exited. Is: bubblewrap runs the
+        resolved interpreter, `/exchange/runner.py`, then the two
+        `runner_arguments`; the runner reads them as `sys.argv[1]` and
+        `sys.argv[2]`. `sandbox` waits for bubblewrap with `os.wait4` once
+        and takes the exit status and `ru_maxrss` × 1024 from that call,
+        reading no `/proc` file. A value port reaches the runner as one
+        file, for cardinality many the JSON array itself; only a many file
+        port is a list of files — the runner had wrapped the array in another
+        list, so a sum over a many value port crashed. Why: a split hands a
+        decision across a seam; both ends must name it, or neither owns it.
+
 ## Texts of earlier states changed by State 6
 
 - State 2 (2026-10-11, decision 30 item 2): A03 rule 5 — the process count
