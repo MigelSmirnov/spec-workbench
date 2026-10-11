@@ -105,8 +105,10 @@ record checked by `design_lint --state 2`, recorded as such in `30_trace.json`.
   `bindings.read_binding`; `effects` reads bindings the same way and a flow
   version's nodes through `flows.read_flow_version`; `runs` reads the pinned
   graph through `flows.read_flow_version` and the pinned code and bounds through
-  `functions.read_implementation`, and passes the graph and the run's trace to
-  `run_graph`, which reads an operation element's conclusion (A11 rule 3)
+  `functions.read_implementation`, reads every node's ports — a function
+  node's from its pinned contract version, an operation node's through
+  `bindings.read_binding` — and passes the graph, those ports and the run's
+  trace to `run_graph`, which reads no port declaration itself and reads an operation element's conclusion (A11 rule 3)
   through `effects.operation_element_conclusion`. No module reads
   the records of a module above it.
 - **Facts passed down.** When a lower module needs a fact a module above owns,
@@ -281,8 +283,8 @@ record checked by `design_lint --state 2`, recorded as such in `30_trace.json`.
   names to `store.remove_run_spool` every ended run that no longer keeps its
   spool (A14 rule 4), then derives again every run not ended — `running`,
   `awaiting_approval` or `pending` — from its records (below, "Recovering a
-  waiting point"), and advances every run whose stored state lags them or
-  that is left `running`; and only then
+  waiting point"), rewriting a stored status or waiting point that lags
+  them, and advances every run that derivation leaves `running`; and only then
   the first request (A03 rule 8, A14 rule 5, A18 rule 4).
 - **Unconfirmed cleanup.** A03 rule 7 records the execution `crashed` with
   `cleanup_failed` and then stops the kernel; the record comes first, so that
@@ -324,11 +326,15 @@ record checked by `design_lint --state 2`, recorded as such in `30_trace.json`.
   `effects.operation_element_conclusion` of its element: the same wait stands;
   `ElementWaiting` with another reason rewrites only the waiting point — the
   element is not reached; `ElementNotReached` — no NodeExecution and no
-  requested approval, as after an approval already decided — is reached again
-  through `effects.reach_operation_element` by the advance; a conclusion
-  advances the run. The run is then advanced with `runs`' own advance, which
-  reaches no element that waits and writes the waiting points and the status
-  `run_graph` derives (A11 rule 4, A14 rule 5).
+  requested approval, as after an approval already decided — makes the run
+  `running` again, and the advance reaches it through
+  `effects.reach_operation_element`; a conclusion is taken by the advance; a
+  wait for an approval never requested — an attempt the owner resolved
+  `not_applied` — is reached again for its fresh approval (A11 rule 3). Every
+  run that derivation leaves `running` is then advanced with `runs`' own
+  advance; a run that still waits is not advanced: only its lagging status and
+  waiting points are rewritten as `run_graph` derives them, and no element is
+  reached (A11 rule 4, A14 rule 5).
 - **The runner** (decision 32). `sandbox_runner` owns the program that runs
   inside the environment, its text, its command line and the reading of the
   report it sends to the parent; `sandbox` owns the environment's launch, the

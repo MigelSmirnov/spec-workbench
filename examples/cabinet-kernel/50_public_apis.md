@@ -23,7 +23,10 @@ Python signatures are State 6's.
   `clock.kernel_now`, taken at the moment the field names: a `started_at` when
   the execution or send begins — for an operation's NodeExecution, the
   `recorded_at` of its EffectAttempt when it has one (A11 rule 4) — every other
-  time when its store change is made.
+  time when its store change is made. A `skipped_by_guard` or
+  `upstream_failed` draft is stamped by `run_graph.plan_run` with one reading
+  for both times, and `runs` writes it in its very next change, so that reading
+  is the moment of its store change.
 - **Refusal.** An operation either returns its output or refuses with one code
   of the closed set below and a bounded reason naming the first failing check
   in its rule's order. A refusal is decided before the operation's first store
@@ -71,9 +74,10 @@ Python signatures are State 6's.
   record yet is a result — not reached, or empty — never a refusal. Every
   operation that takes an element makes these checks, except one whose Enforces
   says it trusts the facts its caller passes down (State 3) —
-  `effects.reach_operation_element` and `effects.operation_element_conclusion`,
-  both called only by `runs` for an element of a run it has read — which make
-  none of them and have no such refusal.
+  `effects.reach_operation_element`, called only by `runs`, and
+  `effects.operation_element_conclusion`, called by `runs` and by
+  `run_graph.plan_run`, always for an element of a run `runs` has read and
+  passed down — which make none of them and have no such refusal.
 - **Naming records.** A record with a minted or computed identity is named by
   it. A start-up operation passes the kernel as the Actor of the store changes
   it makes. Every other operation passes the request's actor, except where it
@@ -1522,11 +1526,11 @@ A value is written before it is read or checked and checked with `canonical_valu
 
 ### Errors
 
-None of its own: a misfit is an answer; a failed store change is `internal_error`.
+None of its own: a misfit is an answer. A source record or source bytes that cannot be read, a refused or failed publication with `store.put_value_bytes`, and a failed store change are broken invariants, each `internal_error`; the failing change writes nothing, a list already written before it stays; nothing is converted to another code.
 
 ### State impact
 
-`record_delivery_values`.
+The published bytes of a derived value, then `record_delivery_values`.
 
 ## `public_op:run_values.empty_list_outputs`
 
@@ -1548,7 +1552,7 @@ For each output port an empty list — a value port's StoredValue of `[]`, its b
 
 ### Observable effect
 
-The bytes of `[]` are published; no record is written.
+The bytes of `[]` are published with `store.put_value_bytes`; no record is written.
 
 ### Enforces
 
@@ -1556,11 +1560,11 @@ An empty list takes the highest class among the node's inputs (A13 rule 6); it i
 
 ### Errors
 
-None of its own.
+None of its own: a refused or failed publication, or a missing input record, is a broken invariant, `internal_error`.
 
 ### State impact
 
-None; the caller writes `record_run_progress`.
+The content-addressed bytes of `[]`, which an equal earlier publication already holds unchanged; no record — the caller writes `record_run_progress`.
 
 ## `public_op:run_values.record_flow_output`
 
@@ -2649,7 +2653,7 @@ Any active grant, whether or not its version is still active (M25).
 
 ### Inputs
 
-A run, its context, its pinned flow version and its trace.
+A run, its context, its pinned flow version, the ports of every node of it as `runs` read them (a function node's from its pinned contract version, an operation node's from its binding), and its trace.
 
 ### Outputs
 

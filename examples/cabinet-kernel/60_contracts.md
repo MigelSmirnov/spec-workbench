@@ -1098,8 +1098,9 @@ item names the module, the witnesses, what the text said and what it says now.
        approval was never requested — and `ElementNotReached` — no
        NodeExecution and no requested approval — are reached again through
        `reach_operation_element`; a conclusion is taken by the advance. Every
-       run with a waiting point that does not stand, or left `running`, is
-       advanced; the advance reaches no element that waits. This agrees with
+       run that derivation leaves `running` is advanced; a run that still
+       waits only has its lagging status and waiting points rewritten, and
+       nothing of it is reached (as closed by the rounds, below). This agrees with
        A11 rule 4 (the kernel does not ask the service; the element waits as
        rule 2 says) and with A14 rule 5 (an element never sent is reached as
        if for the first time; a run is advanced only when the derivation
@@ -1117,9 +1118,38 @@ item names the module, the witnesses, what the text said and what it says now.
 
     *Why.* The table above and the owner's rule: a generator follows one
     action per name; three actions under one name let it satisfy one and break
-    another that the same text states. State 2 is unchanged: A13 rule 6 still
-    says that "`runs`" writes a list when first delivered, which reads as the
-    run kernel; the writer inside it is now `run_values`.
+    another that the same text states.
+
+    *Closed by the rounds that followed* (State 3 round 97, State 4 round 88,
+    State 5 round 127, State 7 round 49):
+
+    7. A13 rule 6 (State 2) no longer names a module: a mapped value list is
+       "written when the list is first delivered"; which module writes it is
+       State 3's, `run_values`. Recovery is worded as A14 rule 5 (State 2)
+       has it: only a run that derivation leaves `running` is advanced; a
+       run that still waits is rewritten, nothing of it reached.
+    8. `run_graph.plan_run` takes the ports of every node (`NodePorts`), read
+       by `runs`; `run_graph` reads no contract version and no binding.
+       `MappedList.port` is the declared `Port`, so the list's schema is
+       derived from it.
+    9. `effects.operation_element_conclusion` is called by `runs` and
+       `run_graph`, for a run `runs` read and passed down.
+    10. A `skipped_by_guard` or `upstream_failed` draft carries the full M23
+        projection and one `kernel_now` reading for both times, taken by
+        `plan_run`; `runs` writes it in its very next change.
+    11. `empty_list_outputs` publishes the bytes of `[]` — that is its state
+        impact; `deliver_input` and `empty_list_outputs` raise every read,
+        publication or store failure as `internal_error`.
+    12. `plan_run`: a `refused_by_owner` record makes the run `refused` with no
+        drafts and no next node, whatever else is ready; an operation
+        element's `skipped_by_guard` or `upstream_failed` record, answered by
+        `operation_element_conclusion` as `ElementFailed` with that status,
+        concludes as the record does; an edge from a flow input is decided
+        from the start; a flow output straight from a flow input is a
+        `RecordedSource`; the one element of a mapped node over an empty list
+        has the empty list's own source, never a `ListElementSource`.
+    13. `judge_execution`: "no returned message" is a report whose `returned`
+        is `None`; `read_runner_report` always gives a report.
 
 ## Texts of earlier states changed by State 6
 

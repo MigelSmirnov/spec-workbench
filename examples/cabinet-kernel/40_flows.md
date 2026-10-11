@@ -935,9 +935,10 @@ EffectAttempt M26 and the concluding NodeExecution M23 written by
    attempt step 6 turned `unknown` now waits `outcome_unknown` (A11 rule 4);
    an element not reached, with no record and no requested approval, is
    reached by the advance; a conclusion — an attempt resolved `applied`
-   included — is taken by the advance (A14 rule 5). Then, as the kernel actor,
-   it advances every run with a waiting point that did not stand or left
-   `running`, oldest first: a function element without a concluded
+   included — is taken by the advance (A14 rule 5). A run that still waits has
+   only its lagging status and waiting points rewritten, and nothing of it is
+   reached. Then, as the kernel actor, it advances every run that derivation
+   leaves `running`, oldest first: a function element without a concluded
    record is executed again; a `read` element without one is sent again; an
    operation element of another class with neither a concluded record nor an
    EffectAttempt is reached as for the first time, an unused approval covering

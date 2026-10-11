@@ -1,0 +1,216 @@
+{
+ "open_points": [
+  {
+   "subject": "Runner report channel integrity",
+   "kind": "trust-boundary gap",
+   "text": "“the numbers of the descriptors it writes to among its arguments” and “loads the code and calls `run` once” leave the inherited report descriptor visible to agent code running in that same interpreter.",
+   "question": "What prevents agent code from writing forged report frames to, or closing, the runner-to-parent descriptor, and how does the parent distinguish runner messages from agent-written bytes?",
+   "options": [
+    "Trap or deny agent access to operations that can use or close the report descriptor",
+    "Put the trusted reporter in a separate process whose descriptor is not inherited by agent code",
+    "Treat the channel as forgeable and validate reports using another trusted observation"
+   ],
+   "default_guess": "Keep the report descriptor inaccessible to agent code by separating the trusted reporter from the interpreter that loads the implementation.",
+   "unit": "50_public_apis.md:`public_op:sandbox_runner.runner_arguments`"
+  },
+  {
+   "subject": "Malformed runner report result",
+   "kind": "output gap",
+   "text": "“an unreadable or partial report is not decoded into outputs” while the Outputs list has only decoded report fields and Errors says “None.”",
+   "question": "What exact result does `read_runner_report` return for an empty, truncated, malformed, contradictory or trailing-data report, so that `sandbox` can classify the execution?",
+   "options": [
+    "Return an explicit invalid-report result that `sandbox` classifies as `crashed`",
+    "Raise an internal error",
+    "Return decoded events up to the malformed portion with no outputs"
+   ],
+   "default_guess": "Return an explicit invalid-report result that `sandbox` classifies as `crashed`.",
+   "unit": "50_public_apis.md:`public_op:sandbox_runner.read_runner_report`"
+  },
+  {
+   "subject": "Validity of delivery-derived StoredValues",
+   "kind": "model contradiction",
+   "text": "“StoredValues M21 a run derives for delivery” are written by `record_delivery_values`, while `run_values.deliver_input` writes them “before it is checked”; M21 defines a StoredValue as “One validated value” whose stored schema is the schema of the port it is written for.",
+   "question": "Against which schema is a list element or mapped value list validated before `record_delivery_values` creates its StoredValue, and what schema does that StoredValue carry when the later receiving-port fit fails?",
+   "options": [
+    "Validate and store it under its source schema, then separately check the receiving port",
+    "Store it under the receiving-port schema even when the subsequent fit fails",
+    "Delay creation of the StoredValue until the receiving-port check succeeds"
+   ],
+   "default_guess": "Validate and store the derived value under its source schema, then perform the separate receiving-port check.",
+   "unit": "50_public_apis.md:Named store changes (`record_change`)"
+  },
+  {
+   "subject": "Mapped file-list representation and ceiling",
+   "kind": "undefined representation",
+   "text": "“a file list as the reference to the elements' files” and “Every delivered list of the node is measured … against `stored_value_bytes_max`” do not define either the file-list reference or canonical bytes for a list that is not a StoredValue.",
+   "question": "What exact object represents a mapped file list, where its list-level disclosure class lives, and what bytes—if any—are measured against `stored_value_bytes_max`?",
+   "options": [
+    "Use a typed file-list reference carrying ordered SpooledFile identities and a class, and do not apply the StoredValue byte ceiling",
+    "Canonicalize the ordered SpooledFile metadata and apply the ceiling to those bytes",
+    "Apply the ceiling to the sum of the referenced files' bytes"
+   ],
+   "default_guess": "Use a typed ordered file-list reference carrying its class, with file sizes governed only by the spool ceilings.",
+   "unit": "50_public_apis.md:`public_op:run_values.assemble_mapped_lists`"
+  },
+  {
+   "subject": "Ordering and precedence while assembling several mapped lists",
+   "kind": "determinism gap",
+   "text": "“Build every delivered list” and “or that one list exceeds `stored_value_bytes_max`” give no order or precedence when several output lists are built and more than one is oversized, or another list encounters a failed read.",
+   "question": "In what order are delivered output lists built and measured, and does an oversized-list result stop further reads or lose to an `internal_error` encountered on another list?",
+   "options": [
+    "Process output ports in code-point order and stop at the first oversized list or read failure",
+    "Attempt every list, with any internal read failure taking precedence over oversize",
+    "Return all oversized ports and all read failures together"
+   ],
+   "default_guess": "Process delivered output ports in code-point order and stop at the first result.",
+   "unit": "50_public_apis.md:`public_op:run_values.assemble_mapped_lists`"
+  },
+  {
+   "subject": "Delivery byte-publication failures",
+   "kind": "error gap",
+   "text": "`deliver_input` may write a list element or mapped value list, and `run_values` is a caller of `store.put_value_bytes`, but its Errors section says only “a failed store change is `internal_error`.”",
+   "question": "What does `deliver_input` return when publishing the derived value's bytes fails before `record_delivery_values`, including an I/O failure or digest/size mismatch?",
+   "options": [
+    "Propagate the store result as `internal_error`, with no StoredValue record written",
+    "Return the problem as a port misfit",
+    "Retry publication inside `deliver_input`"
+   ],
+   "default_guess": "Return `internal_error` and write no StoredValue record.",
+   "unit": "50_public_apis.md:`public_op:run_values.deliver_input`"
+  },
+  {
+   "subject": "Empty mapped file-list class and trace reference",
+   "kind": "output-model gap",
+   "text": "The operation returns “a file port's empty file list” with the highest class of the node's inputs, but M23 names file outputs through SpooledFile facts and an empty list contains no SpooledFile on which that class can be carried.",
+   "question": "What exact reference does the empty-list NodeExecution store for an empty file output, and where is its disclosure class persisted so readers can compute the execution class after restart?",
+   "options": [
+    "Store a typed file-list output wrapper containing the ordered file identities and list-level class",
+    "Add the list-level class directly to the NodeExecution's output entry",
+    "Recompute the class from the NodeExecution inputs whenever it is read"
+   ],
+   "default_guess": "Store the list-level class in a typed file-list output entry of the NodeExecution.",
+   "unit": "50_public_apis.md:`public_op:run_values.empty_list_outputs`"
+  },
+  {
+   "subject": "Empty-list byte-publication effect and failure",
+   "kind": "effects contradiction",
+   "text": "“The bytes of `[]` are published” conflicts with “State impact: None,” and Errors says “None of its own” without saying what happens when `store.put_value_bytes` fails.",
+   "question": "Is publishing `[]` part of this operation's state impact, and what result is returned if that publication fails?",
+   "options": [
+    "It is a content-area write and a failure returns `internal_error` before `record_run_progress`",
+    "The caller publishes the bytes, so this operation is actually pure",
+    "Publication failure is ignored because equal bytes may already exist"
+   ],
+   "default_guess": "Treat publication as this operation's state impact and return `internal_error` before the caller writes the NodeExecution.",
+   "unit": "50_public_apis.md:`public_op:run_values.empty_list_outputs`"
+  },
+  {
+   "subject": "Flow-output byte-publication failures",
+   "kind": "error gap",
+   "text": "`record_flow_output` writes a mapped node's value list as a StoredValue and `run_values` calls `store.put_value_bytes`, but its Errors section mentions only “a failed store change.”",
+   "question": "What does `record_flow_output` return when publishing the list's canonical bytes fails before `record_delivery_values`?",
+   "options": [
+    "Return `internal_error` and leave the run output unchanged",
+    "Return no produced output and let `run_graph` derive `not_produced`",
+    "Retry publication inside the operation"
+   ],
+   "default_guess": "Return `internal_error` and leave the run output unchanged.",
+   "unit": "50_public_apis.md:`public_op:run_values.record_flow_output`"
+  },
+  {
+   "subject": "Direct caller trust for operation conclusions",
+   "kind": "caller contradiction",
+   "text": "The Callers now include “`module:run_graph`, `module:runs`,” but Enforces says “Trusts the run, its pinned version and the element that `runs` passes down” and Errors says “a run, node or element `runs` names exists.”",
+   "question": "When `run_graph` calls this operation, must it pass facts already validated and supplied by `runs`, or must `operation_element_conclusion` validate the run, node and element for that caller?",
+   "options": [
+    "`run_graph` receives validated facts from `runs` and may pass them through under the same trust contract",
+    "The operation validates calls from `run_graph` but trusts direct calls from `runs`",
+    "All callers receive one validated element-context object minted by `runs`"
+   ],
+   "default_guess": "Have `runs` supply one validated element context to `run_graph`, which passes that context through.",
+   "unit": "50_public_apis.md:`public_op:effects.operation_element_conclusion`"
+  },
+  {
+   "subject": "Resolved not-applied element before fresh approval exists",
+   "kind": "missing state",
+   "text": "The outputs allow waiting for `owner_approval` only with “the `approval_id` of the element's `requested` approval,” or “not reached when the element has no NodeExecution yet”; after an unknown attempt is resolved `not_applied`, a NodeExecution exists but recovery may run before the fresh approval was requested.",
+   "question": "What conclusion is returned for an element whose latest unknown attempt is resolved `not_applied` but which has no fresh requested approval yet?",
+   "options": [
+    "Return a distinct needs-reach conclusion so recovery calls `reach_operation_element`",
+    "Broaden not-reached to include this state despite the existing NodeExecution",
+    "Return owner-approval waiting without an approval_id"
+   ],
+   "default_guess": "Return a distinct needs-reach conclusion and never persist an owner-approval WaitingPoint without an approval_id.",
+   "unit": "50_public_apis.md:`public_op:effects.operation_element_conclusion`"
+  },
+  {
+   "subject": "Run-plan context",
+   "kind": "undefined input",
+   "text": "“A run, its context, its pinned flow version and its trace.”",
+   "question": "What exact facts comprise `context`, who constructs them, and which of them may affect the deterministic plan?",
+   "options": [
+    "A closed typed context containing the run's pinned implementations, ports and already-validated record references",
+    "No separate context; all required facts are explicit fields of the run, graph and trace inputs",
+    "An opaque caller-defined context whose contents do not affect decisions"
+   ],
+   "default_guess": "Replace `context` with a closed typed set of explicitly named planning facts.",
+   "unit": "50_public_apis.md:`public_op:run_graph.plan_run`"
+  },
+  {
+   "subject": "Persistence precedence for drafts versus a ready node",
+   "kind": "ordering gap",
+   "text": "One call returns both “the `skipped_by_guard` and `upstream_failed` records that became determined, as drafts” and “the next ready node,” without fixing which the caller handles first.",
+   "question": "If a plan contains both newly determined drafts and a ready node, must `runs` persist all drafts and the derived run state before executing that node, or may it execute first and batch the drafts later?",
+   "options": [
+    "Persist drafts and derived state first, then call `plan_run` again before executing",
+    "Execute the returned ready node first, then persist drafts with its outcome",
+    "Persist drafts and execute the ready node in one `record_run_progress` change"
+   ],
+   "default_guess": "Persist all drafts and derived state first, then re-plan before executing the next node.",
+   "unit": "50_public_apis.md:`public_op:run_graph.plan_run`"
+  },
+  {
+   "subject": "Produced-output handoff to `record_flow_output`",
+   "kind": "output gap",
+   "text": "`plan_run` returns “the produced outputs,” while `run_values.record_flow_output` requires “The source of one produced flow output”; the plan does not say whether each produced output includes that source descriptor, especially for an unwritten mapped value list.",
+   "question": "What exact source information does `plan_run` return for each produced flow output so `runs` can distinguish an existing StoredValue from a derived value list that still must be written?",
+   "options": [
+    "Return the same closed source union used by `deliver_input` and `record_flow_output`",
+    "Have `plan_run` return only final references and require it to write derived lists",
+    "Have `runs` reconstruct each source from the graph and trace"
+   ],
+   "default_guess": "Return the closed source union with each produced output.",
+   "unit": "50_public_apis.md:`public_op:run_graph.plan_run`"
+  },
+  {
+   "subject": "Timestamps on run-graph drafts",
+   "kind": "ownership contradiction",
+   "text": "`run_graph` was added as a caller of `clock.kernel_now`, but `plan_run` is read-only and the convention says every non-start timestamp is taken “when its store change is made.”",
+   "question": "Does `run_graph` stamp the drafted skip and upstream-failure NodeExecutions, or does `runs` stamp them when `record_run_progress` is written; if `run_graph` calls the clock, what specified timestamp is it producing?",
+   "options": [
+    "`runs` stamps drafts immediately before the store change, and `run_graph` is not a clock caller",
+    "`run_graph` stamps every draft while planning and `runs` preserves those times",
+    "`runs` obtains one timestamp and passes it into `plan_run` for every draft from that plan"
+   ],
+   "default_guess": "Have `runs` obtain one timestamp at the progress store change and use it for the drafts; `run_graph` need not read the clock.",
+   "unit": "50_public_apis.md:`public_op:clock.kernel_now`"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"Runner report channel integrity\",\"kind\":\"trust-boundary gap\",\"text\":\"“the numbers of the descriptors it writes to among its arguments” and “loads the code and calls `run` once” leave the inherited report descriptor visible to agent code running in that same interpreter.\",\"question\":\"What prevents agent code from writing forged report frames to, or closing, the runner-to-parent descriptor, and how does the parent distinguish runner messages from agent-written bytes?\",\"options\":[\"Trap or deny agent access to operations that can use or close the report descriptor\",\"Put the trusted reporter in a separate process whose descriptor is not inherited by agent code\",\"Treat the channel as forgeable and validate reports using another trusted observation\"],\"default_guess\":\"Keep the report descriptor inaccessible to agent code by separating the trusted reporter from the interpreter that loads the implementation.\",\"unit\":\"50_public_apis.md:`public_op:sandbox_runner.runner_arguments`\"},{\"subject\":\"Malformed runner report result\",\"kind\":\"output gap\",\"text\":\"“an unreadable or partial report is not decoded into outputs” while the Outputs list has only decoded report fields and Errors says “None.”\",\"question\":\"What exact result does `read_runner_report` return for an empty, truncated, malformed, contradictory or trailing-data report, so that `sandbox` can classify the execution?\",\"options\":[\"Return an explicit invalid-report result that `sandbox` classifies as `crashed`\",\"Raise an internal error\",\"Return decoded events up to the malformed portion with no outputs\"],\"default_guess\":\"Return an explicit invalid-report result that `sandbox` classifies as `crashed`.\",\"unit\":\"50_public_apis.md:`public_op:sandbox_runner.read_runner_report`\"},{\"subject\":\"Validity of delivery-derived StoredValues\",\"kind\":\"model contradiction\",\"text\":\"“StoredValues M21 a run derives for delivery” are written by `record_delivery_values`, while `run_values.deliver_input` writes them “before it is checked”; M21 defines a StoredValue as “One validated value” whose stored schema is the schema of the port it is written for.\",\"question\":\"Against which schema is a list element or mapped value list validated before `record_delivery_values` creates its StoredValue, and what schema does that StoredValue carry when the later receiving-port fit fails?\",\"options\":[\"Validate and store it under its source schema, then separately check the receiving port\",\"Store it under the receiving-port schema even when the subsequent fit fails\",\"Delay creation of the StoredValue until the receiving-port check succeeds\"],\"default_guess\":\"Validate and store the derived value under its source schema, then perform the separate receiving-port check.\",\"unit\":\"50_public_apis.md:Named store changes (`record_change`)\"},{\"subject\":\"Mapped file-list representation and ceiling\",\"kind\":\"undefined representation\",\"text\":\"“a file list as the reference to the elements' files” and “Every delivered list of the node is measured … against `stored_value_bytes_max`” do not define either the file-list reference or canonical bytes for a list that is not a StoredValue.\",\"question\":\"What exact object represents a mapped file list, where its list-level disclosure class lives, and what bytes—if any—are measured against `stored_value_bytes_max`?\",\"options\":[\"Use a typed file-list reference carrying ordered SpooledFile identities and a class, and do not apply the StoredValue byte ceiling\",\"Canonicalize the ordered SpooledFile metadata and apply the ceiling to those bytes\",\"Apply the ceiling to the sum of the referenced files' bytes\"],\"default_guess\":\"Use a typed ordered file-list reference carrying its class, with file sizes governed only by the spool ceilings.\",\"unit\":\"50_public_apis.md:`public_op:run_values.assemble_mapped_lists`\"},{\"subject\":\"Ordering and precedence while assembling several mapped lists\",\"kind\":\"determinism gap\",\"text\":\"“Build every delivered list” and “or that one list exceeds `stored_value_bytes_max`” give no order or precedence when several output lists are built and more than one is oversized, or another list encounters a failed read.\",\"question\":\"In what order are delivered output lists built and measured, and does an oversized-list result stop further reads or lose to an `internal_error` encountered on another list?\",\"options\":[\"Process output ports in code-point order and stop at the first oversized list or read failure\",\"Attempt every list, with any internal read failure taking precedence over oversize\",\"Return all oversized ports and all read failures together\"],\"default_guess\":\"Process delivered output ports in code-point order and stop at the first result.\",\"unit\":\"50_public_apis.md:`public_op:run_values.assemble_mapped_lists`\"},{\"subject\":\"Delivery byte-publication failures\",\"kind\":\"error gap\",\"text\":\"`deliver_input` may write a list element or mapped value list, and `run_values` is a caller of `store.put_value_bytes`, but its Errors section says only “a failed store change is `internal_error`.”\",\"question\":\"What does `deliver_input` return when publishing the derived value's bytes fails before `record_delivery_values`, including an I/O failure or digest/size mismatch?\",\"options\":[\"Propagate the store result as `internal_error`, with no StoredValue record written\",\"Return the problem as a port misfit\",\"Retry publication inside `deliver_input`\"],\"default_guess\":\"Return `internal_error` and write no StoredValue record.\",\"unit\":\"50_public_apis.md:`public_op:run_values.deliver_input`\"},{\"subject\":\"Empty mapped file-list class and trace reference\",\"kind\":\"output-model gap\",\"text\":\"The operation returns “a file port's empty file list” with the highest class of the node's inputs, but M23 names file outputs through SpooledFile facts and an empty list contains no SpooledFile on which that class can be carried.\",\"question\":\"What exact reference does the empty-list NodeExecution store for an empty file output, and where is its disclosure class persisted so readers can compute the execution class after restart?\",\"options\":[\"Store a typed file-list output wrapper containing the ordered file identities and list-level class\",\"Add the list-level class directly to the NodeExecution's output entry\",\"Recompute the class from the NodeExecution inputs whenever it is read\"],\"default_guess\":\"Store the list-level class in a typed file-list output entry of the NodeExecution.\",\"unit\":\"50_public_apis.md:`public_op:run_values.empty_list_outputs`\"},{\"subject\":\"Empty-list byte-publication effect and failure\",\"kind\":\"effects contradiction\",\"text\":\"“The bytes of `[]` are published” conflicts with “State impact: None,” and Errors says “None of its own” without saying what happens when `store.put_value_bytes` fails.\",\"question\":\"Is publishing `[]` part of this operation's state impact, and what result is returned if that publication fails?\",\"options\":[\"It is a content-area write and a failure returns `internal_error` before `record_run_progress`\",\"The caller publishes the bytes, so this operation is actually pure\",\"Publication failure is ignored because equal bytes may already exist\"],\"default_guess\":\"Treat publication as this operation's state impact and return `internal_error` before the caller writes the NodeExecution.\",\"unit\":\"50_public_apis.md:`public_op:run_values.empty_list_outputs`\"},{\"subject\":\"Flow-output byte-publication failures\",\"kind\":\"error gap\",\"text\":\"`record_flow_output` writes a mapped node's value list as a StoredValue and `run_values` calls `store.put_value_bytes`, but its Errors section mentions only “a failed store change.”\",\"question\":\"What does `record_flow_output` return when publishing the list's canonical bytes fails before `record_delivery_values`?\",\"options\":[\"Return `internal_error` and leave the run output unchanged\",\"Return no produced output and let `run_graph` derive `not_produced`\",\"Retry publication inside the operation\"],\"default_guess\":\"Return `internal_error` and leave the run output unchanged.\",\"unit\":\"50_public_apis.md:`public_op:run_values.record_flow_output`\"},{\"subject\":\"Direct caller trust for operation conclusions\",\"kind\":\"caller contradiction\",\"text\":\"The Callers now include “`module:run_graph`, `module:runs`,” but Enforces says “Trusts the run, its pinned version and the element that `runs` passes down” and Errors says “a run, node or element `runs` names exists.”\",\"question\":\"When `run_graph` calls this operation, must it pass facts already validated and supplied by `runs`, or must `operation_element_conclusion` validate the run, node and element for that caller?\",\"options\":[\"`run_graph` receives validated facts from `runs` and may pass them through under the same trust contract\",\"The operation validates calls from `run_graph` but trusts direct calls from `runs`\",\"All callers receive one validated element-context object minted by `runs`\"],\"default_guess\":\"Have `runs` supply one validated element context to `run_graph`, which passes that context through.\",\"unit\":\"50_public_apis.md:`public_op:effects.operation_element_conclusion`\"},{\"subject\":\"Resolved not-applied element before fresh approval exists\",\"kind\":\"missing state\",\"text\":\"The outputs allow waiting for `owner_approval` only with “the `approval_id` of the element's `requested` approval,” or “not reached when the element has no NodeExecution yet”; after an unknown attempt is resolved `not_applied`, a NodeExecution exists but recovery may run before the fresh approval was requested.\",\"question\":\"What conclusion is returned for an element whose latest unknown attempt is resolved `not_applied` but which has no fresh requested approval yet?\",\"options\":[\"Return a distinct needs-reach conclusion so recovery calls `reach_operation_element`\",\"Broaden not-reached to include this state despite the existing NodeExecution\",\"Return owner-approval waiting without an approval_id\"],\"default_guess\":\"Return a distinct needs-reach conclusion and never persist an owner-approval WaitingPoint without an approval_id.\",\"unit\":\"50_public_apis.md:`public_op:effects.operation_element_conclusion`\"},{\"subject\":\"Run-plan context\",\"kind\":\"undefined input\",\"text\":\"“A run, its context, its pinned flow version and its trace.”\",\"question\":\"What exact facts comprise `context`, who constructs them, and which of them may affect the deterministic plan?\",\"options\":[\"A closed typed context containing the run's pinned implementations, ports and already-validated record references\",\"No separate context; all required facts are explicit fields of the run, graph and trace inputs\",\"An opaque caller-defined context whose contents do not affect decisions\"],\"default_guess\":\"Replace `context` with a closed typed set of explicitly named planning facts.\",\"unit\":\"50_public_apis.md:`public_op:run_graph.plan_run`\"},{\"subject\":\"Persistence precedence for drafts versus a ready node\",\"kind\":\"ordering gap\",\"text\":\"One call returns both “the `skipped_by_guard` and `upstream_failed` records that became determined, as drafts” and “the next ready node,” without fixing which the caller handles first.\",\"question\":\"If a plan contains both newly determined drafts and a ready node, must `runs` persist all drafts and the derived run state before executing that node, or may it execute first and batch the drafts later?\",\"options\":[\"Persist drafts and derived state first, then call `plan_run` again before executing\",\"Execute the returned ready node first, then persist drafts with its outcome\",\"Persist drafts and execute the ready node in one `record_run_progress` change\"],\"default_guess\":\"Persist all drafts and derived state first, then re-plan before executing the next node.\",\"unit\":\"50_public_apis.md:`public_op:run_graph.plan_run`\"},{\"subject\":\"Produced-output handoff to `record_flow_output`\",\"kind\":\"output gap\",\"text\":\"`plan_run` returns “the produced outputs,” while `run_values.record_flow_output` requires “The source of one produced flow output”; the plan does not say whether each produced output includes that source descriptor, especially for an unwritten mapped value list.\",\"question\":\"What exact source information does `plan_run` return for each produced flow output so `runs` can distinguish an existing StoredValue from a derived value list that still must be written?\",\"options\":[\"Return the same closed source union used by `deliver_input` and `record_flow_output`\",\"Have `plan_run` return only final references and require it to write derived lists\",\"Have `runs` reconstruct each source from the graph and trace\"],\"default_guess\":\"Return the closed source union with each produced output.\",\"unit\":\"50_public_apis.md:`public_op:run_graph.plan_run`\"},{\"subject\":\"Timestamps on run-graph drafts\",\"kind\":\"ownership contradiction\",\"text\":\"`run_graph` was added as a caller of `clock.kernel_now`, but `plan_run` is read-only and the convention says every non-start timestamp is taken “when its store change is made.”\",\"question\":\"Does `run_graph` stamp the drafted skip and upstream-failure NodeExecutions, or does `runs` stamp them when `record_run_progress` is written; if `run_graph` calls the clock, what specified timestamp is it producing?\",\"options\":[\"`runs` stamps drafts immediately before the store change, and `run_graph` is not a clock caller\",\"`run_graph` stamps every draft while planning and `runs` preserves those times\",\"`runs` obtains one timestamp and passes it into `plan_run` for every draft from that plan\"],\"default_guess\":\"Have `runs` obtain one timestamp at the progress store change and use it for the drafts; `run_graph` need not read the clock.\",\"unit\":\"50_public_apis.md:`public_op:clock.kernel_now`\"},{\"subject\":\"Which recovered runs are advanced\",\"kind\":\"cross-state contradiction\",\"text\":\"The changed recovery text says it “advances every run whose stored state lags them or that is left `running`” and State 4 says “every run with a waiting point that did not stand or left `running`”; `runs.recover_running_runs` still says it reaches a wait that no longer holds and “then advances … every run left `running`.”\",\"question\":\"Must recovery advance a run whose stale waiting point was removed or changed when another standing wait leaves its derived status `pending` or `awaiting_approval`, or only a run whose derived status is `running`?\",\"options\":[\"Advance every run whose stored status or waiting points lag the derivation, even if another wait remains\",\"Advance only runs whose derived status is `running`\",\"Reach only the changed element, write the new waits, and defer all other ready work until a request\"],\"default_guess\":\"Advance every run whose stored status or waiting points lag, while never reaching elements whose waits still stand.\",\"unit\":\"context: agreement of the earlier states' texts with this state\"}]}",
+ "set_aside": [
+  {
+   "subject": "Which recovered runs are advanced",
+   "kind": "cross-state contradiction",
+   "text": "The changed recovery text says it “advances every run whose stored state lags them or that is left `running`” and State 4 says “every run with a waiting point that did not stand or left `running`”; `runs.recover_running_runs` still says it reaches a wait that no longer holds and “then advances … every run left `running`.”",
+   "question": "Must recovery advance a run whose stale waiting point was removed or changed when another standing wait leaves its derived status `pending` or `awaiting_approval`, or only a run whose derived status is `running`?",
+   "options": [
+    "Advance every run whose stored status or waiting points lag the derivation, even if another wait remains",
+    "Advance only runs whose derived status is `running`",
+    "Reach only the changed element, write the new waits, and defer all other ready work until a request"
+   ],
+   "default_guess": "Advance every run whose stored status or waiting points lag, while never reaching elements whose waits still stand.",
+   "unit": "context: agreement of the earlier states' texts with this state"
+  }
+ ]
+}

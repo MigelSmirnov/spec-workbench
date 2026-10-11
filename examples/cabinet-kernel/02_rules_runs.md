@@ -129,7 +129,7 @@ worker.
    StoredValue, the JSON array of the elements' values in element order, whose
    `value_schema` is the array schema with the port's schema as `items`, as
    for every value of a `many` port (M21),
-   written by `runs` when the list is first delivered — never in an element's
+   written when the list is first delivered — never in an element's
    own store change, which for an operation element is `effects'` — and
    named, like any value, by the records that receive it; a list whose
    canonical bytes exceed `stored_value_bytes_max` is not written: the node is
