@@ -937,7 +937,9 @@ item names the module, the witnesses, what the text said and what it says now.
     non-empty mapped node's array output — while a value a NodeExecution names
     as an output, the `[]` of a mapped node over an empty list included, is
     written with that NodeExecution (round 25 corrected round 24's wording,
-    which had excluded every output).
+    which had excluded every output); the array is written before its
+    first delivery — after its size is measured, before the receiver's fit
+    check — so a misfit leaves it written and undelivered (round 26).
 
     *Not changed here.* Three witnesses send to a service the installation
     gives no credential (`kernel_a06_new_version_inherits_nothing`,
