@@ -1,0 +1,133 @@
+{
+ "open_points": [
+  {
+   "subject": "scratch-space bound",
+   "kind": "missing aggregate bound",
+   "text": "“one private exchange directory in which every file the code writes is bounded by `sandbox_scratch_bytes_max`”",
+   "question": "Is `sandbox_scratch_bytes_max` a limit on each individual file only, or must the total bytes and/or number of files in the exchange directory also be bounded?",
+   "options": [
+    "Per-file size only, with no explicit aggregate or file-count limit",
+    "Per-file size plus an aggregate directory-byte limit",
+    "One aggregate directory-byte limit, as before the change",
+    "Per-file size plus aggregate bytes and file-count limits"
+   ],
+   "default_guess": "Treat it as a per-file limit only, because the changed text explicitly says “every file” and rule 5 says “each scratch file's size”.",
+   "unit": "?"
+  },
+  {
+   "subject": "scratch exhaustion outcome",
+   "kind": "unclassified failure",
+   "text": "“a limit hit (memory, process count, scratch, `output_bytes`) — `resource_exhausted`”",
+   "question": "When the exchange filesystem runs out of space or inodes even though no individual file exceeds `sandbox_scratch_bytes_max`, is that a scratch-limit hit yielding `resource_exhausted`, an exception that may be caught by the function, or a `crashed` execution?",
+   "options": [
+    "Always `resource_exhausted`",
+    "An ordinary write error that the function may catch",
+    "`crashed` if uncaught and success if caught",
+    "Distinguish configured-limit exhaustion from host filesystem exhaustion"
+   ],
+   "default_guess": "Classify configured per-file-limit hits as `resource_exhausted`, but treat unrelated host filesystem exhaustion as `crashed` if it prevents completion.",
+   "unit": "?"
+  },
+  {
+   "subject": "files covered by the scratch limit",
+   "kind": "contradictory scope",
+   "text": "Rule 1 limits “every file the code writes”, while rule 5 enforces “each scratch file's size”.",
+   "question": "Does the limit cover only files directly written by agent code, or every file in the exchange directory, including inputs staged by the runner, runner-created output files, temporary files, and files later unlinked?",
+   "options": [
+    "Only files directly written by agent code",
+    "Every regular file created or enlarged in the exchange directory",
+    "Every filesystem object consuming storage there, including unlinked temporary files",
+    "Inputs are exempt but all files created during execution are covered"
+   ],
+   "default_guess": "Apply it to every regular file created or enlarged during the execution, including runner-created output files, but not pre-staged read-only inputs.",
+   "unit": "?"
+  },
+  {
+   "subject": "scratch-limit detection",
+   "kind": "unenforceable classification",
+   "text": "“ResourceBounds M04 are enforced with `setrlimit` … each scratch file's size … [and] a limit hit … [is] `resource_exhausted`”",
+   "question": "How does the parent reliably learn that the file-size limit was hit when agent code catches the resulting signal or write error and returns a conforming output?",
+   "options": [
+    "A trusted runner records every failed write or `SIGXFSZ` event",
+    "A caught limit error does not count as a hit",
+    "The filesystem or sandbox reports limit violations out of band",
+    "Only termination by the limit is classified `resource_exhausted`"
+   ],
+   "default_guess": "Have the trusted runner record the violation out of band so a caught error still yields `resource_exhausted`, matching the stated outcome precedence.",
+   "unit": "?"
+  },
+  {
+   "subject": "process-count bound",
+   "kind": "undefined accounting",
+   "text": "“`setrlimit` (address space, each scratch file's size, processes), set inside the environment before the code loads”",
+   "question": "What exactly does `process_count` count, and what RLIMIT_NPROC value is set: agent-created processes only, the runner plus its descendants, or all processes charged to the mapped host user?",
+   "options": [
+    "Agent process and descendants, with the runner included in `process_count`",
+    "Up to `process_count` child processes in addition to the runner",
+    "All processes charged to the real host UID",
+    "A namespace-local process count enforced independently of RLIMIT_NPROC"
+   ],
+   "default_guess": "Count the runner and every descendant inside the execution, with an effective total of `process_count`, isolated from unrelated host processes.",
+   "unit": "?"
+  },
+  {
+   "subject": "limits during sandbox bootstrap",
+   "kind": "scope ambiguity",
+   "text": "The limits are now “set inside the environment before the code loads”, while every execution is required to run “bounded”.",
+   "question": "Do `memory_bytes` and `process_count` include bubblewrap creation, the Python interpreter and trusted runner startup, or only the state after the in-sandbox runner has set the limits?",
+   "options": [
+    "They cover the entire sandbox process tree from its creation",
+    "They cover the interpreter and agent module after the runner sets them, but not bubblewrap/bootstrap",
+    "They cover agent code only, excluding trusted runtime overhead",
+    "Bootstrap has separate fixed release limits"
+   ],
+   "default_guess": "Apply the contract limits to the runner and agent code after namespace creation; rely on the parent wall deadline for bootstrap.",
+   "unit": "?"
+  },
+  {
+   "subject": "small memory bounds",
+   "kind": "undefined refusal condition",
+   "text": "Limits are “set inside the environment before the code loads”, and “A limit that cannot be set means the code is not loaded and the execution is `crashed`.”",
+   "question": "What happens when `memory_bytes` is valid under A02 but is lower than memory already occupied by the interpreter and runner: is setting the limit considered successful, is code loaded, and is the outcome `crashed` or `resource_exhausted`?",
+   "options": [
+    "Refuse to load and record `crashed`",
+    "Load the code and classify the first failed allocation as `resource_exhausted`",
+    "Treat the bound as excluding fixed runner overhead",
+    "Reject such a contract when authored using a release minimum"
+   ],
+   "default_guess": "Do not load the module; record the execution `crashed` because the requested limit cannot support the already-running trusted runtime.",
+   "unit": "?"
+  },
+  {
+   "subject": "start probe resource bounds",
+   "kind": "missing start check",
+   "text": "Rule 8 says only that “one probe execution succeeds”; the changed rule removed that the probe sets limits at the current ceilings in the same way.",
+   "question": "Which address-space, file-size and process limits does the startup probe set, and must startup fail if any release-supported limit cannot be installed?",
+   "options": [
+    "Set every current release ceiling and fail startup if any cannot be set",
+    "Use one fixed probe contract with separately specified bounds",
+    "Probe only bubblewrap execution and defer limit-setting failures to real executions",
+    "Probe several boundary values, including minimum and maximum supported bounds"
+   ],
+   "default_guess": "Run the probe with all current release ceilings and refuse startup if any of the three `setrlimit` controls cannot be installed.",
+   "unit": "?"
+  },
+  {
+   "subject": "sandbox enforcement mechanism",
+   "kind": "vague delegation",
+   "text": "“how is the sandbox's own (decision 30)”",
+   "question": "What behavior is delegated to the sandbox here, and which exact mechanism must enforce and report the per-file scratch limit rather than leaving different implementations to choose incompatible mechanisms?",
+   "options": [
+    "Only the implementation mechanism is sandbox-private; all observable semantics are those stated in A03",
+    "Both enforcement mechanism and detailed hit semantics are left to the sandbox",
+    "Use Linux `RLIMIT_FSIZE` specifically for every writable regular file",
+    "Use a filesystem quota or bounded backing store instead of `RLIMIT_FSIZE`"
+   ],
+   "default_guess": "Interpret this as implementation-private while requiring `RLIMIT_FSIZE` for per-file size and an out-of-band runner report for deterministic classification.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"scratch-space bound\",\"kind\":\"missing aggregate bound\",\"text\":\"“one private exchange directory in which every file the code writes is bounded by `sandbox_scratch_bytes_max`”\",\"question\":\"Is `sandbox_scratch_bytes_max` a limit on each individual file only, or must the total bytes and/or number of files in the exchange directory also be bounded?\",\"options\":[\"Per-file size only, with no explicit aggregate or file-count limit\",\"Per-file size plus an aggregate directory-byte limit\",\"One aggregate directory-byte limit, as before the change\",\"Per-file size plus aggregate bytes and file-count limits\"],\"default_guess\":\"Treat it as a per-file limit only, because the changed text explicitly says “every file” and rule 5 says “each scratch file's size”.\"},{\"subject\":\"scratch exhaustion outcome\",\"kind\":\"unclassified failure\",\"text\":\"“a limit hit (memory, process count, scratch, `output_bytes`) — `resource_exhausted`”\",\"question\":\"When the exchange filesystem runs out of space or inodes even though no individual file exceeds `sandbox_scratch_bytes_max`, is that a scratch-limit hit yielding `resource_exhausted`, an exception that may be caught by the function, or a `crashed` execution?\",\"options\":[\"Always `resource_exhausted`\",\"An ordinary write error that the function may catch\",\"`crashed` if uncaught and success if caught\",\"Distinguish configured-limit exhaustion from host filesystem exhaustion\"],\"default_guess\":\"Classify configured per-file-limit hits as `resource_exhausted`, but treat unrelated host filesystem exhaustion as `crashed` if it prevents completion.\"},{\"subject\":\"files covered by the scratch limit\",\"kind\":\"contradictory scope\",\"text\":\"Rule 1 limits “every file the code writes”, while rule 5 enforces “each scratch file's size”.\",\"question\":\"Does the limit cover only files directly written by agent code, or every file in the exchange directory, including inputs staged by the runner, runner-created output files, temporary files, and files later unlinked?\",\"options\":[\"Only files directly written by agent code\",\"Every regular file created or enlarged in the exchange directory\",\"Every filesystem object consuming storage there, including unlinked temporary files\",\"Inputs are exempt but all files created during execution are covered\"],\"default_guess\":\"Apply it to every regular file created or enlarged during the execution, including runner-created output files, but not pre-staged read-only inputs.\"},{\"subject\":\"scratch-limit detection\",\"kind\":\"unenforceable classification\",\"text\":\"“ResourceBounds M04 are enforced with `setrlimit` … each scratch file's size … [and] a limit hit … [is] `resource_exhausted`”\",\"question\":\"How does the parent reliably learn that the file-size limit was hit when agent code catches the resulting signal or write error and returns a conforming output?\",\"options\":[\"A trusted runner records every failed write or `SIGXFSZ` event\",\"A caught limit error does not count as a hit\",\"The filesystem or sandbox reports limit violations out of band\",\"Only termination by the limit is classified `resource_exhausted`\"],\"default_guess\":\"Have the trusted runner record the violation out of band so a caught error still yields `resource_exhausted`, matching the stated outcome precedence.\"},{\"subject\":\"process-count bound\",\"kind\":\"undefined accounting\",\"text\":\"“`setrlimit` (address space, each scratch file's size, processes), set inside the environment before the code loads”\",\"question\":\"What exactly does `process_count` count, and what RLIMIT_NPROC value is set: agent-created processes only, the runner plus its descendants, or all processes charged to the mapped host user?\",\"options\":[\"Agent process and descendants, with the runner included in `process_count`\",\"Up to `process_count` child processes in addition to the runner\",\"All processes charged to the real host UID\",\"A namespace-local process count enforced independently of RLIMIT_NPROC\"],\"default_guess\":\"Count the runner and every descendant inside the execution, with an effective total of `process_count`, isolated from unrelated host processes.\"},{\"subject\":\"limits during sandbox bootstrap\",\"kind\":\"scope ambiguity\",\"text\":\"The limits are now “set inside the environment before the code loads”, while every execution is required to run “bounded”.\",\"question\":\"Do `memory_bytes` and `process_count` include bubblewrap creation, the Python interpreter and trusted runner startup, or only the state after the in-sandbox runner has set the limits?\",\"options\":[\"They cover the entire sandbox process tree from its creation\",\"They cover the interpreter and agent module after the runner sets them, but not bubblewrap/bootstrap\",\"They cover agent code only, excluding trusted runtime overhead\",\"Bootstrap has separate fixed release limits\"],\"default_guess\":\"Apply the contract limits to the runner and agent code after namespace creation; rely on the parent wall deadline for bootstrap.\"},{\"subject\":\"small memory bounds\",\"kind\":\"undefined refusal condition\",\"text\":\"Limits are “set inside the environment before the code loads”, and “A limit that cannot be set means the code is not loaded and the execution is `crashed`.”\",\"question\":\"What happens when `memory_bytes` is valid under A02 but is lower than memory already occupied by the interpreter and runner: is setting the limit considered successful, is code loaded, and is the outcome `crashed` or `resource_exhausted`?\",\"options\":[\"Refuse to load and record `crashed`\",\"Load the code and classify the first failed allocation as `resource_exhausted`\",\"Treat the bound as excluding fixed runner overhead\",\"Reject such a contract when authored using a release minimum\"],\"default_guess\":\"Do not load the module; record the execution `crashed` because the requested limit cannot support the already-running trusted runtime.\"},{\"subject\":\"start probe resource bounds\",\"kind\":\"missing start check\",\"text\":\"Rule 8 says only that “one probe execution succeeds”; the changed rule removed that the probe sets limits at the current ceilings in the same way.\",\"question\":\"Which address-space, file-size and process limits does the startup probe set, and must startup fail if any release-supported limit cannot be installed?\",\"options\":[\"Set every current release ceiling and fail startup if any cannot be set\",\"Use one fixed probe contract with separately specified bounds\",\"Probe only bubblewrap execution and defer limit-setting failures to real executions\",\"Probe several boundary values, including minimum and maximum supported bounds\"],\"default_guess\":\"Run the probe with all current release ceilings and refuse startup if any of the three `setrlimit` controls cannot be installed.\"},{\"subject\":\"sandbox enforcement mechanism\",\"kind\":\"vague delegation\",\"text\":\"“how is the sandbox's own (decision 30)”\",\"question\":\"What behavior is delegated to the sandbox here, and which exact mechanism must enforce and report the per-file scratch limit rather than leaving different implementations to choose incompatible mechanisms?\",\"options\":[\"Only the implementation mechanism is sandbox-private; all observable semantics are those stated in A03\",\"Both enforcement mechanism and detailed hit semantics are left to the sandbox\",\"Use Linux `RLIMIT_FSIZE` specifically for every writable regular file\",\"Use a filesystem quota or bounded backing store instead of `RLIMIT_FSIZE`\"],\"default_guess\":\"Interpret this as implementation-private while requiring `RLIMIT_FSIZE` for per-file size and an out-of-band runner report for deterministic classification.\"}]}",
+ "set_aside": []
+}
