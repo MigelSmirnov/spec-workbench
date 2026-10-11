@@ -2820,9 +2820,9 @@ requests are sent under the authority each has (A13).
 An unknown attempt is `unknown_reference` first, the attempt read through
 `store.read_records` to find its run; then run not ended; conclusion per A11
 rule 3; `not_applied` waits for a fresh approval even under a grant (K-08):
-the element is reached again through `effects.reach_operation_element`, which
-runs the pre-send checks and, finding no authority, requests that approval for
-the request as built now (A11 rule 3).
+the element is not reached any more, so the advance reaches it again through
+`effects.reach_operation_element`, which runs the pre-send checks and, finding
+no authority, requests that approval for the request as built now (A11 rule 3).
 
 ### Errors
 
@@ -2902,10 +2902,11 @@ stays, unreported, and is removed again at the next start —; runs left
 
 First names spools to remove (A14 rule 4); then derives every run not ended —
 `running`, `awaiting_approval`, `pending` — from its records, oldest first,
-rewriting a lagging status or waiting point; an operation element whose wait
-no longer holds (its approval decided, its attempt resolved) is reached again
-through `effects.reach_operation_element`; then advances, as the kernel, every
-run left `running` (A14 rule 5).
+rewriting a lagging status or waiting point of a run that still waits; an
+operation element whose wait no longer holds (its approval decided, its attempt
+resolved `not_applied`) is not reached and so is ready, which leaves its run
+`running`; then advances, as the kernel, every run left `running`, reaching
+every ready element while others still wait (A13 rule 8, A14 rule 5).
 
 ### Errors
 

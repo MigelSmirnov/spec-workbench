@@ -1,0 +1,138 @@
+{
+ "open_points": [
+  {
+   "subject": "runner report truncation and completeness",
+   "kind": "missing input/result",
+   "text": "Inputs are \"Every byte the runner wrote to its channel, read by the parent until the channel closed, the environment ended, or the channel bound was passed\" but the operation receives no indication of which condition stopped the read; \"an unreadable or partial report is not decoded into outputs\" and Errors says `None`.",
+   "question": "What exact result does `read_runner_report` return for a partial, malformed, trailing-data, or channel-bound-exceeded report, and how is completeness distinguished from a complete report having the same byte prefix?",
+   "options": [
+    "Return a closed `invalid_report` result and pass the read termination condition as an input",
+    "Infer completeness solely from framing and return a closed `invalid_report` result on any framing failure or trailing data",
+    "Treat every such case as an escaped/crashed runner report"
+   ],
+   "default_guess": "Pass the termination condition and return an explicit `invalid_report` variant for incomplete, malformed, over-bound, or trailing data.",
+   "unit": "50_public_apis.md:`public_op:sandbox_runner.read_runner_report`"
+  },
+  {
+   "subject": "representation of malformed function returns",
+   "kind": "underspecified output",
+   "text": "The outputs are described as \"the outputs `run` returned, each as JSON text, a file, a file list or not representable.\"",
+   "question": "How does the decoded report represent a return that is not a dict, has missing or extra keys, or contains a value of the wrong Python kind, so that `sandbox` rather than the runner can apply the A03 outcome order and decide `contract_violation`?",
+   "options": [
+    "Return the raw top-level return shape with a tagged representation for every Python value kind",
+    "Return a closed structural-failure variant describing non-dict, key-set and value-kind failures",
+    "Have the runner judge these contract violations despite the text assigning outcome judgement to `sandbox`"
+   ],
+   "default_guess": "Return a tagged raw-return representation, including its top-level kind and exact keys, leaving classification to `sandbox`.",
+   "unit": "50_public_apis.md:`public_op:sandbox_runner.read_runner_report`"
+  },
+  {
+   "subject": "runner report resource information",
+   "kind": "vague output",
+   "text": "The operation returns \"whether a bound was hit inside\" while the runner enforces several distinct limits and `sandbox` owns the outcome decision.",
+   "question": "What information identifies an inside resource hit, including simultaneous hits, so `sandbox` can combine it deterministically with its outside observations under A03's precedence order?",
+   "options": [
+    "A single boolean because every inside hit has identical meaning",
+    "One closed resource-hit kind chosen by a fixed precedence",
+    "An ordered set of all observed resource-hit kinds"
+   ],
+   "default_guess": "Return an ordered set of closed resource-hit kinds and let `sandbox` apply the A03 outcome precedence.",
+   "unit": "50_public_apis.md:`public_op:sandbox_runner.read_runner_report`"
+  },
+  {
+   "subject": "flow-output source contract",
+   "kind": "undefined input",
+   "text": "`record_flow_output` takes \"The source of one produced flow output\" and says only that \"A mapped node's value list that reaches a flow output is written as a StoredValue M21.\"",
+   "question": "What is the closed set and exact shape of sources this operation accepts, and which source variants cause a new StoredValue to be written versus merely returning an existing reference?",
+   "options": [
+    "Accept an existing StoredValue reference or an unwritten mapped-value-list draft; only the latter is written",
+    "Accept every source form used by `deliver_input`, including list elements and file-list references",
+    "Accept only mapped-value-list drafts; `runs` handles already-written flow outputs itself"
+   ],
+   "default_guess": "Accept either an existing StoredValue reference or a premeasured mapped-value-list draft, writing only the draft and otherwise returning the existing reference unchanged.",
+   "unit": "50_public_apis.md:`public_op:run_values.record_flow_output`"
+  },
+  {
+   "subject": "flow-output materialization failure semantics",
+   "kind": "missing error rule",
+   "text": "Its Errors say a refused publication or failed change is `internal_error`, but the operation does not state whether an unmeasured or over-ceiling mapped-list source is a valid input, a broken invariant, or a node failure.",
+   "question": "What must `record_flow_output` do if its supplied mapped-list source was not successfully premeasured within `stored_value_bytes_max`?",
+   "options": [
+    "Treat it as a caller invariant breach and return `internal_error`",
+    "Measure it here and return a list-too-large result for `run_graph` to interpret",
+    "Refuse the operation without writing"
+   ],
+   "default_guess": "Require proof of successful premeasurement in the source and treat its absence or an over-ceiling source as `internal_error`.",
+   "unit": "50_public_apis.md:`public_op:run_values.record_flow_output`"
+  },
+  {
+   "subject": "plan output sources requiring materialization",
+   "kind": "underspecified output",
+   "text": "`plan_run` returns \"the produced outputs\" and \"the source of each input\", while some such sources are records already written and others are transient list elements or mapped lists that `run_values.deliver_input` or `run_values.record_flow_output` must first write.",
+   "question": "What tagged source variants does `plan_run` return, with what data and class/schema facts, so `runs` can choose the correct `run_values` operation without reconstructing graph decisions?",
+   "options": [
+    "A closed tagged union distinguishing stored reference, list element and assembled mapped list",
+    "Only stored references, with `plan_run` materializing derived values itself",
+    "Separate collections for ready-input deliveries and flow-output materializations"
+   ],
+   "default_guess": "Return a closed tagged union distinguishing an existing reference, a list element, and a premeasured assembled mapped list.",
+   "unit": "50_public_apis.md:`public_op:run_graph.plan_run`"
+  },
+  {
+   "subject": "mapped-list ceiling failure in the plan",
+   "kind": "missing output model",
+   "text": "The operation enforces \"a mapped list over `stored_value_bytes_max` failing its node with no record\" while its outputs name element conclusions, drafts, a next node, waits, outputs and status but no representation of this recordless aggregate-node failure.",
+   "question": "How is the recordless mapped-node failure represented in the plan, including its status/detail and the fact that no element NodeExecution is changed, so `runs` and later calls derive the same dependants and run result?",
+   "options": [
+    "A separate derived node-conclusion entry with `contract_violation` and `value_too_large`",
+    "Only upstream-failure drafts plus final run status, with no exposed node conclusion",
+    "A synthetic element conclusion that is explicitly never persisted"
+   ],
+   "default_guess": "Return a separate derived aggregate-node conclusion marked failed with `value_too_large`, distinct from every element conclusion and never persisted.",
+   "unit": "50_public_apis.md:`public_op:run_graph.plan_run`"
+  },
+  {
+   "subject": "terminal cancelled runs passed to plan_run",
+   "kind": "domain ambiguity",
+   "text": "The Run input is described as one \"whose stored status, outputs and waiting points it ignores and derives again,\" but cancellation has no NodeExecution and is represented by the Run's `cancelled_by` and stored terminal status.",
+   "question": "May `plan_run` be called for a cancelled run, and if so how does it derive `cancelled` without using the stored status?",
+   "options": [
+    "Its input precondition excludes every ended run except a lagging `refused` derivation",
+    "It derives cancellation from `cancelled_by` and `ended_at` while still ignoring stored status",
+    "It preserves any stored terminal status instead of ignoring it"
+   ],
+   "default_guess": "Exclude already ended runs from planning, except where the trace-derived refusal is being finalized, and make that precondition explicit.",
+   "unit": "50_public_apis.md:`public_op:run_graph.plan_run`"
+  },
+  {
+   "subject": "timestamps on derived NodeExecution drafts",
+   "kind": "vague field assignment",
+   "text": "For a `skipped_by_guard` or `upstream_failed` draft, `runs` \"passes it as `now`\" to `run_graph.plan_run`, but NodeExecution has both `started_at` and `ended_at`.",
+   "question": "Which timestamp fields of each derived draft receive `now`, and must every draft returned by one call share that same reading?",
+   "options": [
+    "Both `started_at` and `ended_at` equal the one `now` for every draft in the call",
+    "Only `ended_at` is `now`, with `started_at` absent",
+    "Each draft receives separate timestamps derived from the supplied reading"
+   ],
+   "default_guess": "Set both `started_at` and `ended_at` to the single supplied `now` for all drafts returned by that call.",
+   "unit": "50_public_apis.md:Conventions every operation follows"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"sandbox runner environment initialization\",\"kind\":\"contradiction\",\"text\":\"`sandbox_runner` owns the program that \\\"sets the environment variables\\\" inside the environment, while A03 requires `PYTHONHASHSEED=0` for deterministic interpreter hashing and `sandbox` owns launching the interpreter.\",\"question\":\"Who sets `PYTHONHASHSEED=0` before the Python interpreter starts, when setting it from runner code is too late to determine that interpreter's hash seed?\",\"options\":[\"`sandbox` supplies the complete launch environment before starting Python\",\"`sandbox_runner.runner_arguments` returns launch-environment data that `sandbox` applies\",\"The runner starts a second interpreter after establishing the environment\"],\"default_guess\":\"Have `sandbox` apply a launch environment supplied as runner configuration before starting Python.\",\"unit\":\"context: agreement of the earlier states' texts with this state\"},{\"subject\":\"runner report truncation and completeness\",\"kind\":\"missing input/result\",\"text\":\"Inputs are \\\"Every byte the runner wrote to its channel, read by the parent until the channel closed, the environment ended, or the channel bound was passed\\\" but the operation receives no indication of which condition stopped the read; \\\"an unreadable or partial report is not decoded into outputs\\\" and Errors says `None`.\",\"question\":\"What exact result does `read_runner_report` return for a partial, malformed, trailing-data, or channel-bound-exceeded report, and how is completeness distinguished from a complete report having the same byte prefix?\",\"options\":[\"Return a closed `invalid_report` result and pass the read termination condition as an input\",\"Infer completeness solely from framing and return a closed `invalid_report` result on any framing failure or trailing data\",\"Treat every such case as an escaped/crashed runner report\"],\"default_guess\":\"Pass the termination condition and return an explicit `invalid_report` variant for incomplete, malformed, over-bound, or trailing data.\",\"unit\":\"50_public_apis.md:`public_op:sandbox_runner.read_runner_report`\"},{\"subject\":\"representation of malformed function returns\",\"kind\":\"underspecified output\",\"text\":\"The outputs are described as \\\"the outputs `run` returned, each as JSON text, a file, a file list or not representable.\\\"\",\"question\":\"How does the decoded report represent a return that is not a dict, has missing or extra keys, or contains a value of the wrong Python kind, so that `sandbox` rather than the runner can apply the A03 outcome order and decide `contract_violation`?\",\"options\":[\"Return the raw top-level return shape with a tagged representation for every Python value kind\",\"Return a closed structural-failure variant describing non-dict, key-set and value-kind failures\",\"Have the runner judge these contract violations despite the text assigning outcome judgement to `sandbox`\"],\"default_guess\":\"Return a tagged raw-return representation, including its top-level kind and exact keys, leaving classification to `sandbox`.\",\"unit\":\"50_public_apis.md:`public_op:sandbox_runner.read_runner_report`\"},{\"subject\":\"runner report resource information\",\"kind\":\"vague output\",\"text\":\"The operation returns \\\"whether a bound was hit inside\\\" while the runner enforces several distinct limits and `sandbox` owns the outcome decision.\",\"question\":\"What information identifies an inside resource hit, including simultaneous hits, so `sandbox` can combine it deterministically with its outside observations under A03's precedence order?\",\"options\":[\"A single boolean because every inside hit has identical meaning\",\"One closed resource-hit kind chosen by a fixed precedence\",\"An ordered set of all observed resource-hit kinds\"],\"default_guess\":\"Return an ordered set of closed resource-hit kinds and let `sandbox` apply the A03 outcome precedence.\",\"unit\":\"50_public_apis.md:`public_op:sandbox_runner.read_runner_report`\"},{\"subject\":\"flow-output source contract\",\"kind\":\"undefined input\",\"text\":\"`record_flow_output` takes \\\"The source of one produced flow output\\\" and says only that \\\"A mapped node's value list that reaches a flow output is written as a StoredValue M21.\\\"\",\"question\":\"What is the closed set and exact shape of sources this operation accepts, and which source variants cause a new StoredValue to be written versus merely returning an existing reference?\",\"options\":[\"Accept an existing StoredValue reference or an unwritten mapped-value-list draft; only the latter is written\",\"Accept every source form used by `deliver_input`, including list elements and file-list references\",\"Accept only mapped-value-list drafts; `runs` handles already-written flow outputs itself\"],\"default_guess\":\"Accept either an existing StoredValue reference or a premeasured mapped-value-list draft, writing only the draft and otherwise returning the existing reference unchanged.\",\"unit\":\"50_public_apis.md:`public_op:run_values.record_flow_output`\"},{\"subject\":\"flow-output materialization failure semantics\",\"kind\":\"missing error rule\",\"text\":\"Its Errors say a refused publication or failed change is `internal_error`, but the operation does not state whether an unmeasured or over-ceiling mapped-list source is a valid input, a broken invariant, or a node failure.\",\"question\":\"What must `record_flow_output` do if its supplied mapped-list source was not successfully premeasured within `stored_value_bytes_max`?\",\"options\":[\"Treat it as a caller invariant breach and return `internal_error`\",\"Measure it here and return a list-too-large result for `run_graph` to interpret\",\"Refuse the operation without writing\"],\"default_guess\":\"Require proof of successful premeasurement in the source and treat its absence or an over-ceiling source as `internal_error`.\",\"unit\":\"50_public_apis.md:`public_op:run_values.record_flow_output`\"},{\"subject\":\"plan output sources requiring materialization\",\"kind\":\"underspecified output\",\"text\":\"`plan_run` returns \\\"the produced outputs\\\" and \\\"the source of each input\\\", while some such sources are records already written and others are transient list elements or mapped lists that `run_values.deliver_input` or `run_values.record_flow_output` must first write.\",\"question\":\"What tagged source variants does `plan_run` return, with what data and class/schema facts, so `runs` can choose the correct `run_values` operation without reconstructing graph decisions?\",\"options\":[\"A closed tagged union distinguishing stored reference, list element and assembled mapped list\",\"Only stored references, with `plan_run` materializing derived values itself\",\"Separate collections for ready-input deliveries and flow-output materializations\"],\"default_guess\":\"Return a closed tagged union distinguishing an existing reference, a list element, and a premeasured assembled mapped list.\",\"unit\":\"50_public_apis.md:`public_op:run_graph.plan_run`\"},{\"subject\":\"mapped-list ceiling failure in the plan\",\"kind\":\"missing output model\",\"text\":\"The operation enforces \\\"a mapped list over `stored_value_bytes_max` failing its node with no record\\\" while its outputs name element conclusions, drafts, a next node, waits, outputs and status but no representation of this recordless aggregate-node failure.\",\"question\":\"How is the recordless mapped-node failure represented in the plan, including its status/detail and the fact that no element NodeExecution is changed, so `runs` and later calls derive the same dependants and run result?\",\"options\":[\"A separate derived node-conclusion entry with `contract_violation` and `value_too_large`\",\"Only upstream-failure drafts plus final run status, with no exposed node conclusion\",\"A synthetic element conclusion that is explicitly never persisted\"],\"default_guess\":\"Return a separate derived aggregate-node conclusion marked failed with `value_too_large`, distinct from every element conclusion and never persisted.\",\"unit\":\"50_public_apis.md:`public_op:run_graph.plan_run`\"},{\"subject\":\"terminal cancelled runs passed to plan_run\",\"kind\":\"domain ambiguity\",\"text\":\"The Run input is described as one \\\"whose stored status, outputs and waiting points it ignores and derives again,\\\" but cancellation has no NodeExecution and is represented by the Run's `cancelled_by` and stored terminal status.\",\"question\":\"May `plan_run` be called for a cancelled run, and if so how does it derive `cancelled` without using the stored status?\",\"options\":[\"Its input precondition excludes every ended run except a lagging `refused` derivation\",\"It derives cancellation from `cancelled_by` and `ended_at` while still ignoring stored status\",\"It preserves any stored terminal status instead of ignoring it\"],\"default_guess\":\"Exclude already ended runs from planning, except where the trace-derived refusal is being finalized, and make that precondition explicit.\",\"unit\":\"50_public_apis.md:`public_op:run_graph.plan_run`\"},{\"subject\":\"timestamps on derived NodeExecution drafts\",\"kind\":\"vague field assignment\",\"text\":\"For a `skipped_by_guard` or `upstream_failed` draft, `runs` \\\"passes it as `now`\\\" to `run_graph.plan_run`, but NodeExecution has both `started_at` and `ended_at`.\",\"question\":\"Which timestamp fields of each derived draft receive `now`, and must every draft returned by one call share that same reading?\",\"options\":[\"Both `started_at` and `ended_at` equal the one `now` for every draft in the call\",\"Only `ended_at` is `now`, with `started_at` absent\",\"Each draft receives separate timestamps derived from the supplied reading\"],\"default_guess\":\"Set both `started_at` and `ended_at` to the single supplied `now` for all drafts returned by that call.\",\"unit\":\"50_public_apis.md:Conventions every operation follows\"}]}",
+ "set_aside": [
+  {
+   "subject": "sandbox runner environment initialization",
+   "kind": "contradiction",
+   "text": "`sandbox_runner` owns the program that \"sets the environment variables\" inside the environment, while A03 requires `PYTHONHASHSEED=0` for deterministic interpreter hashing and `sandbox` owns launching the interpreter.",
+   "question": "Who sets `PYTHONHASHSEED=0` before the Python interpreter starts, when setting it from runner code is too late to determine that interpreter's hash seed?",
+   "options": [
+    "`sandbox` supplies the complete launch environment before starting Python",
+    "`sandbox_runner.runner_arguments` returns launch-environment data that `sandbox` applies",
+    "The runner starts a second interpreter after establishing the environment"
+   ],
+   "default_guess": "Have `sandbox` apply a launch environment supplied as runner configuration before starting Python.",
+   "unit": "context: agreement of the earlier states' texts with this state"
+  }
+ ]
+}

@@ -321,21 +321,17 @@ record checked by `design_lint --state 2`, recorded as such in `30_trace.json`.
   value reaches `sandbox` or `effects` unchecked. The empty list of a mapped
   node over an empty list is built by `run_values.empty_list_outputs` and
   written by `runs` with the node's one NodeExecution (A13 rule 6).
-- **Recovering a waiting point** (decision 32). At start `runs` compares every
-  stored WaitingPoint of a run not ended with
-  `effects.operation_element_conclusion` of its element: the same wait stands;
-  `ElementWaiting` with another reason rewrites only the waiting point — the
-  element is not reached; `ElementNotReached` — no NodeExecution and no
-  requested approval, as after an approval already decided — makes the run
-  `running` again, and the advance reaches it through
-  `effects.reach_operation_element`; a conclusion is taken by the advance; a
-  wait for an approval never requested — an attempt the owner resolved
-  `not_applied` — is reached again for its fresh approval (A11 rule 3). Every
-  run that derivation leaves `running` is then advanced with `runs`' own
-  advance; a run that still waits is not advanced: only its lagging status and
-  waiting points are rewritten as `run_graph` derives them, and the advance
-  reaches nothing of it; the fresh approval above is requested before the
-  derivation, so it is requested for such a run too (A11 rule 4, A14 rule 5).
+- **Recovering a waiting point** (decision 32). Recovery has no rule of its
+  own about a waiting point. At start `runs` derives every run not ended with
+  `run_graph`, which asks `effects.operation_element_conclusion` for each
+  operation element: a wait that still holds stands, with its present reason;
+  an element whose approval was decided, or whose attempt the owner resolved
+  `not_applied`, is not reached and so is ready. A run derived `running` is
+  advanced with `runs`' own advance, which reaches every ready element while
+  other elements still wait (A13 rule 8) — after `not_applied` the reach
+  requests a fresh approval (A11 rule 3) — and writes the status it ends at; a
+  run derived still waiting is not advanced, only its lagging status and
+  waiting points are rewritten (A11 rule 4, A14 rule 5).
 - **The runner** (decision 32). `sandbox_runner` owns the program that runs
   inside the environment, its text, its command line and the reading of the
   report it sends to the parent; `sandbox` owns the environment's launch, the

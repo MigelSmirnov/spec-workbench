@@ -728,10 +728,11 @@ has not ended, and the element; EffectAttempt M26 is changed by
    without output ports — succeeded; applied with output ports — failed,
    `applied_outputs_unknown`; not applied — waits `owner_approval` for a fresh
    approval, even under a grant, and the resend is the next attempt
-   (`flow:run_effect_with_approval` step 4): `module:runs` reaches that element
-   again through `capability:effects.reach_operation_element`, which runs the
-   pre-send checks and, finding no authority, requests the fresh approval for
-   the request as built now (A11 rule 3). The run advances.
+   (`flow:run_effect_with_approval` step 4): the element is not reached any
+   more, so the run's advance reaches it again through
+   `capability:effects.reach_operation_element`, which runs the pre-send checks
+   and, finding no authority, requests the fresh approval for the request as
+   built now (A11 rule 3). Either way `module:runs` only advances the run.
 4. **Cancel.** `capability:runs.cancel_run` refuses an ended run; otherwise it
    ends the run `cancelled`: nothing further is sent, concluded records stay,
    waiting points are removed, undecided approvals can no longer be decided,
@@ -925,20 +926,17 @@ EffectAttempt M26 and the concluding NodeExecution M23 written by
 7. `capability:runs.recover_running_runs`: first names to
    `capability:store.remove_run_spool` every ended run that does not keep its
    spool (A14 rule 4, A18 rule 4); then derives every run that has not ended — `running`, `awaiting_approval`
-   or `pending` — from its records, oldest first, deciding each stored waiting
-   point by `capability:effects.operation_element_conclusion` of its element
-   (decision 32): the same wait stands; a wait for an approval never
-   requested — an attempt the owner resolved `not_applied` — is reached again
-   through `capability:effects.reach_operation_element` for its fresh approval
-   (A11 rule 3); a wait with another reason rewrites only the waiting point,
-   and the element is not reached — an approved element whose `in_flight`
-   attempt step 6 turned `unknown` now waits `outcome_unknown` (A11 rule 4);
-   an element not reached, with no record and no requested approval, is
-   reached by the advance; a conclusion — an attempt resolved `applied`
-   included — is taken by the advance (A14 rule 5). These decisions come
-   before the derivation, so a fresh approval is requested even for a run that
-   then still waits. A run that still waits has only its lagging status and
-   waiting points rewritten, and the advance reaches nothing more of it. Then, as the kernel actor, it advances every run that derivation
+   or `pending` — from its records, oldest first, each operation element by
+   `capability:effects.operation_element_conclusion` (decision 32): a wait that
+   still holds stands with its present reason — an approved element whose
+   `in_flight` attempt step 6 turned `unknown` now waits `outcome_unknown`
+   (A11 rule 4); an element whose approval was decided, or whose attempt the
+   owner resolved `not_applied`, is not reached and so is ready, which leaves
+   its run `running`, and the advance below reaches it through
+   `capability:effects.reach_operation_element`, after `not_applied` for a
+   fresh approval (A11 rule 3); a conclusion — an attempt resolved `applied` included —
+   is taken as it is (A14 rule 5). A run derived still waiting has only its
+   lagging status and waiting points rewritten. Then, as the kernel actor, it advances every run that derivation
    leaves `running`, oldest first: a function element without a concluded
    record is executed again; a `read` element without one is sent again; an
    operation element of another class with neither a concluded record nor an

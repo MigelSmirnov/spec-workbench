@@ -1178,6 +1178,35 @@ item names the module, the witnesses, what the text said and what it says now.
         sources into references with `record_flow_output`, as the final
         change of an advance does.
 
+    *Closed by the third and fourth rounds* (States 3–5 rounds 99–130,
+    State 7 rounds 51–52):
+
+    19. Recovery has no rule of its own about a waiting point. Was: `runs`
+        decided each stored waiting point before deriving the run and reached
+        an element whose fresh approval after `not_applied` was never
+        requested, while a run that still waited was "not reached"; three
+        rounds in a row found that order and that exception contradicting
+        State 2 (A13 rule 8, A14 rule 5). Is: `operation_element_conclusion`
+        answers an element whose latest attempt the owner resolved
+        `not_applied` as not reached, like an element whose approval was
+        decided, so `plan_run` takes it as ready and its run derives
+        `running`; the advance reaches it, where `find_send_authority` admits
+        only a fresh approval, so `reach_operation_element` requests one.
+        Recovery derives each run, advances one derived `running` and
+        rewrites a lagging one that still waits; `continue_after_resolution`
+        only advances the run after either resolution. Why: one decision —
+        "what is ready" — had two owners, `run_graph` and recovery; now it
+        has one.
+    20. `judge_execution` may use the release constants it imports; the
+        scratch limit is `RELEASE_CEILING_SANDBOX_SCRATCH_BYTES_MAX`, which
+        `runner_arguments` writes as `file_size_limit` and the parent sees
+        only as the report's `resource_hit`; the parent kills an environment
+        for its wall deadline and for its channel bound. `run_graph` is no
+        caller of `kernel_now`. A skip or upstream-failure draft carries no
+        `map_index`. `plan_run` reads a StoredValue with a
+        `StoredValueSource` and takes a flow input's PortRef as `Run.inputs`
+        holds it, a SpooledFilesRef for a file port.
+
 ## Texts of earlier states changed by State 6
 
 - State 2 (2026-10-11, decision 30 item 2): A03 rule 5 — the process count

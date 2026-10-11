@@ -1,0 +1,152 @@
+{
+ "open_points": [
+  {
+   "subject": "draft NodeExecution timestamps",
+   "kind": "underspecified fields",
+   "text": "“the time of a draft is the `now` `runs` passes”",
+   "question": "Does `now` populate both `started_at` and `ended_at` of each `skipped_by_guard` or `upstream_failed` NodeExecution, or do those fields follow different rules?",
+   "options": [
+    "Set both `started_at` and `ended_at` to `now`.",
+    "Set only `ended_at` to `now` and derive or omit `started_at`.",
+    "Pass separate timestamps for the two fields."
+   ],
+   "default_guess": "Set both `started_at` and `ended_at` to the same `now`.",
+   "unit": "50_public_apis.md:Conventions every operation follows"
+  },
+  {
+   "subject": "runner report overflow signal",
+   "kind": "missing input state",
+   "text": "“Every byte the runner wrote to its channel, read by the parent until the channel closed, the environment ended, or the channel bound was passed … at most eight times `output_bytes` plus 1 048 576 bytes.”",
+   "question": "How does `read_runner_report` learn that the channel exceeded its bound, since its input contains only at-most-bound bytes and no overflow flag?",
+   "options": [
+    "Pass an explicit `bound_exceeded` flag with the bytes.",
+    "Pass one byte beyond the bound as an overflow sentinel.",
+    "Pass truncated bytes with no indication and let decoding fail."
+   ],
+   "default_guess": "Pass an explicit `bound_exceeded` flag and return a non-output report result.",
+   "unit": "50_public_apis.md:`public_op:sandbox_runner.read_runner_report`"
+  },
+  {
+   "subject": "invalid runner report result",
+   "kind": "missing output variant",
+   "text": "“an unreadable or partial report is not decoded into outputs” together with “Errors: None”",
+   "question": "What exact result does the operation return for an unreadable, partial, over-bound or otherwise malformed report, and how can `sandbox` distinguish that result from a valid report containing no outputs?",
+   "options": [
+    "Return a closed `invalid_report` result for `sandbox` to classify.",
+    "Return a synthetic escaped exception.",
+    "Raise or return `internal_error`.",
+    "Return empty report fields."
+   ],
+   "default_guess": "Return a closed `invalid_report` result that `sandbox` classifies as `crashed`.",
+   "unit": "50_public_apis.md:`public_op:sandbox_runner.read_runner_report`"
+  },
+  {
+   "subject": "materialization by record_flow_output",
+   "kind": "undefined effect condition",
+   "text": "“Write the value a source still needs written”",
+   "question": "For which source variants does `record_flow_output` write `record_delivery_values`, and what does it do when the source already names a written StoredValue?",
+   "options": [
+    "Write only an unwritten derived mapped list; return an existing reference without a store change.",
+    "Always issue `record_delivery_values`, relying on the store to accept an equal value.",
+    "Accept only unwritten derived sources and reject already-written sources."
+   ],
+   "default_guess": "Write only an unwritten derived mapped list and return an already-written source unchanged.",
+   "unit": "50_public_apis.md:`public_op:run_values.record_flow_output`"
+  },
+  {
+   "subject": "flow-output ownership and persistence",
+   "kind": "contradictory effect",
+   "text": "State 4 says “the produced flow outputs are written by `capability:run_values.record_flow_output`”; the API takes no run or flow-output port and its state impact is only “`record_delivery_values`”; elsewhere “the run's … produced outputs are … written by `runs`”",
+   "question": "Does `record_flow_output` merely materialize a StoredValue for a later `runs.record_run_progress`, or is it also supposed to update `Run.outputs`; if it updates the run, where are the required run and output-port inputs and store change?",
+   "options": [
+    "It only materializes the StoredValue; `runs.record_run_progress` updates `Run.outputs`.",
+    "It updates both the StoredValue and `Run.outputs`, requiring additional inputs and a named store change.",
+    "It updates only `Run.outputs` when the source is already stored and materializes otherwise."
+   ],
+   "default_guess": "It only materializes the StoredValue; `runs` writes the reference into `Run.outputs`.",
+   "unit": "50_public_apis.md:`public_op:run_values.record_flow_output`"
+  },
+  {
+   "subject": "repeated delivery of one derived flow output",
+   "kind": "undefined idempotence",
+   "text": "“written when the list is first delivered” and “A mapped node's value list that reaches a flow output is written as a StoredValue”",
+   "question": "When the same mapped-list value is delivered to multiple consumers or both a node and a flow output, how do `deliver_input` and `record_flow_output` determine which call performs the first write and how later calls return the existing reference without attempting a duplicate record insertion?",
+   "options": [
+    "Define a deterministic delivery order and make later calls return the existing StoredValue.",
+    "Make both operations idempotently look up or insert the same StoredValue regardless of delivery order.",
+    "Require `runs` to materialize each derived source once before delivering it anywhere."
+   ],
+   "default_guess": "Make materialization idempotent by identity, with later deliveries returning the existing StoredValue.",
+   "unit": "50_public_apis.md:`public_op:run_values.record_flow_output`"
+  },
+  {
+   "subject": "propagation closure in plan_run",
+   "kind": "undefined derivation boundary",
+   "text": "“the `skipped_by_guard` and `upstream_failed` records that became determined”",
+   "question": "Does one `plan_run` call return the full transitive fixed point of newly determined skips and upstream failures, including consequences of its own drafts and an oversized mapped list, or only the first propagation wave from records already in the trace?",
+   "options": [
+    "Return the complete transitive closure in one ordered draft batch.",
+    "Return only one propagation wave; `runs` writes it and calls again.",
+    "Return drafts only for direct dependants, but compute readiness using their transitive consequences."
+   ],
+   "default_guess": "Return the complete transitive closure in one ordered draft batch.",
+   "unit": "50_public_apis.md:`public_op:run_graph.plan_run`"
+  },
+  {
+   "subject": "drafts versus next executable work",
+   "kind": "undefined output precedence",
+   "text": "“the … records that became determined, as drafts …; the next ready node with its elements”",
+   "question": "If the same derivation finds both new drafts and an independent ready node, may `plan_run` return both, and must `runs` write the drafts before executing that node, or must the plan suppress executable work until the drafts have been persisted and the run replanned?",
+   "options": [
+    "Return both and require `runs` to persist all drafts before executing the returned node.",
+    "Return drafts only; after they are written, a new call may return a ready node.",
+    "Return the ready node first and defer drafts until after it executes."
+   ],
+   "default_guess": "Return drafts only when any exist, then replan after they are written.",
+   "unit": "50_public_apis.md:`public_op:run_graph.plan_run`"
+  },
+  {
+   "subject": "elements returned for a mapped ready node",
+   "kind": "ambiguous output set",
+   "text": "“the next ready node with its elements and the source of each input”",
+   "question": "For a mapped node containing succeeded, failed, waiting and not-yet-reached elements, which elements appear in the returned executable plan?",
+   "options": [
+    "Only elements with no conclusion and no wait, in map-index order.",
+    "Every element, each annotated with its conclusion or wait.",
+    "All elements without a conclusion, including waiting elements."
+   ],
+   "default_guess": "Only elements with no conclusion and no wait, in map-index order.",
+   "unit": "50_public_apis.md:`public_op:run_graph.plan_run`"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"draft NodeExecution timestamps\",\"kind\":\"underspecified fields\",\"text\":\"“the time of a draft is the `now` `runs` passes”\",\"question\":\"Does `now` populate both `started_at` and `ended_at` of each `skipped_by_guard` or `upstream_failed` NodeExecution, or do those fields follow different rules?\",\"options\":[\"Set both `started_at` and `ended_at` to `now`.\",\"Set only `ended_at` to `now` and derive or omit `started_at`.\",\"Pass separate timestamps for the two fields.\"],\"default_guess\":\"Set both `started_at` and `ended_at` to the same `now`.\",\"unit\":\"50_public_apis.md:Conventions every operation follows\"},{\"subject\":\"runner report overflow signal\",\"kind\":\"missing input state\",\"text\":\"“Every byte the runner wrote to its channel, read by the parent until the channel closed, the environment ended, or the channel bound was passed … at most eight times `output_bytes` plus 1 048 576 bytes.”\",\"question\":\"How does `read_runner_report` learn that the channel exceeded its bound, since its input contains only at-most-bound bytes and no overflow flag?\",\"options\":[\"Pass an explicit `bound_exceeded` flag with the bytes.\",\"Pass one byte beyond the bound as an overflow sentinel.\",\"Pass truncated bytes with no indication and let decoding fail.\"],\"default_guess\":\"Pass an explicit `bound_exceeded` flag and return a non-output report result.\",\"unit\":\"50_public_apis.md:`public_op:sandbox_runner.read_runner_report`\"},{\"subject\":\"invalid runner report result\",\"kind\":\"missing output variant\",\"text\":\"“an unreadable or partial report is not decoded into outputs” together with “Errors: None”\",\"question\":\"What exact result does the operation return for an unreadable, partial, over-bound or otherwise malformed report, and how can `sandbox` distinguish that result from a valid report containing no outputs?\",\"options\":[\"Return a closed `invalid_report` result for `sandbox` to classify.\",\"Return a synthetic escaped exception.\",\"Raise or return `internal_error`.\",\"Return empty report fields.\"],\"default_guess\":\"Return a closed `invalid_report` result that `sandbox` classifies as `crashed`.\",\"unit\":\"50_public_apis.md:`public_op:sandbox_runner.read_runner_report`\"},{\"subject\":\"runner report channel ownership\",\"kind\":\"ownership contradiction\",\"text\":\"“`sandbox_runner` owns … the reading of the report it sent to the parent” but `read_runner_report` takes “Every byte … read by the parent” and the channel bound is owned by `sandbox`\",\"question\":\"Which module actually reads and bounds the channel: does `sandbox_runner` consume the stream, or does `sandbox` collect bytes and call `sandbox_runner` only as a decoder?\",\"options\":[\"`sandbox` performs the bounded read; `sandbox_runner` only decodes the supplied bytes.\",\"`sandbox_runner` receives and reads the channel itself, including enforcing the bound.\",\"`sandbox` watches closure and deadlines while `sandbox_runner` incrementally reads through a callback or stream abstraction.\"],\"default_guess\":\"`sandbox` performs the bounded read and `sandbox_runner` only decodes, despite the broader ownership wording.\",\"unit\":\"context: agreement of the earlier states' texts with this state\"},{\"subject\":\"materialization by record_flow_output\",\"kind\":\"undefined effect condition\",\"text\":\"“Write the value a source still needs written”\",\"question\":\"For which source variants does `record_flow_output` write `record_delivery_values`, and what does it do when the source already names a written StoredValue?\",\"options\":[\"Write only an unwritten derived mapped list; return an existing reference without a store change.\",\"Always issue `record_delivery_values`, relying on the store to accept an equal value.\",\"Accept only unwritten derived sources and reject already-written sources.\"],\"default_guess\":\"Write only an unwritten derived mapped list and return an already-written source unchanged.\",\"unit\":\"50_public_apis.md:`public_op:run_values.record_flow_output`\"},{\"subject\":\"flow-output ownership and persistence\",\"kind\":\"contradictory effect\",\"text\":\"State 4 says “the produced flow outputs are written by `capability:run_values.record_flow_output`”; the API takes no run or flow-output port and its state impact is only “`record_delivery_values`”; elsewhere “the run's … produced outputs are … written by `runs`”\",\"question\":\"Does `record_flow_output` merely materialize a StoredValue for a later `runs.record_run_progress`, or is it also supposed to update `Run.outputs`; if it updates the run, where are the required run and output-port inputs and store change?\",\"options\":[\"It only materializes the StoredValue; `runs.record_run_progress` updates `Run.outputs`.\",\"It updates both the StoredValue and `Run.outputs`, requiring additional inputs and a named store change.\",\"It updates only `Run.outputs` when the source is already stored and materializes otherwise.\"],\"default_guess\":\"It only materializes the StoredValue; `runs` writes the reference into `Run.outputs`.\",\"unit\":\"50_public_apis.md:`public_op:run_values.record_flow_output`\"},{\"subject\":\"repeated delivery of one derived flow output\",\"kind\":\"undefined idempotence\",\"text\":\"“written when the list is first delivered” and “A mapped node's value list that reaches a flow output is written as a StoredValue”\",\"question\":\"When the same mapped-list value is delivered to multiple consumers or both a node and a flow output, how do `deliver_input` and `record_flow_output` determine which call performs the first write and how later calls return the existing reference without attempting a duplicate record insertion?\",\"options\":[\"Define a deterministic delivery order and make later calls return the existing StoredValue.\",\"Make both operations idempotently look up or insert the same StoredValue regardless of delivery order.\",\"Require `runs` to materialize each derived source once before delivering it anywhere.\"],\"default_guess\":\"Make materialization idempotent by identity, with later deliveries returning the existing StoredValue.\",\"unit\":\"50_public_apis.md:`public_op:run_values.record_flow_output`\"},{\"subject\":\"propagation closure in plan_run\",\"kind\":\"undefined derivation boundary\",\"text\":\"“the `skipped_by_guard` and `upstream_failed` records that became determined”\",\"question\":\"Does one `plan_run` call return the full transitive fixed point of newly determined skips and upstream failures, including consequences of its own drafts and an oversized mapped list, or only the first propagation wave from records already in the trace?\",\"options\":[\"Return the complete transitive closure in one ordered draft batch.\",\"Return only one propagation wave; `runs` writes it and calls again.\",\"Return drafts only for direct dependants, but compute readiness using their transitive consequences.\"],\"default_guess\":\"Return the complete transitive closure in one ordered draft batch.\",\"unit\":\"50_public_apis.md:`public_op:run_graph.plan_run`\"},{\"subject\":\"drafts versus next executable work\",\"kind\":\"undefined output precedence\",\"text\":\"“the … records that became determined, as drafts …; the next ready node with its elements”\",\"question\":\"If the same derivation finds both new drafts and an independent ready node, may `plan_run` return both, and must `runs` write the drafts before executing that node, or must the plan suppress executable work until the drafts have been persisted and the run replanned?\",\"options\":[\"Return both and require `runs` to persist all drafts before executing the returned node.\",\"Return drafts only; after they are written, a new call may return a ready node.\",\"Return the ready node first and defer drafts until after it executes.\"],\"default_guess\":\"Return drafts only when any exist, then replan after they are written.\",\"unit\":\"50_public_apis.md:`public_op:run_graph.plan_run`\"},{\"subject\":\"elements returned for a mapped ready node\",\"kind\":\"ambiguous output set\",\"text\":\"“the next ready node with its elements and the source of each input”\",\"question\":\"For a mapped node containing succeeded, failed, waiting and not-yet-reached elements, which elements appear in the returned executable plan?\",\"options\":[\"Only elements with no conclusion and no wait, in map-index order.\",\"Every element, each annotated with its conclusion or wait.\",\"All elements without a conclusion, including waiting elements.\"],\"default_guess\":\"Only elements with no conclusion and no wait, in map-index order.\",\"unit\":\"50_public_apis.md:`public_op:run_graph.plan_run`\"},{\"subject\":\"read_run derivation source\",\"kind\":\"cross-text contradiction\",\"text\":\"The changed text says “The run's status, its WaitingPoints and its produced outputs are derived from the trace by `run_graph.plan_run`” and “`runs.read_run` … return[s] that answer,” while `runs.read_run` says it is assembled from the stored Run status, outputs and waiting points and uses the trace only for missing-output reasons.\",\"question\":\"Must `runs.read_run` call `run_graph.plan_run` and return a freshly derived status, waits and outputs, or trust the stored Run fields except for missing-output reasons?\",\"options\":[\"Always derive the entire answer through `plan_run`.\",\"Use stored status, waits and outputs, deriving only missing-output reasons.\",\"Derive through `plan_run` only during recovery or when stored fields are detected as lagging.\"],\"default_guess\":\"Always derive the entire answer through `plan_run`, treating stored fields as persisted cache state.\",\"unit\":\"context: agreement of the earlier states' texts with this state\"}]}",
+ "set_aside": [
+  {
+   "subject": "runner report channel ownership",
+   "kind": "ownership contradiction",
+   "text": "“`sandbox_runner` owns … the reading of the report it sent to the parent” but `read_runner_report` takes “Every byte … read by the parent” and the channel bound is owned by `sandbox`",
+   "question": "Which module actually reads and bounds the channel: does `sandbox_runner` consume the stream, or does `sandbox` collect bytes and call `sandbox_runner` only as a decoder?",
+   "options": [
+    "`sandbox` performs the bounded read; `sandbox_runner` only decodes the supplied bytes.",
+    "`sandbox_runner` receives and reads the channel itself, including enforcing the bound.",
+    "`sandbox` watches closure and deadlines while `sandbox_runner` incrementally reads through a callback or stream abstraction."
+   ],
+   "default_guess": "`sandbox` performs the bounded read and `sandbox_runner` only decodes, despite the broader ownership wording.",
+   "unit": "context: agreement of the earlier states' texts with this state"
+  },
+  {
+   "subject": "read_run derivation source",
+   "kind": "cross-text contradiction",
+   "text": "The changed text says “The run's status, its WaitingPoints and its produced outputs are derived from the trace by `run_graph.plan_run`” and “`runs.read_run` … return[s] that answer,” while `runs.read_run` says it is assembled from the stored Run status, outputs and waiting points and uses the trace only for missing-output reasons.",
+   "question": "Must `runs.read_run` call `run_graph.plan_run` and return a freshly derived status, waits and outputs, or trust the stored Run fields except for missing-output reasons?",
+   "options": [
+    "Always derive the entire answer through `plan_run`.",
+    "Use stored status, waits and outputs, deriving only missing-output reasons.",
+    "Derive through `plan_run` only during recovery or when stored fields are detected as lagging."
+   ],
+   "default_guess": "Always derive the entire answer through `plan_run`, treating stored fields as persisted cache state.",
+   "unit": "context: agreement of the earlier states' texts with this state"
+  }
+ ]
+}
