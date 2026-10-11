@@ -1151,6 +1151,33 @@ item names the module, the witnesses, what the text said and what it says now.
     13. `judge_execution`: "no returned message" is a report whose `returned`
         is `None`; `read_runner_report` always gives a report.
 
+    *Closed by the second rounds* (State 5 round 128, State 7 round 50):
+
+    14. `plan_run` takes `now`, the `kernel_now` reading `runs` takes just
+        before it, for the times of its drafts; `run_graph` reads no clock,
+        so one set of facts gives one answer. Its inputs are listed exactly:
+        the Run (stored status, outputs and waiting points ignored), the
+        RunContext only for `operation_element_conclusion`, the pinned flow
+        version, NodePorts, the trace as ExecutionsOfRun in store order.
+    15. The report channel is bounded: the parent reads at most eight times
+        `output_bytes` plus 1 048 576 bytes, room for base64 (4/3), JSON
+        escaping, trap lines and the failure; past it the parent stops
+        reading, kills the environment as for its deadline and the execution
+        concludes `resource_exhausted` (`ExecutionObservation.channel_over_bound`).
+        An unbounded read would let agent code exhaust the kernel's memory.
+    16. `record_flow_output` names a recorded source's value under the flow
+        output port and raises publication failures as `internal_error`;
+        `judge_execution` decides from the observation, ports and bounds.
+    17. `plan_run` wording: flow inputs go along every enabled edge; an empty
+        list has no position and its node one synthetic element; a skip or
+        upstream-failure record, written only for a node none of whose
+        elements executed, concludes the whole node.
+    18. `execute_function_element` may read the pinned contract version again
+        through `read_implementation`: a pinned version never changes, so the
+        ports are those `advance_run` read. Recovery turns `plan_run`'s output
+        sources into references with `record_flow_output`, as the final
+        change of an advance does.
+
 ## Texts of earlier states changed by State 6
 
 - State 2 (2026-10-11, decision 30 item 2): A03 rule 5 — the process count

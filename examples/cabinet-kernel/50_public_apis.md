@@ -23,10 +23,11 @@ Python signatures are State 6's.
   `clock.kernel_now`, taken at the moment the field names: a `started_at` when
   the execution or send begins — for an operation's NodeExecution, the
   `recorded_at` of its EffectAttempt when it has one (A11 rule 4) — every other
-  time when its store change is made. A `skipped_by_guard` or
-  `upstream_failed` draft is stamped by `run_graph.plan_run` with one reading
-  for both times, and `runs` writes it in its very next change, so that reading
-  is the moment of its store change.
+  time when its store change is made. For a `skipped_by_guard` or
+  `upstream_failed` draft, `runs` takes that reading itself, just before it
+  asks `run_graph.plan_run`, passes it as `now`, and writes the drafts in that
+  very change; `run_graph` reads no clock, so one set of facts gives one
+  answer.
 - **Refusal.** An operation either returns its output or refuses with one code
   of the closed set below and a bounded reason naming the first failing check
   in its rule's order. A refusal is decided before the operation's first store
@@ -712,7 +713,7 @@ Read-only.
 
 ### Inputs
 
-Every byte the runner wrote to its channel, read by the parent until the channel closed.
+Every byte the runner wrote to its channel, read by the parent until the channel closed, the environment ended, or the channel bound was passed (`sandbox`, decision 32): at most eight times `output_bytes` plus 1 048 576 bytes.
 
 ### Outputs
 
@@ -1594,7 +1595,7 @@ A flow output holds the value its edge delivered (A13 rule 3); a flow output is 
 
 ### Errors
 
-None of its own; a failed store change is `internal_error`.
+None of its own: a refused or failed publication with `store.put_value_bytes` and a failed store change are broken invariants, each `internal_error`; nothing is converted to another code.
 
 ### State impact
 
@@ -2653,7 +2654,7 @@ Any active grant, whether or not its version is still active (M25).
 
 ### Inputs
 
-A run, its context, its pinned flow version, the ports of every node of it as `runs` read them (a function node's from its pinned contract version, an operation node's from its binding), and its trace.
+The Run record — whose stored status, outputs and waiting points it ignores and derives again —; its RunContext (`run_id`, the pinned `flow_version_id`, and `started_under`, the store position of the activation the run started under), used only to ask `effects.operation_element_conclusion`; its pinned flow version; one NodePorts per node in `node_id` order, as `runs` read them (a function node's from its pinned contract version, an operation node's from its binding); its trace, the run's NodeExecutions as `store.read_records` answers ExecutionsOfRun, in store order; and `now`, the one `clock.kernel_now` reading `runs` took for the change that will write any draft.
 
 ### Outputs
 

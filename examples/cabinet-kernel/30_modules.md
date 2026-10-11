@@ -1025,8 +1025,9 @@ and the reason of every missing one.
 
 ### Knows
 
-`models`, `clock`, `store` (value bytes), `run_values` (mapped lists),
-`effects` (an operation element's conclusion).
+`models`, `store` (value bytes), `run_values` (mapped lists), `effects` (an
+operation element's conclusion); no clock — the time of a draft is the `now`
+`runs` passes.
 
 ### Must not own
 

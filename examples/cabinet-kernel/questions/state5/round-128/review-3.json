@@ -1,0 +1,150 @@
+{
+ "open_points": [
+  {
+   "subject": "timestamps of derived skip and upstream-failure drafts",
+   "kind": "contradictory timing",
+   "text": "A `skipped_by_guard` or `upstream_failed` draft is stamped by `run_graph.plan_run` with one reading for both times, and `runs` writes it in its very next change, so that reading is the moment of its store change.",
+   "question": "Are `started_at` and `ended_at` the earlier time at which `plan_run` derives the draft, or must they be read when `runs` actually performs the store change; and is the reading shared by all drafts in that change or taken once per draft?",
+   "options": [
+    "Stamp each draft during `plan_run`, once per draft",
+    "Stamp the whole draft batch when `runs` writes it",
+    "Have the store assign the transaction timestamp"
+   ],
+   "default_guess": "Stamp each draft during `plan_run` with one reading used for both fields, following the new explicit sentence despite its conflict with the actual store-change time.",
+   "unit": "50_public_apis.md:Conventions every operation follows"
+  },
+  {
+   "subject": "sandbox environment initialization",
+   "kind": "contradictory ownership",
+   "text": "The runner sets the sandbox environment ... before it loads the code",
+   "question": "Must `sandbox` launch the interpreter with only `PYTHONHASHSEED=0`, must the runner clear and set the environment after interpreter startup, or must both do so?",
+   "options": [
+    "`sandbox` supplies the complete minimal process environment at launch",
+    "The runner clears and sets the environment after launch",
+    "Both enforce the same minimal environment"
+   ],
+   "default_guess": "Have `sandbox` launch with only `PYTHONHASHSEED=0` and have the runner verify or re-establish it before loading agent code.",
+   "unit": "50_public_apis.md:`public_op:sandbox_runner.runner_source`"
+  },
+  {
+   "subject": "runner communication descriptors",
+   "kind": "input contradiction",
+   "text": "Build the runner's command line for one execution, the numbers of the descriptors it writes to among its arguments. ... the number of the descriptor of the channel to the parent.",
+   "question": "How many inherited writable descriptors exist, what is each one's role, and which descriptor numbers must `runner_arguments` receive and encode?",
+   "options": [
+    "One descriptor carries traps and the final report",
+    "Separate descriptors carry trap events and the final report",
+    "A fixed larger descriptor set is used"
+   ],
+   "default_guess": "Use one inherited descriptor for all framed runner messages.",
+   "unit": "50_public_apis.md:`public_op:sandbox_runner.runner_arguments`"
+  },
+  {
+   "subject": "malformed or partial runner report",
+   "kind": "missing output",
+   "text": "an unreadable or partial report is not decoded into outputs ... Errors: None.",
+   "question": "What result does `read_runner_report` return for an unreadable, truncated or otherwise malformed report so that `sandbox` can distinguish it from a valid report with no outputs?",
+   "options": [
+    "Return an explicit malformed-report result",
+    "Return a synthetic escaped-exception result",
+    "Refuse or raise an internal error"
+   ],
+   "default_guess": "Return an explicit malformed-report result that `sandbox` classifies as `crashed`.",
+   "unit": "50_public_apis.md:`public_op:sandbox_runner.read_runner_report`"
+  },
+  {
+   "subject": "runner report size",
+   "kind": "missing bound",
+   "text": "Every byte the runner wrote to its channel, read by the parent until the channel closed. ... The trap hits in the order they were written",
+   "question": "What bounds the report channel and the number or total bytes of trap events, exceptions and framing data, and what result is produced when that bound is exceeded?",
+   "options": [
+    "Apply a fixed release ceiling and report a resource hit",
+    "Apply the execution's `output_bytes` bound to the entire report",
+    "Stream without retaining all events and keep only a bounded summary"
+   ],
+   "default_guess": "Apply a fixed bounded report size and classify exceeding it as `resource_exhausted`.",
+   "unit": "50_public_apis.md:`public_op:sandbox_runner.read_runner_report`"
+  },
+  {
+   "subject": "oversized mapped output lists",
+   "kind": "ambiguous result",
+   "text": "Every list built ... or that one list exceeds `stored_value_bytes_max`.",
+   "question": "When two or more delivered output lists exceed the ceiling, what exact failure result is returned, which port is named, and in what port order is that choice made?",
+   "options": [
+    "Return only an unnamed over-ceiling flag",
+    "Name the first output port in code-point order",
+    "Return all oversized output ports in code-point order"
+   ],
+   "default_guess": "Name the first oversized output port in code-point order and return no built lists for delivery.",
+   "unit": "50_public_apis.md:`public_op:run_values.assemble_mapped_lists`"
+  },
+  {
+   "subject": "empty mapped file-list reference",
+   "kind": "missing representation",
+   "text": "For each output port an empty list — a value port's StoredValue of `[]`, its bytes published, a file port's empty file list — and the references the node's record names.",
+   "question": "What record/reference representation stores an empty file list and its required disclosure class, given that it contains no SpooledFile whose class can carry that fact and M23 defines no separate file-list reference?",
+   "options": [
+    "Add a typed file-list reference carrying class",
+    "Store an empty file-list value record",
+    "Add list class metadata to the NodeExecution port reference"
+   ],
+   "default_guess": "Use a typed file-list reference in the NodeExecution output that carries the empty list and its disclosure class.",
+   "unit": "50_public_apis.md:`public_op:run_values.empty_list_outputs`"
+  },
+  {
+   "subject": "publishing bytes for a mapped list used as a flow output",
+   "kind": "missing effect and error",
+   "text": "Write the value a produced flow output still needs written ... Observable effect: A mapped node's value list that reaches a flow output is written as a StoredValue M21. ... State impact: `record_delivery_values`.",
+   "question": "Does `record_flow_output` publish the mapped list's canonical bytes with `store.put_value_bytes` before `record_delivery_values`, and how are digest/size refusal or publication failure reported after any earlier publication?",
+   "options": [
+    "Publish bytes inside `record_flow_output`, then record the StoredValue",
+    "Require the caller to publish bytes before calling",
+    "Require `assemble_mapped_lists` to publish them"
+   ],
+   "default_guess": "Publish inside `record_flow_output`, convert an impossible digest/size refusal to `internal_error`, and preserve already-published unnamed bytes if the record change fails.",
+   "unit": "50_public_apis.md:`public_op:run_values.record_flow_output`"
+  },
+  {
+   "subject": "`plan_run` context input",
+   "kind": "undefined input",
+   "text": "A run, its context, its pinned flow version, the ports of every node of it as `runs` read them ... and its trace.",
+   "question": "What exact facts constitute “its context,” which of those facts are distinct from the run, pinned version, ports and trace, and which records or values must `runs` pass?",
+   "options": [
+    "Remove `context` because the other named inputs are complete",
+    "Define a closed run-context value containing the additional facts",
+    "Pass separate explicitly named arguments for every additional fact"
+   ],
+   "default_guess": "Replace `context` with a closed typed run-context value whose fields are explicitly enumerated.",
+   "unit": "50_public_apis.md:`public_op:run_graph.plan_run`"
+  },
+  {
+   "subject": "determinism of `plan_run` drafts",
+   "kind": "contract contradiction",
+   "text": "Derive, writing nothing ... drafts ... the same from any reader and after any restart ... [while drafts are] stamped by `run_graph.plan_run` with one reading",
+   "question": "Is a draft's timestamp part of `plan_run`'s output even though that makes equal inputs produce different answers, or must `plan_run` return timeless drafts for `runs` to stamp when persisting them?",
+   "options": [
+    "Timestamp drafts inside `plan_run` and exclude timestamps from the determinism claim",
+    "Return timeless drafts and let `runs` stamp them",
+    "Pass a caller-supplied timestamp into `plan_run`"
+   ],
+   "default_guess": "Return timeless drafts and let `runs` stamp them immediately before the store change.",
+   "unit": "50_public_apis.md:`public_op:run_graph.plan_run`"
+  },
+  {
+   "subject": "startup recovery of a resolved operation attempt",
+   "kind": "contradictory action",
+   "text": "a conclusion is taken by the advance ... [but `recover_running_runs` says] an operation element whose wait no longer holds (its approval decided, its attempt resolved) is reached again through `effects.reach_operation_element`",
+   "question": "When an `outcome_unknown` attempt was resolved `applied`, does recovery accept the derived succeeded/failed conclusion without reaching the element, or call `reach_operation_element` again?",
+   "options": [
+    "Accept an `applied` conclusion without reaching or sending",
+    "Reach every element whose stored wait no longer holds",
+    "Reach only `not_applied` elements that need a fresh approval"
+   ],
+   "default_guess": "Accept `applied` as a conclusion without reaching the element; reach only a `not_applied` element that lacks its fresh approval request.",
+   "unit": "50_public_apis.md:`public_op:run_graph.plan_run`"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"timestamps of derived skip and upstream-failure drafts\",\"kind\":\"contradictory timing\",\"text\":\"A `skipped_by_guard` or `upstream_failed` draft is stamped by `run_graph.plan_run` with one reading for both times, and `runs` writes it in its very next change, so that reading is the moment of its store change.\",\"question\":\"Are `started_at` and `ended_at` the earlier time at which `plan_run` derives the draft, or must they be read when `runs` actually performs the store change; and is the reading shared by all drafts in that change or taken once per draft?\",\"options\":[\"Stamp each draft during `plan_run`, once per draft\",\"Stamp the whole draft batch when `runs` writes it\",\"Have the store assign the transaction timestamp\"],\"default_guess\":\"Stamp each draft during `plan_run` with one reading used for both fields, following the new explicit sentence despite its conflict with the actual store-change time.\" ,\"unit\":\"50_public_apis.md:Conventions every operation follows\"},{\"subject\":\"sandbox environment initialization\",\"kind\":\"contradictory ownership\",\"text\":\"The runner sets the sandbox environment ... before it loads the code\",\"question\":\"Must `sandbox` launch the interpreter with only `PYTHONHASHSEED=0`, must the runner clear and set the environment after interpreter startup, or must both do so?\",\"options\":[\"`sandbox` supplies the complete minimal process environment at launch\",\"The runner clears and sets the environment after launch\",\"Both enforce the same minimal environment\"],\"default_guess\":\"Have `sandbox` launch with only `PYTHONHASHSEED=0` and have the runner verify or re-establish it before loading agent code.\",\"unit\":\"50_public_apis.md:`public_op:sandbox_runner.runner_source`\"},{\"subject\":\"runner communication descriptors\",\"kind\":\"input contradiction\",\"text\":\"Build the runner's command line for one execution, the numbers of the descriptors it writes to among its arguments. ... the number of the descriptor of the channel to the parent.\",\"question\":\"How many inherited writable descriptors exist, what is each one's role, and which descriptor numbers must `runner_arguments` receive and encode?\",\"options\":[\"One descriptor carries traps and the final report\",\"Separate descriptors carry trap events and the final report\",\"A fixed larger descriptor set is used\"],\"default_guess\":\"Use one inherited descriptor for all framed runner messages.\",\"unit\":\"50_public_apis.md:`public_op:sandbox_runner.runner_arguments`\"},{\"subject\":\"malformed or partial runner report\",\"kind\":\"missing output\",\"text\":\"an unreadable or partial report is not decoded into outputs ... Errors: None.\",\"question\":\"What result does `read_runner_report` return for an unreadable, truncated or otherwise malformed report so that `sandbox` can distinguish it from a valid report with no outputs?\",\"options\":[\"Return an explicit malformed-report result\",\"Return a synthetic escaped-exception result\",\"Refuse or raise an internal error\"],\"default_guess\":\"Return an explicit malformed-report result that `sandbox` classifies as `crashed`.\",\"unit\":\"50_public_apis.md:`public_op:sandbox_runner.read_runner_report`\"},{\"subject\":\"runner report size\",\"kind\":\"missing bound\",\"text\":\"Every byte the runner wrote to its channel, read by the parent until the channel closed. ... The trap hits in the order they were written\",\"question\":\"What bounds the report channel and the number or total bytes of trap events, exceptions and framing data, and what result is produced when that bound is exceeded?\",\"options\":[\"Apply a fixed release ceiling and report a resource hit\",\"Apply the execution's `output_bytes` bound to the entire report\",\"Stream without retaining all events and keep only a bounded summary\"],\"default_guess\":\"Apply a fixed bounded report size and classify exceeding it as `resource_exhausted`.\",\"unit\":\"50_public_apis.md:`public_op:sandbox_runner.read_runner_report`\"},{\"subject\":\"oversized mapped output lists\",\"kind\":\"ambiguous result\",\"text\":\"Every list built ... or that one list exceeds `stored_value_bytes_max`.\",\"question\":\"When two or more delivered output lists exceed the ceiling, what exact failure result is returned, which port is named, and in what port order is that choice made?\",\"options\":[\"Return only an unnamed over-ceiling flag\",\"Name the first output port in code-point order\",\"Return all oversized output ports in code-point order\"],\"default_guess\":\"Name the first oversized output port in code-point order and return no built lists for delivery.\",\"unit\":\"50_public_apis.md:`public_op:run_values.assemble_mapped_lists`\"},{\"subject\":\"empty mapped file-list reference\",\"kind\":\"missing representation\",\"text\":\"For each output port an empty list — a value port's StoredValue of `[]`, its bytes published, a file port's empty file list — and the references the node's record names.\",\"question\":\"What record/reference representation stores an empty file list and its required disclosure class, given that it contains no SpooledFile whose class can carry that fact and M23 defines no separate file-list reference?\",\"options\":[\"Add a typed file-list reference carrying class\",\"Store an empty file-list value record\",\"Add list class metadata to the NodeExecution port reference\"],\"default_guess\":\"Use a typed file-list reference in the NodeExecution output that carries the empty list and its disclosure class.\",\"unit\":\"50_public_apis.md:`public_op:run_values.empty_list_outputs`\"},{\"subject\":\"publishing bytes for a mapped list used as a flow output\",\"kind\":\"missing effect and error\",\"text\":\"Write the value a produced flow output still needs written ... Observable effect: A mapped node's value list that reaches a flow output is written as a StoredValue M21. ... State impact: `record_delivery_values`.\",\"question\":\"Does `record_flow_output` publish the mapped list's canonical bytes with `store.put_value_bytes` before `record_delivery_values`, and how are digest/size refusal or publication failure reported after any earlier publication?\",\"options\":[\"Publish bytes inside `record_flow_output`, then record the StoredValue\",\"Require the caller to publish bytes before calling\",\"Require `assemble_mapped_lists` to publish them\"],\"default_guess\":\"Publish inside `record_flow_output`, convert an impossible digest/size refusal to `internal_error`, and preserve already-published unnamed bytes if the record change fails.\",\"unit\":\"50_public_apis.md:`public_op:run_values.record_flow_output`\"},{\"subject\":\"`plan_run` context input\",\"kind\":\"undefined input\",\"text\":\"A run, its context, its pinned flow version, the ports of every node of it as `runs` read them ... and its trace.\",\"question\":\"What exact facts constitute “its context,” which of those facts are distinct from the run, pinned version, ports and trace, and which records or values must `runs` pass?\",\"options\":[\"Remove `context` because the other named inputs are complete\",\"Define a closed run-context value containing the additional facts\",\"Pass separate explicitly named arguments for every additional fact\"],\"default_guess\":\"Replace `context` with a closed typed run-context value whose fields are explicitly enumerated.\",\"unit\":\"50_public_apis.md:`public_op:run_graph.plan_run`\"},{\"subject\":\"determinism of `plan_run` drafts\",\"kind\":\"contract contradiction\",\"text\":\"Derive, writing nothing ... drafts ... the same from any reader and after any restart ... [while drafts are] stamped by `run_graph.plan_run` with one reading\",\"question\":\"Is a draft's timestamp part of `plan_run`'s output even though that makes equal inputs produce different answers, or must `plan_run` return timeless drafts for `runs` to stamp when persisting them?\",\"options\":[\"Timestamp drafts inside `plan_run` and exclude timestamps from the determinism claim\",\"Return timeless drafts and let `runs` stamp them\",\"Pass a caller-supplied timestamp into `plan_run`\"],\"default_guess\":\"Return timeless drafts and let `runs` stamp them immediately before the store change.\",\"unit\":\"50_public_apis.md:`public_op:run_graph.plan_run`\"},{\"subject\":\"startup recovery of a resolved operation attempt\",\"kind\":\"contradictory action\",\"text\":\"a conclusion is taken by the advance ... [but `recover_running_runs` says] an operation element whose wait no longer holds (its approval decided, its attempt resolved) is reached again through `effects.reach_operation_element`\",\"question\":\"When an `outcome_unknown` attempt was resolved `applied`, does recovery accept the derived succeeded/failed conclusion without reaching the element, or call `reach_operation_element` again?\",\"options\":[\"Accept an `applied` conclusion without reaching or sending\",\"Reach every element whose stored wait no longer holds\",\"Reach only `not_applied` elements that need a fresh approval\"],\"default_guess\":\"Accept `applied` as a conclusion without reaching the element; reach only a `not_applied` element that lacks its fresh approval request.\",\"unit\":\"50_public_apis.md:`public_op:run_graph.plan_run`\"}]}",
+ "set_aside": []
+}

@@ -1,0 +1,163 @@
+{
+ "open_points": [
+  {
+   "subject": "timestamps of derived skip and upstream-failure drafts",
+   "kind": "contradiction",
+   "text": "“every other time when its store change is made” versus “stamped by `run_graph.plan_run` with one reading for both times, and `runs` writes it in its very next change, so that reading is the moment of its store change”",
+   "question": "Are `started_at` and `ended_at` the time `plan_run` derives the draft or a fresh time taken when `runs` actually performs `record_run_progress`, and is one reading shared by all drafts in that change or taken once per draft?",
+   "options": [
+    "Use one planning-time reading for every draft in the next change",
+    "Use a separate planning-time reading for each draft",
+    "Have `runs` stamp all drafts at the actual store change"
+   ],
+   "default_guess": "Use one `plan_run` reading for all drafts written by the immediately following `record_run_progress` change.",
+   "unit": "?"
+  },
+  {
+   "subject": "determinism of `run_graph.plan_run`",
+   "kind": "contradiction",
+   "text": "“A `skipped_by_guard` or `upstream_failed` draft is stamped by `run_graph.plan_run`” versus “one deterministic answer to ‘where does this run stand and what executes next’, the same from any reader and after any restart”",
+   "question": "Does determinism exclude draft timestamps, or must timestamps be supplied or assigned outside `plan_run` so identical run facts produce an identical complete result?",
+   "options": [
+    "Exclude timestamps from the deterministic plan and stamp later",
+    "Pass a timestamp into `plan_run` so its result is deterministic for all inputs",
+    "Allow otherwise identical calls to return drafts with different timestamps"
+   ],
+   "default_guess": "Exclude timestamps from the deterministic derivation and stamp drafts when `runs` records them.",
+   "unit": "?"
+  },
+  {
+   "subject": "runner report decoding failure",
+   "kind": "missing output",
+   "text": "“An unreadable or partial report is not decoded into outputs” together with “Errors: None”",
+   "question": "What exact result does `read_runner_report` return for an empty, truncated, malformed, multiply framed or otherwise unreadable report, and how must `sandbox` classify that result?",
+   "options": [
+    "Return a distinct malformed-report result that `sandbox` classifies as `crashed`",
+    "Return an escaped-runner-exception result",
+    "Treat malformed framing as `internal_error` or `stop_required`"
+   ],
+   "default_guess": "Return a distinct malformed-report result and have `sandbox` classify the execution as `crashed`.",
+   "unit": "?"
+  },
+  {
+   "subject": "bounding the runner report channel",
+   "kind": "missing limit",
+   "text": "“Every byte the runner wrote to its channel, read by the parent until the channel closed”",
+   "question": "What bounds reading of the report channel, what happens when it exceeds that bound or never closes, and which execution outcome results, given that the parent owns the wall deadline and output-count decision?",
+   "options": [
+    "The parent stops reading and classifies excess as `resource_exhausted` and failure to close by the deadline as `timeout`",
+    "The report channel has a separate release ceiling and excess is `crashed`",
+    "The parent reads without a byte ceiling but remains subject to the wall deadline"
+   ],
+   "default_guess": "Enforce the execution wall deadline while reading and treat report bytes representing outputs above `output_bytes` as `resource_exhausted`.",
+   "unit": "?"
+  },
+  {
+   "subject": "result of `run_values.assemble_mapped_lists`",
+   "kind": "contradictory representation",
+   "text": "“a value list as the StoredValue of the canonical array” versus “Observable effect: None; nothing is written”",
+   "question": "Does the operation return an unpersisted StoredValue draft, a source object carrying canonical bytes plus prospective StoredValue facts, or only element references from which `deliver_input` must rebuild the value?",
+   "options": [
+    "Return canonical bytes and a complete unpersisted StoredValue draft",
+    "Return only a derived-list source containing element references",
+    "Persist the StoredValue here despite the stated no-write effect"
+   ],
+   "default_guess": "Return canonical bytes with a complete unpersisted StoredValue draft for later persistence by `deliver_input` or `record_flow_output`.",
+   "unit": "?"
+  },
+  {
+   "subject": "multiple oversized mapped output lists",
+   "kind": "undefined ordering",
+   "text": "“Build every delivered list of a mapped node … or that one list exceeds `stored_value_bytes_max`”",
+   "question": "When several delivered value-output lists exceed the ceiling, what result is returned, which list if any is named, and in what output-port order are lists built and checked?",
+   "options": [
+    "Return only a node-level over-ceiling result after measuring every delivered list",
+    "Name the first oversized list in output-port name order",
+    "Return all oversized output ports in output-port name order"
+   ],
+   "default_guess": "Measure every delivered list and return the first oversized output port in Unicode code-point port-name order.",
+   "unit": "?"
+  },
+  {
+   "subject": "size bound used by `run_values.deliver_input`",
+   "kind": "missing input",
+   "text": "“the receiving port and the actor” and “checked with `canonical_values.fit_port_value`”",
+   "question": "Which size bound is passed to `fit_port_value` for a delivered value, a file and a many-file reference, since `fit_port_value` requires the applicable bound but `deliver_input` does not name one?",
+   "options": [
+    "Use `stored_value_bytes_max` for values and `spool_file_bytes_max` per file",
+    "Perform no size check during delivery because production already enforced size ceilings",
+    "Add the applicable bound explicitly to the operation's inputs"
+   ],
+   "default_guess": "Use `stored_value_bytes_max` for values and `spool_file_bytes_max` for each file.",
+   "unit": "?"
+  },
+  {
+   "subject": "effects of `run_values.deliver_input` for non-derived sources",
+   "kind": "ambiguous effect",
+   "text": "“Write the value a source still needs written” and “A list element or a mapped node's value list is written as a StoredValue M21 before it is checked”",
+   "question": "For an already-written StoredValue, a single SpooledFile, or a mapped file-list reference, must `deliver_input` perform no store change and return the existing reference, or create some new delivery record; and what precisely is the returned ‘written reference’ for file inputs?",
+   "options": [
+    "Reuse existing value and file references without a change; only derived value elements and value lists create StoredValues",
+    "Create a delivery-specific StoredValue or reference record for every source",
+    "Reject file sources and have `runs` deliver them separately"
+   ],
+   "default_guess": "Reuse existing StoredValue and SpooledFile references, represent a file list as an ordered reference carrying its class, and write only derived JSON elements or lists.",
+   "unit": "?"
+  },
+  {
+   "subject": "source accepted by `run_values.record_flow_output`",
+   "kind": "vague input",
+   "text": "“The source of one produced flow output”",
+   "question": "What closed source variants may be passed—an existing StoredValue, a flow input or constant, a function or operation output, or an unpersisted mapped-list result—and for each variant does the operation write `record_delivery_values` or simply return an existing reference?",
+   "options": [
+    "Accept the same closed source union as `deliver_input` and write only an unpersisted mapped value list",
+    "Accept only an unpersisted mapped value list",
+    "Always write a new delivery StoredValue regardless of source"
+   ],
+   "default_guess": "Accept existing StoredValue sources and unpersisted mapped value-list sources; reuse the former and persist only the latter.",
+   "unit": "?"
+  },
+  {
+   "subject": "inputs of `run_graph.plan_run`",
+   "kind": "undefined input",
+   "text": "“A run, its context, its pinned flow version, the ports of every node of it … and its trace”",
+   "question": "What exactly is contained in “its context,” and what exact records and value references constitute “its trace,” including their required ordering and whether Run outputs and WaitingPoints are inputs or must be ignored and re-derived?",
+   "options": [
+    "Define context as pins plus flow constants and activation facts, and trace as ordered NodeExecutions with their StoredValue/SpooledFile references",
+    "Pass one explicit immutable planning snapshot containing every required fact",
+    "Let implementations choose which additional run and store facts to read"
+   ],
+   "default_guess": "Replace “context” with an explicit immutable planning snapshot and define trace as the run's NodeExecutions and associated output references in store order, with status, outputs and WaitingPoints re-derived.",
+   "unit": "?"
+  },
+  {
+   "subject": "priority among drafts, delivery work and executable nodes in a run plan",
+   "kind": "missing caller protocol",
+   "text": "“the `skipped_by_guard` and `upstream_failed` records that became determined, as drafts …; the next ready node …; … the produced outputs …; the status the run stops in”",
+   "question": "If one call returns newly determined drafts together with a ready node or newly produced flow outputs, which action must `runs` perform first, and must it re-run `plan_run` after recording drafts or outputs before executing the returned node?",
+   "options": [
+    "Record all drafts and derived flow-output values, then re-plan before executing anything",
+    "Record drafts, then execute the ready node from the same plan, recording outputs later",
+    "Execute the ready node first and record propagation afterward"
+   ],
+   "default_guess": "Record drafts and any required derived output values first, then call `plan_run` again before executing a node.",
+   "unit": "?"
+  },
+  {
+   "subject": "representation of produced outputs from `run_graph.plan_run`",
+   "kind": "missing output contract",
+   "text": "“the produced outputs”",
+   "question": "Does each produced flow output contain an already persisted StoredValue reference, an unpersisted mapped-list source for `run_values.record_flow_output`, or a closed union of both, and how does `runs` tell which outputs still require writing?",
+   "options": [
+    "Return a closed source union with explicit persisted and derived-list variants",
+    "Require `plan_run` to return only persisted StoredValue references",
+    "Return values directly and let `runs` infer whether persistence is needed"
+   ],
+   "default_guess": "Return a closed source union that explicitly distinguishes an existing StoredValue reference from an unpersisted mapped-list source.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"timestamps of derived skip and upstream-failure drafts\",\"kind\":\"contradiction\",\"text\":\"“every other time when its store change is made” versus “stamped by `run_graph.plan_run` with one reading for both times, and `runs` writes it in its very next change, so that reading is the moment of its store change”\",\"question\":\"Are `started_at` and `ended_at` the time `plan_run` derives the draft or a fresh time taken when `runs` actually performs `record_run_progress`, and is one reading shared by all drafts in that change or taken once per draft?\",\"options\":[\"Use one planning-time reading for every draft in the next change\",\"Use a separate planning-time reading for each draft\",\"Have `runs` stamp all drafts at the actual store change\"],\"default_guess\":\"Use one `plan_run` reading for all drafts written by the immediately following `record_run_progress` change.\"},{\"subject\":\"determinism of `run_graph.plan_run`\",\"kind\":\"contradiction\",\"text\":\"“A `skipped_by_guard` or `upstream_failed` draft is stamped by `run_graph.plan_run`” versus “one deterministic answer to ‘where does this run stand and what executes next’, the same from any reader and after any restart”\",\"question\":\"Does determinism exclude draft timestamps, or must timestamps be supplied or assigned outside `plan_run` so identical run facts produce an identical complete result?\",\"options\":[\"Exclude timestamps from the deterministic plan and stamp later\",\"Pass a timestamp into `plan_run` so its result is deterministic for all inputs\",\"Allow otherwise identical calls to return drafts with different timestamps\"],\"default_guess\":\"Exclude timestamps from the deterministic derivation and stamp drafts when `runs` records them.\"},{\"subject\":\"runner report decoding failure\",\"kind\":\"missing output\",\"text\":\"“An unreadable or partial report is not decoded into outputs” together with “Errors: None”\",\"question\":\"What exact result does `read_runner_report` return for an empty, truncated, malformed, multiply framed or otherwise unreadable report, and how must `sandbox` classify that result?\",\"options\":[\"Return a distinct malformed-report result that `sandbox` classifies as `crashed`\",\"Return an escaped-runner-exception result\",\"Treat malformed framing as `internal_error` or `stop_required`\"],\"default_guess\":\"Return a distinct malformed-report result and have `sandbox` classify the execution as `crashed`.\"},{\"subject\":\"bounding the runner report channel\",\"kind\":\"missing limit\",\"text\":\"“Every byte the runner wrote to its channel, read by the parent until the channel closed”\",\"question\":\"What bounds reading of the report channel, what happens when it exceeds that bound or never closes, and which execution outcome results, given that the parent owns the wall deadline and output-count decision?\",\"options\":[\"The parent stops reading and classifies excess as `resource_exhausted` and failure to close by the deadline as `timeout`\",\"The report channel has a separate release ceiling and excess is `crashed`\",\"The parent reads without a byte ceiling but remains subject to the wall deadline\"],\"default_guess\":\"Enforce the execution wall deadline while reading and treat report bytes representing outputs above `output_bytes` as `resource_exhausted`.\"},{\"subject\":\"result of `run_values.assemble_mapped_lists`\",\"kind\":\"contradictory representation\",\"text\":\"“a value list as the StoredValue of the canonical array” versus “Observable effect: None; nothing is written”\",\"question\":\"Does the operation return an unpersisted StoredValue draft, a source object carrying canonical bytes plus prospective StoredValue facts, or only element references from which `deliver_input` must rebuild the value?\",\"options\":[\"Return canonical bytes and a complete unpersisted StoredValue draft\",\"Return only a derived-list source containing element references\",\"Persist the StoredValue here despite the stated no-write effect\"],\"default_guess\":\"Return canonical bytes with a complete unpersisted StoredValue draft for later persistence by `deliver_input` or `record_flow_output`.\"},{\"subject\":\"multiple oversized mapped output lists\",\"kind\":\"undefined ordering\",\"text\":\"“Build every delivered list of a mapped node … or that one list exceeds `stored_value_bytes_max`”\",\"question\":\"When several delivered value-output lists exceed the ceiling, what result is returned, which list if any is named, and in what output-port order are lists built and checked?\",\"options\":[\"Return only a node-level over-ceiling result after measuring every delivered list\",\"Name the first oversized list in output-port name order\",\"Return all oversized output ports in output-port name order\"],\"default_guess\":\"Measure every delivered list and return the first oversized output port in Unicode code-point port-name order.\"},{\"subject\":\"size bound used by `run_values.deliver_input`\",\"kind\":\"missing input\",\"text\":\"“the receiving port and the actor” and “checked with `canonical_values.fit_port_value`”\",\"question\":\"Which size bound is passed to `fit_port_value` for a delivered value, a file and a many-file reference, since `fit_port_value` requires the applicable bound but `deliver_input` does not name one?\",\"options\":[\"Use `stored_value_bytes_max` for values and `spool_file_bytes_max` per file\",\"Perform no size check during delivery because production already enforced size ceilings\",\"Add the applicable bound explicitly to the operation's inputs\"],\"default_guess\":\"Use `stored_value_bytes_max` for values and `spool_file_bytes_max` for each file.\"},{\"subject\":\"effects of `run_values.deliver_input` for non-derived sources\",\"kind\":\"ambiguous effect\",\"text\":\"“Write the value a source still needs written” and “A list element or a mapped node's value list is written as a StoredValue M21 before it is checked”\",\"question\":\"For an already-written StoredValue, a single SpooledFile, or a mapped file-list reference, must `deliver_input` perform no store change and return the existing reference, or create some new delivery record; and what precisely is the returned ‘written reference’ for file inputs?\",\"options\":[\"Reuse existing value and file references without a change; only derived value elements and value lists create StoredValues\",\"Create a delivery-specific StoredValue or reference record for every source\",\"Reject file sources and have `runs` deliver them separately\"],\"default_guess\":\"Reuse existing StoredValue and SpooledFile references, represent a file list as an ordered reference carrying its class, and write only derived JSON elements or lists.\"},{\"subject\":\"source accepted by `run_values.record_flow_output`\",\"kind\":\"vague input\",\"text\":\"“The source of one produced flow output”\",\"question\":\"What closed source variants may be passed—an existing StoredValue, a flow input or constant, a function or operation output, or an unpersisted mapped-list result—and for each variant does the operation write `record_delivery_values` or simply return an existing reference?\",\"options\":[\"Accept the same closed source union as `deliver_input` and write only an unpersisted mapped value list\",\"Accept only an unpersisted mapped value list\",\"Always write a new delivery StoredValue regardless of source\"],\"default_guess\":\"Accept existing StoredValue sources and unpersisted mapped value-list sources; reuse the former and persist only the latter.\"},{\"subject\":\"inputs of `run_graph.plan_run`\",\"kind\":\"undefined input\",\"text\":\"“A run, its context, its pinned flow version, the ports of every node of it … and its trace”\",\"question\":\"What exactly is contained in “its context,” and what exact records and value references constitute “its trace,” including their required ordering and whether Run outputs and WaitingPoints are inputs or must be ignored and re-derived?\",\"options\":[\"Define context as pins plus flow constants and activation facts, and trace as ordered NodeExecutions with their StoredValue/SpooledFile references\",\"Pass one explicit immutable planning snapshot containing every required fact\",\"Let implementations choose which additional run and store facts to read\"],\"default_guess\":\"Replace “context” with an explicit immutable planning snapshot and define trace as the run's NodeExecutions and associated output references in store order, with status, outputs and WaitingPoints re-derived.\"},{\"subject\":\"priority among drafts, delivery work and executable nodes in a run plan\",\"kind\":\"missing caller protocol\",\"text\":\"“the `skipped_by_guard` and `upstream_failed` records that became determined, as drafts …; the next ready node …; … the produced outputs …; the status the run stops in”\",\"question\":\"If one call returns newly determined drafts together with a ready node or newly produced flow outputs, which action must `runs` perform first, and must it re-run `plan_run` after recording drafts or outputs before executing the returned node?\",\"options\":[\"Record all drafts and derived flow-output values, then re-plan before executing anything\",\"Record drafts, then execute the ready node from the same plan, recording outputs later\",\"Execute the ready node first and record propagation afterward\"],\"default_guess\":\"Record drafts and any required derived output values first, then call `plan_run` again before executing a node.\"},{\"subject\":\"representation of produced outputs from `run_graph.plan_run`\",\"kind\":\"missing output contract\",\"text\":\"“the produced outputs”\",\"question\":\"Does each produced flow output contain an already persisted StoredValue reference, an unpersisted mapped-list source for `run_values.record_flow_output`, or a closed union of both, and how does `runs` tell which outputs still require writing?\",\"options\":[\"Return a closed source union with explicit persisted and derived-list variants\",\"Require `plan_run` to return only persisted StoredValue references\",\"Return values directly and let `runs` infer whether persistence is needed\"],\"default_guess\":\"Return a closed source union that explicitly distinguishes an existing StoredValue reference from an unpersisted mapped-list source.\"}]}",
+ "set_aside": []
+}
