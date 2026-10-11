@@ -141,10 +141,10 @@ is not written around.
 | `kernel_a05_highest_effect_class_max_or_read` | `manifest.write_record`, `installation.select_instance`, `stub_service()` |
 | `kernel_a06_effectful_flow_owner_only_activation` | `manifest.write_record`, `installation.select_instance`, `stub_service()` |
 | `kernel_a06_activation_proves_version_again` | `manifest.write_record`, `installation.select_instance`, `stub_service()` |
-| `kernel_a06_new_version_inherits_nothing` | `manifest.write_record`, `installation.select_instance`, `stub_service()`; `stub.requests` (nothing sent without approval) |
+| `kernel_a06_new_version_inherits_nothing` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`; `stub.requests` (nothing sent without approval) |
 | `kernel_a07_proof_refuses_class_above_accepted` | `manifest.write_record`, `installation.select_instance`, `stub_service()` |
-| `kernel_a07_agent_gets_personal_data_as_digest` | `manifest.write_record`, `installation.select_instance`, `stub_service()` |
-| `kernel_a07_preview_hides_personal_data_from_agent` | `manifest.write_record`, `installation.select_instance`, `stub_service()` |
+| `kernel_a07_agent_gets_personal_data_as_digest` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential` |
+| `kernel_a07_preview_hides_personal_data_from_agent` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential` |
 | `kernel_a08_invocable_only_single_http_route` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential` |
 | `kernel_a08_non_read_key_field_must_be_input_port` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential` |
 | `kernel_a08_digest_covers_only_own_capability_entry` | `manifest.write_record`, `installation.select_instance`, `stub_service()`, `installation.set_credential`, `manifest.new_revision`, `installation.set_manifest_revision`, `restart()` |

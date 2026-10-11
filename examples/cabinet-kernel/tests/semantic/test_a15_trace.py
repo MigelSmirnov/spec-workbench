@@ -421,6 +421,9 @@ def test_node_execution_immutable(semantic_runtime):
         PHOTO_CODE,
         [_json("x", "ok-photo")],
     )
+    # A05 rule 1 phase 9: a function output must reach a flow output or an
+    # operation node, so the photo goes on to `check` and its size out.
+    check = _check_function(semantic_runtime)
     put = _note_binding(semantic_runtime, "outbox", "put_draft")
     save = _note_binding(semantic_runtime, "vault", "save_record")
     post = _note_binding(semantic_runtime, "ledger", "post_entry")
@@ -428,13 +431,14 @@ def test_node_execution_immutable(semantic_runtime):
         semantic_runtime,
         "a15_immutable",
         inputs=[_port("word", "input", TEXT, "open")],
-        outputs=[_port("echoed", "output", TEXT)],
+        outputs=[_port("echoed", "output", TEXT), _port("size", "output", NUMBER)],
         nodes=[
             _fn_node("a_fail", echo),
             _op_node("b_save", put),
             _op_node("c_drop", save),
             _op_node("d_post", post),
             _fn_node("e_photo", photo),
+            _fn_node("f_check", check),
         ],
         edges=[
             _edge("", "word", "a_fail", "x"),
@@ -443,11 +447,14 @@ def test_node_execution_immutable(semantic_runtime):
             _edge("", "word", "c_drop", "note"),
             _edge("", "word", "d_post", "note"),
             _edge("", "word", "e_photo", "x"),
+            _edge("e_photo", "photo", "f_check", "photo"),
+            _edge("f_check", "size", "", "size"),
         ],
     )
 
     # `a_fail` crashes, `b_save` is unreachable, `c_drop` ends unknown,
-    # `d_post` waits for the owner's approval and `e_photo` spools a file.
+    # `d_post` waits for the owner's approval, `e_photo` spools a file and
+    # `f_check` reads it.
     run = semantic_runtime.start_run("a15_immutable", inputs=[_json("word", "fail")])
     run_id = run.run_id
     assert _v(run.status) == "awaiting_approval"
@@ -459,6 +466,7 @@ def test_node_execution_immutable(semantic_runtime):
         ("b_save", None, 1),
         ("c_drop", None, 1),
         ("e_photo", None, 1),
+        ("f_check", None, 1),
     }
     # A record naming a spooled file, so that the release and the restart's
     # spool removal below meet a record whose file they remove (State 5,
@@ -525,6 +533,7 @@ def test_node_execution_immutable(semantic_runtime):
         ("c_drop", None, 1),
         ("d_post", None, 1),
         ("e_photo", None, 1),
+        ("f_check", None, 1),
     }
 
 
