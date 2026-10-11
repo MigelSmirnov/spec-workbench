@@ -510,6 +510,10 @@ recomputed with the admission's own `build_slice`.
 
 `AssembledList` became a discriminated union of `AssembledValueList` and `AssembledFileList` after the linker refused the optional bytes `run_values` passed on. It moved `models`, `run_values`, `run_graph`. State 7 rounds 57-58 closed clear. No verdict changed; hashes recomputed.
 
+## Decision 32 item 22 delta (2026-10-12)
+
+The first verification after the split found the seam between `sandbox` and `sandbox_runner` open: the runner file missing from the command, the peak memory measured by reading `/proc`, a many value port wrapped in a second list; `runner_arguments` now returns `tuple[str, str]`. It moved `sandbox_runner`, `sandbox`, `service_invoker`, `run_values`, `functions`, `bindings`, `flows`, `effects`, `run_graph`, `runs`, `surface`. State 7 rounds 59-61 closed. No verdict changed; hashes recomputed.
+
 ## Remarks, not blocking
 
 - **Published `inputSchema` and null.** By decision 22's closed rule, the published `inputSchema`
