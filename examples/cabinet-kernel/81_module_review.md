@@ -419,6 +419,10 @@ Sandbox root links and the manifest path relative to its directory moved `data_p
 
 The second verification's decision 30 moved every slice: `models` gained `MissingRecord` and the `when_missing` field of the four identity queries (deterministic emission), and the notes of `canonical_values`, `store`, `sandbox`, `functions`, `bindings`, `flows`, `effects`, `runs` and `surface` changed. State 7 rounds 24-43 closed every generated module's prompt clear; States 1-5 closed on their changed texts. No verdict changed; hashes recomputed.
 
+## Decision 31 delta (2026-10-11)
+
+Decision 31 (seven notes made direct at the third verification) and the Factory's tuple-field prompt rule (code-factory #75) moved `sandbox`, `runs`, `surface`. State 7 rounds 44-48 closed every generated prompt clear. No verdict changed; hashes recomputed.
+
 ## Remarks, not blocking
 
 - **Published `inputSchema` and null.** By decision 22's closed rule, the published `inputSchema`
