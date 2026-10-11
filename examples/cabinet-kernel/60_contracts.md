@@ -1016,6 +1016,111 @@ item names the module, the witnesses, what the text said and what it says now.
        the code's failed list left out. Witnesses: a11 applied with outputs,
        a13 advance only inside request, resolved unknown conclusion.
 
+## Decision closed at the fourth verification (2026-10-11)
+
+32. **The fourth verification: three actions under one name, split by depth.**
+    After decision 31 `sandbox`, `runs` and `surface` were generated again.
+    `surface` came out clean; `sandbox` and `runs` brought five new defects,
+    each against a text the specification already held:
+
+    | module | defect | text the generator broke |
+    |---|---|---|
+    | `sandbox` | the runner's descriptors moved by `dup2` to 3/4/5 in `preexec_fn`; the probe fails `Bad file descriptor` | `execute_function`: inheritance by `pass_fds` (decision 30) |
+    | `runs` | a list element checked by `fit_port_value` through `read_value_bytes` before its StoredValue was written: `unknown_reference` | `advance_run`: "MUST be written … before fit_port_value checks it" |
+    | `runs` | the same for a mapped node's assembled list | `advance_run`, the mapped list |
+    | `runs` | the guard read from the port the edge leaves by; with `guard_port != from_port` the edge stays undecided and the node is never `skipped_by_guard` | M15: the guard is an output port of the same source node |
+    | `runs` | a dead `RecordsById(record_ids=())` at start: `malformed by-id query` | — |
+
+    and one decision left open: `recover_running_runs` introduced a lagging
+    waiting point (the element waits for another reason) and in the same
+    sentence said that an element whose wait no longer holds is reached again.
+    The generator took one for the other and reached again an element that
+    after recovery simply waits `outcome_unknown`: a new approval was asked and
+    the run stayed `awaiting_approval` instead of `pending` (witness
+    `test_restart_turns_in_flight_unknown`).
+
+    *Was.* The owner's rule: when the change of a module brings new defects,
+    either a decision is open or several actions hide under one name — the
+    depth principle is broken. The note sizes (`global_spec.json`, `notes`)
+    confirm it: `sandbox.execute_function` 13 049 characters, 90 % of its
+    module; `runs.advance_run` 11 577, half of its module; no other kernel
+    operation above 9 000 (`surface.answer_request` is a dispatcher). All five
+    defects sit in these two. Each hid three actions: `advance_run` the plan
+    of the graph, the delivery of values and the move of the run;
+    `execute_function` the launch of the environment, the runner inside it
+    and the supervision from outside.
+
+    *Became.* Each action is a deep module with a narrow interface (State 3).
+    1. `run_graph.plan_run(run, context, flow_version, trace) -> RunPlan`
+       derives, writing nothing, every element's conclusion (an operation
+       element's from `effects.operation_element_conclusion`), each edge
+       enabled, disabled or undecided, the skip and upstream-failure drafts,
+       the next ready node with the source of each input, the waits, the
+       status and the outputs. It owns A13 rules 2, 4, 5, 7 and 8, now the
+       primary owner of A13. **The guard is read from the `guard_port` of the
+       edge's own source node (M15)**, decided only once that node concluded.
+    2. `run_values` is the only place where a StoredValue for delivery comes
+       into being: `assemble_mapped_lists` builds and measures every delivered
+       list of a mapped node, writing nothing; `deliver_input(source, port,
+       actor) -> DeliveredInput | InputMisfit` writes what the source still
+       needs written in a `RecordDeliveryValuesChange` (a new named store change
+       of `record_change`, caller `run_values`, writing only StoredValues) and
+       only then checks it with `fit_port_value`. The signature says it: an
+       unchecked value does not leave, an unwritten one is not read.
+       `empty_list_outputs` builds the empty lists `runs` writes with the
+       node's one record; `record_flow_output` writes a produced flow output.
+    3. `runs` keeps the lifecycle — start, continue, resume, cancel, release,
+       recover, capture, read — and `advance_run` as the loop that asks
+       `run_graph`, delivers through `run_values`, executes through `sandbox`
+       or reaches through `effects`, and writes the run's progress. Its notes
+       are the order of steps.
+    4. `sandbox_runner` owns the inside of an execution: `runner_source()` is
+       the runner's text, `runner_arguments(launch)` its command line,
+       `read_runner_report(message)` the decoding of what it sent. **The
+       descriptor numbers reach the runner as arguments and are the parent's
+       own: `sandbox` passes them with `pass_fds` and never renumbers one — no
+       `dup2`, no `preexec_fn`.** `sandbox` keeps the launch and the
+       supervision; its internal `judge_execution(observation, output_ports,
+       bounds)` names the outcome from what the parent observed, so
+       `execute_function` is one action too. The Factory's reflection gate
+       judges calls in a module's syntax tree (`code_invariant_gates.
+       reflective_access_findings`), not the contents of a string, so the
+       runner's `setattr` stays legal; the module's own code calls none. The
+       members of the runner's configuration are not spelled like the data
+       symbols they carry (`raise_on_call`, not `trapped_functions`): the
+       Factory validator reads such a spelling as a retired table key
+       (SPEC_STANDARD 15.11).
+    5. **`recover_running_runs` decides each stored waiting point by
+       `operation_element_conclusion` of its element**: the same wait stands;
+       `ElementWaiting` with another reason rewrites only the waiting point and
+       the element is not reached; `ElementWaiting` for `owner_approval` with
+       no `approval_id` — an attempt resolved `not_applied` whose fresh
+       approval was never requested — and `ElementNotReached` — no
+       NodeExecution and no requested approval — are reached again through
+       `reach_operation_element`; a conclusion is taken by the advance. Every
+       run with a waiting point that does not stand, or left `running`, is
+       advanced; the advance reaches no element that waits. This agrees with
+       A11 rule 4 (the kernel does not ask the service; the element waits as
+       rule 2 says) and with A14 rule 5 (an element never sent is reached as
+       if for the first time; a run is advanced only when the derivation
+       leaves it `running`).
+    6. The dead by-id read: every read by identity of the new notes is made
+       only when there is an identity to name.
+
+    No rule changed its meaning except the three in bold. Every other text
+    moved to the module that owns it and was shortened; the caller names the
+    call and checks nothing again. The notes of each operation of `runs`,
+    `run_graph`, `run_values`, `sandbox` and `sandbox_runner` are now at most
+    5 700 characters (`execute_function` 4 360, `advance_run` 3 331);
+    `plan_run` (5 699) is one derivation and `runner_source` (5 398) one
+    program, so neither splits further without splitting one action.
+
+    *Why.* The table above and the owner's rule: a generator follows one
+    action per name; three actions under one name let it satisfy one and break
+    another that the same text states. State 2 is unchanged: A13 rule 6 still
+    says that "`runs`" writes a list when first delivered, which reads as the
+    run kernel; the writer inside it is now `run_values`.
+
 ## Texts of earlier states changed by State 6
 
 - State 2 (2026-10-11, decision 30 item 2): A03 rule 5 — the process count
