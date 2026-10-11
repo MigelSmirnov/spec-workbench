@@ -478,9 +478,8 @@ Slices reviewed against the change:
   output reasons are present.
 - **`runs`**: `advance_run` is the order of steps (plan, write drafts, deliver, execute or reach,
   write, final change); `derive_run_answer` takes missing outputs from `plan_run`;
-  `recover_running_runs` decides each stored waiting point by `operation_element_conclusion`
-  (another wait rewrites only the point; not reached and a never-requested approval are reached
-  again; a conclusion is advanced), which is what `test_restart_turns_in_flight_unknown` needs.
+  `recover_running_runs` derives each run with `plan_run`, advances one derived `running` and
+  rewrites a lagging one that still waits (decision 32 item 19, below).
 
 Witnesses (`tests/semantic/`) are unchanged. `RUNTIME_SURFACE.md` names operations of `runs`
 (`runs.start_run`, `runs.read_run`, `runs.resume_run`, …), whose owner did not change, and
@@ -495,6 +494,17 @@ Note on imports: the Factory hygiene judge drops a clause that contains `without
 symbol `SANDBOX_TRAPPED_WITHOUT_ARGUMENT` contains it, so `module_internal` of `sandbox_runner`
 omits it (as it omitted it for `sandbox` before). The Factory slicer still lists it in the
 prompt's IMPORTS. Tool defect 2 below covers it.
+
+## Decision 32 follow-up rounds (2026-10-11)
+
+Rounds after the split (States 2–5 rounds 121–133, State 7 rounds 49–56) closed every State
+with two clear rounds on its current text; `60_contracts.md` decision 32 items 7–20 record each
+closure. Item 19 changed a rule's owner: what is ready is decided by `run_graph` alone —
+`operation_element_conclusion` answers an element whose attempt was resolved `not_applied` as not
+reached, so the advance reaches it for a fresh approval — and recovery has no waiting-point rule
+of its own; `test_restart_turns_in_flight_unknown` still holds (the element waits
+`outcome_unknown`, the run rests `pending`). No verdict changed; every `slice_sha256`
+recomputed with the admission's own `build_slice`.
 
 ## Remarks, not blocking
 
