@@ -1174,7 +1174,7 @@ A fresh environment was created and, on every result but `crashed` with `cleanup
 
 ### Enforces
 
-Isolation, traps, limits from outside and the outcome order of A03; outputs validated against the output ports with
+Isolation, traps, limits from outside (the process count set inside by the runner) and the outcome order of A03; outputs validated against the output ports with
 `canonical_values.fit_port_value`, the bound passed being the execution's
 `output_bytes`; `stored_value_bytes_max` and the spool ceilings are not the
 sandbox's — `runs` and `store` apply them after the execution has otherwise

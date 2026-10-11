@@ -307,8 +307,8 @@ the answer and is not stored; FlowActivation M18 is written by `module:flows`.
 
 1. **Compose.** `capability:flows.compose_flow_version` checks the purpose
    rule first (A01 rule 5: a new flow name needs a purpose and creates the
-   flow), then the pre-proof refusals of A05 rule 7 in their order — repeated
-   node ids, repeated flow port names, a `file` flow port, a flow input without
+   flow), then the pre-proof refusals of A05 rule 7 in their order — an empty
+   node id, repeated node ids, repeated flow port names, a `file` flow port, a flow input without
    a class, a flow output with one, a constant whose value does not fit the
    schema declared with it. A refused composition is not a version and
    records nothing. Otherwise it computes `flow_version_id` with

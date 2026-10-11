@@ -614,7 +614,7 @@ manifest_source
 
 A03: every execution of agent code, trial and real alike — the fresh
 `bubblewrap` environment, the in-sandbox runner and its traps, limits enforced
-from outside, the closed outcome order, the bounded `failure_detail`, confirmed
+from outside except the process count, which the runner sets inside, the closed outcome order, the bounded `failure_detail`, confirmed
 cleanup, reporting an execution whose cleanup cannot be confirmed as `crashed`
 with `cleanup_failed` (above, "Unconfirmed cleanup"), and the start probe.
 
