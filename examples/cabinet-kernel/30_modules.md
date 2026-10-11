@@ -325,7 +325,8 @@ record checked by `design_lint --state 2`, recorded as such in `30_trace.json`.
   own about a waiting point. At start `runs` derives every run not ended with
   `run_graph`, which asks `effects.operation_element_conclusion` for each
   operation element: a wait that still holds stands, with its present reason;
-  an element whose approval was decided, or whose attempt the owner resolved
+  an element whose approval the owner approved — a refused one ends the run
+  `refused` through its `refused_by_owner` record — or whose attempt the owner resolved
   `not_applied`, is not reached and so is ready. A run derived `running` is
   advanced with `runs`' own advance, which reaches every ready element while
   other elements still wait (A13 rule 8) — after `not_applied` the reach

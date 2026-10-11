@@ -930,7 +930,8 @@ EffectAttempt M26 and the concluding NodeExecution M23 written by
    `capability:effects.operation_element_conclusion` (decision 32): a wait that
    still holds stands with its present reason — an approved element whose
    `in_flight` attempt step 6 turned `unknown` now waits `outcome_unknown`
-   (A11 rule 4); an element whose approval was decided, or whose attempt the
+   (A11 rule 4); an element whose approval the owner approved — a refused one wrote a
+   `refused_by_owner` record, which ends the run `refused` — or whose attempt the
    owner resolved `not_applied`, is not reached and so is ready, which leaves
    its run `running`, and the advance below reaches it through
    `capability:effects.reach_operation_element`, after `not_applied` for a

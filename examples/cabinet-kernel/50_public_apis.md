@@ -2466,7 +2466,10 @@ Its conclusion: succeeded with outputs; failed with its status, or with
 outputs; waiting with its reason and, for `owner_approval`, the `approval_id`
 of the element's `requested` approval, so `runs` builds the run's answer
 (Conventions) without reading approval records itself; or not reached when the
-element has no NodeExecution yet (A11 rule 3).
+element has no NodeExecution yet, or when its latest attempt the owner
+resolved `not_applied` and no fresh approval is requested: the advance then
+reaches it again, the send needs a fresh approval, and the element waits
+`owner_approval` for it (A11 rule 3, decision 32).
 
 ### Observable effect
 
@@ -2903,7 +2906,8 @@ stays, unreported, and is removed again at the next start —; runs left
 First names spools to remove (A14 rule 4); then derives every run not ended —
 `running`, `awaiting_approval`, `pending` — from its records, oldest first,
 rewriting a lagging status or waiting point of a run that still waits; an
-operation element whose wait no longer holds (its approval decided, its attempt
+operation element whose wait no longer holds (its approval approved — a
+refused one ends the run `refused` —, its attempt
 resolved `not_applied`) is not reached and so is ready, which leaves its run
 `running`; then advances, as the kernel, every run left `running`, reaching
 every ready element while others still wait (A13 rule 8, A14 rule 5).

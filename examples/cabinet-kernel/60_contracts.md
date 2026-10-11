@@ -1188,8 +1188,9 @@ item names the module, the witnesses, what the text said and what it says now.
         rounds in a row found that order and that exception contradicting
         State 2 (A13 rule 8, A14 rule 5). Is: `operation_element_conclusion`
         answers an element whose latest attempt the owner resolved
-        `not_applied` as not reached, like an element whose approval was
-        decided, so `plan_run` takes it as ready and its run derives
+        `not_applied` as not reached, like an element whose approval the
+        owner approved (a refused one ends the run `refused`); after
+        `not_applied` only a fresh approval makes it wait, so `plan_run` takes it as ready and its run derives
         `running`; the advance reaches it, where `find_send_authority` admits
         only a fresh approval, so `reach_operation_element` requests one.
         Recovery derives each run, advances one derived `running` and
