@@ -1173,11 +1173,11 @@ used; a bounded `failure_detail` otherwise.
 
 ### Observable effect
 
-A fresh environment was created and, on every result but `crashed` with `cleanup_failed`, confirmed removed — except when the parent could not set a limit before starting bubblewrap: then no environment was created, the execution is `crashed` (A03 rule 5), and its resources used are the elapsed wall time with memory and output both zero, since no code ran.
+A fresh environment was created and, on every result but `crashed` with `cleanup_failed`, confirmed removed.
 
 ### Enforces
 
-Isolation, traps, limits from outside (the process count set inside by the runner) and the outcome order of A03; outputs validated against the output ports with
+Isolation, traps, limits set by the runner before the code loads, deadline and output count kept from outside, and the outcome order of A03; outputs validated against the output ports with
 `canonical_values.fit_port_value`, the bound passed being the execution's
 `output_bytes`; `stored_value_bytes_max` and the spool ceilings are not the
 sandbox's — `runs` and `store` apply them after the execution has otherwise

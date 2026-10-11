@@ -202,24 +202,21 @@ and no detection promises the runtime cannot keep.
    catches it and returns a conforming output: `timeout` and `resource_exhausted`
    still come first. These traps classify ordinary attempts; the isolation of
    rule 1 is the security boundary, not the traps.
-5. ResourceBounds M04 are enforced with `setrlimit` — address space by the
-   parent, from outside the environment; the process count by the runner inside
-   the environment's user namespace before the code loads, at `process_count`
-   plus one, since a process limit set by the parent counts every process of the
-   kernel's user on the host and the namespace could not be created (decision
-   30, 2026-10-11) — and the parent's own wall deadline and output
-   count. Every such limit is set soft and hard to the same value, and the code
-   runs without capabilities (bubblewrap's default for an unprivileged
-   caller, never overridden), so it can neither raise nor bypass a limit. The
-   parent sets its limits on the child it starts, after the fork and before it
-   executes bubblewrap, so they hold for bubblewrap and everything inside. A
-   limit that cannot be set — by the parent before bubblewrap starts, or by the
-   runner before the code loads — means the code never runs and the execution
-   is `crashed`. The start probe (rule 8) sets its limits at the current
-   ceilings the same way, so a host where they cannot be set does not start
-   the kernel; an earlier contract version's larger bounds (A20 rule 4) are set
-   only when it executes, and an execution whose bounds the host refuses is
-   `crashed` by the same rule. The output count is the sum of the canonical JSON bytes of every
+5. ResourceBounds M04 are enforced with `setrlimit` by the runner, inside the
+   environment's user namespace, before the code loads: address space, the size
+   of a file written in the scratch, and the process count at `process_count`
+   plus one (a process limit set from outside counts every process of the
+   kernel's user on the host, and the namespace could not be created; decision
+   30, 2026-10-11). Every limit is set soft and hard to the same value, and the
+   code runs without capabilities (bubblewrap's default for an unprivileged
+   caller, never overridden), so it can neither raise nor bypass one. The parent
+   keeps, from outside, the wall deadline, the scratch total and the output
+   count. A runner that cannot set a limit exits before loading the code and
+   the execution is `crashed`. The start probe (rule 8) runs the same runner
+   with the current ceilings, so a host where they cannot be set does not
+   start the kernel; an earlier contract version's larger bounds (A20 rule 4)
+   are set only when it executes, and an execution whose bounds the host
+   refuses is `crashed` by the same rule. The output count is the sum of the canonical JSON bytes of every
    `value` output and the bytes of every `file` output of the one call of `run` —
    for a `many` file output, the sum of its elements' bytes. Outcomes are closed and checked in this order, the first that holds
    deciding: wall deadline passed — `timeout`; a limit hit (memory, process count,

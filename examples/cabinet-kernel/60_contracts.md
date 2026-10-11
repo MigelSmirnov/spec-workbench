@@ -720,29 +720,30 @@ item names the module, the witnesses, what the text said and what it says now.
        open for its child. bubblewrap has no option that names a descriptor
        to keep; the generated `--preserve-fds` does not exist and stopped
        every execution. Was: the note was silent on how the channel crosses.
-    2. *The process limit is set inside the namespace* (`sandbox`; A03 rule 5
-       edited). `RLIMIT_NPROC` is set by the runner, inside the sandbox's user
-       namespace and before the code is loaded, to `process_count + 1`; the
+    2. *Every limit is set by the runner, inside the namespace* (`sandbox`;
+       A03 rule 5 edited). The runner sets address space, the file size in the
+       scratch and `RLIMIT_NPROC` inside the sandbox's user namespace, before
+       the code is loaded, soft and hard alike; the code holds no capability,
+       so it cannot raise one. The process limit is `process_count + 1`: the
        one is the task bubblewrap's init would be — with the runner as the
        namespace's init (item 18) it is the margin that keeps this outer bound
-       above the audit hook's exact count. The parent sets only `RLIMIT_AS`
-       and `RLIMIT_FSIZE`. Set by the parent, the limit counts every process of
-       the kernel's user on the host, and bubblewrap cannot create its
-       namespace (`EAGAIN`). Was: A03 rule 5 and the bounds note had the
-       parent set "address space, processes" from outside. This refines A03
-       rule 5 (State 2): the text of A03 is changed, which reopens the rounds
-       of States 2–5 for this block. State 2 round 109 added: every limit is
-       set soft and hard to the same value and the code holds no capability,
-       so it cannot raise one; a runner that cannot set its limit exits before
-       loading the code and the execution is `crashed`, and since the start
-       probe runs the same runner such a host never starts the kernel. Round 110
-       added: the parent sets its limits on the child after the fork and
-       before it executes bubblewrap; a limit the parent cannot set is
-       `crashed` too; the probe sets the current ceilings, and an earlier
+       above the audit hook's exact count. Set by the parent, that limit
+       counts every process of the kernel's user on the host, and bubblewrap
+       cannot create its namespace (`EAGAIN`). The parent keeps, from outside,
+       the wall deadline, the scratch total and the output count. A runner
+       that cannot set a limit exits before loading the code and the execution
+       is `crashed`; the start probe runs the same runner with the current
+       ceilings, so such a host never starts the kernel, and an earlier
        contract version's larger bounds (A20 rule 4) are set when it executes,
-       `crashed` where the host refuses them. When the parent cannot set
-       them no environment is created; the result's resources used are the
-       elapsed wall time with memory and output 0 (State 5 round 116).
+       `crashed` where the host refuses them. Was: A03 rule 5 and the bounds
+       note had the parent set "address space, processes" from outside. This
+       refines A03 rule 5 (State 2), which reopens the rounds of States 2–5.
+       History: rounds 109–110 (State 2) and 116–117 (State 5) first kept
+       address space and file size with the parent; a limit the parent could
+       not set then needed its own path — no environment, its own resources
+       used — and every round found a new gap in it. With every limit in the
+       runner there is one path: the environment is created, the code is not
+       loaded, `crashed`.
     3. *How the runner installs a trap* (`sandbox`). An attribute of a module
        is replaced with `setattr` on the module. A method of a class or of a
        built-in type (`datetime.datetime.now`) is replaced by setting, on the
@@ -963,13 +964,15 @@ item names the module, the witnesses, what the text said and what it says now.
 ## Texts of earlier states changed by State 6
 
 - State 2 (2026-10-11, decision 30 item 2): A03 rule 5 — the process count
-  is limited by the runner inside the environment's user namespace at
-  `process_count` plus one; the parent sets only the address-space (and
-  file-size) limits. Reopens the rounds of States 2–5.
+  and every other `setrlimit` limit are set by the runner inside the
+  environment's user namespace before the code loads, the process count at
+  `process_count` plus one; the parent keeps the deadline, the scratch total
+  and the output count. Reopens the rounds of States 2–5.
 - State 5 (2026-10-11, decision 30 item 5): "Relations of
   `store.read_records`" and the Errors of `public_op:store.read_records` — a
-  read by identity omits a missing identity; only a relation is
-  `unknown_reference`. Reopens the rounds of State 5.
+  read by identity answers a missing identity as its call names
+  (`when_missing`); a relation's missing record is `unknown_reference`.
+  Reopens the rounds of State 5.
 - State 1 (2026-10-11, decision 30 items 6, 11 and 15): M15 names a flow
   endpoint by the empty node and makes a guard skip per input port (A05 rule
   2, A13 rule 4); M16's `value` is the value_id of a StoredValue.
