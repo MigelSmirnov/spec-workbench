@@ -202,8 +202,12 @@ and no detection promises the runtime cannot keep.
    catches it and returns a conforming output: `timeout` and `resource_exhausted`
    still come first. These traps classify ordinary attempts; the isolation of
    rule 1 is the security boundary, not the traps.
-5. ResourceBounds M04 are enforced from outside the environment with `setrlimit`
-   (address space, processes) and the parent's own wall deadline and output
+5. ResourceBounds M04 are enforced with `setrlimit` — address space by the
+   parent, from outside the environment; the process count by the runner inside
+   the environment's user namespace before the code loads, at `process_count`
+   plus one, since a process limit set by the parent counts every process of the
+   kernel's user on the host and the namespace could not be created (decision
+   30, 2026-10-11) — and the parent's own wall deadline and output
    count. The output count is the sum of the canonical JSON bytes of every
    `value` output and the bytes of every `file` output of the one call of `run` —
    for a `many` file output, the sum of its elements' bytes. Outcomes are closed and checked in this order, the first that holds

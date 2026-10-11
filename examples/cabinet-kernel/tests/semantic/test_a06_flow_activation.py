@@ -41,12 +41,14 @@ manifest record and a selected instance):
   its answer and ``stub.requests`` lists what reached it;
 - ``manifest.write_record(service_id, record)`` -> the service's record at
   the configured revision, written before the kernel starts;
-- ``installation.select_instance(service_id, instance_name)``.
+- ``installation.select_instance(service_id, instance_name)``;
+- ``installation.set_credential(service_id, header_name, secret_value)``.
 """
 
 import pytest
 
 TEXT = '{"type":"string"}'
+CREDENTIAL_HEADER = "X-Api-Key"
 
 OWNER = {"kind": "owner", "agent_name": None}
 AUTHOR = {"kind": "agent", "agent_name": "author"}
@@ -154,6 +156,10 @@ def _service(semantic_runtime, service_id, capabilities):
         },
     )
     semantic_runtime.installation.select_instance(service_id, "local")
+    # A17 rule 2: a service without a credential fails its pre-send check.
+    semantic_runtime.installation.set_credential(
+        service_id, CREDENTIAL_HEADER, f"{service_id}-a06-credential-value"
+    )
     return stub
 
 

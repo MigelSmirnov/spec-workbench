@@ -75,11 +75,14 @@ not review fields, classes or formats, so each is the agent's and says why.
 
 1. **Canonical bytes** (A01 rule 1, carried by States 1 and 2): RFC 8785 as
    written. `canonical_bytes` parses JSON text, refuses a duplicate member name,
-   a non-finite number and an integer outside ±(2^53 − 1), which an IEEE double
-   cannot hold exactly, and emits the JCS form. The size of a JSON value is the
+   a non-finite number and an integer outside ±(2^53 − 1) that an IEEE double
+   cannot hold exactly, and emits the JCS form; an integer an IEEE double holds
+   exactly is that double, so canonical bytes parse again to themselves
+   (decision 30). The size of a JSON value is the
    length of its canonical bytes.
 2. **Supported JSON Schema subset** (A02 rule 1, carried by States 1 and 2): a
-   schema is a JSON object using only `type` (one of `null`, `boolean`,
+   schema is a JSON object using only — each keyword optional, `type` included
+   (decision 30) — `type` (one of `null`, `boolean`,
    `integer`, `number`, `string`, `array`, `object`, as one string), `enum`
    (a non-empty array of distinct scalars), `const` (one scalar), `properties`
    and `required` (for `object`), `additionalProperties` (`true` or `false`
@@ -692,8 +695,254 @@ kernel stopped in its start sequence for two reasons the texts left open.
       verification run found the generated probe starting it and printing
       nothing.
 
+## Decisions closed at the second verification (2026-10-11)
+
+Route B run 10 generated, linked and deployed all fifteen modules; the
+witnesses stopped it. With six preview patches that remove the start and
+infrastructure layers (code-factory `analysis/cabinet-kernel-preview-20261011`,
+`projects/cabinet_kernel/analysis_preview_20261011/`), the witnesses gave 60
+passed, 70 failed. Each failure was traced to the text the generator read
+(the module prompt of `factory_slice_workbench.module_prompts`); where the
+text was silent, ambiguous or contradicted a witness, it is decided here. The
+generated code itself is never repaired: the package is regenerated from these
+texts. The owner left every technical choice to the agent on 2026-10-11; each
+item names the module, the witnesses, what the text said and what it says now.
+
+30. **The second verification: sandbox layers, identity reads and the run's
+    derivations.**
+
+    *Layers the preview patches removed (patches 2–6).*
+
+    1. *Descriptors reach the sandbox by inheritance* (`sandbox`, every
+       witness that executes a function). The trap channel's write end — and
+       the `--info-fd` pipe of item 18 — reaches bubblewrap through
+       `subprocess` `pass_fds`, and bubblewrap keeps an inherited descriptor
+       open for its child. bubblewrap has no option that names a descriptor
+       to keep; the generated `--preserve-fds` does not exist and stopped
+       every execution. Was: the note was silent on how the channel crosses.
+    2. *The process limit is set inside the namespace* (`sandbox`; A03 rule 5
+       edited). `RLIMIT_NPROC` is set by the runner, inside the sandbox's user
+       namespace and before the code is loaded, to `process_count + 1`; the
+       one is the task bubblewrap's init would be — with the runner as the
+       namespace's init (item 18) it is the margin that keeps this outer bound
+       above the audit hook's exact count. The parent sets only `RLIMIT_AS`
+       and `RLIMIT_FSIZE`. Set by the parent, the limit counts every process of
+       the kernel's user on the host, and bubblewrap cannot create its
+       namespace (`EAGAIN`). Was: A03 rule 5 and the bounds note had the
+       parent set "address space, processes" from outside. This refines A03
+       rule 5 (State 2): the text of A03 is changed, which reopens the rounds
+       of States 2–5 for this block.
+    3. *How the runner installs a trap* (`sandbox`). An attribute of a module
+       is replaced with `setattr` on the module. A method of a class or of a
+       built-in type (`datetime.datetime.now`) is replaced by setting, on the
+       class's module, the class's name to a subclass that defines the
+       trapping method. The `__dict__` of a type is read-only and is never
+       written; the generated `owner.__dict__[name] = …` raised before any code
+       ran. The runner's source is a string the sandbox module writes into the
+       exchange directory and the Factory's static gates do not read, so
+       `setattr` is allowed there only; the note says that the sandbox
+       module's own code calls none of `setattr`, `getattr`, `hasattr`,
+       `delattr` and `vars` (the Factory's `reflective_attribute_access`
+       gate), and it names no constant the slicer cannot import (the limits
+       are named in words, not as `RLIMIT_*`, SPEC_STANDARD §15.3).
+    4. *A request fits its model in JSON mode* (`surface`). The fit of
+       `answer_request` is the request model's `model_validate_json` over the
+       JSON text of the canonicalised arguments, `strict=True`. Strict
+       validation of Python objects refuses an enum given as its value string
+       and a tuple given as a JSON array, which is how every request carries
+       them: every call with an enum or a list was `invalid_request`.
+    5. *The store decides a missing identity; its caller names how*
+       (`store` and its callers; models `MissingRecord` and the field
+       `when_missing` of `RecordsById`, `RecordsByPosition`, `RecordsByAttempt`
+       and `SpooledFilesByKey` added; State 5 "Relations of
+       `store.read_records`" and its Errors edited). Every identity query
+       carries `when_missing`: `omit` answers the records found;
+       `unknown_reference` raises `UnknownReferenceError` naming the first
+       missing identity in the order given; `internal_error` raises
+       `StoreInternalError` the same way. A caller passes `unknown_reference`
+       for an identity its own caller named, `internal_error` for one a stored
+       record names, and `omit` only when it asks whether a record exists; it
+       never checks the answer for absence itself. Was: the `read_records`
+       validation note raised `UnknownReferenceError` for every missing
+       identity, while the generated callers read existence from an empty
+       answer — `compose_flow_version` (does the flow, the version exist?) and
+       `recover_in_flight_attempts` ("finds no NodeExecution") need exactly
+       that — so the start stopped in `recover_in_flight_attempts` and an
+       unknown approval or grant ended the process `internal_error`.
+
+       Why the decision stays in the store (owner's review, 2026-10-11): the
+       first draft of this item had every identity read omit and every caller
+       raise on an empty answer — the same absence check written in six
+       modules, which is the store's decision leaking to its callers. With
+       `when_missing` the absence rule stands once, at the store's boundary,
+       and each caller states only its intent. Every identity read of the
+       run-10 package was classified (24 calls; the other read_records calls
+       are relations):
+
+       | caller (module) | query | `when_missing` |
+       |---|---|---|
+       | `decide_effect_approval`, `revoke_standing_approval`, `resolve_unknown_outcome` (effects) | by id / by attempt | `unknown_reference` |
+       | `read_run`, `cancel_run`, `release_run`, `resume_run`, `advance_run`, `continue_after_approval`, `continue_after_resolution`, `capture_failed_execution` (runs) | by id / by attempt | `unknown_reference` |
+       | `read_flow_version`, `active_flow_version` (flows) | by id | `unknown_reference` |
+       | `read_slot`, `read_contract_version`, `read_implementation`, `add_captured_trial_case`, a spooled file a request names (functions) | by id / spooled files | `unknown_reference` |
+       | `read_binding` (bindings) | by id | `unknown_reference` |
+       | `handle_read_fixture_file`, `handle_read_spooled_file` (surface) | by id / spooled files | `unknown_reference` |
+       | `show_port_refs`, a trial execution's class (surface); stored values and spooled files a PortRef names (runs); constants a version names (`prove_version`, flows) | by id / spooled files | `internal_error` |
+       | `compose_flow_version` (flows): the flow and an equal version | by id | `omit` |
+       | `recover_in_flight_attempts` (effects): the attempt's NodeExecution | by attempt | `omit` |
+
+       Witnesses: `kernel_a16_owner_only_actions_refuse_agents` (an unknown
+       approval and grant ended the process `internal_error`, then
+       `kernel_a19_request_cannot_supply_time` found it gone),
+       `kernel_a11_restart_turns_in_flight_unknown`,
+       `kernel_a14_restart_in_flight_becomes_unknown`,
+       `kernel_a14_recovery_completes_before_surface` (the start stopped in
+       `recover_in_flight_attempts`).
+
+    *Texts the witnesses found silent, ambiguous or contradictory.*
+
+    6. *A flow endpoint is the node `""`* (`runs`; M15 edited). A05 rule 2
+       names the flow's own inputs and outputs by the empty node id; the runs
+       notes did not, and the generated `runs` compared `from_node` with the
+       `flow_id`, so every node fed by a flow input was recorded
+       `skipped_by_guard` and nothing was sent. 39 witnesses — A09 (8), A10
+       (7), A14 (5), A17 (4), A11 (3), A08 (2), A07 (2), A15 (2), A19 (2), A04,
+       A12, A13 `next_node_min_node_id`. Now the `advance_run` readiness note
+       and M15 say it.
+    7. *Every schema keyword is optional* (`functions`, `canonical_values`;
+       decision 2). `issue_contract_version` required `type`, so a closed set
+       `{"enum": [...]}` — the guard schema of A05 — was refused
+       `value_schema`. Decision 2 and both schema notes now say each keyword
+       is optional, `type` included. Witnesses:
+       `kernel_a05_exclusive_guards_share_input_port`,
+       `kernel_a05_same_guard_value_edges_refused` and the A13 guard
+       witnesses.
+    8. *A guard value is canonical JSON text* (`flows`). The proof compared
+       the guard value text `"new"` with the decoded enum member `new` and
+       refused every guard. The `prove_version` phase-4 note now says the
+       guard value is a member when it equals, as text, the canonical JSON of
+       an enum member or of the const. Same witnesses as item 7.
+    9. *A derived StoredValue is written before it is read* (`runs`). A
+       mapped element's own value and a mapped node's value list were checked
+       with `fit_port_value` (through `read_value_bytes`) and executed before
+       the change that writes them, and `read_value_bytes` knows only written
+       StoredValues: every mapped node failed `unknown_reference`. The fit
+       note now says such a StoredValue is written in a RecordRunProgressChange
+       without executions before it is checked or handed on.
+       `kernel_a13_failed_input_gives_upstream_failed`.
+    10. *Non-execution records follow written records* (`runs`). One note put
+        the `skipped_by_guard` and `upstream_failed` records an element
+        determines into that element's change, another into "its next"
+        change; the code derived them in the element's change from guard
+        values not yet written. They are now derived from the written trace
+        and go into the next change. `kernel_a13_guard_skip_transitive_run_succeeds`.
+    11. *A guard skip is per input port* (`runs`; M15 edited). A13 rule 4
+        speaks of an input port all of whose edges are disabled; the note
+        said "every edge into it" and M15 "every incoming edge" of the node,
+        so a node with one disabled and one live input was never concluded.
+        `kernel_a13_upstream_failed_wins_over_skip`.
+    12. *A run that fails keeps its produced outputs* (`runs`). The final
+        change "carries the produced flow outputs"; the code carried them only
+        for `succeeded`. Now "whether the run ends succeeded or failed", and
+        an output reached by an edge straight from a flow input is that
+        input's StoredValuesRef (A13 rule 3; the code raised on it).
+        `kernel_a13_any_failure_ends_run_failed`,
+        `kernel_a07_agent_gets_personal_data_as_digest` (its first failure).
+    13. *An operation element's state is its conclusion* (`runs`). The code
+        read an operation node's state from NodeExecution statuses, which stay
+        `outcome_unknown` after a resolution, and never saw an element waiting
+        for approval, which has no NodeExecution: it re-selected that node
+        forever and never reached the nodes after it, and listed no waiting
+        point for a mapped element. The notes now say: the state comes from
+        `operation_element_conclusion`; a node none of whose unconcluded
+        elements can execute is not ready and the next is selected; a mapped
+        operation node's elements are the positions of its delivered list.
+        `kernel_a13_resolved_unknown_conclusion`,
+        `kernel_a13_advance_only_inside_request`,
+        `kernel_a11_applied_no_outputs_succeeds_one_execution`,
+        `kernel_a11_applied_with_outputs_fails_element`,
+        `kernel_a15_one_record_per_conclusion`,
+        `kernel_a10_approval_scoped_per_element`,
+        `kernel_a14_resume_leaves_other_waits_untouched`.
+    14. *A constant's bytes are its canonical_json as given* (`flows`). The
+        code called `.encode()` on the `bytes` of `ConstantInput.canonical_json`
+        and every composition with a constant ended `internal_error`. The
+        `compose_flow_version` note now names the bytes.
+        `kernel_a10_grant_bound_to_flow_version`,
+        `kernel_a06_new_version_inherits_nothing` (its first failure).
+    15. *A FlowConstant names a StoredValue* (`runs`; M16 edited). M16 said
+        "value: a StoredValue", the field is `value: str`, and only `flows`
+        was told it holds the value_id; `runs` read it as JSON text and
+        published it again with the port's class. Now `runs` delivers a
+        StoredValuesRef naming that value_id. Same witnesses as item 14.
+    16. *A current implementation is not activated again* (`functions`). A
+        new admitted verdict set `activate` true even for the current
+        activation (A04 rule 4: "nothing is recorded"); the note's colon read
+        as unconditional. `kernel_a04_rollback_requires_current_verdict`.
+    17. *Canonical bytes parse again to themselves* (`canonical_values`;
+        decision 1). `1e20` is written `100000000000000000000` by JCS, and
+        that text was refused as an integer outside ±(2^53 − 1), so a value
+        canonicalised by `answer_request` failed when `handle_start_run`
+        canonicalised it again. An integer that an IEEE double holds exactly
+        is that double; only one it cannot hold is refused.
+        `kernel_a12_start_inputs_exact_and_valid`. This widens what is
+        accepted: `9007199254740992` (2^53) was refused and is now a number.
+    18. *The runner is the namespace's init; a kill reaches it, not the
+        launcher* (`sandbox`). bubblewrap returned while processes of its
+        namespace were still exiting, and a wall-deadline kill of
+        bubblewrap's process group also killed the launcher, so an execution
+        could be neither confirmed reaped (A03 rule 7) nor observed. bubblewrap
+        now starts with `--as-pid-1`, the deadline kill sends `SIGKILL` through
+        a pidfd to the init bubblewrap reports on `--info-fd`, and every process
+        counts as reaped once bubblewrap has exited.
+        `kernel_a03_deadline_and_limits_classified`; also the intermittent
+        `kernel_a03_fresh_env_no_network_no_host_mounts`. Needs a run on the
+        owner's host (non-root user, its kernel's pidfd and user-namespace
+        accounting).
+    19. *The code sees exactly the release environment* (`sandbox`).
+        bubblewrap sets `PWD` after `--clearenv` and CPython's C-locale
+        coercion sets a locale variable, so the code saw three variables. The
+        runner now sets `os.environ` to `SANDBOX_ENVIRONMENT` before loading
+        the code. `kernel_a03_env_holds_only_hash_seed`.
+    20. *A waiting point lags when its reason changed* (`runs`). After a
+        restart recovery turned an approved element's in-flight attempt
+        `unknown`, the stored `owner_approval` point was kept because the
+        element still "waits". The recovery note now compares the reason.
+        `kernel_a11_restart_turns_in_flight_unknown`.
+
+    *Not changed here.* Three witnesses send to a service the installation
+    gives no credential (`kernel_a06_new_version_inherits_nothing`,
+    `kernel_a07_agent_gets_personal_data_as_digest`,
+    `kernel_a07_preview_hides_personal_data_from_agent`); A17 rule 2 and its
+    own witness `kernel_a17_credential_resolved_per_request` decide that such
+    a request fails `credential_unresolved`. One witness composes a flow whose
+    function node `e_photo` has an output no edge takes
+    (`kernel_a15_node_execution_immutable`), which A05 rule 1 phase 9
+    refuses. The decisions stand; the witnesses are reported for review. Four
+    witnesses compare an answer's list with `()`
+    (`kernel_a14_resume_resends_unreachable`,
+    `kernel_a14_cancel_empties_spool_keeps_trace`,
+    `kernel_a15_spool_file_ceiling`, `kernel_a15_spool_run_ceiling`): the
+    fixture returns every JSON array as a list, while RUNTIME_SURFACE.md
+    returns the output model, whose sequences are tuples; that is the
+    fixture's (code-factory `factory/cabinet-kernel-fixture-verify`).
+
 ## Texts of earlier states changed by State 6
 
+- State 2 (2026-10-11, decision 30 item 2): A03 rule 5 — the process count
+  is limited by the runner inside the environment's user namespace at
+  `process_count` plus one; the parent sets only the address-space (and
+  file-size) limits. Reopens the rounds of States 2–5.
+- State 5 (2026-10-11, decision 30 item 5): "Relations of
+  `store.read_records`" and the Errors of `public_op:store.read_records` — a
+  read by identity omits a missing identity; only a relation is
+  `unknown_reference`. Reopens the rounds of State 5.
+- State 1 (2026-10-11, decision 30 items 6, 11 and 15): M15 names a flow
+  endpoint by the empty node and makes a guard skip per input port (A05 rule
+  2, A13 rule 4); M16's `value` is the value_id of a StoredValue.
+- State 6 (2026-10-11, decision 30 items 7 and 17): decisions 1 and 2 —
+  canonical bytes parse again to themselves; every schema keyword is
+  optional.
 - States 3, 4 and 5 (2026-10-10, decision 26): `clock`'s capabilities are
   `kernel_now` and `monotonic_ns`; the flows that bound a wait name
   `capability:clock.monotonic_ns`; `public_op:clock.monotonic_deadline` is

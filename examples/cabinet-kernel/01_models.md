@@ -699,12 +699,15 @@ and the run.
 Candidate fields:
 
 - `from_node`, `from_port`: a node's output port or a flow input;
-- `to_node`, `to_port`: a node's input port or a flow output;
+- `to_node`, `to_port`: a node's input port or a flow output; a flow input or
+  flow output endpoint has the empty string as its node (A05 rule 2), never the
+  `flow_id`;
 - `guard`: present when the edge is guarded — an output port of the same source
   node whose value schema is a closed set of values, and the one member of that
   set that enables the edge when that port's value equals it; the proof refuses a
-  guard on a port without a closed set or with a value outside it. A node whose every incoming edge is disabled by its guard is not
-  executed and is recorded `skipped_by_guard`; several enabled guarded edges each
+  guard on a port without a closed set or with a value outside it. A node one of whose input ports has every incoming edge disabled by
+  its guard, or coming from a skipped node, is not executed and is recorded
+  `skipped_by_guard` (A13 rule 4, per input port); several enabled guarded edges each
   deliver independently, and the proof refuses two edges that can both deliver to
   one input port, whatever its cardinality (State 2, A05).
 
@@ -742,8 +745,10 @@ other value (K-04: a function has no configuration). Read by the run.
 Candidate fields:
 
 - `to_node`, `to_port`;
-- `value`: a StoredValue (M21) of `value` carriage — a constant is never a file —
-  whose class the composing agent declares with the constant.
+- `value`: the `value_id` of a StoredValue (M21) of `value` carriage — a
+  constant is never a file — written when the version is composed, whose class
+  the composing agent declares with the constant; a run delivers that
+  StoredValue as it is.
 
 ### Identity
 
