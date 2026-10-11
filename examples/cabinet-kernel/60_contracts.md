@@ -730,7 +730,12 @@ item names the module, the witnesses, what the text said and what it says now.
        above the audit hook's exact count. Set by the parent, that limit
        counts every process of the kernel's user on the host, and bubblewrap
        cannot create its namespace (`EAGAIN`). The parent keeps, from outside,
-       the wall deadline, the scratch total and the output count. A runner
+       the wall deadline, the scratch total and the output count; the
+       scratch total is measured once, when the environment has ended — the
+       apparent sizes of the distinct regular files under the exchange
+       directory, the parent's own files excluded, links and directories
+       counting nothing, removed files not counted (State 2 round 114: a total
+       watched while the code runs depends on when it is read). A runner
        that cannot set a limit exits before loading the code and the execution
        is `crashed`; the start probe runs the same runner with the current
        ceilings, so such a host never starts the kernel, and an earlier
@@ -931,8 +936,8 @@ item names the module, the witnesses, what the text said and what it says now.
     the process count (item 2); the code never sees a variable outside
     `SANDBOX_ENVIRONMENT`, which the runner sets (item 19), whatever bubblewrap
     and the interpreter add before it; the scratch ceiling bounds each file
-    (the parent's file-size limit) and the bytes added to the whole exchange
-    directory (measured by the parent while it waits, a resource hit past it);
+    (the runner's file-size limit) and the total of the exchange directory
+    (measured by the parent once the environment has ended, item 2);
     a refused verdict returns no Activation (item 16); a guard value is a
     member when its UTF-8 bytes equal `canonical_bytes` of the member's JSON
     (item 8); the write-before-delivery rule of item 9 covers the values runs

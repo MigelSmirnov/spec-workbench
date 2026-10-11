@@ -211,7 +211,10 @@ and no detection promises the runtime cannot keep.
    code runs without capabilities (bubblewrap's default for an unprivileged
    caller, never overridden), so it can neither raise nor bypass one. The parent
    keeps, from outside, the wall deadline, the scratch total and the output
-   count. A runner that cannot set a limit exits before loading the code and
+   count. The scratch total is measured once, when the environment has ended:
+   the apparent sizes of the distinct regular files (each inode once) under the
+   exchange directory, the files the parent put there excluded; directories and
+   links count nothing, and a file removed before the end is not counted. A runner that cannot set a limit exits before loading the code and
    the execution is `crashed`. The start probe (rule 8) runs the same runner
    with the current ceilings, so a host where they cannot be set does not
    start the kernel; an earlier contract version's larger bounds (A20 rule 4)

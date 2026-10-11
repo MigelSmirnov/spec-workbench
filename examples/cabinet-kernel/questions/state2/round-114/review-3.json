@@ -1,0 +1,102 @@
+{
+ "open_points": [
+  {
+   "subject": "A03 rule 5 per-file scratch limit",
+   "kind": "missing bound",
+   "text": "“ResourceBounds M04 are enforced with `setrlimit` …: address space, the size of a file written in the scratch, and the process count” does not say which bound supplies the file-size limit; M04 contains only `wall_time_ms`, `memory_bytes`, `output_bytes` and `process_count`, while A20 separately defines `sandbox_scratch_bytes_max` and `spool_file_bytes_max`.",
+   "question": "What exact value is used as the `setrlimit` file-size limit for a scratch file?",
+   "options": [
+    "`output_bytes`",
+    "`sandbox_scratch_bytes_max`",
+    "`spool_file_bytes_max`",
+    "A new bound not currently modeled"
+   ],
+   "default_guess": "Use `sandbox_scratch_bytes_max`, because the limit is described as applying to scratch files.",
+   "unit": "?"
+  },
+  {
+   "subject": "A03 rule 5 outcome ordering",
+   "kind": "contradictory outcome set",
+   "text": "The rule adds a limit on “the size of a file written in the scratch”, but the closed outcome order lists only “a limit hit (memory, process count, scratch, `output_bytes`) — `resource_exhausted`”; it does not identify the new per-file limit as either `scratch` or another limit.",
+   "question": "When the new per-file `setrlimit` is hit, which outcome applies and where does it stand in the precedence order?",
+   "options": [
+    "Treat it as the `scratch` limit and return `resource_exhausted`",
+    "Treat it as `output_bytes` and return `resource_exhausted`",
+    "Treat the resulting signal or write error as `crashed`"
+   ],
+   "default_guess": "Treat it as a scratch-limit hit and return `resource_exhausted` before sandbox or crash outcomes.",
+   "unit": "?"
+  },
+  {
+   "subject": "A03 rule 5 caught file-limit failure",
+   "kind": "unobservable limit hit",
+   "text": "“a limit hit … — `resource_exhausted`” does not define how the parent learns that the new file-size limit was hit when the write merely fails and user code catches the resulting signal or exception and returns conforming outputs; unlike rule 4 traps, no hit is recorded on a channel.",
+   "question": "Does touching the per-file limit force `resource_exhausted` even if the implementation catches the failure, and if so how is that hit made authoritative?",
+   "options": [
+    "Any attempted over-limit write forces `resource_exhausted`",
+    "Only termination or an uncaught error from the limit counts as a hit",
+    "A caught failure may still succeed"
+   ],
+   "default_guess": "Any attempted over-limit write forces `resource_exhausted`, with the runner reporting the hit separately from user-code control flow.",
+   "unit": "?"
+  },
+  {
+   "subject": "A03 rule 5 scratch-total accounting",
+   "kind": "undefined measurement",
+   "text": "“The parent keeps, from outside, … the scratch total” does not define what is totaled or when the ceiling is considered hit.",
+   "question": "Does `sandbox_scratch_bytes_max` bound current logical file sizes, allocated disk blocks, the peak total, or cumulative bytes written; do code, inputs, runner files and partially written outputs count; and does deleting or truncating a file release capacity?",
+   "options": [
+    "Peak sum of logical sizes of every file in the exchange directory, including kernel-provided files",
+    "Current sum of logical sizes, with deletion and truncation releasing capacity",
+    "Cumulative bytes written, regardless of later deletion",
+    "Filesystem allocated blocks"
+   ],
+   "default_guess": "Use the peak current sum of logical sizes of all files in the exchange directory, including preloaded inputs and runner-created output files, with deletion or truncation reducing the current total but not erasing a recorded prior breach.",
+   "unit": "?"
+  },
+  {
+   "subject": "A03 rules 5 and 8 parent scratch enforcement",
+   "kind": "unverified invariant",
+   "text": "“The parent keeps, from outside, … the scratch total” is not paired with a required enforcement mechanism or failure rule, while “A runner that cannot set a limit” and the start probe cover only limits set by the runner.",
+   "question": "What happens at startup or execution time if the parent cannot establish or reliably enforce the scratch-total bound?",
+   "options": [
+    "The kernel refuses to start when the probe cannot verify enforcement",
+    "The individual execution is `crashed` before code loads",
+    "The execution proceeds with best-effort monitoring"
+   ],
+   "default_guess": "Refuse kernel startup unless the probe verifies that the parent can enforce the scratch-total bound.",
+   "unit": "?"
+  },
+  {
+   "subject": "A03 rule 5 memory limit after runner startup",
+   "kind": "boundary ambiguity",
+   "text": "The address-space limit is now set “by the runner, inside the environment's user namespace, before the code loads”, but a Python runner and runtime already occupy address space before that point, and A02 permits any positive `memory_bytes` value.",
+   "question": "What happens when `memory_bytes` is below the address space already occupied by the runner when it calls `setrlimit`, and does that preexisting address space count against the contract bound?",
+   "options": [
+    "The limit may be set below current usage and the code runs with no further allocation available",
+    "The execution is `resource_exhausted` before code loads",
+    "Setting or validating such a limit fails and the execution is `crashed`",
+    "Contracts must have an unstated minimum memory bound"
+   ],
+   "default_guess": "Count the runner's existing address space and classify an execution that already exceeds its bound as `resource_exhausted` before loading the implementation.",
+   "unit": "?"
+  },
+  {
+   "subject": "A03 rule 5 process-count namespace semantics",
+   "kind": "undefined accounting",
+   "text": "The change says the runner sets the process limit “inside the environment's user namespace” at `process_count` plus one because a limit set outside counts host-user processes, but it does not state which runner, namespace-init, threads or other existing tasks are counted after the move or establish that `setrlimit` accounting is namespace-local.",
+   "question": "Exactly which tasks count toward `process_count`, what is the single extra process covered by “plus one”, and what must happen if the host's process-limit accounting still includes tasks outside this execution?",
+   "options": [
+    "Count the runner plus agent-created child processes only",
+    "Count every process and thread in the execution's PID namespace",
+    "Accept the kernel's UID-wide `setrlimit` accounting even if unrelated host tasks consume it",
+    "Refuse startup unless the probe proves isolation of the accounting"
+   ],
+   "default_guess": "Define `process_count` as agent-created descendants, reserve the plus one for the runner, and refuse startup unless the probe proves unrelated host tasks do not consume the limit.",
+   "unit": "?"
+  }
+ ],
+ "usage": {},
+ "raw": "{\"open_points\":[{\"subject\":\"A03 rule 5 per-file scratch limit\",\"kind\":\"missing bound\",\"text\":\"“ResourceBounds M04 are enforced with `setrlimit` …: address space, the size of a file written in the scratch, and the process count” does not say which bound supplies the file-size limit; M04 contains only `wall_time_ms`, `memory_bytes`, `output_bytes` and `process_count`, while A20 separately defines `sandbox_scratch_bytes_max` and `spool_file_bytes_max`.\",\"question\":\"What exact value is used as the `setrlimit` file-size limit for a scratch file?\",\"options\":[\"`output_bytes`\",\"`sandbox_scratch_bytes_max`\",\"`spool_file_bytes_max`\",\"A new bound not currently modeled\"],\"default_guess\":\"Use `sandbox_scratch_bytes_max`, because the limit is described as applying to scratch files.\"},{\"subject\":\"A03 rule 5 outcome ordering\",\"kind\":\"contradictory outcome set\",\"text\":\"The rule adds a limit on “the size of a file written in the scratch”, but the closed outcome order lists only “a limit hit (memory, process count, scratch, `output_bytes`) — `resource_exhausted`”; it does not identify the new per-file limit as either `scratch` or another limit.\",\"question\":\"When the new per-file `setrlimit` is hit, which outcome applies and where does it stand in the precedence order?\",\"options\":[\"Treat it as the `scratch` limit and return `resource_exhausted`\",\"Treat it as `output_bytes` and return `resource_exhausted`\",\"Treat the resulting signal or write error as `crashed`\"],\"default_guess\":\"Treat it as a scratch-limit hit and return `resource_exhausted` before sandbox or crash outcomes.\"},{\"subject\":\"A03 rule 5 caught file-limit failure\",\"kind\":\"unobservable limit hit\",\"text\":\"“a limit hit … — `resource_exhausted`” does not define how the parent learns that the new file-size limit was hit when the write merely fails and user code catches the resulting signal or exception and returns conforming outputs; unlike rule 4 traps, no hit is recorded on a channel.\",\"question\":\"Does touching the per-file limit force `resource_exhausted` even if the implementation catches the failure, and if so how is that hit made authoritative?\",\"options\":[\"Any attempted over-limit write forces `resource_exhausted`\",\"Only termination or an uncaught error from the limit counts as a hit\",\"A caught failure may still succeed\"],\"default_guess\":\"Any attempted over-limit write forces `resource_exhausted`, with the runner reporting the hit separately from user-code control flow.\"},{\"subject\":\"A03 rule 5 scratch-total accounting\",\"kind\":\"undefined measurement\",\"text\":\"“The parent keeps, from outside, … the scratch total” does not define what is totaled or when the ceiling is considered hit.\",\"question\":\"Does `sandbox_scratch_bytes_max` bound current logical file sizes, allocated disk blocks, the peak total, or cumulative bytes written; do code, inputs, runner files and partially written outputs count; and does deleting or truncating a file release capacity?\",\"options\":[\"Peak sum of logical sizes of every file in the exchange directory, including kernel-provided files\",\"Current sum of logical sizes, with deletion and truncation releasing capacity\",\"Cumulative bytes written, regardless of later deletion\",\"Filesystem allocated blocks\"],\"default_guess\":\"Use the peak current sum of logical sizes of all files in the exchange directory, including preloaded inputs and runner-created output files, with deletion or truncation reducing the current total but not erasing a recorded prior breach.\"},{\"subject\":\"A03 rules 5 and 8 parent scratch enforcement\",\"kind\":\"unverified invariant\",\"text\":\"“The parent keeps, from outside, … the scratch total” is not paired with a required enforcement mechanism or failure rule, while “A runner that cannot set a limit” and the start probe cover only limits set by the runner.\",\"question\":\"What happens at startup or execution time if the parent cannot establish or reliably enforce the scratch-total bound?\",\"options\":[\"The kernel refuses to start when the probe cannot verify enforcement\",\"The individual execution is `crashed` before code loads\",\"The execution proceeds with best-effort monitoring\"],\"default_guess\":\"Refuse kernel startup unless the probe verifies that the parent can enforce the scratch-total bound.\"},{\"subject\":\"A03 rule 5 memory limit after runner startup\",\"kind\":\"boundary ambiguity\",\"text\":\"The address-space limit is now set “by the runner, inside the environment's user namespace, before the code loads”, but a Python runner and runtime already occupy address space before that point, and A02 permits any positive `memory_bytes` value.\",\"question\":\"What happens when `memory_bytes` is below the address space already occupied by the runner when it calls `setrlimit`, and does that preexisting address space count against the contract bound?\",\"options\":[\"The limit may be set below current usage and the code runs with no further allocation available\",\"The execution is `resource_exhausted` before code loads\",\"Setting or validating such a limit fails and the execution is `crashed`\",\"Contracts must have an unstated minimum memory bound\"],\"default_guess\":\"Count the runner's existing address space and classify an execution that already exceeds its bound as `resource_exhausted` before loading the implementation.\"},{\"subject\":\"A03 rule 5 process-count namespace semantics\",\"kind\":\"undefined accounting\",\"text\":\"The change says the runner sets the process limit “inside the environment's user namespace” at `process_count` plus one because a limit set outside counts host-user processes, but it does not state which runner, namespace-init, threads or other existing tasks are counted after the move or establish that `setrlimit` accounting is namespace-local.\",\"question\":\"Exactly which tasks count toward `process_count`, what is the single extra process covered by “plus one”, and what must happen if the host's process-limit accounting still includes tasks outside this execution?\",\"options\":[\"Count the runner plus agent-created child processes only\",\"Count every process and thread in the execution's PID namespace\",\"Accept the kernel's UID-wide `setrlimit` accounting even if unrelated host tasks consume it\",\"Refuse startup unless the probe proves isolation of the accounting\"],\"default_guess\":\"Define `process_count` as agent-created descendants, reserve the plus one for the runner, and refuse startup unless the probe proves unrelated host tasks do not consume the limit.\"}]}",
+ "set_aside": []
+}
