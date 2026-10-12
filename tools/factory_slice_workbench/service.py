@@ -209,6 +209,21 @@ def reachability_findings(
 
 PROMPT_BUILDER = "tools/generate_agent.py"
 EMISSION = "tools/deterministic_emission.py"
+MODELS_EMITTER = "tools/generate_models_draft.py"
+INSPECTOR_PREFLIGHT = "tools/run_spec_inspector_preflight.py"
+# The emission kind the Factory gives the runtime models module (run_generate.py).
+MODELS_KIND = "models"
+# run_spec_inspector_preflight requires a project name; it only locates the
+# project's optional architecture policy, which a review run does not have.
+REVIEW_PROJECT = "__spec_workbench_review__"
+
+_KINDS_SCRIPT = """
+import json, sys
+sys.path.insert(0, '.')
+from tools.deterministic_emission import deterministic_emission_kind
+spec = json.load(open(sys.argv[1], encoding='utf-8'))
+print(json.dumps({module: deterministic_emission_kind(spec, module) for module in sys.argv[2:]}))
+"""
 
 _PROMPTS_SCRIPT = """
 import json, sys
@@ -216,8 +231,9 @@ sys.path.insert(0, '.')
 from tools.deterministic_emission import deterministic_emission_kind
 from tools.generate_agent import build_prompt
 spec = json.load(open(sys.argv[1], encoding='utf-8'))
+models_code = open(sys.argv[2], encoding='utf-8').read() if sys.argv[2] else None
 out = {'prompts': {}, 'deterministic': {}, 'failed': {}}
-for path in sys.argv[2:]:
+for path in sys.argv[3:]:
     local_spec = json.load(open(path, encoding='utf-8'))
     module = local_spec.get('module_name') or path
     kind = deterministic_emission_kind(spec, module)
@@ -225,7 +241,7 @@ for path in sys.argv[2:]:
         out['deterministic'][module] = kind
         continue
     try:
-        out['prompts'][module] = build_prompt(local_spec, None)
+        out['prompts'][module] = build_prompt(local_spec, models_code)
     except Exception as exc:
         out['failed'][module] = f'{type(exc).__name__}: {exc}'
 print(json.dumps(out))
@@ -236,15 +252,53 @@ class FactoryPromptError(RuntimeError):
     """The Factory could not be asked for the prompts of the generated modules."""
 
 
+def _models_code(factory_root: Path, work: Path, spec: Path, normalized: Path,
+                 paths: list[str]) -> Path | None:
+    """The runtime models module a generation run gives every generator.
+
+    `run_generate.py` emits the module of emission kind `models` with the
+    Factory's `generate_models_draft.py` (after refreshing the Spec Inspector
+    report it reads) and passes the file to `generate_agent.py --models`; the
+    prompt's model surface — enum member names, field lists, port operations —
+    is read from that code. A review that builds the prompt without it asks
+    about a different text. None when the specification has no such module,
+    as for a generation run."""
+    result = _run(factory_root, ["-c", _KINDS_SCRIPT, str(spec), *[Path(p).stem for p in paths]])
+    try:
+        kinds = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        raise FactoryPromptError(f"the Factory emission kinds could not be asked: {_tail(result)}") from None
+    models = [module for module, kind in kinds.items() if kind == MODELS_KIND]
+    if not models:
+        return None
+    if not (factory_root / MODELS_EMITTER).is_file():
+        raise FactoryPromptError(f"no Factory at {factory_root}: missing {MODELS_EMITTER}")
+    command = [MODELS_EMITTER, "--spec", str(work / "slices" / f"{models[0]}.json"),
+               "--output", str(work / "models_draft" / f"{models[0]}.py"),
+               "--base-spec", str(spec), "--normalized-spec", str(normalized)]
+    if (factory_root / INSPECTOR_PREFLIGHT).is_file():
+        report = work / "spec_inspector_report.json"
+        _run(factory_root, [INSPECTOR_PREFLIGHT, "--project", REVIEW_PROJECT, "--spec", str(spec), "--out", str(report)])
+        if report.is_file():
+            command += ["--inspector-report", str(report)]
+    result = _run(factory_root, command)
+    output = work / "models_draft" / f"{models[0]}.py"
+    if result.returncode or not output.is_file():
+        raise FactoryPromptError(f"the Factory cannot emit the `{models[0]}` module: {_tail(result)}")
+    return output
+
+
 def module_prompts(source: Path, factory_root: Path) -> dict[str, str]:
     """The prompt the Factory builds for each module it generates, by module.
 
     The Factory's own normalizer and slicer cut the local specification, its
     `deterministic_emission_kind` leaves out every module it emits without a
-    model (models, data provider, declared backends, table repositories), and
-    its `generate_agent.build_prompt` assembles the prompt from the cut, as a
-    generation run does. Nothing here rebuilds a prompt. Raises
-    `FactoryPromptError` when the Factory cannot be asked or refuses a module.
+    model (models, data provider, declared backends, table repositories), its
+    `generate_models_draft.py` emits the runtime models module, and its
+    `generate_agent.build_prompt` assembles the prompt from the cut and that
+    models code, as a generation run does (`_models_code`). Nothing here
+    rebuilds a prompt. Raises `FactoryPromptError` when the Factory cannot be
+    asked, cannot emit the models module or refuses a module.
     """
     source, factory_root = Path(source).resolve(), Path(factory_root).resolve()
     missing = [tool for tool in (NORMALIZER, SLICER, PROMPT_BUILDER, EMISSION) if not (factory_root / tool).is_file()]
@@ -269,7 +323,9 @@ def module_prompts(source: Path, factory_root: Path) -> dict[str, str]:
             paths.append(str(path))
         if not paths:
             return {}
-        result = _run(factory_root, ["-c", _PROMPTS_SCRIPT, str(work / "global_spec.json"), *paths])
+        models_code = _models_code(factory_root, work, work / "global_spec.json", normalized, paths)
+        result = _run(factory_root, ["-c", _PROMPTS_SCRIPT, str(work / "global_spec.json"),
+                                     str(models_code) if models_code else "", *paths])
     try:
         built = json.loads(result.stdout)
     except json.JSONDecodeError:
