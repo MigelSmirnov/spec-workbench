@@ -514,6 +514,10 @@ recomputed with the admission's own `build_slice`.
 
 The first verification after the split found the seam between `sandbox` and `sandbox_runner` open: the runner file missing from the command, the peak memory measured by reading `/proc`, a many value port wrapped in a second list; `runner_arguments` now returns `tuple[str, str]`. It moved `sandbox_runner`, `sandbox`, `service_invoker`, `run_values`, `functions`, `bindings`, `flows`, `effects`, `run_graph`, `runs`, `surface`. State 7 rounds 59-61 closed. No verdict changed; hashes recomputed.
 
+## Decision 32 item 23 delta (2026-10-12)
+
+The second verification after the split found the `--info-fd` report read only at the pipe's end and the pidfd opened unguarded: under the fixture's bubblewrap a busy loop was never killed, and a probe that returned at once failed the kernel's start with `ProcessLookupError`. The report is now taken as soon as it parses, and a vanished init means nothing to kill. It moved `sandbox`, `service_invoker`, `run_values`, `functions`, `bindings`, `flows`, `effects`, `run_graph`, `runs`, `surface`. State 7 rounds 62-63 closed. No verdict changed; hashes recomputed.
+
 ## Remarks, not blocking
 
 - **Published `inputSchema` and null.** By decision 22's closed rule, the published `inputSchema`

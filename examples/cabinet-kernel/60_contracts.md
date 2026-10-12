@@ -1240,6 +1240,22 @@ item names the module, the witnesses, what the text said and what it says now.
         list, so a sum over a many value port crashed. Why: a split hands a
         decision across a seam; both ends must name it, or neither owns it.
 
+    23. The `--info-fd` report and an init that has already exited. Was:
+        "the child-pid bubblewrap reports on `--info-fd`" said whom to kill,
+        never when the report is complete or what a kill finds after the
+        init has exited, so one generation read the pipe until it closed and
+        another opened the pidfd unguarded. Under the fixture's bubblewrap
+        the pipe stays open while the code runs, so a busy loop was never
+        killed and the kernel spun; and a probe function that returned at
+        once made the kernel's start fail with `ProcessLookupError`. Is: the
+        report is one JSON object, taken as soon as what was read parses,
+        and the pipe is not read further; the pidfd is opened at once; a
+        `ProcessLookupError` from opening it or signalling through it means
+        the init has exited, so nothing is killed and the module waits for
+        bubblewrap as always. `kernel_a03_deadline_and_limits_classified`,
+        `kernel_a03_outcome_precedence_order` and every witness that starts
+        or restarts the kernel.
+
 ## Texts of earlier states changed by State 6
 
 - State 2 (2026-10-11, decision 30 item 2): A03 rule 5 — the process count
