@@ -41,9 +41,25 @@ module it generates, from the cut of its own normalizer and slicer, built in a
 subprocess with the Factory as working directory. A module for which the
 Factory's `tools/deterministic_emission.py` `deterministic_emission_kind`
 selects a producer (models, data provider, declared backends, table
-repositories) is left out: no model reads a prompt for it. It raises
-`FactoryPromptError` when the Factory is missing, refuses the specification or
-refuses a module's prompt. The State 7 question round asks about these prompts
+repositories) is left out: no model reads a prompt for it.
+
+The prompt is built with the runtime models module, as a generation run builds
+it: `run_generate.py` emits the module of emission kind `models` with
+`tools/generate_models_draft.py` (after refreshing the Spec Inspector report it
+reads) and gives the file to `generate_agent.py --models`, and `build_prompt`
+reads the model surface — enum member names, field lists, port operations —
+from that code. `module_prompts` runs the same two Factory tools in its
+temporary directory and passes the emitted code to `build_prompt`; a
+specification without such a module is asked without models code, as it is
+generated. Until 2026-10-12 the review passed no models code, and on Cabinet
+Kernel its 14 prompts differed from the production ones in 2669 lines: enum
+values instead of member names, `StoreRepository` without its operations,
+field lists in another order
+(`tools/DATA_CLOSURE_PLAN_Q9A_ORDERED_ENUM.md` §7).
+
+It raises `FactoryPromptError` when the Factory is missing, refuses the
+specification, cannot emit the models module or refuses a module's prompt. The
+State 7 question round asks about these prompts
 (`skills/spec-authoring/QUESTIONS.md`).
 
 ## Findings

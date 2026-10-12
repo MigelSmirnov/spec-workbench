@@ -201,8 +201,14 @@ would be forced to make, and named 86% of the decisions nobody had made
 `agent/cabinet-flow-runtime-run`, commit `9641888`).
 
 So a State 7 round has one unit per **generated** module, and its text is the
-prompt the Factory builds for it: the Factory's own normalizer and slicer, then
-its `generate_agent.build_prompt` (`factory_slice_workbench.module_prompts`).
+prompt the Factory builds for it: the Factory's own normalizer and slicer, its
+`generate_models_draft.py` for the runtime models module, then its
+`generate_agent.build_prompt` with that models code
+(`factory_slice_workbench.module_prompts`), exactly as a generation run builds
+it. Until 2026-10-12 the review left the models code out and asked about
+another text — enum values instead of member names, a port without its
+operations — and every State 7 unit closed on that text reopened, for the
+diff of its prompt, once the review asked about the production one.
 A module the Factory emits without a model (`deterministic_emission_kind`:
 `models`, the data provider, the declared backends, table repositories) is not
 asked. Each review reads one module's prompt; its points are that module's;

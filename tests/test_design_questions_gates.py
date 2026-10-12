@@ -218,6 +218,12 @@ notes = [n for n in spec['notes'] if any(f in n for f in owned)]
     _write(root / "tools/deterministic_emission.py", """def deterministic_emission_kind(spec, module):
     return {'models': 'models', 'clock': 'system_clock'}.get(module)
 """)
+    _write(root / "tools/generate_models_draft.py", """import sys
+from pathlib import Path
+args = dict(zip(sys.argv[1::2], sys.argv[2::2]))
+Path(args['--output']).parent.mkdir(parents=True, exist_ok=True)
+Path(args['--output']).write_text('class Thing:\\n    pass\\n')
+""")
     return root
 
 
