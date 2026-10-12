@@ -1,0 +1,161 @@
+name: Design questions round
+
+# One round of tools/design_questions.py on a case branch, asked through the
+# Codex CLI under the owner's ChatGPT login, and committed to that branch as if
+# it had been run locally. Started by hand only.
+#
+# Secrets:
+#   CODEX_AUTH_JSON     contents of ~/.codex/auth.json after `codex login`
+#   CODE_FACTORY_TOKEN  read access to MigelSmirnov/code-factory (State 7 only:
+#                       the State 7 prompts are the ones the Factory builds)
+
+on:
+  workflow_dispatch:
+    inputs:
+      case:
+        description: "Case under examples/, e.g. cabinet-kernel"
+        required: true
+      state:
+        description: "Design state to ask, e.g. 7"
+        required: true
+      branch:
+        description: "Case branch (empty: agent/<case>)"
+        required: false
+        default: ""
+      since:
+        description: "--since: git ref at which a reopened state was closed"
+        required: false
+        default: ""
+      runs:
+        description: "--runs (empty: the tool's default)"
+        required: false
+        default: ""
+      model:
+        description: "--model (empty: DESIGN_QUESTIONS_CODEX_MODEL default)"
+        required: false
+        default: ""
+      reasoning:
+        description: "--reasoning (empty: medium)"
+        required: false
+        default: ""
+      factory_ref:
+        description: "code-factory ref for State 7 prompts"
+        required: false
+        default: "main"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: design-questions-${{ inputs.branch || format('agent/{0}', inputs.case) }}
+  cancel-in-progress: false
+
+jobs:
+  round:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    env:
+      CASE: ${{ inputs.case }}
+      STATE: ${{ inputs.state }}
+      BRANCH: ${{ inputs.branch || format('agent/{0}', inputs.case) }}
+      SINCE: ${{ inputs.since }}
+      RUNS: ${{ inputs.runs }}
+      MODEL: ${{ inputs.model }}
+      REASONING: ${{ inputs.reasoning }}
+      FACTORY_REF: ${{ inputs.factory_ref }}
+    steps:
+      - name: Validate inputs
+        run: |
+          [[ "$CASE" =~ ^[a-z0-9][a-z0-9-]*$ ]] || { echo "bad case: $CASE"; exit 2; }
+          [[ "$STATE" =~ ^[0-9]+$ ]] || { echo "bad state: $STATE"; exit 2; }
+          [[ "$BRANCH" =~ ^[A-Za-z0-9._/-]+$ ]] || { echo "bad branch: $BRANCH"; exit 2; }
+          [[ -z "$RUNS" || "$RUNS" =~ ^[0-9]+$ ]] || { echo "bad runs: $RUNS"; exit 2; }
+
+      # The round needs the case's git history (closed units and --since).
+      - name: Check out case branch
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ env.BRANCH }}
+          fetch-depth: 0
+          path: workbench
+
+      - name: Check out Factory (State 7)
+        if: inputs.state == '7'
+        uses: actions/checkout@v6
+        with:
+          repository: MigelSmirnov/code-factory
+          ref: ${{ inputs.factory_ref }}
+          token: ${{ secrets.CODE_FACTORY_TOKEN }}
+          path: code_factory
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install pyyaml pydantic
+          if [ -d code_factory ]; then python -m pip install -r code_factory/requirements.txt; fi
+          npm install -g @openai/codex@0.161.0
+          codex --version
+
+      - name: Install Codex login
+        env:
+          CODEX_AUTH_JSON: ${{ secrets.CODEX_AUTH_JSON }}
+        run: |
+          [ -n "$CODEX_AUTH_JSON" ] || { echo "secret CODEX_AUTH_JSON is not set"; exit 2; }
+          mkdir -p "$HOME/.codex"
+          umask 077
+          printf '%s' "$CODEX_AUTH_JSON" > "$HOME/.codex/auth.json"
+
+      - name: Ask round
+        working-directory: workbench
+        run: |
+          [ -d "examples/$CASE" ] || { echo "no examples/$CASE on $BRANCH"; exit 2; }
+          if [ -d ../code_factory ]; then export SPEC_WORKBENCH_FACTORY_ROOT="$GITHUB_WORKSPACE/code_factory"; fi
+          args=(ask "examples/$CASE" --state "$STATE" --provider codex --json)
+          [ -n "$SINCE" ] && args+=(--since "$SINCE")
+          [ -n "$RUNS" ] && args+=(--runs "$RUNS")
+          [ -n "$MODEL" ] && args+=(--model "$MODEL")
+          [ -n "$REASONING" ] && args+=(--reasoning "$REASONING")
+          mkdir -p ../round-output
+          python tools/design_questions.py "${args[@]}" | tee ../round-output/ask.json
+
+      - name: Round status
+        if: always()
+        working-directory: workbench
+        run: |
+          if [ -d ../code_factory ]; then export SPEC_WORKBENCH_FACTORY_ROOT="$GITHUB_WORKSPACE/code_factory"; fi
+          set +e
+          python tools/design_questions.py status "examples/$CASE" --state "$STATE" --json > ../round-output/status.json
+          echo $? > ../round-output/status.exit
+          cat ../round-output/status.json
+
+      - name: Upload round evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: design-questions-${{ inputs.case }}-state${{ inputs.state }}
+          path: |
+            round-output/
+            workbench/examples/${{ inputs.case }}/questions/state${{ inputs.state }}/
+          if-no-files-found: warn
+
+      # A fast-forward push only: if the branch moved during the round, the push
+      # fails and the round stays in the artifact for the owner to carry over.
+      - name: Commit round to case branch
+        working-directory: workbench
+        run: |
+          git add -- "examples/$CASE/questions"
+          if git diff --cached --quiet; then echo "nothing to commit"; exit 0; fi
+          git -c user.name="design-questions[bot]" \
+              -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+              commit -m "$CASE: State $STATE round via Actions (codex-cli)" \
+                     -m "Run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          git push origin "HEAD:refs/heads/$BRANCH"
