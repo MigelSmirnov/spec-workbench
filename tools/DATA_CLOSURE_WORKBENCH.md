@@ -309,7 +309,7 @@ Lint детерминирован и дёшев, поэтому слой 2 ег�
 - **Шаг 3** — существующая фаза `state8_assembly` и новая проверка слоя 2
   (§7) в её гейте.
 - **Шаг 4** — существующий `_question_gate` для State 7, без изменений.
-- **Stage 9.** `FA019` (contradictions) не меняется. Новая проверка `FA020`
+- **Stage 9.** `FA019` (contradictions) не меняется. Новая проверка `FA021`
   повторяет lint L1–L4 и слой 2 на экспортируемой спеке.
 
 Порядок «lint → слой 2 → contradictions» получается сам: пока lint
@@ -469,7 +469,7 @@ Lint детерминирован и дёшев, поэтому слой 2 ег�
 | `tools/design_notes.py` | Подкоманда среды: запустить агента для модуля, принять результат, записать notes модуля в `80_notes*.md` после lint. |
 | `skills/spec-authoring/authoring_sequence.json` | Фаза `state7_notes`: авторский режим, §15.2 и §15.11 в `docs`; `question_scope` без изменений. Новых фаз нет. |
 | `tools/design_spec_projection.py` / гейт `state8_assembly` | Проверки слоя 2 DC-G1–DC-G4. |
-| `tools/factory_admission_workbench/service.py` | `FA020` рядом с `_question_rounds_check` (`:847`). `FA019` не меняется. |
+| `tools/factory_admission_workbench/service.py` | `FA021` рядом с `_question_rounds_check` (`:847`). `FA019` не меняется. |
 | `tools/questions_workbench/*` | Не меняется. |
 
 ---
