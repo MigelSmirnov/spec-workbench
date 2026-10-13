@@ -357,3 +357,120 @@ def test_data_provider_closure_is_projected_into_rules(tmp_path, monkeypatch) ->
 
     assert findings == []
     assert projected["rules"]["data_provider_backend"] == backend
+
+
+# ── kind: enum and `ordered` in the model closure (Q9-a, step B) ─────
+
+DISCLOSURE = ["open", "business_confidential", "personal_data"]
+
+
+def _enum_codes(tmp_path, monkeypatch, version, model):
+    project = _project(tmp_path)
+    current = json.loads((project / "global_spec.json").read_text(encoding="utf-8"))
+    current["standard_version"] = version
+    current["models"] = {}
+    (project / "global_spec.json").write_text(
+        json.dumps(current, indent=2) + "\n", encoding="utf-8"
+    )
+    (project / "60_model_closure_domain.json").write_text(
+        json.dumps(
+            {
+                "schema_version": "spec_workbench_model_closure.v1",
+                "status": "closed",
+                "models": {"DisclosureClass": model},
+            }
+        ),
+        encoding="utf-8",
+    )
+    _patch_ready_sources(monkeypatch)
+    _, projected, findings, _ = service._project(project)
+    for row in findings:
+        assert row["severity"] == "block"
+        assert row["source"] == "60_model_closure_domain.json"
+    assert projected["models"]["DisclosureClass"] == model
+    return [row["code"] for row in findings]
+
+
+@pytest.mark.parametrize(
+    ("version", "model", "codes"),
+    [
+        (2, {"kind": "enum", "values": DISCLOSURE}, []),
+        (3, {"kind": "enum", "values": DISCLOSURE}, []),
+        (3, {"kind": "enum", "values": DISCLOSURE, "ordered": True}, []),
+        (3, {"kind": "enum", "values": DISCLOSURE, "ordered": False}, ["ordered_must_be_true"]),
+        (3, {"kind": "enum", "values": DISCLOSURE, "ordered": "yes"}, ["ordered_must_be_true"]),
+        (3, {"kind": "enum", "values": DISCLOSURE, "ordered": 1}, ["ordered_must_be_true"]),
+        (3, {"kind": "enum", "values": DISCLOSURE, "ordered": None}, ["ordered_must_be_true"]),
+        (3, {"kind": "enum", "values": DISCLOSURE, "ordered": []}, ["ordered_must_be_true"]),
+        (3, {"fields": {"id": "str"}, "ordered": True}, ["ordered_outside_enum"]),
+        (3, {"kind": "mapping", "rows": [], "ordered": True}, ["ordered_outside_enum"]),
+        (2, {"kind": "enum", "values": DISCLOSURE, "ordered": True},
+         ["ordered_requires_standard_version_3"]),
+        (3, {"kind": "enum", "values": []}, ["enum_values_empty"]),
+        (3, {"kind": "enum"}, ["enum_values_empty"]),
+        (2, {"kind": "enum", "values": ["open", "open"]}, ["enum_values_duplicate"]),
+        (3, {"kind": "enum", "values": ["open", "open"]}, ["enum_values_duplicate"]),
+        (2, {"kind": "enum", "values": ["open", 1]}, ["enum_values_not_string"]),
+        (2, {"kind": "enum", "members": {"OPEN": "open"}}, []),
+        (3, {"kind": "enum", "values": DISCLOSURE, "ordered": True,
+             "members": {"OPEN": "open"}}, ["ordered_enum_members_forbidden"]),
+        (3, {"kind": "enum", "values": DISCLOSURE, "ordered": True,
+             "member_names": {"open": "OPEN"}}, ["ordered_enum_member_names_dict_forbidden"]),
+        (3, {"kind": "enum", "values": DISCLOSURE, "ordered": True,
+             "member_names": ["OPEN", "BC", "PD"]}, []),
+        (3, {"kind": "enum", "values": DISCLOSURE, "ordered": True,
+             "member_names": ["OPEN", "BC"]}, ["ordered_enum_member_names_length"]),
+        (3, {"kind": "enum", "values": DISCLOSURE, "ordered": True,
+             "member_names": "OPEN"}, ["ordered_enum_member_names_length"]),
+        (3, {"kind": "enum", "values": ["low", "rank", "high"], "ordered": True},
+         ["ordered_enum_reserved_member"]),
+        (3, {"kind": "enum", "values": ["low", "mid", "high"], "ordered": True,
+             "member_names": ["low", "rank", "high"]}, ["ordered_enum_reserved_member"]),
+        (3, {"kind": "enum", "values": ["low", "rank", "high"]}, []),
+    ],
+)
+def test_model_closure_enum_declarations_match_the_factory(
+    tmp_path, monkeypatch, version, model, codes
+) -> None:
+    assert _enum_codes(tmp_path, monkeypatch, version, model) == codes
+
+
+def test_refused_enum_blocks_the_plan(tmp_path, monkeypatch) -> None:
+    project = _project(tmp_path)
+    current = json.loads((project / "global_spec.json").read_text(encoding="utf-8"))
+    current["models"] = {}
+    (project / "global_spec.json").write_text(
+        json.dumps(current, indent=2) + "\n", encoding="utf-8"
+    )
+    (project / "60_model_closure_domain.json").write_text(
+        json.dumps(
+            {
+                "schema_version": "spec_workbench_model_closure.v1",
+                "status": "closed",
+                "models": {"DisclosureClass": {"kind": "enum", "values": DISCLOSURE, "ordered": True}},
+            }
+        ),
+        encoding="utf-8",
+    )
+    _patch_ready_sources(monkeypatch)
+
+    plan = service.build_plan(project)
+
+    assert plan["ready_to_apply"] is False
+    assert [row["code"] for row in plan["findings"]] == ["ordered_requires_standard_version_3"]
+
+
+def test_refused_enum_already_in_the_specification_is_attributed_to_it(tmp_path, monkeypatch) -> None:
+    project = _project(tmp_path)
+    current = json.loads((project / "global_spec.json").read_text(encoding="utf-8"))
+    current["models"] = {"Legacy": {"kind": "enum", "values": ["a", "a"]}}
+    (project / "global_spec.json").write_text(
+        json.dumps(current, indent=2) + "\n", encoding="utf-8"
+    )
+    _patch_ready_sources(monkeypatch)
+
+    _, _, findings, _ = service._project(project)
+
+    assert [(row["code"], row["source"]) for row in findings] == [
+        ("enum_values_duplicate", "global_spec.json")
+    ]
