@@ -643,7 +643,7 @@ def _language_check(source: Path) -> AdmissionCheck:
         {
             "path": str(source),
             "standard_version": report["standard_version"],
-            "supported_standard_version": report["supported_standard_version"],
+            "supported_standard_versions": report["supported_standard_versions"],
             "findings": report["findings"],
         },
     )
