@@ -828,3 +828,54 @@ def test_fa020_reads_the_real_factory_declaration() -> None:
 
     assert result.status == "PASS"
     assert 3 in result.evidence["factory_supported_standard_versions"]
+
+
+def _admit_with_lineage(tmp_path: Path, lineage_version: int) -> dict:
+    report = _run(tmp_path)
+    factory = Path(report["factory_root"])
+    _write(factory / "tools/spec_version.py", FACTORY_SPEC_VERSION_A)
+    source = tmp_path / "spec-workbench/accepted/global_spec.json"
+    _write_json(source, {"standard_version": 3, "contracts": {}})
+    canonical = factory / "projects/demo/specs/base/global_spec.json"
+    canonical.parent.mkdir(parents=True, exist_ok=True)
+    canonical.write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
+    first = check(
+        workbench_root=tmp_path / "spec-workbench",
+        source=source,
+        project="demo",
+        factory_root=factory,
+        source_git=CLEAN_GIT,
+    )
+    _write_json(factory / "projects/demo/specs/working/spec_editor_manifest.json", {
+        "accepted": True,
+        "status": "pass",
+        "verdict": "PASS",
+        "inputs": {"standard_version": lineage_version, "codec_coverage": first["codec_coverage"]},
+        "outputs": {"base_spec_sha256_after": hashlib.sha256(canonical.read_bytes()).hexdigest()},
+        "change_summary": {"changed_modules": ["global"]},
+    })
+    admitted = check(
+        workbench_root=tmp_path / "spec-workbench",
+        source=source,
+        project="demo",
+        factory_root=factory,
+        source_git=CLEAN_GIT,
+    )
+    return _fa(admitted, "FA007")["evidence"]
+
+
+def test_v3_lineage_of_a_v3_specification_is_fresh(tmp_path: Path) -> None:
+    evidence = _admit_with_lineage(tmp_path, 3)
+
+    assert evidence["lineage_standard_version"] == 3
+    assert evidence["lineage_fresh"] is True
+    assert evidence["action"] == "noop"
+
+
+def test_v2_lineage_of_a_v3_specification_is_not_fresh(tmp_path: Path) -> None:
+    # One version on every transition of a lineage: v2 → v3 is a new accepted spec.
+    evidence = _admit_with_lineage(tmp_path, 2)
+
+    assert evidence["lineage_standard_version"] == 2
+    assert evidence["lineage_fresh"] is False
+    assert evidence["action"] == "accept_lineage"
