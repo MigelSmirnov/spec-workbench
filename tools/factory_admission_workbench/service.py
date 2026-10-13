@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import fence
 
 import hashlib
@@ -1024,6 +1025,106 @@ def _target_check(factory_root: Path, project: str, source: Path, update_existin
     )
 
 
+FACTORY_SPEC_VERSION_MODULE = "tools/spec_version.py"
+FACTORY_SPEC_VERSION_CONSTANT = "SUPPORTED_STANDARD_VERSIONS"
+
+
+def _factory_standard_versions(path: Path) -> frozenset[int]:
+    """The literal ``SUPPORTED_STANDARD_VERSIONS`` of the Factory's
+    ``tools/spec_version.py``, read without running Factory code.
+
+    The Factory documents the name, the place and the literal form of the
+    constant as part of this contract. Anything else is a ValueError.
+    """
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    for node in tree.body:
+        targets = (
+            node.targets if isinstance(node, ast.Assign)
+            else [node.target] if isinstance(node, ast.AnnAssign) and node.value is not None
+            else []
+        )
+        if not any(isinstance(t, ast.Name) and t.id == FACTORY_SPEC_VERSION_CONSTANT for t in targets):
+            continue
+        value = node.value
+        if (
+            isinstance(value, ast.Call)
+            and isinstance(value.func, ast.Name)
+            and value.func.id in {"frozenset", "set", "tuple"}
+            and len(value.args) == 1
+            and not value.keywords
+        ):
+            value = value.args[0]
+        literal = ast.literal_eval(value)
+        if not isinstance(literal, (set, frozenset, tuple, list)) or not all(
+            type(item) is int for item in literal
+        ):
+            raise ValueError(f"{FACTORY_SPEC_VERSION_CONSTANT} is not a literal collection of integers")
+        return frozenset(literal)
+    raise ValueError(f"{FACTORY_SPEC_VERSION_CONSTANT} is not assigned at module level")
+
+
+def _factory_standard_version_check(factory_root: Path, standard_version: Any) -> AdmissionCheck:
+    """FA020: the target Factory declares the standard version of the source.
+
+    Every Factory accepts version 2, including those that predate
+    ``tools/spec_version.py``. A later version (3: version 2 plus
+    ``ordered: true`` on enums) goes only to a Factory that names it; an older
+    Factory would refuse it at validation, and a Factory that ignored it would
+    silently drop the order (Q9-a, K6).
+    """
+    path = factory_root / FACTORY_SPEC_VERSION_MODULE
+    evidence: dict[str, Any] = {
+        "standard_version": standard_version,
+        "factory_module": str(path),
+    }
+    if type(standard_version) is not int:
+        return AdmissionCheck(
+            "FA020",
+            CHECK_NOT_APPLICABLE,
+            "Source declares no integer standard_version; FA009 reports it.",
+            evidence,
+        )
+    if standard_version == 2:
+        return AdmissionCheck(
+            "FA020",
+            CHECK_NOT_APPLICABLE,
+            "Every Factory accepts standard_version 2.",
+            evidence,
+        )
+    try:
+        supported = _factory_standard_versions(path)
+    except FileNotFoundError:
+        return AdmissionCheck(
+            "FA020",
+            CHECK_BLOCK,
+            f"Target Factory has no {FACTORY_SPEC_VERSION_MODULE}; it cannot accept "
+            f"standard_version {standard_version}.",
+            evidence,
+        )
+    except (OSError, SyntaxError, ValueError) as exc:
+        return AdmissionCheck(
+            "FA020",
+            CHECK_BLOCK,
+            f"Target Factory {FACTORY_SPEC_VERSION_MODULE} declares no readable "
+            f"{FACTORY_SPEC_VERSION_CONSTANT}.",
+            {**evidence, "error": str(exc)},
+        )
+    evidence["factory_supported_standard_versions"] = sorted(supported)
+    if standard_version not in supported:
+        return AdmissionCheck(
+            "FA020",
+            CHECK_BLOCK,
+            f"Target Factory does not support standard_version {standard_version}.",
+            evidence,
+        )
+    return AdmissionCheck(
+        "FA020",
+        CHECK_PASS,
+        f"Target Factory declares support for standard_version {standard_version}.",
+        evidence,
+    )
+
+
 def _factory_toolchain_check(factory_root: Path) -> AdmissionCheck:
     metadata = git_metadata(factory_root)
     required = [
@@ -1077,6 +1178,7 @@ def check(
         _assembly_check(case_root, factory_root),
         _standard_check(workbench_root, factory_root),
         _language_check(source),
+        _factory_standard_version_check(factory_root, source_standard_version),
         _implementation_obligations_check(source),
         _runtime_persistence_check(source_spec, case_root),
         _runtime_carrier_check(source_spec),

@@ -65,6 +65,14 @@ nobody made.
   has no design texts and reports not applicable. See
   `skills/spec-authoring/QUESTIONS.md`.
 
+- `FA020` — the target Factory supports the source's `standard_version`.
+  Version 2 is not applicable: every Factory accepts it. For a later version
+  (3 is version 2 plus `ordered: true` on `kind: enum`) the literal
+  `SUPPORTED_STANDARD_VERSIONS` of the Factory's `tools/spec_version.py`, read
+  without running Factory code, must name it; a missing module or constant
+  blocks. An older Factory would refuse the specification at validation; one
+  that ignored the flag would drop the enum order silently.
+
 `FA019` exists because a late decision passed every other check. On
 2026-10-10 Cabinet Kernel decision 25 added a note allowing pydantic to a
 module whose IMPORTS list held none, and decision 26 rewrote States 3–5; no

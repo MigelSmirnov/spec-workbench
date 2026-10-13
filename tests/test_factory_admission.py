@@ -4,9 +4,13 @@ import hashlib
 import json
 from pathlib import Path
 
+import pytest
+
 from factory_admission_workbench import check
+from questions_workbench import documents as question_documents
 from factory_admission_workbench.service import (
     _assembly_check,
+    _factory_standard_version_check,
     _review_check,
     _runtime_carrier_check,
     _runtime_persistence_check,
@@ -719,3 +723,108 @@ def test_external_obligation_does_not_make_a_lowered_repository_reachable() -> N
 
 def test_runtime_carrier_check_blocks_malformed_spec() -> None:
     assert _runtime_carrier_check({"contracts": [], "models": {}}).status == "BLOCK"
+
+
+# ── FA020: the target Factory supports the source standard_version (Q9-a) ──
+
+FACTORY_SPEC_VERSION_A = '''"""The one source of the specification standard versions this Factory accepts."""
+
+from __future__ import annotations
+
+SUPPORTED_STANDARD_VERSIONS = frozenset({2, 3})
+ORDERED_ENUM_MIN_VERSION = 3
+'''
+
+
+def _admit(tmp_path: Path, standard_version, *, spec_version: str | None) -> dict:
+    report = _run(tmp_path)
+    factory = Path(report["factory_root"])
+    if spec_version is not None:
+        _write(factory / "tools/spec_version.py", spec_version)
+    source = tmp_path / "spec-workbench/accepted/global_spec.json"
+    _write_json(source, {"standard_version": standard_version, "contracts": {}})
+    return check(
+        workbench_root=tmp_path / "spec-workbench",
+        source=source,
+        project="demo",
+        factory_root=factory,
+        source_git=CLEAN_GIT,
+    )
+
+
+def _fa(report: dict, check_id: str) -> dict:
+    return next(item for item in report["checks"] if item["id"] == check_id)
+
+
+def test_v2_source_needs_no_factory_version_declaration(tmp_path: Path) -> None:
+    report = _admit(tmp_path, 2, spec_version=None)
+
+    assert _fa(report, "FA020")["status"] == "NOT_APPLICABLE"
+    assert report["ready"] is True
+
+
+def test_v3_source_passes_when_the_factory_declares_v3(tmp_path: Path) -> None:
+    report = _admit(tmp_path, 3, spec_version=FACTORY_SPEC_VERSION_A)
+
+    fa020 = _fa(report, "FA020")
+    assert _fa(report, "FA009")["status"] == "PASS"
+    assert fa020["status"] == "PASS"
+    assert fa020["evidence"]["factory_supported_standard_versions"] == [2, 3]
+    assert report["ready"] is True
+
+
+def test_v3_source_to_a_factory_before_step_a_is_blocked(tmp_path: Path) -> None:
+    # Plan §5.7: v3 specification, Workbench after step B, Factory before step A.
+    report = _admit(tmp_path, 3, spec_version=None)
+
+    fa020 = _fa(report, "FA020")
+    assert _fa(report, "FA009")["status"] == "PASS"
+    assert fa020["status"] == "BLOCK"
+    assert "tools/spec_version.py" in fa020["summary"]
+    assert report["ready"] is False
+
+
+def test_v3_source_to_a_factory_declaring_only_v2_is_blocked(tmp_path: Path) -> None:
+    report = _admit(tmp_path, 3, spec_version="SUPPORTED_STANDARD_VERSIONS = frozenset({2})\n")
+
+    fa020 = _fa(report, "FA020")
+    assert fa020["status"] == "BLOCK"
+    assert fa020["evidence"]["factory_supported_standard_versions"] == [2]
+
+
+@pytest.mark.parametrize("spec_version", [
+    "ORDERED_ENUM_MIN_VERSION = 3\n",
+    "SUPPORTED_STANDARD_VERSIONS = compute()\n",
+    "SUPPORTED_STANDARD_VERSIONS = frozenset({'2', '3'})\n",
+    "SUPPORTED_STANDARD_VERSIONS = frozenset({2, 3}\n",
+])
+def test_v3_source_with_an_unreadable_factory_declaration_is_blocked(
+    tmp_path: Path, spec_version: str
+) -> None:
+    report = _admit(tmp_path, 3, spec_version=spec_version)
+
+    assert _fa(report, "FA020")["status"] == "BLOCK"
+
+
+def test_factory_declaration_is_read_without_running_it(tmp_path: Path) -> None:
+    marker = tmp_path / "ran"
+    spec_version = (
+        f"open({str(marker)!r}, 'w').write('x')\n"
+        "SUPPORTED_STANDARD_VERSIONS = frozenset({2, 3})\n"
+    )
+    report = _admit(tmp_path, 3, spec_version=spec_version)
+
+    assert _fa(report, "FA020")["status"] == "PASS"
+    assert not marker.exists()
+
+
+def test_fa020_reads_the_real_factory_declaration() -> None:
+    factory = question_documents.factory_root()
+    if factory is None or not (factory / "tools/spec_version.py").is_file():
+        pytest.skip("no Factory checkout (SPEC_WORKBENCH_FACTORY_ROOT or sibling code_factory) "
+                    "with tools/spec_version.py")
+
+    result = _factory_standard_version_check(factory, 3)
+
+    assert result.status == "PASS"
+    assert 3 in result.evidence["factory_supported_standard_versions"]
