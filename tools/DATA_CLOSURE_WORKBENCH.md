@@ -12,7 +12,10 @@
 M3 (`notes_authoring/signals.py`), M6 (`notes_authoring/binding.py`) и lint
 L2–L5 (`notes_authoring/lint.py`, отчёт `tools/design_notes_lint.py`) — без
 модели, с регрессиями §10 (`tests/test_notes_authoring.py`). Lint пока
-отчёт, не гейт. Не сделаны: агент-автор и его промпт, запрос на структуру
+отчёт, не гейт. Пишущему агенту инструменты отдаёт MCP `tools/workbench_mcp`
+(решение Q4): `resolve_data_address` (M1), `find_value_homes` (M2),
+`find_absence` (M4), `module_notes` (M6) и `check_note_draft` — черновик
+note через L1–L5. Не сделаны: агент-автор и его промпт, запрос на структуру
 (§5), подкоманда `design_notes.py`, фаза `state7_notes`, слой 2 (§7), `FA021`.
 
 **Что изменилось.** Первая редакция (до `2619356` включительно) описывала

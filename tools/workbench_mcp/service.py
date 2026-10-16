@@ -301,3 +301,109 @@ def design_context(case_root: Path, location: str, radius: int = 6) -> dict[str,
         "heading_path": list(context.heading_path),
         "lines": list(context.lines),
     }
+
+
+# ---------------------------------------------------------------- notes writer
+#
+# The tools a writing agent asks while it writes one module's notes
+# (tools/DATA_CLOSURE_WORKBENCH.md §4): M1 is the Factory's resolver, M2 / M4 /
+# M6 the declared surface of the in-memory projection, and the draft check the
+# same detector and lint the gate will apply. They read; the environment
+# writes notes only after lint (decision Q15).
+
+DRAFT_PATH = "<draft>"
+
+
+def _surface(case_root: Path) -> dict[str, Any]:
+    from spec_projection_workbench import projected_spec
+
+    return projected_spec(case_root)
+
+
+def resolve_address(case_root: Path, address: str, factory_root: Path | None = None) -> dict[str, Any]:
+    """M1: is one address, written as in a note, a legal node — the Factory's verdict."""
+    from notes_workbench import factory_addresses
+
+    report = factory_addresses.run_resolver(_surface(case_root), [address], factory_root)
+    return {
+        "schema_version": f"{SCHEMA_PREFIX}_address.v1",
+        "standard_version": report.get("standard_version"),
+        **report["addresses"][0],
+    }
+
+
+def value_homes(case_root: Path, value: str) -> dict[str, Any]:
+    """M2: the declared homes of one literal, and those whose value reaches a
+    generated module (the ones a note may name instead of the literal)."""
+    from notes_authoring.index import SpecIndex
+
+    index = SpecIndex.build(_surface(case_root))
+    return {
+        "schema_version": f"{SCHEMA_PREFIX}_value_homes.v1",
+        "value": value,
+        "homes": index.homes(value),
+        "homes_reaching_code": index.homes(value, reaching_code=True),
+    }
+
+
+def absence(case_root: Path, terms: list[str]) -> dict[str, Any]:
+    """M4: where each term occurs in models / config / rules / contracts, and
+    the sha256 of each namespace, for the `absence` of a structure request."""
+    from notes_authoring.index import SpecIndex
+
+    return {"schema_version": f"{SCHEMA_PREFIX}_absence.v1",
+            **SpecIndex.build(_surface(case_root)).absence(terms)}
+
+
+def module_notes(case_root: Path, module: str) -> dict[str, Any]:
+    """M6: the callables of one module and its authored notes, to rewrite
+    rather than add beside; plus how many notes of the case bind nowhere."""
+    from notes_authoring import binding
+
+    spec = _surface(case_root)
+    by_module, unbound = binding.bind(language.authored_notes(case_root), spec)
+    if module not in by_module:
+        raise ValueError(f"unknown module {module!r}; modules: {sorted(by_module)}")
+    return {
+        "schema_version": f"{SCHEMA_PREFIX}_module_notes.v1",
+        "module": module,
+        "callables": list((spec.get("module_functions") or {}).get(module) or []),
+        "notes": by_module[module],
+        "unbound_notes_in_case": len(unbound),
+    }
+
+
+def check_note_draft(case_root: Path, note: str, factory_root: Path | None = None) -> dict[str, Any]:
+    """One draft note ``<scope>: [CLASS] text`` through what will judge it:
+    the State 7 gate's own checks of one note (``gate.note_findings``; from
+    standard_version 3 its address and class checks by the Factory's
+    resolver), then lint L2–L5 against the case's other notes. The lint is
+    the writing environment's acceptance, not yet a gate."""
+    from notes_authoring import binding
+    from notes_authoring.lint import lint
+    from notes_workbench import factory_addresses, gate
+
+    match = gate.NOTE_RE.fullmatch(note.strip())
+    if not match or len(note.strip().splitlines()) != 1:
+        raise ValueError("a note is one line '<scope>: [NOTE_CLASS] prose'")
+    draft = {"path": DRAFT_PATH, "line": 1, "scope": match.group("scope"),
+             "class": match.group("class"), "text": match.group("text").strip()}
+    context = gate.note_context(case_root)
+    findings = gate.note_findings(draft, context)
+    if context["factory_judged"]:
+        findings += factory_addresses.findings(case_root, [draft], factory_root)
+    for item in findings:
+        item.setdefault("rule", "gate")
+        item["path"] = DRAFT_PATH
+    spec = _surface(case_root)
+    report = lint(language.authored_notes(case_root) + [draft], spec)
+    findings += [f for f in report["findings"] if f["path"] == DRAFT_PATH]
+    owners = binding.owners(spec)
+    module = owners.get(draft["scope"]) or owners.get(draft["scope"].split(".", 1)[0])
+    return {
+        "schema_version": f"{SCHEMA_PREFIX}_note_draft.v1",
+        "scope": draft["scope"],
+        "module": module,
+        "clean": not any(f["severity"] == "block" for f in findings),
+        "findings": findings,
+    }
