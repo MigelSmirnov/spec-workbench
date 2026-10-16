@@ -4,7 +4,10 @@ import json
 from pathlib import Path
 from typing import Any
 
-SUPPORTED_STANDARD_VERSION = 2
+# Revision 3 is revision 2 plus `ordered: true` on `kind: enum` (Q9-a) and
+# notes that address data only as `= models.X` (SPEC_STANDARD §15.3.1). The
+# Factory a specification goes to must declare both: FA020 checks that.
+SUPPORTED_STANDARD_VERSIONS: tuple[int, ...] = (2, 3)
 REPORT_SCHEMA = "spec_workbench_language_gate.v1"
 
 
@@ -37,13 +40,13 @@ def verify_payload(spec: Any, *, project_root: str) -> dict[str, Any]:
             "code": "missing_standard_version",
             "message": "standard_version must be the supported integer specification-language revision",
         })
-    elif version != SUPPORTED_STANDARD_VERSION:
+    elif version not in SUPPORTED_STANDARD_VERSIONS:
         findings.append({
             "severity": "error",
             "code": "unsupported_standard_version",
             "message": (
                 f"unsupported standard_version {version!r}; "
-                f"expected {SUPPORTED_STANDARD_VERSION}"
+                f"expected one of {list(SUPPORTED_STANDARD_VERSIONS)}"
             ),
         })
 
@@ -59,7 +62,7 @@ def verify_payload(spec: Any, *, project_root: str) -> dict[str, Any]:
         "schema_version": REPORT_SCHEMA,
         "project_root": project_root,
         "standard_version": version,
-        "supported_standard_version": SUPPORTED_STANDARD_VERSION,
+        "supported_standard_versions": list(SUPPORTED_STANDARD_VERSIONS),
         "ready": errors == 0,
         "summary": {"errors": errors},
         "findings": findings,
@@ -78,7 +81,7 @@ def verify(project: Path) -> dict[str, Any]:
 
 __all__ = [
     "REPORT_SCHEMA",
-    "SUPPORTED_STANDARD_VERSION",
+    "SUPPORTED_STANDARD_VERSIONS",
     "SpecLanguageError",
     "verify",
     "verify_payload",

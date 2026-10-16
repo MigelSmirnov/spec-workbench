@@ -12,6 +12,7 @@ from typing import Any
 import design_router_ir
 import design_stage6_contracts
 import design_stage6_data
+import model_closure_validation
 from persistence_workbench import authoring as persistence_authoring
 from project_extensions import declared_backends
 from standard_backends import standard_backends
@@ -354,6 +355,7 @@ def _project(project: Path) -> tuple[dict[str, Any], dict[str, Any], list[dict[s
     source_checks: list[dict[str, Any]] = []
 
     model_paths = sorted(project.glob("60_model_closure_*.json"))
+    model_sources: dict[str, str] = {}
     if model_paths:
         model_overlay: dict[str, Any] = {}
         model_errors = 0
@@ -404,6 +406,7 @@ def _project(project: Path) -> tuple[dict[str, Any], dict[str, Any], list[dict[s
                         f"model {name!r} has conflicting closed declarations across model closures"
                     )
                 model_overlay[name] = declaration
+                model_sources[name] = path.name
         model_ready = model_errors == 0
         source_checks.append(
             _source_check(
@@ -422,6 +425,22 @@ def _project(project: Path) -> tuple[dict[str, Any], dict[str, Any], list[dict[s
             for name, declaration in model_overlay.items():
                 projected_models[name] = copy.deepcopy(declaration)
             _set(projected, "models", projected_models)
+
+    # The Factory refuses these enum forms when the specification reaches it
+    # (type_resolver.check_enum_declarations); the same rules block here, with
+    # the same codes, on the models the specification would carry.
+    for row in model_closure_validation.check_enum_declarations(
+        _get(projected, "models"), projected.get("standard_version")
+    ):
+        name = row["address"].split(".", 1)[1]
+        findings.append(
+            _finding(
+                "block",
+                row["code"],
+                f"{row['address']}: {row['message']}",
+                source=model_sources.get(name, "global_spec.json"),
+            )
+        )
 
     data_report = design_stage6_data.lint(project)
     data_errors = int(data_report.get("summary", {}).get("errors", 0))
