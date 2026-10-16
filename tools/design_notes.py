@@ -87,9 +87,11 @@ def main(argv: list[str] | None = None) -> int:
         print("design_notes: error: --check is valid only with --propagate or --author-accept", file=sys.stderr)
         return 2
     if args.author_prompt or args.author_accept or args.author_requests:
+        from notes_workbench.factory_addresses import ResolverUnavailable
+
         try:
             payload, code = _author(args)
-        except (OSError, ValueError, json.JSONDecodeError) as exc:
+        except (OSError, ValueError, json.JSONDecodeError, ResolverUnavailable) as exc:
             print(f"design_notes: error: {exc}", file=sys.stderr)
             return 2
         if isinstance(payload, str):

@@ -48,7 +48,7 @@ def validate(request: Any, module: str) -> list[str]:
         errors.append(f"value_kind must be one of {sorted(VALUE_KINDS)}")
     if request.get("route") not in ROUTES:
         errors.append(f"route must be one of {sorted(ROUTES)}")
-    if not _string_list(request.get("candidate_values")):
+    if not _string_list(request.get("candidate_values")) or not request["candidate_values"]:
         errors.append("candidate_values: the values as the writer sees them, each with its source")
     sources = request.get("sources")
     if not isinstance(sources, list) or not sources or not all(

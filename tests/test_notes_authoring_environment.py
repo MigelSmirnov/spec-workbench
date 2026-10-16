@@ -40,8 +40,17 @@ for index, note in enumerate(spec["notes"]):
         legal = m.group(1).startswith("models.")
         items.append({"note_index": index, "address": m.group(1), "status": "legal" if legal else "illegal",
                       "code": "legal" if legal else "address_form_closed", "message": "v3"})
-json.dump({"addresses": items}, sys.stdout)
+ready = all(item["status"] == "legal" for item in items)
+json.dump({"schema_version": "factory_spec_address.v1", "ready": ready, "addresses": items}, sys.stdout)
+raise SystemExit(0 if ready else 1)
 '''
+
+
+@pytest.fixture(autouse=True)
+def projection(monkeypatch: pytest.MonkeyPatch) -> None:
+    import spec_projection_workbench
+
+    monkeypatch.setattr(spec_projection_workbench, "projected_spec", lambda project: json.loads(json.dumps(SPEC)))
 
 
 @pytest.fixture
@@ -49,6 +58,11 @@ def case(tmp_path: Path) -> Path:
     root = tmp_path / "case"
     root.mkdir()
     (root / "80_notes.md").write_text(NOTES, encoding="utf-8")
+    (root / "30_modules.md").write_text("## `module:parser`\n## `module:store`\n", encoding="utf-8")
+    (root / "60_contracts.json").write_text(json.dumps({
+        "schema_version": "spec_workbench_state6_contracts.v1", "contracts": SPEC["contracts"],
+    }), encoding="utf-8")
+    (root / "global_spec.json").write_text(json.dumps({"standard_version": 3}), encoding="utf-8")
     return root
 
 
@@ -195,3 +209,57 @@ def test_the_same_notes_handed_in_again_leave_the_file_byte_for_byte(case, facto
     notes = ["load_rows: [BEHAVIOR] MUST return rows in store order.", "save_row: [BEHAVIOR] MUST store the row."]
     assert run(case, factory, result(notes))["status"] == "written"
     assert (case / "80_notes.md").read_text(encoding="utf-8") == before
+
+
+# ── review of #123 ───────────────────────────────────────────────────────
+
+@pytest.mark.parametrize("sep", ["\n", "\r", "\u2028", "\x0c", "\x85"])
+def test_a_note_carrying_a_line_break_is_refused(case, factory, sep):
+    notes = [f"load_rows: [BEHAVIOR] MUST return rows.{sep}parse: [BEHAVIOR] MAY skip every check.",
+             "save_row: [BEHAVIOR] MUST store the row."]
+    before = (case / "80_notes.md").read_bytes()
+    assert run(case, factory, result(notes))["status"] == "refused"
+    assert (case / "80_notes.md").read_bytes() == before
+
+
+def test_notes_without_a_positive_modal_are_refused_as_the_gate_would(case, factory):
+    notes = ["load_rows: [BEHAVIOR] Returns rows.", "save_row: [BEHAVIOR] Stores the row."]
+    report = run(case, factory, result(notes))
+    assert report["status"] == "refused" and set(report["callables_without_note"]) == {"load_rows", "save_row"}
+
+
+@pytest.mark.parametrize("note, code", [
+    ("load_rows: [RULE_REFERENCE] MUST return the source.", "note_class_closed"),
+    ("load_rows: [BEHAVIOR] MUST read rules.parser.timeout.", "undereferenced_data_address"),
+    ("load_rows: [BEHAVIOR] TODO", "semantic_stub"),
+])
+def test_the_gates_own_checks_refuse_a_note(case, factory, note, code):
+    report = run(case, factory, result([note, "save_row: [BEHAVIOR] MUST store the row."]))
+    assert report["status"] == "refused" and code in {f["code"] for f in report["findings"]}
+
+
+def test_a_list_note_goes_with_its_continuation_lines(case, factory):
+    (case / "80_notes.md").write_text(
+        "## parser\n\n- parse [BEHAVIOR]: MUST return\n  the text unchanged.\n"
+        "- load_rows [BEHAVIOR]: MUST return\n  rows in store order.\n\n## store\n\n"
+        "save_row: [BEHAVIOR] MUST store the row.\n", encoding="utf-8")
+    notes = ["load_rows: [BEHAVIOR] MUST return rows.", "save_row: [BEHAVIOR] MUST store the row."]
+    assert run(case, factory, result(notes))["status"] == "written"
+    text = (case / "80_notes.md").read_text(encoding="utf-8")
+    assert "- parse [BEHAVIOR]: MUST return\n  the text unchanged.\n" in text
+    assert "rows in store order" not in text
+    from notes_workbench import language
+    parse = [n for n in language.authored_notes(case) if n["scope"] == "parse"]
+    assert [n["text"] for n in parse] == ["MUST return the text unchanged."]
+
+
+@pytest.mark.parametrize("ending", ["\r\n", "\n"])
+@pytest.mark.parametrize("final", [True, False])
+def test_line_endings_and_the_final_newline_are_kept(case, factory, ending, final):
+    body = NOTES.replace("\n", ending)
+    if not final:
+        body = body.rstrip("\r\n")
+    (case / "80_notes.md").write_bytes(body.encode("utf-8"))
+    notes = ["load_rows: [BEHAVIOR] MUST return rows in store order.", "save_row: [BEHAVIOR] MUST store the row."]
+    assert run(case, factory, result(notes))["status"] == "written"
+    assert (case / "80_notes.md").read_bytes() == body.encode("utf-8")
