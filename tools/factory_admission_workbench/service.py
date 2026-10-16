@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import fence
 
 import hashlib
@@ -643,7 +644,7 @@ def _language_check(source: Path) -> AdmissionCheck:
         {
             "path": str(source),
             "standard_version": report["standard_version"],
-            "supported_standard_version": report["supported_standard_version"],
+            "supported_standard_versions": report["supported_standard_versions"],
             "findings": report["findings"],
         },
     )
@@ -1024,6 +1025,146 @@ def _target_check(factory_root: Path, project: str, source: Path, update_existin
     )
 
 
+FACTORY_SPEC_VERSION_MODULE = "tools/spec_version.py"
+FACTORY_SPEC_VERSION_CONSTANT = "SUPPORTED_STANDARD_VERSIONS"
+# From this version a note addresses no `rules` / `config` node (SPEC_STANDARD
+# §15.3.1). A Factory that supports v3 but does not name it reads v3 notes
+# by the v2 rule.
+FACTORY_NOTE_ADDRESS_CONSTANT = "NOTE_ADDRESSES_CLOSED_MIN_VERSION"
+
+
+class _NotAssigned(ValueError):
+    """The constant is not assigned at module level."""
+
+
+def _factory_literal(tree: ast.Module, name: str) -> Any:
+    for node in tree.body:
+        targets = (
+            node.targets if isinstance(node, ast.Assign)
+            else [node.target] if isinstance(node, ast.AnnAssign) and node.value is not None
+            else []
+        )
+        if not any(isinstance(t, ast.Name) and t.id == name for t in targets):
+            continue
+        value = node.value
+        if (
+            isinstance(value, ast.Call)
+            and isinstance(value.func, ast.Name)
+            and value.func.id in {"frozenset", "set", "tuple"}
+            and len(value.args) == 1
+            and not value.keywords
+        ):
+            value = value.args[0]
+        try:
+            return ast.literal_eval(value)
+        except (TypeError, ValueError, MemoryError, RecursionError) as exc:
+            # literal_eval raises TypeError for an unhashable set member
+            raise ValueError(f"{name} is not a readable literal: {exc!r}") from None
+    raise _NotAssigned(f"{name} is not assigned at module level")
+
+
+def _factory_standard_versions(path: Path) -> tuple[frozenset[int], int | None]:
+    """The literals ``SUPPORTED_STANDARD_VERSIONS`` and
+    ``NOTE_ADDRESSES_CLOSED_MIN_VERSION`` (None when absent) of the Factory's
+    ``tools/spec_version.py``, read without running Factory code.
+
+    The Factory documents the names, the place and the literal form of the
+    constants as part of this contract. Anything else is a ValueError that
+    names the constant; an absent note constant alone is None.
+    """
+    try:
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    except (MemoryError, RecursionError) as exc:
+        raise ValueError(f"{path.name} does not parse: {exc!r}") from None
+    literal = _factory_literal(tree, FACTORY_SPEC_VERSION_CONSTANT)
+    if not isinstance(literal, (set, frozenset, tuple, list)) or not all(
+        type(item) is int for item in literal
+    ):
+        raise ValueError(f"{FACTORY_SPEC_VERSION_CONSTANT} is not a literal collection of integers")
+    try:
+        closed = _factory_literal(tree, FACTORY_NOTE_ADDRESS_CONSTANT)
+    except _NotAssigned:
+        closed = None
+    if closed is not None and type(closed) is not int:
+        raise ValueError(f"{FACTORY_NOTE_ADDRESS_CONSTANT} is not a literal integer")
+    return frozenset(literal), closed
+
+
+def _factory_standard_version_check(factory_root: Path, standard_version: Any) -> AdmissionCheck:
+    """FA020: the target Factory declares the standard version of the source.
+
+    Every Factory accepts version 2, including those that predate
+    ``tools/spec_version.py``. A later version (3: version 2 plus
+    ``ordered: true`` on enums and notes that address only ``= models.X``)
+    goes only to a Factory that names it; an older Factory would refuse it at
+    validation, and a Factory that ignored it would silently drop the order
+    (Q9-a, K6). From version 3 the Factory must also name the version that
+    closes note addresses, at or below the source's: a Factory that supports
+    v3 without it would accept the `= rules.*` / `= config.*` notes the
+    standard's v3 refuses.
+    """
+    path = factory_root / FACTORY_SPEC_VERSION_MODULE
+    evidence: dict[str, Any] = {
+        "standard_version": standard_version,
+        "factory_module": str(path),
+    }
+    if type(standard_version) is not int:
+        return AdmissionCheck(
+            "FA020",
+            CHECK_NOT_APPLICABLE,
+            "Source declares no integer standard_version; FA009 reports it.",
+            evidence,
+        )
+    if standard_version == 2:
+        return AdmissionCheck(
+            "FA020",
+            CHECK_NOT_APPLICABLE,
+            "Every Factory accepts standard_version 2.",
+            evidence,
+        )
+    try:
+        supported, closed = _factory_standard_versions(path)
+    except FileNotFoundError:
+        return AdmissionCheck(
+            "FA020",
+            CHECK_BLOCK,
+            f"Target Factory has no {FACTORY_SPEC_VERSION_MODULE}; it cannot accept "
+            f"standard_version {standard_version}.",
+            evidence,
+        )
+    except (OSError, SyntaxError, ValueError) as exc:
+        return AdmissionCheck(
+            "FA020",
+            CHECK_BLOCK,
+            f"Target Factory {FACTORY_SPEC_VERSION_MODULE} declares its standard versions in a form "
+            f"admission cannot read ({FACTORY_SPEC_VERSION_CONSTANT}, {FACTORY_NOTE_ADDRESS_CONSTANT}).",
+            {**evidence, "error": str(exc)},
+        )
+    evidence["factory_supported_standard_versions"] = sorted(supported)
+    evidence["factory_note_addresses_closed_min_version"] = closed
+    if standard_version not in supported:
+        return AdmissionCheck(
+            "FA020",
+            CHECK_BLOCK,
+            f"Target Factory does not support standard_version {standard_version}.",
+            evidence,
+        )
+    if standard_version >= 3 and (closed is None or closed > standard_version):
+        return AdmissionCheck(
+            "FA020",
+            CHECK_BLOCK,
+            f"Target Factory supports standard_version {standard_version} but does not close note "
+            f"addresses in it ({FACTORY_NOTE_ADDRESS_CONSTANT}); it would read the notes by the v2 rule.",
+            evidence,
+        )
+    return AdmissionCheck(
+        "FA020",
+        CHECK_PASS,
+        f"Target Factory declares support for standard_version {standard_version}.",
+        evidence,
+    )
+
+
 def _factory_toolchain_check(factory_root: Path) -> AdmissionCheck:
     metadata = git_metadata(factory_root)
     required = [
@@ -1077,6 +1218,7 @@ def check(
         _assembly_check(case_root, factory_root),
         _standard_check(workbench_root, factory_root),
         _language_check(source),
+        _factory_standard_version_check(factory_root, source_standard_version),
         _implementation_obligations_check(source),
         _runtime_persistence_check(source_spec, case_root),
         _runtime_carrier_check(source_spec),

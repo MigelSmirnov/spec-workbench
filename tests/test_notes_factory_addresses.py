@@ -26,7 +26,9 @@ for index, note in enumerate(spec["notes"]):
                       "status": "legal" if legal else "illegal",
                       "code": "legal" if legal else "address_form_closed",
                       "message": "closed in v3"})
-json.dump({"schema_version": "factory_spec_address.v1", "addresses": items}, sys.stdout)
+ready = all(item["status"] == "legal" for item in items)
+json.dump({"schema_version": "factory_spec_address.v1", "ready": ready, "addresses": items}, sys.stdout)
+raise SystemExit(0 if ready else 1)
 '''
 
 
@@ -123,3 +125,36 @@ def test_the_real_factory_resolver_answers_the_gates_input(tmp_path: Path, monke
     ]
     findings = factory_addresses.findings(_project(tmp_path, "", 3), notes, factory_root=root)
     assert [(item["code"], item["line"]) for item in findings] == [("address_form_closed", 2)]
+
+
+@pytest.mark.parametrize("resolver", [
+    # a report, then a non-resolver exit: never "no refusal"
+    'import json, sys\njson.dump({"schema_version": "factory_spec_address.v1", "addresses": []}, sys.stdout)\nraise SystemExit(3)\n',
+    'import json, sys\njson.dump({"schema_version": "factory_spec_address.v1", "addresses": []}, sys.stdout)\nraise RuntimeError("boom")\n',
+    'import json, sys\njson.dump({"schema_version": "factory_spec_address.v1", "addresses": None}, sys.stdout)\n',
+    'import json, sys\njson.dump({"schema_version": "factory_spec_address.v1", "addresses": "abc"}, sys.stdout)\n',
+    'import json, sys\njson.dump({"schema_version": "factory_spec_address.v1", "addresses": [{"note_index": 9, "status": "illegal"}]}, sys.stdout)\n',
+    'import json, sys\njson.dump({"schema_version": "factory_spec_address.v1", "addresses": [{"status": "illegal"}]}, sys.stdout)\n',
+    'import json, sys\njson.dump({"addresses": []}, sys.stdout)\n',
+    'import json, sys\njson.dump([1, 2], sys.stdout)\n',
+    # ready claims all legal while a refusal is reported, and the reverse
+    'import json, sys\njson.dump({"schema_version": "factory_spec_address.v1", "ready": True, "addresses": [{"note_index": 0, "status": "illegal"}]}, sys.stdout)\nraise SystemExit(1)\n',
+    'import json, sys\njson.dump({"schema_version": "factory_spec_address.v1", "ready": False, "addresses": []}, sys.stdout)\nraise SystemExit(0)\n',
+])
+def test_a_resolver_that_fails_in_any_way_blocks_and_never_raises(tmp_path: Path, factory: Path, resolver: str) -> None:
+    (factory / "tools/spec_address.py").write_text(resolver, encoding="utf-8")
+    report = gate.coverage(_project(tmp_path, "parse: [BEHAVIOR] MUST return = models.Known.\n", 3))
+    assert _blocks(report) == [("note_address_resolver_failed", None)]
+
+
+def test_a_projection_with_a_blocking_finding_is_not_used(tmp_path: Path, monkeypatch) -> None:
+    from spec_projection_workbench import service as projection
+    from spec_projection_workbench.model import SpecProjectionError
+
+    monkeypatch.setattr(projection, "_project", lambda project: (
+        {}, {"models": {}}, [{"severity": "block", "code": "model_handoff_not_ready"}], [],
+    ))
+    with pytest.raises(SpecProjectionError, match="model_handoff_not_ready"):
+        projection.projected_spec(tmp_path)
+    monkeypatch.setattr(projection, "_project", lambda project: ({}, {"models": {}}, [{"severity": "warning"}], []))
+    assert projection.projected_spec(tmp_path) == {"models": {}}
