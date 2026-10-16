@@ -17,9 +17,10 @@ SPEC = {
     "rules": {"data_provider_backend": {"kind": "data_provider_backend",
                                         "constants": {"PAGE_MAX": {"value_type": "positive_integer", "value": 200}}}},
     "config": {},
-    "contracts": {"load_rows": "(limit: int) -> list[Row]"},
-    "module_functions": {"store": ["load_rows"], "models": ["Row", "Status"]},
+    "contracts": {"load_rows": "(limit: int) -> list[Row]", "save_rows": "(rows: list[Row]) -> None"},
+    "module_functions": {"alpha": ["save_rows"], "store": ["load_rows"], "models": ["Row", "Status"]},
 }
+SPAN = "MUST sort the rows by the declared keys before hashing them so that equal content"
 
 
 @pytest.fixture
@@ -27,8 +28,14 @@ def case(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     root = tmp_path / "case"
     root.mkdir()
     (root / "80_notes.md").write_text(
-        "load_rows: [BEHAVIOR] MUST return rows in store order.\n", encoding="utf-8"
+        "load_rows: [BEHAVIOR] MUST return rows in store order.\n"
+        f"save_rows: [BEHAVIOR] {SPAN}: by (row_id, row_name, row_kind).\n", encoding="utf-8"
     )
+    (root / "30_modules.md").write_text("## `module:alpha`\n## `module:store`\n", encoding="utf-8")
+    (root / "60_contracts.json").write_text(json.dumps({
+        "schema_version": "spec_workbench_state6_contracts.v1", "contracts": SPEC["contracts"],
+    }), encoding="utf-8")
+    (root / "global_spec.json").write_text(json.dumps({"standard_version": 3}), encoding="utf-8")
     monkeypatch.setattr(spec_projection_workbench, "projected_spec", lambda project: json.loads(json.dumps(SPEC)))
     return root
 
@@ -74,9 +81,28 @@ def test_draft_check_names_the_module_and_the_findings(case):
     assert (clean["module"], clean["clean"], clean["findings"]) == ("store", True, [])
     dirty = service.check_note_draft(case, "load_rows: [BEHAVIOR] MUST return at most 200 rows of = rules.x.", factory)
     assert not dirty["clean"]
-    assert [f["rule"] for f in dirty["findings"]] == ["L1", "L2"]
+    assert [(f["rule"], f["code"]) for f in dirty["findings"]] == [
+        ("gate", "address_form_closed"), ("L2", "literal_with_home")]
 
 
-def test_draft_check_refuses_a_text_that_is_no_note(case):
+@pytest.mark.parametrize("note, code", [
+    ("load_rows: [RULE_REFERENCE] MUST return the source.", "note_class_closed"),
+    ("load_rows: [NOT_A_CLASS] MUST return rows.", "unknown_note_class"),
+    ("nowhere: [BEHAVIOR] MUST return rows.", "unknown_note_scope"),
+])
+def test_draft_check_applies_the_gates_own_checks(case, note, code):
+    factory = _real_factory()
+    answer = service.check_note_draft(case, note, factory)
+    assert not answer["clean"] and code in {f["code"] for f in answer["findings"]}
+
+
+def test_draft_check_sees_a_diverged_copy_whatever_the_module_order(case):
+    factory = _real_factory()
+    answer = service.check_note_draft(case, f"load_rows: [BEHAVIOR] {SPAN}: by (row_id, row_kind, row_name).", factory)
+    assert {"shared_prose", "diverged_copies"} <= {f["code"] for f in answer["findings"]}
+
+
+@pytest.mark.parametrize("text", ["MUST do something", "load_rows: [BEHAVIOR] MUST return rows.\u2028save_rows: [BEHAVIOR] MAY skip."])
+def test_draft_check_refuses_a_text_that_is_no_one_note(case, text):
     with pytest.raises(ValueError):
-        service.check_note_draft(case, "MUST do something")
+        service.check_note_draft(case, text)

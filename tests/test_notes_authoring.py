@@ -45,6 +45,9 @@ def test_10_2_store_page_records_enumerates_record_types(kernel):
     record_types = set(json.loads((FIXTURE / "surface.json").read_text(encoding="utf-8"))["models"]["RecordType"]["values"])
     listed = [f for f in at(kernel, 145) if f["rule"] == "L3" and f["signal"] in ("list", "enum_members")]
     assert any(len(set(f["items"]) & record_types) >= 3 for f in listed)
+    # §10.2: L3 must fire on the enumeration of list_*_rows methods
+    methods = [f for f in at(kernel, 145) if f["rule"] == "L3" and f["signal"] == "mapping"]
+    assert any({"list_slot_rows", "list_run_rows"} <= set(f["items"]) for f in methods)
     assert {"L3:list", "L3:enum_members"} <= codes(kernel, 595)
 
 
@@ -69,6 +72,7 @@ def test_10_4_imported_constants_are_never_signals(kernel):
     values = {f.get("value") for f in at(kernel, 482)}
     assert not any("RELEASE_CEILING" in str(v) for v in values)
     assert values <= {"1", "4", "6"}
+    assert {f["rule"] for f in at(kernel, 482)} <= {"L2", "L3"}
 
 
 def test_10_5_sort_keys_are_field_names_and_their_copies_agree(kernel):
@@ -82,6 +86,25 @@ def test_10_5_sort_keys_are_field_names_and_their_copies_agree(kernel):
 def test_10_6_negative_examples(kernel):
     assert at(kernel, 109) == []
     assert [f["code"] for f in at(kernel, 125)] == ["addressed_enumeration_restated"]
+
+
+def test_l4_blocks_the_restated_list_f3_and_not_the_algorithm_f4(kernel):
+    # research Q9 §2.2: :125 is F3 (members with nothing between them);
+    # :226 and :159 are F4 (a condition behind every member) — prose
+    assert [f["line"] for f in kernel["findings"] if f["rule"] == "L4"] == [125]
+
+
+def test_a_grouped_number_is_one_literal_with_its_home(kernel):
+    found = [f for f in at(kernel, 220) if f.get("value") == "1048576"]
+    assert found and found[0]["rule"] == "L2"
+    assert any("RELEASE_CEILING" in home for home in found[0]["homes"])
+    assert not [f for f in at(kernel, 220) if f.get("value") in ("048", "576")]
+
+
+def test_a_list_in_parentheses_is_one_signal(kernel):
+    for line in (113, 169):
+        lists = [tuple(f["items"]) for f in at(kernel, line) if f.get("signal") == "list"]
+        assert len(lists) == len(set(lists))
 
 
 def test_deterministic_modules_are_bound_but_unfound(kernel):
@@ -201,3 +224,28 @@ def test_l5_diverged_copies_block_and_equal_copies_only_report():
     l5 = lambda notes: {f["code"] for f in lint(notes, SPEC)["findings"] if f["rule"] == "L5"}
     assert l5(same) == {"shared_prose"}
     assert l5(diverged) == {"shared_prose", "diverged_copies"}
+
+
+def test_l5_finds_both_sides_of_a_pair_whatever_the_module_order():
+    span = "MUST sort the rows by the declared keys before hashing them so that equal content"
+    notes = [_note("load_rows", f"{span}: by (row_id, row_name, row_kind)"),
+             _note("Row", f"{span}: by (row_id, row_kind, row_name)", 2)]
+    for ordered in (notes, notes[::-1]):
+        found = {(f["scope"], f["code"]) for f in lint(ordered, SPEC)["findings"] if f["rule"] == "L5"}
+        assert found == {(scope, code) for scope in ("load_rows", "Row") for code in ("shared_prose", "diverged_copies")}
+
+
+def test_l5_identical_copies_with_two_lists_only_report():
+    span = "MUST sort the rows by the declared keys before hashing them so that equal content"
+    text = f"{span}: first by (key_a, key_b, key_c), then by (key_a, key_b, key_d)."
+    codes = {f["code"] for f in lint([_note("load_rows", text), _note("Row", text, 2)], SPEC)["findings"] if f["rule"] == "L5"}
+    assert codes == {"shared_prose"}
+
+
+def test_l5_divergence_in_a_later_shared_sentence_blocks():
+    s1 = "MUST sort the rows by the declared keys before hashing them so that equal content hashes alike."
+    s2 = "MUST then write the columns in the stored order of the table so that readers see"
+    a = f"{s1} {s2} (col_a, col_b, col_c)."
+    b = f"{s1} {s2} (col_a, col_c, col_b)."
+    codes = {f["code"] for f in lint([_note("load_rows", a), _note("Row", b, 2)], SPEC)["findings"] if f["rule"] == "L5"}
+    assert "diverged_copies" in codes
