@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from interface_workbench import construction_boundary_findings
-from notes_workbench import language
+from notes_workbench import factory_addresses, language
 from notes_workbench.note_standard import (
     NOTE_CLASSES,
     REFERENCE_CLASS_PREFIX,
@@ -317,6 +317,8 @@ def coverage(project: Path) -> dict[str, Any]:
     valid_scopes = contract_scopes | module_scopes
     known_addresses = _load_structured_addresses(project)
     deterministic_scopes = _load_deterministic_callable_scopes(project)
+    # From standard_version 3 the Factory's resolver judges every address.
+    factory_judged = factory_addresses.closes_note_addresses(project)
 
     if not path.is_file():
         findings.append(_finding("block", "missing_notes_file", "State 7 requires 80_notes.md before handoff."))
@@ -346,11 +348,13 @@ def coverage(project: Path) -> dict[str, Any]:
 
             addresses = [item.group("address") for item in ADDRESS_RE.finditer(text)]
             expected_prefix = REFERENCE_CLASS_PREFIX.get(note_class)
+            if factory_judged and note_class in factory_addresses.CLOSED_NOTE_CLASSES:
+                expected_prefix = None  # the class itself is refused below
             if expected_prefix is not None:
                 matching = [address for address in addresses if address.startswith(expected_prefix + ".")]
                 if not matching:
                     findings.append(_finding("block", "missing_required_reference", f"[{note_class}] requires an '= {expected_prefix}.*' reference.", line=number, scope=scope))
-            for address in addresses:
+            for address in [] if factory_judged else addresses:
                 if not _address_resolves(address, known_addresses):
                     findings.append(_finding("block", "unresolved_structured_reference", f"Structured reference does not resolve: {address}", line=number, scope=scope))
             for positional in sorted({item.group(0) for item in POSITIONAL_ADDRESS_RE.finditer(text)}):
@@ -380,6 +384,8 @@ def coverage(project: Path) -> dict[str, Any]:
                     scope=scope,
                 ))
 
+    if factory_judged:
+        findings.extend(factory_addresses.findings(project, notes))
     findings.extend(
         _table_access_findings(notes, _load_provider_tables(project), contract_scopes)
     )

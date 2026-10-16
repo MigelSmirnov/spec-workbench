@@ -734,6 +734,20 @@ def _canonical_text(payload: dict[str, Any]) -> str:
     return json.dumps(payload, ensure_ascii=False, indent=2) + "\n"
 
 
+def projected_spec(project: Path) -> dict[str, Any]:
+    """The specification the authored sources project to, in memory; the
+    project's ``global_spec.json`` is not written.
+
+    A source that is not ready leaves its section as the last assembly wrote
+    it, so a projection with a blocking finding does not stand for the
+    authored texts: it raises SpecProjectionError naming the findings."""
+    _, projected, findings, _ = _project(project.resolve())
+    blocks = sorted({str(row.get("code")) for row in findings if row.get("severity") == "block"})
+    if blocks:
+        raise SpecProjectionError(f"the authored sources do not project: {', '.join(blocks)}")
+    return projected
+
+
 def render_diff(project: Path) -> str:
     project = project.resolve()
     _, projected, _, _ = _project(project)
