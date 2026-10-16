@@ -12,15 +12,15 @@
 1. Найди scope: `function_name:` или `ClassName.method_name:`.
 2. Проверь, что note имеет ровно один primary marker: `[NOTE_CLASS]`.
 3. Не добавляй inline-данные в prose. Таблицы, списки, лимиты, пути, TTL, рейтинги и размеры выноси в `config`, `models` или `rules`.
-4. Если note ссылается на данные, оставь адрес: `= config.*`, `= models.*`, `= rules.*`.
+4. Если note ссылается на данные, называй дом: `= models.X`, `the imported X constant`, поле объекта настроек; в редакции 2 ещё `= rules.<backend>.*` и `= config.persistence.*` (§15.3.1).
 5. Не расщепляй mixed note механически, если это ухудшает читаемость. Выбирай primary class по semantic impact.
 
 ## Как выбрать NOTE_CLASS
 
 - `[BEHAVIOR]` — доменное поведение, когда точнее классифицировать нельзя без продуктовой таксономии.
-- `[CONFIG_REFERENCE]` — ссылка на `= config.*`.
+- `[CONFIG_REFERENCE]` — ссылка на `= config.*`; только редакция 2.
 - `[MODEL_REFERENCE]` — ссылка на `= models.*`.
-- `[RULE_REFERENCE]` — ссылка на `= rules.*`.
+- `[RULE_REFERENCE]` — ссылка на `= rules.*`; только редакция 2.
 - `[FORBIDDEN_ACTION]` — запрет действия: MUST NOT, never, no direct access, no file I/O.
 - `[SCHEMA_CONSTRAINT]` — поля, DTO/model shape, required/optional/no extra fields.
 - `[VALIDATION_ERROR]` — invalid/unsupported/missing input, raise/reject/error response.
