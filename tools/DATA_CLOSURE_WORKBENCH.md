@@ -15,8 +15,12 @@ L2–L5 (`notes_authoring/lint.py`, отчёт `tools/design_notes_lint.py`) —
 отчёт, не гейт. Пишущему агенту инструменты отдаёт MCP `tools/workbench_mcp`
 (решение Q4): `resolve_data_address` (M1), `find_value_homes` (M2),
 `find_absence` (M4), `module_notes` (M6) и `check_note_draft` — черновик
-note через L1–L5. Не сделаны: агент-автор и его промпт, запрос на структуру
-(§5), подкоманда `design_notes.py`, фаза `state7_notes`, слой 2 (§7), `FA021`.
+note через L1–L5. Среда: `design_notes.py --author-prompt` (задание агенту,
+§3), `--author-accept` (приём: запросы §5.2 с проверкой `absence` и
+свежести, или notes модуля через L1–L5 и запись в `80_notes.md`, Q15) и
+`--author-requests` (открытые и устаревшие запросы). Запуск агента — работа
+оператора (Q4). Не сделаны: фаза `state7_notes` как среда (§8), слой 2 (§7),
+`FA021`.
 
 **Что изменилось.** Первая редакция (до `2619356` включительно) описывала
 `data_closure` как раунд «Почемучки»: рецензенты читают готовые notes,
