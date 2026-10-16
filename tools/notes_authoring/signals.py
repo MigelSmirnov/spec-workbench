@@ -21,8 +21,14 @@ MODELS_ADDRESS_RE = re.compile(r"=\s*models\.(?P<name>[A-Za-z_][A-Za-z0-9_]*)")
 
 # A number standing alone: not a digit run inside an identifier (sha256,
 # list_v2), not a version or encoding suffix (UTF-8, SHA-256, v3).
-NUMBER_RE = re.compile(r"(?<![\w.\-])-?\d+(?:\.\d+)?(?![\w.]\w)(?!\w)")
-DOUBLE_QUOTED_RE = re.compile(r'"(?P<value>[^"\n]{1,200})"')
+NUMBER_RE = re.compile(
+    # a grouped number first: `1 048 576`, `1,048,576` is one number
+    r"(?<![\w.\-])-?\d{1,3}(?:[ \u00a0\u202f,]\d{3})+(?![\w.,]?\d)(?!\w)"
+    r"|(?<![\w.\-])-?\d+(?:\.\d+)?(?![\w.]\w)(?!\w)"
+)
+_DIGIT_GROUP_SEPARATORS = re.compile(r"[ \u00a0\u202f,]")
+DOUBLE_QUOTED_RE = re.compile(r'["\u201c](?P<value>[^"\u201c\u201d\n]{1,200})["\u201d]')
+TYPOGRAPHIC_SINGLE_QUOTED_RE = re.compile(r"\u2018(?P<value>[^\u2018\u2019\n]{1,200})\u2019")
 # A single-quoted string, not an English apostrophe (`process's`, `others'`).
 SINGLE_QUOTED_RE = re.compile(r"(?<![A-Za-z0-9])'(?P<value>[^'\n]{1,200})'(?![A-Za-z0-9])")
 BACKTICK_RE = re.compile(r"`(?P<value>[^`\n]{1,200})`")
@@ -49,6 +55,9 @@ LIST_RE = re.compile(
     rf"(?<![\w.])(?P<items>{_ITEM}(?:\s*,\s*{_ITEM}){{1,}}(?:\s*,?\s+(?:and|or)\s+{_ITEM})?)(?![\w(])"
 )
 TUPLE_RE = re.compile(rf"\((?P<items>{_IDENTIFIER}(?:\s*,\s*{_IDENTIFIER}){{1,}})\)")
+# One pair of a correspondence written as prose: `list_slot_rows for slots`.
+MAPPING_PAIR_RE = re.compile(r"(?<![\w.])(?P<key>[A-Za-z_][A-Za-z0-9]*_[A-Za-z0-9_]*)\s+for\s+(?P<value>[A-Za-z_][\w]*)")
+_MAPPING_JOINER_RE = re.compile(r"\s*,\s*(?:and\s+)?")
 WORD_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 
 # Words a list may contain that are no item of it.
@@ -57,7 +66,7 @@ _LIST_JOINERS = {"and", "or", "then", "the", "a", "an"}
 
 @dataclass(frozen=True)
 class Signal:
-    kind: str  # number | quoted | path | list | enum_members | arrow | table | design_reference
+    kind: str  # number | quoted | path | list | mapping | enum_members | arrow | table | design_reference
     text: str
     start: int
     items: tuple[str, ...] = field(default=())
@@ -109,7 +118,7 @@ def detect(
         if not _inside(signal.start, spans):
             found.append(signal)
 
-    for regex in (DOUBLE_QUOTED_RE, SINGLE_QUOTED_RE):
+    for regex in (DOUBLE_QUOTED_RE, SINGLE_QUOTED_RE, TYPOGRAPHIC_SINGLE_QUOTED_RE):
         for m in regex.finditer(text):
             quoted_spans.append(m.span())
             add(Signal("quoted", m.group("value"), m.start()))
@@ -117,9 +126,11 @@ def detect(
         quoted_spans.append(m.span())
         if not DOTTED_NAME_RE.fullmatch(m.group("value").strip()):
             add(Signal("quoted", m.group("value"), m.start()))
+    design_spans = [m.span() for m in DESIGN_REF_RE.finditer(text)]
     for m in NUMBER_RE.finditer(text):
-        if not _inside(m.start(), quoted_spans):
-            add(Signal("number", m.group(0), m.start()))
+        # the number of `State 5` is the design reference, not a value
+        if not _inside(m.start(), quoted_spans) and not _inside(m.start(), design_spans):
+            add(Signal("number", _DIGIT_GROUP_SEPARATORS.sub("", m.group(0)), m.start()))
     for m in PATH_RE.finditer(text):
         if not _inside(m.start(), quoted_spans):
             add(Signal("path", m.group(0), m.start()))
@@ -132,15 +143,40 @@ def detect(
     listed: list[tuple[int, int]] = []
     for regex in (LIST_RE, TUPLE_RE):
         for m in regex.finditer(text):
-            if _inside(m.start(), listed):
+            # a list in parentheses is one signal, whichever pattern saw it first
+            if any(start < m.end() and m.start() < end for start, end in listed):
                 continue
             items = _items(m.group("items"))
             if len(set(items)) >= 3 and sum(_identifier_like(i, names) for i in set(items)) >= 2:
                 listed.append(m.span())
                 add(Signal("list", m.group(0), m.start(), items=items))
+    found.extend(_mapping_signals(text, spans))
     if enums:
         found.extend(_enum_signals(text, enums, spans, field_names))
     return sorted(found, key=lambda s: (s.start, s.kind))
+
+
+def _mapping_signals(text: str, spans: list[tuple[int, int]]) -> list[Signal]:
+    """Two or more `key for value` pairs joined by commas: a correspondence
+    (§15.2 check 5) written as prose, whatever words the values are."""
+    signals, chain = [], []
+    for m in MAPPING_PAIR_RE.finditer(text):
+        if _inside(m.start(), spans):
+            continue
+        if chain and _MAPPING_JOINER_RE.fullmatch(text[chain[-1].end():m.start()]):
+            chain.append(m)
+            continue
+        if len(chain) >= 2:
+            signals.append(_mapping(text, chain))
+        chain = [m]
+    if len(chain) >= 2:
+        signals.append(_mapping(text, chain))
+    return signals
+
+
+def _mapping(text: str, chain: list[re.Match]) -> Signal:
+    return Signal("mapping", text[chain[0].start():chain[-1].end()], chain[0].start(),
+                  items=tuple(m.group("key") for m in chain))
 
 
 def _enum_signals(

@@ -81,6 +81,25 @@ def _l2_l3(note: dict[str, Any], module: str | None, index: SpecIndex) -> list[d
     return out
 
 
+# Between two members of a restated list (F3) stand only separators: `open, then
+# business_confidential, then personal_data`. A condition between them —
+# `timeout when the deadline passed; resource_exhausted when …` — is the
+# algorithm form F4, which research Q9 §2.2 classes as prose.
+_PURE_GAP_RE = re.compile(r"[\s,;:()\-–—]*(?:(?:then|and|or)[\s,;:()\-–—]*)*")
+
+
+def _restated_without_conditions(text: str, members: list[str]) -> bool:
+    positions = []
+    for member in members:
+        m = re.search(rf"(?<![\w.]){re.escape(member)}(?![\w])", text)
+        if m is None:
+            return False
+        positions.append((m.start(), m.end()))
+    positions.sort()
+    return all(_PURE_GAP_RE.fullmatch(text[a_end:b_start])
+               for (_, a_end), (b_start, _) in zip(positions, positions[1:]))
+
+
 def _l4(note: dict[str, Any], module: str | None, index: SpecIndex) -> list[dict[str, Any]]:
     text = note["text"]
     out = []
@@ -89,10 +108,11 @@ def _l4(note: dict[str, Any], module: str | None, index: SpecIndex) -> list[dict
         if not members or len(members) < 2:
             continue
         present = member_order(text, members)
-        if len(present) == len(members):
+        if len(present) == len(members) and _restated_without_conditions(text, present):
             out.append(_finding(
                 "L4", "addressed_enumeration_restated", "block", note, module,
-                f"every member of = models.{name} is restated next to its address (M-E2).",
+                f"every member of = models.{name} is restated next to its address with no condition "
+                "between them (M-E2, form F3).",
                 enum=name, members=present,
             ))
     for claim in ORDER_CLAIM_RE.finditer(text):
@@ -112,17 +132,24 @@ def _l4(note: dict[str, Any], module: str | None, index: SpecIndex) -> list[dict
     return out
 
 
-def _sentences_with(text: str, span: tuple[str, ...]) -> str:
-    words = " ".join(span)
-    for sentence in re.split(r"(?<=[.;])\s+", text):
-        if words in " ".join(w.lower() for w in _WORD_RE.findall(sentence)):
-            return sentence
-    return text
+def _sentences(text: str) -> list[str]:
+    return re.split(r"(?<=[.;])\s+", text)
+
+
+def _words(text: str) -> str:
+    return " ".join(w.lower() for w in _WORD_RE.findall(text))
+
+
+def _sentence_with(text: str, gram: tuple[str, ...]) -> str | None:
+    words = " ".join(gram)
+    return next((sentence for sentence in _sentences(text) if words in _words(sentence)), None)
 
 
 def _l5(by_module: dict[str, list[dict[str, Any]]], index: SpecIndex) -> list[dict[str, Any]]:
-    """M-D1: a ≥10-word span shared by notes of different modules (report).
-    M-D2: a list taken from that span's sentence differs between the copies."""
+    """M-D1: a ≥10-word span shared by notes of different modules (report,
+    on both notes). M-D2: in a sentence the copies share, a list differs from
+    its counterpart — the list at the same position of the other copy (block,
+    on both notes)."""
     grams: dict[tuple[str, ...], list[tuple[str, dict[str, Any]]]] = defaultdict(list)
     for module, notes in by_module.items():
         for note in notes:
@@ -133,35 +160,52 @@ def _l5(by_module: dict[str, list[dict[str, Any]]], index: SpecIndex) -> list[di
                 if gram not in seen:
                     seen.add(gram)
                     grams[gram].append((module, note))
-    pairs: dict[tuple[int, int], tuple[tuple[str, ...], tuple[str, dict], tuple[str, dict]]] = {}
+    pairs: dict[tuple[int, int], dict[str, Any]] = {}
     for gram, holders in grams.items():
         for i, (module_a, note_a) in enumerate(holders):
             for module_b, note_b in holders[i + 1:]:
                 if module_a == module_b:
                     continue
                 key = tuple(sorted((id(note_a), id(note_b))))
-                pairs.setdefault(key, (gram, (module_a, note_a), (module_b, note_b)))
+                pair = pairs.setdefault(key, {"a": (module_a, note_a), "b": (module_b, note_b), "grams": []})
+                pair["grams"].append(gram)
+    names = index.names()
     out = []
-    for gram, (module_a, note_a), (module_b, note_b) in pairs.values():
-        other = f"{note_b.get('path')}:{note_b.get('line')} ({module_b})"
-        out.append(_finding(
-            "L5", "shared_prose", "report", note_a, module_a,
-            f"shares a {SHARED_SPAN_WORDS}-word span with {other}; name the other module's function "
-            "instead of restating its rule (M-D4).",
-            span=" ".join(gram), other=other,
-        ))
-        names = index.names()
-        lists_a = [s.items for s in detect(_sentences_with(note_a["text"], gram), names=names) if s.kind == "list"]
-        lists_b = [s.items for s in detect(_sentences_with(note_b["text"], gram), names=names) if s.kind == "list"]
-        for items_a in lists_a:
-            for items_b in lists_b:
+    for pair in pairs.values():
+        (module_a, note_a), (module_b, note_b) = pair["a"], pair["b"]
+        sides = (((module_a, note_a), (module_b, note_b)), ((module_b, note_b), (module_a, note_a)))
+        for (module, note), (other_module, other_note) in sides:
+            other = f"{other_note.get('path')}:{other_note.get('line')} ({other_module})"
+            out.append(_finding(
+                "L5", "shared_prose", "report", note, module,
+                f"shares a {SHARED_SPAN_WORDS}-word span with {other}; name the other module's function "
+                "instead of restating its rule (M-D4).",
+                span=" ".join(pair["grams"][0]), other=other,
+            ))
+        compared = set()
+        diverged: list[tuple[tuple[str, ...], tuple[str, ...]]] = []
+        for gram in pair["grams"]:
+            sentence_a, sentence_b = _sentence_with(note_a["text"], gram), _sentence_with(note_b["text"], gram)
+            if sentence_a is None or sentence_b is None or (sentence_a, sentence_b) in compared:
+                continue
+            compared.add((sentence_a, sentence_b))
+            lists_a = [s.items for s in detect(sentence_a, names=names) if s.kind == "list"]
+            lists_b = [s.items for s in detect(sentence_b, names=names) if s.kind == "list"]
+            for items_a, items_b in zip(lists_a, lists_b):
                 common = set(items_a) & set(items_b)
-                if len(common) >= 2 and len(common) * 2 >= len(set(items_a) | set(items_b)) and items_a != items_b:
-                    out.append(_finding(
-                        "L5", "diverged_copies", "block", note_a, module_a,
-                        f"a list of this note and its copy in {other} share a span and differ (M-D2).",
-                        items=list(items_a), other_items=list(items_b), other=other,
-                    ))
+                if items_a != items_b and len(common) * 2 >= len(set(items_a) | set(items_b)):
+                    diverged.append((items_a, items_b))
+        for items_a, items_b in diverged:
+            for (module, note), (other_module, other_note), mine, theirs in (
+                ((module_a, note_a), (module_b, note_b), items_a, items_b),
+                ((module_b, note_b), (module_a, note_a), items_b, items_a),
+            ):
+                other = f"{other_note.get('path')}:{other_note.get('line')} ({other_module})"
+                out.append(_finding(
+                    "L5", "diverged_copies", "block", note, module,
+                    f"a list of this note and its copy in {other} share a span and differ (M-D2).",
+                    items=list(mine), other_items=list(theirs), other=other,
+                ))
     return out
 
 
