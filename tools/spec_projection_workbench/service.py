@@ -715,6 +715,13 @@ def _canonical_text(payload: dict[str, Any]) -> str:
     return json.dumps(payload, ensure_ascii=False, indent=2) + "\n"
 
 
+def projected_spec(project: Path) -> dict[str, Any]:
+    """The specification the authored sources project to, in memory; the
+    project's ``global_spec.json`` is not written."""
+    _, projected, _, _ = _project(project.resolve())
+    return projected
+
+
 def render_diff(project: Path) -> str:
     project = project.resolve()
     _, projected, _, _ = _project(project)
