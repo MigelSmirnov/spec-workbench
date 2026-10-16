@@ -374,32 +374,30 @@ def module_notes(case_root: Path, module: str) -> dict[str, Any]:
 
 
 def check_note_draft(case_root: Path, note: str, factory_root: Path | None = None) -> dict[str, Any]:
-    """M3 with the verdicts the gate will give: one draft note
-    ``<scope>: [CLASS] text`` through L1 (the Factory's resolver) and L2–L5
-    (against the case's other notes)."""
+    """One draft note ``<scope>: [CLASS] text`` through what will judge it:
+    the State 7 gate's own checks of one note (``gate.note_findings``; from
+    standard_version 3 its address and class checks by the Factory's
+    resolver), then lint L2–L5 against the case's other notes. The lint is
+    the writing environment's acceptance, not yet a gate."""
     from notes_authoring import binding
     from notes_authoring.lint import lint
-    from notes_workbench import factory_addresses
-    from notes_workbench.gate import NOTE_RE
+    from notes_workbench import factory_addresses, gate
 
-    match = NOTE_RE.fullmatch(note.strip())
-    if not match:
-        raise ValueError("a note is '<scope>: [NOTE_CLASS] prose'")
+    match = gate.NOTE_RE.fullmatch(note.strip())
+    if not match or len(note.strip().splitlines()) != 1:
+        raise ValueError("a note is one line '<scope>: [NOTE_CLASS] prose'")
     draft = {"path": DRAFT_PATH, "line": 1, "scope": match.group("scope"),
              "class": match.group("class"), "text": match.group("text").strip()}
+    context = gate.note_context(case_root)
+    findings = gate.note_findings(draft, context)
+    if context["factory_judged"]:
+        findings += factory_addresses.findings(case_root, [draft], factory_root)
+    for item in findings:
+        item.setdefault("rule", "gate")
+        item["path"] = DRAFT_PATH
     spec = _surface(case_root)
-    others = language.authored_notes(case_root)
-    report = lint(others + [draft], spec)
-    findings = [f for f in report["findings"] if f["path"] == DRAFT_PATH]
-    resolver = factory_addresses.run_resolver(
-        {**spec, "notes": [f"{draft['scope']}: [{draft['class']}] {draft['text']}"]},
-        factory_root=factory_root,
-    )
-    for item in resolver["addresses"]:
-        if item.get("status") != "legal":
-            findings.insert(0, {"rule": "L1", "code": item.get("code"), "severity": "block",
-                                "path": DRAFT_PATH, "line": 1, "scope": draft["scope"],
-                                "message": f"{item.get('address')}: {item.get('message')}"})
+    report = lint(language.authored_notes(case_root) + [draft], spec)
+    findings += [f for f in report["findings"] if f["path"] == DRAFT_PATH]
     owners = binding.owners(spec)
     module = owners.get(draft["scope"]) or owners.get(draft["scope"].split(".", 1)[0])
     return {

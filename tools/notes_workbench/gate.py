@@ -308,17 +308,81 @@ def _finding(severity: str, code: str, message: str, *, line: int | None = None,
     return result
 
 
+def note_context(project: Path) -> dict[str, Any]:
+    """What the per-note checks need of a case, loaded once."""
+    return {
+        "valid_scopes": _load_contract_scopes(project) | _load_module_scopes(project),
+        "known_addresses": _load_structured_addresses(project),
+        # From standard_version 3 the Factory's resolver judges every address.
+        "factory_judged": factory_addresses.closes_note_addresses(project),
+    }
+
+
+def note_findings(note: dict[str, Any], context: dict[str, Any]) -> list[dict[str, Any]]:
+    """The checks the gate applies to one parsed note (``line``, ``scope``,
+    ``class``, ``text``) on its own. From standard_version 3 the address
+    checks are the Factory's (``factory_addresses.findings``), run per case."""
+    findings: list[dict[str, Any]] = []
+    number, scope, note_class, text = note.get("line"), note["scope"], note["class"], note["text"]
+    valid_scopes, known_addresses = context["valid_scopes"], context["known_addresses"]
+    factory_judged = context["factory_judged"]
+    if scope not in valid_scopes:
+        findings.append(_finding("block", "unknown_note_scope", f"Unknown note scope: {scope}", line=number, scope=scope))
+    if note_class not in NOTE_CLASSES:
+        findings.append(_finding("block", "unknown_note_class", f"Unknown note class: {note_class}", line=number, scope=scope))
+        return findings
+
+    if any(re.search(pattern, text, re.IGNORECASE) for pattern in STUB_PATTERNS):
+        findings.append(_finding("block", "semantic_stub", "Note is an implementation placeholder rather than a generation requirement.", line=number, scope=scope))
+
+    addresses = [item.group("address") for item in ADDRESS_RE.finditer(text)]
+    expected_prefix = REFERENCE_CLASS_PREFIX.get(note_class)
+    if factory_judged and note_class in factory_addresses.CLOSED_NOTE_CLASSES:
+        expected_prefix = None  # the class itself is refused below
+    if expected_prefix is not None:
+        matching = [address for address in addresses if address.startswith(expected_prefix + ".")]
+        if not matching:
+            findings.append(_finding("block", "missing_required_reference", f"[{note_class}] requires an '= {expected_prefix}.*' reference.", line=number, scope=scope))
+    for address in [] if factory_judged else addresses:
+        if not _address_resolves(address, known_addresses):
+            findings.append(_finding("block", "unresolved_structured_reference", f"Structured reference does not resolve: {address}", line=number, scope=scope))
+    for positional in sorted({item.group(0) for item in POSITIONAL_ADDRESS_RE.finditer(text)}):
+        findings.append(_finding(
+            "block",
+            "array_position_reference",
+            f"{positional} names a value by its position in an array. SPEC_STANDARD 15.4: a position is not an "
+            "identifier. Give the entry its own data-provider constant and name the imported symbol "
+            "(SPEC_STANDARD 6.10: one exact entry - one scalar constant).",
+            line=number,
+            scope=scope,
+        ))
+    referenced = {item.start("address") for item in ADDRESS_RE.finditer(text)}
+    bare = sorted({
+        item.group("address")
+        for item in BARE_DATA_ADDRESS_RE.finditer(text)
+        if item.start("address") not in referenced
+    })
+    for address in bare:
+        findings.append(_finding(
+            "block",
+            "undereferenced_data_address",
+            f"{address} is written without `=`: the Factory does not dereference it, so the generator receives "
+            "neither the value nor a symbol and has to invent it. SPEC_STANDARD 15.3.1: name the imported "
+            "data-provider constant, the settings field, or `= models.<Enum>`.",
+            line=number,
+            scope=scope,
+        ))
+    return findings
+
+
 def coverage(project: Path) -> dict[str, Any]:
     path = project / "80_notes.md"
     findings: list[dict[str, Any]] = []
     notes: list[dict[str, Any]] = []
     contract_scopes = _load_contract_scopes(project)
-    module_scopes = _load_module_scopes(project)
-    valid_scopes = contract_scopes | module_scopes
-    known_addresses = _load_structured_addresses(project)
+    context = note_context(project)
     deterministic_scopes = _load_deterministic_callable_scopes(project)
-    # From standard_version 3 the Factory's resolver judges every address.
-    factory_judged = factory_addresses.closes_note_addresses(project)
+    factory_judged = context["factory_judged"]
 
     if not path.is_file():
         findings.append(_finding("block", "missing_notes_file", "State 7 requires 80_notes.md before handoff."))
@@ -337,52 +401,7 @@ def coverage(project: Path) -> dict[str, Any]:
             note = {"line": number, "scope": scope, "class": note_class, "text": text}
             notes.append(note)
 
-            if scope not in valid_scopes:
-                findings.append(_finding("block", "unknown_note_scope", f"Unknown note scope: {scope}", line=number, scope=scope))
-            if note_class not in NOTE_CLASSES:
-                findings.append(_finding("block", "unknown_note_class", f"Unknown note class: {note_class}", line=number, scope=scope))
-                continue
-
-            if any(re.search(pattern, text, re.IGNORECASE) for pattern in STUB_PATTERNS):
-                findings.append(_finding("block", "semantic_stub", "Note is an implementation placeholder rather than a generation requirement.", line=number, scope=scope))
-
-            addresses = [item.group("address") for item in ADDRESS_RE.finditer(text)]
-            expected_prefix = REFERENCE_CLASS_PREFIX.get(note_class)
-            if factory_judged and note_class in factory_addresses.CLOSED_NOTE_CLASSES:
-                expected_prefix = None  # the class itself is refused below
-            if expected_prefix is not None:
-                matching = [address for address in addresses if address.startswith(expected_prefix + ".")]
-                if not matching:
-                    findings.append(_finding("block", "missing_required_reference", f"[{note_class}] requires an '= {expected_prefix}.*' reference.", line=number, scope=scope))
-            for address in [] if factory_judged else addresses:
-                if not _address_resolves(address, known_addresses):
-                    findings.append(_finding("block", "unresolved_structured_reference", f"Structured reference does not resolve: {address}", line=number, scope=scope))
-            for positional in sorted({item.group(0) for item in POSITIONAL_ADDRESS_RE.finditer(text)}):
-                findings.append(_finding(
-                    "block",
-                    "array_position_reference",
-                    f"{positional} names a value by its position in an array. SPEC_STANDARD 15.4: a position is not an "
-                    "identifier. Give the entry its own data-provider constant and name the imported symbol "
-                    "(SPEC_STANDARD 6.10: one exact entry - one scalar constant).",
-                    line=number,
-                    scope=scope,
-                ))
-            referenced = {item.start("address") for item in ADDRESS_RE.finditer(text)}
-            bare = sorted({
-                item.group("address")
-                for item in BARE_DATA_ADDRESS_RE.finditer(text)
-                if item.start("address") not in referenced
-            })
-            for address in bare:
-                findings.append(_finding(
-                    "block",
-                    "undereferenced_data_address",
-                    f"{address} is written without `=`: the Factory does not dereference it, so the generator receives "
-                    "neither the value nor a symbol and has to invent it. SPEC_STANDARD 15.3.1: name the imported "
-                    "data-provider constant, the settings field, or `= models.<Enum>`.",
-                    line=number,
-                    scope=scope,
-                ))
+            findings.extend(note_findings(note, context))
 
     if factory_judged:
         findings.extend(factory_addresses.findings(project, notes))

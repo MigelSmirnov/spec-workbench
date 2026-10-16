@@ -55,7 +55,8 @@ address, a value without one stops the module with a structure request — never
 as prose. Before writing a value, ask find_value_homes; before an address,
 resolve_data_address; before stating "there is no home", find_absence (its
 digests go into the request); before handing a note in, check_note_draft —
-the gate applies the same lint. module_notes gives the notes to rewrite.
+it applies the State 7 gate's checks of one note and the lint the writing
+environment accepts notes by. module_notes gives the notes to rewrite.
 
 Authority stays with the design-state documents; these tools project them. If
 a tool and a document disagree, the document is right and the tool has a bug:
@@ -226,9 +227,12 @@ def module_notes(project: str, module: str) -> dict[str, Any]:
 @mcp.tool()
 def check_note_draft(project: str, note: str) -> dict[str, Any]:
     """M3 with verdicts: one draft note `<scope>: [CLASS] prose` through the
-    gate's lint — L1 (the Factory's resolver), L2 literal with a home, L3
-    uncovered data signal, L4 restated enumeration, L5 prose shared with
-    another module. `clean` is false while any finding blocks."""
+    State 7 gate's checks of one note (scope, class, stub, references; from
+    standard_version 3 the Factory's resolver, L1) and the writing
+    environment's lint — L2 literal with a home, L3 uncovered data signal,
+    L4 restated enumeration, L5 prose shared with another module. `clean` is
+    false while any finding blocks. Whether every callable has a positive
+    note is a property of the whole module, checked when notes are accepted."""
     try:
         with authoring_pipeline.materialized_project(_REPO_ROOT, project) as (_, case_root):
             return service.check_note_draft(case_root, note)
