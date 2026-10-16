@@ -10,6 +10,23 @@ from pathlib import Path
 from notes_workbench import gate, language, propagation, service
 
 
+def _author(args: argparse.Namespace) -> tuple[dict[str, object] | str, int]:
+    """The State 7 writing environment (tools/DATA_CLOSURE_WORKBENCH.md)."""
+    from notes_authoring import accept, prompt, request
+    from notes_authoring.index import SpecIndex
+    from spec_projection_workbench import projected_spec
+
+    spec = projected_spec(args.project)
+    if args.author_requests:
+        return request.status(args.project, SpecIndex.build(spec)), 0
+    if args.author_prompt:
+        return prompt.build(args.project, args.module, spec, service.module_slice(args.project, args.module),
+                            language.authored_notes(args.project)), 0
+    result = json.loads(Path(args.author_accept).read_text(encoding="utf-8"))
+    payload = accept.accept(args.project, args.module, result, spec=spec, write=not args.check)
+    return payload, 0 if payload["status"] != "refused" else 1
+
+
 def _propagation_human(payload: dict[str, object]) -> str:
     summary = payload["summary"]
     lines = [
@@ -39,6 +56,12 @@ def main(argv: list[str] | None = None) -> int:
     action.add_argument("--handoff", action="store_true")
     action.add_argument("--language", action="store_true")
     action.add_argument("--propagate", action="store_true")
+    action.add_argument("--author-prompt", action="store_true",
+                        help="print the writing agent's task for --module")
+    action.add_argument("--author-accept", metavar="RESULT_JSON",
+                        help="lint the agent's result for --module and write it into the case")
+    action.add_argument("--author-requests", action="store_true",
+                        help="open and stale structure requests per module")
     parser.add_argument(
         "--base-ref",
         default="HEAD",
@@ -50,19 +73,30 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--check",
         action="store_true",
-        help="With --propagate, report drift without writing global_spec.json.",
+        help="With --propagate or --author-accept, report without writing.",
     )
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args(argv)
     if not args.project.is_dir():
         print(f"design_notes: error: project directory not found: {args.project}", file=sys.stderr)
         return 2
-    if (args.slice or args.review) and not args.module:
-        print("design_notes: error: --module is required with --slice/--review", file=sys.stderr)
+    if (args.slice or args.review or args.author_prompt or args.author_accept) and not args.module:
+        print("design_notes: error: --module is required with --slice/--review/--author-*", file=sys.stderr)
         return 2
-    if args.check and not args.propagate:
-        print("design_notes: error: --check is valid only with --propagate", file=sys.stderr)
+    if args.check and not (args.propagate or args.author_accept):
+        print("design_notes: error: --check is valid only with --propagate or --author-accept", file=sys.stderr)
         return 2
+    if args.author_prompt or args.author_accept or args.author_requests:
+        try:
+            payload, code = _author(args)
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            print(f"design_notes: error: {exc}", file=sys.stderr)
+            return 2
+        if isinstance(payload, str):
+            print(payload)
+        else:
+            print(json.dumps(payload, indent=2, ensure_ascii=False))
+        return code
     if args.base_ref != "HEAD" and not args.propagate:
         print("design_notes: error: --base-ref is valid only with --propagate", file=sys.stderr)
         return 2
