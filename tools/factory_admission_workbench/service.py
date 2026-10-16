@@ -1027,23 +1027,20 @@ def _target_check(factory_root: Path, project: str, source: Path, update_existin
 
 FACTORY_SPEC_VERSION_MODULE = "tools/spec_version.py"
 FACTORY_SPEC_VERSION_CONSTANT = "SUPPORTED_STANDARD_VERSIONS"
+# From this version a note addresses no `rules` / `config` node (SPEC_STANDARD
+# §15.3.1). A Factory that supports v3 but does not name it reads v3 notes
+# by the v2 rule.
+FACTORY_NOTE_ADDRESS_CONSTANT = "NOTE_ADDRESSES_CLOSED_MIN_VERSION"
 
 
-def _factory_standard_versions(path: Path) -> frozenset[int]:
-    """The literal ``SUPPORTED_STANDARD_VERSIONS`` of the Factory's
-    ``tools/spec_version.py``, read without running Factory code.
-
-    The Factory documents the name, the place and the literal form of the
-    constant as part of this contract. Anything else is a ValueError.
-    """
-    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+def _factory_literal(tree: ast.Module, name: str) -> Any:
     for node in tree.body:
         targets = (
             node.targets if isinstance(node, ast.Assign)
             else [node.target] if isinstance(node, ast.AnnAssign) and node.value is not None
             else []
         )
-        if not any(isinstance(t, ast.Name) and t.id == FACTORY_SPEC_VERSION_CONSTANT for t in targets):
+        if not any(isinstance(t, ast.Name) and t.id == name for t in targets):
             continue
         value = node.value
         if (
@@ -1054,13 +1051,31 @@ def _factory_standard_versions(path: Path) -> frozenset[int]:
             and not value.keywords
         ):
             value = value.args[0]
-        literal = ast.literal_eval(value)
-        if not isinstance(literal, (set, frozenset, tuple, list)) or not all(
-            type(item) is int for item in literal
-        ):
-            raise ValueError(f"{FACTORY_SPEC_VERSION_CONSTANT} is not a literal collection of integers")
-        return frozenset(literal)
-    raise ValueError(f"{FACTORY_SPEC_VERSION_CONSTANT} is not assigned at module level")
+        return ast.literal_eval(value)
+    raise ValueError(f"{name} is not assigned at module level")
+
+
+def _factory_standard_versions(path: Path) -> tuple[frozenset[int], int | None]:
+    """The literals ``SUPPORTED_STANDARD_VERSIONS`` and
+    ``NOTE_ADDRESSES_CLOSED_MIN_VERSION`` (None when absent) of the Factory's
+    ``tools/spec_version.py``, read without running Factory code.
+
+    The Factory documents the names, the place and the literal form of the
+    constants as part of this contract. Anything else is a ValueError.
+    """
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    literal = _factory_literal(tree, FACTORY_SPEC_VERSION_CONSTANT)
+    if not isinstance(literal, (set, frozenset, tuple, list)) or not all(
+        type(item) is int for item in literal
+    ):
+        raise ValueError(f"{FACTORY_SPEC_VERSION_CONSTANT} is not a literal collection of integers")
+    try:
+        closed = _factory_literal(tree, FACTORY_NOTE_ADDRESS_CONSTANT)
+    except ValueError:
+        closed = None
+    if closed is not None and type(closed) is not int:
+        raise ValueError(f"{FACTORY_NOTE_ADDRESS_CONSTANT} is not a literal integer")
+    return frozenset(literal), closed
 
 
 def _factory_standard_version_check(factory_root: Path, standard_version: Any) -> AdmissionCheck:
@@ -1068,9 +1083,13 @@ def _factory_standard_version_check(factory_root: Path, standard_version: Any) -
 
     Every Factory accepts version 2, including those that predate
     ``tools/spec_version.py``. A later version (3: version 2 plus
-    ``ordered: true`` on enums) goes only to a Factory that names it; an older
-    Factory would refuse it at validation, and a Factory that ignored it would
-    silently drop the order (Q9-a, K6).
+    ``ordered: true`` on enums and notes that address only ``= models.X``)
+    goes only to a Factory that names it; an older Factory would refuse it at
+    validation, and a Factory that ignored it would silently drop the order
+    (Q9-a, K6). From version 3 the Factory must also name the version that
+    closes note addresses, at or below the source's: a Factory that supports
+    v3 without it would accept the `= rules.*` / `= config.*` notes the
+    standard's v3 refuses.
     """
     path = factory_root / FACTORY_SPEC_VERSION_MODULE
     evidence: dict[str, Any] = {
@@ -1092,7 +1111,7 @@ def _factory_standard_version_check(factory_root: Path, standard_version: Any) -
             evidence,
         )
     try:
-        supported = _factory_standard_versions(path)
+        supported, closed = _factory_standard_versions(path)
     except FileNotFoundError:
         return AdmissionCheck(
             "FA020",
@@ -1110,11 +1129,20 @@ def _factory_standard_version_check(factory_root: Path, standard_version: Any) -
             {**evidence, "error": str(exc)},
         )
     evidence["factory_supported_standard_versions"] = sorted(supported)
+    evidence["factory_note_addresses_closed_min_version"] = closed
     if standard_version not in supported:
         return AdmissionCheck(
             "FA020",
             CHECK_BLOCK,
             f"Target Factory does not support standard_version {standard_version}.",
+            evidence,
+        )
+    if standard_version >= 3 and (closed is None or closed > standard_version):
+        return AdmissionCheck(
+            "FA020",
+            CHECK_BLOCK,
+            f"Target Factory supports standard_version {standard_version} but does not close note "
+            f"addresses in it ({FACTORY_NOTE_ADDRESS_CONSTANT}); it would read the notes by the v2 rule.",
             evidence,
         )
     return AdmissionCheck(

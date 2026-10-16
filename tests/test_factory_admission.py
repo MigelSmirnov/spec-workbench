@@ -733,6 +733,7 @@ from __future__ import annotations
 
 SUPPORTED_STANDARD_VERSIONS = frozenset({2, 3})
 ORDERED_ENUM_MIN_VERSION = 3
+NOTE_ADDRESSES_CLOSED_MIN_VERSION = 3
 '''
 
 
@@ -806,11 +807,28 @@ def test_v3_source_with_an_unreadable_factory_declaration_is_blocked(
     assert _fa(report, "FA020")["status"] == "BLOCK"
 
 
+@pytest.mark.parametrize("closed", [None, "4", "'3'"])
+def test_v3_source_to_a_factory_whose_v3_keeps_v2_note_addresses_is_blocked(
+    tmp_path: Path, closed: str | None
+) -> None:
+    # A Factory between code-factory #86 and #87: v3 supported, note addresses
+    # still read by the v2 rule (SPEC_STANDARD §15.3.1).
+    spec_version = "SUPPORTED_STANDARD_VERSIONS = frozenset({2, 3})\n"
+    if closed is not None:
+        spec_version += f"NOTE_ADDRESSES_CLOSED_MIN_VERSION = {closed}\n"
+    report = _admit(tmp_path, 3, spec_version=spec_version)
+
+    fa020 = _fa(report, "FA020")
+    assert fa020["status"] == "BLOCK"
+    assert report["ready"] is False
+
+
 def test_factory_declaration_is_read_without_running_it(tmp_path: Path) -> None:
     marker = tmp_path / "ran"
     spec_version = (
         f"open({str(marker)!r}, 'w').write('x')\n"
         "SUPPORTED_STANDARD_VERSIONS = frozenset({2, 3})\n"
+        "NOTE_ADDRESSES_CLOSED_MIN_VERSION = 3\n"
     )
     report = _admit(tmp_path, 3, spec_version=spec_version)
 

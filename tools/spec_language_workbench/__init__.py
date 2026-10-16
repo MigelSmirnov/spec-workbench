@@ -4,8 +4,9 @@ import json
 from pathlib import Path
 from typing import Any
 
-# Revision 3 is revision 2 plus `ordered: true` on `kind: enum` (Q9-a). The
-# Factory a specification goes to must declare it too: FA020 checks that.
+# Revision 3 is revision 2 plus `ordered: true` on `kind: enum` (Q9-a) and
+# notes that address data only as `= models.X` (SPEC_STANDARD §15.3.1). The
+# Factory a specification goes to must declare both: FA020 checks that.
 SUPPORTED_STANDARD_VERSIONS: tuple[int, ...] = (2, 3)
 REPORT_SCHEMA = "spec_workbench_language_gate.v1"
 
