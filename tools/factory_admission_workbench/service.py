@@ -1033,6 +1033,10 @@ FACTORY_SPEC_VERSION_CONSTANT = "SUPPORTED_STANDARD_VERSIONS"
 FACTORY_NOTE_ADDRESS_CONSTANT = "NOTE_ADDRESSES_CLOSED_MIN_VERSION"
 
 
+class _NotAssigned(ValueError):
+    """The constant is not assigned at module level."""
+
+
 def _factory_literal(tree: ast.Module, name: str) -> Any:
     for node in tree.body:
         targets = (
@@ -1051,8 +1055,12 @@ def _factory_literal(tree: ast.Module, name: str) -> Any:
             and not value.keywords
         ):
             value = value.args[0]
-        return ast.literal_eval(value)
-    raise ValueError(f"{name} is not assigned at module level")
+        try:
+            return ast.literal_eval(value)
+        except (TypeError, ValueError, MemoryError, RecursionError) as exc:
+            # literal_eval raises TypeError for an unhashable set member
+            raise ValueError(f"{name} is not a readable literal: {exc!r}") from None
+    raise _NotAssigned(f"{name} is not assigned at module level")
 
 
 def _factory_standard_versions(path: Path) -> tuple[frozenset[int], int | None]:
@@ -1061,9 +1069,13 @@ def _factory_standard_versions(path: Path) -> tuple[frozenset[int], int | None]:
     ``tools/spec_version.py``, read without running Factory code.
 
     The Factory documents the names, the place and the literal form of the
-    constants as part of this contract. Anything else is a ValueError.
+    constants as part of this contract. Anything else is a ValueError that
+    names the constant; an absent note constant alone is None.
     """
-    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    try:
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    except (MemoryError, RecursionError) as exc:
+        raise ValueError(f"{path.name} does not parse: {exc!r}") from None
     literal = _factory_literal(tree, FACTORY_SPEC_VERSION_CONSTANT)
     if not isinstance(literal, (set, frozenset, tuple, list)) or not all(
         type(item) is int for item in literal
@@ -1071,7 +1083,7 @@ def _factory_standard_versions(path: Path) -> tuple[frozenset[int], int | None]:
         raise ValueError(f"{FACTORY_SPEC_VERSION_CONSTANT} is not a literal collection of integers")
     try:
         closed = _factory_literal(tree, FACTORY_NOTE_ADDRESS_CONSTANT)
-    except ValueError:
+    except _NotAssigned:
         closed = None
     if closed is not None and type(closed) is not int:
         raise ValueError(f"{FACTORY_NOTE_ADDRESS_CONSTANT} is not a literal integer")
@@ -1124,8 +1136,8 @@ def _factory_standard_version_check(factory_root: Path, standard_version: Any) -
         return AdmissionCheck(
             "FA020",
             CHECK_BLOCK,
-            f"Target Factory {FACTORY_SPEC_VERSION_MODULE} declares no readable "
-            f"{FACTORY_SPEC_VERSION_CONSTANT}.",
+            f"Target Factory {FACTORY_SPEC_VERSION_MODULE} declares its standard versions in a form "
+            f"admission cannot read ({FACTORY_SPEC_VERSION_CONSTANT}, {FACTORY_NOTE_ADDRESS_CONSTANT}).",
             {**evidence, "error": str(exc)},
         )
     evidence["factory_supported_standard_versions"] = sorted(supported)

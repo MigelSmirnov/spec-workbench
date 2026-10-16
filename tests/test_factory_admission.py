@@ -798,6 +798,10 @@ def test_v3_source_to_a_factory_declaring_only_v2_is_blocked(tmp_path: Path) -> 
     "SUPPORTED_STANDARD_VERSIONS = compute()\n",
     "SUPPORTED_STANDARD_VERSIONS = frozenset({'2', '3'})\n",
     "SUPPORTED_STANDARD_VERSIONS = frozenset({2, 3}\n",
+    # literal_eval raises TypeError for an unhashable member
+    "SUPPORTED_STANDARD_VERSIONS = {2, (3, [1])}\n",
+    "SUPPORTED_STANDARD_VERSIONS = {2, 3, {}}\n",
+    "SUPPORTED_STANDARD_VERSIONS = frozenset({2, 3})\nNOTE_ADDRESSES_CLOSED_MIN_VERSION = ORDERED_ENUM_MIN_VERSION\n",
 ])
 def test_v3_source_with_an_unreadable_factory_declaration_is_blocked(
     tmp_path: Path, spec_version: str
