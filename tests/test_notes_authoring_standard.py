@@ -138,3 +138,8 @@ def test_a_closing_fence_carries_only_blanks_and_a_backtick_info_holds_no_backti
         "```code``` inline\n\n## 3. next\n", encoding="utf-8")
     (skill / standard.INDEX).write_text("# I\n", encoding="utf-8")
     assert [s["section"] for s in standard.contents(tmp_path)["sections"]] == ["2", "3"]
+
+
+def test_a_dotted_number_is_always_a_section_reference(repo):
+    with pytest.raises(ValueError):
+        standard.section("5.2 Placement", repo)

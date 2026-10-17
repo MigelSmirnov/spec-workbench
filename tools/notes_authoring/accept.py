@@ -211,10 +211,15 @@ def accept(project: Path, module: str, result: Any, *, spec: dict[str, Any] | No
     if elsewhere:
         return _refused(module, f"the module has notes in {sorted({n['path'] for n in elsewhere})}; "
                                 f"the environment writes only {NOTES_FILE}")
-    mixed = _mixed_line_endings(_notes_text(project))
-    if len(mixed) > 1:
+    text = _notes_text(project)
+    endings = _mixed_line_endings(text)
+    if len(endings) > 1 or not set(endings) <= {"\r\n", "\n", "\r"}:
         # rewriting it would join or split lines; normalising it is not ours to do
-        return _refused(module, f"{NOTES_FILE} mixes line endings {[repr(e) for e in mixed]}; normalise it first")
+        return _refused(module, f"{NOTES_FILE} uses line breaks {[repr(e) for e in endings]}; "
+                                "normalise it to one of CRLF, LF or CR first")
+    heading = f"## {module}"
+    if sum(line.rstrip(" \t") == heading for line in text.splitlines()) > 1:
+        return _refused(module, f"{NOTES_FILE} has more than one '{heading}' heading; keep one first")
     parsed, errors = _parse(notes, module, spec)
     if errors:
         return _refused(module, "notes do not parse or bind to the module", errors=errors)

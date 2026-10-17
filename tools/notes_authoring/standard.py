@@ -82,10 +82,11 @@ def section(ref: str, repo: Path | None = None) -> dict[str, Any]:
         found = [i for i, h in enumerate(headings) if h["number"] == number.group("number")
                  # a title given with the number must be that section's
                  and (not number.group("title") or number.group("title").casefold() in h["title"].casefold())]
-    numbered_section = number and any(h["number"] == number.group("number") for h in headings)
-    # words that only start with digits ("200 строк") are a title; a number that
-    # names a section with a title that is not its own refuses
-    if not found and not numbered_section and not (number and not number.group("title")):
+    # a dotted number (`5.2`) or one that names a section is a section reference;
+    # only words that start with a plain number ("200 строк") are a title
+    section_ref = number and ("." in number.group("number") or ref.startswith("§")
+                              or any(h["number"] == number.group("number") for h in headings))
+    if not found and not section_ref and not (number and not number.group("title")):
         # a title, or words that only start with digits ("200 строк")
         exact = [i for i, h in enumerate(headings) if h["title"].casefold() == ref.casefold()]
         found = exact or [i for i, h in enumerate(headings) if ref.casefold() in h["title"].casefold()]
