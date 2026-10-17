@@ -97,3 +97,29 @@ def test_without_a_copy_in_the_repo_the_tools_own_standard_is_read(tmp_path):
 def test_the_real_standard_has_the_sections_the_task_points_to():
     for ref in ("§2", "§15", "15.2", "15.3.1", "15.11"):
         assert standard.section(ref)["text"]
+
+
+def test_a_tilde_fence_or_an_indented_fence_holds_no_heading(tmp_path):
+    skill = tmp_path / standard.SKILL
+    skill.mkdir(parents=True)
+    (skill / standard.STANDARD).write_text(
+        "# S\n\n## 2. notes\n\n~~~text\n## 9. inside a tilde fence\n```\n## 8. still inside\n~~~\n\n"
+        "   ```\n## 7. inside an indented fence\n   ```\n\n## 3. next\n", encoding="utf-8")
+    (skill / standard.INDEX).write_text("# I\n", encoding="utf-8")
+    assert [s["section"] for s in standard.contents(tmp_path)["sections"]] == ["2", "3"]
+    assert "## 7. inside an indented fence" in standard.section("2", tmp_path)["text"]
+
+
+def test_a_number_with_its_title_names_the_section_and_a_wrong_title_does_not(repo):
+    assert standard.section("§15.2 Placement", repo)["section"] == "15.2"
+    with pytest.raises(ValueError):
+        standard.section("§15.2 NOT-list", repo)
+
+
+def test_words_that_start_with_digits_are_still_a_title(tmp_path):
+    skill = tmp_path / standard.SKILL
+    skill.mkdir(parents=True)
+    (skill / standard.STANDARD).write_text("# S\n\n## 2. notes\n\n### Лимит 200 строк\n\nText.\n", encoding="utf-8")
+    (skill / standard.INDEX).write_text("# I\n", encoding="utf-8")
+    assert standard.section("200 строк", tmp_path)["title"] == "Лимит 200 строк"
+    assert standard.section("2", tmp_path)["section"] == "2"

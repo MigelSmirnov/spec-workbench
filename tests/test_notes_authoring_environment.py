@@ -267,7 +267,7 @@ def test_a_list_note_goes_with_its_continuation_lines(case, factory):
     assert [n["text"] for n in parse] == ["MUST return the text unchanged."]
 
 
-@pytest.mark.parametrize("ending", ["\r\n", "\n"])
+@pytest.mark.parametrize("ending", ["\r\n", "\n", "\r"])
 @pytest.mark.parametrize("final", [True, False])
 def test_line_endings_and_the_final_newline_are_kept(case, factory, ending, final):
     body = NOTES.replace("\n", ending)
@@ -286,3 +286,11 @@ def test_the_cli_refuses_a_task_for_a_module_the_case_does_not_have(case, capsys
     assert "unknown module: nowhere" in capsys.readouterr().err
     assert design_notes.main([str(case), "--module", "store", "--author-prompt"]) == 0
     assert "module `store`" in capsys.readouterr().out
+
+
+def test_a_module_heading_with_trailing_blanks_is_the_module_s_heading(case, factory):
+    (case / "80_notes.md").write_text(NOTES.replace("## store\n", "## store  \n"), encoding="utf-8")
+    notes = ["load_rows: [BEHAVIOR] MUST return rows in store order.", "save_row: [BEHAVIOR] MUST store the new row."]
+    assert run(case, factory, result(notes))["status"] == "written"
+    text = (case / "80_notes.md").read_text(encoding="utf-8")
+    assert text.count("## store") == 1 and "MUST store the new row." in text

@@ -396,7 +396,9 @@ def spec_standard(case_root: Path, section: str | None = None) -> dict[str, Any]
     subsections — the copy of SPEC_STANDARD on the case's ref."""
     from notes_authoring import standard
 
-    repo = case_root.resolve().parents[1]
+    # the case ref's repository: the nearest ancestor that carries the standard,
+    # whatever depth the case lives at
+    repo = next((p for p in case_root.resolve().parents if (p / standard.SKILL / standard.STANDARD).is_file()), None)
     payload = standard.contents(repo) if section is None else standard.section(section, repo)
     return {"schema_version": f"{SCHEMA_PREFIX}_spec_standard.v1", **payload}
 
