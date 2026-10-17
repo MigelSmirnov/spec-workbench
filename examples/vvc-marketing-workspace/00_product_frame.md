@@ -26,7 +26,9 @@ The owner is not confident in Spanish. The environment must support understandin
 - The working WhatsApp number currently uses the WhatsApp Business application on a phone.
 - First-version customer-message scope is text and photographs. The owner listens to voice messages on the phone; automatic voice transcription is excluded from the first version (owner decision, 2026-10-17).
 - Customer enquiries are expected through WhatsApp; the owner wants to discuss them and their replies with the assistant.
-- A personal plugin connecting ChatGPT to the owner's service is the intended interaction surface.
+- A personal plugin connecting ChatGPT to the owner's service is an intended interaction surface.
+- The server has two first-version machine clients: the assistant in ChatGPT and a local agent such as Codex. Product decisions are discussed with the owner in chat (owner decision, 2026-10-17). These are two client identities, not two independent owners.
+- The owner proposed a phone-accessible red button for emergency stopping. Its exact scope is pending: blocking outbound automation, stopping the marketing service, and shutting down the entire VPS are different outcomes.
 - Reddit is a possible later direction; the owner deferred its format and priority.
 - Login to Meta for Developers is currently unavailable to the owner. Whether a suitable Meta app exists is unknown.
 - The owner explicitly requested consideration of VPS requirements and security before implementation.
@@ -54,7 +56,9 @@ The owner referred to the server as "OHL" and mentioned DonDominio. Provider, re
 ## 3. Actors
 
 - Owner: reads enquiries, supplies business facts, edits content, approves or refuses external actions, and manages access.
-- Assistant in ChatGPT: explains retrieved data and proposes content or actions; it is not the source of authority for spending, sending or changing permissions.
+- Assistant in ChatGPT: one machine client; discusses decisions with the owner, explains retrieved data and proposes content or actions. It is not the source of authority for spending, sending or changing permissions.
+- Local agent such as Codex: a second machine client of the same service. It acts only under its own authorized scope; its access does not make it an owner or give it unrestricted host-administration authority.
+- Owner on the phone: the human control actor for the proposed emergency-stop surface, separate from both machine clients. Exact emergency behaviour is an open decision.
 - Customer: sends text and potentially media through WhatsApp. Customer content is untrusted input, not an administrative instruction.
 - VPS service: receives integration events, retains the agreed working records, exposes authorized product actions and reports external outcomes.
 - Meta services: authoritative source of actual advertising, publication and WhatsApp-message outcomes within granted permissions.
@@ -64,6 +68,7 @@ The owner referred to the server as "OHL" and mentioned DonDominio. Provider, re
 
 | Owner action | Inputs | Observable result | Failure or uncertainty |
 | --- | --- | --- | --- |
+| Access from either machine client | Owner-authorized ChatGPT or local-agent connection | Account-scoped product state and allowed capabilities; recorded requests identify the initiating client | An absent, revoked or insufficient client grant is reported as a refusal, not substituted by the other client's authority |
 | Inspect connected assets | Authorized connection and selected company assets | Identified accessible assets and observed permissions | Missing, expired or insufficient access is explicit; no inferred connection |
 | Use a supported integration | Owner-selected, installed integration and authorized external account | Its available actions and required permissions are visible; results identify the integration and account | Missing, disabled, incompatible or unsupported capabilities are reported explicitly; another account or provider is not silently substituted |
 | Prepare a Facebook publication | Owner's brief and permitted company materials | Editable proposed content and selected destination | Missing facts or unsupported media prevent a ready-to-publish claim |
@@ -90,7 +95,7 @@ Voice messages remain handled by the owner in the phone application. The first v
 Outputs include retrieved observations, bilingual drafts, approval previews, externally created object identities, observed external statuses, enquiry status histories and operator-visible failures.
 
 Persistent facts needed by the product:
-- owner and connection identity, allowed asset scope and access status;
+- owner identity and distinct ChatGPT/local-agent connection identities, allowed asset scope and access status;
 - original conversation events, participants and external message identities;
 - received photographs and their association with the source conversation and message, subject to the retention decision;
 - enquiry assessments and owner-entered business facts;
@@ -104,7 +109,9 @@ Exact models, identifiers, status vocabularies, schema fields and retention dura
 
 ## 6. External systems and product boundaries
 
-- ChatGPT personal plugin / remote MCP: authorized owner-facing product operations; availability in the owner's account remains to be tested.
+- ChatGPT personal plugin / remote MCP: one authenticated machine-client boundary; availability in the owner's account remains to be tested.
+- Local agent such as Codex: the second authenticated machine-client boundary. The local machine is outside the VPS service trust boundary; an authenticated client is not assumed to be uncompromised.
+- Proposed phone emergency control: owner-facing authority independent of both machine clients. Its authentication, reachability and scope remain to be decided.
 - Meta Marketing API: advertisement operations on explicitly authorized company assets.
 - Facebook publication APIs: required page identity and permissions remain to be verified separately from advertising permissions.
 - WhatsApp Business Platform: message delivery and inbound events; working-number onboarding and phone/API coexistence remain unresolved.
@@ -138,6 +145,8 @@ Only an authenticated owner may authorize the product's external changes.
 Assistant proposals and customer messages are not grants of authority.
 Permission to deploy code, read conversations, send a reply and change advertising are separate authorities.
 The mechanism and lifecycle of approval are not yet designed.
+Decisions discussed in chat must be distinguishable from machine proposals when used by the service. The local agent cannot turn its own proposal, a quoted chat message or another client's assertion into owner approval.
+A shared service record of decisions and action outcomes must serve both clients; two machine clients must not keep conflicting private approval histories. The identity, consistency and concurrency rules belong to States 1–2.
 
 ### ChatGPT, plugin and public network
 
@@ -145,6 +154,23 @@ The remote tool interface crosses a public-network and authentication boundary.
 An unlisted URL is not an authentication decision.
 The service exposes bounded business operations, not a general shell, arbitrary file access, arbitrary outbound requests or unrestricted access to the whole VPS.
 Exact authentication and allowed public surfaces remain to be selected.
+
+### Local-agent access and proposed phone emergency control
+
+ChatGPT and the local agent require separate authenticatable, independently revocable client identities. Exact authentication and permission grants remain open; sharing one unrestricted administrative credential is not an accepted design.
+Service-client access is distinct from developer SSH/deployment access. One does not grant the other.
+The same owner authority and external-action boundaries apply to both machine clients. Concurrent or repeated requests from either client must not create duplicate effects; exact rules belong to States 1–2.
+
+The owner proposed an emergency red button on the phone. The following are proposed acceptance considerations, not yet accepted emergency-stop semantics:
+- the owner can reach it without needing either machine client to cooperate;
+- the control states which scope has actually stopped and reports failure or unreachable service explicitly;
+- an outbound-automation freeze can preserve read access and receipt of enquiries, while stopping the marketing process can also stop its inbound handling;
+- shutting down the entire VPS also affects the co-hosted website and other workloads;
+- stopping the service does not cancel a request already accepted by an external platform and does not stop already-running advertising on Meta;
+- later recovery must expose uncertain/in-flight actions before resuming, rather than silently replaying them;
+- who may resume, whether a restart preserves the stopped state, and an independent recovery route for an unreachable VPS need explicit decisions.
+
+The current project draft does not authorize exposing host-shutdown commands to either machine client or changing the live host.
 
 ### Meta connections and inbound events
 
@@ -206,8 +232,8 @@ Logs must support diagnosis without becoming an uncontrolled copy of conversatio
 5. Customer photographs: which image forms and sizes are supported, how are originals accessed, and what retention applies? Text/photos versus voice scope is settled: photographs are included; voice messages stay on the phone without automatic transcription.
 6. Privacy: which customer facts may be sent to ChatGPT, what notice is needed, how long are messages and attachments retained, and how are deletion requests handled?
 7. Infrastructure: actual VPS provider, OS, capacity, existing workloads, listeners, firewall, recovery route, updates, TLS renewal and verified backup coverage?
-8. Owner access: authentication for the plugin, session revocation, and any owner-facing interface outside ChatGPT?
-9. Operational continuity: how does the owner learn about a new enquiry, and what response remains possible while ChatGPT, the plugin or the VPS is unavailable?
+8. Client and owner access: separate authentication and revocation for ChatGPT and the local agent; exact permission scopes; how owner decisions discussed in chat become service-verifiable authority; authentication for the proposed phone control?
+9. Operational continuity and emergency stop: how does the owner learn about new enquiries or failures, which red-button scope is wanted (outbound freeze, marketing-service stop or VPS shutdown), and what remains usable when a client or the VPS is unavailable? Does stopping active Meta advertising belong to a separate emergency action? Who can resume and does the stop survive a restart?
 10. Advertising authority: allowed assets, budget limits and which later actions may run without a new owner decision?
 11. Development and deployment: implementation repository, deployment actor, release approval and rollback policy?
 12. Enquiry attribution: what evidence connects a WhatsApp enquiry to a particular advertisement, and how are unknown sources represented without guessing?
@@ -225,7 +251,7 @@ These are recorded gaps, not implementation defaults. State 1 and later states m
 
 ## 11. Handoff and verification status
 
-This is the State 0 draft updated with the owner's media-scope and integration-extensibility decisions. It is not a completed application, an accepted security review, an approved deployment plan or evidence of a working direct Meta integration.
+This is the State 0 draft updated with the owner's media-scope, Python, integration-extensibility and two-client decisions. The phone emergency-stop proposal remains pending. It is not a completed application, an accepted security review, an approved deployment plan or evidence of a working direct Meta integration.
 No State 1 source, assembled global_spec.json or Factory export is created.
 
 Authoring CLI and State 0 question rounds have not been run in this session. Two clean reviews of the current State 0 text have not been obtained.
