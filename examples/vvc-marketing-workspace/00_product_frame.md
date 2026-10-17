@@ -32,6 +32,11 @@ The owner is not confident in Spanish. The environment must support understandin
 - Reddit is a possible later direction; the owner deferred its format and priority.
 - Login to Meta for Developers is currently unavailable to the owner. Whether a suitable Meta app exists is unknown.
 - The owner explicitly requested consideration of VPS requirements and security before implementation.
+- ChatGPT and WhatsApp on the phone are sufficient for first-version daily work; no separate enquiry dashboard is required. The phone emergency-stop control remains a separate small owner-facing surface (owner decision, 2026-10-17).
+- WhatsApp is the owner's selected channel for new-enquiry and failure notifications (owner decision, 2026-10-17). Exact delivery feasibility, recipient and outage behaviour remain to be designed.
+- Only the owner may connect integrations, approve updates or change permissions (owner decision, 2026-10-17). Machine clients may prepare or perform specifically authorized work, not grant themselves administrative authority.
+- The owner prefers simple storage and questioned the need for a database or a large conversation archive. The owner has not requested a full CRM or approved permanent archiving of all conversations and photographs.
+- The question about recurring service costs needs explanation before a budget can be selected; no monthly budget has been approved.
 - Integration extensibility is required: the architecture must allow separately developed integration modules or adapters (owner decision, 2026-10-17). This decision does not by itself include Instagram or Reddit in the first release.
 - Python is the implementation language for the VPS service and integration adapters (owner decision, 2026-10-17). The Python version, framework and dependencies remain to be selected.
 
@@ -97,8 +102,8 @@ Outputs include retrieved observations, bilingual drafts, approval previews, ext
 
 Persistent facts needed by the product:
 - owner identity and distinct ChatGPT/local-agent connection identities, allowed asset scope and access status;
-- original conversation events, participants and external message identities;
-- received photographs and their association with the source conversation and message, subject to the retention decision;
+- conversation events and participant/external message identities needed for the agreed working context and duplicate/outcome checks; the extent and retention of message bodies remain open;
+- received photographs needed for current enquiry work and their association with the source conversation and message, subject to the retention decision; permanent photo archiving is not assumed;
 - enquiry assessments and owner-entered business facts;
 - drafts and the exact version considered by the owner;
 - approval/refusal decisions and the external action they concern;
@@ -108,6 +113,12 @@ Persistent facts needed by the product:
 - release identity and operational recovery records.
 
 Exact models, identifiers, status vocabularies, schema fields and retention durations belong to later design work or the open questions below.
+
+### Minimal-storage proposal, not yet a selected database design
+
+Keep enough durable service state for separate client access, revocation, the emergency freeze, owner decisions, external object/message identities, action outcomes and unresolved attempts. This need exists even without a full conversation archive: a restart must not turn unknown submissions into safe-to-repeat work or erase the evidence of authority.
+Use only the message context and photographs needed for current owner-assisted enquiry work; do not assume permanent replication of the phone's entire WhatsApp history. Exact retention, deletion and backup treatment must be resolved before real customer data is collected.
+The choice of SQLite, another database or a different durable store belongs to later design. This proposal explains the need for persistence; it is not owner approval of a schema, library or complete archive.
 
 ## 6. External systems and product boundaries
 
@@ -143,6 +154,7 @@ The common behaviour that integrations must preserve and their exact contracts a
 
 ### Owner and assistant authority
 
+Only the owner may connect integrations, approve updates or change access permissions. The ChatGPT and local-agent clients cannot expand their own authority.
 Only an authenticated owner may authorize the product's external changes.
 Assistant proposals and customer messages are not grants of authority.
 Permission to deploy code, read conversations, send a reply and change advertising are separate authorities.
@@ -210,6 +222,7 @@ Actual network exposure and host security remain unverified.
 Customer messages and contact details are private working data.
 Using ChatGPT to discuss them crosses an external processing boundary; the minimum necessary context, access and retention must be defined before live use.
 Whether text translation runs unattended on the VPS is undecided. Automatic voice transcription is excluded from the first version.
+No separate first-version customer dashboard is required; the owner works in ChatGPT and on the phone. The small emergency-stop surface is still needed and does not imply a broader administrative UI.
 
 ### Releases, backups and logs
 
@@ -236,16 +249,16 @@ Logs must support diagnosis without becoming an uncontrolled copy of conversatio
 3. Meta access: does a suitable developer app exist, which permissions are available, and which company assets can it use?
 4. WhatsApp onboarding: is official phone/API coexistence available for this business and number, directly or through a provider? What remains usable on the phone?
 5. Customer photographs: which image forms and sizes are supported, how are originals accessed, and what retention applies? Text/photos versus voice scope is settled: photographs are included; voice messages stay on the phone without automatic transcription.
-6. Privacy: which customer facts may be sent to ChatGPT, what notice is needed, how long are messages and attachments retained, and how are deletion requests handled?
+6. Minimal storage and privacy: which durable action/control records and working message/photo context are required, which customer facts may be sent to ChatGPT, what notice is needed, and what retention/deletion/backup rules apply? The owner prefers simplicity and has not approved a full permanent conversation archive.
 7. Infrastructure: actual VPS provider, OS, capacity, existing workloads, listeners, firewall, recovery route, updates, TLS renewal and verified backup coverage?
-8. Client and owner access: separate authentication and revocation for ChatGPT and the local agent; exact permission scopes; how owner decisions discussed in chat become service-verifiable authority; authentication for the proposed phone control?
-9. Operational continuity and emergency recovery: how does the owner learn about new enquiries or failures, how is the phone control reached independently of both clients, and what happens if the VPS is unreachable? The stop scope is settled: block outbound effects from both clients, preserve the website and inbound enquiries. Who can resume, does a restart preserve the freeze, and how is unsent or uncertain work reviewed before resumption? An emergency Meta-advertising pause, if wanted, is a separate action.
+8. Client and owner access: separate authentication and revocation for ChatGPT and the local agent; exact permission scopes; how owner decisions discussed in chat become service-verifiable authority; authentication for the phone control? The owner has chosen ChatGPT plus the phone without a separate enquiry dashboard and reserved integration, update and permission administration to the owner.
+9. Operational continuity and emergency recovery: WhatsApp is the selected notification channel; determine the authorized recipient, supported delivery path and behaviour during outages. Distinguish the existing phone application's notifications from notifications sent by the new service. A failed VPS cannot guarantee its own WhatsApp alert, and notifications must not silently bypass the outbound freeze. How is the phone control reached independently of both clients? The stop scope is settled: block outbound effects from both clients, preserve the website and inbound enquiries. Who can resume, does a restart preserve the freeze, and how is unsent or uncertain work reviewed before resumption? An emergency Meta-advertising pause, if wanted, is a separate action.
 10. Advertising authority: allowed assets, budget limits and which later actions may run without a new owner decision?
 11. Development and deployment: implementation repository, deployment actor, release approval and rollback policy?
 12. Enquiry attribution: what evidence connects a WhatsApp enquiry to a particular advertisement, and how are unknown sources represented without guessing?
-13. Costs: acceptable infrastructure, Meta messaging and optional AI-processing costs? No paid service is selected.
+13. Costs: explain the possible recurring costs of infrastructure, backup/monitoring, Meta API messaging or an onboarding provider, and optional server-side AI processing. Obtain an estimate from actual usage and the chosen route before asking the owner for a spending ceiling. Advertising budget is separate. No paid service, new subscription or spending budget is approved.
 14. Recovery semantics: how are uncertain external submissions resolved without double-sending or duplicate creation?
-15. Integration lifecycle: who may approve integration releases, what compatibility and capability checks are required, and what happens to inbound events, readable data and pending actions when an integration is disabled or upgraded?
+15. Integration lifecycle: the owner alone approves updates, connections and permission changes. Define compatibility/capability checks, the permitted deployment actor, and what happens to inbound events, readable data and pending actions when an integration is disabled or upgraded.
 
 These are recorded gaps, not implementation defaults. State 1 and later states must not silently decide them.
 
