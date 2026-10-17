@@ -599,29 +599,41 @@ def _projection_drift_check(case_root: Path | None) -> AdmissionCheck:
     )
 
 
+# The standard and its quick index are one document in two repositories;
+# each must be byte-identical, or the two sources of truth drift unseen.
+STANDARD_FILES = (
+    ("skills/spec-authoring/SPEC_STANDARD.md", "SPEC_STANDARD.md"),
+    ("skills/spec-authoring/SPEC_STANDARD_INDEX.md", "SPEC_STANDARD_INDEX.md"),
+)
+
+
 def _standard_check(workbench_root: Path, factory_root: Path) -> AdmissionCheck:
-    workbench = workbench_root / "skills/spec-authoring/SPEC_STANDARD.md"
-    factory = factory_root / "SPEC_STANDARD.md"
-    if not workbench.is_file() or not factory.is_file():
+    pairs = [(workbench_root / w, factory_root / f) for w, f in STANDARD_FILES]
+    missing = [str(path) for pair in pairs for path in pair if not path.is_file()]
+    if missing:
         return AdmissionCheck(
             "FA004",
             CHECK_BLOCK,
-            "SPEC_STANDARD.md is missing from Workbench or Factory.",
-            {"workbench": str(workbench), "factory": str(factory)},
+            "SPEC_STANDARD.md or SPEC_STANDARD_INDEX.md is missing from Workbench or Factory.",
+            {"missing": missing},
         )
-    workbench_sha = _sha256_file(workbench)
-    factory_sha = _sha256_file(factory)
-    status = CHECK_PASS if workbench_sha == factory_sha else CHECK_BLOCK
+    shas = {f.name: (_sha256_file(w), _sha256_file(f)) for w, f in pairs}
+    differ = [name for name, (w, f) in shas.items() if w != f]
+    status = CHECK_PASS if not differ else CHECK_BLOCK
     summary = (
-        "Workbench and Factory SPEC_STANDARD.md are byte-identical."
+        "Workbench and Factory SPEC_STANDARD.md and SPEC_STANDARD_INDEX.md are byte-identical."
         if status == CHECK_PASS
-        else f"SPEC_STANDARD mismatch: workbench={workbench_sha}, factory={factory_sha}"
+        # "SPEC_STANDARD mismatch" is the summary consumers match; the index follows its form
+        else "; ".join(f"{name.removesuffix('.md')} mismatch: workbench={shas[name][0]}, factory={shas[name][1]}"
+                       for name in differ)
     )
+    standard, index = shas["SPEC_STANDARD.md"], shas["SPEC_STANDARD_INDEX.md"]
     return AdmissionCheck(
         "FA004",
         status,
         summary,
-        {"workbench_sha256": workbench_sha, "factory_sha256": factory_sha},
+        {"workbench_sha256": standard[0], "factory_sha256": standard[1],
+         "workbench_index_sha256": index[0], "factory_index_sha256": index[1]},
     )
 
 

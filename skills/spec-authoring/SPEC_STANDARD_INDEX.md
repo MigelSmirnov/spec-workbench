@@ -14,6 +14,7 @@
 3. Не добавляй inline-данные в prose. Таблицы, списки, лимиты, пути, TTL, рейтинги и размеры выноси в `config`, `models` или `rules`.
 4. Если note ссылается на данные, называй дом: `= models.X`, `the imported X constant`, поле объекта настроек; в редакции 2 ещё `= rules.<backend>.*` и `= config.persistence.*` (§15.3.1).
 5. Не расщепляй mixed note механически, если это ухудшает читаемость. Выбирай primary class по semantic impact.
+6. Требование пиши модальностью: у функции, которую генерирует LLM, хотя бы одна note с `MUST`, `SHOULD` или `MAY` (не `MUST NOT`), иначе `tools/spec_underspec_gate.py` её не пропустит.
 
 ## Как выбрать NOTE_CLASS
 
@@ -148,6 +149,11 @@ predicate или method shape не замкнуты, diagnostic emitter возв
 - В deterministic structural spec ops создавай такой порт через
   `add_model_interface`, затем отдельно добавляй method contracts и физический
   export owner. Не создавай временное фиктивное поле через `add_model`.
+- Этот владелец — всегда модуль `models`, как у любой другой записи секции
+  `models`; модуль-реализация импортирует свой порт оттуда и наследует его.
+  Отдать порт модулю-реализации нельзя: `models` целиком теряет
+  детерминированную эмиссию и уходит на LLM-путь. См.
+  [раздел 5](SPEC_STANDARD.md#5-models).
 
 ## Как заполнять module_internal
 
