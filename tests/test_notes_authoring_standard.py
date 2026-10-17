@@ -114,3 +114,12 @@ def test_a_number_with_its_title_names_the_section_and_a_wrong_title_does_not(re
     assert standard.section("§15.2 Placement", repo)["section"] == "15.2"
     with pytest.raises(ValueError):
         standard.section("§15.2 NOT-list", repo)
+
+
+def test_words_that_start_with_digits_are_still_a_title(tmp_path):
+    skill = tmp_path / standard.SKILL
+    skill.mkdir(parents=True)
+    (skill / standard.STANDARD).write_text("# S\n\n## 2. notes\n\n### Лимит 200 строк\n\nText.\n", encoding="utf-8")
+    (skill / standard.INDEX).write_text("# I\n", encoding="utf-8")
+    assert standard.section("200 строк", tmp_path)["title"] == "Лимит 200 строк"
+    assert standard.section("2", tmp_path)["section"] == "2"

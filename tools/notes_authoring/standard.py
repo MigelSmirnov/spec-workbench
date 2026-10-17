@@ -73,11 +73,13 @@ def section(ref: str, repo: Path | None = None) -> dict[str, Any]:
     headings = _headings(lines)
     ref = ref.strip()
     number = _REF_RE.match(ref)
+    found = []
     if number:
         found = [i for i, h in enumerate(headings) if h["number"] == number.group("number")
                  # a title given with the number must be that section's
                  and (not number.group("title") or number.group("title").casefold() in h["title"].casefold())]
-    else:
+    if not found and not (number and not number.group("title")):
+        # a title, or words that only start with digits ("200 строк")
         exact = [i for i, h in enumerate(headings) if h["title"].casefold() == ref.casefold()]
         found = exact or [i for i, h in enumerate(headings) if ref.casefold() in h["title"].casefold()]
     if len(found) != 1:

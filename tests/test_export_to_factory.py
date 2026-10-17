@@ -479,7 +479,17 @@ def test_export_blocks_index_drift_before_project_creation(
     monkeypatch.setattr(export_to_factory, "git_metadata", _clean_git_metadata)
     monkeypatch.setattr(sys, "argv", ["export_to_factory.py", "--spec", str(source), "--project", "demo",
                                       "--factory-root", str(factory)])
+    # FA004 already blocks this in admission; drop it to reach the export's own check
+    admission = export_to_factory.check_factory_admission
 
-    with pytest.raises(SystemExit, match="SPEC_STANDARD_INDEX mismatch"):
+    def without_fa004(**kwargs):
+        report = admission(**kwargs)
+        report["checks"] = [item for item in report["checks"] if item["id"] != "FA004"]
+        report["ready"] = all(item["status"] != "BLOCK" for item in report["checks"])
+        return report
+
+    monkeypatch.setattr(export_to_factory, "check_factory_admission", without_fa004)
+
+    with pytest.raises(SystemExit, match=r"^SPEC_STANDARD_INDEX mismatch: update or pin"):
         export_to_factory.main()
     assert not (factory / "projects/demo").exists()
