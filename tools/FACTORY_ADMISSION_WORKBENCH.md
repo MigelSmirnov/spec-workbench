@@ -39,7 +39,8 @@ nobody made.
 - `FA001` — committed, clean Workbench source;
 - `FA002` — closed Stage 8.1 ledger with current slice hashes, when present;
 - `FA003` — aggregate Workbench assembly readiness;
-- `FA004` — byte-identical Workbench and Factory `SPEC_STANDARD.md`;
+- `FA004` — byte-identical Workbench and Factory `SPEC_STANDARD.md` and
+  `SPEC_STANDARD_INDEX.md`;
 - `FA005` — PASS from the real Factory canonical validator, bound to the source;
 - `FA006` — closed, byte-addressable semantic-test handoff, when declared;
 - `FA007` — target create/no-op or explicit replacement authorization;
@@ -64,6 +65,18 @@ nobody made.
   the ref it was last closed at (`ask --since`). Explicit `--spec` admission
   has no design texts and reports not applicable. See
   `skills/spec-authoring/QUESTIONS.md`.
+
+- `FA020` — the target Factory supports the source's `standard_version`.
+  Version 2 is not applicable: every Factory accepts it. For a later version
+  (3 is version 2 plus `ordered: true` on `kind: enum` and notes that address
+  data only as `= models.X`, SPEC_STANDARD §15.3.1) the literal
+  `SUPPORTED_STANDARD_VERSIONS` of the Factory's `tools/spec_version.py`, read
+  without running Factory code, must name it, and the literal
+  `NOTE_ADDRESSES_CLOSED_MIN_VERSION` must be an integer at or below it; a
+  missing module or constant blocks. An older Factory would refuse the
+  specification at validation; one that ignored the flag would drop the enum
+  order silently, and one without the note constant would accept the
+  `= rules.*` / `= config.*` notes v3 refuses.
 
 `FA019` exists because a late decision passed every other check. On
 2026-10-10 Cabinet Kernel decision 25 added a note allowing pydantic to a

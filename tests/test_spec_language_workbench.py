@@ -4,6 +4,8 @@ import json
 import shutil
 from pathlib import Path
 
+import pytest
+
 from spec_language_workbench import REPORT_SCHEMA, verify
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -49,7 +51,7 @@ def test_standard_version_two_is_accepted(tmp_path: Path) -> None:
     assert report["summary"]["errors"] == 0
 
 
-def test_unknown_standard_version_fails_closed(tmp_path: Path) -> None:
+def test_standard_version_three_is_accepted(tmp_path: Path) -> None:
     project = _copy_project(tmp_path)
     payload = _load(project)
     payload["standard_version"] = 3
@@ -57,10 +59,28 @@ def test_unknown_standard_version_fails_closed(tmp_path: Path) -> None:
     _write(project, payload)
 
     report = verify(project)
+    assert report["ready"] is True
+    assert report["standard_version"] == 3
+    assert report["supported_standard_versions"] == [2, 3]
+
+
+@pytest.mark.parametrize(("version", "code"), [
+    (4, "unsupported_standard_version"),
+    (0, "unsupported_standard_version"),
+    (1, "unsupported_standard_version"),
+    ("3", "missing_standard_version"),
+    (True, "missing_standard_version"),
+])
+def test_unknown_standard_version_fails_closed(tmp_path: Path, version, code) -> None:
+    project = _copy_project(tmp_path)
+    payload = _load(project)
+    payload["standard_version"] = version
+    payload.pop("adapters", None)
+    _write(project, payload)
+
+    report = verify(project)
     assert report["ready"] is False
-    assert [item["code"] for item in report["findings"]] == [
-        "unsupported_standard_version"
-    ]
+    assert [item["code"] for item in report["findings"]] == [code]
 
 
 def test_missing_standard_version_fails_closed(tmp_path: Path) -> None:

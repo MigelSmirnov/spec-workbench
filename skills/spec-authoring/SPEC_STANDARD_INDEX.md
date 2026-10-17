@@ -12,15 +12,17 @@
 1. Найди scope: `function_name:` или `ClassName.method_name:`.
 2. Проверь, что note имеет ровно один primary marker: `[NOTE_CLASS]`.
 3. Не добавляй inline-данные в prose. Таблицы, списки, лимиты, пути, TTL, рейтинги и размеры выноси в `config`, `models` или `rules`.
-4. Если note ссылается на данные, оставь адрес: `= config.*`, `= models.*`, `= rules.*`.
+4. Если note ссылается на данные, называй дом: `= models.X`, `the imported X constant`, поле объекта настроек; в редакции 2 ещё `= rules.<backend>.*` и `= config.persistence.*` (§15.3.1).
+   Значение, которое читает генерируемый код, — константа поставщика данных (§6.10); таблица над членами перечисления с проверкой полноты — `record_tuple` версии 2 со столбцом-перечислением, `key` и `total`.
 5. Не расщепляй mixed note механически, если это ухудшает читаемость. Выбирай primary class по semantic impact.
+6. Требование пиши модальностью: у функции, которую генерирует LLM, хотя бы одна note с `MUST`, `SHOULD` или `MAY` (не `MUST NOT`), иначе `tools/spec_underspec_gate.py` её не пропустит.
 
 ## Как выбрать NOTE_CLASS
 
 - `[BEHAVIOR]` — доменное поведение, когда точнее классифицировать нельзя без продуктовой таксономии.
-- `[CONFIG_REFERENCE]` — ссылка на `= config.*`.
+- `[CONFIG_REFERENCE]` — ссылка на `= config.*`; только редакция 2.
 - `[MODEL_REFERENCE]` — ссылка на `= models.*`.
-- `[RULE_REFERENCE]` — ссылка на `= rules.*`.
+- `[RULE_REFERENCE]` — ссылка на `= rules.*`; только редакция 2.
 - `[FORBIDDEN_ACTION]` — запрет действия: MUST NOT, never, no direct access, no file I/O.
 - `[SCHEMA_CONSTRAINT]` — поля, DTO/model shape, required/optional/no extra fields.
 - `[VALIDATION_ERROR]` — invalid/unsupported/missing input, raise/reject/error response.
@@ -97,10 +99,12 @@ predicate или method shape не замкнуты, diagnostic emitter возв
 Порядок authoring фиксирует [AUTHORING_SEQUENCE.md](AUTHORING_SEQUENCE.md).
 
 - `persistence_backend/v2` — SQLite-only: `engine=sqlite`, emitter
-  `sqlite_sync_v2`. `persistence_backend/v3` добавляет `engine=postgres` с
-  emitter `postgres_sync_v1`, владение транзакцией (`transaction: owned`),
-  вид метода `lock` и bind-ы `argument_set`/`optional_argument`. Форма
-  таблиц и запросов не меняется.
+  `sqlite_sync_v2`. `persistence_backend/v3` добавляет ровно семь вещей
+  (§6.3): `engine=postgres` с emitter `postgres_sync_v1`, владение
+  транзакцией (`transaction: owned`), вид метода `lock`, bind-ы
+  `argument_set`/`optional_argument`, формы хранения `json_model`/`json_value`,
+  `path` в фильтрах и `unique`, виды запросов `upsert_many` и `list_all`.
+  Форма таблиц, колонок, агрегатов и конвенций не меняется.
 - Полный backend IR contract-dependent: его нельзя помещать в pre-contract
   `60_data_closure.json`.
 - После готового State 6 создай `70_persistence_closure.json`; его `backend_ir`
@@ -148,6 +152,11 @@ predicate или method shape не замкнуты, diagnostic emitter возв
 - В deterministic structural spec ops создавай такой порт через
   `add_model_interface`, затем отдельно добавляй method contracts и физический
   export owner. Не создавай временное фиктивное поле через `add_model`.
+- Этот владелец — всегда модуль `models`, как у любой другой записи секции
+  `models`; модуль-реализация импортирует свой порт оттуда и наследует его.
+  Отдать порт модулю-реализации нельзя: `models` целиком теряет
+  детерминированную эмиссию и уходит на LLM-путь. См.
+  [раздел 5](SPEC_STANDARD.md#5-models).
 
 ## Как заполнять module_internal
 

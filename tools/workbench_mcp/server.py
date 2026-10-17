@@ -2,9 +2,12 @@
 
 Scope of this slice: it answers "why is the specification like this" — which
 accepted design decision owns a name, whether a gap belongs to a known closure
-class, what the notes-language gate will say. There is no write tool and no
-authoring action: designing states, editing notes, and exporting to the
-factory remain explicit repository work on the canonical project branch.
+class, what the notes-language gate will say — and gives a State 7 notes
+writer the tools it asks while writing (tools/DATA_CLOSURE_WORKBENCH.md §4):
+spec_standard and module_slice, M1 resolve_data_address, M2
+find_value_homes, M4 find_absence, M6 module_notes, and check_note_draft. There is no write tool and no authoring
+action: designing states, editing notes, and exporting to the factory remain
+explicit repository work on the canonical project branch.
 
 Run (stdio transport):
     python tools/workbench_mcp/server.py
@@ -26,6 +29,8 @@ from mcp.server.fastmcp import FastMCP
 
 import authoring_pipeline
 import project_navigation
+from notes_workbench.factory_addresses import ResolverUnavailable
+from spec_projection_workbench.model import SpecProjectionError
 from workbench_mcp import service
 
 _INSTRUCTIONS = """\
@@ -45,6 +50,18 @@ Every answer is computed on a temporary read-only worktree of the project's
 canonical ref, never on a working checkout: a dirty local branch does not
 change these answers.
 
+Writing a module's State 7 notes: the rules are SPEC_STANDARD — read them with
+spec_standard (no section: index and contents; then §2 and §15 and whatever
+else the index points to); module_slice says what the module is. A value with
+a home is written as its
+address, a value without one stops the module with a structure request — never
+as prose. Before writing a value, ask find_value_homes; before an address,
+resolve_data_address; before stating "there is no home", find_absence (its
+digests go into the request); before handing a note in, check_note_draft —
+it applies the State 7 gate's checks of one note and the lint the writing
+environment accepts notes by; it is required, not the measure of a note.
+module_notes gives the notes to rewrite.
+
 Authority stays with the design-state documents; these tools project them. If
 a tool and a document disagree, the document is right and the tool has a bug:
 report the discrepancy instead of following the tool.
@@ -57,6 +74,8 @@ _REPO_ROOT = authoring_pipeline.find_repo_root(Path(__file__).resolve().parent)
 _ERRORS = (
     authoring_pipeline.AuthoringPipelineError,
     project_navigation.NavigationError,
+    ResolverUnavailable,
+    SpecProjectionError,
     OSError,
     ValueError,
 )
@@ -157,6 +176,98 @@ def design_context(project: str, location: str, radius: int = 6) -> dict[str, An
     try:
         with authoring_pipeline.materialized_project(_REPO_ROOT, project) as (_, case_root):
             return service.design_context(case_root, location, radius)
+    except _ERRORS as exc:
+        return {"error": str(exc), "known_cases": _known_cases()}
+
+
+@mcp.tool()
+def resolve_data_address(project: str, address: str) -> dict[str, Any]:
+    """M1: whether one data address, written as in a note (`= models.X`,
+    `= rules.…`, `= config.…`, `the imported X constant`), is a legal node —
+    the Factory resolver's verdict (status legal / unresolved / illegal, code,
+    message; for a legal node its kind, canonical JSON and sha256)."""
+    try:
+        with authoring_pipeline.materialized_project(_REPO_ROOT, project) as (_, case_root):
+            return service.resolve_address(case_root, address)
+    except _ERRORS as exc:
+        return {"error": str(exc), "known_cases": _known_cases()}
+
+
+@mcp.tool()
+def find_value_homes(project: str, value: str) -> dict[str, Any]:
+    """M2: where a literal (`30`, `"21.00"`, `personal_data`) is declared.
+    `homes_reaching_code` are the homes a note may name instead of the
+    literal; none means the value has no home: stop with a structure request."""
+    try:
+        with authoring_pipeline.materialized_project(_REPO_ROOT, project) as (_, case_root):
+            return service.value_homes(case_root, value)
+    except _ERRORS as exc:
+        return {"error": str(exc), "known_cases": _known_cases()}
+
+
+@mcp.tool()
+def find_absence(project: str, terms: list[str]) -> dict[str, Any]:
+    """M4: where each term (`timeout`, `retry`, `ceiling`) occurs as a key or
+    value in models / config / rules / contracts, and the sha256 of each
+    namespace looked through — the `absence` a structure request must carry."""
+    try:
+        with authoring_pipeline.materialized_project(_REPO_ROOT, project) as (_, case_root):
+            return service.absence(case_root, terms)
+    except _ERRORS as exc:
+        return {"error": str(exc), "known_cases": _known_cases()}
+
+
+@mcp.tool()
+def module_notes(project: str, module: str) -> dict[str, Any]:
+    """M6: the callables of one module and its authored notes (path, line,
+    scope, class, text) — the notes to rewrite, not to add beside."""
+    try:
+        with authoring_pipeline.materialized_project(_REPO_ROOT, project) as (_, case_root):
+            return service.module_notes(case_root, module)
+    except _ERRORS as exc:
+        return {"error": str(exc), "known_cases": _known_cases()}
+
+
+@mcp.tool()
+def check_note_draft(project: str, note: str) -> dict[str, Any]:
+    """M3 with verdicts: one draft note `<scope>: [CLASS] prose` through the
+    State 7 gate's checks of one note (scope, class, stub, references; from
+    standard_version 3 the Factory's resolver, L1) and the writing
+    environment's lint — L2 literal with a home, L3 uncovered data signal,
+    L4 restated enumeration, L5 prose shared with another module. `clean` is
+    false while any finding blocks. Whether every callable has a positive
+    note is a property of the whole module, checked when notes are accepted."""
+    try:
+        with authoring_pipeline.materialized_project(_REPO_ROOT, project) as (_, case_root):
+            return service.check_note_draft(case_root, note)
+    except _ERRORS as exc:
+        return {"error": str(exc), "known_cases": _known_cases()}
+
+
+@mcp.tool()
+def spec_standard(project: str, section: str | None = None) -> dict[str, Any]:
+    """SPEC_STANDARD, the rules a note is written by, in its own words.
+    Without `section`: the quick index (where to start for a task) and the
+    table of contents. With `section`: that section and its subsections — by
+    number (`§2`, `15.2`, `15.3.1`) or by a part of an unnumbered heading's
+    title (`Что включать в notes`)."""
+    try:
+        with authoring_pipeline.materialized_project(_REPO_ROOT, project) as (_, case_root):
+            return service.spec_standard(case_root, section)
+    except _ERRORS as exc:
+        return {"error": str(exc), "known_cases": _known_cases()}
+
+
+@mcp.tool()
+def module_slice(project: str, module: str) -> dict[str, Any]:
+    """What one module is, for the agent writing its State 7 notes: its
+    callables with signatures, the models those signatures name (fields and
+    members), what the design says the module does (responsibility,
+    capabilities, flows, public operations, obligations), and its open
+    structure requests. Values are not here: ask find_value_homes."""
+    try:
+        with authoring_pipeline.materialized_project(_REPO_ROOT, project) as (_, case_root):
+            return service.module_slice(case_root, module)
     except _ERRORS as exc:
         return {"error": str(exc), "known_cases": _known_cases()}
 

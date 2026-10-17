@@ -4,9 +4,13 @@ import hashlib
 import json
 from pathlib import Path
 
+import pytest
+
 from factory_admission_workbench import check
+from questions_workbench import documents as question_documents
 from factory_admission_workbench.service import (
     _assembly_check,
+    _factory_standard_version_check,
     _review_check,
     _runtime_carrier_check,
     _runtime_persistence_check,
@@ -16,6 +20,7 @@ from factory_admission_workbench.service import (
 
 ROOT = Path(__file__).resolve().parents[1]
 STANDARD = (ROOT / "skills/spec-authoring/SPEC_STANDARD.md").read_text(encoding="utf-8")
+STANDARD_INDEX = (ROOT / "skills/spec-authoring/SPEC_STANDARD_INDEX.md").read_text(encoding="utf-8")
 CLEAN_GIT = {
     "commit": "a" * 40,
     "branch": "agent/test",
@@ -57,6 +62,7 @@ def _factory(
 ) -> Path:
     root = tmp_path / "code_factory"
     _write(root / "SPEC_STANDARD.md", STANDARD)
+    _write(root / "SPEC_STANDARD_INDEX.md", STANDARD_INDEX)
     _write(root / "tools/bootstrap_project.py", "# test fixture\n")
     _write_json(root / "project_index/structure.json", {})
     status = "PASS" if valid else "FINDINGS_PRESENT"
@@ -121,6 +127,7 @@ def _run(
 ) -> dict:
     workbench = tmp_path / "spec-workbench"
     _write(workbench / "skills/spec-authoring/SPEC_STANDARD.md", STANDARD)
+    _write(workbench / "skills/spec-authoring/SPEC_STANDARD_INDEX.md", STANDARD_INDEX)
     source = workbench / "accepted/global_spec.json"
     _write_json(source, {"standard_version": 2, "contracts": {}})
     factory = _factory(tmp_path, valid=valid, inspector_valid=inspector_valid)
@@ -719,3 +726,214 @@ def test_external_obligation_does_not_make_a_lowered_repository_reachable() -> N
 
 def test_runtime_carrier_check_blocks_malformed_spec() -> None:
     assert _runtime_carrier_check({"contracts": [], "models": {}}).status == "BLOCK"
+
+
+# ── FA020: the target Factory supports the source standard_version (Q9-a) ──
+
+FACTORY_SPEC_VERSION_A = '''"""The one source of the specification standard versions this Factory accepts."""
+
+from __future__ import annotations
+
+SUPPORTED_STANDARD_VERSIONS = frozenset({2, 3})
+ORDERED_ENUM_MIN_VERSION = 3
+NOTE_ADDRESSES_CLOSED_MIN_VERSION = 3
+'''
+
+
+def _admit(tmp_path: Path, standard_version, *, spec_version: str | None) -> dict:
+    report = _run(tmp_path)
+    factory = Path(report["factory_root"])
+    if spec_version is not None:
+        _write(factory / "tools/spec_version.py", spec_version)
+    source = tmp_path / "spec-workbench/accepted/global_spec.json"
+    _write_json(source, {"standard_version": standard_version, "contracts": {}})
+    return check(
+        workbench_root=tmp_path / "spec-workbench",
+        source=source,
+        project="demo",
+        factory_root=factory,
+        source_git=CLEAN_GIT,
+    )
+
+
+def _fa(report: dict, check_id: str) -> dict:
+    return next(item for item in report["checks"] if item["id"] == check_id)
+
+
+def test_v2_source_needs_no_factory_version_declaration(tmp_path: Path) -> None:
+    report = _admit(tmp_path, 2, spec_version=None)
+
+    assert _fa(report, "FA020")["status"] == "NOT_APPLICABLE"
+    assert report["ready"] is True
+
+
+def test_v3_source_passes_when_the_factory_declares_v3(tmp_path: Path) -> None:
+    report = _admit(tmp_path, 3, spec_version=FACTORY_SPEC_VERSION_A)
+
+    fa020 = _fa(report, "FA020")
+    assert _fa(report, "FA009")["status"] == "PASS"
+    assert fa020["status"] == "PASS"
+    assert fa020["evidence"]["factory_supported_standard_versions"] == [2, 3]
+    assert report["ready"] is True
+
+
+def test_v3_source_to_a_factory_before_step_a_is_blocked(tmp_path: Path) -> None:
+    # Plan §5.7: v3 specification, Workbench after step B, Factory before step A.
+    report = _admit(tmp_path, 3, spec_version=None)
+
+    fa020 = _fa(report, "FA020")
+    assert _fa(report, "FA009")["status"] == "PASS"
+    assert fa020["status"] == "BLOCK"
+    assert "tools/spec_version.py" in fa020["summary"]
+    assert report["ready"] is False
+
+
+def test_v3_source_to_a_factory_declaring_only_v2_is_blocked(tmp_path: Path) -> None:
+    report = _admit(tmp_path, 3, spec_version="SUPPORTED_STANDARD_VERSIONS = frozenset({2})\n")
+
+    fa020 = _fa(report, "FA020")
+    assert fa020["status"] == "BLOCK"
+    assert fa020["evidence"]["factory_supported_standard_versions"] == [2]
+
+
+@pytest.mark.parametrize("spec_version", [
+    "ORDERED_ENUM_MIN_VERSION = 3\n",
+    "SUPPORTED_STANDARD_VERSIONS = compute()\n",
+    "SUPPORTED_STANDARD_VERSIONS = frozenset({'2', '3'})\n",
+    "SUPPORTED_STANDARD_VERSIONS = frozenset({2, 3}\n",
+    # literal_eval raises TypeError for an unhashable member
+    "SUPPORTED_STANDARD_VERSIONS = {2, (3, [1])}\n",
+    "SUPPORTED_STANDARD_VERSIONS = {2, 3, {}}\n",
+    "SUPPORTED_STANDARD_VERSIONS = frozenset({2, 3})\nNOTE_ADDRESSES_CLOSED_MIN_VERSION = ORDERED_ENUM_MIN_VERSION\n",
+])
+def test_v3_source_with_an_unreadable_factory_declaration_is_blocked(
+    tmp_path: Path, spec_version: str
+) -> None:
+    report = _admit(tmp_path, 3, spec_version=spec_version)
+
+    assert _fa(report, "FA020")["status"] == "BLOCK"
+
+
+@pytest.mark.parametrize("closed", [None, "4", "'3'"])
+def test_v3_source_to_a_factory_whose_v3_keeps_v2_note_addresses_is_blocked(
+    tmp_path: Path, closed: str | None
+) -> None:
+    # A Factory between code-factory #86 and #87: v3 supported, note addresses
+    # still read by the v2 rule (SPEC_STANDARD §15.3.1).
+    spec_version = "SUPPORTED_STANDARD_VERSIONS = frozenset({2, 3})\n"
+    if closed is not None:
+        spec_version += f"NOTE_ADDRESSES_CLOSED_MIN_VERSION = {closed}\n"
+    report = _admit(tmp_path, 3, spec_version=spec_version)
+
+    fa020 = _fa(report, "FA020")
+    assert fa020["status"] == "BLOCK"
+    assert report["ready"] is False
+
+
+def test_factory_declaration_is_read_without_running_it(tmp_path: Path) -> None:
+    marker = tmp_path / "ran"
+    spec_version = (
+        f"open({str(marker)!r}, 'w').write('x')\n"
+        "SUPPORTED_STANDARD_VERSIONS = frozenset({2, 3})\n"
+        "NOTE_ADDRESSES_CLOSED_MIN_VERSION = 3\n"
+    )
+    report = _admit(tmp_path, 3, spec_version=spec_version)
+
+    assert _fa(report, "FA020")["status"] == "PASS"
+    assert not marker.exists()
+
+
+def test_fa020_reads_the_real_factory_declaration() -> None:
+    factory = question_documents.factory_root()
+    if factory is None or not (factory / "tools/spec_version.py").is_file():
+        pytest.skip("no Factory checkout (SPEC_WORKBENCH_FACTORY_ROOT or sibling code_factory) "
+                    "with tools/spec_version.py")
+
+    result = _factory_standard_version_check(factory, 3)
+
+    assert result.status == "PASS"
+    assert 3 in result.evidence["factory_supported_standard_versions"]
+
+
+def _admit_with_lineage(tmp_path: Path, lineage_version: int) -> dict:
+    report = _run(tmp_path)
+    factory = Path(report["factory_root"])
+    _write(factory / "tools/spec_version.py", FACTORY_SPEC_VERSION_A)
+    source = tmp_path / "spec-workbench/accepted/global_spec.json"
+    _write_json(source, {"standard_version": 3, "contracts": {}})
+    canonical = factory / "projects/demo/specs/base/global_spec.json"
+    canonical.parent.mkdir(parents=True, exist_ok=True)
+    canonical.write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
+    first = check(
+        workbench_root=tmp_path / "spec-workbench",
+        source=source,
+        project="demo",
+        factory_root=factory,
+        source_git=CLEAN_GIT,
+    )
+    _write_json(factory / "projects/demo/specs/working/spec_editor_manifest.json", {
+        "accepted": True,
+        "status": "pass",
+        "verdict": "PASS",
+        "inputs": {"standard_version": lineage_version, "codec_coverage": first["codec_coverage"]},
+        "outputs": {"base_spec_sha256_after": hashlib.sha256(canonical.read_bytes()).hexdigest()},
+        "change_summary": {"changed_modules": ["global"]},
+    })
+    admitted = check(
+        workbench_root=tmp_path / "spec-workbench",
+        source=source,
+        project="demo",
+        factory_root=factory,
+        source_git=CLEAN_GIT,
+    )
+    return _fa(admitted, "FA007")["evidence"]
+
+
+def test_v3_lineage_of_a_v3_specification_is_fresh(tmp_path: Path) -> None:
+    evidence = _admit_with_lineage(tmp_path, 3)
+
+    assert evidence["lineage_standard_version"] == 3
+    assert evidence["lineage_fresh"] is True
+    assert evidence["action"] == "noop"
+
+
+def test_v2_lineage_of_a_v3_specification_is_not_fresh(tmp_path: Path) -> None:
+    # One version on every transition of a lineage: v2 → v3 is a new accepted spec.
+    evidence = _admit_with_lineage(tmp_path, 2)
+
+    assert evidence["lineage_standard_version"] == 2
+    assert evidence["lineage_fresh"] is False
+    assert evidence["action"] == "accept_lineage"
+
+
+def _standard_pair(tmp_path: Path, *, factory_index: str | None = STANDARD_INDEX) -> tuple[Path, Path]:
+    workbench, factory = tmp_path / "wb", tmp_path / "cf"
+    _write(workbench / "skills/spec-authoring/SPEC_STANDARD.md", STANDARD)
+    _write(workbench / "skills/spec-authoring/SPEC_STANDARD_INDEX.md", STANDARD_INDEX)
+    _write(factory / "SPEC_STANDARD.md", STANDARD)
+    if factory_index is not None:
+        _write(factory / "SPEC_STANDARD_INDEX.md", factory_index)
+    return workbench, factory
+
+
+def test_fa004_passes_when_the_standard_and_its_index_are_byte_identical(tmp_path: Path) -> None:
+    from factory_admission_workbench.service import _standard_check
+
+    result = _standard_check(*_standard_pair(tmp_path))
+    assert result.status == "PASS"
+    assert result.evidence["workbench_index_sha256"] == result.evidence["factory_index_sha256"]
+
+
+def test_fa004_blocks_when_only_the_index_drifted(tmp_path: Path) -> None:
+    from factory_admission_workbench.service import _standard_check
+
+    result = _standard_check(*_standard_pair(tmp_path, factory_index=STANDARD_INDEX + "\n- one more line\n"))
+    assert result.status == "BLOCK"
+    assert result.summary.startswith("SPEC_STANDARD_INDEX mismatch") and "SPEC_STANDARD mismatch" not in result.summary
+
+
+def test_fa004_blocks_when_the_index_is_missing_on_one_side(tmp_path: Path) -> None:
+    from factory_admission_workbench.service import _standard_check
+
+    result = _standard_check(*_standard_pair(tmp_path, factory_index=None))
+    assert result.status == "BLOCK" and result.evidence["missing"][0].endswith("SPEC_STANDARD_INDEX.md")
