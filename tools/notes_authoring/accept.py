@@ -17,6 +17,7 @@ structure requests, and this module decides:
 
 from __future__ import annotations
 
+import re
 import unicodedata
 from pathlib import Path
 from typing import Any
@@ -109,7 +110,9 @@ def _rewrite(project: Path, module: str, notes: list[dict[str, Any]], existing: 
             text = handle.read()
     # the same line numbering as language.authored_notes (str.splitlines)
     lines = text.splitlines(keepends=True)
-    newline = "\r\n" if "\r\n" in text else "\n"
+    # the file's own line ending: the first one it uses (CRLF, LF or a bare CR)
+    first = re.search(r"\r\n|\n|\r", text)
+    newline = first.group(0) if first else "\n"
     drop: set[int] = set()
     for note in existing:
         if note["path"] != NOTES_FILE:
@@ -125,8 +128,10 @@ def _rewrite(project: Path, module: str, notes: list[dict[str, Any]], existing: 
     rendered = [f"{n['scope']}: [{n['class']}] {n['text']}{newline}" for n in notes]
     bare = [line.rstrip("\r\n") for line in kept]
     heading = f"## {module}"
-    if heading in bare:
-        at = bare.index(heading) + 1
+    # a heading is the module's whatever trailing blanks it carries
+    headings = [i for i, line in enumerate(bare) if line.rstrip() == heading]
+    if headings:
+        at = headings[0] + 1
         if at == len(kept) or kept[at - 1] == kept[at - 1].rstrip("\r\n"):
             kept[at - 1] = bare[at - 1] + newline  # the heading was the last line
         end = at
