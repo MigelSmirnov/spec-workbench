@@ -18,6 +18,7 @@ on someone's working checkout. Pure case-level functions take a materialized
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -308,7 +309,8 @@ def design_context(case_root: Path, location: str, radius: int = 6) -> dict[str,
 # The tools a writing agent asks while it writes one module's notes
 # (tools/DATA_CLOSURE_WORKBENCH.md §4): M1 is the Factory's resolver, M2 / M4 /
 # M6 the declared surface of the in-memory projection, and the draft check the
-# same detector and lint the gate will apply. They read; the environment
+# same detector and lint the gate will apply; spec_standard and module_slice
+# are the rules and the module, read on demand instead of pasted into the task. They read; the environment
 # writes notes only after lint (decision Q15).
 
 DRAFT_PATH = "<draft>"
@@ -320,9 +322,24 @@ def _surface(case_root: Path) -> dict[str, Any]:
     return projected_spec(case_root)
 
 
+# The forms the Factory resolver checks (code-factory tools/spec_address.py:
+# DATA_ADDRESS_RE, IMPORTED_CONSTANT_RE); anything else it refuses as input.
+_NOTE_ADDRESS_FORM_RE = re.compile(
+    r"=\s*(?:models|rules|config)\.[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*"
+    r"|the imported [A-Za-z_][A-Za-z0-9_]* constant"
+)
+
+
 def resolve_address(case_root: Path, address: str, factory_root: Path | None = None) -> dict[str, Any]:
     """M1: is one address, written as in a note, a legal node — the Factory's verdict."""
     from notes_workbench import factory_addresses
+
+    if not _NOTE_ADDRESS_FORM_RE.fullmatch(address.strip()):
+        # the Factory resolver refuses it as input, not as a verdict; say what it checks
+        raise ValueError(f"{address!r} is not a data address the resolver checks. It checks "
+                         "'= models.X' and 'the imported X constant' (in standard_version 2 also "
+                         "'= rules.<backend>.…' and '= config.persistence.…'); a runtime setting "
+                         "is named by its field of the settings object and has no address")
 
     report = factory_addresses.run_resolver(_surface(case_root), [address], factory_root)
     return {
@@ -371,6 +388,29 @@ def module_notes(case_root: Path, module: str) -> dict[str, Any]:
         "notes": by_module[module],
         "unbound_notes_in_case": len(unbound),
     }
+
+
+def spec_standard(case_root: Path, section: str | None = None) -> dict[str, Any]:
+    """The rules of writing in the standard's own words: without ``section``
+    the quick index and the table of contents, with it one section and its
+    subsections — the copy of SPEC_STANDARD on the case's ref."""
+    from notes_authoring import standard
+
+    repo = case_root.resolve().parents[1]
+    payload = standard.contents(repo) if section is None else standard.section(section, repo)
+    return {"schema_version": f"{SCHEMA_PREFIX}_spec_standard.v1", **payload}
+
+
+def module_slice(case_root: Path, module: str) -> dict[str, Any]:
+    """What one module is, for its notes writer: callables and signatures,
+    the models they name, what the design says it does, open structure requests."""
+    from notes_authoring import brief
+    from notes_workbench import service as notes_service
+
+    spec = _surface(case_root)
+    if module not in (spec.get("module_functions") or {}):
+        raise ValueError(f"unknown module {module!r}; modules: {sorted(spec.get('module_functions') or {})}")
+    return brief.build(case_root, module, spec, notes_service.module_slice(case_root, module))
 
 
 def check_note_draft(case_root: Path, note: str, factory_root: Path | None = None) -> dict[str, Any]:
