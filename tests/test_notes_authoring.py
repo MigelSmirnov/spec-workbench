@@ -249,3 +249,20 @@ def test_l5_divergence_in_a_later_shared_sentence_blocks():
     b = f"{s1} {s2} (col_a, col_c, col_b)."
     codes = {f["code"] for f in lint([_note("load_rows", a), _note("Row", b, 2)], SPEC)["findings"] if f["rule"] == "L5"}
     assert "diverged_copies" in codes
+
+
+def test_a_v2_table_s_enum_column_is_no_second_home_of_the_members():
+    spec = {
+        "models": {"OrderStatus": {"kind": "enum", "values": ["draft", "shipped"]},
+                   "OrderStatusClass": {"fields": {"status": "OrderStatus", "terminal": "bool", "label": "str"}}},
+        "rules": {"data_provider_backend": {"kind": "data_provider_backend", "schema_version": 2, "constants": {
+            "ORDER_STATUS_CLASSES": {"value_type": "record_tuple", "row_model": "OrderStatusClass",
+                                     "key": ["status"], "total": True,
+                                     "value": [{"status": "draft", "terminal": False, "label": "Draft"},
+                                               {"status": "shipped", "terminal": True, "label": "Sent"}]}}}},
+    }
+    from notes_authoring.index import SpecIndex
+
+    index = SpecIndex.build(spec)
+    assert index.homes("shipped") == ["= models.OrderStatus"]
+    assert index.homes("Sent") == ["the imported ORDER_STATUS_CLASSES constant"]

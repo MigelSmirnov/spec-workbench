@@ -88,6 +88,17 @@ class SpecIndex:
             for name, row in provider_constants.items():
                 index.constants.add(name)
                 value = row.get("value") if isinstance(row, dict) else row
+                # a v2 table's enum column holds members, whose home is the
+                # enumeration (= models.X), not the table that cites them
+                row_model = models.get(row.get("row_model")) if isinstance(row, dict) else None
+                row_fields = row_model.get("fields") if isinstance(row_model, dict) else None
+                if isinstance(row_fields, dict) and isinstance(value, list):
+                    value = [
+                        {field: cell for field, cell in record.items()
+                         if not (isinstance(models.get(row_fields.get(field)), dict)
+                                 and models[row_fields[field]].get("kind") == "enum")}
+                        for record in value if isinstance(record, dict)
+                    ]
                 for _, leaf in _leaves(value, ""):
                     text = normalize(leaf)
                     if text is not None:
