@@ -43,7 +43,8 @@ connection (below). The dependency direction is fixed,
 from the bottom up:
 
 ```text
-models, data_provider
+models
+data_provider
 canonical_values, clock, store_persistence, sandbox_runner
 store, installation
 sandbox, service_invoker, run_values

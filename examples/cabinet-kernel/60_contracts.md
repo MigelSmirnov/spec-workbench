@@ -1327,7 +1327,8 @@ enumeration and total over its members.
   row models `StatusConclusion`, `ConclusionEffect`, `WaitReasonRestingStatus`
   and `HttpMethodBody`. Reopens the rounds of State 1.
 - State 3 (2026-10-18, decision 33): `data_provider` owns the correspondences
-  over enumeration members and knows `models`; `run_graph` knows
+  over enumeration members and knows `models`, so it moves to its own line of
+  the dependency list, above `models` (the order `module_order` already has); `run_graph` knows
   `data_provider`; the A13 row and `30_trace.json` name `data_provider` a
   consumer of A13, and the trace no longer names `run_graph` for A19.
   Reopens the rounds of States 3–5.
