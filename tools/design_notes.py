@@ -20,8 +20,7 @@ def _author(args: argparse.Namespace) -> tuple[dict[str, object] | str, int]:
     if args.author_requests:
         return request.status(args.project, SpecIndex.build(spec)), 0
     if args.author_prompt:
-        return prompt.build(args.project, args.module, spec, service.module_slice(args.project, args.module),
-                            language.authored_notes(args.project)), 0
+        return prompt.build(args.project, args.module, spec), 0
     result = json.loads(Path(args.author_accept).read_text(encoding="utf-8"))
     payload = accept.accept(args.project, args.module, result, spec=spec, write=not args.check)
     return payload, 0 if payload["status"] != "refused" else 1

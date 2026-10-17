@@ -4,8 +4,8 @@ Scope of this slice: it answers "why is the specification like this" — which
 accepted design decision owns a name, whether a gap belongs to a known closure
 class, what the notes-language gate will say — and gives a State 7 notes
 writer the tools it asks while writing (tools/DATA_CLOSURE_WORKBENCH.md §4):
-M1 resolve_data_address, M2 find_value_homes, M4 find_absence, M6
-module_notes, and check_note_draft. There is no write tool and no authoring
+spec_standard and module_slice, M1 resolve_data_address, M2
+find_value_homes, M4 find_absence, M6 module_notes, and check_note_draft. There is no write tool and no authoring
 action: designing states, editing notes, and exporting to the factory remain
 explicit repository work on the canonical project branch.
 
@@ -50,13 +50,17 @@ Every answer is computed on a temporary read-only worktree of the project's
 canonical ref, never on a working checkout: a dirty local branch does not
 change these answers.
 
-Writing a module's State 7 notes: a value with a home is written as its
+Writing a module's State 7 notes: the rules are SPEC_STANDARD — read them with
+spec_standard (no section: index and contents; then §2 and §15 and whatever
+else the index points to); module_slice says what the module is. A value with
+a home is written as its
 address, a value without one stops the module with a structure request — never
 as prose. Before writing a value, ask find_value_homes; before an address,
 resolve_data_address; before stating "there is no home", find_absence (its
 digests go into the request); before handing a note in, check_note_draft —
 it applies the State 7 gate's checks of one note and the lint the writing
-environment accepts notes by. module_notes gives the notes to rewrite.
+environment accepts notes by; it is required, not the measure of a note.
+module_notes gives the notes to rewrite.
 
 Authority stays with the design-state documents; these tools project them. If
 a tool and a document disagree, the document is right and the tool has a bug:
@@ -236,6 +240,34 @@ def check_note_draft(project: str, note: str) -> dict[str, Any]:
     try:
         with authoring_pipeline.materialized_project(_REPO_ROOT, project) as (_, case_root):
             return service.check_note_draft(case_root, note)
+    except _ERRORS as exc:
+        return {"error": str(exc), "known_cases": _known_cases()}
+
+
+@mcp.tool()
+def spec_standard(project: str, section: str | None = None) -> dict[str, Any]:
+    """SPEC_STANDARD, the rules a note is written by, in its own words.
+    Without `section`: the quick index (where to start for a task) and the
+    table of contents. With `section`: that section and its subsections — by
+    number (`§2`, `15.2`, `15.3.1`) or by a part of an unnumbered heading's
+    title (`Что включать в notes`)."""
+    try:
+        with authoring_pipeline.materialized_project(_REPO_ROOT, project) as (_, case_root):
+            return service.spec_standard(case_root, section)
+    except _ERRORS as exc:
+        return {"error": str(exc), "known_cases": _known_cases()}
+
+
+@mcp.tool()
+def module_slice(project: str, module: str) -> dict[str, Any]:
+    """What one module is, for the agent writing its State 7 notes: its
+    callables with signatures, the models those signatures name (fields and
+    members), what the design says the module does (responsibility,
+    capabilities, flows, public operations, obligations), and its open
+    structure requests. Values are not here: ask find_value_homes."""
+    try:
+        with authoring_pipeline.materialized_project(_REPO_ROOT, project) as (_, case_root):
+            return service.module_slice(case_root, module)
     except _ERRORS as exc:
         return {"error": str(exc), "known_cases": _known_cases()}
 
